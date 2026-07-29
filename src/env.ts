@@ -7,7 +7,7 @@
  * fut le a szerver indulásakor, így hiányzó ENV esetén az app nem indul el.
  */
 
-export const requiredEnvVars = ['DATABASE_URI', 'PAYLOAD_SECRET'] as const
+export const requiredEnvVars = ['DATABASE_URI', 'PAYLOAD_SECRET', 'NEXT_PUBLIC_SERVER_URL'] as const
 
 export type RequiredEnvVar = (typeof requiredEnvVars)[number]
 
