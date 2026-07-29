@@ -1,0 +1,43 @@
+{
+  "name": "kineticare",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "generate:importmap": "payload generate:importmap",
+    "generate:types": "payload generate:types",
+    "test": "node --eval \"console.log('Még nincsenek tesztek — a script a későbbi sprintekben kap tartalmat.')\"",
+    "seed": "tsx src/scripts/seed.ts"
+  },
+  "dependencies": {
+    "@payloadcms/db-postgres": "3.86.0",
+    "@payloadcms/next": "3.86.0",
+    "@payloadcms/plugin-ecommerce": "3.86.0",
+    "@payloadcms/richtext-lexical": "3.86.0",
+    "graphql": "16.14.2",
+    "next": "15.4.11",
+    "payload": "3.86.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "sharp": "0.35.3"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "3.3.6",
+    "@types/node": "20.19.43",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.5",
+    "eslint-config-next": "15.4.11",
+    "prettier": "3.9.6",
+    "tsx": "4.23.1",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,22 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# production build output
+/dist
+/build
+
+# test coverage
+/coverage
+
+# környezeti változók — titkok sosem kerülhetnek a repóba
+.env*
+
+# typescript
+*.tsbuildinfo
+
+# misc
+.DS_Store
