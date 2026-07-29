@@ -1,0 +1,36 @@
+# Dependabot-konfiguráció – Kineticare
+#
+# T-072 politika (PINNELT payload-verziók):
+#   A @payloadcms/* és payload csomagok pontos verzióra vannak pinelve (^ TILOS),
+#   mert a plugin-ecommerce és a core közötti API-változások törhetik a buildet.
+#   Ezek frissítése NEM automatikus: csak changelog elolvasása + staging E2E
+#   teszt sikeres lefutása után, emberi döntéssel történhet.
+#   Ezért a Dependabot ezekre a csomagokra NEM nyit auto-PR-t (ignore).
+
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+    ignore:
+      # T-072: pinnelt payload-csomagok – frissítés csak manuálisan
+      # (changelog-olvasás + staging-E2E után, emberi döntéssel).
+      - dependency-name: "@payloadcms/*"
+      - dependency-name: "payload"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
