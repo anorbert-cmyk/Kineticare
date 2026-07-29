@@ -5,8 +5,13 @@ import { buildConfig } from 'payload'
 import sharp from 'sharp'
 import { fileURLToPath } from 'node:url'
 
+import { Categories } from './collections/Categories'
 import { Media } from './collections/Media'
+import { Menus } from './collections/Menus'
+import { Pages } from './collections/Pages'
+import { Posts } from './collections/Posts'
 import { Users } from './collections/Users'
+import { ecommerce } from './plugins/ecommerce'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -18,7 +23,7 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Users, Media],
+  collections: [Users, Media, Pages, Posts, Menus, Categories],
   editor: lexicalEditor(),
   // A titok kötelező — az induláskori ENV-assert (src/env.ts + src/instrumentation.ts)
   // gondoskodik róla, hogy hiányában az app ne induljon el.
@@ -34,7 +39,8 @@ export default buildConfig({
   sharp,
   plugins: [
     // ecommerce plugin pinned — frissítés csak changelog + staging-E2E után.
-    // A @payloadcms/plugin-ecommerce dependency már jelen van és pontos verzióra van
-    // pinelve a package.json-ben; a tényleges plugin-konfiguráció külön ticketben történik.
+    // A részletes konfiguráció (HUF, customers=users, variants/addresses/guest cart
+    // kikapcsolva, products/orders override-ok) az src/plugins/ecommerce.ts-ben él.
+    ecommerce,
   ],
 })
