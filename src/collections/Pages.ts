@@ -1,0 +1,66 @@
+import type { CollectionConfig } from 'payload'
+
+import { slugField } from '../fields/slug'
+
+export const Pages: CollectionConfig = {
+  slug: 'pages',
+  admin: {
+    useAsTitle: 'title',
+  },
+  fields: [
+    {
+      name: 'title',
+      type: 'text',
+      required: true,
+    },
+    slugField('title'),
+    {
+      name: 'excerpt',
+      type: 'textarea',
+    },
+    {
+      name: 'content',
+      type: 'richText',
+      required: true,
+    },
+    {
+      name: 'heroImage',
+      type: 'upload',
+      relationTo: 'media',
+    },
+    {
+      name: 'seoTitle',
+      type: 'text',
+    },
+    {
+      name: 'seoDescription',
+      type: 'text',
+    },
+    {
+      name: 'ogImage',
+      type: 'upload',
+      relationTo: 'media',
+    },
+    {
+      name: 'status',
+      type: 'select',
+      required: true,
+      defaultValue: 'draft',
+      options: [
+        { label: 'Draft', value: 'draft' },
+        { label: 'Published', value: 'published' },
+      ],
+    },
+    {
+      name: 'publishedAt',
+      type: 'date',
+    },
+    {
+      name: 'order',
+      type: 'number',
+      admin: {
+        description: 'A lista- és menürendezéshez használt sorszám (kisebb = előrébb).',
+      },
+    },
+  ],
+}
