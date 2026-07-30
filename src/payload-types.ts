@@ -1200,6 +1200,7 @@ export interface MenusSelect<T extends boolean = true> {
  */
 export interface CategoriesSelect<T extends boolean = true> {
   title?: T;
+  slug?: T;
   type?: T;
   parent?: T;
   updatedAt?: T;
