@@ -11,6 +11,7 @@ import {
   isOwnerFieldAccess,
 } from '../access'
 import { orderIntegrityBeforeChange } from '../lib/order-integrity'
+import { withoutPluginPaymentEndpoints } from '../lib/payments/barion-adapter'
 
 /**
  * HUF deviza — a forintban nincs tizedesjegy (decimals: 0).
@@ -135,6 +136,43 @@ const withOrderItemSnapshots = (field: Field): Field => {
     fields: [...(named.fields as Field[]), ...orderItemSnapshotFields],
   } as Field
 }
+
+/**
+ * T-021/T-063: az orders `status` mező üzleti állapotgépe.
+ *
+ * A plugin gyári állapotait (processing/completed/cancelled/refunded) a
+ * pénzügyi főlánc állapotgépe váltja:
+ *   created → payment_pending → paid | payment_failed (+ cancelled/refunded).
+ * A `paid` átmenet KIZÁRÓLAG a Barion-callback-útvonal (T-022) joga — sem a
+ * plugin confirmOrder-je (ismert beta-hiba: nem ellenőrzi a fizetés tényleges
+ * státuszát), sem a checkout-start nem állíthat paid-re.
+ *
+ * DB-megjegyzés: az enum-értékcsere migrációt igényel (az enum_orders_status
+ * újraépül); a régi processing/completed értékek kódoldalon megszűnnek.
+ */
+const orderStatusStateMachineOptions = [
+  { label: 'Created', value: 'created' },
+  { label: 'Payment pending', value: 'payment_pending' },
+  { label: 'Paid', value: 'paid' },
+  { label: 'Payment failed', value: 'payment_failed' },
+  { label: 'Cancelled', value: 'cancelled' },
+  { label: 'Refunded', value: 'refunded' },
+]
+
+const withOrderStatusStateMachine = (field: Field): Field => {
+  const named = namedField(field)
+  if (!named || named.name !== 'status' || named.type !== 'select') {
+    return field
+  }
+  return {
+    ...named,
+    defaultValue: 'created',
+    options: orderStatusStateMachineOptions,
+  } as Field
+}
+
+const visitOrderFields = (field: Field): Field =>
+  withOrderStatusStateMachine(withOrderItemSnapshots(field))
 
 /**
  * Products override: a plugin gyári mezői (inventory, priceInHUF…) megmaradnak,
@@ -272,7 +310,7 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
 const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => ({
   ...defaultCollection,
   fields: [
-    ...mapFieldsDeep(defaultCollection.fields, withOrderItemSnapshots),
+    ...mapFieldsDeep(defaultCollection.fields, visitOrderFields),
     {
       name: 'orderNumber',
       type: 'text',
@@ -392,8 +430,17 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
  *   tiltja le a collectiont), ezért a plugin lefutása után szűrjük ki az
  *   `addresses` slugot.
  * - Guest cart kikapcsolva: nincs guest checkout, a fiók kötelező.
- * - paymentMethods üres: a confirmOrder/initiatePayment endpointok így nem
- *   jönnek létre; a fizetésjóváhagyás később saját Barion-callback-vezérelt lesz.
+ * - paymentMethods üres (T-063 plugin-adapter-kontroll): a saját Barion
+ *   PaymentAdapter az src/lib/payments/barion-adapter.ts-ben él, de NINCS
+ *   regisztrálva itt, mert a plugin initiate/confirm végpontjai KOSÁR-
+ *   szemantikát követelnek (cartID kötelező), ami ütközik a kosármentes
+ *   checkout-folyamatunkkal (POST /api/checkout/start). Így a plugin
+ *   /payments/* végpontjai létre sem jönnek — a confirmOrder (ismert
+ *   beta-hiba: nem ellenőrzi a fizetés tényleges státuszát) HTTP-n nem
+ *   hívható; a paid átmenet kizárólag a Barion-callback-útvonal (T-022) joga.
+ *   Védelemképpen a plugin lefutása után a withoutPluginPaymentEndpoints
+ *   szűrő akkor is eltávolít minden /payments/* végpontot, ha egy későbbi
+ *   módosítás mégis regisztrálná az adaptert.
  * - A saját collectionök (pages/posts/menus/categories/media) access-politikája
  *   szintén itt, központilag kapcsolódik be (applyCollectionAccessPolicies) —
  *   a collection-fájlok a koordinátor fájl-scope-ján kívül esnek; a mátrix és a
@@ -435,6 +482,10 @@ export const ecommerce = async (config: Config): Promise<Config> => {
   withEcommerce.collections = applyCollectionAccessPolicies(
     (withEcommerce.collections ?? []).filter((collection) => collection.slug !== 'addresses'),
   )
+
+  // T-063: a plugin /payments/* végpontjai (initiate + confirm-order) sosem
+  // maradhatnak a végleges configban — lásd a fejléc- és a payments-kommentet.
+  withEcommerce.endpoints = withoutPluginPaymentEndpoints(withEcommerce.endpoints)
 
   // A plugin typescript.schema-hookja az addresses-collectionre is $ref-et generál
   // (a fenti sanitize-hiba miatt) — mivel a collectiont kiszűrtük, a hivatkozást is

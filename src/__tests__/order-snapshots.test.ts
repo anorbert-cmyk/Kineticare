@@ -171,7 +171,7 @@ describe.skipIf(!hasDb)('orders snapshot-hookok (DB)', () => {
     await payload.update({
       collection: 'orders',
       id: order.id,
-      data: { status: 'completed' } as Record<string, unknown>,
+      data: { status: 'paid' } as Record<string, unknown>,
       overrideAccess: true,
     })
 
