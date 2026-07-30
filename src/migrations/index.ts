@@ -1,4 +1,5 @@
-import * as migration_20260729_231123_initial_schema from './20260729_231123_initial_schema'
+import * as migration_20260729_231123_initial_schema from './20260729_231123_initial_schema';
+import * as migration_20260730_010003_products_status_enum from './20260730_010003_products_status_enum';
 
 export const migrations = [
   {
@@ -6,4 +7,9 @@ export const migrations = [
     down: migration_20260729_231123_initial_schema.down,
     name: '20260729_231123_initial_schema',
   },
-]
+  {
+    up: migration_20260730_010003_products_status_enum.up,
+    down: migration_20260730_010003_products_status_enum.down,
+    name: '20260730_010003_products_status_enum'
+  },
+];

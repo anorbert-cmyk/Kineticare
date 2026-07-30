@@ -115,6 +115,12 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
     {
       name: 'status',
       type: 'select',
+      // A Payload a drafts `_status` mezőnek ugyanazt az enum-nevet generálná
+      // (toSnakeCase('_status') === 'status'), így az alapértelmezett névütközés
+      // miatt a 'archived' érték elveszne az adatbázis-enumokból. Külön enum-név
+      // a products és a _products_v (versions) táblában is — az oszlopnév és az
+      // API-mezőnév változatlanul `status` marad.
+      enumName: ({ tableName }) => `enum_${tableName}_product_status`,
       options: [
         { label: 'Draft', value: 'draft' },
         { label: 'Published', value: 'published' },
