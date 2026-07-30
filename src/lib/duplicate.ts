@@ -21,7 +21,7 @@ import type { CollectionBeforeValidateHook, FieldHook } from 'payload'
 
 export const DUPLICATE_SUFFIX = 'masodpeldany'
 
-const duplicateSuffixPattern = new RegExp(`-${DUPLICATE_SUFFIX}(-\d+)?$`)
+const duplicateSuffixPattern = new RegExp(`-${DUPLICATE_SUFFIX}(-\\d+)?$`)
 
 /** Levágja a '-masodpeldany' / '-masodpeldany-N' végződést → az eredeti slug-gyökér. */
 export const stripDuplicateSuffix = (slug: string): string => slug.replace(duplicateSuffixPattern, '')
@@ -30,7 +30,7 @@ const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\
 
 /** Pontos egyezés vagy '<gyökér>-masodpeldany(-N)' alakú slug? */
 const matchesDuplicateFamily = (slug: string, root: string): boolean =>
-  slug === root || new RegExp(`^${escapeRegExp(root)}-${DUPLICATE_SUFFIX}(-\d+)?$`).test(slug)
+  slug === root || new RegExp(`^${escapeRegExp(root)}-${DUPLICATE_SUFFIX}(-\\d+)?$`).test(slug)
 
 /**
  * A következő szabad duplikátum-slug: '<gyökér>-masodpeldany',
