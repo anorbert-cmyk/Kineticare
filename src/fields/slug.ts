@@ -1,5 +1,6 @@
 import type { FieldHook, TextField } from 'payload'
 
+import { duplicateSlugBeforeDuplicate } from '../lib/duplicate'
 import { slugify } from '../lib/slugify'
 
 /**
@@ -26,5 +27,8 @@ export const slugField = (sourceField = 'title'): TextField => ({
   unique: true,
   hooks: {
     beforeValidate: [generateFromTitle(sourceField)],
+    // Duplikáláskor (beépített duplicate-folyamat) egyedi
+    // '<eredeti>-masodpeldany' slugot ad — lásd src/lib/duplicate.ts.
+    beforeDuplicate: [duplicateSlugBeforeDuplicate],
   },
 })
