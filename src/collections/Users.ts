@@ -1,10 +1,8 @@
-import type { CollectionConfig, FieldAccess } from 'payload'
+import type { CollectionConfig } from 'payload'
 
-/**
- * Csak owner szerepkörű felhasználó férhet hozzá (mezőszintű írás).
- * A staff így nem emelheti fel a saját (vagy más) jogosultságát.
- */
-const isOwner: FieldAccess = ({ req }) => req.user?.role === 'owner'
+import { isOwner, isOwnerFieldAccess } from '../access/isOwner'
+import { isSelfOrAdmin } from '../access/isSelfOrAdmin'
+import { isStaffOrOwner } from '../access/isStaffOrOwner'
 
 export const Users: CollectionConfig = {
   slug: 'users',
@@ -12,6 +10,20 @@ export const Users: CollectionConfig = {
     useAsTitle: 'email',
   },
   auth: true,
+  access: {
+    // Az admin felületet staff+owner éri el.
+    admin: isStaffOrOwner,
+    // Nyilvános regisztráció engedélyezett: a role mező owner-only
+    // field-access-e miatt jogemelés így sem lehetséges (minden regisztráló
+    // a default 'customer' szerepkört kapja). Owner az adminból bárkit létrehozhat.
+    create: () => true,
+    // Saját rekord olvasása/módosítása — staff/owner minden rekordot.
+    // A role és purchases mezők ettől függetlenül mezőszinten védettek.
+    read: isSelfOrAdmin,
+    update: isSelfOrAdmin,
+    // Törlés kizárólag owner.
+    delete: isOwner,
+  },
   fields: [
     // Az email mezőt az auth automatikusan hozzáadja.
     {
@@ -31,8 +43,8 @@ export const Users: CollectionConfig = {
       ],
       // A role kiosztása/módosítása kizárólag ownernek engedélyezett.
       access: {
-        create: isOwner,
-        update: isOwner,
+        create: isOwnerFieldAccess,
+        update: isOwnerFieldAccess,
       },
     },
     {
