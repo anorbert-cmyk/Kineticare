@@ -1,0 +1,67 @@
+import { barionPost, getBarionConfig, type BarionClientConfig } from './client'
+import type { BarionRefundRequest, BarionRefundResponse, BarionTransactionToRefund } from './types'
+
+/**
+ * Payment/Refund v2 — tranzakció-szintű (részösszeges is lehet) visszatérítés.
+ *
+ * Szabályok:
+ * - Csak Succeeded állapotú fizetés téríthető vissza (Barion-szabály).
+ * - A TransactionsToRefund elemenként tartalmazza a v4-es állapotlekérdezésből
+ *   ismert TransactionId-t és a visszatérítendő (rész)összeget — a lib az
+ *   összeget nem számolja, szerver-oldalon validált értéket vár.
+ * - A válasz RefundedTransactions tömbje tranzakciónként adja vissza a
+ *   tényleges státuszt (Status mező) — ezt a hívó a rendelésen rögzítheti.
+ */
+
+export interface RefundTransactionInput {
+  /** A v4-es fizetésállapot-válasz Transactions tömbjéből származó Barion TransactionId. */
+  transactionId: string
+  /** Visszatérítendő összeg HUF-ban; lehet a tranzakció teljes összege vagy annál kisebb. */
+  amountToRefund: number
+}
+
+export interface RefundPaymentParams {
+  paymentId: string
+  transactionsToRefund: RefundTransactionInput[]
+}
+
+/** A Refund-kérés body-építése külön, tisztán tesztelhető függvényben. */
+export function buildRefundRequest(
+  params: RefundPaymentParams,
+): Omit<BarionRefundRequest, 'POSKey'> {
+  if (params.transactionsToRefund.length === 0) {
+    throw new Error('Barion Payment/Refund: legalább egy visszatérítendő tranzakció kötelező.')
+  }
+  for (const transaction of params.transactionsToRefund) {
+    if (!(transaction.amountToRefund > 0)) {
+      throw new Error(
+        `Barion Payment/Refund: az amountToRefund pozitív kell legyen (TransactionId: ${transaction.transactionId}).`,
+      )
+    }
+  }
+
+  const transactionsToRefund: BarionTransactionToRefund[] = params.transactionsToRefund.map(
+    (transaction) => ({
+      TransactionId: transaction.transactionId,
+      AmountToRefund: transaction.amountToRefund,
+    }),
+  )
+
+  return {
+    PaymentId: params.paymentId,
+    TransactionsToRefund: transactionsToRefund,
+  }
+}
+
+/**
+ * Visszatérítés végrehajtása (Payment/Refund v2). A válasz
+ * RefundedTransactions elemeit (TransactionId + Status) változatlanul adja vissza.
+ */
+export async function refundPayment(
+  params: RefundPaymentParams,
+  config?: BarionClientConfig,
+): Promise<BarionRefundResponse> {
+  const resolvedConfig = config ?? getBarionConfig()
+  const request = buildRefundRequest(params)
+  return barionPost<BarionRefundResponse>('/v2/Payment/Refund', request, resolvedConfig)
+}

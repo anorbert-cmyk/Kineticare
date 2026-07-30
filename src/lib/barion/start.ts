@@ -1,0 +1,159 @@
+import { barionPost, getBarionConfig, type BarionClientConfig } from './client'
+import type {
+  BarionItem,
+  BarionPaymentStartRequest,
+  BarionPaymentStartResponse,
+  BarionPaymentTransaction,
+} from './types'
+
+/**
+ * Payment/Start v2 — új azonnali (Immediate) fizetés indítása a Barionban.
+ *
+ * Fix üzleti szabályok (a lib állítja, a hívó nem felülírható módon kapja):
+ * - PaymentType: Immediate (előleg/részletfizetés nincs)
+ * - GuestCheckOut: true (Barion-fiók nélkül is fizethet a vevő)
+ * - FundingSources: ['All']
+ * - Locale: 'hu-HU', Currency: 'HUF'
+ * - PaymentWindow: default '00:30:00' (paraméterezhető)
+ * - PaymentRequestId: a rendelés orderNumber-e (pl. KH-2026-000123) — ezzel
+ *   idempotens a Start: ugyanazzal a PaymentRequestId-vel a Barion nem hoz
+ *   létre új fizetést, hanem a meglévőt adja vissza.
+ *
+ * Összegszámítás NINCS a libben: a tranzakciók Total/ItemTotal értékeit a
+ * hívó adja, szerver-oldalon validálva (az orders snapshot-árai a forrás).
+ *
+ * Recurring-előkészítés (jövőbeli tokenfizetés): az InitiateRecurrence és a
+ * RecurrenceId csak akkor kerül a kérésbe, ha a BARION_RECURRING_ENABLED
+ * feature-flag 'true' ÉS a hívó kéri. Flag nélkül a recurring-paraméter
+ * megadása hibát dob — így nem maradhat észrevétlen, hogy a recurring
+ * ténylegesen ki van kapcsolva.
+ */
+
+export const BARION_DEFAULT_PAYMENT_WINDOW = '00:30:00'
+
+/** Egy tétel a Start-tranzakcióban (camelCase, a lib képezi a Barion Itemre). */
+export interface StartPaymentItemInput {
+  name: string
+  description: string
+  quantity: number
+  unit: string
+  unitPrice: number
+  itemTotal: number
+  sku?: string
+}
+
+/** Egy tranzakció a Start-kérésben. A total szerver-oldalon validált végösszeg. */
+export interface StartPaymentTransactionInput {
+  posTransactionId: string
+  /** A kedvezményezett Barion e-mail-címe — alapból a konfigurált BARION_PAYEE_EMAIL. */
+  payee?: string
+  total: number
+  comment?: string
+  items: StartPaymentItemInput[]
+}
+
+/** Recurring-előkészítés paraméterei — csak BARION_RECURRING_ENABLED mellett aktív. */
+export interface StartPaymentRecurringInput {
+  /** true = a fizetés egyben recurring-szerződés kezdeményezése is. */
+  initiateRecurrence: boolean
+  /** Külső (kereskedőoldali) recurring-azonosító; initiateRecurrence esetén kötelező. */
+  recurrenceId?: string
+}
+
+export interface StartPaymentParams {
+  /** A rendelés orderNumber-e (KH-YYYY-NNNNNN) — ez lesz a Barion PaymentRequestId. */
+  paymentRequestId: string
+  redirectUrl: string
+  callbackUrl: string
+  transactions: StartPaymentTransactionInput[]
+  payerHint?: string
+  cardHolderNameHint?: string
+  /** hh:mm:ss formátum; alapértelmezés: BARION_DEFAULT_PAYMENT_WINDOW. */
+  paymentWindow?: string
+  recurring?: StartPaymentRecurringInput
+}
+
+function mapItem(item: StartPaymentItemInput): BarionItem {
+  return {
+    Name: item.name,
+    Description: item.description,
+    Quantity: item.quantity,
+    Unit: item.unit,
+    UnitPrice: item.unitPrice,
+    ItemTotal: item.itemTotal,
+    ...(item.sku !== undefined ? { SKU: item.sku } : {}),
+  }
+}
+
+function mapTransaction(
+  transaction: StartPaymentTransactionInput,
+  defaultPayee: string,
+): BarionPaymentTransaction {
+  return {
+    POSTransactionId: transaction.posTransactionId,
+    Payee: transaction.payee ?? defaultPayee,
+    Total: transaction.total,
+    Currency: 'HUF',
+    ...(transaction.comment !== undefined ? { Comment: transaction.comment } : {}),
+    Items: transaction.items.map(mapItem),
+  }
+}
+
+/** A Start-kérés body-építése külön, tisztán tesztelhető függvényben. */
+export function buildPaymentStartRequest(
+  params: StartPaymentParams,
+  config: BarionClientConfig,
+): Omit<BarionPaymentStartRequest, 'POSKey'> {
+  if (params.transactions.length === 0) {
+    throw new Error('Barion Payment/Start: legalább egy tranzakció kötelező.')
+  }
+
+  if (params.recurring !== undefined) {
+    if (!config.recurringEnabled) {
+      throw new Error(
+        'Barion Payment/Start: recurring-előkészítést kért a hívó, de a funkció ki van kapcsolva ' +
+          "(BARION_RECURRING_ENABLED !== 'true'). Kapcsold be a flaget, vagy ne add meg a recurring-paramétert.",
+      )
+    }
+    if (params.recurring.initiateRecurrence && !params.recurring.recurrenceId) {
+      throw new Error(
+        'Barion Payment/Start: initiateRecurrence esetén a recurrenceId megadása kötelező.',
+      )
+    }
+  }
+
+  return {
+    PaymentType: 'Immediate',
+    GuestCheckOut: true,
+    FundingSources: ['All'],
+    Locale: 'hu-HU',
+    Currency: 'HUF',
+    PaymentWindow: params.paymentWindow ?? BARION_DEFAULT_PAYMENT_WINDOW,
+    PaymentRequestId: params.paymentRequestId,
+    ...(params.payerHint !== undefined ? { PayerHint: params.payerHint } : {}),
+    ...(params.cardHolderNameHint !== undefined
+      ? { CardHolderNameHint: params.cardHolderNameHint }
+      : {}),
+    RedirectUrl: params.redirectUrl,
+    CallbackUrl: params.callbackUrl,
+    Transactions: params.transactions.map((transaction) =>
+      mapTransaction(transaction, config.payeeEmail),
+    ),
+    ...(params.recurring?.initiateRecurrence
+      ? { InitiateRecurrence: true, RecurrenceId: params.recurring.recurrenceId }
+      : {}),
+  }
+}
+
+/**
+ * Fizetés indítása (Payment/Start v2). A válasz GatewayUrl-jére kell a vevőt
+ * irányítani; a PaymentId-t a rendelésen rögzíti a hívó (orders.barionPaymentId).
+ */
+export async function startPayment(
+  params: StartPaymentParams,
+  config?: BarionClientConfig,
+): Promise<BarionPaymentStartResponse> {
+  const resolvedConfig = config ?? getBarionConfig()
+  const request = buildPaymentStartRequest(params, resolvedConfig)
+  return barionPost<BarionPaymentStartResponse>('/v2/Payment/Start', request, resolvedConfig)
+}
