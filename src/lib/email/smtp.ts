@@ -1,0 +1,245 @@
+import { Socket } from 'node:net'
+import { connect as connectTls } from 'node:tls'
+
+import { EmailSendError, type MailMessage } from './types'
+
+/**
+ * Minimális SMTP provider (T-018).
+ *
+ * A repo szabályai szerint nem adható hozzá új dependency (pl. nodemailer),
+ * ezért a tranzakciós e-mailekhez szükséges SMTP-részhalmaz itt van
+ * implementálva: implicit TLS (465) vagy STARTTLS (587/25), AUTH LOGIN,
+ * multipart/alternative (text+html) üzenet UTF-8 kódolással.
+ *
+ * Retry-szabály: az SMTP 4xx válaszkódok átmenetiek (újrapróbálható), az 5xx
+ * végleges; a hálózati hibák/timeout újrapróbálhatók.
+ */
+
+export interface SmtpConfig {
+  host: string
+  port: number
+  user?: string
+  pass?: string
+  from: string
+  fromAddress: string
+}
+
+const SMTP_TIMEOUT_MS = 15_000
+
+type SmtpSocket = Socket
+
+class SmtpProtocolError extends EmailSendError {
+  readonly code: number
+
+  constructor(code: number, message: string) {
+    super(`SMTP ${code}: ${message}`, code >= 400 && code < 500)
+    this.code = code
+  }
+}
+
+function encodeWord(value: string): string {
+  // RFC 2047 encoded-word a nem-ASCII (magyar ékezetes) subject/feladónév miatt.
+  if (!/[^\x20-\x7E]/.test(value)) {
+    return value
+  }
+  return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`
+}
+
+function dotStuff(body: string): string {
+  return body.replace(/\r\n\./g, '\r\n..')
+}
+
+function buildMessage(config: SmtpConfig, message: MailMessage): string {
+  const boundary = `----kineticare-${Date.now().toString(36)}`
+  const textPart = Buffer.from(message.text, 'utf8').toString('base64')
+  const htmlPart = Buffer.from(message.html, 'utf8').toString('base64')
+  const headers = [
+    `From: ${encodeWord(config.from)}`,
+    `To: ${message.to.join(', ')}`,
+    `Subject: ${encodeWord(message.subject)}`,
+    `Date: ${new Date().toUTCString()}`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+  ]
+  return [
+    ...headers,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="utf-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    textPart,
+    `--${boundary}`,
+    'Content-Type: text/html; charset="utf-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    htmlPart,
+    `--${boundary}--`,
+    '',
+  ].join('\r\n')
+}
+
+class SmtpSession {
+  private socket: SmtpSocket
+  private buffer = ''
+
+  private constructor(socket: SmtpSocket) {
+    this.socket = socket
+  }
+
+  static async connect(config: SmtpConfig): Promise<SmtpSession> {
+    const implicitTls = config.port === 465
+    const socket = await new Promise<SmtpSocket>((resolve, reject) => {
+      const onError = (error: Error) =>
+        reject(new EmailSendError(`SMTP kapcsolódás sikertelen: ${error.message}`, true))
+      const opened: SmtpSocket = implicitTls
+        ? connectTls({ host: config.host, port: config.port, servername: config.host }, () => {
+            opened.off('error', onError)
+            opened.setTimeout(0)
+            resolve(opened)
+          })
+        : new Socket().connect(config.port, config.host, () => {
+            opened.off('error', onError)
+            opened.setTimeout(0)
+            resolve(opened)
+          })
+      opened.setTimeout(SMTP_TIMEOUT_MS, () => {
+        opened.destroy(new EmailSendError('SMTP időtúllépés a kapcsolódáskor', true))
+      })
+      opened.once('error', onError)
+    })
+    return new SmtpSession(socket)
+  }
+
+  close(): void {
+    this.socket.destroy()
+  }
+
+  private readReply(): Promise<{ code: number; lines: string[] }> {
+    return new Promise((resolve, reject) => {
+      const onData = (chunk: Buffer) => {
+        this.buffer += chunk.toString('utf8')
+        const reply = this.tryParseReply()
+        if (reply) {
+          cleanup()
+          resolve(reply)
+        }
+      }
+      const onError = (error: Error) => {
+        cleanup()
+        reject(error instanceof EmailSendError ? error : new EmailSendError(error.message, true))
+      }
+      const onTimeout = () => {
+        cleanup()
+        reject(new EmailSendError('SMTP időtúllépés válaszra várva', true))
+      }
+      const cleanup = () => {
+        this.socket.off('data', onData)
+        this.socket.off('error', onError)
+        this.socket.off('timeout', onTimeout)
+      }
+      this.socket.on('data', onData)
+      this.socket.once('error', onError)
+      this.socket.setTimeout(SMTP_TIMEOUT_MS, onTimeout)
+      // Lehet, hogy a válasz már a bufferben van (pl. TLS-újrakötés után).
+      const ready = this.tryParseReply()
+      if (ready) {
+        cleanup()
+        resolve(ready)
+      }
+    })
+  }
+
+  private tryParseReply(): { code: number; lines: string[] } | null {
+    const lines = this.buffer.split('\r\n')
+    const collected: string[] = []
+    let code = 0
+    for (const line of lines.slice(0, -1)) {
+      collected.push(line)
+      const match = /^(\d{3})([ -])/.exec(line)
+      if (match) {
+        code = Number(match[1])
+        if (match[2] === ' ') {
+          this.buffer = this.buffer.slice(collected.join('\r\n').length + 2)
+          return { code, lines: collected }
+        }
+      }
+    }
+    return null
+  }
+
+  private async command(line: string, expected: number[]): Promise<string[]> {
+    await new Promise<void>((resolve, reject) => {
+      this.socket.write(`${line}\r\n`, (error) => (error ? reject(error) : resolve()))
+    })
+    const reply = await this.readReply()
+    if (!expected.includes(reply.code)) {
+      throw new SmtpProtocolError(reply.code, reply.lines.join(' | ').slice(0, 200))
+    }
+    return reply.lines
+  }
+
+  /** SMTP-párbeszéd: greeting → (STARTTLS) → (AUTH) → MAIL/RCPT/DATA → QUIT. */
+  async send(config: SmtpConfig, message: MailMessage, upgradeToTls: () => Promise<void>) {
+    await this.expectGreeting()
+    const ehloLines = await this.command(`EHLO ${config.host}`, [250])
+    const supportsStartTls = ehloLines.some((line) => /STARTTLS/i.test(line))
+    if (config.port !== 465 && supportsStartTls) {
+      await this.command('STARTTLS', [220])
+      await upgradeToTls()
+      await this.command(`EHLO ${config.host}`, [250])
+    }
+    if (config.user) {
+      await this.command('AUTH LOGIN', [334])
+      await this.command(Buffer.from(config.user, 'utf8').toString('base64'), [334])
+      await this.command(Buffer.from(config.pass ?? '', 'utf8').toString('base64'), [235])
+    }
+    await this.command(`MAIL FROM:<${config.fromAddress}>`, [250])
+    for (const recipient of message.to) {
+      await this.command(`RCPT TO:<${recipient}>`, [250, 251])
+    }
+    await this.command('DATA', [354])
+    const data = `${dotStuff(buildMessage(config, message))}\r\n.\r\n`
+    await new Promise<void>((resolve, reject) => {
+      this.socket.write(data, (error) => (error ? reject(error) : resolve()))
+    })
+    const reply = await this.readReply()
+    if (reply.code !== 250) {
+      throw new SmtpProtocolError(reply.code, reply.lines.join(' | ').slice(0, 200))
+    }
+    await this.command('QUIT', [221]).catch(() => undefined)
+  }
+
+  private async expectGreeting(): Promise<void> {
+    const reply = await this.readReply()
+    if (reply.code !== 220) {
+      throw new SmtpProtocolError(reply.code, reply.lines.join(' | ').slice(0, 200))
+    }
+  }
+
+  private wrapWithTls(host: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const tlsSocket = connectTls({ socket: this.socket, servername: host }, () => {
+        this.socket = tlsSocket
+        this.buffer = ''
+        resolve()
+      })
+      tlsSocket.once('error', (error) =>
+        reject(new EmailSendError(`SMTP STARTTLS sikertelen: ${error.message}`, true)),
+      )
+    })
+  }
+
+  async sendWithUpgrade(config: SmtpConfig, message: MailMessage): Promise<void> {
+    await this.send(config, message, () => this.wrapWithTls(config.host))
+  }
+}
+
+export async function sendViaSmtp(config: SmtpConfig, message: MailMessage): Promise<void> {
+  const session = await SmtpSession.connect(config)
+  try {
+    await session.sendWithUpgrade(config, message)
+  } finally {
+    session.close()
+  }
+}
