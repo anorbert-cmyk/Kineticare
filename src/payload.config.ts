@@ -218,6 +218,14 @@ export default buildConfig({
     },
   }),
   sharp,
+  // T-019 lezárás: a feltölthető fájlok mérete globálisan max. 10 MB (bájtban).
+  // Collection-szintű fileSize-limit a pinned 3.86.0-ban nem elérhető, ezért a
+  // korlát a globális upload.limits.fileSize mezőn kerül beállításra.
+  upload: {
+    limits: {
+      fileSize: 10485760,
+    },
+  },
   onInit: ensureContactForm,
   plugins: [
     // ecommerce plugin pinned — frissítés csak changelog + staging-E2E után.

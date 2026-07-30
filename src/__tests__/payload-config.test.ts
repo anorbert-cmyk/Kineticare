@@ -36,5 +36,8 @@ describe('payload.config', () => {
     expect(slugs).not.toContain('variants')
     expect(slugs).not.toContain('variantTypes')
     expect(slugs).not.toContain('variantOptions')
+
+    // T-019: a feltöltési méretkorlát globálisan 10 MB (bájtban).
+    expect(config.upload?.limits?.fileSize).toBe(10485760)
   })
 })
