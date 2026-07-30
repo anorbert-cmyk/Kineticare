@@ -1,0 +1,552 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import {
+  BARION_DEFAULT_TIMEOUT_MS,
+  getBarionConfig,
+  type BarionClientConfig,
+} from '../lib/barion/client'
+import {
+  BARION_DEFAULT_PAYMENT_WINDOW,
+  buildPaymentStartRequest,
+  startPayment,
+  type StartPaymentParams,
+} from '../lib/barion/start'
+import { fetchPaymentState, mapBarionPaymentStatus } from '../lib/barion/state'
+import { buildRefundRequest, refundPayment } from '../lib/barion/refund'
+import { BarionApiError } from '../lib/barion/types'
+
+/**
+ * Barion-kliens egységtesztek — mockolt fetch-csel, hálózat nélkül.
+ *
+ * A DUMMY_POS_KEY szándékosan NEM valós POSKey-formátum és feliratozva is
+ * dummy: titok (még teszt-jellegű sem) sosem kerülhet a repóba.
+ */
+
+// DUMMY érték, egyértelműen jelölve — NEM valódi Barion POSKey.
+const DUMMY_POS_KEY = 'DUMMY-POSKEY-NEM-VALODI-TITOK'
+// DUMMY érték, egyértelműen jelölve — NEM valódi Barion POSKey.
+const DUMMY_PROD_POS_KEY = 'DUMMY-PROD-POSKEY-NEM-VALODI-TITOK'
+
+const DUMMY_PAYMENT_ID = '11111111-2222-3333-4444-555555555555'
+const DUMMY_TRANSACTION_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+
+const testConfig: BarionClientConfig = {
+  environment: 'test',
+  apiUrl: 'https://api.test.barion.com',
+  posKey: DUMMY_POS_KEY,
+  payeeEmail: 'payee@example.test',
+  timeoutMs: 15_000,
+  recurringEnabled: false,
+}
+
+const validEnv = {
+  BARION_ENVIRONMENT: 'test',
+  BARION_API_URL: 'https://api.test.barion.com/',
+  BARION_PAYEE_EMAIL: 'payee@example.test',
+  BARION_POSKEY_TEST: DUMMY_POS_KEY,
+  BARION_POSKEY_PROD: DUMMY_PROD_POS_KEY,
+} as NodeJS.ProcessEnv
+
+const fetchMock = vi.fn()
+vi.stubGlobal('fetch', fetchMock)
+
+afterEach(() => {
+  fetchMock.mockReset()
+  vi.restoreAllMocks()
+})
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function lastRequest(): { url: string; init: RequestInit; body: Record<string, unknown> } {
+  const call = fetchMock.mock.calls[fetchMock.mock.calls.length - 1] as [string, RequestInit]
+  const [url, init] = call
+  return {
+    url,
+    init,
+    body: JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>,
+  }
+}
+
+const startParams: StartPaymentParams = {
+  paymentRequestId: 'KH-2026-000123',
+  redirectUrl: 'https://shop.example.test/fizetes/koszonom',
+  callbackUrl: 'https://shop.example.test/api/barion/callback',
+  payerHint: 'vevo@example.test',
+  cardHolderNameHint: 'Minta Mari',
+  transactions: [
+    {
+      posTransactionId: 'KH-2026-000123-1',
+      total: 24990,
+      comment: 'Kurzuscsomag',
+      items: [
+        {
+          name: 'Kézrehabilitációs alapkurs',
+          description: 'Online videós kurzus',
+          quantity: 1,
+          unit: 'db',
+          unitPrice: 24990,
+          itemTotal: 24990,
+          sku: 'kurzus-alap',
+        },
+      ],
+    },
+  ],
+}
+
+describe('getBarionConfig (env-assert)', () => {
+  it('hiányzó teszt POSKey esetén értelmes magyar hibát dob, a kulcsnévvel', () => {
+    const env = { ...validEnv, BARION_POSKEY_TEST: '' } as NodeJS.ProcessEnv
+    expect(() => getBarionConfig(env)).toThrowError(/BARION_POSKEY_TEST/)
+    expect(() => getBarionConfig(env)).toThrowError(/nem indulhat el/)
+  })
+
+  it('prod környezetben a BARION_POSKEY_PROD kötelező', () => {
+    const env = {
+      ...validEnv,
+      BARION_ENVIRONMENT: 'prod',
+      BARION_POSKEY_PROD: '  ',
+    } as NodeJS.ProcessEnv
+    expect(() => getBarionConfig(env)).toThrowError(/BARION_POSKEY_PROD/)
+  })
+
+  it('hiányzó BARION_API_URL és BARION_PAYEE_EMAIL is szerepel a hibaüzenetben', () => {
+    const env = {
+      BARION_POSKEY_TEST: DUMMY_POS_KEY,
+    } as NodeJS.ProcessEnv
+    expect(() => getBarionConfig(env)).toThrowError(/BARION_API_URL/)
+    expect(() => getBarionConfig(env)).toThrowError(/BARION_PAYEE_EMAIL/)
+  })
+
+  it('érvénytelen BARION_ENVIRONMENT értékre dob', () => {
+    const env = { ...validEnv, BARION_ENVIRONMENT: 'staging' } as NodeJS.ProcessEnv
+    expect(() => getBarionConfig(env)).toThrowError(/BARION_ENVIRONMENT/)
+  })
+
+  it('nem https BARION_API_URL-t elutasít', () => {
+    const env = { ...validEnv, BARION_API_URL: 'http://api.test.barion.com' } as NodeJS.ProcessEnv
+    expect(() => getBarionConfig(env)).toThrowError(/BARION_API_URL/)
+  })
+
+  it('alapértelmezés test környezet, origin-normalizált apiUrl, default timeout', () => {
+    const env = { ...validEnv } as NodeJS.ProcessEnv
+    delete env.BARION_ENVIRONMENT
+    const config = getBarionConfig(env)
+    expect(config.environment).toBe('test')
+    expect(config.apiUrl).toBe('https://api.test.barion.com')
+    expect(config.posKey).toBe(DUMMY_POS_KEY)
+    expect(config.timeoutMs).toBe(BARION_DEFAULT_TIMEOUT_MS)
+    expect(config.recurringEnabled).toBe(false)
+  })
+
+  it('prod környezetben a PROD kulcsot választja, timeout envből felülírható', () => {
+    const config = getBarionConfig({
+      ...validEnv,
+      BARION_ENVIRONMENT: 'prod',
+      BARION_API_URL: 'https://api.barion.com',
+      BARION_TIMEOUT_MS: '5000',
+      BARION_RECURRING_ENABLED: 'true',
+    } as NodeJS.ProcessEnv)
+    expect(config.environment).toBe('prod')
+    expect(config.posKey).toBe(DUMMY_PROD_POS_KEY)
+    expect(config.timeoutMs).toBe(5000)
+    expect(config.recurringEnabled).toBe(true)
+  })
+
+  it('érvénytelen BARION_TIMEOUT_MS esetén a default marad', () => {
+    const config = getBarionConfig({
+      ...validEnv,
+      BARION_TIMEOUT_MS: 'nem-szam',
+    } as NodeJS.ProcessEnv)
+    expect(config.timeoutMs).toBe(BARION_DEFAULT_TIMEOUT_MS)
+  })
+})
+
+describe('buildPaymentStartRequest (Start payload-szabályok)', () => {
+  it('fix üzleti mezők: Immediate, guest checkout, All, hu-HU, HUF, 30 perces ablak', () => {
+    const request = buildPaymentStartRequest(startParams, testConfig)
+    expect(request.PaymentType).toBe('Immediate')
+    expect(request.GuestCheckOut).toBe(true)
+    expect(request.FundingSources).toEqual(['All'])
+    expect(request.Locale).toBe('hu-HU')
+    expect(request.Currency).toBe('HUF')
+    expect(request.PaymentWindow).toBe(BARION_DEFAULT_PAYMENT_WINDOW)
+    expect(BARION_DEFAULT_PAYMENT_WINDOW).toBe('00:30:00')
+  })
+
+  it('PaymentRequestId = orderNumber; hintek és URL-ek átmennek; payee default a konfigurált email', () => {
+    const request = buildPaymentStartRequest(startParams, testConfig)
+    expect(request.PaymentRequestId).toBe('KH-2026-000123')
+    expect(request.PayerHint).toBe('vevo@example.test')
+    expect(request.CardHolderNameHint).toBe('Minta Mari')
+    expect(request.RedirectUrl).toBe('https://shop.example.test/fizetes/koszonom')
+    expect(request.CallbackUrl).toBe('https://shop.example.test/api/barion/callback')
+    expect(request.Transactions[0]?.POSTransactionId).toBe('KH-2026-000123-1')
+    expect(request.Transactions[0]?.Payee).toBe('payee@example.test')
+    expect(request.Transactions[0]?.Total).toBe(24990)
+    expect(request.Transactions[0]?.Items[0]).toMatchObject({
+      Name: 'Kézrehabilitációs alapkurs',
+      Quantity: 1,
+      UnitPrice: 24990,
+      ItemTotal: 24990,
+      SKU: 'kurzus-alap',
+    })
+  })
+
+  it('PaymentWindow paraméterezhető', () => {
+    const request = buildPaymentStartRequest(
+      { ...startParams, paymentWindow: '01:00:00' },
+      testConfig,
+    )
+    expect(request.PaymentWindow).toBe('01:00:00')
+  })
+
+  it('a lib NEM számol összeget: a kapott Total/ItemTotal megy ki változatlanul', () => {
+    const weirdTotals: StartPaymentParams = {
+      ...startParams,
+      transactions: [
+        {
+          posTransactionId: 'T-1',
+          total: 123,
+          items: [
+            {
+              name: 'Tétel',
+              description: 'd',
+              quantity: 3,
+              unit: 'db',
+              unitPrice: 50,
+              itemTotal: 123,
+            },
+          ],
+        },
+      ],
+    }
+    const request = buildPaymentStartRequest(weirdTotals, testConfig)
+    // Szándékosan "inkonzisztens" értékek: a lib nem javítja/újraszámolja őket.
+    expect(request.Transactions[0]?.Total).toBe(123)
+    expect(request.Transactions[0]?.Items[0]?.ItemTotal).toBe(123)
+  })
+
+  it('recurring kérés flag NÉLKÜL hibát dob (nem megy ki csendben)', () => {
+    expect(() =>
+      buildPaymentStartRequest(
+        { ...startParams, recurring: { initiateRecurrence: true, recurrenceId: 'SUB-1' } },
+        testConfig,
+      ),
+    ).toThrowError(/BARION_RECURRING_ENABLED/)
+  })
+
+  it('recurring flag mellett InitiateRecurrence + RecurrenceId bekerül a kérésbe', () => {
+    const recurringConfig = { ...testConfig, recurringEnabled: true }
+    const request = buildPaymentStartRequest(
+      { ...startParams, recurring: { initiateRecurrence: true, recurrenceId: 'SUB-1' } },
+      recurringConfig,
+    )
+    expect(request.InitiateRecurrence).toBe(true)
+    expect(request.RecurrenceId).toBe('SUB-1')
+  })
+
+  it('recurring flag mellett, recurring-paraméter nélkül nincs InitiateRecurrence a kérésben', () => {
+    const recurringConfig = { ...testConfig, recurringEnabled: true }
+    const request = buildPaymentStartRequest(startParams, recurringConfig)
+    expect(request.InitiateRecurrence).toBeUndefined()
+    expect(request.RecurrenceId).toBeUndefined()
+  })
+
+  it('initiateRecurrence recurrenceId nélkül hibát dob', () => {
+    const recurringConfig = { ...testConfig, recurringEnabled: true }
+    expect(() =>
+      buildPaymentStartRequest(
+        { ...startParams, recurring: { initiateRecurrence: true } },
+        recurringConfig,
+      ),
+    ).toThrowError(/recurrenceId/)
+  })
+
+  it('üres Transactions tömb hibát dob', () => {
+    expect(() => buildPaymentStartRequest({ ...startParams, transactions: [] }, testConfig))
+      .toThrowError(/tranzakció/)
+  })
+})
+
+describe('startPayment (Payment/Start v2)', () => {
+  it('sikeres Start-válasz parse: PaymentId, GatewayUrl, státusz', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        PaymentId: DUMMY_PAYMENT_ID,
+        PaymentRequestId: 'KH-2026-000123',
+        Status: 'Prepared',
+        GatewayUrl: 'https://secure.test.barion.com/Pay?id=' + DUMMY_PAYMENT_ID,
+        QRUrl: 'https://api.test.barion.com/qr/x',
+        Transactions: [{ TransactionId: DUMMY_TRANSACTION_ID, POSTransactionId: 'KH-2026-000123-1' }],
+        Errors: [],
+      }),
+    )
+
+    const response = await startPayment(startParams, testConfig)
+
+    expect(response.PaymentId).toBe(DUMMY_PAYMENT_ID)
+    expect(response.Status).toBe('Prepared')
+    expect(response.GatewayUrl).toContain(DUMMY_PAYMENT_ID)
+    expect(response.Transactions?.[0]?.TransactionId).toBe(DUMMY_TRANSACTION_ID)
+
+    const request = lastRequest()
+    expect(request.url).toBe('https://api.test.barion.com/v2/Payment/Start')
+    expect(request.init.method).toBe('POST')
+    // A POSKey a body-ban utazik (nem az URL-ben, nem headerben).
+    expect(request.body.POSKey).toBe(DUMMY_POS_KEY)
+    expect(request.url).not.toContain(DUMMY_POS_KEY)
+    expect(request.init.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('Barion hibaválasz (HTTP 400 + Errors) strukturált BarionApiError-é válik', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          Errors: [
+            {
+              ErrorCode: 'ModelValidationError',
+              Title: 'Model validation failed',
+              Description: 'The Transactions field is required.',
+            },
+          ],
+        },
+        400,
+      ),
+    )
+
+    const promise = startPayment(startParams, testConfig)
+    await expect(promise).rejects.toBeInstanceOf(BarionApiError)
+    await expect(promise).rejects.toMatchObject({
+      kind: 'http',
+      httpStatus: 400,
+      providerErrors: [
+        {
+          ErrorCode: 'ModelValidationError',
+          Title: 'Model validation failed',
+          Description: 'The Transactions field is required.',
+        },
+      ],
+    })
+  })
+
+  it('HTTP 200 + nemüres Errors tömb szintén provider-hiba', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        Errors: [
+          {
+            ErrorCode: 'AuthenticationFailed',
+            Title: 'User authentication failed',
+            Description: 'Invalid POSKey.',
+          },
+        ],
+      }),
+    )
+
+    const promise = startPayment(startParams, testConfig)
+    await expect(promise).rejects.toMatchObject({
+      kind: 'provider',
+      providerErrors: [{ ErrorCode: 'AuthenticationFailed' }],
+    })
+  })
+
+  it('timeout/abort kezelés: lassú válasz BarionApiError kind=timeout', async () => {
+    fetchMock.mockImplementationOnce(
+      (_input: unknown, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('This operation was aborted', 'AbortError'))
+          })
+        }),
+    )
+
+    const fastConfig = { ...testConfig, timeoutMs: 20 }
+    const promise = startPayment(startParams, fastConfig)
+    await expect(promise).rejects.toMatchObject({ kind: 'timeout' })
+    await expect(promise).rejects.toBeInstanceOf(BarionApiError)
+  })
+
+  it('hálózati hiba BarionApiError kind=network', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'))
+    await expect(startPayment(startParams, testConfig)).rejects.toMatchObject({
+      kind: 'network',
+    })
+  })
+})
+
+describe('mapBarionPaymentStatus (v4 státusz-leképezés)', () => {
+  it('Succeeded → paid', () => {
+    expect(mapBarionPaymentStatus('Succeeded')).toBe('paid')
+  })
+
+  it('Canceled → cancelled', () => {
+    expect(mapBarionPaymentStatus('Canceled')).toBe('cancelled')
+  })
+
+  it('Expired → cancelled', () => {
+    expect(mapBarionPaymentStatus('Expired')).toBe('cancelled')
+  })
+
+  it('Prepared → payment_pending', () => {
+    expect(mapBarionPaymentStatus('Prepared')).toBe('payment_pending')
+  })
+
+  it('Started → payment_pending', () => {
+    expect(mapBarionPaymentStatus('Started')).toBe('payment_pending')
+  })
+
+  it('ismeretlen/jövőbeli státusz konzervatívan payment_pending (sosem paid)', () => {
+    expect(mapBarionPaymentStatus('InProgress')).toBe('payment_pending')
+    expect(mapBarionPaymentStatus('Reserved')).toBe('payment_pending')
+    expect(mapBarionPaymentStatus('ValamiUjStatusz')).toBe('payment_pending')
+  })
+})
+
+describe('fetchPaymentState (Payment/PaymentState v4)', () => {
+  it('v4 útvonalat hív GET-tel, x-pos-key headerrel; a válasz Transactions tartalmazza a TransactionId-t', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        PaymentId: DUMMY_PAYMENT_ID,
+        PaymentRequestId: 'KH-2026-000123',
+        Status: 'Succeeded',
+        Transactions: [
+          {
+            TransactionId: DUMMY_TRANSACTION_ID,
+            POSTransactionId: 'KH-2026-000123-1',
+            Total: 24990,
+            Currency: 'HUF',
+            Status: 'Succeeded',
+          },
+        ],
+      }),
+    )
+
+    const response = await fetchPaymentState(DUMMY_PAYMENT_ID, testConfig)
+
+    expect(response.Status).toBe('Succeeded')
+    expect(response.Transactions[0]?.TransactionId).toBe(DUMMY_TRANSACTION_ID)
+    expect(mapBarionPaymentStatus(response.Status)).toBe('paid')
+
+    const request = lastRequest()
+    expect(request.url).toBe(
+      `https://api.test.barion.com/v4/Payment/${DUMMY_PAYMENT_ID}/PaymentState`,
+    )
+    // A v2-es deprecated útvonal SOHA nem hívódhat.
+    expect(request.url).not.toContain('/v2/')
+    expect(request.init.method ?? 'GET').toBe('GET')
+    const headers = new Headers(request.init.headers)
+    expect(headers.get('x-pos-key')).toBe(DUMMY_POS_KEY)
+    expect(request.url).not.toContain(DUMMY_POS_KEY)
+    expect(request.init.body).toBeUndefined()
+  })
+})
+
+describe('refundPayment (Payment/Refund v2)', () => {
+  const refundParams = {
+    paymentId: DUMMY_PAYMENT_ID,
+    transactionsToRefund: [{ transactionId: DUMMY_TRANSACTION_ID, amountToRefund: 10000 }],
+  }
+
+  it('refund payload-építés: PaymentId + TransactionsToRefund {TransactionId, AmountToRefund}', () => {
+    const request = buildRefundRequest(refundParams)
+    expect(request.PaymentId).toBe(DUMMY_PAYMENT_ID)
+    expect(request.TransactionsToRefund).toEqual([
+      { TransactionId: DUMMY_TRANSACTION_ID, AmountToRefund: 10000 },
+    ])
+  })
+
+  it('részösszeges refund kimegy a hívásban, a RefundedTransactions státusza visszaérkezik', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        PaymentId: DUMMY_PAYMENT_ID,
+        RefundedTransactions: [
+          {
+            TransactionId: DUMMY_TRANSACTION_ID,
+            Total: 24990,
+            AmountToRefund: 10000,
+            Status: 'PartiallyRefunded',
+          },
+        ],
+      }),
+    )
+
+    const response = await refundPayment(refundParams, testConfig)
+
+    expect(response.PaymentId).toBe(DUMMY_PAYMENT_ID)
+    expect(response.RefundedTransactions).toHaveLength(1)
+    expect(response.RefundedTransactions[0]?.TransactionId).toBe(DUMMY_TRANSACTION_ID)
+    expect(response.RefundedTransactions[0]?.AmountToRefund).toBe(10000)
+    expect(response.RefundedTransactions[0]?.Status).toBe('PartiallyRefunded')
+
+    const request = lastRequest()
+    expect(request.url).toBe('https://api.test.barion.com/v2/Payment/Refund')
+    expect(request.body.PaymentId).toBe(DUMMY_PAYMENT_ID)
+    expect(request.body.POSKey).toBe(DUMMY_POS_KEY)
+    expect(request.body.TransactionsToRefund).toEqual([
+      { TransactionId: DUMMY_TRANSACTION_ID, AmountToRefund: 10000 },
+    ])
+  })
+
+  it('üres visszatérítés-lista és nem-pozitív összeg hibát dob', () => {
+    expect(() => buildRefundRequest({ paymentId: DUMMY_PAYMENT_ID, transactionsToRefund: [] }))
+      .toThrowError(/tranzakció/)
+    expect(() =>
+      buildRefundRequest({
+        paymentId: DUMMY_PAYMENT_ID,
+        transactionsToRefund: [{ transactionId: DUMMY_TRANSACTION_ID, amountToRefund: 0 }],
+      }),
+    ).toThrowError(/amountToRefund/)
+  })
+})
+
+describe('titokvédelem: a POSKey sosem kerül a naplóba', () => {
+  it('sikeres és hibás hívás naplóiban sem szerepel a POSKey', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    try {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ PaymentId: DUMMY_PAYMENT_ID, Status: 'Prepared', Errors: [] }),
+      )
+      await startPayment(startParams, testConfig)
+
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(
+          {
+            Errors: [
+              { ErrorCode: 'AuthenticationFailed', Title: 'auth failed', Description: 'invalid' },
+            ],
+          },
+          401,
+        ),
+      )
+      await expect(startPayment(startParams, testConfig)).rejects.toBeInstanceOf(BarionApiError)
+
+      const allLogOutput = logSpy.mock.calls
+        .map((call) => call.map((arg) => String(arg)).join(' '))
+        .join('\n')
+      expect(allLogOutput.length).toBeGreaterThan(0)
+      expect(allLogOutput).not.toContain(DUMMY_POS_KEY)
+      expect(allLogOutput).not.toContain(DUMMY_PROD_POS_KEY)
+    } finally {
+      logSpy.mockRestore()
+    }
+  })
+
+  it('a kimenő kérés URL-je és fejlécei sem tartalmazzák a POSKey-t (POST)', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ PaymentId: DUMMY_PAYMENT_ID, Status: 'Prepared', Errors: [] }),
+    )
+    await startPayment(startParams, testConfig)
+
+    const request = lastRequest()
+    expect(request.url).not.toContain(DUMMY_POS_KEY)
+    const headers = new Headers(request.init.headers)
+    for (const value of headers.values()) {
+      expect(value).not.toContain(DUMMY_POS_KEY)
+    }
+  })
+})
