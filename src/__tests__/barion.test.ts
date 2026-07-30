@@ -45,7 +45,7 @@ const validEnv = {
   BARION_PAYEE_EMAIL: 'payee@example.test',
   BARION_POSKEY_TEST: DUMMY_POS_KEY,
   BARION_POSKEY_PROD: DUMMY_PROD_POS_KEY,
-} as NodeJS.ProcessEnv
+} as unknown as NodeJS.ProcessEnv
 
 const fetchMock = vi.fn()
 vi.stubGlobal('fetch', fetchMock)
@@ -117,7 +117,7 @@ describe('getBarionConfig (env-assert)', () => {
   it('hiányzó BARION_API_URL és BARION_PAYEE_EMAIL is szerepel a hibaüzenetben', () => {
     const env = {
       BARION_POSKEY_TEST: DUMMY_POS_KEY,
-    } as NodeJS.ProcessEnv
+    } as unknown as NodeJS.ProcessEnv
     expect(() => getBarionConfig(env)).toThrowError(/BARION_API_URL/)
     expect(() => getBarionConfig(env)).toThrowError(/BARION_PAYEE_EMAIL/)
   })

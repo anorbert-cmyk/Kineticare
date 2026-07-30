@@ -30,7 +30,7 @@ function requiredBarionPosKeyEnv(): string {
 }
 
 export function assertRequiredEnv(): void {
-  const missing = requiredEnvVars.filter((key) => {
+  const missing: string[] = requiredEnvVars.filter((key) => {
     const value = process.env[key]
     return typeof value !== 'string' || value.trim().length === 0
   })
