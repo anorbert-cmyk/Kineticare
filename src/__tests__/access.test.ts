@@ -13,6 +13,7 @@ import {
   isStaffOrOwnerFieldAccess,
   publishedOrAdmin,
 } from '../access'
+import { visibleMenusOrAdmin } from '../access/menus-visibility'
 import { orderIntegrityBeforeChange } from '../lib/order-integrity'
 import configPromise from '../payload.config'
 
@@ -200,14 +201,25 @@ describe('collection access bekötés a végleges configban', () => {
       expect(collection?.access?.delete, slug).toBe(isStaffOrOwner)
     }
 
-    for (const slug of ['menus', 'categories']) {
-      const collection = bySlug.get(slug)
-      expect(collection?.access?.create, slug).toBe(isStaffOrOwner)
-      expect(collection?.access?.update, slug).toBe(isStaffOrOwner)
-      expect(collection?.access?.delete, slug).toBe(isStaffOrOwner)
-      // read: nyilvános (mindenkinek true)
-      expect(collection?.access?.read?.(accessArgs(null)), slug).toBe(true)
-    }
+    const categories = bySlug.get('categories')
+    expect(categories?.access?.create).toBe(isStaffOrOwner)
+    expect(categories?.access?.update).toBe(isStaffOrOwner)
+    expect(categories?.access?.delete).toBe(isStaffOrOwner)
+    // categories read: nyilvános (mindenkinek true)
+    expect(categories?.access?.read?.(accessArgs(null))).toBe(true)
+
+    // menus (T-013): a read nyilvános, de nem-admin csak a visible=true sorokat
+    // kapja (where-kényszer); staff/owner mindent lát. A centrális politika és a
+    // Menus collection ugyanazt a visibleMenusOrAdmin függvényt használja.
+    const menus = bySlug.get('menus')
+    expect(menus?.access?.create).toBe(isStaffOrOwner)
+    expect(menus?.access?.update).toBe(isStaffOrOwner)
+    expect(menus?.access?.delete).toBe(isStaffOrOwner)
+    expect(menus?.access?.read).toBe(visibleMenusOrAdmin)
+    expect(menus?.access?.read?.(accessArgs(null))).toEqual({ visible: { equals: true } })
+    expect(menus?.access?.read?.(accessArgs(customer))).toEqual({ visible: { equals: true } })
+    expect(menus?.access?.read?.(accessArgs(staff))).toBe(true)
+    expect(menus?.access?.read?.(accessArgs(owner))).toBe(true)
 
     const media = bySlug.get('media')
     // A public read megmarad, a write staff+owner.

@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
 import { isStaffOrOwner } from './isStaffOrOwner'
+import { visibleMenusOrAdmin } from './menus-visibility'
 import { publishedOrAdmin } from './publishedOrAdmin'
 
 /**
@@ -15,7 +16,9 @@ import { publishedOrAdmin } from './publishedOrAdmin'
  * Mátrix-leképezés:
  * - pages/posts: látogató/customer csak publishedet olvas (saját `status` mező!),
  *   staff+owner mindent olvas; create/update/delete staff+owner.
- * - menus/categories: nincs státusz-mezőjük, a frontend-navigáció miatt a read
+ * - menus (T-013): a read nyilvános, de nem-adminoknak csak a visible=true
+ *   sorok látszanak (visibleMenusOrAdmin); create/update/delete staff+owner.
+ * - categories: nincs státusz-mezője, a frontend-navigáció miatt a read
  *   nyilvános; create/update/delete staff+owner.
  * - media: read nyilvános (a Media collectionben már így van), write staff+owner.
  */
@@ -40,7 +43,9 @@ export const collectionAccessPolicies: Record<string, CollectionConfig['access']
     ...staffOrOwnerWrite,
   },
   menus: {
-    read: publicRead,
+    // T-013: centrális visible-szűrés — nem-admin csak a visible=true sorokat
+    // olvassa; a Menus collection access.read-je ugyanez a függvény.
+    read: visibleMenusOrAdmin,
     ...staffOrOwnerWrite,
   },
   categories: {
