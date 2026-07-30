@@ -1375,6 +1375,7 @@ export interface TransactionsSelect<T extends boolean = true> {
         phone?: T;
       };
   status?: T;
+  customer?: T;
   customerEmail?: T;
   order?: T;
   cart?: T;
