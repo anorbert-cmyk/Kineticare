@@ -29,6 +29,10 @@ export interface WebhookEventDoc {
   attempts?: number | null
   lastError?: string | null
   requestId?: string | null
+  /** A sikeres/végleges feldolgozás időpontja (hiba esetén null — retryable). */
+  processedAt?: string | null
+  /** Az utolsó feldolgozás üzleti kimenetele (pl. paid/cancelled/pending_repoll/failed/rejected). */
+  result?: string | null
   updatedAt?: string
   createdAt?: string
 }

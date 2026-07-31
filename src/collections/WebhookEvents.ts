@@ -86,5 +86,34 @@ export const WebhookEvents: CollectionConfig = {
       name: 'requestId',
       type: 'text',
     },
+    {
+      // A feldolgozás VÉGLEGES üzleti kimenetelének ideje — csak sikeres/
+      // elutasított lezáráskor töltődik; hiba esetén NULL marad, hogy az
+      // esemény újrapróbálható legyen (retry-job).
+      name: 'processedAt',
+      type: 'date',
+      admin: {
+        readOnly: true,
+        description:
+          'A sikeres/végleges feldolgozás időpontja. Hiba (failed) esetén szándékosan üres — az esemény újrapróbálható marad.',
+      },
+    },
+    {
+      // Az utolsó feldolgozás üzleti kimenetele (géppel szűrhető nyom).
+      name: 'result',
+      type: 'select',
+      options: [
+        { label: 'Paid (rendelés fizetve + jogosultság megadva)', value: 'paid' },
+        { label: 'Cancelled (rendelés lemondva)', value: 'cancelled' },
+        { label: 'Függő — újrapollolásra vár', value: 'pending_repoll' },
+        { label: 'Átmenet elutasítva (állapotgép-védelem)', value: 'rejected' },
+        { label: 'Sikertelen feldolgozás (újrapróbálható)', value: 'failed' },
+      ],
+      admin: {
+        readOnly: true,
+        description:
+          'Az utolsó feldolgozás üzleti kimenetele. pending_repoll = a fizetés még függő, a poll-job (külön ticket) dolgozza fel újra.',
+      },
+    },
   ],
 }
