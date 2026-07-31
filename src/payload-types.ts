@@ -468,6 +468,14 @@ export interface WebhookEvent {
   attempts?: number | null;
   lastError?: string | null;
   requestId?: string | null;
+  /**
+   * A sikeres/végleges feldolgozás időpontja. Hiba (failed) esetén szándékosan üres — az esemény újrapróbálható marad.
+   */
+  processedAt?: string | null;
+  /**
+   * Az utolsó feldolgozás üzleti kimenetele. pending_repoll = a fizetés még függő, a poll-job (külön ticket) dolgozza fel újra.
+   */
+  result?: ('paid' | 'cancelled' | 'pending_repoll' | 'rejected' | 'failed') | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -740,7 +748,6 @@ export interface Form {
             name: string;
             label?: string | null;
             width?: number | null;
-            defaultValue?: string | null;
             required?: boolean | null;
             id?: string | null;
             blockName?: string | null;
@@ -1219,6 +1226,8 @@ export interface WebhookEventsSelect<T extends boolean = true> {
   attempts?: T;
   lastError?: T;
   requestId?: T;
+  processedAt?: T;
+  result?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1477,7 +1486,6 @@ export interface FormsSelect<T extends boolean = true> {
               name?: T;
               label?: T;
               width?: T;
-              defaultValue?: T;
               required?: T;
               id?: T;
               blockName?: T;
@@ -1488,7 +1496,6 @@ export interface FormsSelect<T extends boolean = true> {
               name?: T;
               label?: T;
               width?: T;
-              defaultValue?: T;
               required?: T;
               id?: T;
               blockName?: T;
