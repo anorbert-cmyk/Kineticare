@@ -407,6 +407,25 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       },
     },
     {
+      // Refund-nyom (pénzügyi audit): minden visszatérítés egy bejegyzés —
+      // { transactionId, amountHuf, status (Barion RefundedTransactions-státusz),
+      //   refundedAt, type: 'full' | 'partial', reason? }.
+      // Kizárólag a refund-szolgáltatás írja (overrideAccess: true); a read
+      // owner-only, mert pénzügyi tranzakció-adatokat hordoz.
+      name: 'refunds',
+      type: 'json',
+      access: {
+        read: isOwnerFieldAccess,
+        create: () => false,
+        update: () => false,
+      },
+      admin: {
+        readOnly: true,
+        description:
+          'Visszatérítési nyom: tranzakciós refund-bejegyzések (transactionId, összeg, Barion-státusz, időpont, típus).',
+      },
+    },
+    {
       name: 'ipAddress',
       type: 'text',
       access: {

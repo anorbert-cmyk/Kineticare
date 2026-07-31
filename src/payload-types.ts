@@ -468,6 +468,14 @@ export interface WebhookEvent {
   attempts?: number | null;
   lastError?: string | null;
   requestId?: string | null;
+  /**
+   * A sikeres/végleges feldolgozás időpontja. Hiba (failed) esetén szándékosan üres — az esemény újrapróbálható marad.
+   */
+  processedAt?: string | null;
+  /**
+   * Az utolsó feldolgozás üzleti kimenetele. pending_repoll = a fizetés még függő, a poll-job (külön ticket) dolgozza fel újra.
+   */
+  result?: ('paid' | 'cancelled' | 'pending_repoll' | 'rejected' | 'failed') | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -592,6 +600,19 @@ export interface Order {
   consentWithdrawalWaiverAt?: string | null;
   refundReason?: string | null;
   refundedAt?: string | null;
+  /**
+   * Visszatérítési nyom: tranzakciós refund-bejegyzések (transactionId, összeg, Barion-státusz, időpont, típus).
+   */
+  refunds?:
+    | {
+        transactionId: string
+        amountHuf: number
+        status: string
+        refundedAt: string
+        type: 'full' | 'partial'
+        reason?: string | null
+      }[]
+    | null;
   ipAddress?: string | null;
   updatedAt: string;
   createdAt: string;
@@ -1219,6 +1240,8 @@ export interface WebhookEventsSelect<T extends boolean = true> {
   attempts?: T;
   lastError?: T;
   requestId?: T;
+  processedAt?: T;
+  result?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1343,6 +1366,7 @@ export interface OrdersSelect<T extends boolean = true> {
   consentWithdrawalWaiverAt?: T;
   refundReason?: T;
   refundedAt?: T;
+  refunds?: T;
   ipAddress?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1477,7 +1501,6 @@ export interface FormsSelect<T extends boolean = true> {
               name?: T;
               label?: T;
               width?: T;
-              defaultValue?: T;
               required?: T;
               id?: T;
               blockName?: T;
@@ -1488,7 +1511,6 @@ export interface FormsSelect<T extends boolean = true> {
               name?: T;
               label?: T;
               width?: T;
-              defaultValue?: T;
               required?: T;
               id?: T;
               blockName?: T;
