@@ -12,7 +12,6 @@ import { Section } from '@/components/ui/Section'
  */
 export default function ErrorPage({ error, reset }: { error: Error; reset: () => void }) {
   useEffect(() => {
-    // A részletek a szervernaplóban élnek; itt csak fejlesztői jelzés.
     console.error('Frontend render-hiba:', error)
   }, [error])
 
