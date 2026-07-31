@@ -34,7 +34,6 @@ export type SupportedTimezones =
   | 'America/Bogota'
   | 'America/Caracas'
   | 'America/Santiago'
-  | 'America/Buenos_Aires'
   | 'America/Sao_Paulo'
   | 'Atlantic/South_Georgia'
   | 'Atlantic/Azores'
@@ -600,6 +599,19 @@ export interface Order {
   consentWithdrawalWaiverAt?: string | null;
   refundReason?: string | null;
   refundedAt?: string | null;
+  /**
+   * Visszatérítési nyom: tranzakciós refund-bejegyzések (transactionId, összeg, Barion-státusz, időpont, típus).
+   */
+  refunds?:
+    | {
+        transactionId: string
+        amountHuf: number
+        status: string
+        refundedAt: string
+        type: 'full' | 'partial'
+        reason?: string | null
+      }[]
+    | null;
   ipAddress?: string | null;
   updatedAt: string;
   createdAt: string;
@@ -738,7 +750,6 @@ export interface Form {
             name: string;
             label?: string | null;
             width?: number | null;
-            defaultValue?: string | null;
             required?: boolean | null;
             id?: string | null;
             blockName?: string | null;
@@ -783,7 +794,7 @@ export interface Form {
         replyTo?: string | null;
         emailFrom?: string | null;
         subject: string;
-        message?: {
+        message: {
           root: {
             type: string;
             children: {
@@ -893,7 +904,7 @@ export interface PayloadJob {
   log?:
     | {
         executedAt: string;
-        completedAt: string;
+        completedAt?: string | null;
         taskSlug: 'inline' | 'webhook-retry';
         taskID: string;
         input?:
@@ -1352,6 +1363,7 @@ export interface OrdersSelect<T extends boolean = true> {
   consentWithdrawalWaiverAt?: T;
   refundReason?: T;
   refundedAt?: T;
+  refunds?: T;
   ipAddress?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1398,7 +1410,6 @@ export interface TransactionsSelect<T extends boolean = true> {
  * via the `definition` "forms_select".
  */
 export interface FormsSelect<T extends boolean = true> {
-  title?: T;
   fields?:
     | T
     | {
