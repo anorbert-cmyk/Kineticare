@@ -1,0 +1,367 @@
+/**
+ * Layout-stílusok: fejléc, navigáció (desktop + mobil drawer), lábléc,
+ * hibaoldalak. Töréspont: 900px (mobil < 900px) — lásd tokens.css.
+ */
+
+/* ---- Fejléc -------------------------------------------------------------- */
+.kc-site-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background-color: var(--kc-color-surface-tint); /* legacy fejléc-sáv */
+  border-bottom: 1px solid var(--kc-color-blue-200);
+}
+
+.kc-site-header__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kc-space-4);
+  min-height: var(--kc-header-height);
+}
+
+.kc-site-header__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kc-space-3);
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-lg);
+  color: var(--kc-color-navy-900);
+  text-decoration: none;
+}
+
+.kc-site-header__brand:hover {
+  text-decoration: none;
+}
+
+/* ---- Desktop navigáció ---------------------------------------------------- */
+.kc-nav-desktop {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .kc-nav-desktop {
+    display: block;
+  }
+}
+
+.kc-nav-desktop__list {
+  display: flex;
+  align-items: center;
+  gap: var(--kc-space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kc-nav-desktop__item {
+  position: relative;
+}
+
+.kc-nav-desktop__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kc-space-1);
+  padding: var(--kc-space-2) var(--kc-space-3);
+  border-radius: var(--kc-radius-md);
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-bold);
+  color: var(--kc-color-navy-900);
+  text-decoration: none;
+}
+
+.kc-nav-desktop__link:hover {
+  background-color: rgb(11 36 63 / 0.06);
+  text-decoration: none;
+}
+
+.kc-nav-desktop__caret {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex: none;
+}
+
+/* Almenü: hover ÉS billentyűzet-fókusz (focus-within) alatt is nyitva. */
+.kc-nav-desktop__submenu {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 100%;
+  z-index: 60;
+  min-width: 14rem;
+  margin: 0;
+  padding: var(--kc-space-2);
+  list-style: none;
+  background-color: var(--kc-color-white);
+  border: 1px solid var(--kc-color-border);
+  border-radius: var(--kc-radius-md);
+  box-shadow: var(--kc-shadow-md);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(calc(-1 * var(--kc-space-2)));
+  transition:
+    opacity var(--kc-motion-fast) var(--kc-ease-out),
+    transform var(--kc-motion-fast) var(--kc-ease-out),
+    visibility var(--kc-motion-fast);
+}
+
+.kc-nav-desktop__item:hover > .kc-nav-desktop__submenu,
+.kc-nav-desktop__item:focus-within > .kc-nav-desktop__submenu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.kc-nav-desktop__sublink {
+  display: block;
+  padding: var(--kc-space-2) var(--kc-space-3);
+  border-radius: var(--kc-radius-sm);
+  font-size: var(--kc-text-sm);
+  color: var(--kc-color-text);
+  text-decoration: none;
+}
+
+.kc-nav-desktop__sublink:hover {
+  background-color: var(--kc-color-blue-100);
+  color: var(--kc-color-navy-900);
+  text-decoration: none;
+}
+
+/* Külső hivatkozás jelölése. */
+.kc-nav__external-icon {
+  width: 0.8rem;
+  height: 0.8rem;
+  flex: none;
+  opacity: 0.7;
+}
+
+/* ---- Mobil navigáció (hamburger + drawer) --------------------------------- */
+.kc-nav-mobile {
+  display: block;
+}
+
+@media (min-width: 900px) {
+  .kc-nav-mobile {
+    display: none;
+  }
+}
+
+.kc-nav-mobile__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: var(--kc-radius-md);
+  background-color: transparent;
+  color: var(--kc-color-navy-900);
+  cursor: pointer;
+}
+
+.kc-nav-mobile__toggle:hover {
+  background-color: rgb(11 36 63 / 0.06);
+}
+
+.kc-nav-mobile__toggle svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.kc-nav-mobile__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background-color: rgb(11 36 63 / 0.5);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--kc-motion-base) var(--kc-ease-out),
+    visibility var(--kc-motion-base);
+}
+
+.kc-nav-mobile__overlay[data-open='true'] {
+  opacity: 1;
+  visibility: visible;
+}
+
+.kc-nav-mobile__drawer {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  width: min(20rem, 85vw);
+  background-color: var(--kc-color-white);
+  box-shadow: var(--kc-shadow-lg);
+  transform: translateX(100%);
+  visibility: hidden;
+  transition:
+    transform var(--kc-motion-base) var(--kc-ease-out),
+    visibility var(--kc-motion-base);
+}
+
+.kc-nav-mobile__drawer[data-open='true'] {
+  transform: translateX(0);
+  visibility: visible;
+}
+
+.kc-nav-mobile__drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kc-space-3);
+  padding: var(--kc-space-4);
+  border-bottom: 1px solid var(--kc-color-border);
+}
+
+.kc-nav-mobile__drawer-title {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-lg);
+  color: var(--kc-color-navy-900);
+}
+
+.kc-nav-mobile__list {
+  list-style: none;
+  margin: 0;
+  padding: var(--kc-space-3) var(--kc-space-4);
+  overflow-y: auto;
+}
+
+.kc-nav-mobile__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kc-space-2);
+  padding: var(--kc-space-3) var(--kc-space-2);
+  border-radius: var(--kc-radius-md);
+  font-size: var(--kc-text-base);
+  font-weight: var(--kc-font-weight-bold);
+  color: var(--kc-color-navy-900);
+  text-decoration: none;
+}
+
+.kc-nav-mobile__link:hover {
+  background-color: var(--kc-color-blue-100);
+  text-decoration: none;
+}
+
+.kc-nav-mobile__empty {
+  padding: var(--kc-space-4);
+}
+
+.kc-nav-mobile__sublist {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 var(--kc-space-2) var(--kc-space-4);
+}
+
+.kc-nav-mobile__sublink {
+  display: flex;
+  align-items: center;
+  gap: var(--kc-space-2);
+  padding: var(--kc-space-2);
+  border-radius: var(--kc-radius-md);
+  font-size: var(--kc-text-sm);
+  color: var(--kc-color-text);
+  text-decoration: none;
+}
+
+.kc-nav-mobile__sublink:hover {
+  background-color: var(--kc-color-blue-100);
+  text-decoration: none;
+}
+
+/* ---- Lábléc --------------------------------------------------------------- */
+.kc-site-footer {
+  background-color: var(--kc-color-navy-900); /* legacy lábléc */
+  color: var(--kc-color-white);
+  padding-block: var(--kc-space-6);
+}
+
+.kc-site-footer__grid {
+  display: grid;
+  gap: var(--kc-space-5);
+}
+
+@media (min-width: 900px) {
+  .kc-site-footer__grid {
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: var(--kc-space-6);
+  }
+}
+
+.kc-site-footer__brand {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-lg);
+  color: var(--kc-color-white);
+}
+
+.kc-site-footer__tagline {
+  font-size: var(--kc-text-sm);
+  color: rgb(255 255 255 / 0.8);
+  margin-block-start: var(--kc-space-1);
+}
+
+.kc-site-footer__legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kc-space-2) var(--kc-space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--kc-text-sm);
+}
+
+.kc-site-footer__legal a {
+  color: var(--kc-color-white);
+  text-decoration: none;
+}
+
+.kc-site-footer__legal a:hover {
+  text-decoration: underline;
+}
+
+.kc-site-footer__contact {
+  font-size: var(--kc-text-sm);
+}
+
+.kc-site-footer__contact a {
+  color: var(--kc-color-white);
+  font-weight: var(--kc-font-weight-bold);
+}
+
+.kc-site-footer__copy {
+  font-size: var(--kc-text-xs);
+  color: rgb(255 255 255 / 0.7);
+}
+
+/* ---- Hibaoldalak (404/500) ------------------------------------------------- */
+.kc-error-page {
+  text-align: center;
+}
+
+.kc-error-page__code {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-4xl);
+  line-height: var(--kc-leading-tight);
+  color: var(--kc-color-navy-900);
+}
+
+.kc-error-page__title {
+  margin-block-start: var(--kc-space-3);
+  font-size: var(--kc-text-2xl);
+}
+
+.kc-error-page__text {
+  margin-block: var(--kc-space-4) var(--kc-space-6);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-error-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--kc-space-3);
+}
