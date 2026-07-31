@@ -1,7 +1,7 @@
 import { getPayload } from 'payload'
 
-import { createStreamTokenHandler } from '../../../../../lib/stream/route-handler'
-import config from '../../../../../payload.config'
+import { createStreamTokenHandler } from '../../../../lib/stream/route-handler'
+import config from '../../../../payload.config'
 
 /**
  * GET /api/stream-token — védett videókhoz signed playback token, kizárólag
