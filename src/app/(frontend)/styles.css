@@ -1,22 +1,10 @@
-:root {
-  color-scheme: light dark;
-}
-
-body {
-  margin: 0;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
-}
-
-.home {
-  display: flex;
-  min-height: 100vh;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  text-align: center;
-}
+/**
+ * A (frontend) route-group globális stílusbejegyzése.
+ *
+ * Sorrend: tokenek → alapréteg → UI-primitívek → layout (header/footer/nav).
+ * Új stíluslapot a megfelelő rétegbe tegyél, NE ide.
+ */
+@import './styles/tokens.css';
+@import './styles/base.css';
+@import './styles/ui.css';
+@import './styles/layout.css';
