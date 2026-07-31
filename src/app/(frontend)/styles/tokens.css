@@ -1,0 +1,100 @@
+/**
+ * Kineticare design-tokenek — EGYetlen igazságforrás a storefront vizuális
+ * nyelvéhez. A komponensek és oldalak KIZÁRÓLAG ezeket a változókat
+ * használhatják (var(--kc-*)), szétszórt hardcode-olt érték TILOS.
+ *
+ * Forrás: docs/legacy (a régi kineticare.hu klónja) — a színek, a tipográfia
+ * és a térközök a legacy oldal inline stílusaiból kinyerve:
+ *   - navy:  rgba(11, 36, 63, 1)   — legacy lábléc-háttér / márka-sötét
+ *   - tint:  rgba(235, 247, 255, 1) — legacy fejléc-sáv háttér
+ *   - fehér szekciók, fekete címsor-szín
+ *   - címsor: "Tenor Sans" 400; szöveg: "Nunito Sans" 400, 18px/30px alap
+ *   - tartalom-szélességek: wide 1120px, small 720px
+ *
+ * Betűkészlet-megjegyzés: a legacy a fontokat CDN-ről töltötte — hotlink
+ * TILOS, ezért a stack első eleme a név, a fallback rendszerszintű. Ha
+ * később self-hostoljuk a woff2-t (public/assets/fonts alá, ugyanilyen
+ * családnéven), az itt definiált stack változás nélkül aktiválódik.
+ */
+
+:root {
+  /* ---- Színek ---------------------------------------------------------- */
+  --kc-color-navy-900: #0b243f; /* legacy lábléc/márka-sötét — primary gomb, footer, fejléc-szöveg */
+  --kc-color-navy-700: #16406e; /* hover/fókusz árnyalat a navy-900-hoz */
+  --kc-color-blue-100: #ebf7ff; /* legacy tint-sáv (fejléc háttér, tint-section) */
+  --kc-color-blue-200: #d2e9fa; /* tint-határvonal, badge-háttér */
+  --kc-color-white: #ffffff;
+  --kc-color-text: #1a1a1a; /* legacy: rgba(0,0,0,1) címsor + szöveg, kontraszt-miatt finomítva */
+  --kc-color-text-muted: #4a5560; /* másodlagos szöveg — #fff-en 7.9:1 (AA/AAA) */
+  --kc-color-border: #d7dee6;
+  --kc-color-surface: var(--kc-color-white);
+  --kc-color-surface-tint: var(--kc-color-blue-100);
+  --kc-color-danger: #b3261e; /* hibaállapot — fehéren 7.3:1 */
+  --kc-color-danger-surface: #fdecea;
+  --kc-color-success: #166534;
+  --kc-color-success-surface: #e8f5ec;
+  --kc-color-focus: #16406e; /* látható fókuszgyűrű */
+
+  /* Szerep-tokenek (a komponensek EZEKET használják) */
+  --kc-color-primary: var(--kc-color-navy-900);
+  --kc-color-primary-hover: var(--kc-color-navy-700);
+  --kc-color-on-primary: var(--kc-color-white);
+
+  /* ---- Tipográfia ------------------------------------------------------ */
+  --kc-font-heading: 'Tenor Sans', 'Georgia', 'Times New Roman', serif;
+  --kc-font-body: 'Nunito Sans', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+
+  /* Tipográfiai skála (1.25-ös arány, legacy alap 18px) */
+  --kc-text-xs: 0.777rem;   /* ~14px */
+  --kc-text-sm: 0.888rem;   /* 16px */
+  --kc-text-base: 1rem;     /* 18px — legacy body */
+  --kc-text-lg: 1.25rem;    /* ~22px */
+  --kc-text-xl: 1.555rem;   /* ~28px */
+  --kc-text-2xl: 2rem;      /* 36px */
+  --kc-text-3xl: 2.666rem;  /* 48px */
+  --kc-text-4xl: 3.555rem;  /* 64px */
+
+  --kc-leading-tight: 1.15;
+  --kc-leading-heading: 1.2; /* legacy headline 108/100 ≈ 1.08, olvashatóságra kerekítve */
+  --kc-leading-body: 1.67;   /* legacy 30/18 */
+
+  --kc-font-weight-normal: 400;
+  --kc-font-weight-bold: 700;
+
+  /* ---- Térközök (4px rács) --------------------------------------------- */
+  --kc-space-1: 0.25rem;  /* 4px */
+  --kc-space-2: 0.5rem;   /* 8px */
+  --kc-space-3: 0.75rem;  /* 12px */
+  --kc-space-4: 1rem;     /* 16px */
+  --kc-space-5: 1.5rem;   /* 24px */
+  --kc-space-6: 2rem;     /* 32px */
+  --kc-space-7: 3rem;     /* 48px */
+  --kc-space-8: 4.5rem;   /* 72px */
+  --kc-space-9: 5.5rem;   /* 88px — legacy szekció-padding (100px) körül */
+
+  /* ---- Lekerekítések ---------------------------------------------------- */
+  --kc-radius-sm: 0.25rem;  /* 4px */
+  --kc-radius-md: 0.5rem;   /* 8px */
+  --kc-radius-lg: 0.75rem;  /* 12px */
+  --kc-radius-full: 999px;  /* badge/tabletta */
+
+  /* ---- Árnyékok ---------------------------------------------------------- */
+  --kc-shadow-sm: 0 1px 2px rgb(11 36 63 / 0.08);
+  --kc-shadow-md: 0 4px 12px rgb(11 36 63 / 0.12);
+  --kc-shadow-lg: 0 12px 32px rgb(11 36 63 / 0.16);
+
+  /* ---- Layout ------------------------------------------------------------ */
+  --kc-container-wide: 1120px;  /* legacy "wide" tartalom-szélesség */
+  --kc-container-narrow: 720px; /* legacy "small" tartalom-szélesség */
+  --kc-container-gutter: var(--kc-space-5); /* mobil oldal-margó */
+
+  /* ---- Töréspont (dokumentációs jelleggel, JS-beli egyeztetéshez) -------- */
+  /* Mobil < 900px (a legacy 800px-es váltását a mai készülékekhez igazítva);
+     a CSS-médialekérdezések ezt az értéket követik. */
+  --kc-header-height: 4.5rem;
+
+  /* ---- Interakció -------------------------------------------------------- */
+  --kc-motion-fast: 120ms;
+  --kc-motion-base: 200ms;
+  --kc-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
