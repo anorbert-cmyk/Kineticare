@@ -17,6 +17,83 @@ Feldolgozott tartomány: <régi sha>..<új sha> (N commit)
 
 ---
 
+## 2026-07-31 — Mélyaudit: a főlánc kerek, de három ponton szivárog
+
+Feldolgozott tartomány: nincs új commit — ez egy **kódaudit**, nem
+változás-követés. Alap-commit: `f015bc3`.
+
+### Mi történt
+
+Ötdimenziós, ügynök-alapú audit futott a repón (állapotgép, refund,
+access/paywall, hibaágak, konvenciók+tesztek), dimenziónként a két legsúlyosabb
+találat **cáfolat-központú ellenőrzéssel**: a verifikátor feladata a találat
+megdöntése volt, bizonytalanság esetén a cáfolat nyert.
+
+Eredmény: **9 megerősített találat** (M-09..M-16, plusz M-07 megerősítése),
+**1 megcáfolt**, és **13 további találat ellenőrizetlenül eldobva** a
+dimenziónkénti top-2 korlát miatt. Ez a lista tehát nem teljes.
+
+### Mit jelent
+
+Az előző bejegyzésben azt írtam, a pénzügyi főlánc „kerek lett". A szerkezete
+az — de az audit három olyan pontot talált, ahol a **pénz és a hozzáférés
+szétcsúszik**:
+
+1. **M-09 (magas):** a Barion ugyanarra a PaymentId-ra több callbackot küld, a
+   dedup viszont csak a PaymentId-ra kulcsol, és a *nem-végleges* kimenetel is
+   `processed`-re zárja az eseményt. Egy korai, függő callback után a **később
+   érkező, sikeres callback no-opként eldobódik**: a pénz levonódik, a rendelés
+   örökre `payment_pending`, a vevő nem kapja meg a videót. Ez nem elméleti — ez
+   a normál Barion-viselkedés melléktermékeként bekövetkező adatvesztés.
+2. **M-11 (magas):** a refund a Barion tranzakció-szintű státuszát eltárolja, de
+   **sosem ágazik el rá**. `RefundFailed` esetén a rendszer visszavonja a
+   hozzáférést, miközben a vevő a pénzét nem kapja vissza — és az API-n és az
+   adminon keresztül sem korrigálható.
+3. **M-10 (magas):** két párhuzamos refund egymásra ír, mindkettő `partial`-nak
+   hiszi magát, egyik sem vonja vissza a hozzáférést — a teljes vételár
+   visszautalva, a rendelés mégis `paid`.
+
+Külön kategória a **M-12**: a `role` és a `purchases` mezővédelme gondos, de a
+Payload auth által hozzáadott `password`/`email` mezőkre nem terjed ki, és a
+`users.update` a staffnak minden rekordra szól. Egy staff tehát átírhatja az
+owner jelszavát — **audit-bejegyzés nélkül**, mert a plugin csak a `role`
+változását naplózza. Ez access-control kérdés, tehát a `CLAUDE.md` 4. pontja
+szerint emberi döntés.
+
+A megbízhatósági réteg két helyen csendben halott: a retry-job lapja
+**betelhet** kimerült eseményekkel (**M-14**), a feldolgozó regisztrációja pedig
+**egy route-modul import-mellékhatása** (**M-15**) — a cron-worker így elvileg
+sosem találja meg.
+
+És a lánc alapja tesztelhetetlen: az **ár-integritási hookot egyetlen futó teszt
+sem fedi** (**M-16**) — a DB-s teszt kihagyódik, a unit-teszt pedig kimockolja
+pont azt, amit ellenőriznie kellene. Ez az M-01-nél (hiányzó CI) sokkal
+konkrétabb indok a kapuk beüzemelésére.
+
+### Tiltott zóna érintve?
+
+Nem. Az audit **csak olvasott**: alkalmazáskód, migráció, access-függvény és
+függőség nem változott. A `confirmOrder`-védelmet az ügynökök előre ismerték
+szándékos védelmi kódként, és nem is jelentették hibaként.
+
+### Mi bizonyította, hogy az ellenőrzés dolgozik
+
+Egy találat megbukott a szkeptikuson: az állítás szerint a
+`webhook-audit-db.test.ts` kettős védőkorlátja miatt strukturálisan nem tud
+elbukni. A verifikátor kimutatta, hogy a `beforeAll` próbája **csak olvasó
+hívásokból áll**, ezért épp a feltételezett helyzetet (létező tábla, hiányzó
+unique index) *nem* nyeli el — ott `tablesReady = true` lesz, és a teszt
+hangosan bukik. A találat mechanizmus-leírása formailag stimmelt, a
+következtetése nem.
+
+### Következő figyelnivaló
+
+- **M-09, M-11, M-12** a három, amit érdemes soron kívül eldönteni.
+- A 13 ellenőrizetlen találat: ha kell, egy második kör mehet rájuk.
+- A javítás továbbra sem a figyelés hatásköre — külön döntés és PR tárgya.
+
+---
+
 ## 2026-07-31 — A fizetési főlánc bezárult: callback, refund, videó-paywall
 
 Feldolgozott tartomány: `2c88b04..f015bc3` (13 commit)

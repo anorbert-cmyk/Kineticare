@@ -132,11 +132,25 @@ hozzáférést anélkül, hogy bárhol hibaüzenet keletkezne.
 vagy a relationship-elem hozzáadása történjen sorszintű zárolással.
 Ellenőrizendő, hogy a Payload postgres-adapter ad-e erre közvetlen eszközt.
 
+> *2026-07-31, audit:* ez a tétel maga nem került külön ellenőrzésre, de a
+> **M-10** ugyanezt a minta-hibát igazolta a `refunds` json-on, súlyosabb
+> következménnyel. A kettőt érdemes együtt javítani — ugyanaz a
+> read-modify-write séma, ugyanaz a hiányzó tranzakció.
+
 ---
 
 ## M-07 — A `payment_failed` rendelés-státusz egyetlen kódúton sem érhető el
 
-**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** közepes
+**Státusz:** nyitott, **auditban megerősítve** · **Felvéve:** 2026-07-31 · **Súly:** közepes
+
+> A 2026-07-31-i mélyaudit független dimenzióban is megtalálta, és az
+> adversarial ellenőrzés sem tudta megcáfolni. Kiegészítés: a `payment_failed`
+> a `mapBarionPaymentStatus` visszatérési típusában (`OrderPaymentState`) meg
+> sem jelenik, és a `PartiallySucceeded` is a `default` ágra fut. A státuszt a
+> rendszerben kizárólag a checkout-start Barion-hibaága állítja be
+> (`start-checkout.ts:279`) — a callback-út soha. Együtt olvasandó **M-09**-cel:
+> a `pending_repoll`-lal lezárt esemény `processed` lesz, így az elbukott
+> fizetés még egy későbbi callbackkel sem javítható ki.
 
 Az `orders` állapotgép deklarál egy `payment_failed` értéket, de a
 `src/lib/barion/state.ts` `mapBarionPaymentStatus` függvénye sosem képez rá:
@@ -180,3 +194,248 @@ mert a lint nem jelzi őket.
 
 **Javaslat:** nem sürgős. Amikor a `payload-types` és a plugin-típusok
 összeérnek (lásd M-02), érdemes egy körben megnézni, melyik cast tűnhet el.
+
+---
+
+# Mélyaudit — 2026-07-31
+
+Az alábbi tételek egy 5 dimenziós, ügynök-alapú mélyauditból származnak
+(`f015bc3` alap-commit). Mindegyik átment egy **cáfolat-központú ellenőrzésen**:
+a verifikátor feladata a találat megdöntése volt, és bizonytalanság esetén a
+cáfolat nyert. Ami itt szerepel, azt az ellenőrzés sem tudta megcáfolni.
+
+**Lefedettségi korlát:** dimenziónként csak a két legsúlyosabb találat került
+ellenőrzésre; **13 további találat ellenőrizetlen maradt**, és szándékosan nem
+került be. Ez a lista tehát nem teljes.
+
+---
+
+## M-09 — A dedup véglegesen elnyeli a fizetés későbbi, sikeres callbackjét
+
+**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Hely:** `src/lib/barion-callback/route-handler.ts:130`
+
+A webhook-dedup kulcsa kizárólag a `(provider='barion', externalId=PaymentId)`
+pár — a Barion viszont **ugyanarra a PaymentId-ra több callbackot is küld**,
+állapotváltásonként. A baj az, hogy a nem-végleges kimenetelek is `processed`
+státuszba zárják az eseményt: a `payment_pending` ág
+(`process-callback.ts:234`, `closeEvent(..., 'pending_repoll')`) és a
+`rejected` ágak (261/270/284) után az `attemptProcessing` `processed`-re állít
+(`idempotency.ts:151-156`).
+
+**Forgatókönyv:** a vevő elindítja a fizetést, a Barion egy korai (InProgress /
+Started / Authorized / Reserved) állapotról callbackot küld → az esemény
+`pending_repoll` eredménnyel **véglegesen lezárul**. A vevő ezután **sikeresen
+fizet**, a Barion újra POST-ol ugyanazzal a PaymentId-val → a handler
+`duplicate` no-op 200-at ad. **A pénz levonódik, a rendelés örökre
+`payment_pending` marad, a `purchases` sosem íródik be, a videó nem nézhető.**
+
+Mentőháló nincs, és ez kettős zár: nem csak a route-handler 130-134. sora
+dobja el, hanem a `processWebhook` `already-processed` ága is
+(`idempotency.ts:201-209`) — így a retry-job sem tudná lefuttatni. A
+`pending_repoll` értéket **egyetlen kódút sem olvassa**; a kommentekben ígért
+poll-job nem létezik; a `webhook-retry` csak `received`/`failed` eseményeket
+vesz fel (`webhook-retry.ts:59`); és nincs Barion-visszatérési (RedirectUrl)
+reconcile-végpont sem.
+
+**Javaslat:** a dedup kulcs ne csak a PaymentId legyen, vagy a nem-végleges
+kimenetel (`pending_repoll`) ne zárja `processed`-re az eseményt. Amíg ez így
+van, minden korai callback egy elveszett vásárlás kockázata.
+
+---
+
+## M-10 — Párhuzamos refundok elvesztik egymás nyomát
+
+**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Hely:** `src/lib/refund/refund-order.ts:385`
+
+A refund-folyamat végig **egyetlen, a legelején beolvasott order-pillanatképből**
+dolgozik, és a `refunds` json-t teljes tömb-felülírással írja vissza —
+zárolás, verzió-ellenőrzés és tranzakció nélkül.
+
+**Forgatókönyv:** 10 000 Ft-os `paid` rendelésre két párhuzamos refund-hívás
+érkezik, egyenként 5000 Ft-tal (duplán elküldött admin-kérés is elég). Mindkettő
+üres `refunds`-ot olvas, mindkettő átmegy a validáción, **mindkettőt elfogadja a
+Barion — összesen 10 000 Ft ténylegesen visszautalva**. A visszaírásnál viszont
+mindkét szál az elavult, üres tömbből indul, így a `refunds` végül **egyetlen
+5000-es bejegyzést** tartalmaz.
+
+Súlyosbító részlet: a `type` (`partial`/`full`) döntés is az elavult
+pillanatképből számolt `alreadyRefunded`-re épül (301. sor), ezért **mindkét szál
+a `partial` ágra fut, és egyik sem hívja a `revokePurchases`-t**. Végállapot: a
+teljes vételár visszautalva, a rendelés `paid`, a vevő korlátlanul streamel, a
+könyvelés szerint pedig 5000 Ft térült vissza.
+
+**Javaslat:** a refund menjen tranzakcióban, és a `refunds` írása olvassa újra a
+rendelést a záráskor (vagy használjon append-szemantikát). Ugyanaz a
+minta-hiba, mint M-06 — ott a `purchases`, itt a `refunds`.
+
+---
+
+## M-11 — A Barion tranzakció-szintű refund-státusz ellenőrizetlen
+
+**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Hely:** `src/lib/refund/refund-order.ts:374`
+
+A kód a `RefundedTransactions[0].Status` értékét **eltárolja, de sosem ágazik el
+rá**. Bármilyen státusz mellett — beleértve a `RefundFailed`-et, amelyet a repó
+saját típusdefiníciója is felsorol (`src/lib/barion/types.ts:156`) — a rendelést
+`refunded`-re állítja, levonja a `purchases`-jogosultságot, és 200-zal tér
+vissza. Hiányzó/üres `RefundedTransactions` esetén `'Unknown'` státusszal
+ugyanígy „sikeres".
+
+**Forgatókönyv:** a kártyakibocsátó elutasítja a jóváírást → HTTP 200, üres
+`Errors`, de `Status: 'RefundFailed'`. **A vevő elveszíti a hozzáférést, a pénzét
+viszont nem kapja vissza.**
+
+És nem javítható az API-n: az újrapróbálás a 240-242. sori védelembe ütközik
+(409, „már visszatérítésre került"), a `refunds` mező pedig
+`create/update: () => false` + `admin.readOnly`, tehát **az admin felületről sem
+korrigálható** — csak közvetlen adatbázis-beavatkozással. Részrefundnál is
+károsít: a sikertelen összeg beszámít a „már visszatérített" keretbe, és
+korlátozza a későbbi, valódi visszatérítést.
+
+**Javaslat:** a sikeres refund feltétele legyen a tranzakció-szintű státusz
+explicit ellenőrzése; ismeretlen vagy sikertelen státusznál a rendelés maradjon
+érintetlen, és a hívó kapjon hibát.
+
+---
+
+## M-12 — Staff bármely felhasználó (owner is) jelszavát és e-mail-címét átírhatja
+
+**Státusz:** emberi döntésre vár · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Hely:** `src/collections/Users.ts:23`
+
+A `users` collection `update` access-e (`isSelfOrAdmin`) a **staff** szerepkörnek
+where-szűkítés nélkül írásjogot ad **minden** felhasználói rekordra, a Payload
+auth által hozzáadott `password` és `email` mezőkön pedig **nincs mezőszintű
+védelem** — a gondos `role` és `purchases` védelem ezekre nem terjed ki.
+
+**Forgatókönyv:** egy staff felhasználó `PATCH /api/users/<owner-id>` kérést küld
+`{"password":"..."}` törzzsel. Ezután belép ownerként: refundot indíthat, árat és
+publikálást módosíthat, olvashatja az owner-only pénzügyi mezőket és az
+audit-logokat. **A `src/plugins/audit.ts` csak a `role` változását auditálja,
+így erről a jogemelésről audit-bejegyzés sem keletkezik.** Ugyanígy bármely
+vevő fiókjába belépve megkapja annak összes videójára a lejátszási tokent.
+
+Pontosítás: ehhez érvényes staff-hitelesítés kell (belső visszaélés vagy
+kompromittált fiók) — nyilvános regisztrációval nem érhető el, mert a `role`
+owner-only field-access-e miatt minden regisztráló `customer` marad.
+
+**Javaslat:** a `password` és `email` mező kapjon `isSelfOrAdmin`-nál szűkebb
+field-access-t (saját rekord vagy owner), vagy a `users.update` szűküljön
+staffra nézve saját rekordra. **A `CLAUDE.md` 4. pontja szerint ez
+access-control módosítás — emberi jóváhagyás nélkül nem nyúlunk hozzá.**
+
+---
+
+## M-13 — Az `accessDurationDays` (lejáró hozzáférés) sehol nincs kikényszerítve
+
+**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** közepes
+**Hely:** `src/lib/stream/issue-stream-token.ts:131`
+
+A paywall kizárólag **statikus** feltételeket néz: a `users.purchases` tagságot
+és a termék `published`/`archived` státuszát. Időbeli feltétel egyik sem.
+
+A termék `accessDurationDays` mezője — amelynek leírása szerint „hány napig
+érvényes a hozzáférés vásárlás után" — a teljes `src/` fában **csak a
+meződefinícióban és a generált típusokban szerepel, üzleti logikában sehol**.
+Ráadásul a `purchases` sima relationship, vásárlási időbélyeg nélkül, így a
+lejárat a jogosultsági bejegyzésből ki sem számítható — a rendelés dátumára
+kellene visszanyúlni.
+
+**Forgatókönyv:** 30 napra megvásárolt kurzus 2 évvel később is korlátlanul
+nézhető. Lejáratkor semmilyen hook vagy job nem veszi le a jogosultságot; a
+`purchases` egyetlen visszavonási útja a teljes refund.
+
+**Javaslat:** vagy a token-kiállítás ellenőrizze a lejáratot (a rendelés
+dátumából), vagy a mező kerüljön ki, amíg nincs mögötte logika — jelenleg egy
+üzleti ígéretet dokumentál, amit a rendszer nem tart be.
+
+---
+
+## M-14 — A kimerült webhook-események véglegesen elzárják a retry-batchet
+
+**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Hely:** `src/jobs/tasks/webhook-retry.ts:57`
+
+A retry-job fix, `updatedAt` szerint **növekvő** sorrendű, 25 elemű lapot kér a
+`received`/`failed` eseményekből — de nem szűri ki a véglegesen elakadt
+rekordokat, és nem is írja át őket. Két ilyen „fejlap-foglaló" osztály van:
+
+1. a `MAX_WEBHOOK_ATTEMPTS`-et elért események (78-88. sor: csak számláló +
+   `logger.error`, majd `continue` — semmilyen `store.update`),
+2. a regisztrálatlan providerű események (72-76. sor: `skipped`, szintén update
+   nélkül).
+
+Mivel a `WebhookEvents` collectionben **nincs terminális státusz**, az
+`update`/`delete` access `() => false`, és nincs takarító job, ezeknek az
+`updatedAt`-ja véglegesen befagy — így örökre a lap elején maradnak.
+
+**Forgatókönyv:** 25 ilyen rekord összegyűlik → **a retry-job érdemben halott**.
+Minden új sikertelen callback kiszorul a lapról. A vevő fizet, a Barion 5
+kézbesítés után feladja, a rendelés `payment_pending` marad. A hiba egyetlen
+jele: percenként ugyanaz a 25 error-sor (napi ~36 000 fals riasztás), amiben a
+valódi új hibák láthatatlanok.
+
+**Javaslat:** a lekérdezés zárja ki a kimerített rekordokat (terminális státusz
+vagy `attempts` szűrő), és a kimerülés írjon státuszt, ne csak logot.
+
+---
+
+## M-15 — A retry-job feldolgozója csak a callback-route betöltése után létezik
+
+**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Hely:** `src/app/(frontend)/api/barion/callback/route.ts:20`
+
+A `'barion'` webhook-processzor regisztrációja **kizárólag a route-modul
+import-mellékhatása**, és egy in-process `Map`-be kerül
+(`idempotency.ts:251-264`). A `payload.config.ts` / `src/jobs/index.ts` /
+`src/instrumentation.ts` útvonalon **semmi nem tölti be ezt a modult**, a
+retry-job viszont a Payload-példányból fut.
+
+**Forgatókönyv:** újraindítás után marad néhány `failed` esemény. A percenkénti
+cron lefut, de amíg nem érkezik új callback **ugyanabba a Node-folyamatba**, a
+`getWebhookProcessor('barion')` `undefined` → `skipped`, `continue`. Ez a
+naplóban **megkülönböztethetetlen** a „még nem esedékes" esettől: mindkettő
+ugyanabba a `skipped` számlálóba megy (72-76 és 89-92. sor).
+
+Pontosítás: egyprocesszes `next start` deploynál ez nem véglegesen halott ág —
+az első beérkező callback (a duplikátum-ágon is) betölti a modult, tehát
+„önjavul". A valós kockázat az **újraindítás és az első callback közötti
+ablak**, illetve az olyan futtatókörnyezet, ahol a cron-worker sosem szolgál ki
+HTTP-kérést.
+
+**Javaslat:** a regisztráció költözzön a `payload.config` / `instrumentation`
+útvonalra, és a `skipped` számláló váljon szét (nincs processzor ≠ nem
+esedékes).
+
+---
+
+## M-16 — Az ár-integritási hookot egyetlen futó teszt sem fedi le
+
+**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Hely:** `src/__tests__/order-snapshots.test.ts:32`
+
+Az `orderIntegrityBeforeChange` (`src/lib/order-integrity.ts`) — a szerver-oldali
+ár-snapshot és végösszeg-számítás, a fizetési lánc integritásának alapja —
+viselkedését **egyetlen alapértelmezésben futó teszt sem ellenőrzi**:
+
+- az egyedüli viselkedési tesztek (`order-snapshots.test.ts`) DB-hez kötöttek és
+  `describe.skipIf(!hasDb)` miatt kihagyódnak (a repóban nincs `.env`, nincs
+  vitest `setupFile`, és nincs CI-workflow sem — lásd M-01),
+- az `access.test.ts:318` csak azt nézi, hogy a hook **be van-e kötve**,
+- a `checkout-start.test.ts` a `payload.create` mockjával **a hook kimenetét adja
+  vissza fixtúraként**, így a `Total === 5000` assertek a fixtúrát ellenőrzik,
+  nem a kódot.
+
+**Forgatókönyv:** valaki elrontja a `totalHuf` összegzést (pl. kiesik a
+`quantity`), vagy a snapshot a kliens által küldött árat tartja meg. **`npm run
+test` teljesen zöld marad.** Élesben ez rossz végösszeggel indított
+Barion-fizetés: a `start-checkout.ts:260-266` közvetlenül a hook által írt
+`totalHufSnapshot`-ból veszi a fizetendő összeget, és **sem a callback, sem más
+réteg nem ellenőrzi újra**.
+
+**Javaslat:** a hook kapjon DB-független unit-tesztet (a Payload-hívások
+mockolásával, de a hook valódi futtatásával). Ez az M-01-nél is konkrétabb ok
+a CI beüzemelésére.
