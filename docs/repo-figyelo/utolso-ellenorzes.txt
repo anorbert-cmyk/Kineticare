@@ -1,4 +1,4 @@
 # A repo-figyelő utoljára feldolgozott állapota.
 # A digest.sh ebből számolja, mi történt azóta. Kézzel is szerkeszthető.
-sha=2c88b04dbecb67d7766cd3cb47b74ec21393b886
+sha=f015bc3e5e565d12a7a6a286e66137afdd8dadea
 datum=2026-07-31

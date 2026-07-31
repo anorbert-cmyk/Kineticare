@@ -17,6 +17,87 @@ Feldolgozott tartomány: <régi sha>..<új sha> (N commit)
 
 ---
 
+## 2026-07-31 — A fizetési főlánc bezárult: callback, refund, videó-paywall
+
+Feldolgozott tartomány: `2c88b04..f015bc3` (13 commit)
+
+### Mi változott
+
+Három nagy blokk, kb. 3150 hozzáadott sor, ebből ~1470 teszt:
+
+**T-022 — Barion-callback (`src/lib/barion-callback/`).** A `paid` átmenet
+megérkezett, pontosan a korábban dokumentált elv szerint: a callback-payload
+önmagában nem bizonyíték, a jóváhagyás kizárólag a szerver-szerver
+`fetchPaymentState` (v4) verifikációból származik. A route-handler azonnal
+dedupol a `webhook-events`-be és **azonnal 200-at ad** (a Barion 15 mp-es
+elvárása miatt), a feldolgozás `next/server` `after()`-rel és a T-014
+retry-jobbal aszinkron fut. A `webhook-events` két új mezőt kapott:
+`processedAt` és `result` (`paid` / `cancelled` / `pending_repoll` /
+`rejected` / `failed`); hiba esetén a `processedAt` **szándékosan üres marad**,
+így az esemény újrapróbálható.
+
+**T-025 — owner-indítású visszatérítés (`src/lib/refund/`).**
+`POST /api/admin/orders/[orderNumber]/refund`, owner-only RBAC-cal (anon → 401,
+staff → 403). Teljes és részrefundot is kezel; a Barion `TransactionId`-t az
+első refund előtt a v4 GetState `Transactions` tömbjéből oldja fel, és a
+`orders.refunds` json-nyomba menti újrahasználásra. Az `orders` collection új
+`refunds` mezőt kapott: read owner-only, create/update zárt.
+
+**Cloudflare Stream paywall (`src/lib/stream/`).** `GET /api/stream-token`
+HS256-tal aláírt playback JWT-t ad (`sub` = streamAssetId, `exp` = videóhossz +
+10 perc türelem, max. 24 óra), nulla extra függőséggel. A `CF_STREAM_SIGNING_KEY`
+**nem induláskori kötelező ENV**, hanem kérés-idejű lazy ellenőrzés — hiányában
+503, az app elindul.
+
+### Mit jelent
+
+- **A pénzügyi főlánc kerek lett:** checkout-start → Barion → callback → `paid`
+  → `purchases`-jogosultság → aláírt videó-token. A `purchases` mező a lánc
+  csuklópontja, és mezőszinten zárt (create/update `false` a `Users.ts`-ben) —
+  kizárólag `overrideAccess`-szel írja a callback és a refund. A paywall tehát
+  végig kikényszerített, nem csak konvenció.
+- **Két helyen is ugyanaz a védelmi minta ismétlődik:** a jogosultság-írás és
+  -levétel egyaránt **idempotens** (a meglévő elem no-op), és az állapotgép
+  visszalépést nem enged — `paid` rendelést a `cancelled` callback sem billenti
+  vissza, csak riasztást naplóz `rejected` eredménnyel.
+- **Információminimalizálás a paywallban:** a vásárlás-ellenőrzés a termék
+  lekérdezése *előtt* fut, így a 403 nem árulja el, létezik-e a termék. Ez
+  tudatos enumeráció-védelem.
+- **Részrefund ≠ hozzáférés-megvonás:** részösszegnél a rendelés `paid` marad és
+  a vevő tovább nézi a kurzust; a `purchases`-levétel csak teljes refundnál fut,
+  és ott is megvédi azt a terméket, amire a vevőnek másik `paid` rendelése van.
+  Ez kommentben is indokolt döntés, nem véletlen.
+
+### Tiltott zóna érintve?
+
+Nem sérült egyik sem. A digest gyanújel-szűrője üresen futott. Részletesen:
+
+- `confirmOrder`: nincs új hívás; a T-063 háromszoros védelem érintetlen.
+- Migráció: **nem változott** — pedig az `orders.refunds` és a `webhook-events`
+  két új mezője sémaváltozás. Ez így nem hiba (a Payload push/migrate-lépés
+  külön fut), de a következő migráció-generálásnál rajta kell lennie.
+- Access: `WebhookEvents.ts` és az `ordersCollectionOverride` bővült, de
+  **szigorítás irányba** (owner-only read, zárt create/update); meglévő
+  access-függvényt nem írt át senki. A refund-handler a meglévő `hasOwnerRole`
+  predikátumot hívja.
+- Titok: a `.env.example` egy kulccsal bővült érték nélkül, append-only módon.
+- `any`: nincs. (Helyette `as unknown as ...` castok a plugin-generált
+  típusok körül — lásd M-08.)
+
+### Következő figyelnivaló
+
+- **A `payment_failed` állapot továbbra sem érhető el** egyetlen kódúton sem —
+  a Barion `Failed` státusz a mapper `default` ágán `payment_pending`-re fut.
+  Új megfigyelés: **M-07**.
+- **A `purchases` írása read-modify-write**, tranzakció nélkül — párhuzamos
+  callbackek elveszíthetnek egy jogosultságot. Új megfigyelés: **M-06**.
+- A kommentekben hivatkozott **poll-job** (a `pending_repoll` események
+  újrafeldolgozása) még nem létezik — külön ticket.
+- A számlázás (Számlázz.hu) még nincs bekötve, pedig az `orders` mezői
+  (`invoiceStatus`, `invoiceNumber`, `invoicePdfUrl`) készen állnak rá.
+
+---
+
 ## 2026-07-31 — Kiindulási felmérés (a figyelés indulása)
 
 Feldolgozott tartomány: a repó kezdete..`2c88b04` (50 commit, 2026-07-29 óta)
