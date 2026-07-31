@@ -63,6 +63,30 @@ Ezek bármelyike a naplóban **kiemelt** tételként szerepel, és
 
 ## Automatizálás
 
-A figyelést egy ütemezett Routine hajtja (naponta egyszer, reggel). A Routine
-friss session-ben indul, lefuttatja a fenti menetet, és ha volt változás,
-frissíti ezt a mappát. Ütemezés módosítása vagy leállítása kérésre történik.
+**Állapot: még nincs bekapcsolva.** A napi ütemezés (Routine) létrehozása
+jóváhagyáshoz kötött, ezt pedig csak interaktív munkamenetből lehet megadni —
+addig a figyelés kézzel, a fenti menet szerint fut.
+
+A tervezett ütemezés: **naponta egyszer, 05:07 UTC** (nyári időszámításban
+07:07 budapesti idő), friss munkamenetben, push-értesítéssel. A Routine
+promptja, hogy bekapcsoláskor ne kelljen újraírni:
+
+> Napi repó-figyelés az `anorbert-cmyk/Kineticare` repóhoz. Magyarul válaszolj.
+>
+> A figyelés munkaanyaga a `docs/repo-figyelo/` mappa. Először olvasd el a
+> `docs/repo-figyelo/README.md`-t — az írja le a menetet —, majd kövesd:
+>
+> 1. `git fetch origin main`, majd `bash docs/repo-figyelo/digest.sh origin/main`.
+>    Ha 0 új commit van: ne írj naplóbejegyzést és ne nyiss PR-t, csak jelezd
+>    röviden, hogy nem volt változás.
+> 2. Ha volt változás, olvasd el az érintett diffeket — ne csak a
+>    commitüzenetekből dolgozz. A digest gyanújelei jelzések, nem ítéletek.
+> 3. Frissítsd a `naplo.md`-t (új bejegyzés felülre), szükség esetén az
+>    `allapot.md`-t és a `megfigyelesek.md`-t, végül az `utolso-ellenorzes.txt`-t.
+> 4. Nézd meg a nyitott PR-eket és issue-kat is; az érdemi újdonság kerüljön a naplóba.
+> 5. Commitold és pushold a `claude/repo-monitoring-learning-wgr2ct` branchre;
+>    ha nincs hozzá nyitott PR, nyiss egy drafteset.
+>
+> Ez **figyelés, nem fejlesztés**: alkalmazáskódot, migrációt, access-függvényt
+> és függőséget ne módosíts — a talált problémákat a `megfigyelesek.md`-be vedd
+> fel. A repó `CLAUDE.md`-jének tiltott zónái a figyelésre is vonatkoznak.
