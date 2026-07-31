@@ -80,7 +80,6 @@ async function seed(): Promise<void> {
     ownerId = owner.id
     payload.logger.info(`Seed: owner-felhasználó létrehozva (${OWNER_EMAIL}).`)
     if (!process.env.SEED_OWNER_PASSWORD) {
-      // Egyszeri, véletlenszerű induló jelszó — csak itt, egyszer kerül kiírásra.
       payload.logger.info(`Seed: az owner induló jelszava: ${password}`)
     }
   }
@@ -201,6 +200,106 @@ async function seed(): Promise<void> {
       overrideAccess: true,
     })
     payload.logger.info('Seed: demó termék létrehozva (DEMO-KEZREHAB-001).')
+  }
+
+  // --- Demó menüfa (frontend-keret) ------------------------------------------
+  const pageId = (
+    await payload.find({
+      collection: 'pages',
+      where: { slug: { equals: 'bemutatkozas' } },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]?.id
+  const postId = (
+    await payload.find({
+      collection: 'posts',
+      where: { slug: { equals: 'kezrehabilitacio-alapok' } },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]?.id
+  const productId = (
+    await payload.find({
+      collection: 'products',
+      where: { sku: { equals: 'DEMO-KEZREHAB-001' } },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]?.id
+
+  const ensureMenuItem = async (input: {
+    label: string
+    type: 'page' | 'post' | 'url' | 'product'
+    order: number
+    ref?: { relationTo: 'pages' | 'posts' | 'products'; value: number }
+    url?: string
+    parent?: number
+  }): Promise<number | undefined> => {
+    const existing = await payload.find({
+      collection: 'menus',
+      where: {
+        and: [
+          { label: { equals: input.label } },
+          input.parent !== undefined
+            ? { parent: { equals: input.parent } }
+            : { parent: { exists: false } },
+        ],
+      },
+      limit: 1,
+      overrideAccess: true,
+    })
+    if (existing.docs.length > 0) {
+      payload.logger.info(`Seed: menüpont már létezik (${input.label}), kihagyva.`)
+      return existing.docs[0].id
+    }
+    const created = await payload.create({
+      collection: 'menus',
+      data: {
+        label: input.label,
+        type: input.type,
+        order: input.order,
+        ...(input.ref ? { ref: input.ref } : {}),
+        ...(input.url ? { url: input.url } : {}),
+        ...(input.parent !== undefined ? { parent: input.parent } : {}),
+      },
+      overrideAccess: true,
+    })
+    payload.logger.info(`Seed: menüpont létrehozva (${input.label}).`)
+    return created.id
+  }
+
+  await ensureMenuItem({ label: 'Kezdőlap', type: 'url', url: '/', order: 0 })
+  const coursesMenuId = await ensureMenuItem({
+    label: 'Kurzusok',
+    type: 'url',
+    url: '/kurzusok',
+    order: 1,
+  })
+  if (productId !== undefined && coursesMenuId !== undefined) {
+    await ensureMenuItem({
+      label: 'Demó kézrehabilitációs kurzus',
+      type: 'product',
+      ref: { relationTo: 'products', value: productId },
+      parent: coursesMenuId,
+      order: 0,
+    })
+  }
+  if (postId !== undefined) {
+    await ensureMenuItem({
+      label: 'Tudástár',
+      type: 'post',
+      ref: { relationTo: 'posts', value: postId },
+      order: 2,
+    })
+  }
+  if (pageId !== undefined) {
+    await ensureMenuItem({
+      label: 'Bemutatkozás',
+      type: 'page',
+      ref: { relationTo: 'pages', value: pageId },
+      order: 3,
+    })
   }
 
   payload.logger.info('Seed: kész.')
