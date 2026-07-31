@@ -91,10 +91,13 @@ export function createRefundHandler(
       }
 
       let body: unknown = {}
-      const contentLength = request.headers.get('content-length')
-      if (contentLength !== '0' && contentLength !== null) {
+      // A content-length fejléc hiányozhat (chunked átvitel, illetve a tesztekben
+      // konstruált Requesteknél az undici nem tölti ki) — a törzs beolvasása ezért
+      // NEM függhet a fejléctől: üres törzs = üres input, nem-JSON = 400.
+      const rawBody = await request.text()
+      if (rawBody.trim().length > 0) {
         try {
-          body = await request.json()
+          body = JSON.parse(rawBody)
         } catch {
           return Response.json(
             { error: 'Érvénytelen kérés: a törzsnek JSON-nak kell lennie.' },
