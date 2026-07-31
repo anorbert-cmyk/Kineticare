@@ -1,0 +1,214 @@
+import type { Menu, Page, Post, Product } from '../payload-types'
+
+import { extractRelationshipId } from './menu-validation'
+
+/**
+ * Menüfa → navigációs fa (NavItem) építése — tiszta, DB nélkül
+ * unit-tesztelhető logika. A fejléc (Header) az src/lib/menus.ts
+ * getNavTree()-jén keresztül használja.
+ *
+ * Szabályok:
+ * - Csak visible=true menüpontok (a backend-access ezt anonim olvasóra már
+ *   kikényszerítené; itt explicit, hogy a lekérdezés overrideAccess-szel is
+ *   determinisztikus maradjon).
+ * - A menüpont célja CSAK published célú tartalom lehet: page/post esetén a
+ *   szerkesztői `status === 'published'` (a pages/posts publikus
+ *   read-politikája is erre szűr), product esetén a saját `status ===
+ *   'published'` select. Nem-publikált vagy feloldhatatlan cél → a menüpont
+ *   kimarad.
+ * - Maximum 2 szint: a validált adat (menus beforeValidate) legfeljebb
+ *   gyökér→gyermek; a UI mégis ROBUSZTUS: ha mégis mélyebb lánc érkezne,
+ *   az elem a legközelebbi renderelhető gyökér-ős alá kerül, nem töri el
+ *   a renderelést.
+ * - A szülője kiesett (nem látható / nem published / hiányzó) gyermek
+ *   gyökér-szintre emelődik.
+ * - Rendezés: order (hiányzó = 0) szerint, azonos order esetén label (hu).
+ */
+
+export interface NavItem {
+  id: number
+  label: string
+  href: string
+  openInNewTab: boolean
+  /** Igaz, ha a href külső (http/https) hivatkozás — a UI ilyenkor target/rel-t és jelölést ad. */
+  isExternal: boolean
+  children: NavItem[]
+}
+
+/** A menü-célok URL-konvenciója (a következő hullám route-jai ezekre épülnek). */
+export const MENU_HREF_PREFIX = {
+  page: '',
+  post: '/blog',
+  product: '/kurzusok',
+} as const
+
+function resolveRef(menu: Menu): { relationTo: string; value: unknown } | null {
+  const ref = menu.ref
+  if (!ref || typeof ref !== 'object' || !('relationTo' in ref)) {
+    return null
+  }
+  const relationTo = (ref as { relationTo?: unknown }).relationTo
+  const value = (ref as { value?: unknown }).value
+  if (typeof relationTo !== 'string' || typeof value !== 'object' || value === null) {
+    // Nem populate-olt vagy hiányzó ref — a frontend nem tud státuszt/slugot ellenőrizni.
+    return null
+  }
+  return { relationTo, value }
+}
+
+/** Published-ellenőrzés a cél-dokumentumon (collectionönként egyező szabály: saját status select). */
+function isPublishedTarget(doc: Page | Post | Product): boolean {
+  return doc.status === 'published'
+}
+
+/**
+ * Egy menüpont href-feloldása; null, ha a cél nem publikált/feloldhatatlan.
+ */
+export function resolveMenuHref(menu: Menu): string | null {
+  if (menu.type === 'url') {
+    const url = typeof menu.url === 'string' ? menu.url.trim() : ''
+    return url.length > 0 ? url : null
+  }
+
+  const ref = resolveRef(menu)
+  if (!ref) {
+    return null
+  }
+
+  switch (ref.relationTo) {
+    case 'pages': {
+      const doc = ref.value as Page
+      if (!isPublishedTarget(doc)) return null
+      return doc.slug ? `${MENU_HREF_PREFIX.page}/${doc.slug}` : null
+    }
+    case 'posts': {
+      const doc = ref.value as Post
+      if (!isPublishedTarget(doc)) return null
+      return doc.slug ? `${MENU_HREF_PREFIX.post}/${doc.slug}` : null
+    }
+    case 'products': {
+      const doc = ref.value as Product
+      if (!isPublishedTarget(doc)) return null
+      // A products collectionnek nincs slug mezője — azonosító alapú útvonal.
+      return `${MENU_HREF_PREFIX.product}/${doc.id}`
+    }
+    default:
+      return null
+  }
+}
+
+function toNavItem(menu: Menu, href: string): NavItem {
+  return {
+    id: menu.id,
+    label: menu.label,
+    href,
+    openInNewTab: menu.openInNewTab === true,
+    isExternal: /^https?:\/\//i.test(href),
+    children: [],
+  }
+}
+
+/**
+ * A menus-sorokból maximum 2 szintű navigációs fa. A bemenet sorrendje
+ * közömbös; a gyökerek és a children listák is rendezettek.
+ */
+export function buildNavTree(menus: Menu[]): NavItem[] {
+  const visible = menus.filter((menu) => menu.visible !== false)
+  const byId = new Map<number, Menu>(visible.map((menu) => [menu.id, menu]))
+  const orderById = new Map<number, number>(
+    visible.map((menu) => [menu.id, typeof menu.order === 'number' ? menu.order : 0]),
+  )
+  const hrefById = new Map<number, string>()
+  for (const menu of visible) {
+    const href = resolveMenuHref(menu)
+    if (href !== null) {
+      hrefById.set(menu.id, href)
+    }
+  }
+
+  const parentIdOf = (menu: Menu): number | null => {
+    const id = extractRelationshipId(menu.parent)
+    return typeof id === 'number' ? id : null
+  }
+
+  /**
+   * A legközelebbi renderelhető gyökér-ős feloldása a parent-láncban.
+   * Visszatérés: a gyökér-ős id-je; az elem saját id-je, ha gyökérként kell
+   * renderelni (nincs szülő, vagy a szülő-lánc kiesett); null ciklus esetén.
+   */
+  const rootAncestorIdOf = (menu: Menu): number | null => {
+    const visited = new Set<number>([menu.id])
+    let current = menu
+    for (let depth = 0; depth < 8; depth += 1) {
+      const parentId = parentIdOf(current)
+      if (parentId === null) {
+        return current.id
+      }
+      if (visited.has(parentId)) {
+        return null // ciklus — a backend amúgy sem engedi, itt eldobjuk
+      }
+      visited.add(parentId)
+      const parent = byId.get(parentId)
+      if (!parent || !hrefById.has(parentId)) {
+        // A szülő kiesett (nem látható / nem published / hiányzó): a current
+        // elem emelkedik gyökér-szintre.
+        return current.id
+      }
+      current = parent
+    }
+    return null
+  }
+
+  const items: NavItem[] = []
+  const itemById = new Map<number, NavItem>()
+
+  // 1. menet: explicit gyökerek (parent nélküli, renderelhető elemek).
+  for (const menu of visible) {
+    const href = hrefById.get(menu.id)
+    if (href && parentIdOf(menu) === null) {
+      const item = toNavItem(menu, href)
+      items.push(item)
+      itemById.set(menu.id, item)
+    }
+  }
+
+  // 2. menet: minden más elem a legközelebbi renderelhető gyökér-őse alá;
+  //    kiesett szülő-lánc esetén gyökér-szintre emelve.
+  for (const menu of visible) {
+    const href = hrefById.get(menu.id)
+    if (!href || parentIdOf(menu) === null) {
+      continue
+    }
+    const ancestorId = rootAncestorIdOf(menu)
+    if (ancestorId === null) {
+      continue
+    }
+    const item = toNavItem(menu, href)
+    if (ancestorId === menu.id) {
+      items.push(item)
+      itemById.set(menu.id, item)
+      continue
+    }
+    const root = itemById.get(ancestorId)
+    if (!root) {
+      // Biztonsági fallback: az ős nem regisztrált gyökér — gyökérként rendereljük.
+      items.push(item)
+      itemById.set(menu.id, item)
+      continue
+    }
+    root.children.push(item)
+    itemById.set(menu.id, item)
+  }
+
+  const byOrderThenLabel = (a: NavItem, b: NavItem): number => {
+    const diff = (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0)
+    return diff !== 0 ? diff : a.label.localeCompare(b.label, 'hu')
+  }
+
+  items.sort(byOrderThenLabel)
+  for (const item of items) {
+    item.children.sort(byOrderThenLabel)
+  }
+
+  return items
+}
