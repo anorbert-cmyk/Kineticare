@@ -1,6 +1,3 @@
-import type { Config } from 'vitest/config'
-import { defineConfig } from 'vitest/config'
-
 /**
  * vitest-konfiguráció.
  *
@@ -9,6 +6,9 @@ import { defineConfig } from 'vitest/config'
  * renderToStaticMarkup-pel tesztelhetők legyenek külön @jsxImportSource
  * pragma nélkül. A meglévő teszteket nem bontja (72/72 zöld maradt).
  */
+import type { Config } from 'vitest/config'
+import { defineConfig } from 'vitest/config'
+
 export default defineConfig({
   esbuild: {
     jsx: 'automatic',
