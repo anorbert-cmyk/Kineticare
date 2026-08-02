@@ -1,0 +1,114 @@
+Kedves Norbert,
+
+Köszönjük a kellemes szerdai egyeztetést! Sokat tanultunk már most :)
+
+Az alábbiakban összefoglaltuk, mire lenne szükségünk a honlap újratervezése és átköltöztetése során, hogy teljes képet kapj a jelenlegi rendszerünkről és az elképzeléseinkről.
+
+Fő célunk
+---------
+
+Láthatóság, honlap és kurzus felület bővíthetőség tekintetében szeretnénk egy modernebb megoldásra váltani.
+
+Háttér
+------
+
+Jelenleg a weboldalunk és az online kurzusaink a Systeme.io rendszerén futnak.
+
+A megbeszélésünk alapján a jelenlegi letisztult arculatot szeretnénk megtartani, ugyanakkor egy új háttérrendszerre költöznénk (a beszéltek alapján), felhőalapú szerkesztési lehetőséggel.
+
+Általános elvárások
+-------------------
+
+-   Ha valaki beírja, hogy "kéz" stb.. az elsők között legyünk, akiket ajánl az internet, mert jelenleg a szakembereknek szóló akkreditált kurzusunk és a laikusoknak szóló Otthoni Kézrehab kurzusunk is egyedülálló, mégsem hozzá anyagilag a kívánt eredményeket
+-   A jelenlegi minimalista megjelenést szeretnénk megtartani
+-   Nagyon tetszettek a vásárlói szemléletű javaslataid, ezekben örömmel adnánk neked szabad kezet
+-   Fontos számunkra, hogy a weboldal a későbbiekben számunkra is könnyen szerkeszthető és bővíthető legyen
+-   Gyors, stabil működés minden eszközön
+
+Jelenlegi szolgáltatások
+------------------------
+
+Jelenleg az alábbi szolgáltatásokat használjuk:
+
+-   Systeme.io (69 897,64 Ft/év)
+-   Tárhely.eu (18 923 Ft/ év)
+-   Stripe (fee: 1,7% / payout)
+-   Bunny.net (approx.10$/ hó, 120$ /év)
+
+Így megközelítőleg 127 000 Ft /év a kiadásunk, amiben nincs benne a Stripe rendszer kifizetés utáni költsége (kb. 680 Ft / kurzus eladás)
+
+Fontos lenne számunkra, hogy lehetőség szerint a jelenlegi költségszinten maradjunk, vagy ahol lehet, optimalizáljuk az üzemeltetési költségeket.
+
+Amit szeretünk a jelenlegi rendszerben
+--------------------------------------
+
+Szeretnénk, ha ezek a funkciók az új rendszerben is elérhetők lennének:
+
+-   weboldal egyszerű szerkesztése
+-   értékesítések nyomon követése
+-   résztvevők manuális hozzáadása
+-   egyszerű visszatérítés kezelése
+-   automatikus kapcsolat a Számlázz.hu rendszerével
+
+Online kurzusok
+---------------
+
+Jelenleg két tartalom érhető el:
+
+-   SOS Kézrehab (ingyenes)
+-   Otthoni Kézrehab (fizetős)
+
+A jelenlegi Otthoni Kézrehab kurzust (ehhez adtunk hozzá) szeretnénk több kisebb, tematikus kurzusra bontani, mivel úgy látjuk, hogy ez a vásárlók számára vonzóbb és marketing szempontból is hatékonyabb lenne.
+
+Nagyon tetszett az ötleted, hogy egy fő kurzusoldalról lehessen elérni az egyes tematikus landing page-eket.
+
+Például:
+
+1. Fő oldal - laikusoknak kurzusok - Ingyen letölthető segítség, Otthoni Kézrehab (teljes kurzus), Otthoni Kézrehab- Teniszkönyök, Otthoni Kézrehab- Kéztőalagút szindróma, Otthoni Kézrehab- Pattanó ujj stb.
+
+2. Fő oldal - szakembereknek- Kézkurzus, Szakkönyv
+
+Fontos számunkra, hogy:
+
+-   lássuk, ki melyik kurzust vásárolta meg,
+-   melyik kurzust végezte el,
+-   hány vásárlás történt,
+-   mikor történt a vásárlás,
+-   egyszerűen lehessen új kurzusokat létrehozni,
+-   a videók kezelése hosszú távon is könnyen menedzselhető legyen.
+
+A vásárlások automatikusan kapcsolódjanak a Számlázz.hu rendszeréhez, hogy ez ne igényeljen manuális plusz munkát a részünkről.
+
+A jelenlegi vásárlóinknak automatikusan szeretnénk hozzáférést biztosítani az új rendszerben is, lehetőleg úgy, hogy a költözésből a lehető legkevesebbet érzékeljék. Ha erre van bevált megoldásod, örülnénk, ha ebben tudnál javaslatot tenni, hogyan kommunikálná / csinálná a CNN vagy a NASA. :)
+
+Blog
+----
+
+Nagyon tetszett a blog ötlete.
+
+Szeretnénk olyan blogfelületet, ahol egyszerűen tudunk:
+
+-   szöveges,
+-   képes,
+-   videós tartalmakat készíteni.
+
+Szeretnénk, ha például olyan keresésekre, mint:
+
+-   "fáj a kezem",
+-   "teniszkönyök",
+-   "kéztőalagút szindróma",
+-   "ujjzsibbadás",
+-   "kézfájdalom",
+
+a Google minél nagyobb eséllyel a mi tartalmainkat jelenítse meg.
+
+Egyéb funkciók
+--------------
+
+-   Egyszerű kapcsolat hírlevélküldő rendszerrel: ennek mennyi értelmét látod? Mert sok helyen hallani, hogy feliratkozókat kell gyűjteni.
+
+Ha valamelyik ponttal kapcsolatban szerinted van jobb vagy modernebb megoldás, örömmel vesszük a javaslataidat is.
+
+Köszönjük előre is a közös munkát!
+
+Katák :)
