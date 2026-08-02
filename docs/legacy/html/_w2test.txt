@@ -1,7 +1,0 @@
-import { describe, expect, it } from 'vitest'
-
-import { renderToStaticMarkup } from 'react-dom/server'
-
-import { HomeView } from '../../components/content/HomeView'
-
-// placeholder — a teljes teszt a stagingből jön
