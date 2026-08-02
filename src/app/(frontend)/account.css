@@ -1,0 +1,181 @@
+/**
+ * Lejátszó- és fiókoldal-stílusok (kurzusaim, fiok, player).
+ */
+
+/* ---- Fiók --------------------------------------------------------------- */
+
+.kc-account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-6);
+}
+
+.kc-account__section h2 {
+  margin: 0 0 var(--kc-space-4);
+}
+
+.kc-account__grid {
+  display: grid;
+  gap: var(--kc-space-4);
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: var(--kc-space-4);
+}
+
+@media (max-width: 640px) {
+  .kc-account__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kc-account__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--kc-space-3);
+}
+
+.kc-account__saved {
+  color: var(--kc-color-success);
+  font-size: var(--kc-text-sm);
+}
+
+.kc-account__courses {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kc-account__course {
+  color: var(--kc-color-primary);
+  font-weight: var(--kc-font-weight-bold);
+}
+
+.kc-account__orders {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kc-account__order {
+  padding: var(--kc-space-3) 0;
+  border-bottom: 1px solid var(--kc-color-border);
+}
+
+.kc-account__order:last-child {
+  border-bottom: none;
+}
+
+.kc-account__order-row {
+  display: flex;
+  align-items: center;
+  gap: var(--kc-space-3);
+  justify-content: space-between;
+}
+
+.kc-account__order-number {
+  font-family: var(--kc-font-heading);
+}
+
+.kc-account__order-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kc-space-2) var(--kc-space-4);
+  margin-top: var(--kc-space-1);
+  font-size: var(--kc-text-sm);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-account__order-invoice-pending {
+  color: var(--kc-color-warning);
+}
+
+/* ---- Lejátszó ------------------------------------------------------------- */
+
+.kc-player h1 {
+  margin: 0 0 var(--kc-space-5);
+}
+
+.kc-player__layout {
+  display: grid;
+  gap: var(--kc-space-6);
+}
+
+@media (min-width: 1024px) {
+  .kc-player__layout {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    align-items: start;
+  }
+}
+
+.kc-player__stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background-color: var(--kc-color-navy-900);
+  border-radius: var(--kc-radius-lg);
+  overflow: hidden;
+}
+
+.kc-player__frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.kc-player__loading,
+.kc-player__error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--kc-space-3);
+  color: var(--kc-color-white);
+  text-align: center;
+  padding: var(--kc-space-4);
+}
+
+.kc-player__episodes h2 {
+  margin: 0 0 var(--kc-space-3);
+  font-size: var(--kc-text-lg);
+}
+
+.kc-player__episode-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kc-player__episode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kc-space-3);
+  width: 100%;
+  padding: var(--kc-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--kc-radius-md);
+  background: none;
+  color: var(--kc-color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.kc-player__episode:hover {
+  background-color: var(--kc-color-blue-100);
+}
+
+.kc-player__episode[aria-current='true'] {
+  border-color: var(--kc-color-primary);
+  background-color: var(--kc-color-surface-tint);
+}
+
+.kc-player__episode-duration {
+  color: var(--kc-color-text-muted);
+  font-size: var(--kc-text-xs);
+}
+
+.kc-player--forbidden h2 {
+  margin: 0 0 var(--kc-space-3);
+}
