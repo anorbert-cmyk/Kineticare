@@ -247,6 +247,12 @@
   font-size: var(--kc-text-xl);
 }
 
+.kc-course-buybox__price--free {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-xl);
+  color: var(--kc-color-success);
+}
+
 /* ---- CTA-blokk ------------------------------------------------------------ */
 
 .kc-course-cta {
