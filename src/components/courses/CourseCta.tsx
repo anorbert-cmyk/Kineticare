@@ -12,10 +12,12 @@ import { Button } from '../ui/Button'
  * - bejelentkezett vevő („már megvetted", users.purchases) → „Tovább a
  *   kurzusaimhoz" link — archived terméknél is (a meglévő vevő tovább nézi);
  * - archived + nem vevő → a CTA INAKTÍV + „Ez a kurzus jelenleg nem
- *   vásárolható" jelölés.
+ *   vásárolható" jelölés;
+ * - published + ingyenes (priceInHUFEnabled: false) + nem vevő → „Ingyenes —
+ *   azonnal eléred" (nem a Barion-checkouton keresztül — lásd a lib free kind-jét).
  */
 export interface CourseCtaProps {
-  product: Pick<Product, 'id' | 'status'>
+  product: Pick<Product, 'id' | 'status' | 'priceInHUFEnabled'>
   /** Bejelentkezett felhasználó purchases-listája alapján (csak olvasás). */
   hasPurchased: boolean
 }
