@@ -180,7 +180,11 @@ export default async function CoursePage({ params }: CoursePageProps) {
                 <p className="kc-course-buybox__price">
                   <PriceTag label="Ár:" priceHuf={price} />
                 </p>
-              ) : null}
+              ) : (
+                <p className="kc-course-buybox__price kc-course-buybox__price--free">
+                  Ingyenes
+                </p>
+              )}
               <CourseCta hasPurchased={purchased} product={product} />
             </Card>
           </div>
