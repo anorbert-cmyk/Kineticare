@@ -1,0 +1,348 @@
+/**
+ * Kurzus-oldalak stílusai (/kurzusok lista + /kurzusok/[slug] részletek).
+ *
+ * A 5A-stílusok (tokens/base/ui/layout) módosítása TILOS — ez a lap a
+ * kurzus-scope saját rétege, kizárólag a tokeneket (var(--kc-*)) és a
+ * 5A-primitívek osztályait használja. Mobil-first: 360px az alap,
+ * 640px/1024px a töréspontok (a 1440px-es desktop a container szélességén
+ * keresztül öröklődik).
+ */
+
+/* ---- Lista-fejléc ------------------------------------------------------ */
+
+.kc-course-list__header h1 {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-3xl);
+  line-height: var(--kc-leading-heading);
+  margin: 0 0 var(--kc-space-3);
+}
+
+.kc-course-list__lead {
+  max-width: var(--kc-container-narrow);
+  color: var(--kc-color-text-muted);
+  margin: 0 0 var(--kc-space-6);
+}
+
+/* ---- Kategória-szűrő chipek -------------------------------------------- */
+
+.kc-course-filter {
+  margin-bottom: var(--kc-space-6);
+}
+
+.kc-course-filter ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kc-space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kc-course-filter__chip {
+  display: inline-block;
+  padding: var(--kc-space-1) var(--kc-space-3);
+  border: 1px solid var(--kc-color-border);
+  border-radius: var(--kc-radius-full);
+  color: var(--kc-color-text);
+  text-decoration: none;
+  font-size: var(--kc-text-sm);
+  background-color: var(--kc-color-surface);
+  transition:
+    background-color var(--kc-motion-fast) var(--kc-ease-out),
+    border-color var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-course-filter__chip:hover {
+  border-color: var(--kc-color-primary);
+}
+
+.kc-course-filter__chip[aria-current='true'] {
+  background-color: var(--kc-color-primary);
+  border-color: var(--kc-color-primary);
+  color: var(--kc-color-on-primary);
+}
+
+/* ---- Kártyarács (lista + upsell) ---------------------------------------- */
+
+.kc-course-grid {
+  display: grid;
+  grid-template-columns: 1fr; /* 360px mobil: egy oszlop */
+  gap: var(--kc-space-5);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 640px) {
+  .kc-course-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .kc-course-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.kc-course-grid > li {
+  display: flex; /* a kártya nyúljon ki a sor magasságára */
+}
+
+/* ---- Kurzuskártya -------------------------------------------------------- */
+
+.kc-course-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow: hidden;
+}
+
+.kc-course-card__media {
+  display: block;
+  aspect-ratio: 16 / 10;
+  background-color: var(--kc-color-surface-tint);
+}
+
+.kc-course-card__media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.kc-course-card__media-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.kc-course-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-2);
+  padding: var(--kc-space-4);
+  flex: 1;
+}
+
+.kc-course-card__title {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-lg);
+  line-height: var(--kc-leading-heading);
+  margin: 0;
+}
+
+.kc-course-card__title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.kc-course-card__title a:hover {
+  text-decoration: underline;
+}
+
+.kc-course-card__excerpt {
+  color: var(--kc-color-text-muted);
+  font-size: var(--kc-text-sm);
+  margin: 0;
+  flex: 1;
+}
+
+.kc-course-card__price {
+  margin: 0;
+}
+
+/* ---- Üres állapot -------------------------------------------------------- */
+
+.kc-course-empty {
+  padding: var(--kc-space-7);
+  text-align: center;
+  background-color: var(--kc-color-surface-tint);
+  border-radius: var(--kc-radius-lg);
+}
+
+.kc-course-empty h2 {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-xl);
+  margin: 0 0 var(--kc-space-2);
+}
+
+.kc-course-empty p {
+  margin: 0;
+  color: var(--kc-color-text-muted);
+}
+
+/* ---- Kurzus-oldal: morzsa + hero + buybox -------------------------------- */
+
+.kc-course-breadcrumb ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kc-space-1);
+  list-style: none;
+  margin: 0 0 var(--kc-space-5);
+  padding: 0;
+  font-size: var(--kc-text-sm);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-course-breadcrumb li + li::before {
+  content: '/';
+  margin-right: var(--kc-space-1);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-course-hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--kc-space-6);
+  margin-bottom: var(--kc-space-7);
+}
+
+@media (min-width: 1024px) {
+  .kc-course-hero {
+    grid-template-columns: minmax(0, 1fr) 360px;
+    align-items: start;
+  }
+}
+
+.kc-course-hero__main h1 {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-3xl);
+  line-height: var(--kc-leading-heading);
+  margin: 0 0 var(--kc-space-3);
+}
+
+.kc-course-hero__category {
+  margin: 0 0 var(--kc-space-3);
+}
+
+.kc-course-hero__lead {
+  font-size: var(--kc-text-lg);
+  color: var(--kc-color-text-muted);
+  margin: 0;
+}
+
+.kc-course-buybox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-4);
+}
+
+@media (min-width: 1024px) {
+  .kc-course-buybox {
+    position: sticky;
+    top: calc(var(--kc-header-height) + var(--kc-space-4));
+  }
+}
+
+.kc-course-buybox__cover {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--kc-radius-md);
+}
+
+.kc-course-buybox__price {
+  margin: 0;
+  font-size: var(--kc-text-xl);
+}
+
+/* ---- CTA-blokk ------------------------------------------------------------ */
+
+.kc-course-cta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-3);
+  align-items: flex-start;
+}
+
+.kc-course-cta__note {
+  margin: 0;
+}
+
+.kc-course-cta__note--owned {
+  color: var(--kc-color-success);
+  font-size: var(--kc-text-sm);
+}
+
+/* ---- Tartalmi szekciók + előzetes-videó ----------------------------------- */
+
+.kc-course-section {
+  margin-bottom: var(--kc-space-7);
+}
+
+.kc-course-section > h2 {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-2xl);
+  line-height: var(--kc-leading-heading);
+  margin: 0 0 var(--kc-space-4);
+}
+
+.kc-course-preview {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background-color: var(--kc-color-navy-900);
+  border-radius: var(--kc-radius-lg);
+  overflow: hidden;
+}
+
+.kc-course-preview__frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* ---- RichText-tartalom (helyi LexicalContent kimenete) --------------------- */
+/* TODO(W2-értékelés): az 5B-renderer konszolidációjakor a tartalom-tipográfia
+   az 5B styles/content.css-jébe kerül — ez a blokk akkor megszűnik. */
+
+.kc-richtext > * + * {
+  margin-top: var(--kc-space-4);
+}
+
+.kc-richtext h2,
+.kc-richtext h3,
+.kc-richtext h4 {
+  font-family: var(--kc-font-heading);
+  line-height: var(--kc-leading-heading);
+}
+
+.kc-richtext h2 {
+  font-size: var(--kc-text-xl);
+}
+
+.kc-richtext h3 {
+  font-size: var(--kc-text-lg);
+}
+
+.kc-richtext h4 {
+  font-size: var(--kc-text-base);
+}
+
+.kc-richtext a {
+  color: var(--kc-color-primary);
+}
+
+.kc-richtext blockquote {
+  margin-inline: 0;
+  padding-left: var(--kc-space-4);
+  border-left: 3px solid var(--kc-color-border);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-richtext code {
+  background-color: var(--kc-color-surface-tint);
+  padding: 0 var(--kc-space-1);
+  border-radius: var(--kc-radius-sm);
+}
+
+/* ---- Upsell-sáv ------------------------------------------------------------ */
+
+.kc-course-related__title {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-2xl);
+  line-height: var(--kc-leading-heading);
+  margin: 0 0 var(--kc-space-5);
+}
