@@ -1,0 +1,127 @@
+import Link from 'next/link'
+
+import type { Category, Post, User } from '../../payload-types'
+import { estimateReadingMinutes } from '../../lib/reading-time'
+import { absoluteUrl, articleJsonLd, resolveOgImageUrl } from '../../lib/seo'
+import { Badge } from '../ui/Badge'
+import { Container } from '../ui/Container'
+import { Section } from '../ui/Section'
+import { RichText } from '../lexical/RichText'
+import { formatPostDate, PostCard } from './PostCard'
+import { JsonLd } from './JsonLd'
+import { MediaImage } from './MediaImage'
+
+/**
+ * PostView — blogposzt-oldal prezentációs komponense (fixture-ből tesztelhető).
+ *
+ * Tartalma: cím + meta (szerző, dátum, becsült olvasási idő), kategóriák
+ * (kategória-oldalakra linkelve), heroImage, a Lexical-renderelt tartalom,
+ * kapcsolódó posztok (max 3, csak published) és Article JSON-LD.
+ */
+export interface PostViewProps {
+  post: Post
+}
+
+function authorNameOf(post: Post): string | null {
+  const author = post.author
+  if (typeof author === 'object' && author !== null) {
+    const name = (author as User).name
+    if (typeof name === 'string' && name.trim().length > 0) {
+      return name.trim()
+    }
+  }
+  return null
+}
+
+function postCategories(post: Post): Category[] {
+  if (!Array.isArray(post.categories)) return []
+  return post.categories.filter(
+    (cat): cat is Category => typeof cat === 'object' && cat !== null && typeof cat.slug === 'string',
+  )
+}
+
+/** Kapcsolódó posztok: max 3 (a séma maxRows-ja), csak published, slug-gal. */
+export function visibleRelatedPosts(post: Post): Post[] {
+  if (!Array.isArray(post.relatedPosts)) return []
+  return post.relatedPosts
+    .filter((related): related is Post => typeof related === 'object' && related !== null)
+    .filter((related) => related.status === 'published' && typeof related.slug === 'string')
+    .slice(0, 3)
+}
+
+export function PostView({ post }: PostViewProps) {
+  const author = authorNameOf(post)
+  const date = formatPostDate(post.publishedAt)
+  const readingMinutes = estimateReadingMinutes(post.content)
+  const categories = postCategories(post)
+  const related = visibleRelatedPosts(post)
+  const heroMedia = post.heroImage && typeof post.heroImage === 'object' ? post.heroImage : null
+
+  return (
+    <article>
+      <JsonLd
+        data={articleJsonLd({
+          post,
+          path: `/blog/${post.slug}`,
+          ...(author ? { authorName: author } : {}),
+          imageUrl: resolveOgImageUrl(post),
+        })}
+      />
+      <Section className="kc-page-hero" variant="tint">
+        <Container size="narrow">
+          {categories.length > 0 ? (
+            <p className="kc-post-hero__categories">
+              {categories.map((category) => (
+                <Link key={category.id} href={`/blog/kategoria/${category.slug}`}>
+                  <Badge tone="info">{category.title}</Badge>
+                </Link>
+              ))}
+            </p>
+          ) : null}
+          <h1 className="kc-page-hero__title">{post.title}</h1>
+          {post.excerpt ? <p className="kc-page-hero__lead">{post.excerpt}</p> : null}
+          <p className="kc-post-meta">
+            {author ? <span className="kc-post-meta__author">{author}</span> : null}
+            {date ? (
+              <time dateTime={typeof post.publishedAt === 'string' ? post.publishedAt : undefined}>
+                {date}
+              </time>
+            ) : null}
+            {readingMinutes !== null ? <span>{readingMinutes} perc olvasás</span> : null}
+          </p>
+        </Container>
+      </Section>
+      {heroMedia ? (
+        <Section flush>
+          <Container>
+            <div className="kc-page-hero__media">
+              <MediaImage media={heroMedia} preferredSize="lg" priority sizes="(max-width: 1120px) 100vw, 1120px" />
+            </div>
+          </Container>
+        </Section>
+      ) : null}
+      <Section>
+        <Container size="narrow">
+          <RichText content={post.content} />
+        </Container>
+      </Section>
+      {related.length > 0 ? (
+        <Section variant="tint">
+          <Container>
+            <h2 className="kc-section-title">Kapcsolódó bejegyzések</h2>
+            <div className="kc-card-grid">
+              {related.map((relatedPost) => (
+                <PostCard key={relatedPost.id} post={relatedPost} />
+              ))}
+            </div>
+          </Container>
+        </Section>
+      ) : null}
+    </article>
+  )
+}
+
+/** A poszt og:image/meta abszolút URL-jei a route generateMetadata-jához. */
+export function postCanonicalPath(post: Pick<Post, 'slug'>): string {
+  return absoluteUrl(`/blog/${post.slug}`)
+}
