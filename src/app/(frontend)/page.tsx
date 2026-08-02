@@ -1,17 +1,34 @@
-import { Container } from '@/components/ui/Container'
-import { Section } from '@/components/ui/Section'
+import type { Metadata } from 'next'
 
-/**
- * Ideiglenes placeholder-route a keret-layout demonstrálásához.
- * A valódi kezdőlap-tartalom a következő hullám feladata — itt szándékosan
- * nincs üzleti tartalom.
- */
-export default function HomePage() {
+import { HomeView } from '@/components/content/HomeView'
+import { JsonLd } from '@/components/content/JsonLd'
+import { getHomePage, getLatestPosts, getPublishedProducts } from '@/lib/cms'
+import { organizationJsonLd } from '@/lib/seo'
+
+export const dynamic = 'force-dynamic'
+
+export async function generateMetadata(): Promise<Metadata> {
+  const home = await getHomePage()
+  return {
+    title: home?.seoTitle ?? home?.title ?? 'Kineticare — Kézrehabilitációs online kurzusplatform',
+    description:
+      home?.seoDescription ??
+      home?.excerpt ??
+      'Kineticare — kézrehabilitációs online videókurzusok otthoni gyógytornászati programmal.',
+  }
+}
+
+export default async function HomePage() {
+  const [home, products, posts] = await Promise.all([
+    getHomePage(),
+    getPublishedProducts(),
+    getLatestPosts(3),
+  ])
+
   return (
-    <Section>
-      <Container size="narrow">
-        <p>Az oldal jelenleg épül.</p>
-      </Container>
-    </Section>
+    <>
+      <JsonLd data={organizationJsonLd()} />
+      <HomeView home={home} products={products} posts={posts} />
+    </>
   )
 }

@@ -1,8 +1,20 @@
+import type { Config } from 'vitest/config'
 import { defineConfig } from 'vitest/config'
 
+/**
+ * vitest-konfiguráció.
+ *
+ * Az esbuild.jsx: 'automatic' azért kell, mert a React 19 automatikus
+ * JSX-runtime-ját használó komponensek (a content- és lexical-komponensek)
+ * renderToStaticMarkup-pel tesztelhetők legyenek külön @jsxImportSource
+ * pragma nélkül. A meglévő teszteket nem bontja (72/72 zöld maradt).
+ */
 export default defineConfig({
-  test: {
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
+  esbuild: {
+    jsx: 'automatic',
   },
-})
+  test: {
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    environment: 'node',
+  },
+}) satisfies Config
