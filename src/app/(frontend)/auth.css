@@ -1,0 +1,62 @@
+/**
+ * Auth-oldalak stílusai (belepes, regisztracio, elfelejtett-jelszo, jelszo-visszaallitas).
+ */
+
+.kc-auth-lead {
+  margin: 0 0 var(--kc-space-6);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-5);
+  max-width: 36rem;
+}
+
+.kc-auth-form__error,
+.kc-auth-error {
+  padding: var(--kc-space-3) var(--kc-space-4);
+  border: 1px solid var(--kc-color-danger);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-danger-surface);
+  color: var(--kc-color-danger);
+  font-size: var(--kc-text-sm);
+}
+
+.kc-auth-form__billing {
+  padding: var(--kc-space-4);
+  border: 1px solid var(--kc-color-border);
+  border-radius: var(--kc-radius-md);
+}
+
+.kc-auth-form__billing summary {
+  cursor: pointer;
+  font-weight: var(--kc-font-weight-bold);
+  color: var(--kc-color-primary);
+}
+
+.kc-auth-form__billing summary:hover {
+  text-decoration: underline;
+}
+
+.kc-auth-alt {
+  margin-top: var(--kc-space-6);
+  font-size: var(--kc-text-sm);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-auth-alt a {
+  color: var(--kc-color-primary);
+}
+
+.kc-auth-success {
+  padding: var(--kc-space-6);
+  border: 1px solid var(--kc-color-success);
+  border-radius: var(--kc-radius-lg);
+  background-color: var(--kc-color-success-surface);
+}
+
+.kc-auth-success h2 {
+  margin: 0 0 var(--kc-space-3);
+}
