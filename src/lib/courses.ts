@@ -62,11 +62,11 @@ export function hasUserPurchased(
   })
 }
 
-export type CourseCtaKind = 'buy' | 'purchased' | 'archived' | 'unavailable'
+export type CourseCtaKind = 'buy' | 'purchased' | 'archived' | 'unavailable' | 'free'
 
 export interface CourseCtaState {
   kind: CourseCtaKind
-  /** A gomb felirata (buy/archived: „Megveszem"; purchased: „Tovább a kurzusaimhoz"). */
+  /** A gomb felirata (buy/archived: „Megveszem"; purchased: „Tovább a kurzusaimhoz"; free: „Ingyenes — azonnal eléred"). */
   label: string
   /** Link-cél; letiltott (archived/unavailable) állapotban null. */
   href: string | null
@@ -80,12 +80,15 @@ export interface CourseCtaState {
  * - bejelentkezett vevő (purchases tartalmazza) → „Tovább a kurzusaimhoz"
  *   link — archived terméknél is (a meglévő vevő tovább nézi);
  * - archived + nem vevő → a CTA INAKTÍV + ARCHIVED_COURSE_NOTE jelölés;
- * - published + nem vevő → „Megveszem" → checkout;
+ * - published + nem vevő:
+ *   - ingyenes (priceInHUFEnabled: false) → „Ingyenes — azonnal eléred"
+ *     (regisztráció után purchases-be kerül, NEM a Barion-checkouton keresztül);
+ *   - fizetős → „Megveszem" → checkout;
  * - minden más (draft/ismeretlen) → inaktív (a nyilvános oldal egyébként
  *   404-et ad draft termékre; ez a védekező ág).
  */
 export function resolveCourseCta(
-  product: Pick<Product, 'id' | 'status'>,
+  product: Pick<Product, 'id' | 'status' | 'priceInHUFEnabled'>,
   purchased: boolean,
 ): CourseCtaState {
   if (purchased) {
@@ -107,6 +110,18 @@ export function resolveCourseCta(
     }
   }
   if (product.status === 'published') {
+    // Ingyenes kurzus (priceInHUFEnabled: false): regisztráció után azonnal
+    // elérhető, NEM a Barion-checkouton keresztül — a purchases-be a
+    // regisztráció/hozzáférés-adás flow írja (W3 5D scope).
+    if (product.priceInHUFEnabled === false) {
+      return {
+        kind: 'free',
+        label: 'Ingyenes — azonnal eléred',
+        href: MY_COURSES_PATH,
+        disabled: false,
+        note: null,
+      }
+    }
     return {
       kind: 'buy',
       label: 'Megveszem',
