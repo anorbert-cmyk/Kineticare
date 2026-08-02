@@ -1,0 +1,118 @@
+/**
+ * /kapcsolat oldal saját stílusai (kapcsolat-scope — a 5A stílus-aggregátor
+ * nem módosul; ezt a lapot a kapcsolat/page.tsx importálja).
+ *
+ * Mobil-first: az űrlap egységes, teljes szélességű blokkokból áll; a
+ * kc-field/kc-button primitív-osztályok a 5A ui.css-ből jönnek, itt csak a
+ * kapcsolat-specifikus kiegészítések élnek.
+ */
+
+.kc-contact-intro {
+  margin-block-end: var(--kc-space-6);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-5);
+  max-width: 36rem;
+}
+
+.kc-contact-form__textarea {
+  min-height: 9rem;
+  resize: vertical;
+  font-family: var(--kc-font-body);
+}
+
+/* Hiba-összefoglaló (szerverhiba vagy validációs figyelmeztetés). */
+.kc-contact-form__summary {
+  padding: var(--kc-space-3) var(--kc-space-4);
+  border: 1px solid var(--kc-color-danger);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-danger-surface);
+  color: var(--kc-color-danger);
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-bold);
+}
+
+.kc-contact-form__summary:focus-visible {
+  outline: 2px solid var(--kc-color-danger);
+  outline-offset: 2px;
+}
+
+/* Honeypot — vizuálisan és a képernyőolvasó/billentyű-útvonalból is rejtett. */
+.kc-contact-form__hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Adatkezelési hozzájárulás — checkbox + szöveg egymás mellett. */
+.kc-contact-form__consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--kc-space-3);
+}
+
+.kc-contact-form__checkbox {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-block-start: 0.15rem;
+  accent-color: var(--kc-color-primary);
+}
+
+.kc-contact-form__checkbox:focus-visible {
+  outline: 2px solid var(--kc-color-focus);
+  outline-offset: 2px;
+}
+
+.kc-contact-form__consent-label {
+  font-size: var(--kc-text-sm);
+  line-height: var(--kc-leading-body);
+}
+
+.kc-contact-form__turnstile {
+  min-height: 65px; /* a widget helyfoglalása — ugrálás (CLS) nélkül */
+}
+
+.kc-contact-form__turnstile-error,
+.kc-contact-form__unavailable {
+  padding: var(--kc-space-3) var(--kc-space-4);
+  border: 1px solid var(--kc-color-danger);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-danger-surface);
+  color: var(--kc-color-danger);
+  font-size: var(--kc-text-sm);
+}
+
+/* Köszönő-nézet a sikeres beküldés után. */
+.kc-contact-success {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--kc-space-4);
+  max-width: 36rem;
+  padding: var(--kc-space-6);
+  border: 1px solid var(--kc-color-success);
+  border-radius: var(--kc-radius-lg);
+  background-color: var(--kc-color-success-surface);
+}
+
+.kc-contact-success__title {
+  margin: 0;
+  color: var(--kc-color-navy-900);
+}
+
+.kc-contact-success__title:focus-visible {
+  outline: none;
+}
+
+@media (min-width: 900px) {
+  .kc-contact-success {
+    padding: var(--kc-space-7);
+  }
+}
