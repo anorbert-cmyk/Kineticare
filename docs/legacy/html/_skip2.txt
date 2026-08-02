@@ -1,5 +1,0 @@
-import { describe, expect, it } from 'vitest'
-
-import { renderLexicalContent } from '../../components/lexical/serialize'
-
-// placeholder — a teljes teszt a stagingből jön
