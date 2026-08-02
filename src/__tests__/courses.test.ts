@@ -89,7 +89,7 @@ describe('kurzuslista kategória-szűrés', () => {
 
 describe('archived kurzus CTA-ja', () => {
   it('archived + nem vevő: a CTA inaktív, href nélkül, „nem vásárolható" jelöléssel', () => {
-    const cta = resolveCourseCta({ id: 7, status: 'archived' }, false)
+    const cta = resolveCourseCta({ id: 7, status: 'archived', priceInHUFEnabled: true }, false)
     expect(cta.kind).toBe('archived')
     expect(cta.disabled).toBe(true)
     expect(cta.href).toBeNull()
@@ -98,7 +98,7 @@ describe('archived kurzus CTA-ja', () => {
   })
 
   it('archived + vevő: a meglévő vevő tovább nézi — „Tovább a kurzusaimhoz" link', () => {
-    const cta = resolveCourseCta({ id: 7, status: 'archived' }, true)
+    const cta = resolveCourseCta({ id: 7, status: 'archived', priceInHUFEnabled: true }, true)
     expect(cta.kind).toBe('purchased')
     expect(cta.disabled).toBe(false)
     expect(cta.href).toBe(MY_COURSES_PATH)
@@ -106,10 +106,32 @@ describe('archived kurzus CTA-ja', () => {
   })
 
   it('draft + nem vevő: inaktív védekező ág (a nyilvános route amúgy 404)', () => {
-    const cta = resolveCourseCta({ id: 7, status: 'draft' }, false)
+    const cta = resolveCourseCta({ id: 7, status: 'draft', priceInHUFEnabled: true }, false)
     expect(cta.kind).toBe('unavailable')
     expect(cta.disabled).toBe(true)
     expect(cta.href).toBeNull()
+  })
+})
+
+describe('ingyenes kurzus (free kind)', () => {
+  it('published + ingyenes (priceInHUFEnabled: false) + nem vevő: „Ingyenes — azonnal eléred", nem checkout', () => {
+    const cta = resolveCourseCta({ id: 10, status: 'published', priceInHUFEnabled: false }, false)
+    expect(cta.kind).toBe('free')
+    expect(cta.label).toBe('Ingyenes — azonnal eléred')
+    expect(cta.href).toBe(MY_COURSES_PATH)
+    expect(cta.href).not.toContain(CHECKOUT_PATH)
+    expect(cta.disabled).toBe(false)
+  })
+
+  it('published + ingyenes + vevő: a purchased ág él (a meglévő vevő is a kurzusaimra megy)', () => {
+    const cta = resolveCourseCta({ id: 10, status: 'published', priceInHUFEnabled: false }, true)
+    expect(cta.kind).toBe('purchased')
+  })
+
+  it('published + fizetős + nem vevő: a buy ág él változatlanul (checkout)', () => {
+    const cta = resolveCourseCta({ id: 10, status: 'published', priceInHUFEnabled: true }, false)
+    expect(cta.kind).toBe('buy')
+    expect(cta.href).toContain(CHECKOUT_PATH)
   })
 })
 
@@ -125,7 +147,7 @@ describe('„már megvetted" ág', () => {
 
   it('vevőnél a CTA a kurzusaimra mutat (checkout helyett), bármilyen státusznál', () => {
     for (const status of ['published', 'archived', 'draft'] as const) {
-      const cta = resolveCourseCta({ id: 3, status }, true)
+      const cta = resolveCourseCta({ id: 3, status, priceInHUFEnabled: true }, true)
       expect(cta.kind).toBe('purchased')
       expect(cta.href).toBe(MY_COURSES_PATH)
       expect(cta.disabled).toBe(false)
@@ -133,7 +155,7 @@ describe('„már megvetted" ág', () => {
   })
 
   it('published + nem vevő: „Megveszem" a checkout-flowba visz (termek query-param)', () => {
-    const cta = resolveCourseCta({ id: 42, status: 'published' }, false)
+    const cta = resolveCourseCta({ id: 42, status: 'published', priceInHUFEnabled: true }, false)
     expect(cta.kind).toBe('buy')
     expect(cta.label).toBe('Megveszem')
     expect(cta.href).toBe(`${CHECKOUT_PATH}?termek=42`)
