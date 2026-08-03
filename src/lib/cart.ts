@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 
-import { formatPriceHuf } from '../../lib/format-price'
+import { formatPriceHuf } from './format-price'
 
 /**
  * Kosár-oldali állapot (egy termék = egy vásárlás a jelenlegi modellben — a
