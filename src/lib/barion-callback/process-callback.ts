@@ -1,6 +1,6 @@
 import type { Payload } from 'payload'
 
-import type { Order, User } from '../../payload-types'
+import type { Order } from '../../payload-types'
 import { BarionApiError, fetchPaymentState, mapBarionPaymentStatus } from '../barion'
 import {
   registerWebhookProcessor,
@@ -10,23 +10,22 @@ import {
   type WebhookHandler,
 } from '../idempotency'
 import { logger, type Logger } from '../logger'
+import { onOrderPaid } from '../order-paid'
+import { applyBarionStateTransition } from '../order-status/apply-barion-state'
 
 /**
- * Barion-callback aszinkron feldolgozó (T-022).
+ * Barion-callback aszinkron feldolgozó (T-022, W4-02 refaktor).
  *
  * A Barion callback-POSTja gyakorlatilag csak a PaymentId-t hordozza — a
  * callback-payload ÖNMAGÁBAN NEM BIZONYÍTÉK. A jóváhagyás ezért KIZÁRÓLAG a
  * szerver-szerver fetchPaymentState (v4!) verifikációval történik; a státusz-
  * leképezés a tesztelt mapBarionPaymentStatus szerint.
  *
- * Átmenet-szabályok (mind idempotens):
- * - paid: order payment_pending/created → paid (már paid → no-op, NEM hiba),
- *   purchases-beírás a users-re (már megvan → no-op). Más kiinduló státuszból
- *   (cancelled/refunded/payment_failed) TILOS — naplózott riasztás.
- * - cancelled: payment_pending → cancelled; paid felé TILOS visszaállítani
- *   (állapotgép-védelem, riasztás); más kiindulóból figyelmeztetés, marad.
- * - payment_pending: státusz marad; result='pending_repoll' jelzi, hogy a
- *   rendelés újrapollolásra vár (a poll-job külön ticket).
+ * Az állapotgép-átmeneteket a KÖZÖS MAG (src/lib/order-status/apply-barion-state.ts)
+ * végzi — ugyanazt használja az order-poll job is, így az elveszett callback
+ * utánpollolása definíció szerint azonos szabályokkal zárul. A friss paid-
+ * átmenet mellékhatásait (számla-job + visszaigazoló e-mail) az onOrderPaid
+ * futtatja, szintén közös modulból.
  *
  * Hiba-szabály: a fetchPaymentState hibája (timeout/network/provider) vagy a
  * hiányzó rendelés THROW a handlerből → a processWebhook failed-re állítja
@@ -89,68 +88,6 @@ async function findOrderForPayment(
     }
   }
   return null
-}
-
-function orderProductIds(order: Order): number[] {
-  const items = order.items ?? []
-  const ids: number[] = []
-  for (const item of items) {
-    if (item.product === null || item.product === undefined) {
-      continue
-    }
-    ids.push(typeof item.product === 'object' ? item.product.id : item.product)
-  }
-  return ids
-}
-
-function userPurchaseIds(user: User): number[] {
-  const purchases = user.purchases ?? []
-  return purchases.map((entry) => (typeof entry === 'object' ? entry.id : entry))
-}
-
-/**
- * A purchases-jogosultság idempotens beírása: csak a hiányzó termékek kerülnek
- * hozzá (már meglévő → no-op). Így a dupla callback és az újrapróbálás sem
- * hozhat létre dupla jogosultságot; részleges korábbi hiba esetén pedig
- * kijavítja a hiányt.
- */
-async function grantPurchases(
-  payload: Payload,
-  order: Order,
-  log: Logger,
-): Promise<{ granted: number; alreadyOwned: number }> {
-  const customerRef = order.customer
-  const customerId =
-    typeof customerRef === 'object' && customerRef !== null ? customerRef.id : customerRef
-  if (customerId === null || customerId === undefined) {
-    // Rendelés vevő nélkül nem létezhet a checkout-folyamatban — ez adatinkonzisztencia.
-    throw new Error('a rendeléshez nem tartozik vevő (customer) — jogosultság nem írható be')
-  }
-
-  const user = (await payload.findByID({
-    collection: 'users',
-    id: customerId,
-    depth: 0,
-    overrideAccess: true,
-  })) as User
-
-  const owned = new Set(userPurchaseIds(user).map(String))
-  const missing = orderProductIds(order).filter((productId) => !owned.has(String(productId)))
-
-  if (missing.length > 0) {
-    await payload.update({
-      collection: 'users',
-      id: customerId,
-      data: { purchases: [...userPurchaseIds(user), ...missing] },
-      overrideAccess: true,
-    })
-    log.info('barion-callback: purchases-jogosultság beírva', {
-      userId: customerId,
-      grantedProductIds: missing,
-    })
-  }
-
-  return { granted: missing.length, alreadyOwned: orderProductIds(order).length - missing.length }
 }
 
 /** Az esemény végleges lezárása: processedAt + result beírása. */
@@ -220,100 +157,47 @@ export function createBarionCallbackProcessor(deps: BarionCallbackProcessorDeps)
       }
       const orderLog = eventLog.child({ orderId: order.id, orderNumber: order.orderNumber })
 
-      // 3. Állapotgép-átmenetek.
-      if (mapped === 'payment_pending') {
-        if (order.status !== 'payment_pending' && order.status !== 'created') {
-          orderLog.warn(
-            'barion-callback: függő fizetésjelzés nem függő rendelésre — állapot változatlan',
-            {
-              orderStatus: order.status,
-            },
-          )
-        }
-        // Státusz marad; a poll-job (külön ticket) ütemezzi az újrapollolást.
+      // 3. Állapotgép-átmenet a KÖZÖS MAGGAL (a poll-job is ezt futtatja).
+      const transition = await applyBarionStateTransition({
+        payload: deps.payload,
+        order,
+        mapped,
+        log: orderLog,
+      })
+
+      // 4. Friss paid-átmenet mellékhatásai (számla-job + visszaigazoló e-mail).
+      //    Az onOrderPaid sosem dob — a callback-feldolgozás ettől nem bukhat el.
+      if (transition.transitionedToPaid) {
+        await onOrderPaid({ payload: deps.payload, order, logger: orderLog })
+      }
+
+      // 5. Esemény-lezárás az akcióhoz rendelt result-tal.
+      if (transition.action === 'pending') {
         await closeEvent(store, event, 'pending_repoll')
         return { status: 'payment_pending', orderId: order.id, orderNumber: order.orderNumber }
       }
-
-      if (mapped === 'cancelled') {
-        if (order.status === 'payment_pending') {
-          await deps.payload.update({
-            collection: 'orders',
-            id: order.id,
-            data: { status: 'cancelled' },
-            overrideAccess: true,
-          })
-          orderLog.info('barion-callback: rendelés lemondva (Barion-státusz alapján)')
-          await closeEvent(store, event, 'cancelled')
-          return { status: 'cancelled', orderId: order.id, orderNumber: order.orderNumber }
+      if (transition.action === 'cancelled') {
+        await closeEvent(store, event, 'cancelled')
+        return {
+          status: 'cancelled',
+          ...(transition.duplicate ? { duplicate: true } : {}),
+          orderId: order.id,
+          orderNumber: order.orderNumber,
         }
-        if (order.status === 'cancelled') {
-          orderLog.info('barion-callback: a rendelés már lemondott — duplikátum no-op')
-          await closeEvent(store, event, 'cancelled')
-          return { status: 'cancelled', duplicate: true, orderId: order.id }
-        }
-        if (order.status === 'paid') {
-          // ÁLLAPOTGÉP-VÉDELEM: paid rendelést SOSEM állítunk vissza cancelledre.
-          orderLog.error(
-            'RIASZTÁS: paid rendelésre cancelled Barion-callback érkezett — visszaállítás TILOS, állapot marad paid',
-            { barionStatus: state.Status },
-          )
-          await closeEvent(store, event, 'rejected')
-          return { status: 'rejected', reason: 'paid-cancel-rejected', orderId: order.id }
-        }
-        orderLog.warn(
-          'barion-callback: cancelled jelzés nem lemondható kiinduló státuszból — állapot marad',
-          {
-            orderStatus: order.status,
-          },
-        )
+      }
+      if (transition.action === 'rejected') {
         await closeEvent(store, event, 'rejected')
-        return { status: 'rejected', reason: 'cancel-not-allowed', orderId: order.id }
+        return { status: 'rejected', reason: transition.reason, orderId: order.id }
       }
 
-      // mapped === 'paid'
-      if (
-        order.status === 'cancelled' ||
-        order.status === 'refunded' ||
-        order.status === 'payment_failed'
-      ) {
-        orderLog.error(
-          'RIASZTÁS: paid jelzés nem engedélyezett kiinduló státuszból — állapot változatlan, manuális ellenőrzés szükséges',
-          { orderStatus: order.status, barionStatus: state.Status },
-        )
-        await closeEvent(store, event, 'rejected')
-        return { status: 'rejected', reason: 'paid-not-allowed', orderId: order.id }
-      }
-
-      const alreadyPaid = order.status === 'paid'
-      if (!alreadyPaid) {
-        if (order.status === 'created') {
-          orderLog.warn(
-            'barion-callback: created státuszú rendelés ugrik paid-re (payment_pending átugorva)',
-          )
-        }
-        await deps.payload.update({
-          collection: 'orders',
-          id: order.id,
-          data: { status: 'paid' },
-          overrideAccess: true,
-        })
-        orderLog.info('barion-callback: rendelés paid-re állítva (Barion v4 verifikációval)')
-      } else {
-        orderLog.info(
-          'barion-callback: a rendelés már paid — átmenet no-op, jogosultság-ellenőrzés fut',
-        )
-      }
-
-      // Purchases-beírás mindig idempotens (már paid rendelésnél is kijavítja az esetleges hiányt).
-      const grant = await grantPurchases(deps.payload, order, orderLog)
+      // transition.action === 'paid'
       await closeEvent(store, event, 'paid')
       return {
         status: 'paid',
-        duplicate: alreadyPaid,
+        duplicate: transition.duplicate === true,
         orderId: order.id,
         orderNumber: order.orderNumber,
-        purchasesGranted: grant.granted,
+        purchasesGranted: transition.purchasesGranted,
       }
     } catch (error) {
       // Hibaág: a result='failed' best-effort jelölés (a státuszt/lastErrort a

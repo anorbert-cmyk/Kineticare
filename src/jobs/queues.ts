@@ -14,3 +14,11 @@ export function assertQueueName(name: string): string {
 }
 
 export const WEBHOOK_RETRY_QUEUE = assertQueueName('webhook-maintenance')
+
+/**
+ * Rendelés-életciklus queue (W4): az order-poll (utánpollolás + számla-resweep)
+ * és az invoice-issue (Számlázz.hu) jobok ide kerülnek — a webhook-retry-tól
+ * elkülönítve, hogy a callback-újrapróbálások ne keveredjenek a rendelés-
+ * karbantartással. A queue-név a payload-jobs táblában is megjelenik.
+ */
+export const ORDER_MAINTENANCE_QUEUE = assertQueueName('order-maintenance')
