@@ -142,9 +142,9 @@ function render(node: ReactNode): string {
   return renderToStaticMarkup(createElement(Fragment, null, node))
 }
 
-/** A HUF-formázás nem-törhető szóközöket használ — a tesztekben normalizáljuk. */
+/** A HUF-formázás nem-törhető szóközöket (NBSP) használ — a tesztekben normalizáljuk. */
 function normalizeNbsp(html: string): string {
-  return html.replace(/ /g, ' ')
+  return html.replace(/ /g, ' ')
 }
 
 // ---------------------------------------------------------------------------
