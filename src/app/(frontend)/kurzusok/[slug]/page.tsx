@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { getPayload } from 'payload'
 import { cache } from 'react'
 
+import { TrackEvent } from '@/components/analytics/TrackEvent'
 import { CourseCta } from '@/components/courses/CourseCta'
 import { LexicalContent } from '@/components/courses/LexicalContent'
 import { PreviewVideo, hasPreviewVideo } from '@/components/courses/PreviewVideo'
@@ -140,6 +141,8 @@ export default async function CoursePage({ params }: CoursePageProps) {
 
   return (
     <>
+      {/* PostHog funnel-lépés: a kurzus-oldal megnyitása (no-op consent nélkül). */}
+      <TrackEvent event="course_viewed" properties={{ courseId: product.id, courseSku: product.sku ?? undefined }} />
       <Section>
         <Container>
           <nav aria-label="Morzsamenü" className="kc-course-breadcrumb">

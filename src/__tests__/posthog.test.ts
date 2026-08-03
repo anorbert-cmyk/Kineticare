@@ -1,0 +1,102 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import {
+  ANALYTICS_EVENTS,
+  buildPostHogOptions,
+  captureAnalyticsEvent,
+  capturePageView,
+  CONSENT_STORAGE_KEY,
+  hasAnalyticsConsent,
+  initPostHog,
+  isPostHogConfigured,
+  POSTHOG_API_HOST,
+  resetPostHogForTests,
+} from '../lib/analytics/posthog'
+
+/**
+ * PostHog-integráció egységtesztek — a központi konfig, a consent-kapu és a
+ * capture no-op viselkedések. A posthog-js singleton mockolt (valódi hálózat
+ * és böngésző-API nélkül).
+ */
+
+vi.mock('posthog-js', () => ({
+  default: {
+    init: vi.fn(),
+    capture: vi.fn(),
+  },
+}))
+
+import posthog from 'posthog-js'
+
+const posthogMock = posthog as unknown as {
+  init: ReturnType<typeof vi.fn>
+  capture: ReturnType<typeof vi.fn>
+}
+
+function storageWith(value: string | null): Pick<Storage, 'getItem'> {
+  return {
+    getItem: (key: string) => (key === CONSENT_STORAGE_KEY ? value : null),
+  }
+}
+
+beforeEach(() => {
+  resetPostHogForTests()
+  posthogMock.init.mockReset()
+  posthogMock.capture.mockReset()
+})
+
+describe('isPostHogConfigured / hasAnalyticsConsent', () => {
+  it('a munkatérben nincs NEXT_PUBLIC_POSTHOG_KEY → nincs konfigurálva', () => {
+    // A NEXT_PUBLIC_* env build-időben kerül a bundle-be; a tesztkörnyezetben üres.
+    expect(isPostHogConfigured()).toBe(false)
+  })
+
+  it("consent: csak explicit 'granted' jelent hozzájárulást", () => {
+    expect(hasAnalyticsConsent(storageWith('granted'))).toBe(true)
+    expect(hasAnalyticsConsent(storageWith('denied'))).toBe(false)
+    expect(hasAnalyticsConsent(storageWith(null))).toBe(false)
+    expect(hasAnalyticsConsent(storageWith('bármi-más'))).toBe(false)
+  })
+
+  it('tárolóhiba esetén is false (sosem engedélyezünk vakon)', () => {
+    const broken: Pick<Storage, 'getItem'> = {
+      getItem: () => {
+        throw new Error('storage tiltva')
+      },
+    }
+    expect(hasAnalyticsConsent(broken)).toBe(false)
+  })
+})
+
+describe('buildPostHogOptions', () => {
+  it('elsőfél-proxy api_host (/ingest), EU ui_host, identified_only person-profil', () => {
+    const options = buildPostHogOptions()
+    expect(options.api_host).toBe('/ingest')
+    expect(POSTHOG_API_HOST).toBe('/ingest')
+    expect(options.ui_host).toBe('https://eu.i.posthog.com')
+    expect(options.person_profiles).toBe('identified_only')
+  })
+
+  it('a $pageview manuális (App Router), a pageleave automatikus', () => {
+    const options = buildPostHogOptions()
+    expect(options.capture_pageview).toBe(false)
+    expect(options.capture_pageleave).toBe(true)
+  })
+})
+
+describe('initPostHog / capture no-op szabályok', () => {
+  it('kulcs nélkül NEM inicializál — a capture bármitől függetlenül no-op', () => {
+    expect(initPostHog()).toBe(false)
+    expect(posthogMock.init).not.toHaveBeenCalled()
+
+    captureAnalyticsEvent('course_viewed', { courseId: 1 })
+    capturePageView('/kurzusok/1')
+    expect(posthogMock.capture).not.toHaveBeenCalled()
+  })
+
+  it('az esemény-nevek a regiszterből jönnek (elgépelés-védelem)', () => {
+    expect(ANALYTICS_EVENTS.courseViewed).toBe('course_viewed')
+    expect(ANALYTICS_EVENTS.checkoutStarted).toBe('checkout_started')
+    expect(ANALYTICS_EVENTS.purchaseConfirmed).toBe('purchase_confirmed')
+  })
+})
