@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next'
-import type { ReactNode } from 'react'
+import { Suspense, type ReactNode } from 'react'
 
+import { PostHogPageView } from '@/components/analytics/PostHogPageView'
+import { PostHogProvider } from '@/components/analytics/PostHogProvider'
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
 
@@ -45,9 +47,15 @@ export default function FrontendLayout({ children }: { children: ReactNode }) {
         <a className="kc-skip-link" href="#tartalom">
           Ugrás a tartalomra
         </a>
-        <Header />
-        <main id="tartalom">{children}</main>
-        <Footer />
+        <PostHogProvider>
+          {/* A useSearchParams miatt Suspense-határ kell (Next build-szabály). */}
+          <Suspense fallback={null}>
+            <PostHogPageView />
+          </Suspense>
+          <Header />
+          <main id="tartalom">{children}</main>
+          <Footer />
+        </PostHogProvider>
       </body>
     </html>
   )

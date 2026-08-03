@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getPayload } from 'payload'
 import { headers } from 'next/headers'
 
+import { TrackEvent } from '@/components/analytics/TrackEvent'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { CheckoutForm } from '@/components/checkout/CheckoutForm'
@@ -103,6 +104,8 @@ export default async function PenztarPage({ searchParams }: PenztarPageProps) {
   return (
     <Section>
       <Container size="narrow">
+        {/* PostHog funnel-lépés: a pénztár megnyitása (no-op consent nélkül). */}
+        <TrackEvent event="checkout_started" properties={{ courseId: product.id, courseSku: product.sku ?? undefined }} />
         <h1>Pénztár</h1>
         {alreadyPurchased ? (
           <div className="kc-cart-notice" role="status">
