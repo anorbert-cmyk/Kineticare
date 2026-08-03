@@ -24,6 +24,42 @@ const nextConfig: NextConfig = {
   // A PostHog proxy átirányításai (pl. /decide → /flags) az origin-hostra
   // mutatnának — skip, hogy a kliens a saját domainen maradjon.
   skipTrailingSlashRedirect: true,
+
+  // OWASP A05: biztonsági HTTP-fejlécek minden válaszon. A CSP a Stream-
+  // iframe (kurzus/előzetes/hero-videó), a Turnstile-widget és a PostHog
+  // hostjaival van felépítve (a PostHog a /ingest elsőfél-proxyn megy, ezért
+  // connect-src 'self' elég). Stagingen érdemes a karcolás-mentes bevezetéshez
+  // Content-Security-Policy-Report-Only-val kezdeni.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' https://iframe.cloudflarestream.com https://challenges.cloudflare.com",
+              "frame-src 'self' https://iframe.cloudflarestream.com https://customer-*.cloudflarestream.com https://www.youtube-nocookie.com https://player.vimeo.com https://challenges.cloudflare.com",
+              "img-src 'self' data: https://videodelivery.net https://customer-*.cloudflarestream.com",
+              "media-src 'self' https://videodelivery.net https://customer-*.cloudflarestream.com",
+              "connect-src 'self'",
+              "style-src 'self' 'unsafe-inline'",
+              "font-src 'self'",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'self'",
+            ].join('; '),
+          },
+        ],
+      },
+    ]
+  },
 }
 
 export default withPayload(nextConfig)

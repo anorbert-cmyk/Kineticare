@@ -9,7 +9,15 @@ export const Users: CollectionConfig = {
   admin: {
     useAsTitle: 'email',
   },
-  auth: true,
+  auth: {
+    // OWASP A07: a sikertelen kísérletek korlátozása — 5 hibás próbálkozás
+    // után 10 perces zárolás (a credential-stuffing/brute-force megelőzése).
+    maxLoginAttempts: 5,
+    lockTime: 600_000, // 10 perc, ezredmásodpercben
+    // A forgot-password token élettartama explicit (2 óra) — a reset-link
+    // így nem használható korlátlan ideig.
+    tokenExpiration: 7_200_000,
+  },
   access: {
     // Az admin felületet staff+owner éri el.
     admin: isStaffOrOwner,
