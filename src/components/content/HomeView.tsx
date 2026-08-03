@@ -2,9 +2,11 @@ import Link from 'next/link'
 
 import type { Page, Post, Product } from '../../payload-types'
 import { organizationJsonLd } from '../../lib/seo'
+import { HERO_VIDEO_STREAM_ID } from '../../lib/hero-video'
 import { Button } from '../ui/Button'
 import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
+import { HeroVideo } from './HeroVideo'
 import { JsonLd } from './JsonLd'
 import { MediaImage } from './MediaImage'
 import { PostCard } from './PostCard'
@@ -17,7 +19,9 @@ import { RichText } from '../lexical/RichText'
  *
  * Struktúra (a legacy kezdőlap szellemében: hero → segítség/kurzus → bizalom/tudástár):
  * 1. Hero — a 'kezdolap' slugú CMS-oldalból (cím/kivonat/heroImage), fallbackben
- *    márka-alapértelmezés; CTA a kurzus-kiemelésre és a tudástárra.
+ *    márka-alapértelmezés; CTA a kurzus-kiemelésre és a tudástárra. A hero média:
+ *    ha a HERO_VIDEO_STREAM_ID be van állítva (src/lib/hero-video.ts), a Stream
+ *    hero-videó jelenik meg, egyébként a CMS heroImage.
  * 2. Kurzus-kiemelés — published termékek kártyái (cover/cím/ár); üresen a
  *    szekció elmarad (nincs törött üres blokk).
  * 3. Legfrissebb posztok — a published tudástár-posztok kártyái + „Összes bejegyzés".
@@ -54,7 +58,11 @@ function HeroSection({ home }: { home: Page | null }) {
               </Button>
             </div>
           </div>
-          {heroMedia ? (
+          {HERO_VIDEO_STREAM_ID !== null ? (
+            <div className="kc-hero__media">
+              <HeroVideo streamId={HERO_VIDEO_STREAM_ID} />
+            </div>
+          ) : heroMedia ? (
             <div className="kc-hero__media">
               <MediaImage media={heroMedia} preferredSize="md" priority sizes="(max-width: 900px) 100vw, 544px" />
             </div>
