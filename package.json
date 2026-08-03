@@ -23,7 +23,7 @@
     "@payloadcms/plugin-ecommerce": "3.86.0",
     "@payloadcms/plugin-form-builder": "3.86.0",
     "@payloadcms/richtext-lexical": "3.86.0",
-    "graphql": "16.14.2",
+    "graphql": "17.0.2",
     "next": "15.5.22",
     "payload": "3.86.0",
     "posthog-js": "1.410.5",
