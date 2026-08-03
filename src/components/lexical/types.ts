@@ -11,7 +11,8 @@ export const TEXT_FORMAT = {
 export interface LexicalNode {
   type: string
   text?: string
-  format?: number
+  /** Szöveg-csomópontnál bitmaszk (number), blokk-csomópontnál üres string (''). */
+  format?: number | string
   tag?: string
   listType?: string
   checked?: boolean
