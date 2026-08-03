@@ -267,9 +267,9 @@ function renderParagraph(node: LexicalNode, key: string): ReactNode {
 
 function renderHeading(node: LexicalNode, key: string): ReactNode {
   const tag = typeof node.tag === 'string' ? node.tag : 'h2'
-  // SEO-higiénia: a tartalmi h1 → h2 (oldalanként egy h1, a dokumentumcím).
-  const effectiveTag = tag === 'h1' ? 'h2' : /^h[2-6]$/.test(tag) ? tag : 'h2'
-  return createElement(effectiveTag, { key }, renderChildren(node, key))
+  // SEO-higiénia: oldalanként egy h1 (a dokumentum-cím); a tartalmi h1 h2-re lágyul.
+  const mapped = tag === 'h1' ? 'h2' : /^h[2-6]$/.test(tag) ? tag : 'h2'
+  return createElement(mapped, { key }, renderChildren(node, key))
 }
 
 function renderList(node: LexicalNode, key: string): ReactNode {
@@ -279,64 +279,64 @@ function renderList(node: LexicalNode, key: string): ReactNode {
     return createElement('ol', { key }, children)
   }
   if (listType === 'check') {
+    // Gyakorlatlista: a check-lista a rehabilitációs gyakorlatsor megjelenítője.
     return createElement('ul', { key, className: 'kc-richtext__exercise-list' }, children)
   }
   return createElement('ul', { key }, children)
 }
 
 function renderListItem(node: LexicalNode, key: string): ReactNode {
-  const checked = node.checked === true ? true : node.checked === false ? false : undefined
-  if (checked === undefined) {
-    return createElement('li', { key }, renderChildren(node, key))
-  }
-  return createElement(
-    'li',
-    { key, className: checked ? 'is-checked' : 'is-unchecked', 'data-checked': checked },
-    renderChildren(node, key),
-  )
-}
-
-function renderQuote(node: LexicalNode, key: string): ReactNode {
-  return createElement('blockquote', { key }, renderChildren(node, key))
+  const isCheckItem = typeof node.checked === 'boolean'
+  const className = isCheckItem
+    ? `kc-richtext__exercise-item${node.checked ? ' kc-richtext__exercise-item--done' : ''}`
+    : undefined
+  return createElement('li', { key, className }, renderChildren(node, key))
 }
 
 function renderUpload(node: LexicalNode, key: string): ReactNode {
-  const media = (isRecord(node.value) ? node.value : null) as MediaLike | null
-  if (!media) {
-    warnUnknownNode({ ...node, type: 'upload(hianyzo-media)' })
+  const media = isRecord(node.value) ? (node.value as MediaLike) : null
+  const src = media ? pickMediaUrl(media, 'md') : null
+  if (!media || !src) {
+    // Nem feloldott feltöltés (nincs populate-olva vagy nem kép): ne hasaljon el.
+    warnUnknownNode({ ...node, type: 'upload(nem-feloldott)' })
     return null
   }
-  const src = pickMediaUrl(media)
-  if (!src) {
-    warnUnknownNode({ ...node, type: 'upload(nincs-url)' })
-    return null
-  }
-  const alt = mediaAlt(media)
-  const { width, height } = mediaDimensions(media)
-  const caption =
-    isRecord(media) && typeof (media as Record<string, unknown>).caption === 'string'
-      ? ((media as Record<string, unknown>).caption as string)
-      : null
 
-  return createElement(
-    'figure',
-    { key, className: 'kc-richtext__figure' },
-    createElement(Image, {
-      src,
-      alt,
-      width,
-      height,
-      sizes: '(max-width: 720px) 100vw, 720px',
-      className: 'kc-richtext__image',
-    }),
-    caption ? createElement('figcaption', { className: 'kc-richtext__figcaption' }, caption) : null,
-  )
+  const alt = mediaAlt(media)
+  if (alt.length === 0) {
+    // Az alt a Media collectionben kötelező — ha mégis hiányzik, az adathiba;
+    // dekoratívként renderelünk és fejlesztői figyelmeztetést adunk.
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[lexical] Feltöltött kép alt-szöveg nélkül — dekoratívként renderelve.')
+    }
+  }
+
+  const dimensions = mediaDimensions(media, 'md')
+  const sizes = '(max-width: 720px) 100vw, 720px'
+  const image = dimensions
+    ? createElement(Image, {
+        src,
+        alt,
+        width: dimensions.width,
+        height: dimensions.height,
+        sizes,
+      })
+    : // Intrinsic méret hiányában kitöltős render (a figure aránytartó).
+      createElement(Image, { src, alt, fill: true, sizes })
+
+  return createElement('figure', { key, className: 'kc-richtext__figure' }, image)
 }
+
+// ---------------------------------------------------------------------------
+// Fő bejáró
+// ---------------------------------------------------------------------------
 
 function renderNode(node: LexicalNode, key: string): ReactNode {
   switch (node.type) {
     case 'text':
       return renderText(node, key)
+    case 'linebreak':
+      return createElement('br', { key })
     case 'paragraph':
       return renderParagraph(node, key)
     case 'heading':
@@ -346,43 +346,58 @@ function renderNode(node: LexicalNode, key: string): ReactNode {
     case 'listitem':
       return renderListItem(node, key)
     case 'quote':
-      return renderQuote(node, key)
+      return createElement('blockquote', { key }, renderChildren(node, key))
     case 'horizontalrule':
       return createElement('hr', { key })
-    case 'linebreak':
-      return createElement('br', { key })
     case 'link':
       return renderLink(node, key)
     case 'upload':
       return renderUpload(node, key)
-    default: {
+    case 'relationship':
+    case 'block':
+      // Dokumentum-hivatkozás / jövőbeli custom blokk: a storefront ezeket
+      // szándékosan nem rendereli (a publikus felületen nem tartozik rájuk) —
+      // fejlesztői módban figyelmeztetés, a beágyazott gyermekek megmaradnak.
       warnUnknownNode(node)
-      const children = childrenOf(node)
-      if (children.length > 0) {
-        return createElement(Fragment, { key }, renderChildren(node, key))
-      }
-      return null
-    }
+      return createElement(Fragment, { key }, renderChildren(node, key))
+    default:
+      warnUnknownNode(node)
+      return createElement(Fragment, { key }, renderChildren(node, key))
   }
 }
 
-function extractPlainText(node: LexicalNode): string {
+/** Egyszerű szöveg-kinyerés (videócím, olvasási idő — formázás nélkül). */
+export function extractPlainText(node: LexicalNode): string {
   if (node.type === 'text') {
     return typeof node.text === 'string' ? node.text : ''
   }
   return childrenOf(node)
     .map((child) => extractPlainText(child))
-    .join('')
+    .join(' ')
 }
 
 /**
- * A richText-tartalom bejárása. Üres/hibás bemenetre null (a RichText-burkoló
- * ebből semmit sem renderel).
+ * A teljes richText-tartalom renderelése. Hibás/üres bemenetre null
+ * (a hívó oldal ekkor tartalom nélkül, de renderelve marad).
  */
 export function renderLexicalContent(content: unknown): ReactNode {
-  if (!isRecord(content)) return null
-  const root = isRecord(content.root) ? content.root : null
-  const children = root && Array.isArray(root.children) ? (root.children as LexicalNode[]) : []
-  if (children.length === 0) return null
-  return children.map((child, index) => renderNode(child as LexicalNode, `n-${index}`))
+  if (!isRecord(content) || !isRecord(content.root)) {
+    return null
+  }
+  const root = content.root as unknown as LexicalNode
+  return renderChildren(root, 'n')
+}
+
+export type { LexicalContent, LexicalNode }
+
+/**
+ * Van-e renderelhető tartalom a Lexical-dokumentumban (a RichText-blokkok
+ * feltételes megjelenítéséhez, pl. HomeView CMS-szekció).
+ */
+export function hasLexicalContent(content: unknown): boolean {
+  if (typeof content !== 'object' || content === null) return false
+  const root = (content as { root?: unknown }).root
+  if (typeof root !== 'object' || root === null) return false
+  const children = (root as { children?: unknown }).children
+  return Array.isArray(children) && children.length > 0
 }
