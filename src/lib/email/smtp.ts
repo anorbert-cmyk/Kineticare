@@ -184,7 +184,18 @@ class SmtpSession {
     await this.expectGreeting()
     const ehloLines = await this.command(`EHLO ${config.host}`, [250])
     const supportsStartTls = ehloLines.some((line) => /STARTTLS/i.test(line))
-    if (config.port !== 465 && supportsStartTls) {
+    if (config.port !== 465) {
+      // STARTTLS KÖTELEZŐ a nem-465-ös porton: a szerver-hirdetés hiányában a
+      // hitelesítés TITKOSÍTATLAN csatornán menne ki — ezt a folyamat nem
+      // folytathatja (a 465-ös implicit TLS ettől független).
+      if (!supportsStartTls) {
+        throw new EmailSendError(
+          'Az SMTP-szerver nem hirdet STARTTLS-t, implicit TLS (465) pedig nincs beállítva — ' +
+            'a hitelesítés titkosítatlan csatornán NEM küldhető. Állíts be TLS-támogatást a szerveren, ' +
+            'használd a 465-ös implicit TLS-portot, vagy válts Resend-providerre.',
+          false,
+        )
+      }
       await this.command('STARTTLS', [220])
       await upgradeToTls()
       await this.command(`EHLO ${config.host}`, [250])
