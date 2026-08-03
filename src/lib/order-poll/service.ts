@@ -11,29 +11,14 @@ import { applyBarionStateTransition } from '../order-status/apply-barion-state'
  * utánpollolása a Barion v4 GetState-tel. Ez a "második védővonal": ha egy
  * callback elveszik (hálózati hiba, deploy, Barion-késés), a fizetés akkor is
  * lezárul — a v4 válasz a végső igazság, a callback csak gyorsító.
- *
- * Szabályok:
- * - Az átmeneteket a KÖZÖS MAG (order-status/apply-barion-state) végzi — a
- *   callback-processzorral bit-azonos szabályok.
- * - Friss paid-átmenetnél ugyanazok a mellékhatások (onOrderPaid: számla-job
- *   + visszaigazoló e-mail).
- * - Prepared/Started (még nyitott fizetés): a rendelés marad payment_pending,
- *   a következő futás újrapollolja; 24 óránál régebbi függő rendelésnél
- *   error-szintű owner-riasztás.
- * - barionPaymentId NÉLKÜLI "árva" rendelés (a checkout a Barion-hívás előtt
- *   állt le): ORPHAN_GRACE letelte után cancelled + warn (a Barionban úgysem
- *   létezik fizetés hozzá; a vevő újrakezdheti).
- * - Barion-hiba (timeout/network) egy rendelésnél: az a rendelés kimarad ebből
- *   a futásból (failed-számláló), a többi megy tovább.
- *
- * Emellett a számla-RESWEEP is itt él: a paid rendelésekre, amelyeknél a
- * számlakiállítás valamiért kimaradt (invoiceStatus 'none', vagy 10 percnél
- * régebben 'pending'-ben ragadt), újra sorba állítja az invoice-issue jobot.
- * (A szamlaKulsoAzon-idempotencia miatt a dupla kiállítás kizárt.)
  */
 
 export const ORDER_POLL_BATCH_SIZE = 25
-export const ORPHAN_ORDER_GRACE_MS = 2 * 60 * 60 * 1000 // 2 óra
+// Az árva-rendelés lejárata 24 óra: a Barion PaymentWindow (30 perc) és a
+// banki késleltetések mellett a 2 órás türelem túl szűk volt — a 2 óra UTÁN
+// befejeződő fizetés a 'paid-not-allowed' állapotgép-védelembe ütközött
+// (pénz felvéve, kurzus nem). A 24 óra a késői banki feldolgozás is belefér.
+export const ORPHAN_ORDER_GRACE_MS = 24 * 60 * 60 * 1000 // 24 óra
 export const STUCK_ORDER_WARN_MS = 24 * 60 * 60 * 1000 // 24 óra
 export const INVOICE_RESWEEP_BATCH_SIZE = 10
 export const INVOICE_PENDING_STALE_MS = 10 * 60 * 1000 // 10 perc
