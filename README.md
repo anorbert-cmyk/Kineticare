@@ -41,6 +41,7 @@ Környezeti változók: `.env.example` (a titkok SOHA nem kerülnek a repóba;
 | Barion sandbox | `docs/barion-sandbox-setup.md` |
 | E2E-futtatás | `docs/e2e-staging-runbook.md` |
 | UX-hierarchia-audit | `docs/ux-hierarchia-audit.md` |
+| OWASP biztonsági audit | `docs/owasp-security-review.md` |
 | PostHog | `docs/posthog.md` |
 | Hero-videó feltöltés | `docs/hero-video-feltoltes.md` |
 | Legacy-forrás | `docs/legacy/` |
@@ -74,4 +75,5 @@ Környezeti változók: `.env.example` (a titkok SOHA nem kerülnek a repóba;
 
 Railway (staging + prod), a konfig a `railway.json`-ban; a lépések a
 `docs/deploy-railway.md` runbookban. A CI-workflow-k (typecheck/vitest/lint/
-build + gitleaks) a `.github/workflows/` alatt élnek.
+build + gitleaks + npm audit) a `.github/workflows/` alatt élnek (a feltöltés
+az admin-csomagból, UTMUTATO-CI.md).
