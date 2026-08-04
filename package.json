@@ -15,7 +15,8 @@
     "generate:importmap": "payload generate:importmap",
     "generate:types": "payload generate:types",
     "test": "vitest run",
-    "seed": "tsx src/scripts/seed.ts"
+    "seed": "tsx src/scripts/seed.ts",
+    "grant:purchase": "tsx src/scripts/grant-purchase.ts"
   },
   "dependencies": {
     "@payloadcms/db-postgres": "3.86.0",
