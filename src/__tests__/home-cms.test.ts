@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { HomeView } from '../components/content/HomeView'
+import { isPaidProduct } from '../components/content/home/CourseCards'
 import { isPubliclyVisibleProduct } from '../components/content/ProductCard'
 import { formatPostDate } from '../components/content/PostCard'
 import { PostView, visibleRelatedPosts } from '../components/content/PostView'
@@ -20,8 +21,11 @@ import type { Category, Media, Page, Post, Product, User } from '../payload-type
 
 /**
  * Oldal-render tesztek (kezdőlap + CMS/blog) — fixture-adattal, DB nélkül.
- * Lefedi: kurzus-kiemelés (cover/cím/ár), friss posztok, poszt-oldal meta-részei,
- * draft/published viselkedés és az SEO-fallbacklánc.
+ * Lefedi: a docs/ux-hierarchia-audit.md cél-hierarchiájú kezdőlapot (M1 hero CTA,
+ * M2 fizetős kurzus-kiemelés cím/ár, M3 hogyan-működik, M4 hitel-csík,
+ * M6 GYIK, M7 visszafogott ingyenes SOS-sáv; az M5 vélemény-szekció szándékosan
+ * NINCS implementálva — fiktív idézet nem kerülhet ki, valós forrásig vár), a friss posztokat, a
+ * poszt-oldal meta-részeit, a draft/published viselkedést és az SEO-fallbackláncot.
  */
 
 // ---------------------------------------------------------------------------
@@ -144,7 +148,7 @@ function render(node: ReactNode): string {
 
 /** A HUF-formázás nem-törhető szóközöket (NBSP, U+00A0) használ — a tesztekben normalizáljuk. */
 function normalizeNbsp(html: string): string {
-  return html.replace(/ /g, ' ')
+  return html.replace(/\u00a0/g, ' ')
 }
 
 // ---------------------------------------------------------------------------
@@ -164,24 +168,113 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(fallbackHtml).toContain('Hatékony és biztonságos módszerek')
   })
 
-  it('kurzus-kiemelés: published termékből kártya (cím/ár), draft/archived kimarad', () => {
+  it('M1 hero CTA: elsődleges a kurzusokra, másodlagos (visszafogott) az ingyenes SOS-ra', () => {
+    const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
+    // EGY elsődleges CTA a fizetős kurzusok oldalára (audit K3).
+    expect(html).toContain('Kurzusok megtekintése')
+    expect(html).toContain('href="/kurzusok"')
+    // A lead-magnet csak visszafogott, lapon belüli link (audit K2).
+    expect(html).toContain('Ingyenes SOS gyakorlatok')
+    expect(html).toContain('href="#ingyenes"')
+  })
+
+  it('M2 kurzus-kiemelés: published FIZETŐS termékből kártya (cím/ár), draft/archived kimarad', () => {
     const html = render(
       createElement(HomeView, {
         home: null,
         products: [
-          product({ id: 1, sku: 'SOS Kézrelax' }),
+          product({ id: 1, sku: 'Kéztőalagút-szindróma kurzus' }),
           product({ id: 2, sku: 'Draft kurzus', status: 'draft' }),
           product({ id: 3, sku: 'Archivált kurzus', status: 'archived' }),
         ],
         posts: [],
       }),
     )
-    expect(html).toContain('SOS Kézrelax')
+    expect(html).toContain('Kéztőalagút-szindróma kurzus')
     expect(normalizeNbsp(html)).toContain('19 990 Ft')
     expect(html).not.toContain('Draft kurzus')
     expect(html).not.toContain('Archivált kurzus')
     // A kártya a menü-konvenciójú kurzus-útvonalra mutat.
     expect(html).toContain('href="/kurzusok/1"')
+  })
+
+  it('M2/M7: az ingyenes termék NEM a fizetős kártyák között, hanem a visszafogott SOS-sávban jelenik meg', () => {
+    const html = render(
+      createElement(HomeView, {
+        home: null,
+        products: [
+          product({ id: 1, sku: 'Fizetős kurzus' }),
+          product({ id: 7, sku: 'SOS Kézrelax villámkurzus', priceInHUF: null, priceInHUFEnabled: false }),
+        ],
+        posts: [],
+      }),
+    )
+    // A fizetős kártya-szekció (id="kurzusok") csak a fizetős terméket linkeli.
+    const coursesSection = html.slice(html.indexOf('id="kurzusok"'), html.indexOf('Így működik'))
+    expect(coursesSection).toContain('href="/kurzusok/1"')
+    expect(coursesSection).not.toContain('href="/kurzusok/7"')
+    // Az ingyenes termék a másodlagos súlyú SOS-sávban (id="ingyenes"), „Ingyenes" jelöléssel.
+    const sosSection = html.slice(html.indexOf('id="ingyenes"'))
+    expect(sosSection).toContain('SOS Kézrelax villámkurzus')
+    expect(sosSection).toContain('Ingyenes')
+    expect(sosSection).toContain('href="/kurzusok/7"')
+  })
+
+  it('M7 SOS-sáv: ingyenes termék nélkül is megjelenik, fallbackben a kurzuslistára mutat', () => {
+    const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
+    expect(html).toContain('id="ingyenes"')
+    expect(html).toContain('SOS Kézrelax')
+    expect(html).toContain('Elindítom az ingyenes kurzust')
+  })
+
+  it('M3 hogyan-működik: 3 lépés (megveszem → azonnal nézem → otthon gyakorlok)', () => {
+    const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
+    expect(html).toContain('Így működik az online kurzus')
+    expect(html).toContain('Kiválasztod a kurzust')
+    expect(html).toContain('Azonnal hozzáférsz')
+    expect(html).toContain('Otthon gyakorolsz')
+  })
+
+  it('M4 hitel-csík: kondenzált szakmai érvek + a Rólunk oldalra mutató link', () => {
+    const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
+    expect(html).toContain('Gyógytornász és manuálterapeuta')
+    expect(html).toContain('href="/rolunk"')
+  })
+
+  it('M6 GYIK: az audit kérdései (műtét, fájdalom, időráfordítás, eszköz) details/summary-ben', () => {
+    const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
+    expect(html).toContain('Gyakori kérdések')
+    expect(html).toContain('Műtét után is végezhetem a gyakorlatokat?')
+    expect(html).toContain('Mennyi időt vesz igénybe naponta?')
+    expect(html).toContain('<details')
+    expect(html).toContain('<summary')
+  })
+
+  it('szekció-sorrend: hero → kurzusok → hogyan működik → hitel → GYIK → ingyenes SOS', () => {
+    const html = render(
+      createElement(HomeView, { home: null, products: [product({ id: 1 })], posts: [] }),
+    )
+    const order = [
+      'kc-hero__title',
+      'id="kurzusok"',
+      'Így működik az online kurzus',
+      'Bővebben a szakmai hátterünkről',
+      'Gyakori kérdések',
+      'id="ingyenes"',
+    ]
+    const positions = order.map((marker) => html.indexOf(marker))
+    for (const position of positions) {
+      expect(position).toBeGreaterThanOrEqual(0)
+    }
+    const sorted = [...positions].sort((a, b) => a - b)
+    expect(positions).toEqual(sorted)
+  })
+
+  it('isPaidProduct: csak az árazott (priceInHUFEnabled + szám ár) termék fizetős', () => {
+    expect(isPaidProduct({ priceInHUFEnabled: true, priceInHUF: 19990 })).toBe(true)
+    expect(isPaidProduct({ priceInHUFEnabled: true, priceInHUF: null })).toBe(false)
+    expect(isPaidProduct({ priceInHUFEnabled: false, priceInHUF: 19990 })).toBe(false)
+    expect(isPaidProduct({ priceInHUFEnabled: null, priceInHUF: null })).toBe(false)
   })
 
   it('legfrissebb posztok: published megjelenik, draft kimarad; a tudástár-link megvan', () => {
