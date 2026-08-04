@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { submitCheckout, GENERIC_CHECKOUT_ERROR } from '../../lib/checkout-submit'
+import { submitCheckout, GENERIC_CHECKOUT_ERROR } from '../lib/checkout-submit'
 
 describe('submitCheckout', () => {
   it('siker-ág: 200 {orderNumber, gatewayUrl} → ok és a mezők', async () => {

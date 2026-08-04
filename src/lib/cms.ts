@@ -97,9 +97,21 @@ export async function getLatestPosts(limit = 3): Promise<Post[]> {
   )
 }
 
-/** Bloglista: published posztok, opcionális kategória-szűréssel. */
-export async function getPosts(options: { categoryId?: number; limit?: number } = {}): Promise<Post[]> {
-  const { categoryId, limit = 60 } = options
+/** Bloglista: published posztok, opcionális kategória-szűréssel (id VAGY slug alapján). */
+export async function getPosts(
+  options: { categoryId?: number; categorySlug?: string; limit?: number } = {},
+): Promise<Post[]> {
+  const { categorySlug, limit = 60 } = options
+  let { categoryId } = options
+  // Kategória-slug → id feloldás: ismeretlen slug esetén nincs találat (üres
+  // lista), nem esünk vissza a szűretlen listára.
+  if (typeof categoryId !== 'number' && typeof categorySlug === 'string' && categorySlug.length > 0) {
+    const category = await getCategoryBySlug(categorySlug)
+    if (!category) {
+      return []
+    }
+    categoryId = category.id
+  }
   return safeQuery(
     'poszt-lista',
     async () => {
@@ -139,6 +151,41 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
       return docs[0] ?? null
     },
     null,
+  )
+}
+
+/**
+ * Kapcsolódó posztok: az aktuális poszt kategóriáinak más published posztjai,
+ * az aktuális poszt kizárásával (publishedAt desc). Kategória nélküli posztnál
+ * nincs értelmezhető „kapcsolódó" halmaz — üres lista.
+ */
+export async function getRelatedPosts(post: Post, limit = 3): Promise<Post[]> {
+  const categoryIds = Array.isArray(post.categories)
+    ? post.categories.map((category) => (typeof category === 'object' && category !== null ? category.id : category))
+    : []
+  if (categoryIds.length === 0) {
+    return []
+  }
+  return safeQuery(
+    `kapcsolodo-posztok:${post.id}`,
+    async () => {
+      const payload = await getPayload({ config })
+      const { docs } = await payload.find({
+        collection: 'posts',
+        where: {
+          ...PUBLISHED_WHERE,
+          id: { not_equals: post.id },
+          categories: { in: categoryIds },
+        },
+        limit,
+        sort: '-publishedAt',
+        depth: 1,
+        draft: false,
+        overrideAccess: true,
+      })
+      return docs
+    },
+    [],
   )
 }
 
@@ -189,6 +236,31 @@ export async function getCategoryBySlug(slug: string): Promise<Category | null> 
 export async function getFeaturedProducts(limit = 3): Promise<Product[]> {
   return safeQuery(
     'kurzus-kiemeles',
+    async () => {
+      const payload = await getPayload({ config })
+      const { docs } = await payload.find({
+        collection: 'products',
+        where: PUBLISHED_WHERE,
+        limit,
+        sort: '-createdAt',
+        depth: 1,
+        draft: false,
+        overrideAccess: true,
+      })
+      return docs
+    },
+    [],
+  )
+}
+
+/**
+ * Összes published termék (a kezdőlap kurzus-kiemeléséhez): ugyanaz a
+ * published-szűrt lekérdezés, mint a getFeaturedProducts, nagyobb alap-limittel.
+ * Az archived/draft sosem kerül ki a storefrontra.
+ */
+export async function getPublishedProducts(limit = 12): Promise<Product[]> {
+  return safeQuery(
+    'published-termekek',
     async () => {
       const payload = await getPayload({ config })
       const { docs } = await payload.find({

@@ -27,7 +27,7 @@ export default async function BlogPage({ searchParams }: Props) {
     <Section>
       <Container>
         <h1>Tudástár</h1>
-        <CategoryFilter categories={categories} activeSlug={kategoria} basePath="/blog" />
+        <CategoryFilter categories={categories} activeSlug={kategoria} />
         {posts.length === 0 ? (
           <p className="kc-empty">Ebben a kategóriában még nincs cikk.</p>
         ) : (

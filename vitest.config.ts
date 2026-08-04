@@ -6,11 +6,20 @@
  * renderToStaticMarkup-pel tesztelhetők legyenek külön @jsxImportSource
  * pragma nélkül. A meglévő teszteket nem bontja (72/72 zöld maradt).
  */
+import { fileURLToPath } from 'node:url'
+
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   esbuild: {
     jsx: 'automatic',
+  },
+  resolve: {
+    alias: {
+      // A tsconfig paths '@/*' → './src/*' megfelelője — az '@/lib/...'
+      // importok a tesztekben is feloldódjanak.
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
   },
   test: {
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],

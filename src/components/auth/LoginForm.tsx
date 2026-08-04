@@ -36,7 +36,7 @@ export function LoginForm({ returnUrl }: LoginFormProps) {
       window.location.href = returnUrl
       return
     }
-    setError(result.message)
+    setError(result.message ?? null)
   }
 
   return (

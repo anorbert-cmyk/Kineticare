@@ -6,7 +6,7 @@ import {
   forgotPassword,
   resetPassword,
   GENERIC_AUTH_ERROR,
-} from '../../lib/auth-client'
+} from '../lib/auth-client'
 
 describe('loginUser', () => {
   it('siker-ág: 200 → ok', async () => {

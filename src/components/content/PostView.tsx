@@ -20,6 +20,14 @@ import { MediaImage } from './MediaImage'
  */
 export interface PostViewProps {
   post: Post
+  /**
+   * Opcionális, kívülről betöltött kapcsolódó posztok (pl. getRelatedPosts
+   * kategória-alapú találatai). Alapértelmezetten a poszt relatedPosts
+   * mezőjéből dolgozunk (visibleRelatedPosts).
+   */
+  related?: Post[]
+  /** A meta-sor (szerző/dátum/olvasási idő) megjelenítése — alapértelmezett: igen. */
+  showMeta?: boolean
 }
 
 function authorNameOf(post: Post): string | null {
@@ -49,12 +57,19 @@ export function visibleRelatedPosts(post: Post): Post[] {
     .slice(0, 3)
 }
 
-export function PostView({ post }: PostViewProps) {
+/** Csak a published, slug-gal rendelkező posztok jelenhetnek meg kapcsolódóként. */
+function displayableRelated(posts: Post[]): Post[] {
+  return posts
+    .filter((related) => related.status === 'published' && typeof related.slug === 'string')
+    .slice(0, 3)
+}
+
+export function PostView({ post, related: relatedProp, showMeta = true }: PostViewProps) {
   const author = authorNameOf(post)
   const date = formatPostDate(post.publishedAt)
   const readingMinutes = estimateReadingMinutes(post.content)
   const categories = postCategories(post)
-  const related = visibleRelatedPosts(post)
+  const related = relatedProp ? displayableRelated(relatedProp) : visibleRelatedPosts(post)
   const heroMedia = post.heroImage && typeof post.heroImage === 'object' ? post.heroImage : null
 
   return (
@@ -80,15 +95,17 @@ export function PostView({ post }: PostViewProps) {
           ) : null}
           <h1 className="kc-page-hero__title">{post.title}</h1>
           {post.excerpt ? <p className="kc-page-hero__lead">{post.excerpt}</p> : null}
-          <p className="kc-post-meta">
-            {author ? <span className="kc-post-meta__author">{author}</span> : null}
-            {date ? (
-              <time dateTime={typeof post.publishedAt === 'string' ? post.publishedAt : undefined}>
-                {date}
-              </time>
-            ) : null}
-            {readingMinutes !== null ? <span>{readingMinutes} perc olvasás</span> : null}
-          </p>
+          {showMeta ? (
+            <p className="kc-post-meta">
+              {author ? <span className="kc-post-meta__author">{author}</span> : null}
+              {date ? (
+                <time dateTime={typeof post.publishedAt === 'string' ? post.publishedAt : undefined}>
+                  {date}
+                </time>
+              ) : null}
+              {readingMinutes !== null ? <span>{readingMinutes} perc olvasás</span> : null}
+            </p>
+          ) : null}
         </Container>
       </Section>
       {heroMedia ? (

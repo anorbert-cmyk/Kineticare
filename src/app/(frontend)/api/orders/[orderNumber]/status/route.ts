@@ -1,7 +1,7 @@
 import { getPayload } from 'payload'
 
-import { createOrderStatusHandler } from '../../../../../lib/checkout/order-status-handler'
-import config from '../../../../../payload.config'
+import { createOrderStatusHandler } from '@/lib/checkout/order-status-handler'
+import config from '@payload-config'
 
 /**
  * GET /api/orders/[orderNumber]/status — a köszönőoldal rendelés-státusz

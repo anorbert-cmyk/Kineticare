@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState } from 'react'
 
 import { Badge } from '@/components/ui/Badge'
@@ -117,7 +118,7 @@ export function AccountView({ user, orders }: AccountViewProps) {
         <h2>Kurzusaim</h2>
         {purchasedProducts.length === 0 ? (
           <p>
-            Még nincs kurzusod. <a href="/kurzusok">Nézd meg a kurzusainkat</a> — az első
+            Még nincs kurzusod. <Link href="/kurzusok">Nézd meg a kurzusainkat</Link> — az első
             ingyenes is lehet.
           </p>
         ) : (
@@ -147,7 +148,10 @@ export function AccountView({ user, orders }: AccountViewProps) {
         ) : (
           <ul className="kc-account__orders" role="list">
             {orders.map((order) => {
-              const status = ORDER_STATUS_LABELS[order.status] ?? { label: order.status, tone: 'neutral' as const }
+              const status = (order.status ? ORDER_STATUS_LABELS[order.status] : undefined) ?? {
+                label: order.status ?? 'Ismeretlen',
+                tone: 'neutral' as const,
+              }
               const total = typeof order.totalHufSnapshot === 'number' ? order.totalHufSnapshot : null
               return (
                 <li key={order.id} className="kc-account__order">

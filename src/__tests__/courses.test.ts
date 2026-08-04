@@ -17,7 +17,7 @@ import {
 } from '../lib/courses'
 import type { Category, Product } from '../payload-types'
 
-const NBSP = ' '
+const NBSP = '\u00a0'
 
 /** Minimális kategória-fixture (a products.category populate-olt alakja). */
 function category(id: number, slug: string, title: string): Category {

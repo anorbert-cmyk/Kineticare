@@ -19,5 +19,5 @@ export function formatPriceHuf(value: number): string {
   }).format(rounded)
   // Az Intl a hu-HU locale-ban NBSP-t használ — biztosítjuk, hogy a tagolás és
   // a pénznem-elválasztás mindenképp nem-törhető szóköz legyen.
-  return formatted.replace(/ /g, ' ')
+  return formatted.replace(/ /g, '\u00a0')
 }

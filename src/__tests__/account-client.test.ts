@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { updateProfile, GENERIC_UPDATE_ERROR } from '../../lib/account-client'
+import { updateProfile, GENERIC_UPDATE_ERROR } from '../lib/account-client'
 
 describe('updateProfile', () => {
   it('siker-ág: 200 → ok', async () => {

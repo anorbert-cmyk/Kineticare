@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { fetchStreamToken, GENERIC_STREAM_ERROR } from '../../lib/stream-token-client'
+import { fetchStreamToken, GENERIC_STREAM_ERROR } from '../lib/stream-token-client'
 
 describe('fetchStreamToken', () => {
   it('200 {token, expiresAt} → token-kind', async () => {

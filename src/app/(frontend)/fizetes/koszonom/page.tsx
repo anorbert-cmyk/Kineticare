@@ -10,7 +10,7 @@ import { ThankYouView } from '@/components/checkout/ThankYouView'
 import { logger } from '@/lib/logger'
 import type { User } from '@/payload-types'
 
-import config from '../../../payload.config'
+import config from '@payload-config'
 
 export const metadata: Metadata = {
   title: 'Köszönjük a vásárlást',

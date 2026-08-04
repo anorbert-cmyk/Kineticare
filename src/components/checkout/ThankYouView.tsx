@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/Button'
@@ -98,7 +99,7 @@ export function ThankYouView({ orderNumber, isLoggedIn }: ThankYouViewProps) {
         <h1>Köszönjük a vásárlást!</h1>
         <p>
           A fizetésed sikeresen megérkezett. A kurzust a{' '}
-          <a href="/kurzusaim">Kurzusaim</a> oldalon éred el.
+          <Link href="/kurzusaim">Kurzusaim</Link> oldalon éred el.
         </p>
         <p className="kc-thankyou__order">
           Rendelésszám: <strong>{orderNumber}</strong>

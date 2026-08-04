@@ -11,7 +11,7 @@ import { logger } from '@/lib/logger'
 import { courseTitle, hasUserPurchased, parseCourseIdParam } from '@/lib/courses'
 import type { Product, User } from '@/payload-types'
 
-import config from '../../../payload.config'
+import config from '@payload-config'
 
 export const metadata: Metadata = {
   title: 'Kurzus lejátszása',
@@ -72,7 +72,15 @@ export default async function KurzusaimPlayerPage({ params }: KurzusaimPlayerPag
           product={{
             id: product.id,
             title: courseTitle(product),
-            videos: Array.isArray(product.videos) ? product.videos : [],
+            videos: Array.isArray(product.videos)
+              ? product.videos.map((video) => ({
+                  id: video.id ?? undefined,
+                  title: video.title ?? undefined,
+                  streamAssetId: video.streamAssetId ?? undefined,
+                  durationSec: video.durationSec ?? undefined,
+                  status: video.status ?? undefined,
+                }))
+              : [],
           }}
           hasAccess={purchased}
         />

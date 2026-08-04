@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/Button'
@@ -46,7 +47,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
       <div aria-live="polite" className="kc-auth-success" role="status">
         <h2>Új jelszó beállítva</h2>
         <p>Sikeresen beállítottad az új jelszavadat. Most már be tudsz lépni vele.</p>
-        <a className="kc-button kc-button--primary" href="/belepes">Belépés</a>
+        <Link className="kc-button kc-button--primary" href="/belepes">Belépés</Link>
       </div>
     )
   }

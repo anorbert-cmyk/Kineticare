@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getPayload } from 'payload'
 import { headers } from 'next/headers'
@@ -90,7 +91,7 @@ export default async function PenztarPage({ searchParams }: PenztarPageProps) {
           <h1>Pénztár</h1>
           <div className="kc-cart-empty" role="status">
             <p>Nincs kiválasztott termék a fizetéshez.</p>
-            <a className="kc-button kc-button--primary" href="/kurzusok">Válassz kurzust</a>
+            <Link className="kc-button kc-button--primary" href="/kurzusok">Válassz kurzust</Link>
           </div>
         </Container>
       </Section>
@@ -111,7 +112,7 @@ export default async function PenztarPage({ searchParams }: PenztarPageProps) {
           <div className="kc-cart-notice" role="status">
             <p>
               Ezt a kurzust már megvetted — a{' '}
-              <a href="/kurzusaim">Kurzusaim</a> oldalon éred el.
+              <Link href="/kurzusaim">Kurzusaim</Link> oldalon éred el.
             </p>
           </div>
         ) : null}

@@ -82,6 +82,15 @@ export function buildDocMetadata(doc: SeoDoc, path: string): Metadata {
   }
 }
 
+/**
+ * Oldal-szintű Metadata a CMS-oldalak/blogposztok generateMetadata-jához —
+ * vékony wrapper a buildDocMetadata fölé (title/description/og fallbacklánc
+ * + canonical). A path a hívó felelőssége (pl. `/blog/${slug}` vagy `/${slug}`).
+ */
+export function buildPageMetadata(doc: SeoDoc, path: string): Metadata {
+  return buildDocMetadata(doc, path)
+}
+
 // ---------------------------------------------------------------------------
 // JSON-LD
 // ---------------------------------------------------------------------------
