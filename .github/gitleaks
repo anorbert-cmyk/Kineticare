@@ -1,0 +1,30 @@
+# ============================================================================
+# Kineticare – titokszivárgás-ellenőrzés (gitleaks, TELJES history)
+# ----------------------------------------------------------------------------
+# Minden push és PR során végigolvassa a TELJES git-históriát; ha bármelyik
+# commitba titok (API-kulcs, jelszó, token) került, a job megbukik.
+# Ütemezve is fut (hetente), hogy az utólag bevezetett szabályok is
+# visszamenőleg érvényesüljenek.
+# ============================================================================
+
+name: gitleaks
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1" # hétfő 03:00 UTC
+
+jobs:
+  scan:
+    name: gitleaks (teljes history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # teljes history KÖTELEZŐ — a régi commitokat is vizsgáljuk
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_COMMENTS: true
+          GITLEAKS_ENABLE_SUMMARY: true
