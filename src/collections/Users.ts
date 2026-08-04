@@ -1,8 +1,14 @@
 import type { CollectionConfig } from 'payload'
+import { APIError, AuthenticationError, LockedAuth } from 'payload'
 
 import { isOwner, isOwnerFieldAccess } from '../access/isOwner'
 import { isSelfOrAdmin } from '../access/isSelfOrAdmin'
 import { isStaffOrOwner } from '../access/isStaffOrOwner'
+import { logger } from '../lib/logger'
+import {
+  formatPasswordPolicyErrors,
+  validatePasswordStrength,
+} from '../lib/security/password-policy'
 
 export const Users: CollectionConfig = {
   slug: 'users',
@@ -96,6 +102,54 @@ export const Users: CollectionConfig = {
     },
   ],
   hooks: {
+    beforeChange: [
+      // OWASP A07: jelszó-erősségi politika. A Payload 3.86-ban nincs natív
+      // passwordMinLength/komplexitási beállítás, ezért hookból érvényesítjük.
+      // A collection beforeChange hook a hash-elés ELŐTT fut (a create/update
+      // műveletek csak a hookok után generálják a salt/hash párost), így a
+      // data.password itt még nyers szöveg.
+      ({ data, originalDoc }) => {
+        // Csak akkor ellenőrzünk, ha ténylegesen jelszót állítanak be vagy
+        // módosítanak — a többi profilmező-mentést a hook érintetlenül hagyja.
+        if (typeof data.password !== 'string' || data.password.length === 0) {
+          return data
+        }
+        // Update-nél az e-mail gyakran nincs a payloadban — ilyenkor a
+        // meglévő rekord e-mail-címével vetjük össze a jelszót.
+        const email =
+          typeof data.email === 'string'
+            ? data.email
+            : (originalDoc?.email as string | undefined)
+        const errors = validatePasswordStrength({ password: data.password, email })
+        if (errors.length > 0) {
+          throw new APIError(formatPasswordPolicyErrors(errors), 400)
+        }
+        return data
+      },
+    ],
+    afterError: [
+      // Sikertelen bejelentkezés naplózása. A Payload 3.86-ban NINCS
+      // afterFailedLogin hook; a REST /api/users/login hibák (hibás jelszó →
+      // AuthenticationError, zárolt fiók → LockedAuth) a routeError-en át a
+      // collection afterError hookjában landolnak. Jelszót sosem naplózunk —
+      // a logger redact-listája is védi az ilyen kulcsokat.
+      ({ error, req }) => {
+        const isLoginRequest = typeof req.url === 'string' && req.url.includes('/login')
+        if (!isLoginRequest || !(error instanceof AuthenticationError || error instanceof LockedAuth)) {
+          return
+        }
+        const email = typeof req.data?.email === 'string' ? req.data.email : undefined
+        const forwardedFor = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+        const ip = forwardedFor || req.headers.get('x-real-ip') || undefined
+        logger.warn('Sikertelen bejelentkezési kísérlet', {
+          event: 'auth.login.failed',
+          collection: 'users',
+          email,
+          ip,
+          reason: error instanceof LockedAuth ? 'account-locked' : 'invalid-credentials',
+        })
+      },
+    ],
     afterLogin: [
       async ({ req, user }) => {
         await req.payload.update({
