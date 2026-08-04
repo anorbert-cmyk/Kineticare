@@ -1,6 +1,17 @@
 import posthog from 'posthog-js'
 import type { PostHogConfig } from 'posthog-js'
 
+import {
+  CONSENT_EVENT,
+  CONSENT_GRANTED,
+  CONSENT_STORAGE_KEY,
+  dispatchConsentEvent,
+  readConsent,
+  writeConsent,
+  type ConsentReader,
+  type ConsentState,
+} from './consent'
+
 /**
  * PostHog-integráció — központi konfig és esemény-névregiszter.
  *
@@ -23,12 +34,13 @@ export const POSTHOG_HOST = (process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://eu
 /** Elsőfél-proxy útvonal (a next.config.ts rewrites ezt a PostHog EU-hostra forgatja). */
 export const POSTHOG_API_HOST = '/ingest'
 
-/** Analytics-hozzájárulás tároló-ablakkulcs (a consent-banner ezt írja). */
-export const CONSENT_STORAGE_KEY = 'kc_analytics_consent'
-export const CONSENT_GRANTED = 'granted'
-export const CONSENT_DENIED = 'denied'
-/** A consent-banner által kibocsátott window-esemény (a provider hallgat rá). */
-export const CONSENT_EVENT = 'kc:analytics-consent'
+/**
+ * A consent-tárolókulcs, az állapot-konstansok és az eseménynév EGYETLEN
+ * igazságforrása a ./consent modul (körmenti import elkerülésével) — innen
+ * re-exportáljuk a visszafelé kompatibilitásért.
+ */
+export { CONSENT_EVENT, CONSENT_GRANTED, CONSENT_STORAGE_KEY }
+export { CONSENT_DENIED } from './consent'
 
 /** Üzleti esemény-nevek EGY helyen — a funnel-riportok ezekre épülnek. */
 export const ANALYTICS_EVENTS = {
@@ -47,16 +59,9 @@ export function isPostHogConfigured(): boolean {
  * A látogató hozzájárult-e az analyticshez. Csak kliens-oldalon értelmes
  * (szerveren mindig false → SSR-ben sosem indul a tracking).
  */
-export function hasAnalyticsConsent(storage?: Pick<Storage, 'getItem'>): boolean {
-  const store = storage ?? (typeof window !== 'undefined' ? window.localStorage : undefined)
-  if (!store) {
-    return false
-  }
-  try {
-    return store.getItem(CONSENT_STORAGE_KEY) === CONSENT_GRANTED
-  } catch {
-    return false
-  }
+export function hasAnalyticsConsent(storage?: ConsentReader): boolean {
+  // Egyetlen igazságforrás: a consent.ts állapotgépe (nincs párhuzamos logika).
+  return readConsent(storage) === CONSENT_GRANTED
 }
 
 /** A posthog.init opciói (tiszta függvény — egységtesztelhető). */
@@ -87,6 +92,64 @@ export function initPostHog(): boolean {
   posthog.init(POSTHOG_KEY, buildPostHogOptions())
   initialized = true
   return true
+}
+
+/** Inicializálva van-e a PostHog-kliens (a provider és a tesztek használják). */
+export function isPostHogInitialized(): boolean {
+  return initialized
+}
+
+/**
+ * A capture tényleges BEkapcsolása 'granted' consent mellett: ha még nem
+ * futott init, most lefut; ha már igen (korábbi opt-out után), csak a
+ * posthog opt_in_capturing kapcsol vissza. NEM ír consentet és NEM szór
+ * eseményt — ezt a provider consent-figyelője hívja.
+ */
+export function enableAnalyticsCapture(): boolean {
+  if (initialized) {
+    posthog.opt_in_capturing()
+    return true
+  }
+  return initPostHog()
+}
+
+/**
+ * A capture KIkapcsolása 'denied' consent mellett (opt_out_capturing — a
+ * már inicializált kliens is abbahagyja a rögzítést). Az újra-initet az
+ * initPostHog consent-kapuja tiltja, amíg a tárolt állapot 'denied'.
+ */
+export function disableAnalyticsCapture(): void {
+  if (initialized) {
+    posthog.opt_out_capturing()
+  }
+}
+
+/**
+ * Látogatói hozzájárulás (banner „Elfogadom"): consent tárolása +
+ * 'kc:analytics-consent' esemény + capture bekapcsolása. A consent akkor is
+ * tárolódik, ha a PostHog nincs konfigurálva (a döntés megmarad).
+ */
+export function optInToAnalytics(): void {
+  writeConsent('granted')
+  dispatchConsentEvent('granted')
+  if (isPostHogConfigured()) {
+    enableAnalyticsCapture()
+  }
+}
+
+/**
+ * Látogatói elutasítás (banner „Elutasítom"): consent tárolása + esemény +
+ * capture kikapcsolása. 'denied' állapotban a PostHog SOHA nem init újra.
+ */
+export function optOutOfAnalytics(): void {
+  writeConsent('denied')
+  dispatchConsentEvent('denied')
+  disableAnalyticsCapture()
+}
+
+/** A tárolt consent állapot lekérdezése (a banner láthatóságához). */
+export function getAnalyticsConsentState(): ConsentState {
+  return readConsent()
 }
 
 /** Üzleti esemény rögzítése — no-op, ha az analitika ki van kapcsolva. */

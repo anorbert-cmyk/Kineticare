@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Suspense, type ReactNode } from 'react'
 
+import { ConsentBanner } from '@/components/analytics/ConsentBanner'
 import { PostHogPageView } from '@/components/analytics/PostHogPageView'
 import { PostHogProvider } from '@/components/analytics/PostHogProvider'
 import { Footer } from '@/components/layout/Footer'
@@ -55,6 +56,8 @@ export default function FrontendLayout({ children }: { children: ReactNode }) {
           <Header />
           <main id="tartalom">{children}</main>
           <Footer />
+          {/* GDPR consent-sáv: csak 'unknown' állapotban látszik, a body végén, a többi elem fölött. */}
+          <ConsentBanner />
         </PostHogProvider>
       </body>
     </html>
