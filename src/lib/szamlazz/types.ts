@@ -70,3 +70,21 @@ export interface IssueInvoiceResult {
   /** failed kimenetelnél az ok (emberi olvasásra). */
   reason?: string
 }
+
+/**
+ * A stornó-számla kiállítás kimenetele (T-WSD — a Számla Agent dedikált
+ * sztornó interfésze, xmlszamlast / action-szamla_agent_st).
+ * - 'storned': a stornó-számla kiállításra került;
+ * - 'already-storned': a rendelésen már rögzítve van stornó-számla (no-op);
+ * - 'disabled': a Számlázz.hu-integráció kikapcsolva (nincs agent-kulcs) — NEM hiba;
+ * - 'failed': nem újrapróbálható okból nem készült el (pl. nincs eredeti számlaszám).
+ */
+export type IssueStornoOutcome = 'storned' | 'already-storned' | 'disabled' | 'failed'
+
+export interface IssueStornoResult {
+  outcome: IssueStornoOutcome
+  /** A kiállított stornó-számla száma (storned kimenetelnél). */
+  stornoNumber?: string
+  /** failed kimenetelnél az ok (emberi olvasásra). */
+  reason?: string
+}

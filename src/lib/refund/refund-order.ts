@@ -4,6 +4,7 @@ import type { Order, User } from '../../payload-types'
 import { auditLogStore, writeAuditLog } from '../audit'
 import { BarionApiError, fetchPaymentState, refundPayment } from '../barion'
 import { logger, type Logger } from '../logger'
+import { issueStornoForOrder, type IssueStornoForOrderDeps } from '../szamlazz'
 
 /**
  * Owner-only rendelés-visszatérítés (refund) szolgáltatás.
@@ -83,6 +84,15 @@ export interface RefundOrderOptions {
   headers?: Headers
   ipAddress?: string
   logger?: Logger
+  /**
+   * Injektálható stornó-hívó (teszteléshez); alapból a valódi
+   * issueStornoForOrder. A stornó best-effort: a kimenetele a refund
+   * eredményét SOHA nem befolyásolja.
+   */
+  issueStorno?: (
+    order: Order,
+    deps: IssueStornoForOrderDeps,
+  ) => ReturnType<typeof issueStornoForOrder>
 }
 
 export interface RefundOrderResult {
@@ -447,6 +457,43 @@ export async function refundOrder(options: RefundOrderOptions): Promise<RefundOr
     transactionId,
     refundedTransactionStatus,
   })
+
+  // 10. Stornó-számla BEST-EFFORT — kizárólag TELJES refundnál (a stornó az
+  // eredeti számla teljes érvénytelenítése; részrefundhoz helyesbítő számla
+  // kellene, az külön fejlesztés). A stornó hibája (beleértve a retryable
+  // Számlázz.hu-hibákat is) NEM billentheti ki a már sikeres refundot:
+  // minden ág el van kapva és strukturáltan naplózva. A refund-folyamat
+  // szinkron route-handler (nem job-alapú), ezért a stornó itt, inline,
+  // best-effort módon fut; a duplikáció ellen a Számlázz.hu-oldali
+  // szamlaKulsoAzon-horgony (`${orderNumber}-STORNO`) véd.
+  if (type === 'full') {
+    try {
+      const issueStorno = options.issueStorno ?? issueStornoForOrder
+      const stornoResult = await issueStorno(order, {
+        logger: orderLog,
+        ...(reason ? { reason } : {}),
+      })
+      if (stornoResult.outcome === 'failed') {
+        orderLog.warn(
+          'refund: a stornó-számla kiállítása sikertelen — a refund ettől függetlenül sikeres (emberi pótlás szükséges)',
+          { reason: stornoResult.reason ?? null },
+        )
+      } else {
+        orderLog.info('refund: stornó-számla feldolgozva', {
+          outcome: stornoResult.outcome,
+          stornoNumber: stornoResult.stornoNumber ?? null,
+        })
+      }
+    } catch (error) {
+      orderLog.error(
+        'refund: a stornó-számla kiállítása hibával állt le (best-effort) — a refund eredménye ettől változatlan',
+        {
+          retryable: error instanceof Error && 'retryable' in error ? error.retryable : null,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      )
+    }
+  }
 
   return {
     orderNumber: order.orderNumber ?? orderNumber,

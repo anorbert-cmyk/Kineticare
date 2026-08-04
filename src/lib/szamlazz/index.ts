@@ -26,9 +26,19 @@ export {
   type IssueInvoiceForOrderDeps,
 } from './invoice'
 export {
+  buildStornoXml,
+  issueStornoForOrder,
+  postStornoXml,
+  STORNO_KULSO_AZON_SUFFIX,
+  type BuildStornoXmlInput,
+  type IssueStornoForOrderDeps,
+} from './storno'
+export {
   SzamlazzApiError,
   type IssueInvoiceOutcome,
   type IssueInvoiceResult,
+  type IssueStornoOutcome,
+  type IssueStornoResult,
   type SzamlazzAgentError,
   type SzamlazzClientConfig,
   type SzamlazzErrorKind,
