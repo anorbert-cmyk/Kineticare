@@ -1,4 +1,0 @@
-# Lockfile-checkpoint: a package-lock.json az admin-csomagban (output/github-manual-fajlok/package-lock.json)
-# várakozik a repóba feltöltésre — a nagyméretű fájlt a GitHub-weben
-# (Add file → Upload files) lehet a leggyorsabban bevinni.
-# Utána a ci.yml install-lépése npm install -> npm ci lesz.
