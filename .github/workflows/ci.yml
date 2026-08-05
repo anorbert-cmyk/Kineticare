@@ -1,0 +1,94 @@
+# ============================================================================
+# Kineticare – CI (minőségi kapuk)
+# ----------------------------------------------------------------------------
+# Minden main-push és PR lefuttatja:
+#   verify job : npm ci -> typecheck -> vitest -> eslint
+#   build  job : next build (futásidőben generált álértékekkel)
+#   audit  job : npm audit (critical szint = bukás)
+#
+# MIÉRT --legacy-peer-deps? A @payloadcms/* 3.86.0 csomagok peer-tartománya
+# `next >=15.4.11 <15.5.0 || >=16.2.6 <17.0.0`, a repó viszont a biztonsági
+# javítás miatt next@15.5.22-re van pinelve. Amíg a Payload ki nem adja a
+# 15.5.x-et engedő peer-range-et, a telepítés csak --legacy-peer-deps-szel
+# oldható fel (a pinned @payloadcms/* verziókhoz nem nyúlunk — CLAUDE.md 5.).
+# ============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  verify:
+    name: typecheck + vitest + lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Függőségek telepítése
+        run: npm ci --legacy-peer-deps
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Vitest
+        run: npm test
+      - name: ESLint
+        run: npm run lint
+
+  build:
+    name: next build
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Függőségek telepítése
+        run: npm ci --legacy-peer-deps
+      # A build-hoz az src/env.ts kötelező kulcsai kellenek. Titok (még
+      # placeholder sem) nem kerülhet a repóba (CLAUDE.md TILOS ZÓNÁK 1.),
+      # ezért a titok-alakú értékeket futásidőben generáljuk — eldobható,
+      # senkihez nem tartozó véletlen érték, csak a build lefutásához.
+      - name: Build-idejű álértékek generálása (nem titkok)
+        run: |
+          {
+            echo "DATABASE_URI=postgresql://ci:$(openssl rand -hex 16)@127.0.0.1:5432/ci"
+            echo "PAYLOAD_SECRET=$(openssl rand -hex 32)"
+            echo "NEXT_PUBLIC_SERVER_URL=http://localhost:3000"
+            echo "BARION_API_URL=https://api.test.barion.com"
+            echo "BARION_PAYEE_EMAIL=ci@example.test"
+            echo "BARION_POSKEY_TEST=$(openssl rand -hex 16)"
+          } >> "$GITHUB_ENV"
+      - name: Build
+        run: npm run build
+
+  audit:
+    name: npm audit (critical = bukás)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Függőségek telepítése
+        run: npm ci --legacy-peer-deps
+      - name: Sebezhetőség-audit
+        run: npm audit --audit-level=critical
