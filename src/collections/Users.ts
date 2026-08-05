@@ -14,6 +14,12 @@ import {
   type CollectionBeforeChangeHook,
   type CollectionConfig,
 } from 'payload'
+import {
+  isOwner,
+  isOwnerFieldAccess,
+  isSelfOrAdmin,
+  isStaffOrOwner,
+} from '../access'
 
 const logger = createLogger({ module: 'users' })
 
@@ -87,7 +93,22 @@ export const Users: CollectionConfig = {
     lockTime: 600_000, // 10 perc zárolás 5 sikertelen próbálkozás után
     tokenExpiration: 7_200_000, // 2 óra
   },
+  access: {
+    // Az admin felületet staff+owner éri el.
+    admin: isStaffOrOwner,
+    // Nyilvános regisztráció engedélyezett: a role mező owner-only
+    // field-access-e miatt jogemelés így sem lehetséges (minden regisztráló
+    // a default 'customer' szerepkört kapja). Owner az adminból bárkit létrehozhat.
+    create: () => true,
+    // Saját rekord olvasása/módosítása — staff/owner minden rekordot.
+    // A role és purchases mezők ettől függetlenül mezőszinten védettek.
+    read: isSelfOrAdmin,
+    update: isSelfOrAdmin,
+    // Törlés kizárólag owner.
+    delete: isOwner,
+  },
   fields: [
+    // Az email mezőt az auth automatikusan hozzáadja.
     {
       name: 'name',
       type: 'text',
@@ -113,6 +134,12 @@ export const Users: CollectionConfig = {
       type: 'relationship',
       relationTo: 'products',
       hasMany: true,
+      // A vásárlásokat kizárólag rendszerfolyamat írja (fizetésjóváhagyás),
+      // sem az admin, sem az API nem szerkesztheti közvetlenül.
+      access: {
+        create: () => false,
+        update: () => false,
+      },
       admin: {
         description: 'A felhasználó által megvásárolt kurzusok (hozzáférés).',
       },
@@ -149,8 +176,4 @@ export const Users: CollectionConfig = {
     beforeChange: [enforcePasswordPolicy],
     afterError: [logFailedLogin],
   },
-}
-
-function isOwnerFieldAccess({ req }: { req: { user?: { role?: string } | null } }) {
-  return req.user?.role === 'owner'
 }
