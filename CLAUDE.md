@@ -74,3 +74,67 @@ betartandók — az ügynök ezek megsértésére irányuló kérést is utasít
 - Új viselkedéshez fókuszált teszt vagy legalább reprodukálható ellenőrzési lépés.
 - Titok, `.env*` fájl, migrációs kézi szerkesztés, `confirmOrder`-hívás és
   `any`-típus esetén a PR automatikusan elutasítandó.
+
+## Üzemeltetési tanulságok — élesben szerzett
+
+Ezek mind valós, órákat elvivő hibák voltak. Mielőtt új diagnózist építesz,
+nézd végig, hogy nem ezek egyikébe futottál-e.
+
+### Deploy (Railway)
+
+1. **A „SUCCESS" deploy nem jelenti, hogy az új kód fut.** A Railway builder
+   `Build · skipped (nothing to build)` döntéssel kihagyhatja a buildet: lehúzza
+   az új commitot, de a **régi `.next/` mappát** indítja el. Hetekig futhat így
+   régi kód, miközben minden zöld. **Ellenőrzés:** a deploy build-logjában
+   szerepelnie kell egy tényleges `npm run build` futásnak. Ezért van explicit
+   `buildCommand` és `healthcheckPath` beállítva.
+2. **A service-szintű beállítás felülírja a `railway.json`-t.** Ha a fájlban
+   módosítasz (builder, buildCommand, healthcheck), ellenőrizd a szolgáltatás
+   beállításában is, különben a fájl csak dokumentáció marad.
+3. **A Postgres-szolgáltatás újraindítása kiürítheti az adatbázist.** Egy
+   redeploy `initdb`-t futtatott és a kötet üresen jött vissza — a séma csak a
+   `payload migrate` újrafutásával állt helyre. **Mentés jelenleg nincs**
+   (feladatlista C14). Éles adat mellett a Postgres újraindítása tilos
+   mentés nélkül.
+4. **Deploy-hibák, amiket már láttunk:**
+   - `git clone failed with exit 128` a `SNAPSHOT_CODE` fázisban → a deployt
+     **rövidített commit-SHA-val** indították. SHA nélkül (a branch HEAD-jére)
+     azonnal átmegy.
+   - `ublkFlush: flush failed: manifest precondition failed` a `PUBLISH_IMAGE`
+     fázisban → Railway-oldali blockstore-hiba, nem a kód. Több gépen is
+     előjött, nyilvános incidens nélkül. Újrapróbálás segít (nálunk a 3.
+     kísérletre ment át).
+   - Ha a build, healthcheck és deploy lépés zöld, és csak utána bukik: a hiba
+     szinte biztosan a platformé, ne a kódban keresd.
+
+### Adatbázis és Payload
+
+5. **`payload migrate` nem futtatja újra a már lefutott migrációkat.** Hiányzó
+   tábla esetén a `migrate` „Done"-t ír és nem csinál semmit.
+6. **Hosszú (30+ mp) befagyás írásnál = sorzár, nem lassú lekérdezés.** Egy
+   beragadt, nyitva maradt tranzakció (`unexpected EOF on client connection with
+   an open transaction`) zárolja a sort, és minden írás megáll rajta. Olvasás
+   közben gyors marad — ez a megkülönböztető jel.
+7. **A `pg` pool hangolása kötelező a Railway privát hálózatán.** A háló elvágja
+   a tétlen TCP-kapcsolatokat; keepalive és idle-timeout nélkül a pool halott
+   socketet használ újra, és a kérés a TCP retransmission-timeoutig (~45 mp)
+   áll. A pool `error` eseményét is le KELL kezelni, különben
+   `uncaughtException`-ként viszi el a Next.js szerverfolyamatot.
+
+### Auth és első indulás
+
+8. **Az első user owner szerepkört kap** (`promoteFirstUserToOwner` hook).
+   Enélkül a rendszer telepítés után zárva marad: a `role` mező owner-only,
+   tehát az első user `customer` lenne, aki nem jut be az adminba, nem
+   törölhető (`access.delete: isOwner`) és a szerepköre sem írható át.
+9. **A 2. usertől a `role` alapértelmezése `customer`.** Admin-hozzáféréshez az
+   adminban kézzel `staff`-ra kell állítani — ezen bukott el több teszt-user.
+
+### Build és eszközök
+
+10. **A lockfile-t tiszta registry-ből kell generálni.** Ha a `resolved` URL-ek
+    privát tükörre (pl. `npm.mirrors.*`) mutatnak, a CI runner nem éri el őket.
+    Ellenőrzés: `grep -o '"resolved": "https://[^/]*' package-lock.json | sort -u`.
+11. **A `robots.ts` és `sitemap.ts` csak a gyökér `src/app/` mappából
+    generálódik.** A `(frontend)` route-groupból a `robots.ts` némán kimarad —
+    a build route-manifestjében ellenőrizhető, hogy létrejött-e.
