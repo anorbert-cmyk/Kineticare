@@ -177,7 +177,7 @@ Nem sérült egyik sem. A digest gyanújel-szűrője üresen futott. Részletese
 
 ## 2026-07-31 — Kiindulási felmérés (a figyelés indulása)
 
-Feldolgozott tartomány: a repó kezdete..`2c88b04` (50 commit, 2026-07-29 óta)
+Feldolgozott tartomány: a repó kezdete..`2c88b04` (61 commit, 2026-07-29 óta)
 
 ### Mi változott
 

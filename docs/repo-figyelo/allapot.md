@@ -1,6 +1,6 @@
 # Állapot-pillanatkép
 
-> Frissítve: **2026-07-31** · Alap-commit: `f015bc3` (`main`) · Commitok száma: 63
+> Frissítve: **2026-07-31** · Alap-commit: `f015bc3` (`main`) · Commitok száma: 74
 
 ## Egy bekezdésben
 

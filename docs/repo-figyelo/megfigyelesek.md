@@ -10,7 +10,12 @@ Státuszok: `nyitott` · `emberi döntésre vár` · `lezárva`
 
 ## M-01 — A README CI-workflow-kra hivatkozik, de nincsenek workflow-fájlok
 
-**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Státusz:** lezárva (2026-08-06) · **Felvéve:** 2026-07-31 · **Súly:** magas
+
+> **Lezárás:** a `ci.yml`, `gitleaks.yml` és `claude.yml` workflow-k 2026-08-05/06-án
+> bekerültek (`#5`, `#6` PR-ek), és a mainen zölden futnak — a „main-re csak zöld
+> CI után" szabály így már kikényszerített. A felvételkor (f015bc3) a tétel
+> pontos volt; az alábbi leírás a történeti állapotot őrzi.
 
 A `README.md` szerint minden `main`-re érkező push és PR lefuttat egy CI-t
 (typecheck → lint → build → test, Postgres 16 service-containerrel), egy
@@ -54,7 +59,7 @@ formázás megoldja.
 **Státusz:** emberi döntésre vár · **Felvéve:** 2026-07-31 · **Súly:** közepes
 
 A repóban a figyelő saját PR-jén (#1) kívül **nincs egyetlen pull request sem**,
-és nincs issue sem — mind a 63 commit közvetlenül a `main`-en keletkezett. Ez
+és nincs issue sem — mind a 74 commit közvetlenül a `main`-en keletkezett. Ez
 ellentmond a `README.md` és a `CLAUDE.md` PR-elvárásainak (zöld CI, leírás,
 review az access-változásokhoz).
 

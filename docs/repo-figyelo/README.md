@@ -3,7 +3,7 @@
 Ez a mappa a Kineticare repó **folyamatos követésének** munkaanyaga: mi a repó
 jelenlegi állapota, mi változott az utolsó ellenőrzés óta, és mit tanultunk
 belőle. Célja, hogy az ügynök (és bármely új közreműködő) egy fájlból meg tudja
-mondani, hol tart a projekt — anélkül, hogy 50 commitot kellene visszaolvasnia.
+mondani, hol tart a projekt — anélkül, hogy 61 commitot kellene visszaolvasnia.
 
 ## Fájlok
 
