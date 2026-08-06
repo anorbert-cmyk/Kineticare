@@ -56,7 +56,10 @@ formázás megoldja.
 
 ## M-03 — A munka közvetlenül `main`-re megy, PR nélkül
 
-**Státusz:** emberi döntésre vár · **Felvéve:** 2026-07-31 · **Súly:** közepes
+**Státusz:** lezárva (2026-08-06) · **Felvéve:** 2026-07-31 · **Súly:** közepes
+
+> **Lezárás:** 2026-08-05/06-tól a munka PR-eken keresztül megy (`#5`, `#8`–`#14`),
+> és a CI-kapuk is élnek (lásd M-01). A tétel a felvételkori állapotot írja le.
 
 A repóban a figyelő saját PR-jén (#1) kívül **nincs egyetlen pull request sem**,
 és nincs issue sem — mind a 74 commit közvetlenül a `main`-en keletkezett. Ez
@@ -147,6 +150,14 @@ Ellenőrizendő, hogy a Payload postgres-adapter ad-e erre közvetlen eszközt.
 ## M-07 — A `payment_failed` rendelés-státusz egyetlen kódúton sem érhető el
 
 **Státusz:** nyitott, **auditban megerősítve** · **Felvéve:** 2026-07-31 · **Súly:** közepes
+
+> *2026-08-06 újraellenőrzés:* **változatlanul fennáll.** A
+> `mapBarionPaymentStatus` `default` ága továbbra is `payment_pending`; a
+> függvény fejlécdokumentációja időközben ki is mondja, hogy a `Failed` is ide
+> fut („konzervatív default"). Az indoklás most már valós mentőhálóra épül (az
+> `order-poll` job elkészült), de a `payment_failed` állapot továbbra sem áll be
+> soha, és a véglegesen elbukott fizetés 24 órán át pollozódik, mielőtt árvának
+> minősülne.
 
 > A 2026-07-31-i mélyaudit független dimenzióban is megtalálta, és az
 > adversarial ellenőrzés sem tudta megcáfolni. Kiegészítés: a `payment_failed`
@@ -247,6 +258,26 @@ reconcile-végpont sem.
 kimenetel (`pending_repoll`) ne zárja `processed`-re az eseményt. Amíg ez így
 van, minden korai callback egy elveszett vásárlás kockázata.
 
+> *2026-08-06 újraellenőrzés — a súly csökkent, a gyökérok megmaradt.*
+> Elkészült az **`order-poll` szolgáltatás** (`src/lib/order-poll/service.ts` +
+> `src/jobs/tasks/order-poll.ts`), amely **közvetlenül az `orders`
+> collectionből** dolgozik (`where: { status: { equals: 'payment_pending' } }`),
+> tehát **teljesen megkerüli a webhook-dedupot**. Ez az a második védővonal,
+> aminek a hiányát a találat kimondta: az elnyelt callback után a rendelés így is
+> lezárul.
+>
+> Két dolog viszont marad: (a) a callback-út gyökéroka változatlan — a
+> `pending_repoll`-lal lezárt esemény továbbra is `processed`, és a későbbi
+> sikeres callback továbbra is eldobódik; (b) a mentőháló az
+> `ENABLE_JOB_WORKERS` mögötti job tényleges futásától függ, azaz a
+> lezárás már nem eseményvezérelt, hanem poll-ciklus-késleltetésű.
+>
+> Érdemes megjegyezni: a szolgáltatás kommentje egy valós incidenst rögzít —
+> az árva-rendelés türelmi ideje 2 óráról 24 órára nőtt, mert a 2 óra után
+> befejeződő fizetés a `paid-not-allowed` állapotgép-védelembe ütközött,
+> „pénz felvéve, kurzus nem". Ez ugyanannak a hibaosztálynak egy másik ága,
+> élesben megtapasztalva.
+
 ---
 
 ## M-10 — Párhuzamos refundok elvesztik egymás nyomát
@@ -304,6 +335,10 @@ korlátozza a későbbi, valódi visszatérítést.
 explicit ellenőrzése; ismeretlen vagy sikertelen státusznál a rendelés maradjon
 érintetlen, és a hívó kapjon hibát.
 
+> *2026-08-06 újraellenőrzés:* **változatlanul fennáll.** A
+> `refundedTransactionStatus` továbbra is csak eltárolódik
+> (`refund-order.ts:383-384`), egyetlen elágazás sem épül rá.
+
 ---
 
 ## M-12 — Staff bármely felhasználó (owner is) jelszavát és e-mail-címét átírhatja
@@ -331,6 +366,14 @@ owner-only field-access-e miatt minden regisztráló `customer` marad.
 field-access-t (saját rekord vagy owner), vagy a `users.update` szűküljön
 staffra nézve saját rekordra. **A `CLAUDE.md` 4. pontja szerint ez
 access-control módosítás — emberi jóváhagyás nélkül nem nyúlunk hozzá.**
+
+> *2026-08-06 újraellenőrzés:* **változatlanul fennáll.** A `users.update`
+> továbbra is `isSelfOrAdmin`, és a `password`/`email` mezőn nincs
+> field-access. Időközben bekerült egy jelszó-politika hook
+> (`src/lib/security/password-policy.ts`) — az viszont a jelszó *erősségét*
+> szabályozza, nem azt, hogy **ki** írhatja felül. A tétel érintetlen.
+> Megjegyzés: az OWASP-kódvizsgálat (`3c74335`) és a Users access-mátrix
+> helyreállítása (`7d2be53`) is lefutott azóta, de ezt a rést nem zárta.
 
 ---
 
@@ -414,6 +457,12 @@ HTTP-kérést.
 **Javaslat:** a regisztráció költözzön a `payload.config` / `instrumentation`
 útvonalra, és a `skipped` számláló váljon szét (nincs processzor ≠ nem
 esedékes).
+
+> *2026-08-06 újraellenőrzés:* **változatlanul fennáll.** A
+> `registerBarionWebhookProcessor` hívása továbbra is csak a callback-route
+> modulban van; sem a `payload.config.ts`, sem a `src/jobs/index.ts`, sem az
+> `src/instrumentation.ts` nem tölti be. Enyhítő körülmény, hogy az `order-poll`
+> job (lásd M-09) már nem függ ettől a regisztrációtól.
 
 ---
 

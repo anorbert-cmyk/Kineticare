@@ -17,6 +17,85 @@ Feldolgozott tartomány: <régi sha>..<új sha> (N commit)
 
 ---
 
+## 2026-08-06 — A repó öt napot ugrott; a találatok újraellenőrzése
+
+Feldolgozott tartomány: `f015bc3..1cabe83` (**171 commit**) — *részleges*
+feldolgozás, lásd lent.
+
+### Mi változott
+
+A `main` öt nap alatt a backend-alapozásból **majdnem teljes termékké** vált.
+A commitüzenetek alapján a nagy blokkok:
+
+- **Teljes frontend:** kezdőlap és UX-hierarchia, kurzus-storefront (lista,
+  kurzusoldal, buybox, előzetes, upsell), kosár → pénztár → köszönőoldal
+  (státusz-poll) → sikertelen ág, auth-oldalak (belépés, regisztráció,
+  elfelejtett/visszaállított jelszó), fiók- és lejátszóoldal (`/kurzusaim`,
+  CoursePlayer, token-frissítés lejárat előtt 5 perccel), design-tokenek.
+- **Számlázás (T-024):** Számlázz.hu Számla Agent kliens, számla-XML builder,
+  `invoice-issue` job — és **stornó-számla teljes refundnál**, a refund-folyamatba
+  kötve.
+- **`order-poll` szolgáltatás (W4):** a `payment_pending` rendelések
+  utánpollolása Barion v4 GetState-tel, számla-újrasöpréssel.
+- **Biztonság:** teljes OWASP Top 10 kódvizsgálat + javítások (SMTP STARTTLS
+  kötelező, JSON-LD `</script>`-escape, login-lockout, security-headerek,
+  jelszó-politika OWASP A07 szerint).
+- **Üzemeltetés:** CI, gitleaks és Claude Code workflow-k, Railway deploy
+  (buildCommand + healthcheck), Postgres-pool hangolás, PostHog consent-first
+  analytics, `grant-purchase` CLI.
+- **Folyamat:** a munka átállt PR-ekre (`#5`, `#8`–`#14`).
+
+### Mit jelent
+
+Két megfigyelés **lezárult**: az **M-01** (hiányzó CI-workflow-k) és az
+**M-03** (PR nélküli fejlesztés) — mindkét minőségi kapu él.
+
+Az audit-találatokat célzottan újraellenőriztem:
+
+| Tétel | Állapot |
+| --- | --- |
+| **M-09** — a dedup elnyeli a sikeres callbackot | **súly csökkent** — az `order-poll` job megkerüli a webhook-dedupot |
+| **M-07** — `payment_failed` elérhetetlen | változatlan |
+| **M-11** — `RefundFailed` sikernek számít | változatlan |
+| **M-12** — staff átírhatja az owner jelszavát | változatlan |
+| **M-15** — a retry-feldolgozó regisztrációja route-mellékhatás | változatlan |
+
+Az M-09 mentőhálója a legfontosabb hír: az `order-poll` **közvetlenül az
+`orders` collectionből** dolgozik, nem a webhook-eseményekből, tehát az elnyelt
+callback után is lezárul a fizetés. A gyökérok viszont megmaradt, és a lezárás
+már nem eseményvezérelt, hanem poll-ciklus-késleltetésű.
+
+Külön érdemes elolvasni az `order-poll/service.ts` kommentjét: az árva-rendelés
+türelmi ideje 2 óráról 24 órára nőtt, mert a 2 óra után befejeződő fizetés a
+`paid-not-allowed` védelembe ütközött — **„pénz felvéve, kurzus nem"**. Ez
+ugyanannak a hibaosztálynak egy másik ága, élesben megtapasztalva. Az M-11 és
+M-12 ugyanebbe az osztályba tartozik, és még nyitva van.
+
+### Tiltott zóna érintve?
+
+Ez a bejegyzés **nem** végzett teljes tiltott-zóna átvizsgálást a 171 commiton —
+lásd a korlátot lent. A célzott ellenőrzés nem talált sértést, de ez nem
+egyenértékű egy teljes körrel.
+
+### Korlát — mit NEM tartalmaz ez a bejegyzés
+
+Ez **részleges feldolgozás**: a 171 commit közül a nagy blokkokat a
+commitüzenetekből azonosítottam, és csak a korábbi audit-találatok érintett
+kódjait olvastam újra. **Nem** történt meg az új kód (frontend, Számlázz.hu,
+order-poll, auth, analytics) érdemi átvizsgálása, sem az `allapot.md`
+újraírása a mostani architektúrára. Az `allapot.md` és a `README.md`
+számai ezért elavultak.
+
+### Következő figyelnivaló
+
+- Egy **teljes ellenőrzési kör** esedékes: az `allapot.md` újraírása és a
+  ~170 commitnyi új kód átvizsgálása. Ez külön futtatás.
+- **M-11** és **M-12** továbbra is a két legsúlyosabb nyitott tétel.
+- Az `order-poll` és az `invoice-issue` job az `ENABLE_JOB_WORKERS` mögött él —
+  éles környezetben ellenőrizendő, hogy tényleg fut-e.
+
+---
+
 ## 2026-07-31 — Mélyaudit: a főlánc kerek, de három ponton szivárog
 
 Feldolgozott tartomány: nincs új commit — ez egy **kódaudit**, nem
