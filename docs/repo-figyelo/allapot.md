@@ -2,6 +2,13 @@
 
 > Frissítve: **2026-07-31** · Alap-commit: `f015bc3` (`main`) · Commitok száma: 74
 
+> ⚠️ **ELAVULT (2026-08-06).** A `main` azóta 171 committel ment előre: elkészült
+> a teljes frontend, a Számlázz.hu-integráció, az `order-poll` job, az auth-
+> és fiókoldalak, a PostHog-analytics és a CI-workflow-k. Az alábbi leírás a
+> `f015bc3` állapotot tükrözi, és **újraírásra vár** — a részleteket lásd a
+> `naplo.md` 2026-08-06-i bejegyzésében.
+
+
 ## Egy bekezdésben
 
 A Kineticare egy kézrehabilitációs kurzusplatform: Next.js 15 (App Router) +
