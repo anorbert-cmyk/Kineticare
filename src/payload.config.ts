@@ -165,7 +165,30 @@ function contactFormData(): Record<string, unknown> {
   }
 }
 
+/**
+ * A `pg` pool tétlen kapcsolatain érkező hibák lekezelése.
+ *
+ * A Railway privát hálózata elvágja a tétlen TCP-kapcsolatokat. A pool ilyenkor
+ * `error` eseményt bocsát ki a tétlen kliensen; ha ezt senki nem kezeli le, a
+ * Node `uncaughtException`-ként dobja tovább, és a teljes szerverfolyamat
+ * instabillá válik (a production-logban ez a
+ * „⨯ uncaughtException: Connection terminated unexpectedly" sor).
+ * A pool a hibás klienst magától eldobja és újat nyit, tehát a naplózás elég.
+ */
+function registerPoolErrorHandler(payload: Payload): void {
+  const { pool } = payload.db
+  if (typeof pool?.on !== 'function') {
+    return
+  }
+  pool.on('error', (error: Error) => {
+    logger.warn('Postgres pool hiba tétlen kapcsolaton (a pool újranyitja)', {
+      error: error.message,
+    })
+  })
+}
+
 async function ensureContactForm(payload: Payload): Promise<void> {
+  registerPoolErrorHandler(payload)
   try {
     const existing = await payload.find({
       // A forms collection a form-builder pluginből jön — a payload-types a
@@ -212,9 +235,25 @@ export default buildConfig({
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },
+  // A pool-beállítások a Railway privát hálózatához vannak hangolva: az
+  // elvágott, tétlen TCP-kapcsolatokon a `pg` egyébként ~45 mp-ig (a TCP
+  // retransmission-timeoutig) vár, majd „Connection terminated unexpectedly"
+  // hibával dől el — emiatt akadt el korábban az admin user létrehozása is.
   db: postgresAdapter({
     pool: {
       connectionString: process.env.DATABASE_URI || '',
+      // TCP keepalive: életben tartja a kapcsolatot, és a megszakadást
+      // másodpercek alatt észreveszi a percek helyett.
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
+      // A pool a hálózat előtt dobja el a tétlen kapcsolatot, hogy sose
+      // használjon újra olyan socketet, amit a privát háló már elvágott.
+      idleTimeoutMillis: 30_000,
+      // Fail-fast: ha 10 mp alatt nincs kapcsolat, hiba jöjjön, ne fagyás.
+      connectionTimeoutMillis: 10_000,
+      // Egyetlen kérés se álljon percekig egy beragadt lekérdezésen.
+      statement_timeout: 30_000,
+      query_timeout: 30_000,
     },
   }),
   sharp,
