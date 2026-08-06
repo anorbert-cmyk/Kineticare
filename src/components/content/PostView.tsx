@@ -2,7 +2,7 @@ import Link from 'next/link'
 
 import type { Category, Post, User } from '../../payload-types'
 import { estimateReadingMinutes } from '../../lib/reading-time'
-import { absoluteUrl, articleJsonLd, resolveOgImageUrl } from '../../lib/seo'
+import { absoluteUrl, articleJsonLd, breadcrumbJsonLd, resolveOgImageUrl } from '../../lib/seo'
 import { Badge } from '../ui/Badge'
 import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
@@ -81,6 +81,12 @@ export function PostView({ post, related: relatedProp, showMeta = true }: PostVi
           ...(author ? { authorName: author } : {}),
           imageUrl: resolveOgImageUrl(post),
         })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Tudástár', path: '/blog' },
+          { name: post.title, path: `/blog/${post.slug}` },
+        ])}
       />
       <Section className="kc-page-hero" variant="tint">
         <Container size="narrow">

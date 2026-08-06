@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 
-import type { Media, Page, Post } from '../payload-types'
+import type { Media, Page, Post, Product } from '../payload-types'
 
 /**
  * Storefront SEO-segédek — a pages/posts meta-fallbacklánca egy helyen.
@@ -104,6 +104,124 @@ export function organizationJsonLd(): Record<string, unknown> {
     url: absoluteUrl('/'),
     description:
       'Kineticare — kézrehabilitációs online videókurzusok otthoni gyógytornászati programmal.',
+    // Az entitás egyértelműsítése AI-válaszokban: a nyelv és a működési terület
+    // explicit megadása csökkenti a más márkákkal való összemosás esélyét.
+    inLanguage: 'hu-HU',
+    areaServed: 'HU',
+    knowsAbout: [
+      'kézrehabilitáció',
+      'gyógytorna',
+      'kéz- és csuklósérülés utáni rehabilitáció',
+      'otthoni rehabilitációs gyakorlatok',
+    ],
+  }
+}
+
+/**
+ * FAQPage JSON-LD.
+ *
+ * A GYIK a leggyakrabban kivonatolt tartalomtípus AI-válaszokban: a kérdés-válasz
+ * pár önmagában is értelmes egység, ezért közvetlenül idézhető. A `text` mezőbe
+ * mindig a TELJES válasz kerüljön, ne csonkolt változat — a csonkolt válasz
+ * félreidézhető.
+ */
+export function faqPageJsonLd(
+  items: ReadonlyArray<{ question: string; answer: string }>,
+): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    inLanguage: 'hu-HU',
+    mainEntity: items.map((item) => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: item.answer,
+      },
+    })),
+  }
+}
+
+/**
+ * BreadcrumbList JSON-LD.
+ *
+ * A morzsa a gépi olvasónak (keresőnek és AI-ágensnek egyaránt) megmutatja,
+ * hol helyezkedik el az oldal a struktúrában — ez az „agentic discovery"
+ * alapja: az ágens így tudja, hogy egy kurzusoldal a kurzuskínálat része.
+ */
+export function breadcrumbJsonLd(
+  items: ReadonlyArray<{ name: string; path: string }>,
+): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: item.name,
+      item: absoluteUrl(item.path),
+    })),
+  }
+}
+
+/**
+ * Course JSON-LD a kurzusoldalakhoz.
+ *
+ * Miért `Course` és nem `Product`: a termék valójában online videókurzus, és a
+ * `Course` séma pontosabban írja le (Google is támogatja a Course rich resultot).
+ * Az ár az `offers`-ben él — a `CreativeWork` (és így a `Course`) érvényes
+ * property-je. Ár nélkül (`priceInHUFEnabled` kikapcsolva) az `offers` kimarad,
+ * mert a 0 Ft-os vagy hiányzó ár félrevezető strukturált adat lenne.
+ *
+ * FONTOS karbantartási szabály: minden ár- vagy csomagváltozásnál ez a séma is
+ * frissül (a `priceInHUF` mezőből származik) — az elavult strukturált adat
+ * gyorsan téves árat terjeszt az AI-válaszokban.
+ */
+export function courseJsonLd(args: {
+  product: Pick<Product, 'shortDescription' | 'status'>
+  name: string
+  path: string
+  priceHuf: number | null
+  imageUrl?: string
+}): Record<string, unknown> {
+  const { product, name, path, priceHuf, imageUrl } = args
+  const description =
+    typeof product.shortDescription === 'string' && product.shortDescription.trim().length > 0
+      ? product.shortDescription.trim()
+      : undefined
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Course',
+    name,
+    ...(description ? { description } : {}),
+    url: absoluteUrl(path),
+    inLanguage: 'hu-HU',
+    ...(imageUrl ? { image: [imageUrl] } : {}),
+    provider: {
+      '@type': 'Organization',
+      name: SITE_NAME,
+      url: absoluteUrl('/'),
+    },
+    hasCourseInstance: {
+      '@type': 'CourseInstance',
+      courseMode: 'online',
+      inLanguage: 'hu-HU',
+    },
+    ...(priceHuf !== null
+      ? {
+          offers: {
+            '@type': 'Offer',
+            price: priceHuf,
+            priceCurrency: 'HUF',
+            url: absoluteUrl(path),
+            availability:
+              product.status === 'published'
+                ? 'https://schema.org/InStock'
+                : 'https://schema.org/Discontinued',
+          },
+        }
+      : {}),
   }
 }
 
