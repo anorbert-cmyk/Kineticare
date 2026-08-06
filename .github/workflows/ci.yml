@@ -20,6 +20,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Kézi indítás tetszőleges branchre (Actions fül -> CI -> Run workflow),
+  # illetve API-ból. AZÉRT KELL, mert a push/pull_request trigger webhookon
+  # múlik: a 2026-08-06-i GitHub Actions-incidensben a webhookok ~15%-a ment
+  # csak át, így órákig egyetlen push sem indított futást — miközben a
+  # közvetlenül (API-ból) létrehozott futások sorba álltak és lefutottak.
+  # Ezzel a triggerrel ilyenkor sem maradunk CI nélkül.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
