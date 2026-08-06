@@ -1,5 +1,8 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { HomeView } from '../components/content/HomeView'
 import { FAQ_ITEMS } from '../components/content/home/Faq'
 import { breadcrumbJsonLd, courseJsonLd, faqPageJsonLd, organizationJsonLd } from '../lib/seo'
 import robots from '../app/robots'
@@ -108,6 +111,27 @@ describe('BreadcrumbList JSON-LD', () => {
     expect(items[0]!.position).toBe(1)
     expect(items[1]!.position).toBe(2)
     expect(String(items[1]!.item)).toMatch(/^https?:\/\/.+\/blog\/cikk$/)
+  })
+})
+
+describe('Kezdőlap strukturált adat (render)', () => {
+  const html = renderToStaticMarkup(
+    createElement(HomeView, { home: null, products: [], posts: [] }),
+  )
+  const blocks = [...html.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/gs)].map(
+    (match) => JSON.parse(match[1]!.replace(/&quot;/g, '"')) as Record<string, unknown>,
+  )
+
+  it('az Organization séma PONTOSAN egyszer szerepel', () => {
+    // Élesben duplán jelent meg, mert a page.tsx és a HomeView is kirenderelte.
+    // A duplikált entitás-leírás validációs figyelmeztetést okoz, és fölöslegesen
+    // kétszer írja le ugyanazt a gépi olvasónak.
+    const organizations = blocks.filter((block) => block['@type'] === 'Organization')
+    expect(organizations).toHaveLength(1)
+  })
+
+  it('a FAQPage séma szerepel a kezdőlapon', () => {
+    expect(blocks.filter((block) => block['@type'] === 'FAQPage')).toHaveLength(1)
   })
 })
 
