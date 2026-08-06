@@ -8,17 +8,50 @@
  *  - oldalak (pages): `kezdolap`, `rolunk`, `szolgaltatasok` — slug alapján UPSERT
  *    (létező oldal mezőit frissíti: a cél a visszaállítás, nem a kihagyás);
  *  - termékek (products): „Otthoni KézRehab Program" (fizetős, 79 500 Ft) és
- *    „SOS Kézrelax" (ingyenes lead-magnet) — sku alapján UPSERT;
+ *    „SOS Kézrelax villámkurzus" (ingyenes lead-magnet) — sku alapján UPSERT;
  *  - menük: Szolgáltatások / Rólunk / Kapcsolat menüpontok a meglévő seed
  *    menüpontok mellé, label-alapú deduppal.
  *
  * Többször futtatva sem duplikál: minden entitást egyedi kulcs (fájlnév / slug /
  * sku / label) alapján keres meg, és csak a hiányzót hozza létre, a létezőt
- * (oldal/termék esetén) az archív tartalommal frissíti.
+ * (oldal/termék esetén) — külön kapu mögött — az archív tartalommal frissíti.
+ *
+ * FIGYELEM — az `sku` ebben a repóban a VEVŐNEK MEGJELENŐ TERMÉKNÉV, nem gépi
+ * cikkszám. A products collectionben nincs külön title mező: a plugin
+ * `useAsTitle: 'sku'` beállítással fut (src/plugins/ecommerce.ts), a kurzuskártya
+ * és a kurzusoldal címe az sku (src/components/content/ProductCard.tsx,
+ * src/lib/courses.ts `courseTitle`), és az orders items `titleSnapshot` mezője is
+ * az sku-t rögzíti — vagyis a megrendelésre és a számlára is ez kerül. Ezért a
+ * termékek sku-ja ember-olvasható név („Otthoni KézRehab Program", „SOS Kézrelax
+ * villámkurzus"); gépi azonosító (pl. „KEZREHAB-ONLINE-001") a kurzuskártyán, a
+ * kurzusoldalon ÉS a vevő számláján is így jelenne meg. Az sku egyben az
+ * idempotencia-kulcs is (keresés + upsert), ezért a script mindenhol pontosan
+ * ugyanezt az értéket használja.
  *
  * Futtatás (DATABASE_URI és PAYLOAD_SECRET környezeti változókkal — lokálisan
  * vagy Railway shellben):
  *   npm run seed:legacy
+ *     → PRÓBAFUTÁS (dry-run, ez az ALAPÉRTELMEZÉS): a script semmit nem ír,
+ *       csak kiírja entitásonként, mit tenne, és a végén összesít.
+ *   LEGACY_RESTORE_CONFIRM=igen npm run seed:legacy
+ *     → tényleges írás: a HIÁNYZÓ entitások létrejönnek.
+ *   LEGACY_RESTORE_CONFIRM=igen LEGACY_OVERWRITE=igen npm run seed:legacy
+ *     → a MEGLÉVŐ oldalak/termékek felülírása is megtörténik.
+ *   LEGACY_RESTORE_CONFIRM=igen LEGACY_ARCHIVE_DEMO=igen npm run seed:legacy
+ *     → a seed.ts demó-tartalmának depublikálása (archiválás/draft/rejtés,
+ *       törlés SOHA — lásd lentebb).
+ *
+ * Miért kell megerősítés? A script slug/sku-egyezésnél FELÜLÍRJA a meglévő
+ * dokumentumot (tartalom, cím, SEO, ár, státusz), az éles adatbázisról pedig
+ * jelenleg NINCS mentés (CLAUDE.md „Üzemeltetési tanulságok", feladatlista C14) —
+ * a felülírás tehát visszavonhatatlan. Ezért az alapértelmezés a dry-run, a
+ * létező dokumentum felülírása pedig külön kapun (LEGACY_OVERWRITE) múlik.
+ *
+ * Demó-tartalom (LEGACY_ARCHIVE_DEMO): a seed.ts demó-tartalma a valódi mellett
+ * maradna (a `DEMO-KEZREHAB-001` termék fizetős kurzuskártyaként, a
+ * „bemutatkozas" oldal és a menüpontja a fejlécben), ezért a script kérésre
+ * DEPUBLIKÁLJA: termék → archived, oldal → draft, menüpontok → visible=false.
+ * Törlés soha nem történik, így a lépés egy admin-kattintással visszafordítható.
  *
  * Tudatosan KIMARAD (az archívumból nem épül vissza):
  *  - az 5 angol lorem-ipsum blogposzt (systeme.io sablon-töltelék) és a /search;
@@ -35,6 +68,68 @@ import { getPayload, type Payload } from 'payload'
 
 import config from '../payload.config'
 import type { Page, Product } from '../payload-types'
+
+// ---------------------------------------------------------------------------
+// Futtatási kapuk — dry-run alapértelmezés, megerősítés az íráshoz
+// ---------------------------------------------------------------------------
+
+/** Egy kapu akkor nyitott, ha a környezeti változó pontosan „igen" (kis/nagybetű mindegy). */
+const kapuNyitva = (nev: string): boolean => process.env[nev]?.trim().toLowerCase() === 'igen'
+
+/** Tényleges írás az adatbázisba (enélkül a script csak próbafutást végez). */
+const CONFIRM = kapuNyitva('LEGACY_RESTORE_CONFIRM')
+/** LÉTEZŐ dokumentum felülírása (a CONFIRM-on felül külön kapu). */
+const OVERWRITE = kapuNyitva('LEGACY_OVERWRITE')
+/** A seed.ts demó-tartalmának depublikálása (archiválás/draft/rejtés, törlés nélkül). */
+const ARCHIVE_DEMO = kapuNyitva('LEGACY_ARCHIVE_DEMO')
+/** Próbafutás: minden döntés lefut és naplózódik, de egyetlen írás sem történik. */
+const DRY_RUN = !CONFIRM
+
+/** Futás végi összesítés — a dry-run és az éles futás ugyanezeket számolja. */
+const osszesites = {
+  letrehozas: 0,
+  feluliras: 0,
+  depublikalas: 0,
+  kihagyas: 0,
+}
+
+const naploLetrehozas = (payload: Payload, cimke: string): void => {
+  osszesites.letrehozas += 1
+  payload.logger.info(`Legacy: ${DRY_RUN ? 'LÉTREHOZNÁ' : 'LÉTREHOZVA'} — ${cimke}`)
+}
+
+const naploFeluliras = (payload: Payload, cimke: string): void => {
+  osszesites.feluliras += 1
+  payload.logger.warn(`Legacy: ${DRY_RUN ? 'FELÜLÍRNÁ' : 'FELÜLÍRVA'} — ${cimke}`)
+}
+
+const naploDepublikalas = (payload: Payload, cimke: string): void => {
+  osszesites.depublikalas += 1
+  payload.logger.info(`Legacy: ${DRY_RUN ? 'DEPUBLIKÁLNÁ' : 'DEPUBLIKÁLVA'} — ${cimke}`)
+}
+
+const naploKihagyas = (payload: Payload, cimke: string, indok: string): void => {
+  osszesites.kihagyas += 1
+  payload.logger.warn(`Legacy: ${DRY_RUN ? 'KIHAGYNÁ' : 'KIHAGYVA'} — ${cimke} (${indok})`)
+}
+
+/**
+ * Meglévő dokumentum felülírásának kapuja: LEGACY_OVERWRITE nélkül kihagyás +
+ * magyar figyelmeztetés. A dry-run csak a szövegen változtat, a döntésen nem —
+ * így a próbafutás pontosan azt mutatja, amit az éles futás ugyanezekkel a
+ * flagekkel tenne.
+ */
+const felulirhato = (payload: Payload, cimke: string): boolean => {
+  if (OVERWRITE) {
+    return true
+  }
+  naploKihagyas(
+    payload,
+    cimke,
+    'MÁR LÉTEZIK; a script FELÜLÍRNÁ a tartalmát, de LEGACY_OVERWRITE=igen nélkül érintetlen marad — az éles adatbázisról nincs mentés, a felülírás visszavonhatatlan',
+  )
+  return false
+}
 
 // ---------------------------------------------------------------------------
 // Lexical richText-építő segédfüggvények (típusosak — a payload-types
@@ -188,8 +283,13 @@ const imageDir = path.join(
   'kepek',
 )
 
-/** Média idempotens biztosítása: fájlnév-alapú dedup (webp-konverzió miatt alapnév-prefix). */
-const ensureMedia = async (payload: Payload, image: LegacyImage): Promise<number> => {
+/**
+ * Média idempotens biztosítása: fájlnév-alapú dedup (webp-konverzió miatt
+ * alapnév-prefix). A média csak létrejön, meglévőt sosem ír felül. Próbafutásban
+ * a hiányzó média `undefined` id-vel tér vissza — a rá hivatkozó oldal/termék
+ * ilyenkor egyszerűen kép nélkül kerül a naplóba (írás úgysem történik).
+ */
+const ensureMedia = async (payload: Payload, image: LegacyImage): Promise<number | undefined> => {
   const baseName = image.file.replace(/\.[^.]+$/, '')
   const existing = await payload.find({
     collection: 'media',
@@ -198,8 +298,12 @@ const ensureMedia = async (payload: Payload, image: LegacyImage): Promise<number
     overrideAccess: true,
   })
   if (existing.docs.length > 0) {
-    payload.logger.info(`Legacy: média már létezik (${image.file}), kihagyva.`)
+    naploKihagyas(payload, `média: ${image.file}`, 'már fel van töltve')
     return existing.docs[0].id
+  }
+  if (DRY_RUN) {
+    naploLetrehozas(payload, `média: ${image.file}`)
+    return undefined
   }
   const created = await payload.create({
     collection: 'media',
@@ -207,7 +311,7 @@ const ensureMedia = async (payload: Payload, image: LegacyImage): Promise<number
     filePath: path.join(imageDir, image.file),
     overrideAccess: true,
   })
-  payload.logger.info(`Legacy: média feltöltve (${image.file}).`)
+  naploLetrehozas(payload, `média: ${image.file}`)
   return created.id
 }
 
@@ -215,7 +319,7 @@ const ensureMedia = async (payload: Payload, image: LegacyImage): Promise<number
 // Kategória — a seed által is ismert termékkategória független biztosítása.
 // ---------------------------------------------------------------------------
 
-const ensureProductCategory = async (payload: Payload): Promise<number> => {
+const ensureProductCategory = async (payload: Payload): Promise<number | undefined> => {
   const slug = 'kezrehabilitacios-kurzusok'
   const existing = await payload.find({
     collection: 'categories',
@@ -224,15 +328,19 @@ const ensureProductCategory = async (payload: Payload): Promise<number> => {
     overrideAccess: true,
   })
   if (existing.docs.length > 0) {
-    payload.logger.info(`Legacy: kategória már létezik (${slug}), kihagyva.`)
+    naploKihagyas(payload, `kategória: ${slug}`, 'már létezik')
     return existing.docs[0].id
+  }
+  if (DRY_RUN) {
+    naploLetrehozas(payload, `kategória: ${slug}`)
+    return undefined
   }
   const created = await payload.create({
     collection: 'categories',
     data: { title: 'Kézrehabilitációs kurzusok', slug, type: 'product' },
     overrideAccess: true,
   })
-  payload.logger.info(`Legacy: kategória létrehozva (${slug}).`)
+  naploLetrehozas(payload, `kategória: ${slug}`)
   return created.id
 }
 
@@ -808,8 +916,13 @@ interface PageInput {
   seoDescription: string
 }
 
-/** Oldal idempotens visszaállítása: slug alapján UPSERT (a mezőket frissíti). */
-const upsertPage = async (payload: Payload, input: PageInput): Promise<number> => {
+/**
+ * Oldal idempotens visszaállítása: slug alapján UPSERT (a mezőket frissíti).
+ * A létező oldal felülírása a LEGACY_OVERWRITE kapun múlik, az írás pedig a
+ * LEGACY_RESTORE_CONFIRM kapun — enélkül csak a döntés naplózódik.
+ */
+const upsertPage = async (payload: Payload, input: PageInput): Promise<number | undefined> => {
+  const cimke = `oldal: ${input.slug}`
   const existing = await payload.find({
     collection: 'pages',
     where: { slug: { equals: input.slug } },
@@ -828,25 +941,35 @@ const upsertPage = async (payload: Payload, input: PageInput): Promise<number> =
     _status: 'published' as const,
   }
   if (existing.docs.length > 0) {
-    await payload.update({
-      collection: 'pages',
-      id: existing.docs[0].id,
-      data,
-      overrideAccess: true,
-    })
-    payload.logger.info(`Legacy: oldal frissítve (${input.slug}).`)
+    if (!felulirhato(payload, cimke)) {
+      return existing.docs[0].id
+    }
+    if (!DRY_RUN) {
+      await payload.update({
+        collection: 'pages',
+        id: existing.docs[0].id,
+        data,
+        overrideAccess: true,
+      })
+    }
+    naploFeluliras(payload, `${cimke} (tartalom, cím, kivonat, SEO, státusz)`)
     return existing.docs[0].id
+  }
+  if (DRY_RUN) {
+    naploLetrehozas(payload, cimke)
+    return undefined
   }
   const created = await payload.create({
     collection: 'pages',
     data: { ...data, publishedAt: new Date().toISOString() },
     overrideAccess: true,
   })
-  payload.logger.info(`Legacy: oldal létrehozva (${input.slug}).`)
+  naploLetrehozas(payload, cimke)
   return created.id
 }
 
 interface ProductInput {
+  /** Az sku a VEVŐNEK MEGJELENŐ név (useAsTitle) ÉS az idempotencia-kulcs egyben. */
   sku: string
   shortDescription: string
   longDescription: Product['longDescription']
@@ -854,11 +977,18 @@ interface ProductInput {
   priceInHUF?: number
   coverImage?: number
   gallery?: { image: number }[]
-  category: number
+  category?: number
 }
 
-/** Termék idempotens visszaállítása: sku alapján UPSERT. */
-const upsertProduct = async (payload: Payload, input: ProductInput): Promise<number> => {
+/**
+ * Termék idempotens visszaállítása: sku alapján UPSERT — a keresés és a beírt
+ * érték szándékosan UGYANAZ az sku (ez a dedup-kulcs, egyben a display-név).
+ */
+const upsertProduct = async (
+  payload: Payload,
+  input: ProductInput,
+): Promise<number | undefined> => {
+  const cimke = `termék: ${input.sku}`
   const existing = await payload.find({
     collection: 'products',
     where: { sku: { equals: input.sku } },
@@ -873,26 +1003,40 @@ const upsertProduct = async (payload: Payload, input: ProductInput): Promise<num
     ...(input.priceInHUF !== undefined ? { priceInHUF: input.priceInHUF } : {}),
     ...(input.coverImage !== undefined ? { coverImage: input.coverImage } : {}),
     ...(input.gallery !== undefined ? { gallery: input.gallery } : {}),
-    category: input.category,
+    ...(input.category !== undefined ? { category: input.category } : {}),
     status: 'published' as const,
     _status: 'published' as const,
   }
   if (existing.docs.length > 0) {
-    await payload.update({
-      collection: 'products',
-      id: existing.docs[0].id,
-      data,
-      overrideAccess: true,
-    })
-    payload.logger.info(`Legacy: termék frissítve (${input.sku}).`)
+    if (!felulirhato(payload, cimke)) {
+      return existing.docs[0].id
+    }
+    if (!DRY_RUN) {
+      await payload.update({
+        collection: 'products',
+        id: existing.docs[0].id,
+        data,
+        overrideAccess: true,
+      })
+    }
+    naploFeluliras(payload, `${cimke} (leírás, ár, borító, kategória, státusz)`)
     return existing.docs[0].id
+  }
+  if (DRY_RUN) {
+    naploLetrehozas(payload, cimke)
+    return undefined
+  }
+  // A kategória a products collectionben kötelező; éles futásban mindig van
+  // (a próbafutás az az eset, amikor még nem jött létre — ott nem írunk).
+  if (input.category === undefined) {
+    throw new Error(`Legacy: hiányzó termékkategória a(z) „${input.sku}" termékhez.`)
   }
   const created = await payload.create({
     collection: 'products',
-    data,
+    data: { ...data, category: input.category },
     overrideAccess: true,
   })
-  payload.logger.info(`Legacy: termék létrehozva (${input.sku}).`)
+  naploLetrehozas(payload, cimke)
   return created.id
 }
 
@@ -907,6 +1051,7 @@ const ensureMenuItem = async (
     url?: string
   },
 ): Promise<void> => {
+  const cimke = `menüpont: ${input.label}`
   const existing = await payload.find({
     collection: 'menus',
     where: {
@@ -916,21 +1061,170 @@ const ensureMenuItem = async (
     overrideAccess: true,
   })
   if (existing.docs.length > 0) {
-    payload.logger.info(`Legacy: menüpont már létezik (${input.label}), kihagyva.`)
+    naploKihagyas(payload, cimke, 'már létezik')
     return
   }
-  await payload.create({
-    collection: 'menus',
-    data: {
-      label: input.label,
-      type: input.type,
-      order: input.order,
-      ...(input.ref ? { ref: input.ref } : {}),
-      ...(input.url ? { url: input.url } : {}),
-    },
-    overrideAccess: true,
-  })
-  payload.logger.info(`Legacy: menüpont létrehozva (${input.label}).`)
+  if (!DRY_RUN) {
+    await payload.create({
+      collection: 'menus',
+      data: {
+        label: input.label,
+        type: input.type,
+        order: input.order,
+        ...(input.ref ? { ref: input.ref } : {}),
+        ...(input.url ? { url: input.url } : {}),
+      },
+      overrideAccess: true,
+    })
+  }
+  naploLetrehozas(payload, cimke)
+}
+
+// ---------------------------------------------------------------------------
+// Demó-tartalom depublikálása (LEGACY_ARCHIVE_DEMO)
+//
+// A seed.ts demó-tartalma ütközik az élessel: a `DEMO-KEZREHAB-001` termék
+// fizetős kurzuskártyaként jelenne meg a valódi kurzus mellett, a „bemutatkozas"
+// oldal és a menüpontja pedig a fejlécben. A lépés ezért DEPUBLIKÁL, de SOHA nem
+// töröl — minden változás egy admin-kattintással visszafordítható. (A frontend a
+// saját `status` selectre, illetve a menus `visible` mezőjére szűr.)
+// ---------------------------------------------------------------------------
+
+const DEMO_TERMEK_SKU = 'DEMO-KEZREHAB-001'
+const DEMO_OLDAL_SLUG = 'bemutatkozas'
+const DEMO_MENU_LABEL = 'Bemutatkozás'
+const DEMO_ALMENU_LABEL = 'Demó kézrehabilitációs kurzus'
+const KURZUSOK_MENU_LABEL = 'Kurzusok'
+
+/** Egy menüpont elrejtése (visible: false) — a sor megmarad, csak nem látszik. */
+const rejtsdElMenupontot = async (
+  payload: Payload,
+  menu: { id: number; visible?: boolean | null },
+  cimke: string,
+): Promise<void> => {
+  if (menu.visible === false) {
+    naploKihagyas(payload, cimke, 'már rejtett')
+    return
+  }
+  if (!DRY_RUN) {
+    await payload.update({
+      collection: 'menus',
+      id: menu.id,
+      data: { visible: false },
+      overrideAccess: true,
+    })
+  }
+  naploDepublikalas(payload, `${cimke} → visible: false`)
+}
+
+const depublikaldDemoTartalmat = async (payload: Payload): Promise<void> => {
+  payload.logger.info(
+    'Legacy: demó-tartalom depublikálása (LEGACY_ARCHIVE_DEMO=igen) — a script archivál/draftra állít/elrejt, törölni SOHA nem töröl.',
+  )
+
+  // --- Demó termék → archived ------------------------------------------------
+  const demoTermek = (
+    await payload.find({
+      collection: 'products',
+      where: { sku: { equals: DEMO_TERMEK_SKU } },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]
+  const termekCimke = `demó termék: ${DEMO_TERMEK_SKU}`
+  if (!demoTermek) {
+    payload.logger.info(`Legacy: ${termekCimke} nincs az adatbázisban — nincs teendő.`)
+  } else if (demoTermek.status === 'archived') {
+    naploKihagyas(payload, termekCimke, 'már archivált')
+  } else {
+    if (!DRY_RUN) {
+      await payload.update({
+        collection: 'products',
+        id: demoTermek.id,
+        data: { status: 'archived' },
+        overrideAccess: true,
+      })
+    }
+    naploDepublikalas(payload, `${termekCimke} → status: archived`)
+  }
+
+  // --- Demó oldal → draft ----------------------------------------------------
+  const demoOldal = (
+    await payload.find({
+      collection: 'pages',
+      where: { slug: { equals: DEMO_OLDAL_SLUG } },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]
+  const oldalCimke = `demó oldal: ${DEMO_OLDAL_SLUG}`
+  if (!demoOldal) {
+    payload.logger.info(`Legacy: ${oldalCimke} nincs az adatbázisban — nincs teendő.`)
+  } else if (demoOldal.status === 'draft') {
+    naploKihagyas(payload, oldalCimke, 'már draft')
+  } else {
+    if (!DRY_RUN) {
+      await payload.update({
+        collection: 'pages',
+        id: demoOldal.id,
+        data: { status: 'draft' },
+        overrideAccess: true,
+      })
+    }
+    naploDepublikalas(payload, `${oldalCimke} → status: draft`)
+  }
+
+  // --- Demó menüpont (gyökérszintű „Bemutatkozás") → visible: false ----------
+  const demoMenu = (
+    await payload.find({
+      collection: 'menus',
+      where: {
+        and: [{ label: { equals: DEMO_MENU_LABEL } }, { parent: { exists: false } }],
+      },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]
+  const menuCimke = `demó menüpont: ${DEMO_MENU_LABEL}`
+  if (!demoMenu) {
+    payload.logger.info(`Legacy: ${menuCimke} nincs az adatbázisban — nincs teendő.`)
+  } else {
+    await rejtsdElMenupontot(payload, demoMenu, menuCimke)
+  }
+
+  // --- Demó almenüpont (a „Kurzusok" alatt) → visible: false -----------------
+  const kurzusokMenu = (
+    await payload.find({
+      collection: 'menus',
+      where: {
+        and: [{ label: { equals: KURZUSOK_MENU_LABEL } }, { parent: { exists: false } }],
+      },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]
+  const almenuCimke = `demó almenüpont: ${DEMO_ALMENU_LABEL}`
+  if (!kurzusokMenu) {
+    payload.logger.info(
+      `Legacy: nincs gyökérszintű „${KURZUSOK_MENU_LABEL}" menüpont — a(z) ${almenuCimke} keresése kihagyva.`,
+    )
+    return
+  }
+  const demoAlmenu = (
+    await payload.find({
+      collection: 'menus',
+      where: {
+        and: [{ label: { equals: DEMO_ALMENU_LABEL } }, { parent: { equals: kurzusokMenu.id } }],
+      },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]
+  if (!demoAlmenu) {
+    payload.logger.info(`Legacy: ${almenuCimke} nincs az adatbázisban — nincs teendő.`)
+    return
+  }
+  await rejtsdElMenupontot(payload, demoAlmenu, almenuCimke)
 }
 
 // ---------------------------------------------------------------------------
@@ -940,18 +1234,49 @@ const ensureMenuItem = async (
 async function restoreLegacyContent(): Promise<void> {
   const payload = await getPayload({ config })
 
+  // --- Futtatási mód kiírása (a napló elején egyértelmű legyen) --------------
+  payload.logger.info(
+    DRY_RUN
+      ? 'Legacy: PRÓBAFUTÁS (dry-run) — a script SEMMIT nem ír az adatbázisba, csak kiírja, mit tenne. Tényleges íráshoz: LEGACY_RESTORE_CONFIRM=igen'
+      : 'Legacy: ÉLES FUTÁS — a script ÍRNI FOG az adatbázisba (LEGACY_RESTORE_CONFIRM=igen).',
+  )
+  payload.logger.info(
+    OVERWRITE
+      ? 'Legacy: meglévő oldal/termék felülírása ENGEDÉLYEZVE (LEGACY_OVERWRITE=igen) — a régi tartalom véglegesen elveszik, mentés nincs.'
+      : 'Legacy: meglévő oldal/termék felülírása TILTVA — a létező dokumentumok érintetlenek maradnak (LEGACY_OVERWRITE=igen oldja fel).',
+  )
+  payload.logger.info(
+    ARCHIVE_DEMO
+      ? 'Legacy: a seed demó-tartalmának depublikálása KÉRVE (LEGACY_ARCHIVE_DEMO=igen).'
+      : 'Legacy: a seed demó-tartalma érintetlen marad (LEGACY_ARCHIVE_DEMO=igen kapcsolja be a depublikálást).',
+  )
+
   // --- Média (az összes többi entitás hivatkozik rá) -------------------------
   const mediaIds = new Map<string, number>()
   for (const image of LEGACY_IMAGES) {
-    mediaIds.set(image.file, await ensureMedia(payload, image))
+    const id = await ensureMedia(payload, image)
+    if (id !== undefined) {
+      mediaIds.set(image.file, id)
+    }
   }
-  const mediaId = (file: string): number => {
+  /**
+   * Kép-id feloldása. Éles futásban a hiányzó id programhiba (megszakítunk);
+   * próbafutásban viszont természetes, hogy a még fel nem töltött kép nem
+   * kapott id-t — ilyenkor `undefined`, és a hivatkozás egyszerűen kimarad.
+   */
+  const mediaId = (file: string): number | undefined => {
     const id = mediaIds.get(file)
-    if (id === undefined) {
+    if (id === undefined && !DRY_RUN) {
       throw new Error(`Legacy: ismeretlen képfájl-hivatkozás: ${file}`)
     }
     return id
   }
+  /** Galéria-elemek a feloldható kép-id-kből (próbafutásban lehet üres). */
+  const gallery = (...files: string[]): { image: number }[] =>
+    files
+      .map((file) => mediaId(file))
+      .filter((id): id is number => id !== undefined)
+      .map((image) => ({ image }))
 
   // --- Oldal: kezdolap -------------------------------------------------------
   await upsertPage(payload, {
@@ -996,24 +1321,24 @@ async function restoreLegacyContent(): Promise<void> {
   const productCategoryId = await ensureProductCategory(payload)
 
   // --- Termék: Otthoni KézRehab Program (fizetős) ------------------------------
+  // Az sku a VEVŐNEK MEGJELENŐ név (useAsTitle: 'sku'), ezért nem cikkszám:
+  // ugyanez kerül a kurzuskártyára, a kurzusoldalra és a számlára is.
   await upsertProduct(payload, {
-    sku: 'KEZREHAB-ONLINE-001',
+    sku: 'Otthoni KézRehab Program',
     shortDescription:
       'Könnyen követhető, otthon is biztonságosan alkalmazható kézrehabilitációs program gyógytornászoktól – csukló-, ujj-, alkar- és könyökfájdalmakra, a saját tempódban, 50+ videós gyakorlattal.',
     longDescription: kezrehabLongDescription(),
     priceInHUFEnabled: true,
     priceInHUF: 79500,
     coverImage: mediaId('688b93e6ab76f_Programpackshot.png'),
-    gallery: [
-      { image: mediaId('678fcfac079a8_Gyakorlat.JPG') },
-      { image: mediaId('680a69d078306_Katakfeherbenhattal.png') },
-    ],
+    gallery: gallery('678fcfac079a8_Gyakorlat.JPG', '680a69d078306_Katakfeherbenhattal.png'),
     category: productCategoryId,
   })
 
-  // --- Termék: SOS Kézrelax (ingyenes lead-magnet) -----------------------------
+  // --- Termék: SOS Kézrelax villámkurzus (ingyenes lead-magnet) ----------------
+  // Itt is a display-név az sku (lásd a fájl fejkommentjét).
   await upsertProduct(payload, {
-    sku: 'SOS-KEZRELAX-001',
+    sku: 'SOS Kézrelax villámkurzus',
     shortDescription:
       'Ingyenes villámkurzus: a 3 legjobb gyakorlatunk a kézfájdalom gyors enyhítésére – drága eszközök és hosszú, macerás gyakorlatok nélkül.',
     longDescription: kezrelaxLongDescription(),
@@ -1021,7 +1346,7 @@ async function restoreLegacyContent(): Promise<void> {
     // szám) így NEM kapja el — a termék a FreeSos-blokkba kerül (audit K2).
     priceInHUFEnabled: false,
     coverImage: mediaId('688b873ad2a80_belepotermekpackshot1.png'),
-    gallery: [{ image: mediaId('6884161138c15_puska.png') }],
+    gallery: gallery('6884161138c15_puska.png'),
     category: productCategoryId,
   })
 
@@ -1043,6 +1368,15 @@ async function restoreLegacyContent(): Promise<void> {
     })
   ).docs[0]?.id
 
+  /** A hiányzó céloldal nem hiba: próbafutásban az oldal még nem jött létre. */
+  const menucelHianyzik = (label: string, slug: string): void => {
+    payload.logger.info(
+      DRY_RUN
+        ? `Legacy: a(z) „${label}" menüpont a próbafutásban nem értékelhető — a hivatkozott oldal (${slug}) csak éles futáskor jön létre.`
+        : `Legacy: a(z) „${label}" menüpont kihagyva — a hivatkozott oldal (${slug}) nem található.`,
+    )
+  }
+
   if (szolgaltatasokPageId !== undefined) {
     await ensureMenuItem(payload, {
       label: 'Szolgáltatások',
@@ -1050,6 +1384,8 @@ async function restoreLegacyContent(): Promise<void> {
       ref: { relationTo: 'pages', value: szolgaltatasokPageId },
       order: 4,
     })
+  } else {
+    menucelHianyzik('Szolgáltatások', 'szolgaltatasok')
   }
   if (rolunkPageId !== undefined) {
     await ensureMenuItem(payload, {
@@ -1058,6 +1394,8 @@ async function restoreLegacyContent(): Promise<void> {
       ref: { relationTo: 'pages', value: rolunkPageId },
       order: 5,
     })
+  } else {
+    menucelHianyzik('Rólunk', 'rolunk')
   }
   // A /kapcsolat az új oldalon dedikált route (űrlappal), nem CMS-oldal — url típus.
   await ensureMenuItem(payload, {
@@ -1067,6 +1405,24 @@ async function restoreLegacyContent(): Promise<void> {
     order: 6,
   })
 
+  // --- Demó-tartalom depublikálása (opcionális, a confirm-kapu mögött) --------
+  if (ARCHIVE_DEMO) {
+    await depublikaldDemoTartalmat(payload)
+  }
+
+  // --- Összesítés ------------------------------------------------------------
+  if (DRY_RUN) {
+    payload.logger.info(
+      `Legacy PRÓBAFUTÁS — összesítés: ${osszesites.letrehozas} létrehozandó, ${osszesites.feluliras} felülírandó, ${osszesites.depublikalas} depublikálandó, ${osszesites.kihagyas} kihagyva. Az adatbázisba SEMMI nem íródott.`,
+    )
+    payload.logger.info(
+      'Legacy: tényleges futtatás → LEGACY_RESTORE_CONFIRM=igen npm run seed:legacy (meglévő tartalom felülírásához ezen felül LEGACY_OVERWRITE=igen, a demó depublikálásához LEGACY_ARCHIVE_DEMO=igen).',
+    )
+    return
+  }
+  payload.logger.info(
+    `Legacy ÉLES FUTÁS — összesítés: ${osszesites.letrehozas} létrehozva, ${osszesites.feluliras} felülírva, ${osszesites.depublikalas} depublikálva, ${osszesites.kihagyas} kihagyva.`,
+  )
   payload.logger.info('Legacy: kész — a régi kineticare.hu tartalma visszaépítve.')
 }
 
