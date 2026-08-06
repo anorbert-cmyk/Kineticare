@@ -33,6 +33,7 @@ Környezeti változók: `.env.example` (a titkok SOHA nem kerülnek a repóba;
 
 | Terület | Fájl |
 |---|---|
+| **Feladatlista (mi van hátra)** | **`docs/feladatlista.md`** |
 | Megvalósíthatóság | `docs/kezrehabilitacios-weboldal-megvalosithatosagi-tanulmany.md` |
 | Végrehajtási terv | `docs/kezrehabilitacio-vegrehajtasi-terv.md` (+ `-v2.md`) |
 | Megrendelői igények | `docs/megrendeloi-igeny-specifikacio.txt`, `docs/igeny-valtozas-pontok.md` |
