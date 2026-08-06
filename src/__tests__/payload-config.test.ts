@@ -40,4 +40,27 @@ describe('payload.config', () => {
     // T-019: a feltöltési méretkorlát globálisan 10 MB (bájtban).
     expect(config.upload?.limits?.fileSize).toBe(10485760)
   })
+
+  /**
+   * A Railway privát hálózata elvágja a tétlen TCP-kapcsolatokat. Keepalive és
+   * idle-timeout nélkül a `pg` a halott socketet használja újra, és a kérés a
+   * TCP retransmission-timeoutig (~45 mp) áll, majd „Connection terminated
+   * unexpectedly" hibával dől el — emiatt akadt el az admin user létrehozása.
+   * Ez a teszt őrzi, hogy a pool-hangolás ne essen ki a konfigból.
+   */
+  it('a Postgres-pool tétlen-kapcsolat elleni beállításai a helyükön vannak', async () => {
+    const config = await configPromise
+
+    const adapter = (
+      config.db as unknown as { init: (args: { payload: unknown }) => { poolOptions?: unknown } }
+    ).init({ payload: {} })
+    const poolOptions = adapter.poolOptions as Record<string, unknown>
+
+    expect(poolOptions.keepAlive).toBe(true)
+    expect(poolOptions.keepAliveInitialDelayMillis).toBe(10_000)
+    expect(poolOptions.idleTimeoutMillis).toBe(30_000)
+    expect(poolOptions.connectionTimeoutMillis).toBe(10_000)
+    expect(poolOptions.statement_timeout).toBe(30_000)
+    expect(poolOptions.query_timeout).toBe(30_000)
+  })
 })
