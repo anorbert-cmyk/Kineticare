@@ -1,0 +1,56 @@
+/**
+ * Self-hostolt betűtípusok — a legacy kineticare.hu fontjai.
+ *
+ * A legacy oldal a Google Fonts-családokat a systeme.io CloudFront-tükréről
+ * töltötte (hotlink TILOS), ezért a woff2 fájlok most a repóban,
+ * a public/assets/fonts alatt élnek. A font-family nevek szándékosan
+ * megegyeznek a tokens.css-ben definiált stack első elemeivel
+ * (--kc-font-heading: 'Tenor Sans', --kc-font-body: 'Nunito Sans'),
+ * így a tokenek módosítása nélkül aktiválódnak.
+ *
+ * A fájlok TELJES (nem subset) woff2-k, tartalmazzák a latin-ext
+ * karaktereket (ő, ű stb.) is, ezért unicode-range korlátozás nem kell.
+ * font-display: swap — a legacy is ezt használta.
+ */
+
+/* Címsorok: Tenor Sans 400 */
+@font-face {
+  font-family: 'Tenor Sans';
+  src: url('/assets/fonts/tenor-sans-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Törzsszöveg: Nunito Sans 400 / 400 italic / 600 / 700 */
+@font-face {
+  font-family: 'Nunito Sans';
+  src: url('/assets/fonts/nunito-sans-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nunito Sans';
+  src: url('/assets/fonts/nunito-sans-400-italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nunito Sans';
+  src: url('/assets/fonts/nunito-sans-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nunito Sans';
+  src: url('/assets/fonts/nunito-sans-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
