@@ -75,5 +75,16 @@ Környezeti változók: `.env.example` (a titkok SOHA nem kerülnek a repóba;
 
 Railway (staging + prod), a konfig a `railway.json`-ban; a lépések a
 `docs/deploy-railway.md` runbookban. A CI-workflow-k (typecheck/vitest/lint/
-build + gitleaks + npm audit) a `.github/workflows/` alatt élnek (a feltöltés
-az admin-csomagból, UTMUTATO-CI.md).
+build + gitleaks + npm audit) a `.github/workflows/` alatt élnek.
+
+> **A `buildCommand` explicit megadása kötelező.** Nélküle a Railway builder
+> „nothing to build" döntéssel **kihagyja a buildet**, lehúzza az új commitot,
+> de a **korábbi `.next/` mappát** indítja el — a deploy zölden „SUCCESS"-t
+> mutat, miközben hetekkel régebbi kód fut. A hibát csak a build-log
+> `─ Build · skipped (nothing to build)` sora árulja el. A `healthcheckPath`
+> szintén be van állítva, hogy egy induláskor halott build ne mehessen élesbe.
+>
+> **Figyelem:** a szolgáltatás dashboardon beállított értékei **felülírják** ezt
+> a fájlt. Ha itt módosítasz valamit, ellenőrizd a service-beállításban is
+> (`build.builder`, `buildCommand`, `healthcheckPath`), különben a fájl csak
+> dokumentáció marad.
