@@ -63,6 +63,30 @@ const enforcePasswordPolicy: CollectionBeforeChangeHook = async ({
   return data
 }
 
+// Az ELSŐ felhasználó owner-szerepkört kap.
+//
+// Enélkül a rendszer telepítés után zárva marad: a `role` mező field-access-e
+// owner-only (`isOwnerFieldAccess`), owner viszont még nincs, ezért a
+// create-first-user form nem tudja elküldeni a role-t, és az új user a
+// `defaultValue: 'customer'` szerepkörrel jön létre. A collection
+// `access.admin` viszont `isStaffOrOwner` — vagyis az első user NEM jut be az
+// adminba, törölni sem lehet (`access.delete: isOwner`), és a szerepkörét sem
+// írhatja át senki. A hook ezt a patthelyzetet oldja fel: ha a DB-ben még
+// nincs user, a létrejövő rekord owner lesz. A 2. usertől a hook nem nyúl a
+// role-hoz, tehát a jogemelés elleni védelem (owner-only field access)
+// változatlanul él.
+const promoteFirstUserToOwner: CollectionBeforeChangeHook = async ({ data, req, operation }) => {
+  if (operation !== 'create') {
+    return data
+  }
+  const count = await req.payload.count({ collection: 'users' })
+  if (count.totalDocs > 0) {
+    return data
+  }
+  logger.info('Az első felhasználó owner szerepkörrel jön létre')
+  return { ...data, role: 'owner' }
+}
+
 // Sikertelen bejelentkezés naplózása. A Payload 3.86-ban NINCS
 // afterFailedLogin hook; a REST /api/users/login hibák (hibás jelszó →
 // AuthenticationError, zárolt fiók → LockedAuth) a routeError-en át a
@@ -173,7 +197,7 @@ export const Users: CollectionConfig = {
     },
   ],
   hooks: {
-    beforeChange: [enforcePasswordPolicy],
+    beforeChange: [promoteFirstUserToOwner, enforcePasswordPolicy],
     afterError: [logFailedLogin],
   },
 }
