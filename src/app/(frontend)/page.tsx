@@ -1,9 +1,7 @@
 import type { Metadata } from 'next'
 
 import { HomeView } from '@/components/content/HomeView'
-import { JsonLd } from '@/components/content/JsonLd'
 import { getHomePage, getLatestPosts, getPublishedProducts } from '@/lib/cms'
-import { organizationJsonLd } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,10 +23,10 @@ export default async function HomePage() {
     getLatestPosts(3),
   ])
 
-  return (
-    <>
-      <JsonLd data={organizationJsonLd()} />
-      <HomeView home={home} products={products} posts={posts} />
-    </>
-  )
+  // A kezdőlap strukturált adatát (Organization + FAQPage) a HomeView adja —
+  // az a komponens, amelyik a látható tartalmat is rendereli, és amelyet a
+  // fixture-tesztek fognak. Itt NEM ismételjük meg: a duplikált Organization
+  // séma egy oldalon validációs figyelmeztetést okoz, és fölöslegesen kétszer
+  // írja le ugyanazt az entitást a gépi olvasónak.
+  return <HomeView home={home} products={products} posts={posts} />
 }
