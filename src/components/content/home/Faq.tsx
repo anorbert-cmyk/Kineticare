@@ -12,7 +12,13 @@ import { Section } from '../../ui/Section'
  * jóváhagyása az irányadó — orvosi ígéretet nem teszünk.
  */
 
-const FAQ_ITEMS: { question: string; answer: string }[] = [
+/**
+ * Exportált, hogy a kezdőlap FAQPage JSON-LD-je UGYANEBBŐL a forrásból épüljön.
+ * Így a strukturált adat és a látható szöveg nem tud szétcsúszni — az eltérő
+ * schema és oldalszöveg a leggyakoribb ok, amiért a keresők elvetik a rich
+ * resultot, az AI pedig téves választ idéz.
+ */
+export const FAQ_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
   {
     question: 'Műtét után is végezhetem a gyakorlatokat?',
     answer:

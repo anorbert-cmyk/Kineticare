@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 import type { Page, Post, Product } from '../../payload-types'
-import { organizationJsonLd } from '../../lib/seo'
+import { faqPageJsonLd, organizationJsonLd } from '../../lib/seo'
 import { HERO_VIDEO_STREAM_ID } from '../../lib/hero-video'
 import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
@@ -12,7 +12,7 @@ import { PostCard } from './PostCard'
 import { isPubliclyVisibleProduct } from './ProductCard'
 import { CourseCards, isPaidProduct } from './home/CourseCards'
 import { CredentialsStrip } from './home/CredentialsStrip'
-import { Faq } from './home/Faq'
+import { FAQ_ITEMS, Faq } from './home/Faq'
 import { FreeSos } from './home/FreeSos'
 import { HeroCta } from './home/HeroCta'
 import { HowItWorks } from './home/HowItWorks'
@@ -90,6 +90,7 @@ export function HomeView({ home, products, posts }: HomeViewProps) {
   return (
     <>
       <JsonLd data={organizationJsonLd()} />
+      <JsonLd data={faqPageJsonLd(FAQ_ITEMS)} />
       <HeroSection home={home} />
 
       <CourseCards products={paidProducts} />

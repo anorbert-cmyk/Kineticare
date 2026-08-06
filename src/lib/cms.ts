@@ -134,6 +134,32 @@ export async function getPosts(
   )
 }
 
+/**
+ * Összes published CMS-oldal a sitemaphoz.
+ *
+ * `depth: 0` — a sitemapnak csak a slug és az updatedAt kell, a relációk
+ * populate-olása fölösleges kör lenne. A kezdőlapot a hívó kezeli külön
+ * (a `kezdolap` slug a `/` útvonalon él, nem `/kezdolap`-on).
+ */
+export async function getAllPublishedPages(limit = 500): Promise<Page[]> {
+  return safeQuery(
+    'sitemap-oldalak',
+    async () => {
+      const payload = await getPayload({ config })
+      const { docs } = await payload.find({
+        collection: 'pages',
+        where: PUBLISHED_WHERE,
+        limit,
+        depth: 0,
+        draft: false,
+        overrideAccess: true,
+      })
+      return docs
+    },
+    [],
+  )
+}
+
 /** Poszt slug alapján — author/categories/relatedPosts populate-olva (depth 2). */
 export async function getPostBySlug(slug: string): Promise<Post | null> {
   return safeQuery(

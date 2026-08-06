@@ -47,7 +47,7 @@ A lista 4 blokkra bomlik: **(A) azonnali, rajtad múló**, **(B) integrációk
 | B5 | **Adatvédelem oldal** a CMS-ben | — | `/admin` → Pages (`adatvedelem`) | A consent-banner ide linkel, jelenleg 404. A legacy `adatvedelem.html` a forrás. |
 | B6 | **E-mail (SMTP)** rendszer-levelekhez | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | SMTP-szolgáltató | A `src/lib/email/smtp.ts` STARTTLS-t kér (OWASP-fix). Az order-confirmation és a reset-password e-mail csak ezzel él. |
 | B7 | **Claude GitHub App + `ANTHROPIC_API_KEY`** | GitHub repo secret | github.com/apps/claude + anthropic.com | A `@claude` megemlítés issue/PR-kommentben. A `ci.yml` és `gitleaks.yml` enélkül is fut. |
-| B8 | **Google Search Console** bekötés | — (DNS TXT vagy HTML-meta) | search.google.com/search-console | Domain-tulajdon igazolás, sitemap beküldés, indexelés-figyelés. Ellenőrizni kell, hogy a `src/lib/seo.ts` mellé van-e `sitemap.xml` és `robots.txt` — ha nincs, az külön backlog-tétel (lásd C11). |
+| B8 | **Google Search Console** bekötés | — (DNS TXT vagy HTML-meta) | search.google.com/search-console | Domain-tulajdon igazolás, **sitemap beküldés** (`/sitemap.xml` már él), indexelés-figyelés. |
 | B9 | **Google Analytics (GA4)** bekötés | `NEXT_PUBLIC_GA_MEASUREMENT_ID` (új kulcs) | analytics.google.com | **Csak consent után tölthet be** — a meglévő consent-állapotgépre kell kötni, ugyanúgy, mint a PostHogot. A kód még nem tartalmaz GA-integrációt, ez fejlesztést igényel (lásd C12). |
 | B10 | **Linear** bekötés | — | linear.app | Feladat- és hibakövetés. Eldöntendő: mennyire kösd a repóhoz (branch-név-konvenció `feat/<ticket-id>-…` már illeszkedik a Linear ticket-ID-khez), és kell-e GitHub↔Linear szinkron. |
 
@@ -72,7 +72,7 @@ A lista 4 blokkra bomlik: **(A) azonnali, rajtad múló**, **(B) integrációk
 | C8 | **Meglévő-vevő migráció (T-061)** | Közepes | A `grant:purchase` script kész — a tömeges importhoz CSV/JSON-olvasó kell. |
 | C9 | **Newsletter** (footer-feliratkozás) | Alacsony | A `plugin-form-builder` kész, a bekötés a CMS-ben. |
 | C10 | **Dependabot-kör figyelése** | Alacsony | A korábbi vitest security-update failure a placeholder-lockfile miatt volt; a következő Dependabot-PR megmutatja, rendbe jött-e. |
-| C11 | **`sitemap.xml` + `robots.txt`** | Közepes | **Egyik sincs a repóban** (ellenőrizve: `src/` és `public/` alatt nincs találat) — a B8 (Search Console) előfeltétele. A `src/lib/seo.ts` mellé. |
+| ~~C11~~ | ~~`sitemap.xml` + `robots.txt`~~ | — | **KÉSZ** (2026-08-06): `src/app/robots.ts` + `src/app/sitemap.ts`. A robots az AI-crawlereket kifejezetten engedi. Részletek: `docs/seo-geo-llm.md`. |
 | C12 | **GA4 bekötése a consent-állapotgépre** | Közepes | A B9 kódoldali fele. **A repóban jelenleg nincs GA-integráció** (ellenőrizve: nincs `gtag` / `googletagmanager` hivatkozás). GA csak `granted` consent után tölthet be, a PostHog-integráció mintájára. |
 
 ### Üzemeltetési tételek (2026-08-06-i hibakeresésből)
@@ -81,6 +81,18 @@ A lista 4 blokkra bomlik: **(A) azonnali, rajtad múló**, **(B) integrációk
 |---|---|---|---|
 | C13 | **`idle_in_transaction_session_timeout` a Postgresen** | Közepes | Ma egy beragadt, nyitva maradt tranzakció zárolta a `users` sort, és minden bejelentkezés befagyott. A DB-oldali timeout ezt magától feloldaná. |
 | C14 | **Adatbázis-mentés** | HIGH (élesítés előtt) | Jelenleg nincs mentés. Ma a Postgres-szolgáltatás újraindításakor `initdb` futott és a kötet üresen jött vissza — tartalom még nem volt benne, de éles adatnál ez adatvesztés lenne. |
+
+### SEO / GEO / LLM-optimalizálás
+
+A **technikai réteg kész** (C11: robots + sitemap, valamint FAQPage / Course /
+BreadcrumbList strukturált adat). Ami hátravan, az nagyrészt tartalmi munka —
+a teljes checklist: `docs/seo-geo-llm.md`.
+
+| # | Feladat | Prioritás | Megjegyzés |
+|---|---|---|---|
+| C15 | **Tartalmi átvezetés minden cikken és oldalon** | Közepes (folyamatos) | Kérdés-alapú alcímek, közvetlen válasz az alcím alatt, forrásmegjelölt adat, E-E-A-T szerzői bio, CEP-alapú (helyzet-, nem téma-) címek. A Katák szakmai munkája. `docs/seo-geo-llm.md` 2. fejezet. |
+| C16 | **Prompt-portfólió + baseline-mérés** | Közepes | 25 prompt 4 típusban (bevétel / reputáció / versenytárs / rés), havi rögzítés. `docs/seo-geo-llm.md` 3. fejezet. |
+| C17 | **Bot-védelem ellenőrzése élesítés után** | Közepes | A `robots.txt` hiába enged, ha a Cloudflare/WAF blokkolja az AI-crawlereket. Külön réteg, külön ellenőrzés. |
 
 ---
 

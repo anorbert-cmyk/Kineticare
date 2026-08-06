@@ -44,6 +44,7 @@ Környezeti változók: `.env.example` (a titkok SOHA nem kerülnek a repóba;
 | UX-hierarchia-audit | `docs/ux-hierarchia-audit.md` |
 | OWASP biztonsági audit | `docs/owasp-security-review.md` |
 | PostHog | `docs/posthog.md` |
+| SEO / GEO / LLM-optimalizálás | `docs/seo-geo-llm.md` |
 | Hero-videó feltöltés | `docs/hero-video-feltoltes.md` |
 | Legacy-forrás | `docs/legacy/` |
 

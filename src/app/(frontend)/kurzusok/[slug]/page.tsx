@@ -6,6 +6,7 @@ import { getPayload } from 'payload'
 import { cache } from 'react'
 
 import { TrackEvent } from '@/components/analytics/TrackEvent'
+import { JsonLd } from '@/components/content/JsonLd'
 import { CourseCta } from '@/components/courses/CourseCta'
 import { LexicalContent } from '@/components/courses/LexicalContent'
 import { PreviewVideo, hasPreviewVideo } from '@/components/courses/PreviewVideo'
@@ -23,6 +24,7 @@ import {
   parseCourseIdParam,
 } from '@/lib/courses'
 import { logger } from '@/lib/logger'
+import { absoluteUrl, breadcrumbJsonLd, courseJsonLd } from '@/lib/seo'
 import type { Product, User } from '@/payload-types'
 
 import config from '../../../../payload.config'
@@ -143,6 +145,23 @@ export default async function CoursePage({ params }: CoursePageProps) {
     <>
       {/* PostHog funnel-lépés: a kurzus-oldal megnyitása (no-op consent nélkül). */}
       <TrackEvent event="course_viewed" properties={{ courseId: product.id, courseSku: product.sku ?? undefined }} />
+      {/* Strukturált adat: a Course-séma ára a priceInHUF-ból jön, tehát
+          árváltozásnál automatikusan követi — nem tud elavulni. */}
+      <JsonLd
+        data={courseJsonLd({
+          product,
+          name: title,
+          path: `/kurzusok/${product.id}`,
+          priceHuf: price,
+          ...(cover ? { imageUrl: absoluteUrl(cover.url) } : {}),
+        })}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Kurzusok', path: '/kurzusok' },
+          { name: title, path: `/kurzusok/${product.id}` },
+        ])}
+      />
       <Section>
         <Container>
           <nav aria-label="Morzsamenü" className="kc-course-breadcrumb">
