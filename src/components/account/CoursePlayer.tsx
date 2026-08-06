@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { fetchStreamToken, type StreamTokenResult } from '../../lib/stream-token-client'
+import { fetchStreamToken } from '../../lib/stream-token-client'
 
 /**
  * CoursePlayer — a kurzus lejátszója (epizódlista + Cloudflare Stream

@@ -7,7 +7,6 @@ import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { AccountView } from '@/components/account/AccountView'
 import { logger } from '@/lib/logger'
-import { hasUserPurchased } from '@/lib/courses'
 import type { Order, User } from '@/payload-types'
 
 import config from '../../../payload.config'

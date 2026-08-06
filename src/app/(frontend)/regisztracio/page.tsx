@@ -7,7 +7,6 @@ import { headers } from 'next/headers'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { RegisterForm } from '@/components/auth/RegisterForm'
-import { logger } from '@/lib/logger'
 import type { User } from '@/payload-types'
 
 import config from '../../../payload.config'

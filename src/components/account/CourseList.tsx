@@ -31,6 +31,7 @@ export function CourseList({ products }: CourseListProps) {
             <Card as="article" className="kc-course-card" interactive padded={false}>
               <Link className="kc-course-card__media" href={`/kurzusaim/${product.id}`} tabIndex={-1}>
                 {cover ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- a Payload media méretei kézileg vannak bekötve (width/height a CMS-ből)
                   <img
                     alt={cover.alt}
                     decoding="async"
