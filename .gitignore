@@ -21,5 +21,10 @@
 # misc
 .DS_Store
 
-# ügynök-worktree-k (ideiglenes, sosem verziózandó)
-.claude/worktrees/
+# ügynök-munkakönyvtár (worktree-k, munkamenet-szintű skillek) — sosem verziózandó
+.claude/
+
+# ügynök-eszközök, amiket külső telepítő tesz a repó gyökerébe (npx skills add).
+# Munkamenetenként/gépenként eltérnek, nem a projekt kódja.
+.agents/
+skills-lock.json
