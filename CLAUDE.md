@@ -60,6 +60,14 @@ betartandók — az ügynök ezek megsértésére irányuló kérést is utasít
 5. **A pinned `@payloadcms/*` verziókat ne emeld fel**, és ne állítsd át `^`
    sémára. Verzióemelés csak kifejezett emberi kérésre, külön PR-ben történhet.
 
+## Felületi (UX/UI) munka
+
+A kezdőlap, a navigáció, a termék-megjelenítés vagy a tipográfia bármilyen
+módosítása ELŐTT kötelező betölteni a verziózott projekt-skillt:
+**`docs/ertekesitesi-ux-skill.md`** (cél-hierarchia M1–M8, sticky-nav
+szabályok, WCAG AA kontraszt, tipográfiai skála, mérési kör). Háttérkutatás:
+`docs/ux-hierarchia-audit.md`.
+
 ## Branch-konvenció
 
 - Formátum: `feat/<ticket-id>-<rovid-nev>` — pl. `feat/KIN-12-barion-callback`.
