@@ -185,22 +185,27 @@
   },
   ```
 
-### 🟢 GREEN A08 — Supply-chain: a CI-workflow-k és a lockfile még admin-feltöltésen vannak
-- **Hely:** `output/github-manual-fajlok/` (pending) — a repóban még nincs `ci.yml`, `gitleaks.yml`, `package-lock.json`
-- **Leírás:** a CI-kapuk (typecheck/vitest/lint/build) és a gitleaks a feltöltésig nem futnak; a `package-lock.json` hiányában a telepítés nem reprodukálható (npm install feloldás-alapú). A B1–B7 regressziók ebből fakadtak.
-- **Hatás:** integritás-hiány a build-láncban (a már dokumentált admin-teendő).
-- **Javítás:** a manuális csomag feltöltése (UTMUTATO-CI.md), és a ci.yml-be npm-audit-jobb visszatétele:
+### ✅ LEZÁRVA A08 — Supply-chain: a CI-workflow-k és a lockfile hiánya
+- **Eredeti találat:** a repóban nem volt `ci.yml`, `gitleaks.yml` és valódi `package-lock.json`, ezért a CI-kapuk (typecheck/vitest/lint/build) és a gitleaks nem futottak, a telepítés pedig nem volt reprodukálható (feloldás-alapú `npm install`). A B1–B7 regressziók ebből fakadtak.
+- **Állapot:** **lezárva.** Mindhárom fájl a `main`-en van. A `package-lock.json` tiszta registryből készült — minden `resolved` URL a `registry.npmjs.org`-ra mutat (privát tükörre mutató URL a CI-runnerről elérhetetlen lenne).
+- **A tényleges audit-job a `ci.yml`-ben** — ez a mérvadó, ne ezt a doksit másold:
   ```yaml
   audit:
-    name: npm audit (moderate+ = bukás)
+    name: npm audit (critical = bukás)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
-      - run: npm ci
-      - run: npm audit --audit-level=moderate
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npm audit --audit-level=critical
   ```
+  Három eltérés a fenti eredeti javaslathoz képest, mindegyik szándékos:
+  1. `--legacy-peer-deps` **kötelező**: a `@payloadcms/*` 3.86.0 peer-tartománya kizárja a biztonsági javítás miatt pinelt `next@15.5.22`-t. Enélkül a telepítés elhasal.
+  2. `--audit-level=critical` a `moderate` helyett: a `moderate` szint a tranzitív fejlesztői függőségek zajától folyamatosan piros lenne, ami a kaput használhatatlanná teszi. A szint emelése külön döntés.
+  3. `checkout@v7` / `setup-node@v7`: a `@v4` runtime-ja `node20`, amit a GitHub 2026-09-16-án eltávolít a hosztolt runnerekről.
 
 ### 🟢 GREEN A10 — SSRF: nincs felhasználó-vezérelt kimenő kérés (PASS, jegyzettel)
 - **Hely:** `src/lib/barion/client.ts`, `src/lib/szamlazz/client.ts`, `src/payload.config.ts` (Turnstile), `next.config.ts` (PostHog rewrites)
