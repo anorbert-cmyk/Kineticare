@@ -28,6 +28,15 @@ updates:
       # vonalat a Dependabot ne nyissa újra, amíg a Payload nem támogatja.
       - dependency-name: "graphql"
         update-types: ["version-update:semver-major"]
+      # A @types/node majorja a futásidejű Node majorhoz (24) van illesztve —
+      # major-emelés csak a runtime-emeléssel együtt, kézzel.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TS 7 (natív, Go-alapú fordító): nincs JS API-ja, ezért a
+      # next@15.5 build-idejű typecheckje, a typescript-eslint@8
+      # (peer: >=4.8.4 <6.1.0) és a Payload típusgenerálás sem támogatja.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: "/"
