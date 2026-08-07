@@ -35,6 +35,11 @@ updates:
       interval: weekly
       day: monday
       time: "06:00"
-    open-pull-requests-limit: 2
+    # 2-ről 5-re emelve: a 2-es limit mellett a #15/#16 (checkout, gitleaks)
+    # kitöltötte a keretet, és a setup-node Node 20-as runtime-emelése
+    # (2026-09-16-i kivezetési határidő!) PR nélkül maradt. Az 5-ös keret
+    # a repó összes actionjének (checkout, setup-node, gitleaks,
+    # claude-code-action) egyidejű major-emelését is elbírja.
+    open-pull-requests-limit: 5
     labels:
       - dependencies
