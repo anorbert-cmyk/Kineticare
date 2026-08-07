@@ -1,5 +1,5 @@
 import type { Payload } from 'payload'
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 import { createBarionCallbackProcessor } from '../lib/barion-callback/process-callback'
 import { createBarionCallbackHandler } from '../lib/barion-callback/route-handler'
@@ -236,7 +236,7 @@ function setup(options: MockPayloadOptions = {}) {
   return { POST, store, docs, payload, calls, order, user, capture }
 }
 
-const logOutput = (spy: ReturnType<typeof vi.spyOn>): string =>
+const logOutput = (spy: MockInstance<(...args: unknown[]) => void>): string =>
   spy.mock.calls.map((call) => call.map((arg) => String(arg)).join(' ')).join('\n')
 
 describe('POST /api/barion/callback — bemenet-ellenőrzés', () => {
