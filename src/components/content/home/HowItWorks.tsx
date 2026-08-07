@@ -66,7 +66,7 @@ const textStyle: CSSProperties = {
 
 export function HowItWorks() {
   return (
-    <Section variant="tint">
+    <Section variant="default">
       <Container>
         <h2 className="kc-section-title">Így működik az online kurzus</h2>
         <ol

@@ -21,10 +21,11 @@ import type { Category, Media, Page, Post, Product, User } from '../payload-type
 
 /**
  * Oldal-render tesztek (kezdőlap + CMS/blog) — fixture-adattal, DB nélkül.
- * Lefedi: a docs/ux-hierarchia-audit.md cél-hierarchiájú kezdőlapot (M1 hero CTA,
- * M2 fizetős kurzus-kiemelés cím/ár, M3 hogyan-működik, M4 hitel-csík,
- * M6 GYIK, M7 visszafogott ingyenes SOS-sáv; az M5 vélemény-szekció szándékosan
- * NINCS implementálva — fiktív idézet nem kerülhet ki, valós forrásig vár), a friss posztokat, a
+ * Lefedi: a docs/ux-hierarchia-audit.md 3. szakaszának cél-hierarchiájú
+ * kezdőlapot (M1 hero CTA, M2 hitel-csík, M3 fizetős kurzus-kiemelés cím/ár,
+ * M4 visszafogott ingyenes SOS-sáv, M5 hogyan-működik, M8 GYIK a lap alján;
+ * a vélemény-szekció szándékosan NINCS implementálva — fiktív idézet nem
+ * kerülhet ki, a valódi rövid idézetek CMS-tartalomként érkeznek, M6), a friss posztokat, a
  * poszt-oldal meta-részeit, a draft/published viselkedést és az SEO-fallbackláncot.
  */
 
@@ -178,7 +179,7 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(html).toContain('href="#ingyenes"')
   })
 
-  it('M2 kurzus-kiemelés: published FIZETŐS termékből kártya (cím/ár), draft/archived kimarad', () => {
+  it('M3 kurzus-kiemelés: published FIZETŐS termékből kártya (cím/ár), draft/archived kimarad', () => {
     const html = render(
       createElement(HomeView, {
         home: null,
@@ -198,7 +199,7 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(html).toContain('href="/kurzusok/1"')
   })
 
-  it('M2/M7: az ingyenes termék NEM a fizetős kártyák között, hanem a visszafogott SOS-sávban jelenik meg', () => {
+  it('M3/M4: az ingyenes termék NEM a fizetős kártyák között, hanem a visszafogott SOS-sávban jelenik meg', () => {
     const html = render(
       createElement(HomeView, {
         home: null,
@@ -210,7 +211,7 @@ describe('HomeView (kezdőlap-render)', () => {
       }),
     )
     // A fizetős kártya-szekció (id="kurzusok") csak a fizetős terméket linkeli.
-    const coursesSection = html.slice(html.indexOf('id="kurzusok"'), html.indexOf('Így működik'))
+    const coursesSection = html.slice(html.indexOf('id="kurzusok"'), html.indexOf('id="ingyenes"'))
     expect(coursesSection).toContain('href="/kurzusok/1"')
     expect(coursesSection).not.toContain('href="/kurzusok/7"')
     // Az ingyenes termék a másodlagos súlyú SOS-sávban (id="ingyenes"), „Ingyenes" jelöléssel.
@@ -220,14 +221,14 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(sosSection).toContain('href="/kurzusok/7"')
   })
 
-  it('M7 SOS-sáv: ingyenes termék nélkül is megjelenik, fallbackben a kurzuslistára mutat', () => {
+  it('M4 SOS-sáv: ingyenes termék nélkül is megjelenik, fallbackben a kurzuslistára mutat', () => {
     const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
     expect(html).toContain('id="ingyenes"')
     expect(html).toContain('SOS Kézrelax')
     expect(html).toContain('Elindítom az ingyenes kurzust')
   })
 
-  it('M3 hogyan-működik: 3 lépés (megveszem → azonnal nézem → otthon gyakorlok)', () => {
+  it('M5 hogyan-működik: 3 lépés (megveszem → azonnal nézem → otthon gyakorlok)', () => {
     const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
     expect(html).toContain('Így működik az online kurzus')
     expect(html).toContain('Kiválasztod a kurzust')
@@ -235,13 +236,13 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(html).toContain('Otthon gyakorolsz')
   })
 
-  it('M4 hitel-csík: kondenzált szakmai érvek + a Rólunk oldalra mutató link', () => {
+  it('M2 hitel-csík: kondenzált szakmai érvek + a Rólunk oldalra mutató link', () => {
     const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
     expect(html).toContain('Gyógytornász és manuálterapeuta')
     expect(html).toContain('href="/rolunk"')
   })
 
-  it('M6 GYIK: az audit kérdései (műtét, fájdalom, időráfordítás, eszköz) details/summary-ben', () => {
+  it('M8 GYIK: az audit kérdései (műtét, fájdalom, időráfordítás, eszköz) details/summary-ben', () => {
     const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
     expect(html).toContain('Gyakori kérdések')
     expect(html).toContain('Műtét után is végezhetem a gyakorlatokat?')
@@ -250,17 +251,17 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(html).toContain('<summary')
   })
 
-  it('szekció-sorrend: hero → kurzusok → hogyan működik → hitel → GYIK → ingyenes SOS', () => {
+  it('szekció-sorrend az audit szerint: hero → hitel-csík → fizetős kurzusok → ingyenes SOS → hogyan működik → GYIK a végén', () => {
     const html = render(
       createElement(HomeView, { home: null, products: [product({ id: 1 })], posts: [] }),
     )
     const order = [
       'kc-hero__title',
-      'id="kurzusok"',
-      'Így működik az online kurzus',
       'Bővebben a szakmai hátterünkről',
-      'Gyakori kérdések',
+      'id="kurzusok"',
       'id="ingyenes"',
+      'Így működik az online kurzus',
+      'Gyakori kérdések',
     ]
     const positions = order.map((marker) => html.indexOf(marker))
     for (const position of positions) {

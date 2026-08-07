@@ -59,7 +59,8 @@
 .kc-hero__title {
   margin: 0 0 var(--kc-space-4);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-3xl);
+  /* A display-lépcső folytonos (clamp), külön töréspont-felülírás nem kell. */
+  font-size: var(--kc-text-4xl);
   font-weight: var(--kc-font-weight-normal);
   line-height: var(--kc-leading-heading);
   color: var(--kc-color-text);
@@ -90,10 +91,6 @@
   .kc-hero__grid {
     grid-template-columns: 1.1fr 1fr;
     gap: var(--kc-space-7);
-  }
-
-  .kc-hero__title {
-    font-size: var(--kc-text-4xl);
   }
 }
 

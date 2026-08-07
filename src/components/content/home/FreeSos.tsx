@@ -54,7 +54,7 @@ export function FreeSos({ freeProduct }: FreeSosProps) {
   const href = freeProduct ? `/kurzusok/${freeProduct.id}` : '/kurzusok'
 
   return (
-    <Section id="ingyenes" variant="default">
+    <Section id="ingyenes" variant="tint">
       <Container>
         <div style={cardStyle}>
           <div style={textBlockStyle}>

@@ -22,24 +22,28 @@ import { RichText } from '../lexical/RichText'
 /**
  * HomeView — a kezdőlap prezentációs komponense (tiszta, fixture-ből tesztelhető).
  *
- * A docs/ux-hierarchia-audit.md cél-hierarchiája szerinti sorrend (üzleti cél:
- * kurzus-értékesítés → bizalom → kapcsolat; a lead-magnet másodlagos):
- * 1. M1 Hero + EGY elsődleges CTA a fizetős kurzusokra (→ /kurzusok) +
+ * A docs/ux-hierarchia-audit.md 3. szakaszának cél-hierarchiája szerinti
+ * sorrend (üzleti cél: kurzus-értékesítés → bizalom → kapcsolat; a lead-magnet
+ * másodlagos), a szabályok a docs/ertekesitesi-ux-skill.md-ben:
+ * M1 Hero + EGY elsődleges CTA a fizetős kurzusokra (→ /kurzusok) +
  *    visszafogott másodlagos link az ingyenes SOS-ra (HeroCta). A hero média:
  *    ha a HERO_VIDEO_STREAM_ID be van állítva (src/lib/hero-video.ts), a Stream
  *    hero-videó jelenik meg, egyébként a CMS heroImage — a videóblokk érintetlen.
- * 2. M2 Fizetős kurzus-kártyák (cím/rövid leírás/ÁR/CTA) KÖZVETLENÜL a hero
- *    után (CourseCards) — üresen a szekció elmarad.
- * 3. M3 „Így működik az online kurzus" — 3 lépés, statikus (HowItWorks).
- * 4. M4 Szakmai hitel-csík a /rolunk linkkel (CredentialsStrip).
- * 5. M5 Vélemények — KIVÉVE: valódi, hitelesíthető idézetek hiányában a
- *    szekció egyelőre elmarad (fiktív vélemény nem kerülhet ki; a valós
- *    idézetek érkezésekor visszatehető).
- * 6. M6 Gyakori kérdések — ellenérv-kezelés, statikus (Faq).
- * 7. M7 Ingyenes SOS Kézrelax — lead-magnet VISSZAFOGOTT súllyal (FreeSos).
- * 8. A CMS-oldal richText-tartalma (ha van) — a staff által írt szekciók.
- * 9. Legfrissebb posztok — tudástár (SEO, hosszútáv) + „Összes bejegyzés".
- * A kapcsolat/footer (M8) a layoutban él, itt érintetlen.
+ * M2 Szakmai hitel-csík a /rolunk linkkel (CredentialsStrip) — közvetlenül a
+ *    hero alatt keretezi a vásárlási döntést.
+ * M3 Fizetős kurzus-kártyák (cím/rövid leírás/ÁR/CTA) a hitel-csík után
+ *    (CourseCards) — üresen a szekció elmarad.
+ * M4 Ingyenes SOS Kézrelax — lead-magnet VISSZAFOGOTT, másodlagos súllyal,
+ *    közvetlenül a fizetős blokk után, tint háttérrel elválasztva (FreeSos).
+ * M5 „Így működik az online kurzus" — 3 lépés, statikus (HowItWorks).
+ * M6 A CMS-oldal richText-tartalma (ha van) — a staff által írt szekciók; a
+ *    valódi RÖVID vélemények is ide érkeznek majd (fiktív idézet
+ *    fogyasztóvédelmi okból nem kerülhet ki — docs/feladatlista.md A8).
+ * M7 Legfrissebb posztok — tudástár (SEO, hosszútáv) + „Összes bejegyzés".
+ * M8 Gyakori kérdések — ellenérv-kezelés a lap alján (Faq; a FAQPage JSON-LD
+ *    miatt a szekció főoldali jelenléte SEO-kötelezettség, lásd
+ *    docs/seo-geo-llm.md).
+ * A kapcsolat/footer a layoutban él, itt érintetlen.
  *
  * A draft tartalom ide el sem jut: a lekérdezések published-szűrtjei mellett a
  * kártyakomponensek is védőhálót tartanak.
@@ -93,15 +97,13 @@ export function HomeView({ home, products, posts }: HomeViewProps) {
       <JsonLd data={faqPageJsonLd(FAQ_ITEMS)} />
       <HeroSection home={home} />
 
-      <CourseCards products={paidProducts} />
-
-      <HowItWorks />
-
       <CredentialsStrip />
 
-      <Faq />
+      <CourseCards products={paidProducts} />
 
       <FreeSos freeProduct={freeProduct} />
+
+      <HowItWorks />
 
       {home?.content && hasLexicalContent(home.content) ? (
         <Section>
@@ -128,6 +130,8 @@ export function HomeView({ home, products, posts }: HomeViewProps) {
           </Container>
         </Section>
       ) : null}
+
+      <Faq />
     </>
   )
 }
