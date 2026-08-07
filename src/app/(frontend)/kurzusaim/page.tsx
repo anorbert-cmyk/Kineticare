@@ -6,8 +6,6 @@ import { headers } from 'next/headers'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { CourseList } from '@/components/account/CourseList'
-import { logger } from '@/lib/logger'
-import { courseTitle, hasUserPurchased } from '@/lib/courses'
 import type { Product, User } from '@/payload-types'
 
 import config from '../../../payload.config'

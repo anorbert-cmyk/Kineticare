@@ -1,13 +1,10 @@
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
-import Link from 'next/link'
 import { getPayload } from 'payload'
 
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
-import { Button } from '@/components/ui/Button'
 import { ThankYouView } from '@/components/checkout/ThankYouView'
-import { logger } from '@/lib/logger'
 import type { User } from '@/payload-types'
 
 import config from '@payload-config'

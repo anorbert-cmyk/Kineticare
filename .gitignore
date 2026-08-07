@@ -20,3 +20,6 @@
 
 # misc
 .DS_Store
+
+# ügynök-worktree-k (ideiglenes, sosem verziózandó)
+.claude/worktrees/
