@@ -60,20 +60,44 @@ const services = [
   {
     num: "01",
     title: "Rendelői kezelések",
-    body: "Személyre szabott, célzott terápiák kéz- és alkart érintő panaszok esetén, modern eszközökkel és szakértelemmel.",
-    link: { label: "Tudj meg többet", href: "https://www.kineticare.hu/" },
+    body: "Akut sérülések, műtét utáni állapotok és krónikus fájdalmak esetén a mozgásterápia a gyógyulás alappillére. Gyógytornával, manuálterápiával és egy sor kiegészítő terápiával várunk a stúdiónkban.",
+    link: {
+      label: "Tovább a kezelésekre",
+      href: "https://www.kineticare.hu/rendeloi-kezelesek",
+      external: false,
+    },
   },
   {
     num: "02",
     title: "Otthoni program",
-    body: "Terápiás gyakorlatok és hasznos tanácsok, hogy otthonodban is aktívan tegyél a gyógyulásodért.",
-    link: { label: "Tudj meg többet", href: "https://www.kineticare.hu/" },
+    body: "Ha nem tudsz eljutni kezelésre, vagy egyszerűen csak megpróbálnád előbb magadnak megoldani a kézproblémádat, akkor ezeket neked készítettük. Az átfogó kézrehabilitációs programban bárhol, bármikor végezhető megoldásokat találsz.",
+    link: {
+      label: "Tovább a programra",
+      href: "https://www.kineticare.hu/kezrehab",
+      external: false,
+    },
   },
   {
     num: "03",
     title: "Szakmai képzések",
-    body: "Naprakész tudás, gyakorlatorientált képzések szakembereknek a kézrehabilitáció legújabb módszereiről.",
-    link: { label: "Tudj meg többet", href: "https://www.kineticare.hu/" },
+    body: "Akkreditált tantermi kézkurzusunkat a ProBody Stúdióval együttműködve hoztuk létre a kéz, a csukló- és könyökízület rehabilitációs lehetőségeiről gyógytornászoknak, orvosoknak, erőnléti és szakági edzőknek.",
+    link: {
+      label: "Tovább a kéz workshopra",
+      href: "https://probodystudio.hu/kez-workshop/",
+      external: true,
+    },
+  },
+];
+
+const pressLogos = [
+  { src: "/assets/site/press-noklapja.png", alt: "Nők Lapja" },
+  { src: "/assets/site/press-karc.png", alt: "Karc FM" },
+  { src: "/assets/site/press-hazipatika.png", alt: "Házipatika" },
+  { src: "/assets/site/press-kepmas.png", alt: "Képmás magazin" },
+  { src: "/assets/site/press-ispor.png", alt: "iSport" },
+  {
+    src: "/assets/site/press-mgyft.png",
+    alt: "Magyar Gyógytornász-Fizioterapeuták Társasága",
   },
 ];
 
@@ -202,6 +226,9 @@ function Index() {
                         aria-label={`${service.title}: ${service.link.label}`}
                         className="kc-inline-link"
                         href={service.link.href}
+                        {...(service.link.external
+                          ? { target: "_blank", rel: "noreferrer" }
+                          : {})}
                       >
                         {service.link.label} <span aria-hidden="true">→</span>
                       </a>
@@ -265,7 +292,7 @@ function Index() {
                   alt="Kiss Kata és Kocsis Kata, a KinetiCare gyógytornászai"
                   className="kc-about-photo"
                   loading="lazy"
-                  src="/assets/brand/katak.jpg"
+                  src="/assets/site/katak-team.jpg"
                 />
               </figure>
 
@@ -298,36 +325,50 @@ function Index() {
                 <span aria-hidden="true" className="kc-quote-mark">„</span>
                 <blockquote>
                   <p className="kc-quote-big">
-                    A kezeim a hangszeremeim. Itt nemcsak kezelést kaptam,
-                    hanem valódi megértést is.
+                    Már az első alkalommal éreztem, hogy jó kezekben vagyok, szó
+                    szerint is. Nemcsak a tüneteket enyhítette, hanem segített
+                    megérteni a kiváltó okokat is.
                   </p>
-                  <span className="kc-attribution">Garami Gábor, zenész</span>
+                  <span className="kc-attribution">
+                    Garami Gábor, zenész, műsorvezető
+                  </span>
                 </blockquote>
               </div>
               <div className="kc-quotes-side">
                 <blockquote className="kc-quote-small">
                   <span aria-hidden="true" className="kc-quote-mini-mark">„</span>
                   <p>
-                    Hónapok óta fennálló csuklófájdalmammal érkeztem, és már az
-                    első alkalommal éreztem, hogy jó kezekben vagyok. A kezelés
-                    hatékony volt, a gyógytornászom pedig minden lépést
-                    érthetően magyarázott el.
+                    Egy 10 éve tartó ganglion problémával, több operáció után
+                    jutottam el Katához, mert szikementes segítséget szerettem
+                    volna igénybe venni, és nem is dönthettem volna jobban!
+                    Nagyon hálás vagyok, hogy szakértelme által jelentős
+                    javulást és tünetmentességet értünk el a kezelések során.
                   </p>
                   <span className="kc-attribution">Kállai Dóra, biológus</span>
                 </blockquote>
                 <blockquote className="kc-quote-small">
                   <span aria-hidden="true" className="kc-quote-mini-mark">„</span>
                   <p>
-                    A jógatanítás mellett fontos számomra, hogy a saját testemre
-                    is figyeljek. Itt nemcsak a tüneteket kezelték, hanem
-                    segítettek megelőzni a további problémákat is. Hálás vagyok
-                    a szakértelemért és a figyelemért.
+                    A KINETICARE lányokat ajánlás alapján kerestem meg, ugyanis
+                    pár hónapja erős fájdalommal járt a hüvelykujjam és a
+                    csuklóm mozgatása. A közös munkának, a világos
+                    magyarázatoknak, a szuper feladatoknak és életvezetési
+                    tanácsoknak hála, sikerült a gyógyulás!
                   </p>
                   <span className="kc-attribution">
                     Bagdal Szilvia, jógaoktató
                   </span>
                 </blockquote>
               </div>
+            </div>
+          </section>
+
+          <section aria-label="Megjelenéseink" className="kc-press">
+            <p className="kc-press-label">Ismerhetsz minket innen</p>
+            <div className="kc-press-row">
+              {pressLogos.map((logo) => (
+                <img alt={logo.alt} key={logo.src} loading="lazy" src={logo.src} />
+              ))}
             </div>
           </section>
 
@@ -345,11 +386,16 @@ function Index() {
                   SOS KézRelax villámkurzus
                 </h2>
                 <p className="kc-sos-p">
-                  Gyors segítség kézfájdalom és túlterhelés esetén, szakértői
-                  útmutatóval.
+                  Ínhüvelygyulladás, kéztőalagút-szindróma, teniszkönyök? Gyors
+                  megoldás speciális gyakorlatokkal, amivel magadnak is
+                  enyhítheted a kézfájdalmad, drága eszközök és hosszú, macerás
+                  gyakorlatok nélkül.
                 </p>
-                <a className="kc-sos-cta" href="https://www.kineticare.hu/">
-                  <span aria-hidden="true">→</span> Megnézem a kurzust
+                <a
+                  className="kc-sos-cta"
+                  href="https://www.kineticare.hu/kezrelax"
+                >
+                  <span aria-hidden="true">→</span> Kérem a villámkurzust
                 </a>
               </div>
             </section>
@@ -359,13 +405,25 @@ function Index() {
                 <a className="kc-footer-link" href="mailto:info@kineticare.hu">
                   Írjon nekünk
                 </a>
-                <p className="kc-footer-mark">
-                  KINETI<span>CARE</span>
-                </p>
+                <img
+                  alt="KinetiCare logó"
+                  className="kc-footer-logo"
+                  loading="lazy"
+                  src="/assets/site/logo-kineticare.png"
+                />
               </div>
               <div className="kc-footer-meta">
                 <a href="mailto:info@kineticare.hu">info@kineticare.hu</a>
                 <span>© 2026 KinetiCare, minden jog fenntartva</span>
+              </div>
+              <div className="kc-footer-legal">
+                <a href="https://www.kineticare.hu/adatvedelem">
+                  Adatkezelési és adatvédelmi szabályzat
+                </a>
+                <a href="https://www.kineticare.hu/aszf">
+                  Általános szerződési feltételek
+                </a>
+                <a href="https://www.kineticare.hu/impresszum">Impresszum</a>
               </div>
             </footer>
           </div>

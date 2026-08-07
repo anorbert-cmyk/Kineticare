@@ -56,37 +56,58 @@ Defense: the brand's existing logo and site are light-blue on white; the
 accent is the brand blue with enough contrast for text use.
 
 ## Locked type
-Editorial serif + grotesk pairing, WITH written justification: the KinetiCare
-logotype is a high-contrast Didone-style serif; the brand voice is
-editorial-care premium (clinic + human warmth), so display type follows the
-logo. Display: **Cormorant Garamond** (400/500/600). Body/UI: **Montserrat**
-(400/500/600/700). Both families are self-hosted as Latin Extended WOFF2 so
-Hungarian glyphs and font metrics remain deterministic. Never inject a serif
-word into a sans headline; hierarchy comes from scale only.
+The user's real brand pairing, taken from the live kineticare.hu site
+(explicit user instruction, 2026-08-07): Display: **Tenor Sans** (single 400
+cut — the heading face of kineticare.hu). Body/UI: **Nunito Sans** (variable
+400-700 — the body face of kineticare.hu). Both self-hosted as latin +
+latin-ext WOFF2 with unicode-range splits so Hungarian glyphs render from
+local files. Tenor Sans has no bolder cut: display hierarchy comes from scale
+only, never synthetic bold; tracking is neutral-to-slightly-positive (Tenor is
+an airy display sans), so the earlier Didone-era negative tracking is retired.
 
 ## Section plan (after the journey)
 Order: journey (hero) → fájdalomfelismerés → három értékígéret → három állapot
-→ Szolgáltatások → Katák (about) → Vélemények → SOS KézRelax CTA +
-Kapcsolat/footer. The four supplied 1440×810 boards are authoritative for the
-services, about, testimonials and closing compositions. Desktop uses a fluid
-1440×810 design canvas with minimum 100dvh chapters; mobile drops fixed-height
-composition in favor of natural reading flow. Eyebrow budget: 3 across 8
-post-journey sections.
+→ Szolgáltatások → Katák (about) → Vélemények → sajtósáv (valós
+megjelenés-logók) → SOS KézRelax CTA + Kapcsolat/footer. The four supplied
+1440×810 boards are authoritative for the services, about, testimonials and
+closing compositions. Desktop uses a fluid 1440×810 design canvas with minimum
+100dvh chapters; mobile drops fixed-height composition in favor of natural
+reading flow. Eyebrow budget: 3 across 9 post-journey sections (the press band
+uses a plain muted label, not an eyebrow).
+
+**Copy source:** every section text is the real, live copy of kineticare.hu
+(fetched 2026-08-07) — hero headline + sub, welcome, USP-k, services
+descriptions, the verbatim testimonials of Garami Gábor, Kállai Dóra and
+Bagdal Szilvia, the SOS KézRelax course description, and the real contact +
+legal links (info@kineticare.hu, adatvedelem/aszf/impresszum). En-dashes in
+adopted copy are typographically replaced with commas per the craft floor's
+no-dash rule; quote excerpts stay verbatim contiguous word sequences.
 
 ## Asset plan
-- The film: Seedance 2.0, 16:9, 1080p, ~15s, audio off; storyboard as style
-  reference. Local split into 3 segments + desktop/mobile encodes + posters
-  from the ENCODED clips.
+- The film (v3, scene-02): Seedance 2.0, 16:9, 1080p, 15s, audio off;
+  six-keyframe storyboard as style reference. THREE-ACT single take: closed
+  fist in cool light → therapist hands enter, support, then release → the
+  hand finishes opening alone in warm light (the user's symbolism: "a lányok
+  segítenek, hogy ő maga nyílhasson ki"). ONE clip, desktop + mobile encodes
+  + posters from the ENCODED clips (scene-02*).
 - Storyboard: ONE 16:9 six-keyframe grid image (Phase 1).
 - Boards: 4 section boards (services, about, testimonials, contact).
-- About photo: real brand photo from kineticare.hu (Kiss Kata & Kocsis Kata),
-  downloaded into assets. Logo: real brand PNG from kineticare.hu.
-- Launch branding (cover + OG + favicon): generate_app_branding, submitted
-  ONCE alongside the film.
+- Real site assets (kineticare.hu, fetched 2026-08-07, in
+  public/assets/site/): about photo (katak-team.jpg), brand logo PNG
+  (logo-kineticare.png, footer), 6 press logos (Nők Lapja, Karc, Házipatika,
+  Képmás, iSport, MGYFT) for the press band.
+- Fonts self-hosted in public/fonts/: tenor-sans-400 latin/latin-ext,
+  nunito-sans variable latin/latin-ext.
+- Launch branding (cover + OG + favicon): already generated and wired in
+  app-meta.json from the previous build round; palette and brand unchanged, so
+  it is intentionally kept (no re-generation).
 
 ## CTA inventory (each its own garment)
-- "SOS KézRelax" — journey chapter 3 + banner: framed block CTA.
+- "Kérem a villámkurzust" (→ kineticare.hu/kezrelax) — SOS banner: framed
+  block CTA (the real course CTA of the live site).
 - "Írjon nekünk" (mailto:info@kineticare.hu) — nav: small solid pill;
   footer: oversized underlined link.
-- "Tovább a workshopra" — services: underlined inline link with arrow.
+- "Tovább a kezelésekre / a programra / a kéz workshopra" — services rows:
+  underlined inline links with arrow, pointing at the real subpages
+  (rendeloi-kezelesek, kezrehab, probodystudio.hu/kez-workshop).
 One label per intent page-wide: contact intent is always "Írjon nekünk".

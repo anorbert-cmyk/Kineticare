@@ -13,7 +13,7 @@ hozzá tartozó nyers designanyag verziózva, a repóból is elérhető legyen.
 | Website ID | `1c27d55a-6e1d-45fb-89fd-d20802f7fb1e` |
 | Élő URL | https://kineticare.higgsfield.app |
 | Upstream repo | `https://apps-repos.higgsfield.ai/hfu-user3HXsS3zuk6lYIpoEEwSg6ZieYZ9/kineticare-1c27d55a-6e1d-45fb-89fd-d20802f7fb1e.git` (branch `main`) |
-| Szinkronizált commit | `6576bc72a81757690c0bd24bc4e6ecb431fad911` — „Rebuild KinetiCare sections to authoritative design boards", 2026-08-07 15:52 UTC |
+| Szinkronizált commit | `c45639d7c4a524a347eed50500014717c6a56c0f` — „Real kineticare.hu content, brand fonts (Tenor Sans + Nunito Sans), three-act hand film v3", 2026-08-07 17:21 UTC |
 
 Az upstream git-előzmény (12 commit) az eredeti távoli repóban maradt; ide csak a
 munkakönyvtár tartalma került át, `.git` nélkül.
