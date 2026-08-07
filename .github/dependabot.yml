@@ -35,11 +35,14 @@ updates:
       interval: weekly
       day: monday
       time: "06:00"
-    # 2-ről 5-re emelve: a 2-es limit mellett a #15/#16 (checkout, gitleaks)
-    # kitöltötte a keretet, és a setup-node Node 20-as runtime-emelése
-    # (2026-09-16-i kivezetési határidő!) PR nélkül maradt. Az 5-ös keret
-    # a repó összes actionjének (checkout, setup-node, gitleaks,
-    # claude-code-action) egyidejű major-emelését is elbírja.
+    # 2-ről 5-re emelve. A 2-es keretet a #15 (checkout) és a #16 (gitleaks)
+    # töltötte ki, ezért a setup-node Node 20-as runtime-emelésére — aminek
+    # 2026-09-16-i kivezetési határideje van — nem jutott hely, és kézzel
+    # kellett megcsinálni. FIGYELEM: a limit emelése visszamenőleg NEM hoz
+    # létre PR-t, csak a következő heti futástól enged többet; az elmaradt
+    # emelést mindig kézzel kell pótolni. Az 5-ös keret a repó mind a négy
+    # actionjének (checkout, setup-node, gitleaks, claude-code-action)
+    # egyidejű major-emelését is elbírja.
     open-pull-requests-limit: 5
     labels:
       - dependencies
