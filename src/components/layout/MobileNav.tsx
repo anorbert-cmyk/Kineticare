@@ -22,10 +22,16 @@ export function MobileNav({ items }: { items: NavItem[] }) {
 
   const close = useCallback(() => setOpen(false), [])
 
-  // Útvonalváltáskor záródik.
-  useEffect(() => {
+  // Útvonalváltáskor záródik — a React ajánlott „állapot-igazítás renderben"
+  // mintájával (https://react.dev/learn/you-might-not-need-an-effect), nem
+  // effektben. Mountkor (és hidratáláskor) a két útvonal egyenlő, tehát nem
+  // fut igazítás: a szerver- és a kliens-render kimenete változatlan. Csak
+  // tényleges útvonalváltáskor zár, még a festés előtt (effekt helyett).
+  const [renderedPathname, setRenderedPathname] = useState(pathname)
+  if (pathname !== renderedPathname) {
+    setRenderedPathname(pathname)
     setOpen(false)
-  }, [pathname])
+  }
 
   // Escape + body scroll-lock.
   useEffect(() => {

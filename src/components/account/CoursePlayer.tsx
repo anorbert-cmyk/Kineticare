@@ -39,10 +39,21 @@ type PlayerState =
   | { kind: 'unavailable' }
   | { kind: 'error'; message: string }
 
+/** A lejátszó-betöltő szignatúrája (a token-frissítés önhivatkozásához kell). */
+type LoadVideo = (index: number, isRefresh?: boolean) => Promise<void>
+
 export function CoursePlayer({ product, hasAccess }: CoursePlayerProps) {
   const [state, setState] = useState<PlayerState>({ kind: 'idle' })
   const [activeIndex, setActiveIndex] = useState(0)
   const refreshTimerRef = useRef<number | null>(null)
+  /**
+   * A token-frissítés `setTimeout`-ja korábban magát a `loadVideo` konstanst
+   * hivatkozta a saját deklarációja ELŐTT (react-hooks/immutability): a
+   * closure így örökre a létrehozáskori — időközben elavuló — változatot
+   * tartotta. A ref mindig a LEGFRISSEBB `loadVideo`-ra mutat; a timer
+   * legkorábban 30 mp múlva sül el, addig a lenti effekt már beállította.
+   */
+  const loadVideoRef = useRef<LoadVideo | null>(null)
 
   const videos = product.videos.filter((video) => video.status === 'ready' && video.streamAssetId)
 
@@ -53,8 +64,8 @@ export function CoursePlayer({ product, hasAccess }: CoursePlayerProps) {
     }
   }, [])
 
-  const loadVideo = useCallback(
-    async (index: number, isRefresh = false) => {
+  const loadVideo = useCallback<LoadVideo>(
+    async (index, isRefresh = false) => {
       if (!hasAccess) {
         setState({ kind: 'forbidden' })
         return
@@ -94,7 +105,7 @@ export function CoursePlayer({ product, hasAccess }: CoursePlayerProps) {
       const refreshInSec = Math.max(30, expiresAt - nowSec - TOKEN_REFRESH_BEFORE_EXPIRY_SEC)
 
       refreshTimerRef.current = window.setTimeout(() => {
-        void loadVideo(index, true)
+        void loadVideoRef.current?.(index, true)
       }, refreshInSec * 1000)
 
       setState({ kind: 'playing', videoIndex: index, token: result.token, expiresAt })
@@ -102,6 +113,14 @@ export function CoursePlayer({ product, hasAccess }: CoursePlayerProps) {
     [hasAccess, product.id, videos, clearRefreshTimer],
   )
 
+  // A ref mindig a legutóbbi renderben létrejött loadVideo-t tartja.
+  useEffect(() => {
+    loadVideoRef.current = loadVideo
+  }, [loadVideo])
+
+  // Mountkori automatikus indítás. A react-hooks/set-state-in-effect ezt a
+  // hívást megjelöli (a `loadVideo` tranzitíven setState-et hív) — a szabály
+  // erre a fájlra warn-ra van állítva az eslint.config.mjs-ben, indoklással.
   useEffect(() => {
     if (hasAccess && videos.length > 0 && state.kind === 'idle') {
       void loadVideo(0)

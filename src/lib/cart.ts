@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
 import { formatPriceHuf } from './format-price'
 
@@ -22,6 +22,67 @@ export interface CartState {
 }
 
 const CART_STORAGE_KEY = 'kineticare-cart-v1'
+
+/**
+ * A SZERVER- és a HIDRATÁLÁSI pillanatkép: mindig üres kosár, hivatkozás-stabil.
+ * A localStorage csak böngészőben létezik, ezért a szerver-HTML és az első
+ * kliens-render is üres kosárral készül — a tárolt tartalom csak a hidratálás
+ * UTÁN kerül be. (Ez a korábbi „useState({items:[]}) + useEffect(setState)"
+ * megoldás pontos megfelelője, csak effekt nélkül.)
+ */
+const EMPTY_CART: CartState = { items: [] }
+
+type CartListener = () => void
+
+const cartListeners = new Set<CartListener>()
+
+/** A localStorage-ból olvasott, gyorsítótárazott pillanatkép (hivatkozás-stabilitás). */
+let cachedCart: CartState = EMPTY_CART
+let cachedCartIsValid = false
+
+/** Írás után: a gyorsítótár érvénytelen + minden feliratkozó értesül. */
+function notifyCartChanged(): void {
+  cachedCartIsValid = false
+  for (const listener of cartListeners) {
+    listener()
+  }
+}
+
+function subscribeToCart(onStoreChange: CartListener): () => void {
+  cartListeners.add(onStoreChange)
+  return () => {
+    cartListeners.delete(onStoreChange)
+  }
+}
+
+/**
+ * Kliens-pillanatkép. A `useSyncExternalStore` elvárja, hogy változatlan
+ * tároló mellett UGYANAZT a hivatkozást adja vissza — a `readCart()` minden
+ * híváskor új objektumot gyárt, ezért gyorsítótárazzuk, és csak írás után
+ * (notifyCartChanged) olvassuk újra.
+ */
+function getCartSnapshot(): CartState {
+  if (!cachedCartIsValid) {
+    cachedCart = readCart()
+    cachedCartIsValid = true
+  }
+  return cachedCart
+}
+
+function getServerCartSnapshot(): CartState {
+  return EMPTY_CART
+}
+
+/**
+ * A `useCart` mögötti külső store — exportálva, hogy a hidratálási szerződés
+ * („a szerver-pillanatkép akkor is üres, ha a tárolóban van tétel") tesztelhető
+ * legyen. Komponensben közvetlenül ne használd: erre való a `useCart`.
+ */
+export const cartStore = {
+  subscribe: subscribeToCart,
+  getSnapshot: getCartSnapshot,
+  getServerSnapshot: getServerCartSnapshot,
+}
 
 /** A kosár perzisztencia a localStorage-ban (kliens-oldali minimális — a szerver mindig újraszámolja az árat). */
 export function readCart(): CartState {
@@ -45,6 +106,7 @@ export function writeCart(state: CartState): void {
     return
   }
   window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(state))
+  notifyCartChanged()
 }
 
 export function addToCart(item: CartItem): CartState {
@@ -85,16 +147,22 @@ export function useCart(): {
   totalHuf: number
   isEmpty: boolean
 } {
-  const [state, setState] = useState<CartState>({ items: [] })
-
-  useEffect(() => {
-    setState(readCart())
-  }, [])
+  const state = useSyncExternalStore(
+    cartStore.subscribe,
+    cartStore.getSnapshot,
+    cartStore.getServerSnapshot,
+  )
 
   return {
     state,
-    add: (item) => setState(addToCart(item)),
-    remove: (productId) => setState(removeFromCart(productId)),
+    // Az írás (addToCart/removeFromCart → writeCart) maga értesíti a store-t,
+    // így nem kell külön setState — a hook a store pillanatképét követi.
+    add: (item) => {
+      addToCart(item)
+    },
+    remove: (productId) => {
+      removeFromCart(productId)
+    },
     totalHuf: cartTotalHuf(state),
     isEmpty: cartIsEmpty(state),
   }
