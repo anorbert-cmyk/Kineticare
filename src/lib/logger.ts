@@ -189,7 +189,6 @@ class StructuredLogger implements Logger {
     if (context && Object.keys(context).length > 0) {
       entry.context = redactValue(context, new Set(), 0)
     }
-    // eslint-disable-next-line no-console
     console.log(serialize(entry))
   }
 }

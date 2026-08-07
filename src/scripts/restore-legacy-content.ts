@@ -1,0 +1,1436 @@
+/**
+ * Legacy tartalom-visszaépítő script — a RÉGI kineticare.hu (systeme.io) archivált
+ * tartalmát tölti be a Payload CMS-be, a seed.ts mintáját követve, TELJESEN
+ * idempotens módon:
+ *  - média: a `legacy-content/kepek/` mappába bemásolt archív képekből,
+ *    fájlnév-alapú deduppal (a feltöltés webp-re konvertál, ezért a kiterjesztés
+ *    nélküli alapnév szerint keresünk);
+ *  - oldalak (pages): `kezdolap`, `rolunk`, `szolgaltatasok` — slug alapján UPSERT
+ *    (létező oldal mezőit frissíti: a cél a visszaállítás, nem a kihagyás);
+ *  - termékek (products): „Otthoni KézRehab Program" (fizetős, 79 500 Ft) és
+ *    „SOS Kézrelax villámkurzus" (ingyenes lead-magnet) — sku alapján UPSERT;
+ *  - menük: Szolgáltatások / Rólunk / Kapcsolat menüpontok a meglévő seed
+ *    menüpontok mellé, label-alapú deduppal.
+ *
+ * Többször futtatva sem duplikál: minden entitást egyedi kulcs (fájlnév / slug /
+ * sku / label) alapján keres meg, és csak a hiányzót hozza létre, a létezőt
+ * (oldal/termék esetén) — külön kapu mögött — az archív tartalommal frissíti.
+ *
+ * FIGYELEM — az `sku` ebben a repóban a VEVŐNEK MEGJELENŐ TERMÉKNÉV, nem gépi
+ * cikkszám. A products collectionben nincs külön title mező: a plugin
+ * `useAsTitle: 'sku'` beállítással fut (src/plugins/ecommerce.ts), a kurzuskártya
+ * és a kurzusoldal címe az sku (src/components/content/ProductCard.tsx,
+ * src/lib/courses.ts `courseTitle`), és az orders items `titleSnapshot` mezője is
+ * az sku-t rögzíti — vagyis a megrendelésre és a számlára is ez kerül. Ezért a
+ * termékek sku-ja ember-olvasható név („Otthoni KézRehab Program", „SOS Kézrelax
+ * villámkurzus"); gépi azonosító (pl. „KEZREHAB-ONLINE-001") a kurzuskártyán, a
+ * kurzusoldalon ÉS a vevő számláján is így jelenne meg. Az sku egyben az
+ * idempotencia-kulcs is (keresés + upsert), ezért a script mindenhol pontosan
+ * ugyanezt az értéket használja.
+ *
+ * Futtatás (DATABASE_URI és PAYLOAD_SECRET környezeti változókkal — lokálisan
+ * vagy Railway shellben):
+ *   npm run seed:legacy
+ *     → PRÓBAFUTÁS (dry-run, ez az ALAPÉRTELMEZÉS): a script semmit nem ír,
+ *       csak kiírja entitásonként, mit tenne, és a végén összesít.
+ *   LEGACY_RESTORE_CONFIRM=igen npm run seed:legacy
+ *     → tényleges írás: a HIÁNYZÓ entitások létrejönnek.
+ *   LEGACY_RESTORE_CONFIRM=igen LEGACY_OVERWRITE=igen npm run seed:legacy
+ *     → a MEGLÉVŐ oldalak/termékek felülírása is megtörténik.
+ *   LEGACY_RESTORE_CONFIRM=igen LEGACY_ARCHIVE_DEMO=igen npm run seed:legacy
+ *     → a seed.ts demó-tartalmának depublikálása (archiválás/draft/rejtés,
+ *       törlés SOHA — lásd lentebb).
+ *
+ * Miért kell megerősítés? A script slug/sku-egyezésnél FELÜLÍRJA a meglévő
+ * dokumentumot (tartalom, cím, SEO, ár, státusz), az éles adatbázisról pedig
+ * jelenleg NINCS mentés (CLAUDE.md „Üzemeltetési tanulságok", feladatlista C14) —
+ * a felülírás tehát visszavonhatatlan. Ezért az alapértelmezés a dry-run, a
+ * létező dokumentum felülírása pedig külön kapun (LEGACY_OVERWRITE) múlik.
+ *
+ * Demó-tartalom (LEGACY_ARCHIVE_DEMO): a seed.ts demó-tartalma a valódi mellett
+ * maradna (a `DEMO-KEZREHAB-001` termék fizetős kurzuskártyaként, a
+ * „bemutatkozas" oldal és a menüpontja a fejlécben), ezért a script kérésre
+ * DEPUBLIKÁLJA: termék → archived, oldal → draft, menüpontok → visible=false.
+ * Törlés soha nem történik, így a lépés egy admin-kattintással visszafordítható.
+ *
+ * Tudatosan KIMARAD (az archívumból nem épül vissza):
+ *  - az 5 angol lorem-ipsum blogposzt (systeme.io sablon-töltelék) és a /search;
+ *  - a funnel/checkout/köszönő oldalak (kezrehab-penztar, typ-*, hamarosan, oto-*)
+ *    — az új oldalnak saját checkout-folyamata van (/penztar, Barion);
+ *  - a kapcsolat oldal — az új oldalon dedikált /kapcsolat route űrlappal létezik;
+ *  - a jogi oldalak (adatvedelem, aszf, impresszum) — külön jogi review tárgya.
+ */
+
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { getPayload, type Payload } from 'payload'
+
+import config from '../payload.config'
+import type { Page, Product } from '../payload-types'
+
+// ---------------------------------------------------------------------------
+// Futtatási kapuk — dry-run alapértelmezés, megerősítés az íráshoz
+// ---------------------------------------------------------------------------
+
+/** Egy kapu akkor nyitott, ha a környezeti változó pontosan „igen" (kis/nagybetű mindegy). */
+const kapuNyitva = (nev: string): boolean => process.env[nev]?.trim().toLowerCase() === 'igen'
+
+/** Tényleges írás az adatbázisba (enélkül a script csak próbafutást végez). */
+const CONFIRM = kapuNyitva('LEGACY_RESTORE_CONFIRM')
+/** LÉTEZŐ dokumentum felülírása (a CONFIRM-on felül külön kapu). */
+const OVERWRITE = kapuNyitva('LEGACY_OVERWRITE')
+/** A seed.ts demó-tartalmának depublikálása (archiválás/draft/rejtés, törlés nélkül). */
+const ARCHIVE_DEMO = kapuNyitva('LEGACY_ARCHIVE_DEMO')
+/** Próbafutás: minden döntés lefut és naplózódik, de egyetlen írás sem történik. */
+const DRY_RUN = !CONFIRM
+
+/** Futás végi összesítés — a dry-run és az éles futás ugyanezeket számolja. */
+const osszesites = {
+  letrehozas: 0,
+  feluliras: 0,
+  depublikalas: 0,
+  kihagyas: 0,
+}
+
+const naploLetrehozas = (payload: Payload, cimke: string): void => {
+  osszesites.letrehozas += 1
+  payload.logger.info(`Legacy: ${DRY_RUN ? 'LÉTREHOZNÁ' : 'LÉTREHOZVA'} — ${cimke}`)
+}
+
+const naploFeluliras = (payload: Payload, cimke: string): void => {
+  osszesites.feluliras += 1
+  payload.logger.warn(`Legacy: ${DRY_RUN ? 'FELÜLÍRNÁ' : 'FELÜLÍRVA'} — ${cimke}`)
+}
+
+const naploDepublikalas = (payload: Payload, cimke: string): void => {
+  osszesites.depublikalas += 1
+  payload.logger.info(`Legacy: ${DRY_RUN ? 'DEPUBLIKÁLNÁ' : 'DEPUBLIKÁLVA'} — ${cimke}`)
+}
+
+const naploKihagyas = (payload: Payload, cimke: string, indok: string): void => {
+  osszesites.kihagyas += 1
+  payload.logger.warn(`Legacy: ${DRY_RUN ? 'KIHAGYNÁ' : 'KIHAGYVA'} — ${cimke} (${indok})`)
+}
+
+/**
+ * Meglévő dokumentum felülírásának kapuja: LEGACY_OVERWRITE nélkül kihagyás +
+ * magyar figyelmeztetés. A dry-run csak a szövegen változtat, a döntésen nem —
+ * így a próbafutás pontosan azt mutatja, amit az éles futás ugyanezekkel a
+ * flagekkel tenne.
+ */
+const felulirhato = (payload: Payload, cimke: string): boolean => {
+  if (OVERWRITE) {
+    return true
+  }
+  naploKihagyas(
+    payload,
+    cimke,
+    'MÁR LÉTEZIK; a script FELÜLÍRNÁ a tartalmát, de LEGACY_OVERWRITE=igen nélkül érintetlen marad — az éles adatbázisról nincs mentés, a felülírás visszavonhatatlan',
+  )
+  return false
+}
+
+// ---------------------------------------------------------------------------
+// Lexical richText-építő segédfüggvények (típusosak — a payload-types
+// Page['content'] szerkezetét követik; `any` nélkül).
+// ---------------------------------------------------------------------------
+
+type RichTextContent = Page['content']
+type BlockNode = RichTextContent['root']['children'][number]
+
+const textNode = (text: string, format = 0): BlockNode => ({
+  type: 'text',
+  detail: 0,
+  format,
+  mode: 'normal',
+  style: '',
+  text,
+  version: 1,
+})
+
+const paragraph = (children: BlockNode[]): BlockNode => ({
+  type: 'paragraph',
+  children,
+  direction: null,
+  format: '',
+  indent: 0,
+  version: 1,
+})
+
+const para = (text: string): BlockNode => paragraph([textNode(text)])
+
+const heading = (tag: 'h2' | 'h3', text: string): BlockNode => ({
+  type: 'heading',
+  tag,
+  children: [textNode(text)],
+  direction: null,
+  format: '',
+  indent: 0,
+  version: 1,
+})
+
+const link = (url: string, label: string, newTab = false): BlockNode => ({
+  type: 'link',
+  fields: { linkType: 'custom', url, newTab },
+  children: [textNode(label)],
+  direction: null,
+  format: '',
+  indent: 0,
+  version: 1,
+})
+
+/** Önálló CTA-bekezdés (a serializer ezt gombként rendereli). */
+const cta = (url: string, label: string, newTab = false): BlockNode =>
+  paragraph([link(url, label, newTab)])
+
+const bulletList = (items: string[]): BlockNode => ({
+  type: 'list',
+  listType: 'bullet',
+  tag: 'ul',
+  start: 1,
+  children: items.map((item, index) => ({
+    type: 'listitem',
+    value: index + 1,
+    children: [textNode(item)],
+    direction: null,
+    format: '',
+    indent: 0,
+    version: 1,
+  })),
+  direction: null,
+  format: '',
+  indent: 0,
+  version: 1,
+})
+
+const quote = (text: string): BlockNode => ({
+  type: 'quote',
+  children: [para(text)],
+  direction: null,
+  format: '',
+  indent: 0,
+  version: 1,
+})
+
+const richText = (children: BlockNode[]): RichTextContent => ({
+  root: {
+    type: 'root',
+    children,
+    direction: null,
+    format: '',
+    indent: 0,
+    version: 1,
+  },
+})
+
+// ---------------------------------------------------------------------------
+// Média — az archívumból kiválasztott, tartalomhoz kötődő képek.
+// A fájlok a script melletti legacy-content/kepek/ mappában élnek.
+// ---------------------------------------------------------------------------
+
+interface LegacyImage {
+  file: string
+  alt: string
+}
+
+const LEGACY_IMAGES: readonly LegacyImage[] = [
+  { file: '6790f4bfde577_kckeklogog.png', alt: 'Kineticare logó' },
+  {
+    file: '67b4bc17e0c78_katak-paravan.jpg',
+    alt: 'Kiss Kata és Kocsis Kata gyógytornászok, a Kineticare alapítói',
+  },
+  {
+    file: '67c07b094d012_SYL_9113.jpeg',
+    alt: 'Gyógytornász kezelés a Kineticare rendelőben',
+  },
+  {
+    file: '678fa5f84cd52_Katakeleganslaptoppal.jpeg',
+    alt: 'A Kineticare gyógytornásza laptop előtt – online program',
+  },
+  { file: '67b3c6e9e315f_KocsisKatakozeli.png', alt: 'Kocsis Kata gyógytornász portré' },
+  { file: '67c07def59ac2_KissKataelegans.png', alt: 'Kiss Kata gyógytornász portré' },
+  { file: '682a121babe80_IMG_7573.jpeg', alt: 'Kiss Kata és Kocsis Kata munka közben' },
+  { file: '6883e93d26513_GaramiGabor.png', alt: 'Garami Gábor zenész, műsorvezető – vélemény' },
+  { file: '682c8a154f5ba_IMG_0039.jpeg', alt: 'Páciens-vélemény portréfotó' },
+  {
+    file: '688b93e6ab76f_Programpackshot.png',
+    alt: 'Otthoni KézRehab Program csomagkép',
+  },
+  { file: '678fcfac079a8_Gyakorlat.JPG', alt: 'Kézrehabilitációs gyakorlat bemutatása' },
+  {
+    file: '680a69d078306_Katakfeherbenhattal.png',
+    alt: 'Kiss Kata és Kocsis Kata, a Kineticare alapítói',
+  },
+  {
+    file: '688b873ad2a80_belepotermekpackshot1.png',
+    alt: 'SOS Kézrelax villámkurzus csomagkép',
+  },
+  {
+    file: '6884161138c15_puska.png',
+    alt: 'Letölthető gyakorlat-összefoglaló (puska) a villámkurzushoz',
+  },
+  { file: '67b3bd06f3936_Rendelo.png', alt: 'Kineticare rendelő – személyes kezelések' },
+  {
+    file: '67b2668feae66_Kezeleskek.png',
+    alt: 'Rendelői kezelések – gyógytorna és manuálterápia',
+  },
+]
+
+const imageDir = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'legacy-content',
+  'kepek',
+)
+
+/**
+ * Média idempotens biztosítása: fájlnév-alapú dedup (webp-konverzió miatt
+ * alapnév-prefix). A média csak létrejön, meglévőt sosem ír felül. Próbafutásban
+ * a hiányzó média `undefined` id-vel tér vissza — a rá hivatkozó oldal/termék
+ * ilyenkor egyszerűen kép nélkül kerül a naplóba (írás úgysem történik).
+ */
+const ensureMedia = async (payload: Payload, image: LegacyImage): Promise<number | undefined> => {
+  const baseName = image.file.replace(/\.[^.]+$/, '')
+  const existing = await payload.find({
+    collection: 'media',
+    where: { filename: { like: `${baseName}%` } },
+    limit: 1,
+    overrideAccess: true,
+  })
+  if (existing.docs.length > 0) {
+    naploKihagyas(payload, `média: ${image.file}`, 'már fel van töltve')
+    return existing.docs[0].id
+  }
+  if (DRY_RUN) {
+    naploLetrehozas(payload, `média: ${image.file}`)
+    return undefined
+  }
+  const created = await payload.create({
+    collection: 'media',
+    data: { alt: image.alt },
+    filePath: path.join(imageDir, image.file),
+    overrideAccess: true,
+  })
+  naploLetrehozas(payload, `média: ${image.file}`)
+  return created.id
+}
+
+// ---------------------------------------------------------------------------
+// Kategória — a seed által is ismert termékkategória független biztosítása.
+// ---------------------------------------------------------------------------
+
+const ensureProductCategory = async (payload: Payload): Promise<number | undefined> => {
+  const slug = 'kezrehabilitacios-kurzusok'
+  const existing = await payload.find({
+    collection: 'categories',
+    where: { slug: { equals: slug } },
+    limit: 1,
+    overrideAccess: true,
+  })
+  if (existing.docs.length > 0) {
+    naploKihagyas(payload, `kategória: ${slug}`, 'már létezik')
+    return existing.docs[0].id
+  }
+  if (DRY_RUN) {
+    naploLetrehozas(payload, `kategória: ${slug}`)
+    return undefined
+  }
+  const created = await payload.create({
+    collection: 'categories',
+    data: { title: 'Kézrehabilitációs kurzusok', slug, type: 'product' },
+    overrideAccess: true,
+  })
+  naploLetrehozas(payload, `kategória: ${slug}`)
+  return created.id
+}
+
+// ---------------------------------------------------------------------------
+// Oldaltartalmak — a régi kineticare.hu archívumából, hűen átemelve.
+// (A menü/fejléc/footer és a systeme.io-s technikai elemek nem tartoznak ide;
+//  az új storefront ezeket saját komponensekből rendereli.)
+// ---------------------------------------------------------------------------
+
+const kezdolapContent = (): RichTextContent =>
+  richText([
+    heading('h2', 'Szeretnél megszabadulni a fájdalomtól, de hiába próbáltál ki (szinte) mindent?'),
+    para('Tudjuk, milyen, amikor:'),
+    bulletList([
+      'Az ujjad vagy a csuklód már a nap közepén görcsöl, és esélyed sincs pihentetni',
+      'Minden mozdulatnál attól tartasz, csak ne legyen rosszabb',
+      'Egyre több kenőcsöt, borogatást és „csodaszert” halmozol fel, de a fájdalom újra és újra jelentkezik.',
+    ]),
+    para(
+      'Ha eleged van abból, hogy már csak félgőzzel bírsz dolgozni vagy sportolni, mert félsz a fájdalomtól, vagy netán a fájdalomcsillapítókig fajult a helyzet, akkor a legjobb helyen jársz.',
+    ),
+    para(
+      'Mozgásterápiás módszerekkel tudunk abban segíteni, hogy végre megszűnjön a kézfájdalmad, és újra teljes erőbedobással élhesd a mindennapjaid.',
+    ),
+    heading('h2', 'Üdvözlünk!'),
+    para(
+      'Kiss Kata és Kocsis Kata vagyunk, gyógytornászok, manuálterapeuták és sportrehabilitációs trénerek, és évek óta elsősorban a kéz rehabilitációjával foglalkozunk.',
+    ),
+    para(
+      'A pácienseink nagy része kéz-, csukló-, könyök- vagy vállfájdalommal érkezik hozzánk, így pontosan tudjuk, milyen makacs probléma tud ez lenni, és hogy mennyire megkeseríti az ember mindennapjait.',
+    ),
+    para(
+      'A legújabb kutatásokat, külföldi guideline-okat és a saját gyakorlati tapasztalatainkat ötvözzük – mindezt a lehető legbiztonságosabb, mégis leggyorsabb felépülés érdekében.',
+    ),
+    para(
+      'Hiszünk abban, hogy a kezed nemcsak egy testrész – mindenhez szükséged van rá. Ezért igyekszünk minden módon segíteni rendbehozni a kezed, megszüntetni a fájdalmat, és elérni, hogy úgy használhasd a kezed, mintha sosem lett volna vele semmi baj.',
+    ),
+    heading('h2', 'Erre számíthatsz velünk'),
+    heading('h3', '1. A legújabb, tudományosan megalapozott módszereket alkalmazzuk'),
+    para(
+      'Folyamatosan figyeljük a külföldi és hazai szakmai protokollokat, kutatásokat, és a pácienseinken látott valós tapasztalatokat is ötvözzük.',
+    ),
+    para(
+      'Így garantáltan naprakész, biztonságos és hatékony módszerekkel dolgozunk, hogy a kezed a lehető leggyorsabban regenerálódhasson.',
+    ),
+    heading('h3', '2. Személyre szabott megoldást kapsz – akár otthon, akár rendelőben'),
+    para(
+      'Minden programunkban (legyen az online kurzus vagy személyes kezelés) figyelembe vesszük a te szokásaidat, terhelésedet és korlátaidat.',
+    ),
+    para(
+      'Ha nincs időd a rendelőbe járni, otthoni gyakorlóvideók várnak; ha pedig eljössz hozzánk, az igényeidhez és az életviteledhez igazítjuk a kezelési tervet. A lényeg: mindig van olyan megoldásunk, ami neked megfelel, és valódi javulást hoz.',
+    ),
+    heading('h3', '3. Nem rövidtávú tünetkezeléssel, hanem tartós eredménnyel foglalkozunk'),
+    para(
+      'Nálunk nem áll meg a folyamat a „gyorsan csökkentsük a fájdalmat” résznél. Arra törekszünk, hogy ne is térjen vissza a kínzó fájdalom.',
+    ),
+    para(
+      'Megmutatjuk, hogyan változtass a mozgásmintáidon, és milyen gyakorlatokat érdemes beépítened a hétköznapokba.',
+    ),
+    para(
+      'A cél: egy olyan stabil, teherbíró kéz, ami hosszú távon bírja a strapát – akár munkáról, sportról vagy a hétköznapok terheléséről van szó.',
+    ),
+    heading('h2', 'Vélemények'),
+    heading('h3', '„Kötelezővé tenném mindenkinek, akinek kézpanasza van”'),
+    quote(
+      'Kocsis Katát kézproblémával kerestem fel, és már az első alkalommal éreztem, hogy jó kezekben vagyok – szó szerint is. Nagy odafigyeléssel, alázattal és valódi szakértelemmel kezelt minden alkalommal. Nemcsak a tüneteket enyhítette, hanem segített megérteni a kiváltó okokat is. Őszintén ajánlom mindenkinek, aki nemcsak gyors enyhülést, hanem tartós megoldást keres.',
+    ),
+    para('– Garami Gábor, zenész / műsorvezető'),
+    quote(
+      'Egy 10 éve tartó ganglion problémával, több operáció után jutottam el Katához, mert szikementes segítséget szerettem volna igénybe venni, és nem is dönthettem volna jobban! Nagyon hálás vagyok, hogy szakértelme által jelentős javulást és tünetmentességet értünk el a kezelések során, és rengeteg tudást is kaptam, pl. hogy tornáztathatom én magam is a fájó testrészeket, vagy hogyan tape-elhetem be magam akut fájdalom esetén.',
+    ),
+    para('– Kállai Dóra, biológus'),
+    quote(
+      'Katával 2022-ben kezdtünk el együtt dolgozni. Sok éve tartó derékfájással és nyaki problémával fordultam hozzá. A sok fájdalom miatt azt gondoltam, hogy már csak a gyógytorna marad egész életemre. De Kata segített megtanulni helyesen mozogni, és visszatérni a sportokhoz. Hálás vagyok neki a valós szakértelméért, türelméért és támogatásáért, amely által nemcsak fájdalommentesen élhetek, hanem újra élvezhetem a mozgás örömét.',
+    ),
+    para('– Kunfalvi Lili, piackutató'),
+    quote(
+      'A KINETICARE lányokat ajánlás alapján kerestem meg, ugyanis akkor már pár hónapja erős fájdalommal járt a hüvelykujjam és a csuklóm mozgatása. Ez a munkámat is nehezítette, hiszen jógaoktatóként folyamatosan használnom kellett, nem pihentethettem. A közös munkának, a világos magyarázatoknak, hogy mi történik velem, illetve a szuper feladatoknak és életvezetési tanácsoknak hála sikerült a gyógyulás! Nagyon hálás vagyok a KINETICARE-nek, hiszen azóta fájdalommentesen élek, és újra visszatérhettem kedvenc gyakorlatomhoz, a kézenálláshoz is.',
+    ),
+    para('– Bagdal Szilvia, Sziszi Yoga: haladó jógaoktató / mobility- és meditációs tréner'),
+    quote(
+      'Kézzsibbadással kerestem fel Katát, és hihetetlen módon ráérzett, milyen gyakorlatok segítenének nekem, ugyanis a második találkozóra már úgy érkeztem, hogy teljesen elmúltak a panaszaim. Ezeket a gyakorlatokat mind a mai napig elvégzem felsőtest edzés után, és nem is jöttek vissza a panaszok.',
+    ),
+    para('– Dr. Sitku Lili, fogorvos'),
+    quote(
+      'Minden felmerülő fájdalmamra, problémámra azonnal tudott megoldást nyújtani, és az általa adott gyakorlatok végrehajtásával szinten tudom tartani az általános jó közérzetemet, nincsenek hosszan fennálló fájdalmaim, neki köszönhetően nagyon sokat fejlődött a testem, a teherbírásom.',
+    ),
+    para('– Hámori Lili, édesanya'),
+    quote(
+      'Már a két évvel ezelőtti első személyes találkozásunk során is érzékeltem ezt a magas színvonalú szakmaiságot, és a pácienssel empatikus, emberséges, támogató hozzáállást. A folyamatos gyógytorna, manuálterápiás kezelés következtében sikerült mindennapi aktív életemet visszakapnom.',
+    ),
+    para('– Dr. Kárpáti Katalin, ügyvéd'),
+  ])
+
+const szolgaltatasokContent = (): RichTextContent =>
+  richText([
+    heading('h2', 'Fáj a kezed, csuklód, könyököd vagy vállad?'),
+    para(
+      'Tudjuk, hogy ez a probléma mennyire tud hátráltatni a munkában vagy a sportban, de még a hétköznapokban is.',
+    ),
+    para(
+      'Ezért professzionális kezeléseinkkel és online programjainkkal abban segítünk, hogy minél gyorsabban visszanyerd a kezed erejét és mozgását – hosszú távú eredményekkel.',
+    ),
+    heading('h2', 'Van megoldás – ha tudod, merre indulj'),
+    para(
+      'A legtöbb kéz-, csukló- vagy könyökprobléma megfelelő terápiával hatékonyan kezelhető – és akár a műtét is elkerülhető.',
+    ),
+    para(
+      'Ehhez persze türelemre és kitartásra van szükség, de a test egy csodálatos „szerkezet”: ha segítünk neki, képes rendbehozni magát.',
+    ),
+    para(
+      'A kézfájdalmak kezelésében nem hiszünk a gyors, felületes megoldásokban. A kezeléseink és programjaink a legmodernebb mozgásterápiás és manuálterápiás módszerekre épülnek, hogy segítsenek a gyökérok megszüntetésében, és a hosszú távú regenerációban.',
+    ),
+    heading('h2', 'Válaszd ki, hogyan segíthetünk neked a legjobban'),
+    heading('h3', 'Rendelői kezelések – személyes terápiás megoldások'),
+    para(
+      'Ha gyors és hatékony eredményt szeretnél, gyógytornával, manuálterápiával és kiegészítő technikákkal segítünk a kezed, és ha szükséges, a gerinced panaszainak csökkentésében.',
+    ),
+    para(
+      'Akut sérülések, műtét utáni rehabilitáció és krónikus fájdalmak kezelésére egyénre szabott mozgásterápiát, manuálterápiát és különböző kiegészítő terápiákat és eszközöket alkalmazunk, hogy gyors és tartós eredményt érj el.',
+    ),
+    para('Amiben segíteni tudunk:'),
+    bulletList([
+      'Gyógytorna – akut sérülések, műtét utáni állapotok és krónikus fájdalmak esetén a mozgásterápia a gyógyulás alappillére',
+      'Manuálterápia – a lágyrészek és ízületek célzott, kézzel végzett kezelése',
+      'Kiegészítő terápiák – Kinesio Tape és Dynamic Tape® felhelyezés, flossing, köpölyterápia, fasciakés (eszközös lágyrész-mobilizáció), hegkezelés, NRX® bandázs',
+    ]),
+    heading('h3', 'Árlista – gyógytorna / manuálterápia'),
+    bulletList([
+      '50 perces alkalom – 18 000 Ft (tartalmazza a szükség szerinti Kinesio Tape vagy Dynamic Tape® felhelyezését, flossing-, köpöly- és/vagy eszközös lágyrész-manuálterápiás kezeléseket)',
+      '20 perces alkalom – 10 000 Ft (tartalmazza a szükség szerinti Kinesio Tape vagy Dynamic Tape® felhelyezését, flossing-, köpöly- és/vagy eszközös lágyrész-manuálterápiás kezeléseket)',
+    ]),
+    para(
+      'Az első alkalom minden esetben 50 perces vizsgálatot foglal magába. Rendelőinkben készpénzes és átutalásos fizetésre van lehetőség.',
+    ),
+    para('Helyszíneink: 1117 Budapest, Nádorliget u. 7/b • 1114 Budapest, Fadrusz utca 15.'),
+    cta('/kapcsolat', 'Időpontot kérek'),
+    heading('h3', 'Online kurzus – otthoni fájdalomcsökkentő program'),
+    para('Nem tudsz eljutni személyes kezelésre?'),
+    para(
+      'Ha nincs lehetőséged rendelőbe járni, az otthoni gyakorlóvideóink segítenek enyhíteni a fájdalmad és visszaállítani a kezed működését.',
+    ),
+    para(
+      'Az otthoni programunk biztonságos, szakértői alapokra épülő mozgásprogramokat tartalmaz, amik segítenek neked otthon is hatékonyan kezelni a kézfájdalmadat. A saját tempódban haladhatsz, és bárhol, bármikor végezheted.',
+    ),
+    cta('/kurzusok', 'Megnézem a kurzusokat'),
+    heading('h3', 'Szakmai képzések – akkreditált kézrehabilitációs képzés szakembereknek'),
+    para('Szeretnéd mélyíteni a kézsérülések és rehabilitáció terén szerzett ismereteidet?'),
+    para(
+      'Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe címmel akkreditált tantermi képzést biztosítunk gyógytornászok, orvosok, mozgásterapeuták és edzők számára, a ProBody Stúdióval együttműködve. (12 kreditpont – SZTK-A-33553/2024)',
+    ),
+    cta('https://probodystudio.hu/kez-workshop/', 'Tovább a szakmai képzésre', true),
+    heading('h2', 'Ezért fogod imádni'),
+    heading('h3', '1. A kéz a specialitásunk'),
+    para(
+      'Nem csupán egy terület a sok közül, hanem a fő szakterületünk. Évek óta foglalkozunk kézrehabilitációval, és sokféle esettel találkoztunk már.',
+    ),
+    heading('h3', '2. Tartós eredmények'),
+    para(
+      'Nemcsak csillapítjuk a tüneteket, hanem a kiváltó okokat is kezeljük. Megtanítunk arra is, mit tegyél, hogy többet ne okozzon problémát neked a kézfájdalom.',
+    ),
+    heading('h3', '3. Naprakész tudás'),
+    para(
+      'Folyamatosan követjük a legújabb kutatásokat és módszereket, hogy a lehető leghatékonyabb kezelést kaphasd tőlünk.',
+    ),
+    heading('h2', 'Vélemények'),
+    heading('h3', '„Életem végéig hálás leszek neked”'),
+    quote(
+      '10 év élsport után jelentkező könyökízületi problémáim miatt kezdtem el dolgozni Kocsis Katával. Műtétre került a sor, amiben maximálisan támogatott: ott volt velem a műtőben, és a műtét után is mellettem maradt, amíg magamhoz nem tértem. A rehabilitáció teljes folyamatában számíthattam rá. Bár nem volt könnyű időszak, a közös munka mindig vidáman telt, tele biztatással és támogatással, amiért a mai napig hálás vagyok. Azóta is bármilyen egészségügyi problémám adódik, nyugodt szívvel fordulok hozzá.',
+    ),
+    para('– Konda Boglárka, vízilabdázó'),
+    quote(
+      'Pár évvel ezelőtt reménytelenül álltam a karrierem előtt. De hálát adok a sorsnak, hogy megismertelek, mert te vagy az a személy, akinek azt köszönhetem, hogy visszatérhettem oda, ahova tartozom, a Manézsba. A páratlan szakértelmed segítségével rengeteget javult az állapotom. A gyógyulás és a regeneráció mellett nagyon sokat tanulhattam tőled, és a mai napig hasznosítom ezt a tudást. A segítséged mellé egy igaz barátságot is kaptam! Életem végéig hálás leszek neked!',
+    ),
+    para('– Tarba Patrícia, artista'),
+  ])
+
+const rolunkContent = (): RichTextContent =>
+  richText([
+    para('– és igazából neked is. Akinek nem fáj a keze, talán bele sem gondol, hogy szinte minden ébren töltött percben használjuk a kezünket valamire.'),
+    para(
+      'Ha pedig azért vagy itt, mert megoldást keresel valamilyen húzódásra, sérülésre vagy idegi-, ízületi fájdalomra, akkor pontosan tudod:',
+    ),
+    heading('h2', '…ez nem „csak egy kéz”'),
+    para(
+      'Ez a te összekötő kapcsod a világgal: ezzel dolgozol, alkotsz, simogatsz, bátorítasz, gyógyítasz, táplálsz, és mindent ezzel mozgatsz.',
+    ),
+    para(
+      'Így egy sérülés vagy fájdalom kihat az önállóságodra, a munkádra, a hobbidra, de még a legapróbb hétköznapi mozdulataidra is. Ezért olyan fontos, hogy a kezed megkapja azt a törődést és szakértői segítséget, amire szüksége van.',
+    ),
+    heading('h2', 'Amikor már napi szinten problémát okoz a fájdalom'),
+    para(
+      'Tudjuk, milyen kiszolgáltatott érzés az, amikor megsérül az ember keze, vagy a túlerőltetés miatt gyullad be egy ízület vagy ideg. Főleg, amikor nem hogy nem múlik a fájdalom, de egyre erősebb lesz…',
+    ),
+    para(
+      'Minden nehezebb ilyenkor: aggódsz, hogy meddig fogod tudni így végezni a munkádat, vagy sportolóként azon stresszelsz, hogy ki kell-e hagynod versenyeket.',
+    ),
+    para('Ha te is szeretnéd, hogy végre…'),
+    bulletList([
+      'megszabadulj a fájdalomtól,',
+      'szabadon használhasd újra a kezed anélkül, hogy vigyáznod kellene vele,',
+      'visszatérjen bele az erő, és ugyanúgy használhasd, mint régen,',
+      'ne kelljen attól tartanod, hogy mi lesz, ha romlik a helyzet,',
+    ]),
+    para('…akkor a legjobb helyen vagy, és szívesen segítünk.'),
+    heading('h2', 'Megérdemled a profi törődést'),
+    para(
+      'Kocsis Kata és Kiss Kata vagyunk, a KINETICARE alapítói. Gyógytornász, manuálterapeuta, sportrehabilitációs tréner végzettséggel, de az évek során egyre inkább a kézrehabilitáció került nálunk a fókuszba.',
+    ),
+    para(
+      'A klinikán és utána a saját rendelőnkben is egyre szembetűnőbb volt, hogy milyen sokan jönnek hozzánk a kéz valamelyik részének a problémájával.',
+    ),
+    para(
+      'Úgyhogy egyre jobban beleástuk magunkat a témába: a külföldi továbbképzésektől a boncolásokon és műtéteken át a legújabb kezelési technikákig mindent igyekszünk felkutatni, amit a kéz anatómiájáról és rehabilitációjáról tudni érdemes, hogy a pácienseinknek átfogó, profi segítséget nyújthassunk.',
+    ),
+    para(
+      'Büszkék vagyunk rá, hogy válogatott sportolók, olimpikonok, kismamák és irodai dolgozók, de még a társszakmákban dolgozók is (és persze sokan mások) hozzánk fordulnak, ha megoldást szeretnének.',
+    ),
+    para(
+      'Szakmai képzéseket és workshopokat is tartunk a témában, és emellett a Magyar Sportrehabilitációs Egyesület és a Magyar Gyógytornász-Fizioterapeuták Társaságának munkájában is részt veszünk.',
+    ),
+    para(
+      'Hiszünk abban, hogy a megfelelő technikákkal helyrehozhatók a sérülések, sokszor akár a műtétek is elkerülhetőek, és hogy a te kezed is megérdemli a profi törődést.',
+    ),
+    para(
+      'Akár kezelésre jössz hozzánk, akár az otthon végezhető gyakorlatainkkal „kezeled” magad, a cél ugyanaz: segítünk megszabadulni a kézfájdalmaiktól, hogy újra élvezhesd a munkát, a sportot és a hétköznapi teendőket.',
+    ),
+    heading('h2', 'Kocsis Kata'),
+    para('Gyógytornász, sportrehabilitációs tréner, gyógymasszőr – telefon: +36 30 169 2263'),
+    heading('h2', 'Kiss Kata'),
+    para('Gyógytornász, manuálterapeuta, sportrehabilitációs tréner – telefon: +36 20 357 3493'),
+    heading('h2', 'Vélemények'),
+    heading('h3', '„Már az első alkalom után lecsökkent a fájdalom.”'),
+    quote(
+      '2024. szeptemberében kerültem Kocsis Katához, amiért örökre hálás leszek. Mérhetetlen könyökfájdalmam volt a bal kezemben, és társult hozzá egy hüvelykujj-panasz is. Alapos vizsgálat után elmagyarázta, mi a probléma, és megkezdte a kezelést. A kedves mosolya és zseniális szakmai tudása felbecsülhetetlen! Már az első kezelés mérföldkő volt, hiszen tudtam használni a kezem, és elmúlt a fájdalom. Ajánlani? IGEN, de inkább kötelezővé tenném mindenkinek, akinek kézpanasza van az élete bármely szakaszában.',
+    ),
+    para('– Varró Barbara, Nagy Sportágválasztó ügyvezető'),
+    quote(
+      'Kata minden újonnan jövő kihívást egy megoldandó feladatként kezel, és látszik rajta az elhivatottság a szakmája iránt. Így volt ez legutóbb a síelésre való felkészítéssel is, a mozgásformához szükséges erősítő feladatokat végeztük. A gyakorlatsorok végrehajtását mindig kellő szigorral és odafigyeléssel ellenőrzi – ez az a precízitás és hozzáállás, amit a páciensek később meghálálnak. Az erőfeszítéseidet mindig dicsérő szavak követik, neki pedig az a legnagyobb dicséret, ha az óra végén mosolyogva, jóleső fáradtsággal, de panaszmentesen lépsz ki az ajtón.',
+    ),
+    para('– Takács Mátyás, építészmérnök'),
+    heading('h2', 'Amiben mások vagyunk'),
+    heading('h3', '1. A kéz a specialitásunk'),
+    para(
+      'Úgy fogyasztjuk a kézrehabilitációval kapcsolatos legújabb szakmai anyagokat és technikákat, mint a legizgalmasabb sorozatot: mindig jön az újabb „epizód”, amiért teljes lelkesedéssel rajongunk, és azonnal ki is próbáljuk.',
+    ),
+    heading('h3', '2. Megosztjuk a tudásunkat'),
+    para(
+      'Szakmai előadóként, társszerzőként, és akkreditált workshopokkal is igyekszünk átadni a tudásunkat az érdeklődő szakmabelieknek. (A Semmelweis Egyetemen a jövő gyógytornászai az egyetemi képzésükön többek között a mi anyagunkból is tanulnak.)',
+    ),
+    heading('h3', '3. Tartós eredményeket adunk'),
+    para(
+      'Nem csak a tüneteket kezeljük. Megtaláljuk a probléma gyökerét, együtt dolgozunk a kezelésén, és utána pontosan tudni fogod, mit tegyél, hogy épen és egészségesen tartsd a kezed (vagy amidet kezeltük).',
+    ),
+    heading('h2', 'Miben segíthetünk?'),
+    heading('h3', 'Rendelői kezelések – személyesen'),
+    para(
+      'Akut sérülések, műtét utáni állapotok és krónikus fájdalmak esetén a mozgásterápia a gyógyulás alappillére. Gyógytornával, manuálterápiával és egy sor kiegészítő terápiával várunk.',
+    ),
+    cta('/szolgaltatasok', 'Tovább a kezelésekre'),
+    heading('h3', 'Otthoni program – online'),
+    para(
+      'Ha a kézfájdalom enyhítésére szeretnél egy bárhol, bármikor végezhető megoldást, akkor egy átfogó programmal is tudunk segíteni.',
+    ),
+    cta('/kurzusok', 'Tovább a kurzusokra'),
+    heading('h3', 'Szakmai képzések – kollégáknak'),
+    para(
+      'Akkreditált tantermi kézkurzus a kéz, a csukló- és könyökízület rehabilitációs lehetőségeiről gyógytornászoknak, erőnléti- és szakági edzőknek és orvosoknak.',
+    ),
+    cta('https://probodystudio.hu/kez-workshop/', 'Tovább a képzésre', true),
+    heading('h2', 'Partnereink'),
+    para(
+      'Magyar Sportrehabilitációs Egyesület, ProBody Stúdió, Aurora Medical, Dynamic Tape®, TUDATEST, PhysioWatch, WIBBI, Halm Optika, dr. pharm. Kocsis Kristóf, Csillik Árpád, NISHI STUDIO pilates, BodyGPS, Magic Smile, Be Fit With Ben, OrtoCare, Pille Fizioterápia.',
+    ),
+    heading('h2', 'Kocsis Kata szakmai önéletrajz'),
+    para('Gyógytornász, sportrehabilitációs tréner, gyógy- és sportmasszőr'),
+    heading('h3', 'Tanulmányok'),
+    bulletList([
+      'Pécsi Tudományegyetem Egészségtudományi Kar, Ápolás és Betegellátás alapképzési szak, Gyógytornász szakirány',
+      'Minerva Érettségizettek Szakközépiskolája – Gyógy- és sportmasszőr (54-726-01)',
+    ]),
+    heading('h3', 'Tanfolyamok, továbbképzések, konferenciák'),
+    bulletList([
+      'Ezerarcú hypermobilitás a gyógytornász praxisban (2026) – BodyGPS',
+      'Orfit alapanyagokból készült kéz- és felsővégtag rögzítők (2025) – Tóth Jordán Zsolt, OrtoCare',
+      'Aspetar World Conference 2025 – Doha, Katar',
+      'ATP Challenger Physio Education Program (2024) – International Tennis Performance Association',
+      'Hegkezelés és hegtudatos életmód (2024) – La Matriarcha',
+      'II. Fizioterápiás Tematikus Nap – A krónikus non-specifikus derékfájdalom (2024) – PTE ETK',
+      'Az izomsérülések diagnosztikája és rehabilitációja – Varró Tina, Probody Academy',
+      'Management of Distal Radius Fractures following ORIF surgery from 6 weeks (2024) – Kate Thorn, CHT (USA), AHTA',
+      'Early Management of Distal Radius Fractures following ORIF surgery (2024) – Kate Thorn, CHT (USA), AHTA',
+      'Extensor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
+      'Flexor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
+      "De Quervain's Tenosynovitis (2024) – Kate Thorn, CHT (USA), AHTA",
+      'Carpal Tunnel Syndrome (2024) – Loren Szmiga, Manual Therapist, CHT',
+      'Trigger Finger (2024) – Loren Szmiga, Manual Therapist, CHT',
+      'Functional Anatomy of the Hand (2024) – Daphne Xuan, MPT',
+      'A nagy térd kurzus (2024) – Varró Tina, Probody Academy',
+      'Az elülső keresztszalag-pótlást követő rehabilitációs program (2023) – Varró Tina, Probody Academy',
+      'Gyorsaságfejlesztés a XXI. században (2022) – Magyar Edzők Társasága',
+      'Innovating in Health Care (2022) – Harvard Medical School',
+      'Human Anatomy: Musculoskeletal Cases (2022) – Harvard Medical School',
+      'PK1 FPH – Integrált manuálterápia a modernkori testtartási zavarok kezelésében (2022) – MGYFT',
+      'Bevezetés a Biomechanikai-Dinamikus Taping Módszertanába (2022) – Dynamic Tape® Magyarország',
+      'Neuroplaszticitás és mozgásterápia (2022) – Feövenyessy Medical Fitness Akadémia',
+      'Practical Improvement Science in Health Care (2021–2022) – Harvard Medical School',
+      'Regeneráció a versenyidőszakban (2022) – Magyar Edzők Társasága',
+      'Sportfizioterápia (Sportrehabilitáció) (2022) – Varró Tina, Maximum Performance',
+      'A porckárosodás kezelésének új lehetőségei (2022) – Magyar Edzők Társasága',
+      'Mulligan-koncepció I. modul (2021) – Mulligan Koncepció Magyarország',
+      'Barvincsenko-féle lágyrész-manuálterápia I. – A gerinc és a medence (2021) – Holisztikus Medicina Alapítvány',
+      'Az önsorsrontás pszichológiája (2021) – Jog és Pszichológia',
+      'Kismama kinesiotape (2021) – Perfect Movement Mozgásközpont',
+      'McKenzie „B” kurzus (2021) – Magyarországi McKenzie Intézet',
+      'SMR (self myofascial release) a sport- és mozgásszervi rehabilitációban (2020) – Balance Medical Fitness Akadémia',
+      'McKenzie „A” kurzus (2020) – Magyarországi McKenzie Intézet',
+      'NRX® – Dinamikus ízületstabilizálás és korrekció (2020) – Balance Medical Fitness Akadémia',
+      'Flossing terápia a mozgásszervi problémák és sportsérülések rehabilitációjában (2018) – Balance Medical Fitness Akadémia',
+      'Kinesiology taping / Sport taping képzés (2018) – Balance Medical Fitness Akadémia',
+      'Svédmasszázs (2015) – OKTÁV Továbbképző Központ',
+    ]),
+    heading('h3', 'Publikációk'),
+    bulletList([
+      'Kocsis, K., Szalay, B., Békési, Á., Király, B. (2022). Thoracalis gerincszakasz elváltozásai és az impingement szindróma összevetése a különböző korosztályokban játszó röplabdások körében. Fizioterápia, 31(2), 3–10.',
+      'Kocsis, K., Ács, P., Boncz, I., Molics, B., Király, B. (2022). Comparison between thoracic spine deformities and impingement syndrome among volleyball players in different age groups. Value in Health Journal, POSB337.',
+    ]),
+    heading('h3', 'Konferenciák, előadások'),
+    bulletList([
+      'Magyar Sportrehabilitációs Konferencia (2025, Budapest): Műtőasztaltól a kezdőötösig – egy NBI-es kosárlabdázó esettanulmánya',
+      'Sportrehabilitációs tréner képzés: Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe – akkreditált kurzus, 12 kreditpont (SZTK-A-33553/2024) – instruktor (2024, 2025, 2026, Budapest)',
+      'ProBody Stúdió sportrehabilitációs tréner képzés: Gerinc anatómia és vizsgálat – instruktor (2024, 2025, 2026, Budapest)',
+      'ProBody Stúdió sportrehabilitációs tréner képzés: Könyök-, csukló- és kézízületek érintettségei sportolói szemszögből – instruktor (2023, 2024, Budapest)',
+      'A Magyar Kézsebész Társaság 29. kongresszusa: Kézsebészeti skill tréning – instruktor (2023, Székesfehérvár)',
+      'Akkreditált Oftex kurzus: Ínvarratok és határterületek a kézsebészeti ellátásban – instruktor (2023, Budapest)',
+      'ISPOR konferencia: Comparison between Thoracic Spine Deformities and Impingement Syndrome Among Volleyball Players (2020, Milánó; 2021, Koppenhága)',
+    ]),
+    heading('h3', 'Média-megjelenések'),
+    bulletList([
+      'Kézsérülés, műtét, fájdalom után: őrizd meg kezed egészségét! (2025) – Secret Medical Podcast',
+      'Űzzük el a stresszt! (2025) – Nők Lapja Évszakok',
+      'Mi fán terem az ínhüvelygyulladás? (2025/37) – Nők Lapja',
+      'Az irodai munka az új extrém sport? A kéz is dolgozik (2024/47) – Nők Lapja',
+      'Mitől lesz a banyapúp? (2024/8) – Nők Lapja',
+      'Mozgás korra szabva (2023/45) – Nők Lapja',
+      'Hogy ami egészséges, öröm is legyen (2023/9) – Képmás magazin',
+      'A henger az új csodaszer? (2023/35) – Nők Lapja',
+      'Sport korra szabva (2023/4) – Nők Lapja Egészség Különszám',
+      'Ne vegyük félvállról! (2023/14) – Nők Lapja',
+      'Fájdalom az ujjakban – A nyeregízületi porckopás (2022) – Szimpatika magazin',
+      'A derékfájdalom ront a legtöbbet az életminőségen (2021) – Házipatika.com',
+      'Derékfájdalom: akár fertőzés is okozhatja a panaszokat! (2021) – Egészség Kalauz',
+      'Karc FM – Kortalan műsor (2021): gyógytornász-szerepvállalás',
+    ]),
+    heading('h2', 'Kiss Kata szakmai önéletrajz'),
+    para('Gyógytornász, manuálterapeuta, sportrehabilitációs tréner'),
+    heading('h3', 'Tanulmányok'),
+    bulletList([
+      'Semmelweis Egyetem Egészségtudományi Kar, Ápolás és Betegellátás alapképzési szak – Gyógytornász szakirány',
+      'Holisztikus Medicina Alapítvány – Barvicsenko-féle manuálterapeuta képzés (manuális medicina elméleti és gyakorlati képzése)',
+    ]),
+    heading('h3', 'Tanfolyamok, továbbképzések, konferenciák'),
+    bulletList([
+      'Tendon Transfer Training (2026) – Hand Therapy Academy',
+      'Wrist Pain in the Combative Athlete 1–2. (2026) – Ian Gatt, Inspire Institute of Sport',
+      'Ezerarcú hypermobilitás a gyógytornász praxisban (2026) – BodyGPS',
+      'Orfit alapanyagokból készült kéz- és felsővégtag rögzítők (2025) – Tóth Jordán Zsolt, OrtoCare',
+      'Say It Better: Essential Skills for Designing Effective Presentations for Healthcare Professionals (2025) – Aspetar, Doha',
+      'Artificial Intelligence (AI) in Sports Medicine Workshop (2025) – Aspetar, Doha',
+      'Aspetar World Conference 2025 – Doha, Katar',
+      'Ulnar Sided Wrist Pain (2025) – Hand Therapy Academy',
+      'The Painful Shoulder (2025) – Adam Meakins',
+      'ATP Challenger Physio Education Program (2024) – International Tennis Performance Association',
+      'II. Fizioterápiás Tematikus Nap – A krónikus non-specifikus derékfájdalom (2024) – PTE ETK',
+      'Management of Distal Radius Fractures following ORIF surgery from 6 weeks (2024) – Kate Thorn, CHT (USA), AHTA',
+      'Early Management of Distal Radius Fractures following ORIF surgery (2024) – Kate Thorn, CHT (USA), AHTA',
+      'Extensor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
+      'Flexor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
+      "De Quervain's Tenosynovitis (2024) – Kate Thorn, CHT (USA), AHTA",
+      'Carpal Tunnel Syndrome (2024) – Loren Szmiga, Manual Therapist, CHT',
+      'Trigger Finger (2024) – Loren Szmiga, Manual Therapist, CHT',
+      'Functional Anatomy of the Hand (2024) – Daphne Xuan, MPT',
+      'Állkapocsízületi diszfunkciók fizioterápiája (2023) – MGYFT',
+      'Ergon IASTM eszközös lágyrészmobilizáció (2022) – Ergon IASTM Technique Hungary',
+      'Tumorpáciensek ellátása fasciaterápiákkal (2022) – Oriolus-med',
+      'Human Anatomy: Musculoskeletal Cases (2022) – Harvard Medical School',
+      'Sportrehabilitációs tréner képzés 1–2. szint (2022) – Maximum Performance',
+      'Neuroplaszticitás és mozgásterápia (2022) – Feövenyessy Medical Fitness Akadémia',
+      'Dinamikus manuálterápia I–II. (2021–2022) – Holisztikus Medicina Alapítvány',
+      'Fascia: elmélet és kezelési technikák (2021) – Balande Med Academy',
+      'Kinezio- és sporttaping (2021) – Balance Med Academy',
+      'Flossing a sportrehabilitációban (2021) – Balance Med Academy',
+      'Köpölyözés a sportprevencióban és a rehabilitációban (2021) – Balance Med Academy',
+      'Dynamic Tape: Bevezetés a Biomechanika-Dinamikus Taping Módszertanába (2019) – Dynamic Tape® Magyarország',
+    ]),
+    heading('h3', 'Konferenciák, előadások'),
+    bulletList([
+      'ProBody Stúdió: Rigid tape és funkcionális kötözések a sportrehabilitációban – instruktor (2026, Budapest)',
+      'Magyar Sportrehabilitációs Konferencia (2025, Budapest): Ulnáris oldali csuklófájdalmak – a csukló „derékfájása”',
+      'Sportrehabilitációs tréner képzés: Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe – akkreditált kurzus, 12 kreditpont (SZTK-A-33553/2024) – instruktor (2024, 2025, 2026, Budapest)',
+      'ProBody Stúdió sportrehabilitációs tréner képzés: Gerinc anatómia és vizsgálat – instruktor (2024, 2025, 2026, Budapest)',
+      'A lumbális és thoracalis gerinc manuális kezelési technikái Filippo Mechellivel – tolmács (2024, Budapest)',
+      'A Magyar Kézsebész Társaság 29. kongresszusa: Kézsebészeti skill tréning – instruktor (2023, Székesfehérvár)',
+      'Akkreditált Oftex kurzus: Ínvarratok és határterületek a kézsebészeti ellátásban – instruktor (2023, Budapest)',
+      'Gyógyító mezítlábazás – Nők Lapja (2023/34)',
+    ]),
+  ])
+
+// ---------------------------------------------------------------------------
+// Termékleírások — a régi sales-oldalak (kezrehab.md, kezrelax.md) szövegéből.
+// ---------------------------------------------------------------------------
+
+const kezrehabLongDescription = (): Product['longDescription'] =>
+  richText([
+    para(
+      'Az Otthoni KézRehab egy könnyen követhető, otthon is biztonságosan alkalmazható kézrehabilitációs program, amivel megszüntetheted vagy jelentősen enyhítheted a csukló-, ujj-, alkar- és könyökfájdalmakat, akár hetek alatt. Mindezt drága eszközök és macerás gyakorlatok nélkül, akár napi néhány percben – kézrehabilitációs gyógytornászok állították össze.',
+    ),
+    para('Ezzel a módszerrel képes leszel:'),
+    bulletList([
+      'a hetek, hónapok óta tartó fájdalmat is rendbehozni az ujjaidban, csuklódban, karodban vagy a könyöködben,',
+      'megtanulni a megelőzés „fortélyait”, hogy innentől tudatosan védhesd a kezeidet a túlterheléstől,',
+      'felkészíteni a kezeidet a napi terhelésre, hogy a nap végén se sajogjanak vagy zsibbadjanak.',
+    ]),
+    heading('h2', 'Mi vár a programban?'),
+    heading('h3', 'I. modul: Az alapok'),
+    bulletList([
+      '„Belenézünk a kezedbe” – rövid és nagyon egyszerű anatómiai áttekintés',
+      'Megnézzük, hol vannak a csontok, ízületek, szalagok és inak, mi a szerepük és hogyan működnek',
+      'Megszüntetjük azokat a tévhiteket, amik sokakat gátolnak abban, hogy megelőzzék vagy megszüntessék a fájdalmat a kezükben',
+    ]),
+    heading('h3', 'II. modul: A probléma'),
+    bulletList([
+      '„Miért alakul ki a probléma?”',
+      'Gyakori példákon keresztül megmutatjuk, mik a tipikus hibák munka, sport vagy hétköznapi tevékenységek közben, amik miatt kialakul a fájdalom',
+      'Elmondjuk, milyen esetben mi a megoldás, és milyen tünetek esetén fordulj szakemberhez (és melyikhez) az öngyógyító technikák mellett',
+    ]),
+    heading('h3', 'III. modul: A megoldás'),
+    para('Technikák és gyakorlatok a különböző problémákra:'),
+    bulletList(['Könyökfájdalmak', 'Csuklófájdalom', 'Hüvelyk- és többi ujj panaszai', 'Zsibbadó ujjak']),
+    heading('h3', 'IV. modul: A hosszú távú megelőzés'),
+    bulletList([
+      'Így tudod elkerülni, hogy kiújuljon a probléma',
+      'Szórakoztató mobilizáló gyakorlatok a mindennapokra (avagy hogyan segíthet a reggeli kávézás a vállad és a könyököd átmozgatásában?)',
+      'Milyen eszközöket érdemes használni és miért',
+      'Mindent a rögzítőkről: erre figyelj a vásárlásnál',
+    ]),
+    heading('h2', 'Ezt kapod az Otthoni KézRehab Programban'),
+    bulletList([
+      '4 modulnyi részletes online videóanyag',
+      '50+ videós gyakorlat – rövid, lépésről lépésre bemutatott mozdulatsorok a kezed, csuklód, alkarod és a kapcsolódó területek (háti gerinc, nyaki gerinc, váll) rehabilitálására',
+      '5 perces miniblokkok – egyszerű feladatsorok, amiket fáradság nélkül beilleszthetsz a reggeledbe, egy rövid szünetbe munka közben, vagy az esti kikapcsolódásba',
+      'Prevenciós útmutató – hogyan dolgozz, sportolj, vagy végezd a mindennapi tevékenységeidet anélkül, hogy újra terhelnéd a kezed',
+      'Kinesio szalag minikurzus – így használd ezt a csodás eszközt a fájdalom enyhítésére',
+      'Így sportolj kézrehab alatt minikurzus – hogy ne hátráltasd a gyógyulást, ugyanakkor ne ess ki a formádból',
+      'Ergonómiai minikurzus friss anyukáknak – kerüld el a klasszikus „babás fájdalmakat”',
+      'Tematikus e-bookok, amik támogatják a kézrehabilitációdat: eszközök, táplálékkiegészítők és kézápolás rehabhoz',
+      'A gyakorlatok letölthető és nyomtatható formában',
+      'A Dream Team: válogatott szakemberajánló a kiegészítő kezelésekhez (közel 100 000 Ft értékű kedvezménykuponokkal)',
+    ]),
+    heading('h2', 'Bónusz minikurzusok'),
+    heading('h3', '01 – Kinesio szalag minikurzus (értéke 29 900 Ft – most ajándék)'),
+    para(
+      'Megtanulod, hogyan kell hüvelykujjat, csuklóízületet és könyökízületet hatékonyan tape-elni, hogyan készítsd elő a bőrfelületet a maximális eredmény érdekében, és mik a tipikus hibák, amiket érdemes elkerülni.',
+    ),
+    heading('h3', '02 – Ergonómiai minikurzus kisbabás anyukáknak (értéke 19 900 Ft – most ajándék)'),
+    para(
+      'Tanácsok friss édesanyáknak: milyen testhelyzeteket érdemes kerülni, és hogyan tartsd a kezed, karod és törzsed a tipikusan megterhelő tevékenységeknél (etetés, fürdetés), hogy elkerüld a „friss szülők kézbetegségét”.',
+    ),
+    heading('h3', '03 – Hogyan sportolj kézrehab mellett (értéke 19 900 Ft – most ajándék)'),
+    para(
+      'Mit tegyél, és mit ne, ha fáj a kezed, de nem szeretnéd abbahagyni a sportolást: alternatívák, speciális bemelegítés és trükkök, amikkel csökkentheted a kézfájdalom miatt kihagyott edzések számát.',
+    ),
+    heading('h2', 'Ez a program tökéletes számodra, ha…'),
+    bulletList([
+      'hónapok óta szenvedsz valamilyen fájdalommal a kezed egy vagy több részén, de eddig semmi nem hozott tartós enyhülést,',
+      'sokat dolgozol a kezeddel, és erős terhelést kapnak az ujjaid, csuklód, alkarod, könyököd,',
+      'messze laksz, esetleg nem tudod megoldani hetente egyszer-kétszer az utazást a gyógytornászhoz,',
+      'eleged van abból, hogy az interneten talált ellentmondásos tanácsok vagy a „csodakenőcsök” nem hoznak eredményt,',
+      'szeretnél aktívan tenni a gyógyulásodért, és nem csak a fájdalomcsillapításra hagyatkozni,',
+      'olyan megoldást akarsz, ami biztonságos, szakmailag megalapozott, mégis otthon is végezhető,',
+      'rendelkezel diagnózissal, de megakadtál, hogy merre is indulj el a rehabilitáció útján,',
+      'meg szeretnéd tanulni, milyen tevékenységeket hogyan kell végezni kézkímélő módon,',
+      'szeretnéd tudni, hogyan kell szakszerűen tape-elni a kezed.',
+    ]),
+    heading('h2', 'Nem javasoljuk a programot, ha…'),
+    bulletList([
+      'a kezed érintő traumás (pl. törés) sérülésed volt, és az orvos még nem enged mindent csinálni,',
+      'már jelentkezett érzéskiesés, vagy régebb óta tart, észlelhető, jelentős gyengülés a szorítóerőben, esetleg látható izomtömeg-vesztés a tenyéren,',
+      'már műtétre vársz, esetleg onkológiai kezelés alatt állsz, vagy folyamatban lévő orvosi kezelésben részesülsz – ilyenkor mindenképp kérdezd meg előbb a kezelőorvosod,',
+      'nem szeretnéd megérteni a kézproblémáid miértjét,',
+      'csak az olyan passzív kezelésektől (masszázs, manuálterápia) várod a megoldást, amiket „rajtad végeznek”, de otthon nem akarod végezni a gyakorlatokat,',
+      'nincs napi 5 perced magadra.',
+    ]),
+    heading('h2', '30 napos kipróbálási garancia'),
+    para(
+      'Próbáld ki a programot 30 napig, és tapasztald meg, milyen változást hoz a kezed állapotában! Ha úgy érzed, hogy nem segített, csak írj egy e-mailt, és kérdés nélkül visszafizetjük a program árát. Semmit sem kockáztatsz, de rengeteget nyerhetsz!',
+    ),
+    para(
+      'A program eredeti ára 119 000 Ft – bevezető áron most 79 500 Ft-ért érhető el. (A kurzus nem helyettesíti a szakorvosi kontrollt.)',
+    ),
+  ])
+
+const kezrelaxLongDescription = (): Product['longDescription'] =>
+  richText([
+    para(
+      'Ínhüvelygyulladás, kéztőalagút-szindróma, teniszkönyök? Vagy fogalmad sincs, mi az, de egyre jobban fáj, és nem tudod, mit kezdj vele? Itt egy egyszerű, de hatásos otthoni megoldás, amivel gyorsan enyhítheted a kézfájdalmad – drága eszközök és hosszú, macerás gyakorlatok nélkül.',
+    ),
+    para(
+      'Kiss Kata és Kocsis Kata vagyunk, gyógytornászok és sportrehabilitációs trénerek – a praxisunkban kifejezetten a kéz és a kar rehabilitációjára specializálódtunk. Ebben a villámkurzusban ott van minden, amit azoknak szoktunk elmagyarázni és megmutatni, akiknek azonnal segítségre van szükségük.',
+    ),
+    heading('h2', 'SOS Kézrelax villámkurzus – a 3 legjobb gyakorlatunk a fájdalom enyhítésére'),
+    para('A villámkurzus témái:'),
+    bulletList([
+      'Mit tegyél, és mit ne, ha fáj a kezed? – a legfontosabb tanácsok és tippek, amivel azonnal elindulhatsz a fájdalomcsökkentés útján',
+      'Honnan tudhatod, pontosan mivel van a baj? – megmutatjuk, mi hogyan teszteljük a különböző kórképeket; ezeket azonnal kipróbálhatod magadon',
+      'Elmagyarázzuk, hogyan alakulhatott ki a probléma – ha érted a miértjét, könnyebb elkerülni a további fájdalmakat',
+      'Hogyan és milyen rögzítőt használj – a rögzítőkkel tehermentesítheted a fájó területet, de nem mindegy, mit és hogyan használsz',
+      'Csuklófájdalom oldása – megtanulod mobilizálni az érintett területet, és enyhíteni a kínzó fájdalmat',
+      'Zsibbadó ujjak – egyszerű, egyperces gyakorlat, amivel csökkentheted a zsibbadás érzését',
+      'Könyök-tehermentesítés – így csökkentsd a könyök körüli feszültséget és gyulladást célzott mozdulatokkal',
+      'Így enyhítsd a hüvelykujj-táji nyilalló fájdalmat',
+    ]),
+    heading('h2', 'A videók mellé ezt is megkapod'),
+    heading('h3', 'Letölthető „puska” a gyakorlatokhoz'),
+    para(
+      'Készítettünk neked a gyakorlatokhoz egy pdf-et, amiben szerepel mindegyik gyakorlat fotókkal, és hogy mennyit és hogyan végezd őket. Lementheted a telefonodra vagy kinyomtathatod – ha épp 2 perced van a kézrelax gyakorlatokra, erre csak ránézel, és már emlékszel is, mit kell tenni.',
+    ),
+    heading('h2', '100% boldogság garancia'),
+    para(
+      'Olimpikonoktól a műkörmösökön át a zongoristákig több mint ezer embernek segítettünk már speciális gyakorlatokkal rendbehozni a kézproblémáját. Ha te valamiért úgy érzed, neked nem segítettek, csak írj nekünk, és kérdés nélkül visszatérítjük a vételárat.',
+    ),
+    heading('h2', 'Vélemények'),
+    quote(
+      'Teniszkönyökömmel évek óta küzdök, hol jobban, hol kevésbé. Sok mindennek már utánaolvastam, de még így is sok meglepetést okozott a kurzus. A gyakorlatok és a plusz kiegészítő tippek pedig egyszerűen zseniálisak!',
+    ),
+    para('– P. Benjámin, informatikus'),
+    quote('A kurzusban gyors és egyszerű gyakorlatok voltak, amik tényleg SOS megoldások!'),
+    para('– D. Anna, logisztikus'),
+    quote(
+      'Olyan információkat kaptam a kéztőalagút-szindrómámról, amik új nézőpontot adtak. Már most hálás vagyok!',
+    ),
+    para('– H. Gabi, coach'),
+    heading('h2', 'Kérdések, amik talán felmerültek benned'),
+    heading('h3', 'Mennyire bonyolultak ezek a gyakorlatok?'),
+    para(
+      'Nagyon egyszerűek, de részletesen megmutatjuk a videókban is, hogyan kell őket végezni. Mindent elmagyarázunk, hogy értsd, melyik mozdulatot miért csináljuk.',
+    ),
+    heading('h3', 'Ettől megszűnik a fájdalmam?'),
+    para(
+      'Ez egy amolyan gyorssegély-csomag. A három legkritikusabb területre fókuszálunk (kéz, csukló, könyök), hogy azonnal enyhítsünk a problémán. Ha nagyobb a baj, vagy komplex megoldásra vágysz, javasoljuk az „Otthoni KézRehab” programot, ami sokkal mélyebben megy bele a kezelésbe, és egy átfogóbb megoldást ad.',
+    ),
+    heading('h3', 'Nem lehet, hogy még jobban begyullad a kezem?'),
+    para(
+      'A kézrehabilitáció a szakmánk, és teljesen biztonságosak a gyakorlatok. Ezzel együtt természetesen fontos, hogy figyeld a tested jelzéseit. Ha nagyon intenzív a fájdalom, először konzultálj orvossal.',
+    ),
+    heading('h3', 'Meddig érhetők el a videók?'),
+    para(
+      'Hivatalosan minimum egy évig, de nem tervezzük megvonni a nagyvilágtól még nagyon, nagyon sokáig.',
+    ),
+  ])
+
+// ---------------------------------------------------------------------------
+// UPSERT-segédek
+// ---------------------------------------------------------------------------
+
+interface PageInput {
+  slug: string
+  title: string
+  excerpt: string
+  content: RichTextContent
+  heroImage?: number
+  seoTitle: string
+  seoDescription: string
+}
+
+/**
+ * Oldal idempotens visszaállítása: slug alapján UPSERT (a mezőket frissíti).
+ * A létező oldal felülírása a LEGACY_OVERWRITE kapun múlik, az írás pedig a
+ * LEGACY_RESTORE_CONFIRM kapun — enélkül csak a döntés naplózódik.
+ */
+const upsertPage = async (payload: Payload, input: PageInput): Promise<number | undefined> => {
+  const cimke = `oldal: ${input.slug}`
+  const existing = await payload.find({
+    collection: 'pages',
+    where: { slug: { equals: input.slug } },
+    limit: 1,
+    overrideAccess: true,
+  })
+  const data = {
+    title: input.title,
+    slug: input.slug,
+    excerpt: input.excerpt,
+    content: input.content,
+    ...(input.heroImage !== undefined ? { heroImage: input.heroImage } : {}),
+    seoTitle: input.seoTitle,
+    seoDescription: input.seoDescription,
+    status: 'published' as const,
+    _status: 'published' as const,
+  }
+  if (existing.docs.length > 0) {
+    if (!felulirhato(payload, cimke)) {
+      return existing.docs[0].id
+    }
+    if (!DRY_RUN) {
+      await payload.update({
+        collection: 'pages',
+        id: existing.docs[0].id,
+        data,
+        overrideAccess: true,
+      })
+    }
+    naploFeluliras(payload, `${cimke} (tartalom, cím, kivonat, SEO, státusz)`)
+    return existing.docs[0].id
+  }
+  if (DRY_RUN) {
+    naploLetrehozas(payload, cimke)
+    return undefined
+  }
+  const created = await payload.create({
+    collection: 'pages',
+    data: { ...data, publishedAt: new Date().toISOString() },
+    overrideAccess: true,
+  })
+  naploLetrehozas(payload, cimke)
+  return created.id
+}
+
+interface ProductInput {
+  /** Az sku a VEVŐNEK MEGJELENŐ név (useAsTitle) ÉS az idempotencia-kulcs egyben. */
+  sku: string
+  shortDescription: string
+  longDescription: Product['longDescription']
+  priceInHUFEnabled: boolean
+  priceInHUF?: number
+  coverImage?: number
+  gallery?: { image: number }[]
+  category?: number
+}
+
+/**
+ * Termék idempotens visszaállítása: sku alapján UPSERT — a keresés és a beírt
+ * érték szándékosan UGYANAZ az sku (ez a dedup-kulcs, egyben a display-név).
+ */
+const upsertProduct = async (
+  payload: Payload,
+  input: ProductInput,
+): Promise<number | undefined> => {
+  const cimke = `termék: ${input.sku}`
+  const existing = await payload.find({
+    collection: 'products',
+    where: { sku: { equals: input.sku } },
+    limit: 1,
+    overrideAccess: true,
+  })
+  const data = {
+    sku: input.sku,
+    shortDescription: input.shortDescription,
+    longDescription: input.longDescription,
+    priceInHUFEnabled: input.priceInHUFEnabled,
+    ...(input.priceInHUF !== undefined ? { priceInHUF: input.priceInHUF } : {}),
+    ...(input.coverImage !== undefined ? { coverImage: input.coverImage } : {}),
+    ...(input.gallery !== undefined ? { gallery: input.gallery } : {}),
+    ...(input.category !== undefined ? { category: input.category } : {}),
+    status: 'published' as const,
+    _status: 'published' as const,
+  }
+  if (existing.docs.length > 0) {
+    if (!felulirhato(payload, cimke)) {
+      return existing.docs[0].id
+    }
+    if (!DRY_RUN) {
+      await payload.update({
+        collection: 'products',
+        id: existing.docs[0].id,
+        data,
+        overrideAccess: true,
+      })
+    }
+    naploFeluliras(payload, `${cimke} (leírás, ár, borító, kategória, státusz)`)
+    return existing.docs[0].id
+  }
+  if (DRY_RUN) {
+    naploLetrehozas(payload, cimke)
+    return undefined
+  }
+  // A kategória a products collectionben kötelező; éles futásban mindig van
+  // (a próbafutás az az eset, amikor még nem jött létre — ott nem írunk).
+  if (input.category === undefined) {
+    throw new Error(`Legacy: hiányzó termékkategória a(z) „${input.sku}" termékhez.`)
+  }
+  const created = await payload.create({
+    collection: 'products',
+    data: { ...data, category: input.category },
+    overrideAccess: true,
+  })
+  naploLetrehozas(payload, cimke)
+  return created.id
+}
+
+/** Menüpont biztosítása a seed.ts mintájára: label (+parent) alapú dedup. */
+const ensureMenuItem = async (
+  payload: Payload,
+  input: {
+    label: string
+    type: 'page' | 'post' | 'url' | 'product'
+    order: number
+    ref?: { relationTo: 'pages' | 'posts' | 'products'; value: number }
+    url?: string
+  },
+): Promise<void> => {
+  const cimke = `menüpont: ${input.label}`
+  const existing = await payload.find({
+    collection: 'menus',
+    where: {
+      and: [{ label: { equals: input.label } }, { parent: { exists: false } }],
+    },
+    limit: 1,
+    overrideAccess: true,
+  })
+  if (existing.docs.length > 0) {
+    naploKihagyas(payload, cimke, 'már létezik')
+    return
+  }
+  if (!DRY_RUN) {
+    await payload.create({
+      collection: 'menus',
+      data: {
+        label: input.label,
+        type: input.type,
+        order: input.order,
+        ...(input.ref ? { ref: input.ref } : {}),
+        ...(input.url ? { url: input.url } : {}),
+      },
+      overrideAccess: true,
+    })
+  }
+  naploLetrehozas(payload, cimke)
+}
+
+// ---------------------------------------------------------------------------
+// Demó-tartalom depublikálása (LEGACY_ARCHIVE_DEMO)
+//
+// A seed.ts demó-tartalma ütközik az élessel: a `DEMO-KEZREHAB-001` termék
+// fizetős kurzuskártyaként jelenne meg a valódi kurzus mellett, a „bemutatkozas"
+// oldal és a menüpontja pedig a fejlécben. A lépés ezért DEPUBLIKÁL, de SOHA nem
+// töröl — minden változás egy admin-kattintással visszafordítható. (A frontend a
+// saját `status` selectre, illetve a menus `visible` mezőjére szűr.)
+// ---------------------------------------------------------------------------
+
+const DEMO_TERMEK_SKU = 'DEMO-KEZREHAB-001'
+const DEMO_OLDAL_SLUG = 'bemutatkozas'
+const DEMO_MENU_LABEL = 'Bemutatkozás'
+const DEMO_ALMENU_LABEL = 'Demó kézrehabilitációs kurzus'
+const KURZUSOK_MENU_LABEL = 'Kurzusok'
+
+/** Egy menüpont elrejtése (visible: false) — a sor megmarad, csak nem látszik. */
+const rejtsdElMenupontot = async (
+  payload: Payload,
+  menu: { id: number; visible?: boolean | null },
+  cimke: string,
+): Promise<void> => {
+  if (menu.visible === false) {
+    naploKihagyas(payload, cimke, 'már rejtett')
+    return
+  }
+  if (!DRY_RUN) {
+    await payload.update({
+      collection: 'menus',
+      id: menu.id,
+      data: { visible: false },
+      overrideAccess: true,
+    })
+  }
+  naploDepublikalas(payload, `${cimke} → visible: false`)
+}
+
+const depublikaldDemoTartalmat = async (payload: Payload): Promise<void> => {
+  payload.logger.info(
+    'Legacy: demó-tartalom depublikálása (LEGACY_ARCHIVE_DEMO=igen) — a script archivál/draftra állít/elrejt, törölni SOHA nem töröl.',
+  )
+
+  // --- Demó termék → archived ------------------------------------------------
+  const demoTermek = (
+    await payload.find({
+      collection: 'products',
+      where: { sku: { equals: DEMO_TERMEK_SKU } },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]
+  const termekCimke = `demó termék: ${DEMO_TERMEK_SKU}`
+  if (!demoTermek) {
+    payload.logger.info(`Legacy: ${termekCimke} nincs az adatbázisban — nincs teendő.`)
+  } else if (demoTermek.status === 'archived') {
+    naploKihagyas(payload, termekCimke, 'már archivált')
+  } else {
+    if (!DRY_RUN) {
+      await payload.update({
+        collection: 'products',
+        id: demoTermek.id,
+        data: { status: 'archived' },
+        overrideAccess: true,
+      })
+    }
+    naploDepublikalas(payload, `${termekCimke} → status: archived`)
+  }
+
+  // --- Demó oldal → draft ----------------------------------------------------
+  const demoOldal = (
+    await payload.find({
+      collection: 'pages',
+      where: { slug: { equals: DEMO_OLDAL_SLUG } },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]
+  const oldalCimke = `demó oldal: ${DEMO_OLDAL_SLUG}`
+  if (!demoOldal) {
+    payload.logger.info(`Legacy: ${oldalCimke} nincs az adatbázisban — nincs teendő.`)
+  } else if (demoOldal.status === 'draft') {
+    naploKihagyas(payload, oldalCimke, 'már draft')
+  } else {
+    if (!DRY_RUN) {
+      await payload.update({
+        collection: 'pages',
+        id: demoOldal.id,
+        data: { status: 'draft' },
+        overrideAccess: true,
+      })
+    }
+    naploDepublikalas(payload, `${oldalCimke} → status: draft`)
+  }
+
+  // --- Demó menüpont (gyökérszintű „Bemutatkozás") → visible: false ----------
+  const demoMenu = (
+    await payload.find({
+      collection: 'menus',
+      where: {
+        and: [{ label: { equals: DEMO_MENU_LABEL } }, { parent: { exists: false } }],
+      },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]
+  const menuCimke = `demó menüpont: ${DEMO_MENU_LABEL}`
+  if (!demoMenu) {
+    payload.logger.info(`Legacy: ${menuCimke} nincs az adatbázisban — nincs teendő.`)
+  } else {
+    await rejtsdElMenupontot(payload, demoMenu, menuCimke)
+  }
+
+  // --- Demó almenüpont (a „Kurzusok" alatt) → visible: false -----------------
+  const kurzusokMenu = (
+    await payload.find({
+      collection: 'menus',
+      where: {
+        and: [{ label: { equals: KURZUSOK_MENU_LABEL } }, { parent: { exists: false } }],
+      },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]
+  const almenuCimke = `demó almenüpont: ${DEMO_ALMENU_LABEL}`
+  if (!kurzusokMenu) {
+    payload.logger.info(
+      `Legacy: nincs gyökérszintű „${KURZUSOK_MENU_LABEL}" menüpont — a(z) ${almenuCimke} keresése kihagyva.`,
+    )
+    return
+  }
+  const demoAlmenu = (
+    await payload.find({
+      collection: 'menus',
+      where: {
+        and: [{ label: { equals: DEMO_ALMENU_LABEL } }, { parent: { equals: kurzusokMenu.id } }],
+      },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]
+  if (!demoAlmenu) {
+    payload.logger.info(`Legacy: ${almenuCimke} nincs az adatbázisban — nincs teendő.`)
+    return
+  }
+  await rejtsdElMenupontot(payload, demoAlmenu, almenuCimke)
+}
+
+// ---------------------------------------------------------------------------
+// Főprogram
+// ---------------------------------------------------------------------------
+
+async function restoreLegacyContent(): Promise<void> {
+  const payload = await getPayload({ config })
+
+  // --- Futtatási mód kiírása (a napló elején egyértelmű legyen) --------------
+  payload.logger.info(
+    DRY_RUN
+      ? 'Legacy: PRÓBAFUTÁS (dry-run) — a script SEMMIT nem ír az adatbázisba, csak kiírja, mit tenne. Tényleges íráshoz: LEGACY_RESTORE_CONFIRM=igen'
+      : 'Legacy: ÉLES FUTÁS — a script ÍRNI FOG az adatbázisba (LEGACY_RESTORE_CONFIRM=igen).',
+  )
+  payload.logger.info(
+    OVERWRITE
+      ? 'Legacy: meglévő oldal/termék felülírása ENGEDÉLYEZVE (LEGACY_OVERWRITE=igen) — a régi tartalom véglegesen elveszik, mentés nincs.'
+      : 'Legacy: meglévő oldal/termék felülírása TILTVA — a létező dokumentumok érintetlenek maradnak (LEGACY_OVERWRITE=igen oldja fel).',
+  )
+  payload.logger.info(
+    ARCHIVE_DEMO
+      ? 'Legacy: a seed demó-tartalmának depublikálása KÉRVE (LEGACY_ARCHIVE_DEMO=igen).'
+      : 'Legacy: a seed demó-tartalma érintetlen marad (LEGACY_ARCHIVE_DEMO=igen kapcsolja be a depublikálást).',
+  )
+
+  // --- Média (az összes többi entitás hivatkozik rá) -------------------------
+  const mediaIds = new Map<string, number>()
+  for (const image of LEGACY_IMAGES) {
+    const id = await ensureMedia(payload, image)
+    if (id !== undefined) {
+      mediaIds.set(image.file, id)
+    }
+  }
+  /**
+   * Kép-id feloldása. Éles futásban a hiányzó id programhiba (megszakítunk);
+   * próbafutásban viszont természetes, hogy a még fel nem töltött kép nem
+   * kapott id-t — ilyenkor `undefined`, és a hivatkozás egyszerűen kimarad.
+   */
+  const mediaId = (file: string): number | undefined => {
+    const id = mediaIds.get(file)
+    if (id === undefined && !DRY_RUN) {
+      throw new Error(`Legacy: ismeretlen képfájl-hivatkozás: ${file}`)
+    }
+    return id
+  }
+  /** Galéria-elemek a feloldható kép-id-kből (próbafutásban lehet üres). */
+  const gallery = (...files: string[]): { image: number }[] =>
+    files
+      .map((file) => mediaId(file))
+      .filter((id): id is number => id !== undefined)
+      .map((image) => ({ image }))
+
+  // --- Oldal: kezdolap -------------------------------------------------------
+  await upsertPage(payload, {
+    slug: 'kezdolap',
+    title: 'Hatékony és biztonságos módszerek a kéz és a kar fájdalmai ellen',
+    excerpt:
+      'Professzionális, mégis emberközeli terápiás megoldásokkal kezeljük a különböző mozgásszervi problémákat, hogy te ismét önfeledten dolgozhass, sportolhass vagy gondoskodhass szeretteidről.',
+    content: kezdolapContent(),
+    heroImage: mediaId('67b4bc17e0c78_katak-paravan.jpg'),
+    seoTitle: 'Kineticare – kézrehabilitáció gyógytornászoktól',
+    seoDescription:
+      'Kocsis Kata és Kiss Kata gyógytornászok – kézrehabilitáció, kéztőalagút-szindróma, kézfájdalom, csuklófájdalom, teniszkönyök kezelése rendelőben és online programmal.',
+  })
+
+  // --- Oldal: rolunk ---------------------------------------------------------
+  await upsertPage(payload, {
+    slug: 'rolunk',
+    title: 'A kéz a mindenünk',
+    excerpt:
+      'Kocsis Kata és Kiss Kata vagyunk, a KINETICARE alapítói – gyógytornászok, manuálterapeuták és sportrehabilitációs trénerek, évek óta elsősorban a kéz rehabilitációjával foglalkozunk.',
+    content: rolunkContent(),
+    heroImage: mediaId('682a121babe80_IMG_7573.jpeg'),
+    seoTitle: 'Rólunk – Kineticare',
+    seoDescription:
+      'Kocsis Kata kézrehabilitációs gyógytornász-fizioterapeuta, Kiss Kata kézrehabilitációs gyógytornász-fizioterapeuta és manuálterapeuta – szakmai háttér, vélemények, média-megjelenések.',
+  })
+
+  // --- Oldal: szolgaltatasok ---------------------------------------------------
+  await upsertPage(payload, {
+    slug: 'szolgaltatasok',
+    title: 'A kezed folyton dolgozik – segítünk, hogy közben ne fájjon',
+    excerpt:
+      'Hatékony kezeléseket, otthon végezhető programokat és szakmai továbbképzéseket nyújtunk azoknak, akik biztos eredményeket szeretnének.',
+    content: szolgaltatasokContent(),
+    heroImage: mediaId('67b3bd06f3936_Rendelo.png'),
+    seoTitle: 'Szolgáltatások – Kineticare',
+    seoDescription:
+      'Rendelői gyógytorna és manuálterápia Budapesten (50 perc 18 000 Ft, 20 perc 10 000 Ft), otthoni kézrehabilitációs program és akkreditált szakmai képzések.',
+  })
+
+  // --- Termékkategória ---------------------------------------------------------
+  const productCategoryId = await ensureProductCategory(payload)
+
+  // --- Termék: Otthoni KézRehab Program (fizetős) ------------------------------
+  // Az sku a VEVŐNEK MEGJELENŐ név (useAsTitle: 'sku'), ezért nem cikkszám:
+  // ugyanez kerül a kurzuskártyára, a kurzusoldalra és a számlára is.
+  await upsertProduct(payload, {
+    sku: 'Otthoni KézRehab Program',
+    shortDescription:
+      'Könnyen követhető, otthon is biztonságosan alkalmazható kézrehabilitációs program gyógytornászoktól – csukló-, ujj-, alkar- és könyökfájdalmakra, a saját tempódban, 50+ videós gyakorlattal.',
+    longDescription: kezrehabLongDescription(),
+    priceInHUFEnabled: true,
+    priceInHUF: 79500,
+    coverImage: mediaId('688b93e6ab76f_Programpackshot.png'),
+    gallery: gallery('678fcfac079a8_Gyakorlat.JPG', '680a69d078306_Katakfeherbenhattal.png'),
+    category: productCategoryId,
+  })
+
+  // --- Termék: SOS Kézrelax villámkurzus (ingyenes lead-magnet) ----------------
+  // Itt is a display-név az sku (lásd a fájl fejkommentjét).
+  await upsertProduct(payload, {
+    sku: 'SOS Kézrelax villámkurzus',
+    shortDescription:
+      'Ingyenes villámkurzus: a 3 legjobb gyakorlatunk a kézfájdalom gyors enyhítésére – drága eszközök és hosszú, macerás gyakorlatok nélkül.',
+    longDescription: kezrelaxLongDescription(),
+    // Ingyenes: a HomeView isPaidProduct logikája (priceInHUFEnabled === true &&
+    // szám) így NEM kapja el — a termék a FreeSos-blokkba kerül (audit K2).
+    priceInHUFEnabled: false,
+    coverImage: mediaId('688b873ad2a80_belepotermekpackshot1.png'),
+    gallery: gallery('6884161138c15_puska.png'),
+    category: productCategoryId,
+  })
+
+  // --- Menük (a régi fejléc-navigáció a seed menüpontjai mellé) ----------------
+  const szolgaltatasokPageId = (
+    await payload.find({
+      collection: 'pages',
+      where: { slug: { equals: 'szolgaltatasok' } },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]?.id
+  const rolunkPageId = (
+    await payload.find({
+      collection: 'pages',
+      where: { slug: { equals: 'rolunk' } },
+      limit: 1,
+      overrideAccess: true,
+    })
+  ).docs[0]?.id
+
+  /** A hiányzó céloldal nem hiba: próbafutásban az oldal még nem jött létre. */
+  const menucelHianyzik = (label: string, slug: string): void => {
+    payload.logger.info(
+      DRY_RUN
+        ? `Legacy: a(z) „${label}" menüpont a próbafutásban nem értékelhető — a hivatkozott oldal (${slug}) csak éles futáskor jön létre.`
+        : `Legacy: a(z) „${label}" menüpont kihagyva — a hivatkozott oldal (${slug}) nem található.`,
+    )
+  }
+
+  if (szolgaltatasokPageId !== undefined) {
+    await ensureMenuItem(payload, {
+      label: 'Szolgáltatások',
+      type: 'page',
+      ref: { relationTo: 'pages', value: szolgaltatasokPageId },
+      order: 4,
+    })
+  } else {
+    menucelHianyzik('Szolgáltatások', 'szolgaltatasok')
+  }
+  if (rolunkPageId !== undefined) {
+    await ensureMenuItem(payload, {
+      label: 'Rólunk',
+      type: 'page',
+      ref: { relationTo: 'pages', value: rolunkPageId },
+      order: 5,
+    })
+  } else {
+    menucelHianyzik('Rólunk', 'rolunk')
+  }
+  // A /kapcsolat az új oldalon dedikált route (űrlappal), nem CMS-oldal — url típus.
+  await ensureMenuItem(payload, {
+    label: 'Kapcsolat',
+    type: 'url',
+    url: '/kapcsolat',
+    order: 6,
+  })
+
+  // --- Demó-tartalom depublikálása (opcionális, a confirm-kapu mögött) --------
+  if (ARCHIVE_DEMO) {
+    await depublikaldDemoTartalmat(payload)
+  }
+
+  // --- Összesítés ------------------------------------------------------------
+  if (DRY_RUN) {
+    payload.logger.info(
+      `Legacy PRÓBAFUTÁS — összesítés: ${osszesites.letrehozas} létrehozandó, ${osszesites.feluliras} felülírandó, ${osszesites.depublikalas} depublikálandó, ${osszesites.kihagyas} kihagyva. Az adatbázisba SEMMI nem íródott.`,
+    )
+    payload.logger.info(
+      'Legacy: tényleges futtatás → LEGACY_RESTORE_CONFIRM=igen npm run seed:legacy (meglévő tartalom felülírásához ezen felül LEGACY_OVERWRITE=igen, a demó depublikálásához LEGACY_ARCHIVE_DEMO=igen).',
+    )
+    return
+  }
+  payload.logger.info(
+    `Legacy ÉLES FUTÁS — összesítés: ${osszesites.letrehozas} létrehozva, ${osszesites.feluliras} felülírva, ${osszesites.depublikalas} depublikálva, ${osszesites.kihagyas} kihagyva.`,
+  )
+  payload.logger.info('Legacy: kész — a régi kineticare.hu tartalma visszaépítve.')
+}
+
+restoreLegacyContent()
+  .then(() => {
+    process.exit(0)
+  })
+  .catch((error) => {
+    console.error('Legacy: hiba történt.', error)
+    process.exit(1)
+  })
