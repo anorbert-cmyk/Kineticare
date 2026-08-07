@@ -9,7 +9,14 @@
 
 ## 0. Mi történik deploykor (röviden)
 
-1. **Build:** `npm ci && npm run build` (Nixpacks, Node ≥20 a `package.json` engines alapján).
+1. **Build:** `npm ci --legacy-peer-deps && npm run build` (**Railpack** builder — lásd
+   `railway.json`, `"builder": "RAILPACK"`; a Nixpacks régi állapot). A Node-verziót a
+   `package.json` `engines.node` mezője adja (**`24.x`**), amit a railpack a
+   24-es vonal legfrissebb patch-ére old fel.
+   **FIGYELEM:** a service Variables közé tett `RAILPACK_NODE_VERSION` **felülírja** az
+   `engines.node`-ot (a railpack ebben a sorrendben old fel:
+   `RAILPACK_NODE_VERSION` → `engines.node` → `.nvmrc` → `.node-version` → default `lts`).
+   Ha a futásidő nem az, amit vársz, előbb ezt a változót keresd.
 2. **Start:** `npx payload migrate && npm start` — a migráció idempotens és
    követett (a `payload_migrations` táblában), tehát minden bootnál biztonságosan
    lefut; új migráció esetén az indulás előtt érvényesül.
@@ -80,6 +87,14 @@ A seed létrehozza: owner-felhasználó (`SEED_OWNER_EMAIL` /
 
 ## 5. Deploy utáni ellenőrzőlista
 
+- [ ] A **build-logban tényleges `npm run build` futás** szerepel — ha
+      `Build · skipped (nothing to build)` látszik, a régi `.next/` indult el,
+      és a deployt SHA nélkül (a branch HEAD-jére) újra kell indítani
+- [ ] A **deploy-logban ott a `server_start` sor**, benne `"nodeVersion":"v24.…"`
+      és a **várt `commitSha`**. Ha a nodeVersion nem 24-es: a service Variables
+      közt keresd a `RAILPACK_NODE_VERSION`-t (felülírja az `engines.node`-ot).
+      Ha a sor egyáltalán nincs meg: előbb a `LOG_LEVEL`-t ellenőrizd (`info` kell
+      hozzá), csak utána gyanakodj régi kódra
 - [ ] Railway deploy zöld, healthcheck átment
 - [ ] `https://<domain>/admin` → Payload login-oldal töltődik
 - [ ] Owner belép az adminba, látja a demó-terméket
