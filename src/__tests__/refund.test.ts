@@ -1,5 +1,5 @@
 import type { Payload } from 'payload'
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 import { createRefundHandler } from '../lib/refund/route-handler'
 import { readRefundEntries } from '../lib/refund/refund-order'
@@ -191,7 +191,7 @@ function setup(options: MockPayloadOptions = {}) {
   return { POST, ...mock }
 }
 
-const logOutput = (spy: ReturnType<typeof vi.spyOn>): string =>
+const logOutput = (spy: MockInstance<(...args: unknown[]) => void>): string =>
   spy.mock.calls.map((call) => call.map((arg) => String(arg)).join(' ')).join('\n')
 
 describe('RBAC — owner-only művelet', () => {
