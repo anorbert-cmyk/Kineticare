@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { captureAnalyticsEvent } from '@/lib/analytics/posthog'
-import { pollOrderStatus, type OrderStatus } from '../../lib/order-status-poll'
+import { pollOrderStatus } from '../../lib/order-status-poll'
 
 /**
  * ThankYouView — a köszönőoldal kliens-oldali viselkedése.
