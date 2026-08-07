@@ -28,7 +28,7 @@
     "graphql": "16.14.2",
     "next": "15.5.22",
     "payload": "3.86.0",
-    "posthog-js": "1.410.5",
+    "posthog-js": "1.410.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "sharp": "0.35.3"
