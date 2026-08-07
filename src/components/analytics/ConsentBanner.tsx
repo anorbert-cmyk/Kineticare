@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useState, useSyncExternalStore, type CSSProperties } from 'react'
 
-import { readConsent, type ConsentState } from '@/lib/analytics/consent'
+import { CONSENT_EVENT, readConsent, type ConsentState } from '@/lib/analytics/consent'
 import { optInToAnalytics, optOutOfAnalytics } from '@/lib/analytics/posthog'
 
 /**
@@ -82,13 +82,42 @@ const declineStyle: CSSProperties = {
   color: 'var(--kc-color-white)',
 }
 
+/**
+ * A tárolt consent KÜLSŐ store-ként. A `kc:analytics-consent` esemény az
+ * egyetlen írás-jelzés (az optIn/optOut szórja) — erre iratkozunk fel.
+ */
+function subscribeToConsent(onStoreChange: () => void): () => void {
+  window.addEventListener(CONSENT_EVENT, onStoreChange)
+  return () => window.removeEventListener(CONSENT_EVENT, onStoreChange)
+}
+
+/** Kliens-pillanatkép: primitív string, tehát hivatkozás-stabil (nem ciklizál). */
+function getConsentSnapshot(): ConsentState {
+  return readConsent()
+}
+
+/**
+ * Szerver- ÉS hidratálási pillanatkép: `null` = „még nem olvastuk a tárolót".
+ * Ez tartja meg pontosan a korábbi viselkedést: a szerver és az első
+ * kliens-render egyaránt semmit sem renderel, a tárolt érték csak a
+ * hidratálás UTÁN kerül be — így a szerver- és kliens-HTML nem térhet el.
+ */
+function getServerConsentSnapshot(): ConsentState | null {
+  return null
+}
+
 export function ConsentBanner() {
   // null = még nem olvastuk a tárolót (SSR + első kliens-render) → null render.
-  const [consent, setConsent] = useState<ConsentState | null>(null)
-
-  useEffect(() => {
-    setConsent(readConsent())
-  }, [])
+  const storedConsent = useSyncExternalStore<ConsentState | null>(
+    subscribeToConsent,
+    getConsentSnapshot,
+    getServerConsentSnapshot,
+  )
+  // A gombnyomás helyi döntése akkor is elrejti a sávot, ha a tárolóba írás
+  // nem sikerült (letiltott localStorage) — a korábbi setConsent pontosan így
+  // viselkedett, ezért marad meg külön állapotként.
+  const [decision, setDecision] = useState<ConsentState | null>(null)
+  const consent = decision ?? storedConsent
 
   if (consent !== 'unknown') {
     return null
@@ -96,12 +125,12 @@ export function ConsentBanner() {
 
   const onAccept = (): void => {
     optInToAnalytics()
-    setConsent('granted')
+    setDecision('granted')
   }
 
   const onDecline = (): void => {
     optOutOfAnalytics()
-    setConsent('denied')
+    setDecision('denied')
   }
 
   return (

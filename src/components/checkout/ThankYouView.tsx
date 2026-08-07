@@ -30,18 +30,16 @@ type ViewState =
   | { kind: 'failed'; status: string }
   | { kind: 'unauthorized' }
   | { kind: 'not-found' }
-  | { kind: 'no-order' }
 
 export function ThankYouView({ orderNumber, isLoggedIn }: ThankYouViewProps) {
   const [state, setState] = useState<ViewState>({ kind: 'polling', attempts: 0 })
 
   useEffect(() => {
-    if (!orderNumber) {
-      setState({ kind: 'no-order' })
-      return
-    }
-    if (!isLoggedIn) {
-      setState({ kind: 'unauthorized' })
+    // A hiányzó rendelésszám és a be nem jelentkezett látogató a PROPOKBÓL
+    // következik (mindkettő szerver-oldalról érkezik, tehát a szerver- és a
+    // kliens-render azonos): ezeket a nézeteket renderben döntjük el, nem
+    // állapotba írjuk. Az effekt ilyenkor csak nem indít poll-ozást.
+    if (!orderNumber || !isLoggedIn) {
       return
     }
 
@@ -92,6 +90,29 @@ export function ThankYouView({ orderNumber, isLoggedIn }: ThankYouViewProps) {
       cancelled = true
     }
   }, [orderNumber, isLoggedIn])
+
+  // Propokból közvetlenül következő nézetek (állapot nélkül).
+  if (!orderNumber) {
+    return (
+      <div className="kc-thankyou" role="status">
+        <h1>Köszönjük!</h1>
+        <p>Hiányzik a rendelésszám a hivatkozásból. A rendelésedet a Kurzusaim oldalon találod.</p>
+        <Button href="/kurzusaim">Kurzusaim</Button>
+      </div>
+    )
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <div className="kc-thankyou" role="status">
+        <h1>Köszönjük!</h1>
+        <p>A rendelésed állapotának megtekintéséhez jelentkezz be.</p>
+        <Button href={`/belepes?returnUrl=${encodeURIComponent('/fizetes/koszonom?order=' + orderNumber)}`}>
+          Belépés
+        </Button>
+      </div>
+    )
+  }
 
   if (state.kind === 'paid') {
     return (
@@ -148,12 +169,13 @@ export function ThankYouView({ orderNumber, isLoggedIn }: ThankYouViewProps) {
     )
   }
 
+  // A poll is adhat 401-et (közben lejárt munkamenet) — ugyanaz a nézet.
   if (state.kind === 'unauthorized') {
     return (
       <div className="kc-thankyou" role="status">
         <h1>Köszönjük!</h1>
         <p>A rendelésed állapotának megtekintéséhez jelentkezz be.</p>
-        <Button href={`/belepes?returnUrl=${encodeURIComponent('/fizetes/koszonom?order=' + (orderNumber ?? ''))}`}>
+        <Button href={`/belepes?returnUrl=${encodeURIComponent('/fizetes/koszonom?order=' + orderNumber)}`}>
           Belépés
         </Button>
       </div>
@@ -173,16 +195,6 @@ export function ThankYouView({ orderNumber, isLoggedIn }: ThankYouViewProps) {
           <Button href="/kurzusaim">Kurzusaim</Button>
           <Button href="/kapcsolat" variant="secondary">Kapcsolat</Button>
         </div>
-      </div>
-    )
-  }
-
-  if (state.kind === 'no-order') {
-    return (
-      <div className="kc-thankyou" role="status">
-        <h1>Köszönjük!</h1>
-        <p>Hiányzik a rendelésszám a hivatkozásból. A rendelésedet a Kurzusaim oldalon találod.</p>
-        <Button href="/kurzusaim">Kurzusaim</Button>
       </div>
     )
   }
