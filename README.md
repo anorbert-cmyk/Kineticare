@@ -11,7 +11,12 @@ végrehajtási tervben (`docs/kezrehabilitacio-vegrehajtasi-terv.md`,
 
 ## Fejlesztői gyorsindítás
 
+**Node 24 kell** (Active LTS). A repóban van `.nvmrc`, tehát `nvm use` / `fnm use`
+beállítja. Más majoron az `npm install` csak `EBADENGINE` figyelmeztetést ad és
+lefut, de az éles futásidő Node 24 — ne azon fejlessz.
+
 ```bash
+nvm use                  # vagy: fnm use — a .nvmrc szerint Node 24
 cp .env.example .env     # töltsd ki a kötelező értékeket (lásd a fájlt)
 npm install
 npm run dev              # http://localhost:3000 (admin: /admin)
