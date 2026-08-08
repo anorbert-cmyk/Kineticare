@@ -34,6 +34,11 @@ npm run build            # next build
 Környezeti változók: `.env.example` (a titkok SOHA nem kerülnek a repóba;
 `.env` gitignore-olt, staging/prod: Railway-változók).
 
+Seed (`npm run seed`): üres fejlesztői adatbázisra teljes demó-tartalmat tölt.
+`SEED_SCOPE=kezdolap npm run seed` — szűkített, élesben is futtatható hatókör:
+kizárólag a kezdőlap szekciósorát és a landing tartalmi képeit tölti be
+(idempotens; meglévő szekciósort sosem ír felül; demó-tartalmat nem hoz létre).
+
 ## Dokumentáció (docs/)
 
 | Terület | Fájl |
