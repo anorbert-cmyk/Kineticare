@@ -16,6 +16,7 @@ import { Card } from '@/components/ui/Card'
 import { Container } from '@/components/ui/Container'
 import { PriceTag } from '@/components/ui/PriceTag'
 import { Section } from '@/components/ui/Section'
+import { resolveSingleCourseAccess } from '@/lib/course-access-lookup'
 import {
   courseCover,
   coursePriceHuf,
@@ -39,7 +40,9 @@ import config from '../../../../payload.config'
  *   listázódik, a meglévő vevő a „Tovább a kurzusaimhoz" linket kapja);
  *   draft/ismeretlen → 404.
  * - A „már megvetted" állapot a bejelentkezett user purchases-listájából
- *   (users.purchases, csak olvasás) dől el.
+ *   (users.purchases, csak olvasás) dől el — LEJÁRT hozzáférésnél (A1,
+ *   accessDurationDays) viszont újra a vásárlási CTA jelenik meg, különben a
+ *   vevő zsákutcába futna („vásárold meg újra" ↔ „tovább a kurzusaimhoz").
  * - A longDescription renderelését JELENLEG a helyi, minimális
  *   LexicalContent végzi — TODO(W2-értékelés): konszolidáció az 5B-hullám
  *   src/components/lexical/ rendererével (lásd a komponens fejlécét).
@@ -77,6 +80,26 @@ async function getCurrentUser(): Promise<User | null> {
     return (user as User | null) ?? null
   } catch {
     return null
+  }
+}
+
+/**
+ * Él-e MÉG a vevő hozzáférése (A1). Lekérdezési hiba esetén true — a CTA
+ * ilyenkor a mai, „már megvetted" viselkedést mutatja; a tényleges lejátszást
+ * a stream-token végpont amúgy is újra ellenőrzi.
+ */
+async function hasLiveAccess(userId: number, product: Product): Promise<boolean> {
+  try {
+    const payload = await getPayload({ config })
+    const access = await resolveSingleCourseAccess({ payload, userId, product, logger })
+    return access.hasAccess
+  } catch (error) {
+    logger.warn('kurzus-oldal: hozzáférés-állapot számítása sikertelen', {
+      userId,
+      productId: product.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return true
   }
 }
 
@@ -133,7 +156,11 @@ export default async function CoursePage({ params }: CoursePageProps) {
   }
 
   const user = await getCurrentUser()
-  const purchased = user !== null && hasUserPurchased(user.purchases, product.id)
+  // Lejárt hozzáférés = a CTA szempontjából „még nem vevő": újra megvásárolható.
+  const purchased =
+    user !== null &&
+    hasUserPurchased(user.purchases, product.id) &&
+    (await hasLiveAccess(user.id, product))
 
   const title = courseTitle(product)
   const cover = courseCover(product)

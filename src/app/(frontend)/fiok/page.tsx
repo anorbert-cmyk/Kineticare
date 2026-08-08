@@ -7,7 +7,9 @@ import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { AccountView } from '@/components/account/AccountView'
 import { logger } from '@/lib/logger'
-import type { Order, User } from '@/payload-types'
+import { toCourseAccessView, type CourseAccessView } from '@/lib/course-access'
+import { resolveCourseAccessForUser } from '@/lib/course-access-lookup'
+import type { Order, Product, User } from '@/payload-types'
 
 import config from '../../../payload.config'
 
@@ -45,6 +47,39 @@ async function getUserOrders(userId: number): Promise<Order[]> {
 }
 
 /**
+ * A megvett kurzusok hozzáférés-állapota (A1) — a lejárat forrása egységesen az
+ * src/lib/course-access.ts. Korlátlan (accessDurationDays nélküli) kurzusoknál
+ * nem indul extra lekérdezés.
+ */
+async function getAccessViews(user: User): Promise<Record<number, CourseAccessView>> {
+  const products = (user.purchases ?? []).filter(
+    (entry): entry is Product => typeof entry === 'object' && entry !== null,
+  )
+  const views: Record<number, CourseAccessView> = {}
+  if (products.length === 0) {
+    return views
+  }
+  try {
+    const payload = await getPayload({ config })
+    const states = await resolveCourseAccessForUser({
+      payload,
+      userId: user.id,
+      products,
+      logger,
+    })
+    for (const [productId, state] of states) {
+      views[productId] = toCourseAccessView(state)
+    }
+  } catch (error) {
+    logger.warn('fiók: hozzáférés-állapot számítása sikertelen', {
+      userId: user.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+  return views
+}
+
+/**
  * /fiok — a felhasználó fiókja (adataim, rendeléseim, kurzusaim).
  */
 export default async function FiokPage() {
@@ -54,12 +89,13 @@ export default async function FiokPage() {
   }
 
   const orders = await getUserOrders(user.id)
+  const accessByProductId = await getAccessViews(user)
 
   return (
     <Section>
       <Container>
         <h1>Fiókom</h1>
-        <AccountView user={user} orders={orders} />
+        <AccountView accessByProductId={accessByProductId} user={user} orders={orders} />
       </Container>
     </Section>
   )

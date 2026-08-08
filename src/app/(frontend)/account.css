@@ -49,6 +49,28 @@
   font-weight: var(--kc-font-weight-bold);
 }
 
+/* ---- Hozzáférés lejárata (A1) --------------------------------------------
+   A kurzus-kártyán és a fiók kurzuslistáján megjelenő meta-sor. Méret és szín
+   kizárólag a közös tokenekről (UX-skill 4. pont). A lejárt állapot a
+   figyelmeztető színt kapja: --kc-color-warning (#8a5a00) a kártya fehér
+   felületén 5,93:1, a paper lap-háttéren 5,61:1 — mindkettő az AA normál
+   szöveg 4,5:1-es küszöbe felett. */
+
+.kc-course-access {
+  display: block;
+  margin: 0 0 var(--kc-space-3);
+  font-size: var(--kc-text-sm);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-course-access--expired {
+  color: var(--kc-color-warning);
+}
+
+.kc-account__courses .kc-course-access {
+  margin-bottom: var(--kc-space-2);
+}
+
 .kc-account__orders {
   list-style: none;
   margin: 0;

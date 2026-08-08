@@ -8,6 +8,8 @@ import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { CoursePlayer } from '@/components/account/CoursePlayer'
 import { logger } from '@/lib/logger'
+import { accessExpiredMessage } from '@/lib/course-access'
+import { resolveSingleCourseAccess } from '@/lib/course-access-lookup'
 import { courseTitle, hasUserPurchased, parseCourseIdParam } from '@/lib/courses'
 import type { Product, User } from '@/payload-types'
 
@@ -43,6 +45,34 @@ async function getCurrentUser(): Promise<User | null> {
 }
 
 /**
+ * A megvett kurzus időbeli érvényessége (A1). Lekérdezési hiba esetén a mai,
+ * korlátlan viselkedés marad — a stream-token végpont ettől függetlenül újra
+ * ellenőrzi a lejáratot, tehát a felület engedékenysége nem nyit lyukat.
+ */
+async function getAccessExpiredMessage(userId: number, product: Product): Promise<string | null> {
+  try {
+    const payload = await getPayload({ config })
+    const access = await resolveSingleCourseAccess({ payload, userId, product, logger })
+    if (access.hasAccess) {
+      return null
+    }
+    logger.info('lejátszó: lejárt hozzáférés — a videók nem indíthatók', {
+      userId,
+      productId: product.id,
+      expiresAt: access.expiresAt?.toISOString() ?? null,
+    })
+    return accessExpiredMessage(access.expiresAt)
+  } catch (error) {
+    logger.warn('lejátszó: hozzáférés-állapot számítása sikertelen', {
+      userId,
+      productId: product.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
+}
+
+/**
  * /kurzusaim/[id] — a kurzus lejátszóoldala (epizódlista + Cloudflare Stream
  * player, signed token a T-032 végpontról, token-frissítés exp−5 percben).
  */
@@ -64,11 +94,13 @@ export default async function KurzusaimPlayerPage({ params }: KurzusaimPlayerPag
   }
 
   const purchased = hasUserPurchased(user.purchases, product.id)
+  const expiredMessage = purchased ? await getAccessExpiredMessage(user.id, product) : null
 
   return (
     <Section>
       <Container>
         <CoursePlayer
+          expiredMessage={expiredMessage}
           product={{
             id: product.id,
             title: courseTitle(product),
@@ -82,7 +114,7 @@ export default async function KurzusaimPlayerPage({ params }: KurzusaimPlayerPag
                 }))
               : [],
           }}
-          hasAccess={purchased}
+          hasAccess={purchased && expiredMessage === null}
         />
       </Container>
     </Section>
