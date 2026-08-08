@@ -1,0 +1,105 @@
+import type { Field } from 'payload'
+
+/**
+ * Közös link-mezők a szekció-blokkokhoz (szekció-rendszer terv, 2. pont).
+ *
+ * Minden gombnál/hivatkozásnál UGYANAZ a három mező jelenik meg, ugyanazokkal a
+ * magyar feliratokkal — így a szerkesztőnek egyszer kell megtanulnia:
+ *  - `felirat`     — mi legyen a gombra/linkre írva,
+ *  - `url`         — hová vigyen,
+ *  - `ujAblakban`  — új lapon nyíljon-e.
+ *
+ * A mezőnevek szándékosan magyarok (lásd a section-settings.ts konvenció-jegyzetét):
+ * a terv és a frontend-munkacsomagok ezekre épülnek.
+ *
+ * Szándékosan NINCS „belső oldal vagy külső link" választó (mint a Menüpontoknál):
+ * a szekciók CTA-i szinte mindig ugyanarra a néhány belső útvonalra mutatnak
+ * (/kurzusok, /kurzusok/…, /kapcsolat), a kétlépcsős választó itt csak plusz
+ * kattintás lenne. Egy szabad szövegmező kezeli mindkét esetet.
+ */
+
+/** A `url` mező alapértelmezett magyarázata — laikusnak szól, példával. */
+export const LINK_URL_DESCRIPTION =
+  'Saját oldalra elég a perjellel kezdődő rész (pl. /kurzusok), másik weboldalra a teljes cím https://-sel kezdve.'
+
+export interface LinkFieldsOptions {
+  /**
+   * Kell-e „felirat" mező. Logóknál/képeknél nem: ott maga a kép a felirat.
+   * @default true
+   */
+  includeLabel?: boolean
+  /** Kötelező-e a felirat. @default false */
+  labelRequired?: boolean
+  /** Kötelező-e a webcím. @default false */
+  urlRequired?: boolean
+  /** A felirat-mező egyedi magyarázata (ha az alapértelmezett nem elég pontos). */
+  labelDescription?: string
+  /** A webcím-mező egyedi magyarázata. */
+  urlDescription?: string
+}
+
+/**
+ * A három link-mező tömbje — `array`/`group` mezők `fields` listájába való.
+ */
+export const linkFields = ({
+  includeLabel = true,
+  labelRequired = false,
+  urlRequired = false,
+  labelDescription = 'Ez a szöveg jelenik meg a gombon (pl. „Kurzusok megtekintése").',
+  urlDescription = LINK_URL_DESCRIPTION,
+}: LinkFieldsOptions = {}): Field[] => {
+  const fields: Field[] = []
+
+  if (includeLabel) {
+    fields.push({
+      name: 'felirat',
+      type: 'text',
+      required: labelRequired,
+      label: 'Felirat',
+      admin: { description: labelDescription },
+    })
+  }
+
+  fields.push(
+    {
+      name: 'url',
+      type: 'text',
+      required: urlRequired,
+      label: 'Hová vigyen (webcím)',
+      admin: { description: urlDescription },
+    },
+    {
+      name: 'ujAblakban',
+      type: 'checkbox',
+      defaultValue: false,
+      label: 'Új lapon nyíljon',
+      admin: {
+        description:
+          'Másik weboldalra mutató linknél szokás bekapcsolni, hogy a látogató ne hagyja el a Kineticare oldalát.',
+      },
+    },
+  )
+
+  return fields
+}
+
+export interface LinkGroupOptions extends LinkFieldsOptions {
+  /** A csoport mezőneve (pl. `cta`). */
+  name: string
+  /** A csoport magyar felirata (pl. „Gomb"). */
+  label: string
+  /** A csoport magyarázata a szerkesztőnek. */
+  description?: string
+}
+
+/**
+ * Egyetlen link „csomagban" (group) — ott hasznos, ahol pontosan EGY gomb van
+ * (pl. SOS-sáv, CTA-sáv, hitel-csík).
+ */
+export const linkGroup = ({ name, label, description, ...options }: LinkGroupOptions): Field => ({
+  name,
+  type: 'group',
+  label,
+  admin: description ? { description } : {},
+  fields: linkFields(options),
+})
