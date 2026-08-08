@@ -7,6 +7,8 @@ export { isOwner, isOwnerFieldAccess } from './isOwner'
 export { isSelfOrAdmin } from './isSelfOrAdmin'
 export { isStaffOrOwner, isStaffOrOwnerFieldAccess } from './isStaffOrOwner'
 export { publishedOrAdmin } from './publishedOrAdmin'
+export { visibleMenusOrAdmin } from './menus-visibility'
+export { visibleTestimonialsOrAdmin } from './testimonials-visibility'
 export {
   applyCollectionAccessPolicies,
   collectionAccessPolicies,

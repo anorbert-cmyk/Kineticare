@@ -14,6 +14,7 @@ import {
   publishedOrAdmin,
 } from '../access'
 import { visibleMenusOrAdmin } from '../access/menus-visibility'
+import { visibleTestimonialsOrAdmin } from '../access/testimonials-visibility'
 import { orderIntegrityBeforeChange } from '../lib/order-integrity'
 import configPromise from '../payload.config'
 
@@ -141,6 +142,25 @@ describe('adminOrPublishedStatus (products read, drafts _status mező)', () => {
   })
 })
 
+describe('visibleTestimonialsOrAdmin (testimonials read, a menus mintájára)', () => {
+  it.each([
+    ['owner', owner],
+    ['staff', staff],
+  ])('%s a levett véleményeket is olvassa (true)', (_label, user) => {
+    expect(visibleTestimonialsOrAdmin(accessArgs(user))).toBe(true)
+  })
+
+  it('customer csak a látható véleményeket olvassa (visible-kényszer)', () => {
+    expect(visibleTestimonialsOrAdmin(accessArgs(customer))).toEqual({
+      visible: { equals: true },
+    })
+  })
+
+  it('látogató is csak a látható véleményeket olvassa', () => {
+    expect(visibleTestimonialsOrAdmin(accessArgs(null))).toEqual({ visible: { equals: true } })
+  })
+})
+
 describe('isDocumentOwner (orders/carts customer-kényszer)', () => {
   it('bejelentkezett user a saját customer-dokumentumait kapja', () => {
     expect(isDocumentOwner(accessArgs(customer))).toEqual({
@@ -227,6 +247,33 @@ describe('collection access bekötés a végleges configban', () => {
     expect(media?.access?.create).toBe(isStaffOrOwner)
     expect(media?.access?.update).toBe(isStaffOrOwner)
     expect(media?.access?.delete).toBe(isStaffOrOwner)
+  })
+
+  /**
+   * A Testimonials collection-fájl maga NEM tartalmaz access-blokkot: a
+   * politikát a centrális pipeline (applyCollectionAccessPolicies) applikálja rá.
+   * Ez a teszt azt őrzi, hogy a bekötés a VÉGLEGES configban tényleg megtörténik
+   * — különben a collection default (staff-only admin) szabályokkal maradna, és
+   * a kezdőlap vélemény-szekciója nem kapna adatot a nyilvános olvasáson.
+   */
+  it('testimonials: a read látható-vagy-admin, az írás staff+owner', async () => {
+    const config = await configPromise
+    const testimonials = (config.collections ?? []).find((c) => c.slug === 'testimonials')
+
+    expect(testimonials).toBeDefined()
+    expect(testimonials?.access?.read).toBe(visibleTestimonialsOrAdmin)
+    expect(testimonials?.access?.create).toBe(isStaffOrOwner)
+    expect(testimonials?.access?.update).toBe(isStaffOrOwner)
+    expect(testimonials?.access?.delete).toBe(isStaffOrOwner)
+
+    // Mátrix-sor: látogató és customer csak a visible=true sorokat kapja,
+    // staff/owner mindent (az adminban a levett vélemény is szerkeszthető).
+    expect(testimonials?.access?.read?.(accessArgs(null))).toEqual({ visible: { equals: true } })
+    expect(testimonials?.access?.read?.(accessArgs(customer))).toEqual({
+      visible: { equals: true },
+    })
+    expect(testimonials?.access?.read?.(accessArgs(staff))).toBe(true)
+    expect(testimonials?.access?.read?.(accessArgs(owner))).toBe(true)
   })
 
   it('users: saját rekord + owner-only delete, nyitott regisztráció', async () => {

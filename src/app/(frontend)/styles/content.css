@@ -59,7 +59,8 @@
 .kc-hero__title {
   margin: 0 0 var(--kc-space-4);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-3xl);
+  /* A display-lépcső folytonos (clamp), külön töréspont-felülírás nem kell. */
+  font-size: var(--kc-text-4xl);
   font-weight: var(--kc-font-weight-normal);
   line-height: var(--kc-leading-heading);
   color: var(--kc-color-text);
@@ -90,10 +91,6 @@
   .kc-hero__grid {
     grid-template-columns: 1.1fr 1fr;
     gap: var(--kc-space-7);
-  }
-
-  .kc-hero__title {
-    font-size: var(--kc-text-4xl);
   }
 }
 
@@ -236,6 +233,113 @@
 .kc-post-card__date {
   margin-top: auto;
   font-size: var(--kc-text-xs);
+  color: var(--kc-color-text-muted);
+}
+
+/* ---- Vélemények (kezdőlap M6) ---------------------------------------------
+   Fehér kártyák a tint szekció-háttéren. Kontraszt (a tokens.css értékeiből
+   számolva): --kc-color-text (#1a1a1a) fehéren 17,40:1; --kc-color-text-muted
+   (#4a5560) fehéren 7,61:1, a tint sávon (#ebf7ff) 6,99:1 — mindegyik AA
+   felett. Nincs interakció és nincs átmenet, így fókusz-/reduced-motion
+   kezelést nem igényel. */
+
+.kc-testimonials__head {
+  margin: 0 0 var(--kc-space-6);
+  text-align: center;
+}
+
+.kc-testimonials__eyebrow {
+  margin: 0;
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-bold);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--kc-color-text-muted);
+}
+
+/* A tipográfiát a .kc-section-title adja (a komponens mindkét osztályt viseli),
+   itt csak a szemöldök-sorhoz igazított margó tér el a szekció-alapértéktől. */
+.kc-testimonials__title {
+  margin: var(--kc-space-3) 0 0;
+}
+
+.kc-testimonials__list {
+  display: grid;
+  gap: var(--kc-space-5);
+  grid-template-columns: 1fr;
+  /* Egy hasábban a szöveg sorhossza a narrow tartalom-szélességnél marad. */
+  max-width: var(--kc-container-narrow);
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+/* 1–3 vélemény esetén is kitöltött rács (auto-fit): 2 véleménynél két
+   egyenlő hasáb, nem marad lyuk a sor végén. */
+@media (min-width: 900px) {
+  .kc-testimonials__list {
+    max-width: none;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  }
+}
+
+/* A rács-cella és a kártya is nyúlik, így egy sorban a kártyák egyforma
+   magasak — a nevek/titulusok egy vonalban maradnak. */
+.kc-testimonials__item {
+  display: flex;
+}
+
+.kc-testimonials__card {
+  flex: 1;
+}
+
+.kc-testimonials__figure {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin: 0;
+}
+
+/* Dekoratív idézőjel (a markupban aria-hidden) — halvány márka-kék. */
+.kc-testimonials__mark {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-3xl);
+  line-height: 1;
+  color: var(--kc-color-blue-200);
+}
+
+/* A lenti margó a minimális térköz az attribúciós vonalig — a maradékot az
+   attribúció `margin-top: auto`-ja tölti ki, így az egy sorban lévő rácsban a
+   nevek egy vonalban maradnak. */
+.kc-testimonials__quote {
+  margin: var(--kc-space-2) 0 var(--kc-space-5);
+}
+
+.kc-testimonials__text {
+  margin: 0;
+  max-width: 60ch;
+  line-height: var(--kc-leading-body);
+  color: var(--kc-color-text);
+}
+
+.kc-testimonials__attribution {
+  margin-top: auto;
+  padding-top: var(--kc-space-4);
+  border-top: 1px solid var(--kc-color-border);
+}
+
+.kc-testimonials__cite {
+  display: block;
+  font-size: var(--kc-text-sm);
+  font-style: normal;
+  font-weight: var(--kc-font-weight-bold);
+  color: var(--kc-color-text);
+}
+
+.kc-testimonials__role {
+  display: block;
+  margin-top: var(--kc-space-1);
+  font-size: var(--kc-text-sm);
   color: var(--kc-color-text-muted);
 }
 
@@ -430,4 +534,63 @@
   width: 100%;
   height: 100%;
   border: 0;
+}
+
+/* ==== B2 — Piszkozat-előnézet sáv ========================================
+   A `/next/preview` route által bekapcsolt Next draft mode jelzősávja
+   (src/components/preview/PreviewBar.tsx). Vékony, nem-tolakodó, a tartalom
+   FÖLÖTT (a sticky fejléc alatt) — nem sticky, hogy ne vegyen el helyet.
+
+   Kontraszt (docs/ertekesitesi-ux-skill.md 3. pont):
+   - fehér szöveg a navy-900 (#0b243f) sávon: 15,7:1 (AA/AAA)
+   - hover-alapon (navy-700 #16406e): 10,5:1
+   - fehér fókuszgyűrű a sötét sávon: 15,7:1 (UI-komponens ≥ 3:1)
+   A globális `:focus-visible` navy gyűrűje ezen a sötét háttéren nem látszana,
+   ezért itt fehérre váltjuk.
+   Fontméret kizárólag a skáláról (--kc-text-sm); animáció nincs.
+   ======================================================================== */
+
+.kc-preview-bar {
+  background-color: var(--kc-color-navy-900);
+  color: var(--kc-color-white);
+  border-bottom: 1px solid var(--kc-color-navy-700);
+}
+
+.kc-preview-bar__inner {
+  display: flex;
+  flex-wrap: wrap; /* keskeny kijelzőn a link a szöveg alá kerül */
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kc-space-1) var(--kc-space-4);
+  padding-block: var(--kc-space-1);
+}
+
+.kc-preview-bar__text {
+  margin: 0;
+  color: var(--kc-color-white);
+  font-size: var(--kc-text-sm);
+  line-height: var(--kc-leading-body);
+}
+
+.kc-preview-bar__exit {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem; /* 44px érintési célfelület */
+  padding-inline: var(--kc-space-2);
+  border-radius: var(--kc-radius-sm);
+  color: var(--kc-color-white);
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-bold);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.kc-preview-bar__exit:hover {
+  background-color: var(--kc-color-navy-700);
+  color: var(--kc-color-white);
+}
+
+.kc-preview-bar__exit:focus-visible {
+  outline: 3px solid var(--kc-color-white);
+  outline-offset: 2px;
 }

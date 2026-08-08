@@ -10,6 +10,32 @@
   z-index: 50;
   background-color: var(--kc-color-surface-tint); /* legacy fejléc-sáv */
   border-bottom: 1px solid var(--kc-color-blue-200);
+  transition:
+    background-color var(--kc-motion-base) var(--kc-ease-out),
+    box-shadow var(--kc-motion-base) var(--kc-ease-out);
+}
+
+/* Legörgetve (html[data-kc-scrolled] — a HeaderScrollFx kliens-jelzője) a sáv
+   tömör, enyhén áttetsző felületre vált. A navy-900 szöveg kontrasztja a
+   legrosszabb esetben (tiszta fehér mögöttes tartalom) is bőven AA feletti;
+   blur-támogatás nélkül 94%-os fedettség a tartalék — lásd
+   docs/ertekesitesi-ux-skill.md 3. pont. */
+html[data-kc-scrolled] .kc-site-header {
+  background-color: color-mix(in srgb, var(--kc-color-surface) 94%, transparent);
+  box-shadow: var(--kc-shadow-sm);
+}
+
+@supports (backdrop-filter: blur(8px)) {
+  html[data-kc-scrolled] .kc-site-header {
+    background-color: color-mix(in srgb, var(--kc-color-surface) 86%, transparent);
+    backdrop-filter: blur(8px);
+  }
+}
+
+.kc-site-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--kc-space-3);
 }
 
 .kc-site-header__bar {
@@ -41,7 +67,9 @@
 
 @media (min-width: 900px) {
   .kc-nav-desktop {
+    /* A menü a jobb oldalra húz (brand ↔ menü + CTA). */
     display: block;
+    margin-left: auto;
   }
 }
 

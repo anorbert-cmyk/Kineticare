@@ -72,20 +72,21 @@ export interface Config {
   };
   blocks: {};
   collections: {
-    users: User;
     media: Media;
     pages: Page;
     posts: Post;
-    menus: Menu;
     categories: Category;
-    'webhook-events': WebhookEvent;
-    'audit-logs': AuditLog;
+    testimonials: Testimonial;
+    menus: Menu;
     products: Product;
     carts: Cart;
     orders: Order;
     transactions: Transaction;
     forms: Form;
     'form-submissions': FormSubmission;
+    users: User;
+    'webhook-events': WebhookEvent;
+    'audit-logs': AuditLog;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -94,20 +95,21 @@ export interface Config {
   };
   collectionsJoins: {};
   collectionsSelect: {
-    users: UsersSelect<false> | UsersSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     pages: PagesSelect<false> | PagesSelect<true>;
     posts: PostsSelect<false> | PostsSelect<true>;
-    menus: MenusSelect<false> | MenusSelect<true>;
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
-    'webhook-events': WebhookEventsSelect<false> | WebhookEventsSelect<true>;
-    'audit-logs': AuditLogsSelect<false> | AuditLogsSelect<true>;
+    testimonials: TestimonialsSelect<false> | TestimonialsSelect<true>;
+    menus: MenusSelect<false> | MenusSelect<true>;
     products: ProductsSelect<false> | ProductsSelect<true>;
     carts: CartsSelect<false> | CartsSelect<true>;
     orders: OrdersSelect<false> | OrdersSelect<true>;
     transactions: TransactionsSelect<false> | TransactionsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
+    users: UsersSelect<false> | UsersSelect<true>;
+    'webhook-events': WebhookEventsSelect<false> | WebhookEventsSelect<true>;
+    'audit-logs': AuditLogsSelect<false> | AuditLogsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -128,6 +130,8 @@ export interface Config {
   jobs: {
     tasks: {
       'webhook-retry': TaskWebhookRetry;
+      'order-poll': TaskOrderPoll;
+      'invoice-issue': TaskInvoiceIssue;
       inline: {
         input: unknown;
         output: unknown;
@@ -167,100 +171,16 @@ export interface UserAuthOperations {
   };
 }
 /**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users".
- */
-export interface User {
-  id: number;
-  name: string;
-  role: 'owner' | 'staff' | 'customer';
-  purchases?: (number | Product)[] | null;
-  billingName?: string | null;
-  billingZip?: string | null;
-  billingCity?: string | null;
-  billingStreet?: string | null;
-  taxNumber?: string | null;
-  lastLoginAt?: string | null;
-  updatedAt: string;
-  createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  sessions?:
-    | {
-        id: string;
-        createdAt?: string | null;
-        expiresAt: string;
-      }[]
-    | null;
-  password?: string | null;
-  collection: 'users';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "products".
- */
-export interface Product {
-  id: number;
-  inventory?: number | null;
-  priceInHUFEnabled?: boolean | null;
-  priceInHUF?: number | null;
-  shortDescription?: string | null;
-  longDescription?: {
-    root: {
-      type: string;
-      children: {
-        type: any;
-        version: number;
-        [k: string]: unknown;
-      }[];
-      direction: ('ltr' | 'rtl') | null;
-      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-      indent: number;
-      version: number;
-    };
-    [k: string]: unknown;
-  } | null;
-  coverImage?: (number | null) | Media;
-  gallery?:
-    | {
-        image?: (number | null) | Media;
-        id?: string | null;
-      }[]
-    | null;
-  category: number | Category;
-  previewVideoStreamId?: string | null;
-  videos?:
-    | {
-        title?: string | null;
-        streamAssetId?: string | null;
-        durationSec?: number | null;
-        status?: ('processing' | 'ready' | 'error') | null;
-        id?: string | null;
-      }[]
-    | null;
-  /**
-   * Hány napig érvényes a hozzáférés vásárlás után. Üres (null) = örök hozzáférés.
-   */
-  accessDurationDays?: number | null;
-  status?: ('draft' | 'published' | 'archived') | null;
-  sku?: string | null;
-  relatedProducts?: (number | Product)[] | null;
-  updatedAt: string;
-  createdAt: string;
-  deletedAt?: string | null;
-  _status?: ('draft' | 'published') | null;
-}
-/**
+ * Az oldalon használt képek. Feltöltés után bármelyik oldalról kiválaszthatók.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "media".
  */
 export interface Media {
   id: number;
+  /**
+   * A kép szöveges leírása — kötelező, a képernyőolvasók és a Google miatt. Írd le egy mondatban, mi látszik a képen.
+   */
   alt: string;
   updatedAt: string;
   createdAt: string;
@@ -317,27 +237,28 @@ export interface Media {
   };
 }
 /**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories".
- */
-export interface Category {
-  id: number;
-  title: string;
-  slug: string;
-  type?: ('content' | 'product') | null;
-  parent?: (number | null) | Category;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
+ * Önálló aloldalak (pl. Rólunk, Szolgáltatások). A kezdőlap tartalma a „kezdolap" webcímű oldalon él.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "pages".
  */
 export interface Page {
   id: number;
+  /**
+   * Az oldal címe — ez jelenik meg a lap tetején és a böngészőfülön.
+   */
   title: string;
+  /**
+   * A cím webcímes alakja, magától kitöltődik (ékezetek nélkül, kötőjelekkel). Csak akkor írd át, ha tudod, mit csinálsz — a régi webcím ilyenkor megszűnik működni.
+   */
   slug: string;
+  /**
+   * Pár mondatos összefoglaló; a Google találati listáján is ez jelenhet meg.
+   */
   excerpt?: string | null;
+  /**
+   * Az oldal szövege. A felső eszköztárral formázhatsz, listázhatsz, linkelhetsz.
+   */
   content: {
     root: {
       type: string;
@@ -353,11 +274,26 @@ export interface Page {
     };
     [k: string]: unknown;
   };
+  /**
+   * Az oldal tetején megjelenő nagy kép (nem kötelező).
+   */
   heroImage?: (number | null) | Media;
+  /**
+   * Ha üresen hagyod, a Google a fenti címet használja.
+   */
   seoTitle?: string | null;
+  /**
+   * A Google találati listáján megjelenő rövid leírás (kb. 150 karakter).
+   */
   seoDescription?: string | null;
+  /**
+   * Ez a kép jelenik meg, ha valaki Facebookon vagy Messengeren megosztja az oldalt.
+   */
   ogImage?: (number | null) | Media;
   status: 'draft' | 'published';
+  /**
+   * Az első közzétételkor magától kitöltődik. Csak akkor írd át, ha más dátumot akarsz mutatni.
+   */
   publishedAt?: string | null;
   /**
    * A lista- és menürendezéshez használt sorszám (kisebb = előrébb).
@@ -368,14 +304,28 @@ export interface Page {
   _status?: ('draft' | 'published') | null;
 }
 /**
+ * A Tudástár (blog) cikkei. A közzétett bejegyzések azonnal megjelennek az oldalon.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "posts".
  */
 export interface Post {
   id: number;
+  /**
+   * A bejegyzés címe — ez jelenik meg a listában és a Google találatai közt.
+   */
   title: string;
+  /**
+   * A cím webcímes alakja, magától kitöltődik (ékezetek nélkül, kötőjelekkel). Csak akkor írd át, ha tudod, mit csinálsz — a régi webcím ilyenkor megszűnik működni.
+   */
   slug: string;
+  /**
+   * Pár mondatos ajánló; a bloglista kártyáin és a Google-ban is ez látszik.
+   */
   excerpt?: string | null;
+  /**
+   * A cikk szövege. A felső eszköztárral formázhatsz, listázhatsz, linkelhetsz.
+   */
   content: {
     root: {
       type: string;
@@ -391,33 +341,233 @@ export interface Post {
     };
     [k: string]: unknown;
   };
+  /**
+   * A cikk fő képe — a bloglistán és a cikk tetején jelenik meg.
+   */
   heroImage?: (number | null) | Media;
+  /**
+   * Ha üresen hagyod, a Google a fenti címet használja.
+   */
   seoTitle?: string | null;
+  /**
+   * A Google találati listáján megjelenő rövid leírás (kb. 150 karakter).
+   */
   seoDescription?: string | null;
+  /**
+   * Ez a kép jelenik meg, ha valaki Facebookon vagy Messengeren megosztja a cikket.
+   */
   ogImage?: (number | null) | Media;
   status: 'draft' | 'published';
+  /**
+   * Az első közzétételkor magától kitöltődik. A bloglista ez alapján rendez (a legfrissebb elöl).
+   */
   publishedAt?: string | null;
   /**
    * A lista- és menürendezéshez használt sorszám (kisebb = előrébb).
    */
   order?: number | null;
+  /**
+   * Alapból te vagy; ha más nevében írod a cikket, itt átállíthatod.
+   */
   author?: (number | null) | User;
+  /**
+   * Melyik témakörökbe tartozik a cikk. Több is választható.
+   */
   categories?: (number | Category)[] | null;
+  /**
+   * Legfeljebb 3 cikk, amit a bejegyzés alján ajánlunk az olvasónak.
+   */
   relatedPosts?: (number | Post)[] | null;
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
 }
 /**
+ * Szerkesztők és vásárlók. A szerepkört csak tulajdonos állíthatja át.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "users".
+ */
+export interface User {
+  id: number;
+  name: string;
+  /**
+   * Tulajdonos: mindent lát és állít. Munkatárs: tartalmat kezel. Vásárló: csak a saját fiókját. Átállítani csak tulajdonos tud.
+   */
+  role: 'owner' | 'staff' | 'customer';
+  /**
+   * A felhasználó által megvásárolt kurzusok (hozzáférés). A fizetés után magától töltődik — kézzel nem szerkeszthető.
+   */
+  purchases?: (number | Product)[] | null;
+  billingName?: string | null;
+  billingZip?: string | null;
+  billingCity?: string | null;
+  billingStreet?: string | null;
+  /**
+   * Csak céges vásárlásnál kell.
+   */
+  taxNumber?: string | null;
+  lastLoginAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  email: string;
+  resetPasswordToken?: string | null;
+  resetPasswordExpiration?: string | null;
+  salt?: string | null;
+  hash?: string | null;
+  loginAttempts?: number | null;
+  lockUntil?: string | null;
+  sessions?:
+    | {
+        id: string;
+        createdAt?: string | null;
+        expiresAt: string;
+      }[]
+    | null;
+  password?: string | null;
+  collection: 'users';
+}
+/**
+ * A megvásárolható kurzusok. Az árat és a közzétételt csak tulajdonos állíthatja.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "products".
+ */
+export interface Product {
+  id: number;
+  inventory?: number | null;
+  priceInHUFEnabled?: boolean | null;
+  priceInHUF?: number | null;
+  shortDescription?: string | null;
+  longDescription?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  coverImage?: (number | null) | Media;
+  gallery?:
+    | {
+        image?: (number | null) | Media;
+        id?: string | null;
+      }[]
+    | null;
+  category: number | Category;
+  previewVideoStreamId?: string | null;
+  videos?:
+    | {
+        title?: string | null;
+        streamAssetId?: string | null;
+        durationSec?: number | null;
+        status?: ('processing' | 'ready' | 'error') | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Hány napig érvényes a hozzáférés vásárlás után. Üres (null) = örök hozzáférés.
+   */
+  accessDurationDays?: number | null;
+  status?: ('draft' | 'published' | 'archived') | null;
+  sku?: string | null;
+  relatedProducts?: (number | Product)[] | null;
+  updatedAt: string;
+  createdAt: string;
+  deletedAt?: string | null;
+  _status?: ('draft' | 'published') | null;
+}
+/**
+ * Témakörök a blogbejegyzésekhez és a kurzusokhoz.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories".
+ */
+export interface Category {
+  id: number;
+  /**
+   * A kategória neve, ahogy az olvasó látja (pl. „Kézrehabilitáció").
+   */
+  title: string;
+  /**
+   * A cím webcímes alakja, magától kitöltődik (ékezetek nélkül, kötőjelekkel). Csak akkor írd át, ha tudod, mit csinálsz — a régi webcím ilyenkor megszűnik működni.
+   */
+  slug: string;
+  /**
+   * Blogkategória a Tudástár cikkeihez, kurzuskategória a webshop termékeihez. A blog csak a blogkategóriákat mutatja.
+   */
+  type?: ('content' | 'product') | null;
+  /**
+   * Csak akkor töltsd ki, ha ez egy nagyobb témakör alkategóriája.
+   */
+  parent?: (number | null) | Category;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Páciensek valódi visszajelzései. A kezdőlapon legfeljebb 3 kiemelt vélemény jelenik meg.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "testimonials".
+ */
+export interface Testimonial {
+  id: number;
+  /**
+   * A vélemény teljes, eredeti szövege — pontosan úgy, ahogy elhangzott.
+   */
+  quote: string;
+  /**
+   * Rövid, 1–2 mondatos változat a főoldalra; ha üres, a teljes szöveg rövidsége esetén az jelenik meg.
+   */
+  shortQuote?: string | null;
+  /**
+   * Aki a véleményt mondta (pl. „Garami Gábor" vagy „P. Benjámin").
+   */
+  authorName: string;
+  /**
+   * Nem kötelező — pl. „zenész, műsorvezető".
+   */
+  authorTitle?: string | null;
+  /**
+   * Főoldalon megjelenik (legfeljebb 3 kiemelt).
+   */
+  featured?: boolean | null;
+  /**
+   * A megjelenés sorrendje (kisebb szám = előrébb).
+   */
+  order?: number | null;
+  /**
+   * Ha kiveszed a pipát, a vélemény sehol nem jelenik meg, de nem vész el.
+   */
+  visible?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Az oldal tetején látszó menü. Legfeljebb 2 szint: főmenüpont és alatta almenüpontok.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "menus".
  */
 export interface Menu {
   id: number;
+  /**
+   * Ez a szöveg jelenik meg a menüben (pl. „Kurzusok").
+   */
   label: string;
+  /**
+   * Válaszd ki, milyen tartalomra visz a menüpont; ettől függ a következő mező.
+   */
   type: 'page' | 'post' | 'url' | 'product';
   /**
-   * A menüpont célja — a type-nak megfelelő collectionből.
+   * A menüpont célja — a fent választott típusnak megfelelő listából.
    */
   ref?:
     | ({
@@ -432,87 +582,32 @@ export interface Menu {
         relationTo: 'products';
         value: number | Product;
       } | null);
+  /**
+   * Teljes webcím más oldalra, https://-sel kezdve.
+   */
   url?: string | null;
   /**
-   * Legfeljebb 2 szintű menüfa: csak gyökér menüpont választható szülőnek.
+   * Csak akkor töltsd ki, ha ez almenüpont. Legfeljebb 2 szintű a menü: almenüpont alá már nem tehetsz továbbit.
    */
   parent?: (number | null) | Menu;
   /**
-   * A menün belüli sorrend (kisebb = előrébb).
+   * A menün belüli sorrend (kisebb szám = előrébb).
    */
   order?: number | null;
+  /**
+   * Ha kiveszed a pipát, a menüpont eltűnik az oldalról, de nem vész el.
+   */
   visible?: boolean | null;
+  /**
+   * Külső linkeknél szokás bekapcsolni, hogy a látogató ne hagyja el az oldalt.
+   */
   openInNewTab?: boolean | null;
   updatedAt: string;
   createdAt: string;
 }
 /**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "webhook-events".
- */
-export interface WebhookEvent {
-  id: number;
-  provider: 'barion' | 'stream' | 'szamlazz';
-  externalId: string;
-  eventType?: string | null;
-  payload?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  status: 'received' | 'processed' | 'failed';
-  attempts?: number | null;
-  lastError?: string | null;
-  requestId?: string | null;
-  /**
-   * A sikeres/végleges feldolgozás időpontja. Hiba (failed) esetén szándékosan üres — az esemény újrapróbálható marad.
-   */
-  processedAt?: string | null;
-  /**
-   * Az utolsó feldolgozás üzleti kimenetele. pending_repoll = a fizetés még függő, a poll-job (külön ticket) dolgozza fel újra.
-   */
-  result?: ('paid' | 'cancelled' | 'pending_repoll' | 'rejected' | 'failed') | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "audit-logs".
- */
-export interface AuditLog {
-  id: number;
-  actor?: (number | null) | User;
-  action: string;
-  entityType?: string | null;
-  entityId?: string | null;
-  before?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  after?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  requestId?: string | null;
-  ipAddress?: string | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
+ * A vásárlók félbehagyott kosarai. Automatikusan keletkezik — ne szerkeszd.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "carts".
  */
@@ -535,6 +630,8 @@ export interface Cart {
   createdAt: string;
 }
 /**
+ * A leadott rendelések és a fizetésük állapota. A rendeléseket a rendszer kezeli — kézzel ne módosítsd őket.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "orders".
  */
@@ -605,12 +702,12 @@ export interface Order {
    */
   refunds?:
     | {
-        transactionId: string
-        amountHuf: number
-        status: string
-        refundedAt: string
-        type: 'full' | 'partial'
-        reason?: string | null
+        transactionId: string;
+        amountHuf: number;
+        status: string;
+        refundedAt: string;
+        type: 'full' | 'partial';
+        reason?: string | null;
       }[]
     | null;
   ipAddress?: string | null;
@@ -618,6 +715,8 @@ export interface Order {
   createdAt: string;
 }
 /**
+ * A fizetési tranzakciók nyoma. Csak a rendszer írja — ne szerkeszd.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "transactions".
  */
@@ -654,6 +753,8 @@ export interface Transaction {
   createdAt: string;
 }
 /**
+ * A weboldal űrlapjai (pl. Kapcsolat). A mezőket itt lehet átszabni.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "forms".
  */
@@ -819,6 +920,8 @@ export interface Form {
   createdAt: string;
 }
 /**
+ * A látogatók által beküldött üzenetek. Csak olvasásra való.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "form-submissions".
  */
@@ -836,6 +939,76 @@ export interface FormSubmission {
    * Cloudflare Turnstile spam-ellenőrző token — csak akkor kötelező, ha a TURNSTILE_SECRET_KEY be van állítva.
    */
   turnstileToken?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * A fizetési és videós szolgáltatók értesítései — hibakereséshez. Ide nem kell nyúlni.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "webhook-events".
+ */
+export interface WebhookEvent {
+  id: number;
+  provider: 'barion' | 'stream' | 'szamlazz';
+  externalId: string;
+  eventType?: string | null;
+  payload?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  status: 'received' | 'processed' | 'failed';
+  attempts?: number | null;
+  lastError?: string | null;
+  requestId?: string | null;
+  /**
+   * A sikeres/végleges feldolgozás időpontja. Hiba (failed) esetén szándékosan üres — az esemény újrapróbálható marad.
+   */
+  processedAt?: string | null;
+  /**
+   * Az utolsó feldolgozás üzleti kimenetele. pending_repoll = a fizetés még függő, a poll-job (külön ticket) dolgozza fel újra.
+   */
+  result?: ('paid' | 'cancelled' | 'pending_repoll' | 'rejected' | 'failed') | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Ki, mikor, mit módosított a pénzügyi és jogosultsági műveletekben. Csak olvasható.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "audit-logs".
+ */
+export interface AuditLog {
+  id: number;
+  actor?: (number | null) | User;
+  action: string;
+  entityType?: string | null;
+  entityId?: string | null;
+  before?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  after?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  requestId?: string | null;
+  ipAddress?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -908,7 +1081,7 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'webhook-retry';
+        taskSlug: 'inline' | 'webhook-retry' | 'order-poll' | 'invoice-issue';
         taskID: string;
         input?:
           | {
@@ -941,7 +1114,7 @@ export interface PayloadJob {
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'webhook-retry') | null;
+  taskSlug?: ('inline' | 'webhook-retry' | 'order-poll' | 'invoice-issue') | null;
   queue?: string | null;
   waitUntil?: string | null;
   processing?: boolean | null;
@@ -956,10 +1129,6 @@ export interface PayloadLockedDocument {
   id: number;
   document?:
     | ({
-        relationTo: 'users';
-        value: number | User;
-      } | null)
-    | ({
         relationTo: 'media';
         value: number | Media;
       } | null)
@@ -972,20 +1141,16 @@ export interface PayloadLockedDocument {
         value: number | Post;
       } | null)
     | ({
-        relationTo: 'menus';
-        value: number | Menu;
-      } | null)
-    | ({
         relationTo: 'categories';
         value: number | Category;
       } | null)
     | ({
-        relationTo: 'webhook-events';
-        value: number | WebhookEvent;
+        relationTo: 'testimonials';
+        value: number | Testimonial;
       } | null)
     | ({
-        relationTo: 'audit-logs';
-        value: number | AuditLog;
+        relationTo: 'menus';
+        value: number | Menu;
       } | null)
     | ({
         relationTo: 'products';
@@ -1010,6 +1175,18 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'form-submissions';
         value: number | FormSubmission;
+      } | null)
+    | ({
+        relationTo: 'users';
+        value: number | User;
+      } | null)
+    | ({
+        relationTo: 'webhook-events';
+        value: number | WebhookEvent;
+      } | null)
+    | ({
+        relationTo: 'audit-logs';
+        value: number | AuditLog;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1052,37 +1229,6 @@ export interface PayloadMigration {
   batch?: number | null;
   updatedAt: string;
   createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users_select".
- */
-export interface UsersSelect<T extends boolean = true> {
-  name?: T;
-  role?: T;
-  purchases?: T;
-  billingName?: T;
-  billingZip?: T;
-  billingCity?: T;
-  billingStreet?: T;
-  taxNumber?: T;
-  lastLoginAt?: T;
-  updatedAt?: T;
-  createdAt?: T;
-  email?: T;
-  resetPasswordToken?: T;
-  resetPasswordExpiration?: T;
-  salt?: T;
-  hash?: T;
-  loginAttempts?: T;
-  lockUntil?: T;
-  sessions?:
-    | T
-    | {
-        id?: T;
-        createdAt?: T;
-        expiresAt?: T;
-      };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1201,22 +1347,6 @@ export interface PostsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "menus_select".
- */
-export interface MenusSelect<T extends boolean = true> {
-  label?: T;
-  type?: T;
-  ref?: T;
-  url?: T;
-  parent?: T;
-  order?: T;
-  visible?: T;
-  openInNewTab?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "categories_select".
  */
 export interface CategoriesSelect<T extends boolean = true> {
@@ -1229,35 +1359,32 @@ export interface CategoriesSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "webhook-events_select".
+ * via the `definition` "testimonials_select".
  */
-export interface WebhookEventsSelect<T extends boolean = true> {
-  provider?: T;
-  externalId?: T;
-  eventType?: T;
-  payload?: T;
-  status?: T;
-  attempts?: T;
-  lastError?: T;
-  requestId?: T;
-  processedAt?: T;
-  result?: T;
+export interface TestimonialsSelect<T extends boolean = true> {
+  quote?: T;
+  shortQuote?: T;
+  authorName?: T;
+  authorTitle?: T;
+  featured?: T;
+  order?: T;
+  visible?: T;
   updatedAt?: T;
   createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "audit-logs_select".
+ * via the `definition` "menus_select".
  */
-export interface AuditLogsSelect<T extends boolean = true> {
-  actor?: T;
-  action?: T;
-  entityType?: T;
-  entityId?: T;
-  before?: T;
-  after?: T;
-  requestId?: T;
-  ipAddress?: T;
+export interface MenusSelect<T extends boolean = true> {
+  label?: T;
+  type?: T;
+  ref?: T;
+  url?: T;
+  parent?: T;
+  order?: T;
+  visible?: T;
+  openInNewTab?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1501,6 +1628,7 @@ export interface FormsSelect<T extends boolean = true> {
               name?: T;
               label?: T;
               width?: T;
+              defaultValue?: T;
               required?: T;
               id?: T;
               blockName?: T;
@@ -1511,6 +1639,7 @@ export interface FormsSelect<T extends boolean = true> {
               name?: T;
               label?: T;
               width?: T;
+              defaultValue?: T;
               required?: T;
               id?: T;
               blockName?: T;
@@ -1553,6 +1682,71 @@ export interface FormSubmissionsSelect<T extends boolean = true> {
         id?: T;
       };
   turnstileToken?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "users_select".
+ */
+export interface UsersSelect<T extends boolean = true> {
+  name?: T;
+  role?: T;
+  purchases?: T;
+  billingName?: T;
+  billingZip?: T;
+  billingCity?: T;
+  billingStreet?: T;
+  taxNumber?: T;
+  lastLoginAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  email?: T;
+  resetPasswordToken?: T;
+  resetPasswordExpiration?: T;
+  salt?: T;
+  hash?: T;
+  loginAttempts?: T;
+  lockUntil?: T;
+  sessions?:
+    | T
+    | {
+        id?: T;
+        createdAt?: T;
+        expiresAt?: T;
+      };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "webhook-events_select".
+ */
+export interface WebhookEventsSelect<T extends boolean = true> {
+  provider?: T;
+  externalId?: T;
+  eventType?: T;
+  payload?: T;
+  status?: T;
+  attempts?: T;
+  lastError?: T;
+  requestId?: T;
+  processedAt?: T;
+  result?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "audit-logs_select".
+ */
+export interface AuditLogsSelect<T extends boolean = true> {
+  actor?: T;
+  action?: T;
+  entityType?: T;
+  entityId?: T;
+  before?: T;
+  after?: T;
+  requestId?: T;
+  ipAddress?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1650,6 +1844,37 @@ export interface TaskWebhookRetry {
     failed: number;
     skipped: number;
     exhausted: number;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskOrder-poll".
+ */
+export interface TaskOrderPoll {
+  input?: unknown;
+  output: {
+    scanned: number;
+    transitionedPaid: number;
+    cancelled: number;
+    stillPending: number;
+    skipped: number;
+    failed: number;
+    orphaned: number;
+    invoiceRequeued: number;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskInvoice-issue".
+ */
+export interface TaskInvoiceIssue {
+  input: {
+    orderId: number;
+  };
+  output: {
+    outcome: string;
+    invoiceNumber?: string | null;
+    reason?: string | null;
   };
 }
 /**

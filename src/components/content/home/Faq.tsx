@@ -60,7 +60,7 @@ const answerStyle: CSSProperties = {
 
 export function Faq() {
   return (
-    <Section variant="tint">
+    <Section variant="default">
       <Container size="narrow">
         <h2 className="kc-section-title">Gyakori kérdések</h2>
         <div style={{ marginTop: 'var(--kc-space-5, 1.5rem)' }}>

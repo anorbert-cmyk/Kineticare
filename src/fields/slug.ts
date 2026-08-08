@@ -25,6 +25,11 @@ export const slugField = (sourceField = 'title'): TextField => ({
   type: 'text',
   required: true,
   unique: true,
+  label: 'Webcím (slug)',
+  admin: {
+    description:
+      'A cím webcímes alakja, magától kitöltődik (ékezetek nélkül, kötőjelekkel). Csak akkor írd át, ha tudod, mit csinálsz — a régi webcím ilyenkor megszűnik működni.',
+  },
   hooks: {
     beforeValidate: [generateFromTitle(sourceField)],
     // Duplikáláskor (beépített duplicate-folyamat) egyedi

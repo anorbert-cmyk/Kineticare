@@ -1,6 +1,7 @@
 import * as migration_20260729_231123_initial_schema from './20260729_231123_initial_schema';
 import * as migration_20260730_010003_products_status_enum from './20260730_010003_products_status_enum';
 import * as migration_20260730_080404_sync_schema_code from './20260730_080404_sync_schema_code';
+import * as migration_20260808_123444_tartalomkezeles_admin_velemenyek from './20260808_123444_tartalomkezeles_admin_velemenyek';
 
 export const migrations = [
   {
@@ -16,6 +17,11 @@ export const migrations = [
   {
     up: migration_20260730_080404_sync_schema_code.up,
     down: migration_20260730_080404_sync_schema_code.down,
-    name: '20260730_080404_sync_schema_code'
+    name: '20260730_080404_sync_schema_code',
+  },
+  {
+    up: migration_20260808_123444_tartalomkezeles_admin_velemenyek.up,
+    down: migration_20260808_123444_tartalomkezeles_admin_velemenyek.down,
+    name: '20260808_123444_tartalomkezeles_admin_velemenyek'
   },
 ];

@@ -109,8 +109,15 @@ const logFailedLogin: CollectionAfterErrorHook = ({ error, req }) => {
 
 export const Users: CollectionConfig = {
   slug: 'users',
+  labels: {
+    singular: 'Felhasználó',
+    plural: 'Felhasználók',
+  },
   admin: {
     useAsTitle: 'email',
+    group: 'Felhasználók',
+    defaultColumns: ['name', 'email', 'role', 'lastLoginAt'],
+    description: 'Szerkesztők és vásárlók. A szerepkört csak tulajdonos állíthatja át.',
   },
   auth: {
     maxLoginAttempts: 5,
@@ -137,17 +144,23 @@ export const Users: CollectionConfig = {
       name: 'name',
       type: 'text',
       required: true,
+      label: 'Név',
     },
     {
       name: 'role',
       type: 'select',
       required: true,
       defaultValue: 'customer',
+      label: 'Szerepkör',
       options: [
-        { label: 'Owner', value: 'owner' },
-        { label: 'Staff', value: 'staff' },
-        { label: 'Customer', value: 'customer' },
+        { label: 'Tulajdonos', value: 'owner' },
+        { label: 'Munkatárs', value: 'staff' },
+        { label: 'Vásárló', value: 'customer' },
       ],
+      admin: {
+        description:
+          'Tulajdonos: mindent lát és állít. Munkatárs: tartalmat kezel. Vásárló: csak a saját fiókját. Átállítani csak tulajdonos tud.',
+      },
       access: {
         create: isOwnerFieldAccess,
         update: isOwnerFieldAccess,
@@ -158,6 +171,7 @@ export const Users: CollectionConfig = {
       type: 'relationship',
       relationTo: 'products',
       hasMany: true,
+      label: 'Megvásárolt kurzusok',
       // A vásárlásokat kizárólag rendszerfolyamat írja (fizetésjóváhagyás),
       // sem az admin, sem az API nem szerkesztheti közvetlenül.
       access: {
@@ -165,32 +179,42 @@ export const Users: CollectionConfig = {
         update: () => false,
       },
       admin: {
-        description: 'A felhasználó által megvásárolt kurzusok (hozzáférés).',
+        description:
+          'A felhasználó által megvásárolt kurzusok (hozzáférés). A fizetés után magától töltődik — kézzel nem szerkeszthető.',
       },
     },
     {
       name: 'billingName',
       type: 'text',
+      label: 'Számlázási név',
     },
     {
       name: 'billingZip',
       type: 'text',
+      label: 'Irányítószám',
     },
     {
       name: 'billingCity',
       type: 'text',
+      label: 'Település',
     },
     {
       name: 'billingStreet',
       type: 'text',
+      label: 'Utca, házszám',
     },
     {
       name: 'taxNumber',
       type: 'text',
+      label: 'Adószám',
+      admin: {
+        description: 'Csak céges vásárlásnál kell.',
+      },
     },
     {
       name: 'lastLoginAt',
       type: 'date',
+      label: 'Utolsó belépés',
       admin: {
         readOnly: true,
       },

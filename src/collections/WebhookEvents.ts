@@ -17,10 +17,16 @@ const isOwnerOrStaff: Access = ({ req }) => req.user?.role === 'owner' || req.us
 
 export const WebhookEvents: CollectionConfig = {
   slug: 'webhook-events',
+  labels: {
+    singular: 'Rendszeresemény',
+    plural: 'Rendszeresemények',
+  },
   admin: {
     useAsTitle: 'externalId',
     defaultColumns: ['provider', 'externalId', 'eventType', 'status', 'attempts', 'updatedAt'],
     group: 'Rendszer',
+    description:
+      'A fizetési és videós szolgáltatók értesítései — hibakereséshez. Ide nem kell nyúlni.',
   },
   access: {
     read: isOwnerOrStaff,
@@ -41,6 +47,7 @@ export const WebhookEvents: CollectionConfig = {
       name: 'provider',
       type: 'select',
       required: true,
+      label: 'Szolgáltató',
       options: [
         { label: 'Barion', value: 'barion' },
         { label: 'Cloudflare Stream', value: 'stream' },
@@ -52,14 +59,17 @@ export const WebhookEvents: CollectionConfig = {
       type: 'text',
       required: true,
       index: true,
+      label: 'Külső azonosító',
     },
     {
       name: 'eventType',
       type: 'text',
+      label: 'Esemény típusa',
     },
     {
       name: 'payload',
       type: 'json',
+      label: 'Nyers üzenet',
     },
     {
       name: 'status',
@@ -67,24 +77,28 @@ export const WebhookEvents: CollectionConfig = {
       required: true,
       defaultValue: 'received',
       index: true,
+      label: 'Feldolgozottság',
       options: [
-        { label: 'Received', value: 'received' },
-        { label: 'Processed', value: 'processed' },
-        { label: 'Failed', value: 'failed' },
+        { label: 'Beérkezett', value: 'received' },
+        { label: 'Feldolgozva', value: 'processed' },
+        { label: 'Sikertelen', value: 'failed' },
       ],
     },
     {
       name: 'attempts',
       type: 'number',
       defaultValue: 0,
+      label: 'Próbálkozások száma',
     },
     {
       name: 'lastError',
       type: 'text',
+      label: 'Utolsó hiba',
     },
     {
       name: 'requestId',
       type: 'text',
+      label: 'Kérésazonosító',
     },
     {
       // A feldolgozás VÉGLEGES üzleti kimenetelének ideje — csak sikeres/
@@ -92,6 +106,7 @@ export const WebhookEvents: CollectionConfig = {
       // esemény újrapróbálható legyen (retry-job).
       name: 'processedAt',
       type: 'date',
+      label: 'Feldolgozás időpontja',
       admin: {
         readOnly: true,
         description:
@@ -102,17 +117,18 @@ export const WebhookEvents: CollectionConfig = {
       // Az utolsó feldolgozás üzleti kimenetele (géppel szűrhető nyom).
       name: 'result',
       type: 'select',
+      label: 'Üzleti kimenetel',
       options: [
-        { label: 'Paid (rendelés fizetve + jogosultság megadva)', value: 'paid' },
-        { label: 'Cancelled (rendelés lemondva)', value: 'cancelled' },
-        { label: 'Függő — újrapollolásra vár', value: 'pending_repoll' },
+        { label: 'Fizetve (rendelés fizetve + jogosultság megadva)', value: 'paid' },
+        { label: 'Lemondva (rendelés lemondva)', value: 'cancelled' },
+        { label: 'Függő — újrakérdezésre vár', value: 'pending_repoll' },
         { label: 'Átmenet elutasítva (állapotgép-védelem)', value: 'rejected' },
         { label: 'Sikertelen feldolgozás (újrapróbálható)', value: 'failed' },
       ],
       admin: {
         readOnly: true,
         description:
-          'Az utolsó feldolgozás üzleti kimenetele. pending_repoll = a fizetés még függő, a poll-job (külön ticket) dolgozza fel újra.',
+          'Az utolsó feldolgozás üzleti kimenetele. A „Függő" azt jelenti, hogy a fizetés még nem dőlt el: a rendszer később magától újra rákérdez a szolgáltatónál.',
       },
     },
   ],

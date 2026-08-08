@@ -1,5 +1,6 @@
 import { ecommercePlugin } from '@payloadcms/plugin-ecommerce'
 import type { CollectionOverride, Currency } from '@payloadcms/plugin-ecommerce/types'
+import type { JSONSchema4 } from 'json-schema'
 import type { Config, Field, FieldAccess } from 'payload'
 
 import {
@@ -102,6 +103,7 @@ const orderItemSnapshotFields: Field[] = [
   {
     name: 'titleSnapshot',
     type: 'text',
+    label: 'Kurzus neve a megrendeléskor',
     access: {
       create: () => false,
       update: () => false,
@@ -115,6 +117,7 @@ const orderItemSnapshotFields: Field[] = [
   {
     name: 'priceHufSnapshot',
     type: 'number',
+    label: 'Ár a megrendeléskor (Ft)',
     access: {
       create: () => false,
       update: () => false,
@@ -135,6 +138,35 @@ const withOrderItemSnapshots = (field: Field): Field => {
     ...named,
     fields: [...(named.fields as Field[]), ...orderItemSnapshotFields],
   } as Field
+}
+
+/**
+ * Az orders.refunds json-mező ERŐS típusa a generált payload-types.ts-hez.
+ *
+ * A `json` mezőkből a típusgenerátor alapból `unknown`-t (bármit) csinál — a
+ * refunds-t viszont pénzügyi kód olvassa (src/lib/refund/*), ezért itt kézzel
+ * megadjuk a séma-alakot. Így a `npm run generate:types` újrafuttatása után is
+ * a bejegyzés-szintű mezők (transactionId, amountHuf, status, refundedAt, type,
+ * reason) típusosak maradnak, és a fordító elkapja az elgépeléseket.
+ *
+ * A séma a refund-szolgáltatás által írt alakot tükrözi — ha ott új mező kerül
+ * a bejegyzésbe, ezt is bővíteni kell.
+ */
+const refundsTypescriptSchema: JSONSchema4 = {
+  type: ['array', 'null'],
+  items: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['transactionId', 'amountHuf', 'status', 'refundedAt', 'type'],
+    properties: {
+      transactionId: { type: 'string' },
+      amountHuf: { type: 'number' },
+      status: { type: 'string' },
+      refundedAt: { type: 'string' },
+      type: { type: 'string', enum: ['full', 'partial'] },
+      reason: { type: ['string', 'null'] },
+    },
+  },
 }
 
 /**
@@ -175,38 +207,72 @@ const visitOrderFields = (field: Field): Field =>
   withOrderStatusStateMachine(withOrderItemSnapshots(field))
 
 /**
+ * Admin-csoport a webshop-collectionöknek: a plugin gyári collectionjei
+ * egységesen a „Webshop" fül alá kerülnek, magyar megnevezéssel — így a
+ * szerkesztő az oldalsávban elkülönítve látja a tartalmat és a webshopot.
+ */
+const WEBSHOP_GROUP = 'Webshop'
+
+/**
  * Products override: a plugin gyári mezői (inventory, priceInHUF…) megmaradnak,
  * a kurzus-specifikus mezők mögéjük kerülnek.
  */
 const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) => ({
   ...defaultCollection,
+  labels: {
+    singular: 'Kurzus',
+    plural: 'Kurzusok',
+  },
   admin: {
     ...defaultCollection.admin,
     useAsTitle: 'sku',
+    group: WEBSHOP_GROUP,
+    description: 'A megvásárolható kurzusok. Az árat és a közzétételt csak tulajdonos állíthatja.',
   },
   fields: [
     ...mapFieldsDeep(defaultCollection.fields, withOwnerOnlyPriceAccess),
     {
       name: 'shortDescription',
       type: 'textarea',
+      label: 'Rövid leírás',
+      admin: {
+        description: '1–3 mondat. A kurzuskártyákon és a kezdőlapon ez látszik.',
+      },
     },
     {
       name: 'longDescription',
       type: 'richText',
+      label: 'Részletes leírás',
+      admin: {
+        description: 'A kurzus oldalán megjelenő teljes szöveg.',
+      },
     },
     {
       name: 'coverImage',
       type: 'upload',
       relationTo: 'media',
+      label: 'Borítókép',
+      admin: {
+        description: 'A kurzus kártyáján és az oldala tetején megjelenő kép.',
+      },
     },
     {
       name: 'gallery',
       type: 'array',
+      label: 'Képgaléria',
+      labels: {
+        singular: 'Kép',
+        plural: 'Képek',
+      },
+      admin: {
+        description: 'További képek a kurzus oldalára (nem kötelező).',
+      },
       fields: [
         {
           name: 'image',
           type: 'upload',
           relationTo: 'media',
+          label: 'Kép',
         },
       ],
     },
@@ -215,42 +281,70 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       type: 'relationship',
       relationTo: 'categories',
       required: true,
+      label: 'Kategória',
+      admin: {
+        description: 'Kötelező. Ha nincs megfelelő, előbb hozd létre a Tartalom → Kategóriák alatt.',
+      },
     },
     {
       name: 'previewVideoStreamId',
       type: 'text',
+      label: 'Bemutató videó azonosítója',
+      admin: {
+        description:
+          'A Cloudflare Stream videó azonosítója az ingyenes előzeteshez. Ha nem tudod, hagyd üresen.',
+      },
     },
     {
       name: 'videos',
       type: 'array',
+      label: 'Videók',
+      labels: {
+        singular: 'Videó',
+        plural: 'Videók',
+      },
+      admin: {
+        description: 'A kurzus videói — a vásárlók ezeket nézhetik meg.',
+      },
       fields: [
         {
           name: 'title',
           type: 'text',
+          label: 'Videó címe',
         },
         {
           name: 'streamAssetId',
           type: 'text',
+          label: 'Videó azonosítója',
+          admin: {
+            description: 'A Cloudflare Stream azonosítója. Feltöltéskor a rendszer tölti ki.',
+          },
         },
         {
           name: 'durationSec',
           type: 'number',
+          label: 'Hossz (másodperc)',
         },
         {
           name: 'status',
           type: 'select',
           defaultValue: 'processing',
+          label: 'Videó állapota',
           options: [
-            { label: 'Processing', value: 'processing' },
-            { label: 'Ready', value: 'ready' },
-            { label: 'Error', value: 'error' },
+            { label: 'Feldolgozás alatt', value: 'processing' },
+            { label: 'Kész', value: 'ready' },
+            { label: 'Hiba', value: 'error' },
           ],
+          admin: {
+            description: 'A videó feldolgozottsága — a rendszer állítja, ne írd át.',
+          },
         },
       ],
     },
     {
       name: 'accessDurationDays',
       type: 'number',
+      label: 'Hozzáférés hossza (nap)',
       admin: {
         description:
           'Hány napig érvényes a hozzáférés vásárlás után. Üres (null) = örök hozzáférés.',
@@ -259,6 +353,7 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
     {
       name: 'status',
       type: 'select',
+      label: 'Állapot',
       // A Payload a drafts `_status` mezőnek ugyanazt az enum-nevet generálná
       // (toSnakeCase('_status') === 'status'), így az alapértelmezett névütközés
       // miatt a 'archived' érték elveszne az adatbázis-enumokból. Külön enum-név
@@ -266,10 +361,13 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       // API-mezőnév változatlanul `status` marad.
       enumName: ({ tableName }) => `enum_${tableName}_product_status`,
       options: [
-        { label: 'Draft', value: 'draft' },
-        { label: 'Published', value: 'published' },
-        { label: 'Archived', value: 'archived' },
+        { label: 'Piszkozat', value: 'draft' },
+        { label: 'Közzétéve', value: 'published' },
+        { label: 'Archivált', value: 'archived' },
       ],
+      admin: {
+        description: 'Csak a közzétett kurzus látszik az oldalon. Ezt csak tulajdonos állíthatja.',
+      },
       // T-011: a publikálás/archiválás (status create/update) kizárólag owneri
       // döntés — a staff draftot készíthet, de nem publikálhat.
       access: {
@@ -281,12 +379,21 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       name: 'sku',
       type: 'text',
       unique: true,
+      label: 'Kurzus neve (azonosító)',
+      admin: {
+        description:
+          'Ez a kurzus megjelenő neve és egyben egyedi azonosítója — két kurzusnak nem lehet ugyanaz.',
+      },
     },
     {
       name: 'relatedProducts',
       type: 'relationship',
       relationTo: 'products',
       hasMany: true,
+      label: 'Kapcsolódó kurzusok',
+      admin: {
+        description: 'A kurzus oldalán ajánlott további kurzusok.',
+      },
     },
   ],
 })
@@ -309,11 +416,22 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
  */
 const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => ({
   ...defaultCollection,
+  labels: {
+    singular: 'Rendelés',
+    plural: 'Rendelések',
+  },
+  admin: {
+    ...defaultCollection.admin,
+    group: WEBSHOP_GROUP,
+    description:
+      'A leadott rendelések és a fizetésük állapota. A rendeléseket a rendszer kezeli — kézzel ne módosítsd őket.',
+  },
   fields: [
     ...mapFieldsDeep(defaultCollection.fields, visitOrderFields),
     {
       name: 'orderNumber',
       type: 'text',
+      label: 'Rendelésszám',
       // Postgresben a unique index több NULL-t is megenged, így gyakorlatilag sparse.
       unique: true,
       index: true,
@@ -330,6 +448,7 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
     {
       name: 'totalHufSnapshot',
       type: 'number',
+      label: 'Végösszeg a megrendeléskor (Ft)',
       access: {
         create: () => false,
         update: () => false,
@@ -343,20 +462,26 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
     {
       name: 'barionPaymentId',
       type: 'text',
+      label: 'Barion fizetésazonosító',
       // Postgresben a unique index több NULL-t is megenged, így gyakorlatilag sparse.
       unique: true,
       index: true,
       access: {
         read: isOwnerFieldAccess,
       },
+      admin: {
+        description: 'A Barion oldali fizetés azonosítója — hibakereséshez.',
+      },
     },
     {
       name: 'barionPaymentRequestId',
       type: 'text',
+      label: 'Barion kérésazonosító',
     },
     {
       name: 'invoiceNumber',
       type: 'text',
+      label: 'Számla sorszáma',
       access: {
         read: isOwnerFieldAccess,
       },
@@ -364,37 +489,53 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
     {
       name: 'invoicePdfUrl',
       type: 'text',
+      label: 'Számla PDF linkje',
     },
     {
       name: 'invoiceStatus',
       type: 'select',
       defaultValue: 'none',
+      label: 'Számla állapota',
       options: [
-        { label: 'None', value: 'none' },
-        { label: 'Pending', value: 'pending' },
-        { label: 'Issued', value: 'issued' },
-        { label: 'Failed', value: 'failed' },
+        { label: 'Nincs', value: 'none' },
+        { label: 'Függőben', value: 'pending' },
+        { label: 'Kiállítva', value: 'issued' },
+        { label: 'Sikertelen', value: 'failed' },
       ],
+      admin: {
+        description: 'A számlázás állapota. A rendszer állítja — ne írd át.',
+      },
     },
     {
       name: 'customerSnapshot',
       type: 'json',
+      label: 'Vásárlói adatok a megrendeléskor',
       access: {
         read: isOwnerFieldAccess,
+      },
+      admin: {
+        description: 'A számlázási adatok mentett másolata a rendelés idejéből.',
       },
     },
     {
       name: 'consentWithdrawalWaiver',
       type: 'checkbox',
       defaultValue: false,
+      label: 'Lemondott az elállási jogról',
+      admin: {
+        description:
+          'A vásárló a megrendeléskor kérte az azonnali hozzáférést, és tudomásul vette, hogy ezzel elveszti a 14 napos elállási jogát.',
+      },
     },
     {
       name: 'consentWithdrawalWaiverAt',
       type: 'date',
+      label: 'Elállási jogról lemondás időpontja',
     },
     {
       name: 'refundReason',
       type: 'text',
+      label: 'Visszatérítés indoka',
       access: {
         update: isOwnerFieldAccess,
       },
@@ -402,6 +543,7 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
     {
       name: 'refundedAt',
       type: 'date',
+      label: 'Visszatérítés időpontja',
       access: {
         update: isOwnerFieldAccess,
       },
@@ -414,6 +556,11 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       // owner-only, mert pénzügyi tranzakció-adatokat hordoz.
       name: 'refunds',
       type: 'json',
+      label: 'Visszatérítések',
+      // A generált típus erős marad (lásd refundsTypescriptSchema). A kapott
+      // sémát nem eldobjuk, hanem kiegészítjük — így az admin.description-ből
+      // származó JSDoc-komment is megmarad a generált típuson.
+      typescriptSchema: [({ jsonSchema }) => ({ ...jsonSchema, ...refundsTypescriptSchema })],
       access: {
         read: isOwnerFieldAccess,
         create: () => false,
@@ -428,8 +575,12 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
     {
       name: 'ipAddress',
       type: 'text',
+      label: 'IP-cím a megrendeléskor',
       access: {
         read: isOwnerFieldAccess,
+      },
+      admin: {
+        description: 'A megrendelés IP-címe — csalásgyanús eset kivizsgálásához.',
       },
     },
   ],
@@ -477,6 +628,18 @@ export const ecommerce = async (config: Config): Promise<Config> => {
     addresses: false,
     carts: {
       allowGuestCarts: false,
+      cartsCollectionOverride: ({ defaultCollection }) => ({
+        ...defaultCollection,
+        labels: {
+          singular: 'Kosár',
+          plural: 'Kosarak',
+        },
+        admin: {
+          ...defaultCollection.admin,
+          group: WEBSHOP_GROUP,
+          description: 'A vásárlók félbehagyott kosarai. Automatikusan keletkezik — ne szerkeszd.',
+        },
+      }),
     },
     currencies: {
       defaultCurrency: 'HUF',
@@ -495,7 +658,20 @@ export const ecommerce = async (config: Config): Promise<Config> => {
       productsCollectionOverride,
       variants: false,
     },
-    transactions: true,
+    transactions: {
+      transactionsCollectionOverride: ({ defaultCollection }) => ({
+        ...defaultCollection,
+        labels: {
+          singular: 'Tranzakció',
+          plural: 'Tranzakciók',
+        },
+        admin: {
+          ...defaultCollection.admin,
+          group: WEBSHOP_GROUP,
+          description: 'A fizetési tranzakciók nyoma. Csak a rendszer írja — ne szerkeszd.',
+        },
+      }),
+    },
   })(config)
 
   withEcommerce.collections = applyCollectionAccessPolicies(

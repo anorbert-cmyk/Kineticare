@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import type { Page, Post, Product } from '../../payload-types'
+import type { Page, Post, Product, Testimonial } from '../../payload-types'
 import { faqPageJsonLd, organizationJsonLd } from '../../lib/seo'
 import { HERO_VIDEO_STREAM_ID } from '../../lib/hero-video'
 import { Container } from '../ui/Container'
@@ -16,30 +16,41 @@ import { FAQ_ITEMS, Faq } from './home/Faq'
 import { FreeSos } from './home/FreeSos'
 import { HeroCta } from './home/HeroCta'
 import { HowItWorks } from './home/HowItWorks'
+import { featuredTestimonials, TestimonialsSection } from './home/TestimonialsSection'
 import { hasLexicalContent } from '../lexical/serialize'
 import { RichText } from '../lexical/RichText'
 
 /**
  * HomeView — a kezdőlap prezentációs komponense (tiszta, fixture-ből tesztelhető).
  *
- * A docs/ux-hierarchia-audit.md cél-hierarchiája szerinti sorrend (üzleti cél:
- * kurzus-értékesítés → bizalom → kapcsolat; a lead-magnet másodlagos):
- * 1. M1 Hero + EGY elsődleges CTA a fizetős kurzusokra (→ /kurzusok) +
+ * A docs/ux-hierarchia-audit.md 3. szakaszának cél-hierarchiája szerinti
+ * sorrend (üzleti cél: kurzus-értékesítés → bizalom → kapcsolat; a lead-magnet
+ * másodlagos), a szabályok a docs/ertekesitesi-ux-skill.md-ben:
+ * M1 Hero + EGY elsődleges CTA a fizetős kurzusokra (→ /kurzusok) +
  *    visszafogott másodlagos link az ingyenes SOS-ra (HeroCta). A hero média:
  *    ha a HERO_VIDEO_STREAM_ID be van állítva (src/lib/hero-video.ts), a Stream
  *    hero-videó jelenik meg, egyébként a CMS heroImage — a videóblokk érintetlen.
- * 2. M2 Fizetős kurzus-kártyák (cím/rövid leírás/ÁR/CTA) KÖZVETLENÜL a hero
- *    után (CourseCards) — üresen a szekció elmarad.
- * 3. M3 „Így működik az online kurzus" — 3 lépés, statikus (HowItWorks).
- * 4. M4 Szakmai hitel-csík a /rolunk linkkel (CredentialsStrip).
- * 5. M5 Vélemények — KIVÉVE: valódi, hitelesíthető idézetek hiányában a
- *    szekció egyelőre elmarad (fiktív vélemény nem kerülhet ki; a valós
- *    idézetek érkezésekor visszatehető).
- * 6. M6 Gyakori kérdések — ellenérv-kezelés, statikus (Faq).
- * 7. M7 Ingyenes SOS Kézrelax — lead-magnet VISSZAFOGOTT súllyal (FreeSos).
- * 8. A CMS-oldal richText-tartalma (ha van) — a staff által írt szekciók.
- * 9. Legfrissebb posztok — tudástár (SEO, hosszútáv) + „Összes bejegyzés".
- * A kapcsolat/footer (M8) a layoutban él, itt érintetlen.
+ * M2 Szakmai hitel-csík a /rolunk linkkel (CredentialsStrip) — közvetlenül a
+ *    hero alatt keretezi a vásárlási döntést.
+ * M3 Fizetős kurzus-kártyák (cím/rövid leírás/ÁR/CTA) a hitel-csík után
+ *    (CourseCards) — üresen a szekció elmarad.
+ * M4 Ingyenes SOS Kézrelax — lead-magnet VISSZAFOGOTT, másodlagos súllyal,
+ *    közvetlenül a fizetős blokk után, tint háttérrel elválasztva (FreeSos).
+ * M5 „Így működik az online kurzus" — 3 lépés, statikus (HowItWorks).
+ * M6 Vélemények — a CMS `testimonials` collectionjéből, a termékblokk UTÁN
+ *    (TestimonialsSection): legfeljebb 3 kiemelt és látható vélemény, `order`
+ *    szerint, a rövid változat elsőbbségével. Kiemelt vélemény nélkül a szekció
+ *    elmarad — fiktív idézet fogyasztóvédelmi okból nem kerülhet ki, ezért
+ *    helykitöltő sincs.
+ * M6+ A CMS-oldal richText-tartalma (ha van) — a staff által írt szabad
+ *    szekciók, a vélemények után, a tudástár előtt.
+ * M7 Legfrissebb posztok — tudástár (SEO, hosszútáv) + „Összes bejegyzés". A
+ *    háttere a sávritmust követi: ha a (tint) vélemény-szekció után nincs
+ *    fehér CMS-blokk, a tudástár fehér, hogy ne álljon össze két tint sáv.
+ * M8 Gyakori kérdések — ellenérv-kezelés a lap alján (Faq; a FAQPage JSON-LD
+ *    miatt a szekció főoldali jelenléte SEO-kötelezettség, lásd
+ *    docs/seo-geo-llm.md).
+ * A kapcsolat/footer a layoutban él, itt érintetlen.
  *
  * A draft tartalom ide el sem jut: a lekérdezések published-szűrtjei mellett a
  * kártyakomponensek is védőhálót tartanak.
@@ -48,6 +59,12 @@ export interface HomeViewProps {
   home: Page | null
   products: Product[]
   posts: Post[]
+  /**
+   * Vélemények (M6). Opcionális, hogy a kizárólag a hero/JSON-LD viselkedést
+   * vizsgáló renderek is meghívhassák — hiányzó vagy üres listánál a szekció
+   * egyszerűen elmarad.
+   */
+  testimonials?: Testimonial[]
 }
 
 function HeroSection({ home }: { home: Page | null }) {
@@ -81,11 +98,20 @@ function HeroSection({ home }: { home: Page | null }) {
   )
 }
 
-export function HomeView({ home, products, posts }: HomeViewProps) {
+export function HomeView({ home, products, posts, testimonials = [] }: HomeViewProps) {
   const visibleProducts = products.filter(isPubliclyVisibleProduct)
   const paidProducts = visibleProducts.filter(isPaidProduct)
   const freeProduct = visibleProducts.find((product) => !isPaidProduct(product)) ?? null
   const visiblePosts = posts.filter((post) => post.status === 'published' && post.slug)
+
+  // Sávritmus: a kezdőlap fehér és tint (világoskék) szekciókat váltogat. A
+  // vélemény-szekció (tint) és a CMS-blokk (fehér) is FELTÉTELES, ezért a
+  // tudástár háttere nem lehet fix: CMS-tartalom nélkül a tudástár közvetlenül
+  // a vélemények után jönne, és a két tint sáv egyetlen nagy folttá olvadna
+  // (elveszne a szekcióhatár). Ilyenkor a tudástár fehérre vált.
+  const hasCmsContent = Boolean(home?.content && hasLexicalContent(home.content))
+  const testimonialsVisible = featuredTestimonials(testimonials).length > 0
+  const previousBandIsTint = testimonialsVisible && !hasCmsContent
 
   return (
     <>
@@ -93,17 +119,17 @@ export function HomeView({ home, products, posts }: HomeViewProps) {
       <JsonLd data={faqPageJsonLd(FAQ_ITEMS)} />
       <HeroSection home={home} />
 
-      <CourseCards products={paidProducts} />
-
-      <HowItWorks />
-
       <CredentialsStrip />
 
-      <Faq />
+      <CourseCards products={paidProducts} />
 
       <FreeSos freeProduct={freeProduct} />
 
-      {home?.content && hasLexicalContent(home.content) ? (
+      <HowItWorks />
+
+      <TestimonialsSection testimonials={testimonials} />
+
+      {hasCmsContent && home?.content ? (
         <Section>
           <Container size="narrow">
             <RichText content={home.content} />
@@ -112,7 +138,7 @@ export function HomeView({ home, products, posts }: HomeViewProps) {
       ) : null}
 
       {visiblePosts.length > 0 ? (
-        <Section variant="tint">
+        <Section variant={previousBandIsTint ? 'default' : 'tint'}>
           <Container>
             <h2 className="kc-section-title">Legfrissebb a tudástárból</h2>
             <div className="kc-card-grid">
@@ -128,6 +154,8 @@ export function HomeView({ home, products, posts }: HomeViewProps) {
           </Container>
         </Section>
       ) : null}
+
+      <Faq />
     </>
   )
 }

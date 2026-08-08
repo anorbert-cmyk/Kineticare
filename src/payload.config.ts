@@ -1,6 +1,8 @@
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { formBuilderPlugin } from '@payloadcms/plugin-form-builder'
-import { lexicalEditor } from '@payloadcms/richtext-lexical'
+import { FixedToolbarFeature, lexicalEditor } from '@payloadcms/richtext-lexical'
+import { en } from '@payloadcms/translations/languages/en'
+import { hu } from '@payloadcms/translations/languages/hu'
 import path from 'node:path'
 import { APIError, buildConfig, type Access, type Payload } from 'payload'
 import sharp from 'sharp'
@@ -12,11 +14,13 @@ import { Media } from './collections/Media'
 import { Menus } from './collections/Menus'
 import { Pages } from './collections/Pages'
 import { Posts } from './collections/Posts'
+import { Testimonials } from './collections/Testimonials'
 import { Users } from './collections/Users'
 import { WebhookEvents } from './collections/WebhookEvents'
 import { jobsConfig } from './jobs'
 import { contactStaffEmail, kineticareEmailAdapter, sendMail, usersAuthEmails } from './lib/email'
 import { logger } from './lib/logger'
+import { adminGroups } from './plugins/admin-groups'
 import { audit } from './plugins/audit'
 import { ecommerce } from './plugins/ecommerce'
 
@@ -221,9 +225,35 @@ export default buildConfig({
     importMap: {
       baseDir: path.resolve(dirname),
     },
+    // A böngészőfülön/megosztáskor látszó cím: „<oldal> – Kineticare admin".
+    meta: {
+      titleSuffix: ' – Kineticare admin',
+    },
   },
-  collections: [Users, Media, Pages, Posts, Menus, Categories, WebhookEvents, AuditLogs],
-  editor: lexicalEditor(),
+  // Magyar admin felület: a @payloadcms/translations `hu` nyelvfájlja a
+  // fallback, így a nem szerkesztett kulcsok is magyarul jelennek meg; az `en`
+  // választható marad (a Payload a felhasználó nyelvi beállítását tiszteletben tartja).
+  i18n: {
+    supportedLanguages: { en, hu },
+    fallbackLanguage: 'hu',
+  },
+  collections: [
+    Users,
+    Media,
+    Pages,
+    Posts,
+    Menus,
+    Categories,
+    Testimonials,
+    WebhookEvents,
+    AuditLogs,
+  ],
+  // FixedToolbarFeature: a szerkesztő fölött állandóan látszó eszköztár —
+  // laikus szerkesztőnek sokkal felfedezhetőbb, mint a lebegő (kijelölésre
+  // előbukkanó) alapértelmezett toolbar.
+  editor: lexicalEditor({
+    features: ({ defaultFeatures }) => [...defaultFeatures, FixedToolbarFeature()],
+  }),
   // T-018: a Payload auth e-mailjei (forgot-password) is a saját provider-rétegen
   // mennek ki (Resend/SMTP/noop — env nélkül sosem crashel).
   email: kineticareEmailAdapter,
@@ -279,7 +309,27 @@ export default buildConfig({
     // T-016: form-builder plugin pinned 3.86.0 — a nyilvános beküldés a plugin
     // form-submissions endpointján megy (külön POST /api/contact route nincs).
     formBuilderPlugin({
+      // Az űrlapok és a beküldések saját admin-csoportot kapnak, magyar
+      // megnevezéssel — a tartalom és a webshop mellé, jól elkülönítve.
+      formOverrides: {
+        labels: {
+          singular: 'Űrlap',
+          plural: 'Űrlapok',
+        },
+        admin: {
+          group: 'Űrlapok',
+          description: 'A weboldal űrlapjai (pl. Kapcsolat). A mezőket itt lehet átszabni.',
+        },
+      },
       formSubmissionOverrides: {
+        labels: {
+          singular: 'Űrlapbeküldés',
+          plural: 'Űrlapbeküldések',
+        },
+        admin: {
+          group: 'Űrlapok',
+          description: 'A látogatók által beküldött üzenetek. Csak olvasásra való.',
+        },
         access: {
           // Admin oldalon staff+owner olvashatja/kezelheti a beküldéseket;
           // a create a plugin defaultja marad (nyilvános űrlap-beküldés).
@@ -305,5 +355,8 @@ export default buildConfig({
         },
       },
     }),
+    // Az admin oldalsáv csoport-sorrendje — a lánc VÉGÉN kell futnia, hogy a
+    // plugin-collectionöket (webshop, űrlapok) is besorolja.
+    adminGroups,
   ],
 })

@@ -16,6 +16,13 @@ export interface SectionProps {
   className?: string
   /** Horgony-cél (pl. a skip-link main-tartalma vagy #kapcsolat). */
   id?: string
+  /**
+   * A szekciót megnevező címsor id-je. A `section` elem csak akkor kap
+   * landmark-szerepet a képernyőolvasóban, ha van neve — ezért a saját
+   * címsorral rendelkező szekciók ezt a szekció-elemre teszik (nem a belső
+   * listára).
+   */
+  'aria-labelledby'?: string
 }
 
 export function Section({
@@ -25,6 +32,7 @@ export function Section({
   as: Component = 'section',
   className,
   id,
+  'aria-labelledby': ariaLabelledBy,
 }: SectionProps) {
   const classes = [
     'kc-section',
@@ -35,7 +43,7 @@ export function Section({
     .filter(Boolean)
     .join(' ')
   return (
-    <Component className={classes} id={id}>
+    <Component aria-labelledby={ariaLabelledBy} className={classes} id={id}>
       {children}
     </Component>
   )

@@ -44,15 +44,20 @@
   --kc-font-heading: 'Tenor Sans', 'Georgia', 'Times New Roman', serif;
   --kc-font-body: 'Nunito Sans', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
 
-  /* Tipográfiai skála (1.25-ös arány, legacy alap 18px) */
-  --kc-text-xs: 0.777rem;   /* ~14px */
-  --kc-text-sm: 0.888rem;   /* 16px */
-  --kc-text-base: 1rem;     /* 18px — legacy body */
-  --kc-text-lg: 1.25rem;    /* ~22px */
-  --kc-text-xl: 1.555rem;   /* ~28px */
-  --kc-text-2xl: 2rem;      /* 36px */
-  --kc-text-3xl: 2.666rem;  /* 48px */
-  --kc-text-4xl: 3.555rem;  /* 64px */
+  /* Tipográfiai skála — folytonos (clamp), ~1.25 modulus, 1rem = 16px
+     böngésző-alap (html-en nincs font-size felülírás; a korábbi „18px legacy
+     alap" komment nem a valós renderelt méretet írta le). A felső lépcsők
+     360px→1200px között viewport-arányosan nőnek; a --kc-text-4xl a
+     display-lépcső, egyben a hero-címsor felső korlátja
+     (docs/ertekesitesi-ux-skill.md, 4. pont). */
+  --kc-text-xs: 0.777rem;
+  --kc-text-sm: 0.888rem;
+  --kc-text-base: 1rem;
+  --kc-text-lg: clamp(1.125rem, 1.07rem + 0.24vw, 1.25rem);
+  --kc-text-xl: clamp(1.3rem, 1.21rem + 0.4vw, 1.5rem);
+  --kc-text-2xl: clamp(1.55rem, 1.38rem + 0.75vw, 1.95rem);
+  --kc-text-3xl: clamp(1.9rem, 1.62rem + 1.25vw, 2.55rem);
+  --kc-text-4xl: clamp(2.25rem, 1.8rem + 2vw, 3.3rem);
 
   --kc-leading-tight: 1.15;
   --kc-leading-heading: 1.2; /* legacy headline 108/100 ≈ 1.08, olvashatóságra kerekítve */

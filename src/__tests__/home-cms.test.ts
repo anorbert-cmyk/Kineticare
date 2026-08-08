@@ -17,14 +17,15 @@ import {
   resolveSeoDescription,
   resolveSeoTitle,
 } from '../lib/seo'
-import type { Category, Media, Page, Post, Product, User } from '../payload-types'
+import type { Category, Media, Page, Post, Product, Testimonial, User } from '../payload-types'
 
 /**
  * Oldal-render tesztek (kezdőlap + CMS/blog) — fixture-adattal, DB nélkül.
- * Lefedi: a docs/ux-hierarchia-audit.md cél-hierarchiájú kezdőlapot (M1 hero CTA,
- * M2 fizetős kurzus-kiemelés cím/ár, M3 hogyan-működik, M4 hitel-csík,
- * M6 GYIK, M7 visszafogott ingyenes SOS-sáv; az M5 vélemény-szekció szándékosan
- * NINCS implementálva — fiktív idézet nem kerülhet ki, valós forrásig vár), a friss posztokat, a
+ * Lefedi: a docs/ux-hierarchia-audit.md 3. szakaszának cél-hierarchiájú
+ * kezdőlapot (M1 hero CTA, M2 hitel-csík, M3 fizetős kurzus-kiemelés cím/ár,
+ * M4 visszafogott ingyenes SOS-sáv, M5 hogyan-működik, M6 vélemények a
+ * termékblokk után — CMS-ből, max 3, rövid változattal, kiemelt vélemény
+ * híján a szekció elmarad, M8 GYIK a lap alján), a friss posztokat, a
  * poszt-oldal meta-részeit, a draft/published viselkedést és az SEO-fallbackláncot.
  */
 
@@ -130,6 +131,21 @@ function product(overrides: Partial<Product> & { id: number }): Product {
   } as unknown as Product
 }
 
+function testimonial(overrides: Partial<Testimonial> & { id: number }): Testimonial {
+  return {
+    quote: `Teljes vélemény ${overrides.id}.`,
+    shortQuote: null,
+    authorName: `Szerző ${overrides.id}`,
+    authorTitle: null,
+    featured: true,
+    order: overrides.id,
+    visible: true,
+    updatedAt: '',
+    createdAt: '',
+    ...overrides,
+  } as unknown as Testimonial
+}
+
 function category(overrides: Partial<Category> & { id: number }): Category {
   return {
     title: `Kategória ${overrides.id}`,
@@ -149,6 +165,26 @@ function render(node: ReactNode): string {
 /** A HUF-formázás nem-törhető szóközöket (NBSP, U+00A0) használ — a tesztekben normalizáljuk. */
 function normalizeNbsp(html: string): string {
   return html.replace(/\u00a0/g, ' ')
+}
+
+type SectionBand = 'feher' | 'tint'
+
+/** A kezd\u0151lap szekci\u00f3-s\u00e1vjai renderel\u00e9si sorrendben (feh\u00e9r / tint h\u00e1tt\u00e9r). */
+function sectionBands(html: string): SectionBand[] {
+  return Array.from(html.matchAll(/<section[^>]*\sclass="([^"]*)"/g)).map(([, classes]) =>
+    classes.includes('kc-section--tint') ? 'tint' : 'feher',
+  )
+}
+
+/** Az adott sz\u00f6veget tartalmaz\u00f3 szekci\u00f3 h\u00e1tt\u00e9r-s\u00e1vja. */
+function bandOfSectionWith(html: string, marker: string): SectionBand {
+  const markerIndex = html.indexOf(marker)
+  if (markerIndex < 0) {
+    throw new Error(`A jel\u00f6l\u0151 nem szerepel a renderelt oldalon: ${marker}`)
+  }
+  const openIndex = html.lastIndexOf('<section', markerIndex)
+  const openTag = html.slice(openIndex, html.indexOf('>', openIndex))
+  return openTag.includes('kc-section--tint') ? 'tint' : 'feher'
 }
 
 // ---------------------------------------------------------------------------
@@ -178,7 +214,7 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(html).toContain('href="#ingyenes"')
   })
 
-  it('M2 kurzus-kiemelés: published FIZETŐS termékből kártya (cím/ár), draft/archived kimarad', () => {
+  it('M3 kurzus-kiemelés: published FIZETŐS termékből kártya (cím/ár), draft/archived kimarad', () => {
     const html = render(
       createElement(HomeView, {
         home: null,
@@ -198,7 +234,7 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(html).toContain('href="/kurzusok/1"')
   })
 
-  it('M2/M7: az ingyenes termék NEM a fizetős kártyák között, hanem a visszafogott SOS-sávban jelenik meg', () => {
+  it('M3/M4: az ingyenes termék NEM a fizetős kártyák között, hanem a visszafogott SOS-sávban jelenik meg', () => {
     const html = render(
       createElement(HomeView, {
         home: null,
@@ -210,7 +246,7 @@ describe('HomeView (kezdőlap-render)', () => {
       }),
     )
     // A fizetős kártya-szekció (id="kurzusok") csak a fizetős terméket linkeli.
-    const coursesSection = html.slice(html.indexOf('id="kurzusok"'), html.indexOf('Így működik'))
+    const coursesSection = html.slice(html.indexOf('id="kurzusok"'), html.indexOf('id="ingyenes"'))
     expect(coursesSection).toContain('href="/kurzusok/1"')
     expect(coursesSection).not.toContain('href="/kurzusok/7"')
     // Az ingyenes termék a másodlagos súlyú SOS-sávban (id="ingyenes"), „Ingyenes" jelöléssel.
@@ -220,14 +256,14 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(sosSection).toContain('href="/kurzusok/7"')
   })
 
-  it('M7 SOS-sáv: ingyenes termék nélkül is megjelenik, fallbackben a kurzuslistára mutat', () => {
+  it('M4 SOS-sáv: ingyenes termék nélkül is megjelenik, fallbackben a kurzuslistára mutat', () => {
     const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
     expect(html).toContain('id="ingyenes"')
     expect(html).toContain('SOS Kézrelax')
     expect(html).toContain('Elindítom az ingyenes kurzust')
   })
 
-  it('M3 hogyan-működik: 3 lépés (megveszem → azonnal nézem → otthon gyakorlok)', () => {
+  it('M5 hogyan-működik: 3 lépés (megveszem → azonnal nézem → otthon gyakorlok)', () => {
     const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
     expect(html).toContain('Így működik az online kurzus')
     expect(html).toContain('Kiválasztod a kurzust')
@@ -235,13 +271,86 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(html).toContain('Otthon gyakorolsz')
   })
 
-  it('M4 hitel-csík: kondenzált szakmai érvek + a Rólunk oldalra mutató link', () => {
+  it('M6 vélemények: legfeljebb 3 kiemelt+látható jelenik meg, a többi kimarad', () => {
+    const html = render(
+      createElement(HomeView, {
+        home: null,
+        products: [],
+        posts: [],
+        testimonials: [
+          testimonial({ id: 1, authorName: 'Garami Gábor', authorTitle: 'zenész, műsorvezető' }),
+          testimonial({ id: 2, authorName: 'Kállai Dóra' }),
+          testimonial({ id: 3, authorName: 'Bagdal Szilvia' }),
+          testimonial({ id: 4, authorName: 'Negyedik kiemelt' }),
+          testimonial({ id: 5, authorName: 'Nem kiemelt', featured: false }),
+          testimonial({ id: 6, authorName: 'Rejtett vélemény', visible: false }),
+        ],
+      }),
+    )
+    expect(html).toContain('Pácienseink mondták')
+    expect(html).toContain('Garami Gábor')
+    expect(html).toContain('zenész, műsorvezető')
+    expect(html).toContain('Kállai Dóra')
+    expect(html).toContain('Bagdal Szilvia')
+    // A 4. kiemelt már nem fér bele (UX-skill M6: max 2–3), a nem kiemelt és a
+    // rejtett vélemény pedig sosem jelenhet meg.
+    expect(html).not.toContain('Negyedik kiemelt')
+    expect(html).not.toContain('Nem kiemelt')
+    expect(html).not.toContain('Rejtett vélemény')
+    expect(html.match(/<blockquote/g) ?? []).toHaveLength(3)
+  })
+
+  it('M6 vélemények: a rövid változat elsőbbséget élvez a teljes szöveg felett', () => {
+    const html = render(
+      createElement(HomeView, {
+        home: null,
+        products: [],
+        posts: [],
+        testimonials: [
+          testimonial({
+            id: 1,
+            quote: 'A teljes, hosszú vélemény, ami a főoldalon már túl sok lenne.',
+            shortQuote: 'A rövid, főoldalra szánt változat.',
+          }),
+          testimonial({ id: 2, quote: 'Csak a teljes szöveg van megadva.', shortQuote: '   ' }),
+        ],
+      }),
+    )
+    expect(html).toContain('A rövid, főoldalra szánt változat.')
+    expect(html).not.toContain('A teljes, hosszú vélemény')
+    // Üres (csak szóköz) rövid változatnál a teljes szöveg jelenik meg.
+    expect(html).toContain('Csak a teljes szöveg van megadva.')
+  })
+
+  it('M6 vélemények: kiemelt vélemény nélkül a szekció elmarad (nincs helykitöltő, nincs fiktív idézet)', () => {
+    const emptyHtml = render(
+      createElement(HomeView, { home: null, products: [], posts: [], testimonials: [] }),
+    )
+    expect(emptyHtml).not.toContain('id="velemenyek"')
+    expect(emptyHtml).not.toContain('Pácienseink mondták')
+
+    const hiddenOnlyHtml = render(
+      createElement(HomeView, {
+        home: null,
+        products: [],
+        posts: [],
+        testimonials: [
+          testimonial({ id: 1, featured: false }),
+          testimonial({ id: 2, visible: false }),
+        ],
+      }),
+    )
+    expect(hiddenOnlyHtml).not.toContain('id="velemenyek"')
+    expect(hiddenOnlyHtml).not.toContain('Pácienseink mondták')
+  })
+
+  it('M2 hitel-csík: kondenzált szakmai érvek + a Rólunk oldalra mutató link', () => {
     const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
     expect(html).toContain('Gyógytornász és manuálterapeuta')
     expect(html).toContain('href="/rolunk"')
   })
 
-  it('M6 GYIK: az audit kérdései (műtét, fájdalom, időráfordítás, eszköz) details/summary-ben', () => {
+  it('M8 GYIK: az audit kérdései (műtét, fájdalom, időráfordítás, eszköz) details/summary-ben', () => {
     const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
     expect(html).toContain('Gyakori kérdések')
     expect(html).toContain('Műtét után is végezhetem a gyakorlatokat?')
@@ -250,17 +359,24 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(html).toContain('<summary')
   })
 
-  it('szekció-sorrend: hero → kurzusok → hogyan működik → hitel → GYIK → ingyenes SOS', () => {
+  it('szekció-sorrend az audit szerint: hero → hitel-csík → fizetős kurzusok → ingyenes SOS → hogyan működik → vélemények → CMS-tartalom → GYIK a végén', () => {
     const html = render(
-      createElement(HomeView, { home: null, products: [product({ id: 1 })], posts: [] }),
+      createElement(HomeView, {
+        home: page({ id: 1, content: contentWithWords(10) as unknown as Page['content'] }),
+        products: [product({ id: 1 })],
+        posts: [],
+        testimonials: [testimonial({ id: 1 })],
+      }),
     )
     const order = [
       'kc-hero__title',
-      'id="kurzusok"',
-      'Így működik az online kurzus',
       'Bővebben a szakmai hátterünkről',
-      'Gyakori kérdések',
+      'id="kurzusok"',
       'id="ingyenes"',
+      'Így működik az online kurzus',
+      'id="velemenyek"',
+      'kc-richtext',
+      'Gyakori kérdések',
     ]
     const positions = order.map((marker) => html.indexOf(marker))
     for (const position of positions) {
@@ -268,6 +384,68 @@ describe('HomeView (kezdőlap-render)', () => {
     }
     const sorted = [...positions].sort((a, b) => a - b)
     expect(positions).toEqual(sorted)
+  })
+
+  /**
+   * Sávritmus: a kezdőlap fehér és tint szekciókat váltogat. A vélemény-szekció
+   * (tint) és a CMS-blokk (fehér) is feltételes, ezért CMS-tartalom nélkül a
+   * tudástár közvetlenül a vélemények után jönne — két tint sáv egyetlen nagy
+   * folttá olvadna, és elveszne a szekcióhatár.
+   */
+  it.each([
+    ['CMS-tartalommal', contentWithWords(10) as unknown as Page['content']],
+    ['CMS-tartalom nélkül', emptyContent()],
+  ])('sávritmus (%s): nincs két egymást követő tint sáv', (_label, content) => {
+    const html = render(
+      createElement(HomeView, {
+        home: page({ id: 1, content }),
+        products: [product({ id: 1 })],
+        posts: [post({ id: 1 })],
+        testimonials: [testimonial({ id: 1 })],
+      }),
+    )
+    const bands = sectionBands(html)
+
+    expect(bands.length).toBeGreaterThan(0)
+    expect(bands).toContain('tint')
+    for (let index = 1; index < bands.length; index += 1) {
+      expect([bands[index - 1], bands[index]]).not.toEqual(['tint', 'tint'])
+    }
+  })
+
+  it('sávritmus: a tudástár csak akkor tint, ha a fehér CMS-blokk elválasztja a véleményektől', () => {
+    const withCms = render(
+      createElement(HomeView, {
+        home: page({ id: 1, content: contentWithWords(10) as unknown as Page['content'] }),
+        products: [],
+        posts: [post({ id: 1 })],
+        testimonials: [testimonial({ id: 1 })],
+      }),
+    )
+    expect(bandOfSectionWith(withCms, 'Pácienseink mondták')).toBe('tint')
+    expect(bandOfSectionWith(withCms, 'Legfrissebb a tudástárból')).toBe('tint')
+
+    const withoutCms = render(
+      createElement(HomeView, {
+        home: page({ id: 1 }),
+        products: [],
+        posts: [post({ id: 1 })],
+        testimonials: [testimonial({ id: 1 })],
+      }),
+    )
+    expect(bandOfSectionWith(withoutCms, 'Pácienseink mondták')).toBe('tint')
+    expect(bandOfSectionWith(withoutCms, 'Legfrissebb a tudástárból')).toBe('feher')
+
+    // Kiemelt vélemény nélkül a tudástár előtt fehér szekció áll, így visszakapja a tint sávot.
+    const withoutTestimonials = render(
+      createElement(HomeView, {
+        home: page({ id: 1 }),
+        products: [],
+        posts: [post({ id: 1 })],
+        testimonials: [],
+      }),
+    )
+    expect(bandOfSectionWith(withoutTestimonials, 'Legfrissebb a tudástárból')).toBe('tint')
   })
 
   it('isPaidProduct: csak az árazott (priceInHUFEnabled + szám ár) termék fizetős', () => {
