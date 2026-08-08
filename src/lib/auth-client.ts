@@ -99,14 +99,21 @@ export async function forgotPassword(
   fetchImpl: typeof fetch = fetch,
 ): Promise<AuthResult> {
   try {
-    await fetchImpl('/api/users/forgot-password', {
+    const response = await fetchImpl('/api/users/forgot-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
       credentials: 'include',
     })
-    // A Payload mindig 200-at ad (ne szivárogjon, létezik-e a cím) — a kliens
-    // ugyanazt a megerősítő üzenetet mutatja.
+    // Az IP-alapú kérés-korlát (A2) 429-e KIVÉTEL a „mindig ok" szabály alól:
+    // ilyenkor e-mail sem ment ki, tehát a megerősítő képernyő hazudna — a
+    // felhasználó hiába várná a levelet. A 429 az IP-hez kötődik, nem a
+    // címhez, ezért nem szivárogtatja, hogy létezik-e a fiók.
+    if (response.status === 429) {
+      return { ok: false, message: await parseErrorMessage(response, GENERIC_AUTH_ERROR) }
+    }
+    // Egyébként a Payload mindig 200-at ad (ne szivárogjon, létezik-e a cím) —
+    // a kliens ugyanazt a megerősítő üzenetet mutatja.
     return { ok: true }
   } catch {
     return { ok: false, message: GENERIC_AUTH_ERROR }

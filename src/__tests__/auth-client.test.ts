@@ -51,6 +51,18 @@ describe('forgotPassword', () => {
     const result = await forgotPassword('nemletezo@b.hu', mockFetch as never)
     expect(result.ok).toBe(true)
   })
+
+  it('A2 — 429 (IP-alapú korlát) esetén NEM hazudik sikert, a szerver üzenetét adja vissza', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ errors: [{ message: 'Túl sok próbálkozás. Kérjük, próbáld újra pár perc múlva.' }] }),
+        { status: 429, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    const result = await forgotPassword('valaki@b.hu', mockFetch as never)
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('Túl sok próbálkozás')
+  })
 })
 
 describe('resetPassword', () => {
