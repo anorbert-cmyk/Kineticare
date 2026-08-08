@@ -71,6 +71,11 @@ megjelenítés).
   `--kc-color-accent-deep: #2f6e9f` (a landing közép-kék akcentpárja — a fő
   site-ról eddig hiányzott), `--kc-color-tint-cool: #e6f0f8` (a landing
   hűvösebb tintje; a meglévő `--kc-color-blue-100` marad a régi komponenseknek).
+- **Kontraszt-korlát az akcentre (számolt):** `--kc-color-accent` a
+  tint-cool háttéren 4,07:1 — normál szövegre AA ALATT. Ezért az `accent`
+  kizárólag nagy szövegre (≥ 24 px / 18,66 px félkövér) vagy dekorációra
+  használható tinten; szöveg-linkre és normál szövegre `accent-deep`
+  (fehéren 5,45:1) vagy navy jár. Ezt a blokk-CSS-ek kommentje is rögzítse.
 - A landing `ink #10243e` ↔ fő site `navy-900 #0b243f`: **egységesítés a
   meglévő navy-900-ra** (vizuálisan megkülönböztethetetlen, egy igazságforrás).
 - Fontméretek: a landing inline `clamp()`-jei a `--kc-text-*` skálára állnak
@@ -129,9 +134,11 @@ rólunk → vélemények → sajtó → SOS) **eltér az értékesítési auditt
 benne korai kurzuskártya-blokk!). A feloldás:
 
 - **A seed-elt alapsorrend az auditot követi, a landing kinézetével:**
-  `filmHero` (M1) → `pressLogos` (M2) → `courseCards` (M3) → `freeSos` (M4) →
-  `welcome` → `usps` → `states` → `services` → `about` → `howItWorks` (M5) →
-  `testimonials` (M6) → `knowledge` (M7) → `faq` (M8).
+  `filmHero` (M1) → `credsStrip` (M2 — a szakmai hitel-csík, ahogy az audit
+  előírja; a sajtólogó-sor NEM helyettesíti) → `courseCards` (M3) →
+  `freeSos` (M4) → `pressLogos` → `welcome` → `usps` → `states` → `services` →
+  `about` → `howItWorks` (M5) → `testimonials` (M6) → `knowledge` (M7) →
+  `faq` (M8).
 - A lányok ettől szabadon eltérhetnek (ez a rendszer értelme), de: a blokkok
   admin-leírása jelzi az ajánlott helyet; a szerkesztői útmutató új fejezete
   elmagyarázza a sorrend-logikát; és a PostHog-funnel
