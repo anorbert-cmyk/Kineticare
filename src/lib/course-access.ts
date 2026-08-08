@@ -1,0 +1,160 @@
+/**
+ * Kurzus-hozzáférés érvényessége — a rendszer EGYETLEN igazságforrása (A1).
+ *
+ * A products `accessDurationDays` mezője (src/plugins/ecommerce.ts) eddig csak
+ * definiálva volt, de sehol nem érvényesült: aki egyszer megvette a kurzust,
+ * örökre hozzáfért. Ez a modul adja a szabályt; a hozzáférési pontok
+ * (kurzusaim-lista, lejátszó-oldal, stream-token kiadás) KIZÁRÓLAG ezt
+ * használják.
+ *
+ * A modul szándékosan TISZTA: nincs DB-, Payload- vagy Next-függése, így
+ * kimerítően egységtesztelhető (src/__tests__/course-access.test.ts). A
+ * vásárlási időpont felderítése (paid rendelések) a course-access-lookup.ts
+ * feladata.
+ *
+ * SZABÁLY (a lejárat számítása):
+ * - `accessDurationDays` hiányzik / null / nem szám / 0 / negatív → KORLÁTLAN
+ *   hozzáférés. Ez a MAI viselkedés, és ez a default: a mező üresen hagyása
+ *   sosem szüntetheti meg egy meglévő vásárló hozzáférését.
+ * - Ismeretlen vásárlási időpont (nincs paid rendelés a termékre — pl. kézzel
+ *   adott vagy ingyenes hozzáférés, lásd src/scripts/grant-purchase.ts) →
+ *   szintén KORLÁTLAN (fail-open). Lejáratot csak akkor számolunk, ha a
+ *   kezdőpont bizonyítható; enélkül nem zárunk ki senkit.
+ * - Egyébként: lejárat = vásárlás időpontja + `accessDurationDays` × 24 óra
+ *   (fix 24 órás napok, nem naptári nap). A hozzáférés a lejárat pillanatáig
+ *   él: `most < lejárat` → van hozzáférés, `most >= lejárat` → lejárt.
+ */
+
+/** Egy nap ezredmásodpercben — a lejárat fix 24 órás napokkal számol. */
+export const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+export type CourseAccessReason =
+  /** Nincs korlát a terméken (accessDurationDays hiányzik/0/negatív). */
+  | 'unlimited'
+  /** Van korlát, de a vásárlás időpontja nem ismert → fail-open. */
+  | 'unknown-purchase-date'
+  /** Van korlát, a hozzáférés MOST még él. */
+  | 'active'
+  /** Van korlát, a hozzáférés lejárt. */
+  | 'expired'
+
+export interface CourseAccessState {
+  /** Hozzáfér-e MOST a felhasználó a kurzushoz. */
+  hasAccess: boolean
+  /** Mikor jár le a hozzáférés; null = korlátlan (vagy nem meghatározható). */
+  expiresAt: Date | null
+  /** Az eredmény indoka — naplózáshoz és a felületi üzenet kiválasztásához. */
+  reason: CourseAccessReason
+}
+
+export interface CourseAccessInput {
+  /**
+   * A vásárlás (fizetés) időpontja. Az orders sémában NINCS `paidAt` mező,
+   * ezért a gyakorlatban a paid rendelés `createdAt` értéke kerül ide
+   * (lásd course-access-lookup.ts).
+   */
+  purchasedAt?: string | Date | null
+  /** A termék `accessDurationDays` mezője. Hiányzó/0/negatív → korlátlan. */
+  accessDurationDays?: number | null
+  /** „Most" — az egységtesztek és a determinisztikus renderelés miatt injektálható. */
+  now?: Date
+}
+
+/** Elfogadja az ISO-stringet és a Date-et is; érvénytelen érték → null. */
+function toDate(value: string | Date | null | undefined): Date | null {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : new Date(value.getTime())
+  }
+  if (typeof value !== 'string') {
+    return null
+  }
+  const trimmed = value.trim()
+  if (trimmed.length === 0) {
+    return null
+  }
+  const parsed = new Date(trimmed)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+/**
+ * A hozzáférés-szabály kiértékelése — MINDEN hozzáférési pont ezt hívja.
+ * A fenti modul-fejléc szabályait valósítja meg, mellékhatás nélkül.
+ */
+export function resolveCourseAccess(input: CourseAccessInput): CourseAccessState {
+  const days = input.accessDurationDays
+  if (typeof days !== 'number' || !Number.isFinite(days) || days <= 0) {
+    return { hasAccess: true, expiresAt: null, reason: 'unlimited' }
+  }
+
+  const purchasedAt = toDate(input.purchasedAt)
+  if (purchasedAt === null) {
+    return { hasAccess: true, expiresAt: null, reason: 'unknown-purchase-date' }
+  }
+
+  const expiresAt = new Date(purchasedAt.getTime() + days * MS_PER_DAY)
+  const now = input.now ?? new Date()
+  if (now.getTime() < expiresAt.getTime()) {
+    return { hasAccess: true, expiresAt, reason: 'active' }
+  }
+  return { hasAccess: false, expiresAt, reason: 'expired' }
+}
+
+/**
+ * Magyar dátumformátum a felületre: „2027. 03. 04.".
+ * A megjelenítés Europe/Budapest zónában történik (a tárolt időpont UTC), hogy
+ * a vevő azt a napot lássa, amit a saját naptárában is.
+ */
+const HU_DATE_FORMATTER = new Intl.DateTimeFormat('hu-HU', {
+  timeZone: 'Europe/Budapest',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+export function formatAccessDate(date: Date): string {
+  return HU_DATE_FORMATTER.format(date)
+}
+
+/** A lejárt hozzáférés felhasználói üzenetének első mondata (felület + API). */
+export const ACCESS_EXPIRED_TITLE = 'A hozzáférésed ehhez a kurzushoz lejárt.'
+
+/** Mit tehet a vevő — sürgetés és nyomásgyakorlás nélkül. */
+const ACCESS_EXPIRED_HINT = 'Ha szeretnéd folytatni, a kurzus újra megvásárolható.'
+
+/**
+ * Empatikus, magyar üzenet a lejárt hozzáférésre — a lejárat napjával, ha
+ * ismert. Ugyanez az üzenet megy a felületre és a stream-token 403-as
+ * válaszába, hogy a vevő mindenhol ugyanazt olvassa.
+ */
+export function accessExpiredMessage(expiresAt: Date | null): string {
+  if (expiresAt === null) {
+    return `${ACCESS_EXPIRED_TITLE} ${ACCESS_EXPIRED_HINT}`
+  }
+  return `${ACCESS_EXPIRED_TITLE} A hozzáférés ${formatAccessDate(expiresAt)} napján járt le. ${ACCESS_EXPIRED_HINT}`
+}
+
+/** „Hozzáférés eddig: 2027. 03. 04." — a kurzusaim-listán; null, ha korlátlan. */
+export function accessExpiryLabel(expiresAt: Date | null): string | null {
+  return expiresAt === null ? null : `Hozzáférés eddig: ${formatAccessDate(expiresAt)}`
+}
+
+/**
+ * A hozzáférés-állapot kliens-komponensbe átadható (szerializálható) alakja:
+ * Date helyett kész, magyar szövegek — így a kliens nem formáz dátumot, és a
+ * szerver/kliens kimenet definíció szerint azonos.
+ */
+export interface CourseAccessView {
+  hasAccess: boolean
+  /** „Hozzáférés eddig: …" — null, ha nincs ismert lejárat. */
+  expiryLabel: string | null
+  /** Empatikus üzenet lejárt hozzáférésnél — null, ha él a hozzáférés. */
+  expiredMessage: string | null
+}
+
+export function toCourseAccessView(state: CourseAccessState): CourseAccessView {
+  return {
+    hasAccess: state.hasAccess,
+    expiryLabel: accessExpiryLabel(state.expiresAt),
+    expiredMessage: state.hasAccess ? null : accessExpiredMessage(state.expiresAt),
+  }
+}
