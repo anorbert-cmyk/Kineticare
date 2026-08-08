@@ -268,6 +268,19 @@ describe('RenderBlocks', () => {
     expect(html).not.toContain('Teszt poszt 2')
   })
 
+  it('ismételt adatvezérelt blokk nem duplikálja az alap-horgonyt', () => {
+    const html = renderBlocks(
+      layoutOf(
+        { blockType: 'testimonials', id: 't1', sectionSettings: {} },
+        { blockType: 'testimonials', id: 't2', sectionSettings: {} },
+      ),
+      { testimonials: [testimonial({ id: 1 })] },
+    )
+    // Az első példány kapja a beépített horgonyt, a második egyedit kap.
+    expect(html.match(/id="velemenyek"/g)?.length ?? 0).toBe(1)
+    expect(html).toContain('id="velemenyek-t2"')
+  })
+
   it('freeSos: blokk-cím + gomb-felülírás; termék híján is renderel', () => {
     const html = renderBlocks(
       layoutOf({
@@ -299,6 +312,20 @@ describe('buildHomeLayout (seed alap-layout)', () => {
 
   it('a filmHero az első blokk — a kezdőlap a filmsávval nyit', () => {
     expect(buildHomeLayout()[0]?.blockType).toBe('filmHero')
+  })
+
+  it('az értékesítési hierarchia (UX-skill M1–M8) sorrend-szabályai teljesülnek', () => {
+    const order: string[] = buildHomeLayout().map((block) => block.blockType)
+    const at = (type: string) => order.indexOf(type)
+    // M2–M4: hitel-csík közvetlenül a hero után, a fizetős blokk előbb, mint az ingyenes.
+    expect(at('credsStrip')).toBe(1)
+    expect(at('courseCards')).toBe(2)
+    expect(at('freeSos')).toBeGreaterThan(at('courseCards'))
+    // M6–M7: vélemények és tudástár csak a termékblokk UTÁN jöhetnek.
+    expect(at('testimonials')).toBeGreaterThan(at('courseCards'))
+    expect(at('knowledge')).toBeGreaterThan(at('courseCards'))
+    // M8: a GYIK zárja a lapot.
+    expect(order[order.length - 1]).toBe('faq')
   })
 
   it('média nélkül is renderelhető, pontosan egy H1-gyel (UX-skill 4. pont)', () => {

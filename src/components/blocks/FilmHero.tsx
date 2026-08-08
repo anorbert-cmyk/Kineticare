@@ -29,6 +29,11 @@ import '../../app/(frontend)/styles/blocks/film-hero.css'
  *
  * A `sectionSettings.visible` szűrése NEM itt történik: a blokk-renderelő
  * (RenderBlocks, F3) hagyja ki a rejtett szekciókat.
+ *
+ * ISMERT KORLÁT: a ScrollScrub a sáv geometriáját mountkor és resize-ra méri.
+ * A blokk a lap ELEJÉRE való (a seed és az admin-sorrend is így ajánlja); ha a
+ * szerkesztő mélyebbre húzza, a felette lévő, később betöltő képek eltolhatják
+ * a mért görgetési sávot az első resize-ig.
  */
 
 /** A statikus film négy assetje (terv 3.3 — desktop + mobil klip és poszter). */

@@ -88,14 +88,28 @@ export function RenderBlocks({ layout, products, posts, testimonials }: RenderBl
   const paidProducts = visibleProducts.filter(isPaidProduct)
   const freeProduct = visibleProducts.find((product) => !isPaidProduct(product)) ?? null
 
+  // Az adatvezérelt szekciók beépített alap-horgonya (kurzusok, ingyenes,
+  // velemenyek) csak a típus ELSŐ példányán érvényesülhet: ha a szerkesztő
+  // ugyanabból a blokkból többet tesz a lapra anchorId nélkül, a további
+  // példányok nem kaphatják ugyanazt a DOM-id-t (érvénytelen HTML lenne, és a
+  // /#horgony linkek mindig az elsőre ugranának).
+  const seenTypes = new Set<string>()
+
   return (
     <>
-      {layout.map((block) => {
+      {layout.map((block, index) => {
         if (block.sectionSettings?.visible === false) {
           return null
         }
-        const key = block.id ?? `${block.blockType}-${layout.indexOf(block)}`
-        return <BlockSwitch key={key} {...{ block, paidProducts, freeProduct, posts, testimonials }} />
+        const isRepeat = seenTypes.has(block.blockType)
+        seenTypes.add(block.blockType)
+        const key = block.id ?? `${block.blockType}-${index}`
+        return (
+          <BlockSwitch
+            key={key}
+            {...{ block, isRepeat, paidProducts, freeProduct, posts, testimonials }}
+          />
+        )
       })}
     </>
   )
@@ -103,12 +117,15 @@ export function RenderBlocks({ layout, products, posts, testimonials }: RenderBl
 
 function BlockSwitch({
   block,
+  isRepeat,
   paidProducts,
   freeProduct,
   posts,
   testimonials,
 }: {
   block: LayoutBlock
+  /** A típus ismételt példánya-e a lapon — az alap-horgony csak az elsőé. */
+  isRepeat: boolean
   paidProducts: Product[]
   freeProduct: Product | null
   posts: Post[]
@@ -153,7 +170,7 @@ function BlockSwitch({
       return (
         <CourseCards
           heading={block.heading ?? undefined}
-          id={id}
+          id={id ?? (isRepeat ? `kurzusok-${block.id ?? 'ismetelt'}` : undefined)}
           lead={block.lead ?? undefined}
           products={paidProducts}
           variant={variant}
@@ -172,7 +189,7 @@ function BlockSwitch({
           body={block.body ?? undefined}
           cta={linkFrom(block.cta)}
           freeProduct={freeProduct}
-          id={id}
+          id={id ?? (isRepeat ? `ingyenes-${block.id ?? 'ismetelt'}` : undefined)}
           title={block.title}
           variant={variant}
         />
@@ -199,7 +216,7 @@ function BlockSwitch({
           eyebrow={block.eyebrow ?? undefined}
           heading={block.heading ?? undefined}
           headingId={`velemenyek-cim-${block.id ?? 'fo'}`}
-          id={id}
+          id={id ?? (isRepeat ? `velemenyek-${block.id ?? 'ismetelt'}` : undefined)}
           maxItems={block.maxItems ?? undefined}
           testimonials={testimonials}
           variant={variant}

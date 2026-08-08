@@ -32,7 +32,11 @@ export interface ButtonProps {
   className?: string
   /** Csak <button>-rendernél értelmezett. */
   onClick?: () => void
-  /** Külső href esetén új lapon nyitás (target="_blank" rel="noopener noreferrer"). */
+  /**
+   * Új lapon nyitás (target="_blank" + noopener) — belső és külső href-re is
+   * érvényes: a CMS linkmezők „Új lapon nyíljon" kapcsolója ide fut be, és a
+   * szerkesztő döntése akkor sem veszhet el némán, ha az útvonal belső.
+   */
   openInNewTab?: boolean
 }
 
@@ -70,7 +74,11 @@ export function Button({
       )
     }
     return (
-      <Link className={classes} href={href}>
+      <Link
+        className={classes}
+        href={href}
+        {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      >
         {children}
       </Link>
     )
