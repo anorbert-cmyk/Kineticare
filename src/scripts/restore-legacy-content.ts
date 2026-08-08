@@ -10,11 +10,15 @@
  *  - termékek (products): „Otthoni KézRehab Program" (fizetős, 79 500 Ft) és
  *    „SOS Kézrelax villámkurzus" (ingyenes lead-magnet) — sku alapján UPSERT;
  *  - menük: Szolgáltatások / Rólunk / Kapcsolat menüpontok a meglévő seed
- *    menüpontok mellé, label-alapú deduppal.
+ *    menüpontok mellé, label-alapú deduppal;
+ *  - vélemények (testimonials): a régi oldalakon megjelent 14 VALÓS páciens-
+ *    visszajelzés — név + a szöveg eleje alapján UPSERT; a kezdőlapra szánt
+ *    3 kiemelt (featured) rövid változatot (shortQuote) is kap.
  *
  * Többször futtatva sem duplikál: minden entitást egyedi kulcs (fájlnév / slug /
- * sku / label) alapján keres meg, és csak a hiányzót hozza létre, a létezőt
- * (oldal/termék esetén) — külön kapu mögött — az archív tartalommal frissíti.
+ * sku / label / név+szövegkezdet) alapján keres meg, és csak a hiányzót hozza
+ * létre, a létezőt (oldal/termék/vélemény esetén) — külön kapu mögött — az
+ * archív tartalommal frissíti.
  *
  * FIGYELEM — az `sku` ebben a repóban a VEVŐNEK MEGJELENŐ TERMÉKNÉV, nem gépi
  * cikkszám. A products collectionben nincs külön title mező: a plugin
@@ -41,7 +45,7 @@
  *     → a seed.ts demó-tartalmának depublikálása (archiválás/draft/rejtés,
  *       törlés SOHA — lásd lentebb).
  *
- * Miért kell megerősítés? A script slug/sku-egyezésnél FELÜLÍRJA a meglévő
+ * Miért kell megerősítés? A script slug/sku/név-egyezésnél FELÜLÍRJA a meglévő
  * dokumentumot (tartalom, cím, SEO, ár, státusz), az éles adatbázisról pedig
  * jelenleg NINCS mentés (CLAUDE.md „Üzemeltetési tanulságok", feladatlista C14) —
  * a felülírás tehát visszavonhatatlan. Ezért az alapértelmezés a dry-run, a
@@ -903,6 +907,159 @@ const kezrelaxLongDescription = (): Product['longDescription'] =>
   ])
 
 // ---------------------------------------------------------------------------
+// Vélemények — a régi kineticare.hu oldalain megjelent, VALÓS páciens-
+// visszajelzések. Ugyanezek a szövegek a fenti oldal-tartalmakban idézetként is
+// ott vannak (ott a szöveg részei); itt külön, szerkeszthető adatként kerülnek a
+// testimonials collectionbe, hogy a kezdőlap M6-blokkja CMS-ből legyen kezelhető.
+//
+// A `quote` mindenhol BETŰHÍVEN azonos a fenti oldal-tartalmakban szereplő
+// idézettel — kitalált vagy „szépített" visszajelzés ide nem kerülhet.
+// A `shortQuote` a kezdőlapra szánt rövid változat: pontosan az a három, amit a
+// megújult kezdőlap-terv (higgsfield-site/app/src/routes/index.tsx) is mutat.
+// (Kállai Dóránál a terv rövidített szövege 283 karakter, a mező viszont
+// legfeljebb 260-at enged — ezért annak a betűhív ELSŐ MONDATA kerül ide, ami
+// egyben a teljes idézet eleje is; szó nem változott és nem került bele.)
+// ---------------------------------------------------------------------------
+
+interface LegacyTestimonial {
+  /** A vélemény teljes szövege — betűhíven a régi oldalak idézeteiből. */
+  quote: string
+  /**
+   * Rövid, kezdőlapra szánt változat (M6: legfeljebb 3 vélemény, 1–2 mondat).
+   * Csak a kiemelt véleményeknél van kitöltve.
+   */
+  shortQuote?: string
+  authorName: string
+  authorTitle: string
+  /** Kiemelt = megjelenik a kezdőlapon (legfeljebb 3 ilyen lehet). */
+  featured: boolean
+  /** Sorrend: a 3 kiemelt kapja az 1–3-at, a többi az eredeti sorrendben 4-től. */
+  order: number
+}
+
+/** Mind a 14 vélemény látható (`visible: true`) — csak a kiemelés különbözik. */
+const LEGACY_TESTIMONIALS: readonly LegacyTestimonial[] = [
+  {
+    quote:
+      'Kocsis Katát kézproblémával kerestem fel, és már az első alkalommal éreztem, hogy jó kezekben vagyok – szó szerint is. Nagy odafigyeléssel, alázattal és valódi szakértelemmel kezelt minden alkalommal. Nemcsak a tüneteket enyhítette, hanem segített megérteni a kiváltó okokat is. Őszintén ajánlom mindenkinek, aki nemcsak gyors enyhülést, hanem tartós megoldást keres.',
+    shortQuote:
+      'Már az első alkalommal éreztem, hogy jó kezekben vagyok, szó szerint is. Nemcsak a tüneteket enyhítette, hanem segített megérteni a kiváltó okokat is.',
+    authorName: 'Garami Gábor',
+    authorTitle: 'zenész / műsorvezető',
+    featured: true,
+    order: 1,
+  },
+  {
+    quote:
+      'Egy 10 éve tartó ganglion problémával, több operáció után jutottam el Katához, mert szikementes segítséget szerettem volna igénybe venni, és nem is dönthettem volna jobban! Nagyon hálás vagyok, hogy szakértelme által jelentős javulást és tünetmentességet értünk el a kezelések során, és rengeteg tudást is kaptam, pl. hogy tornáztathatom én magam is a fájó testrészeket, vagy hogyan tape-elhetem be magam akut fájdalom esetén.',
+    shortQuote:
+      'Egy 10 éve tartó ganglion problémával, több operáció után jutottam el Katához, mert szikementes segítséget szerettem volna igénybe venni, és nem is dönthettem volna jobban!',
+    authorName: 'Kállai Dóra',
+    authorTitle: 'biológus',
+    featured: true,
+    order: 2,
+  },
+  {
+    quote:
+      'Katával 2022-ben kezdtünk el együtt dolgozni. Sok éve tartó derékfájással és nyaki problémával fordultam hozzá. A sok fájdalom miatt azt gondoltam, hogy már csak a gyógytorna marad egész életemre. De Kata segített megtanulni helyesen mozogni, és visszatérni a sportokhoz. Hálás vagyok neki a valós szakértelméért, türelméért és támogatásáért, amely által nemcsak fájdalommentesen élhetek, hanem újra élvezhetem a mozgás örömét.',
+    authorName: 'Kunfalvi Lili',
+    authorTitle: 'piackutató',
+    featured: false,
+    order: 4,
+  },
+  {
+    quote:
+      'A KINETICARE lányokat ajánlás alapján kerestem meg, ugyanis akkor már pár hónapja erős fájdalommal járt a hüvelykujjam és a csuklóm mozgatása. Ez a munkámat is nehezítette, hiszen jógaoktatóként folyamatosan használnom kellett, nem pihentethettem. A közös munkának, a világos magyarázatoknak, hogy mi történik velem, illetve a szuper feladatoknak és életvezetési tanácsoknak hála sikerült a gyógyulás! Nagyon hálás vagyok a KINETICARE-nek, hiszen azóta fájdalommentesen élek, és újra visszatérhettem kedvenc gyakorlatomhoz, a kézenálláshoz is.',
+    shortQuote:
+      'A KINETICARE lányokat ajánlás alapján kerestem meg, ugyanis pár hónapja erős fájdalommal járt a hüvelykujjam és a csuklóm mozgatása. A közös munkának, a világos magyarázatoknak, a szuper feladatoknak és életvezetési tanácsoknak hála, sikerült a gyógyulás!',
+    authorName: 'Bagdal Szilvia',
+    authorTitle: 'Sziszi Yoga: haladó jógaoktató / mobility- és meditációs tréner',
+    featured: true,
+    order: 3,
+  },
+  {
+    quote:
+      'Kézzsibbadással kerestem fel Katát, és hihetetlen módon ráérzett, milyen gyakorlatok segítenének nekem, ugyanis a második találkozóra már úgy érkeztem, hogy teljesen elmúltak a panaszaim. Ezeket a gyakorlatokat mind a mai napig elvégzem felsőtest edzés után, és nem is jöttek vissza a panaszok.',
+    authorName: 'Dr. Sitku Lili',
+    authorTitle: 'fogorvos',
+    featured: false,
+    order: 5,
+  },
+  {
+    quote:
+      'Minden felmerülő fájdalmamra, problémámra azonnal tudott megoldást nyújtani, és az általa adott gyakorlatok végrehajtásával szinten tudom tartani az általános jó közérzetemet, nincsenek hosszan fennálló fájdalmaim, neki köszönhetően nagyon sokat fejlődött a testem, a teherbírásom.',
+    authorName: 'Hámori Lili',
+    authorTitle: 'édesanya',
+    featured: false,
+    order: 6,
+  },
+  {
+    quote:
+      'Már a két évvel ezelőtti első személyes találkozásunk során is érzékeltem ezt a magas színvonalú szakmaiságot, és a pácienssel empatikus, emberséges, támogató hozzáállást. A folyamatos gyógytorna, manuálterápiás kezelés következtében sikerült mindennapi aktív életemet visszakapnom.',
+    authorName: 'Dr. Kárpáti Katalin',
+    authorTitle: 'ügyvéd',
+    featured: false,
+    order: 7,
+  },
+  {
+    quote:
+      '10 év élsport után jelentkező könyökízületi problémáim miatt kezdtem el dolgozni Kocsis Katával. Műtétre került a sor, amiben maximálisan támogatott: ott volt velem a műtőben, és a műtét után is mellettem maradt, amíg magamhoz nem tértem. A rehabilitáció teljes folyamatában számíthattam rá. Bár nem volt könnyű időszak, a közös munka mindig vidáman telt, tele biztatással és támogatással, amiért a mai napig hálás vagyok. Azóta is bármilyen egészségügyi problémám adódik, nyugodt szívvel fordulok hozzá.',
+    authorName: 'Konda Boglárka',
+    authorTitle: 'vízilabdázó',
+    featured: false,
+    order: 8,
+  },
+  {
+    quote:
+      'Pár évvel ezelőtt reménytelenül álltam a karrierem előtt. De hálát adok a sorsnak, hogy megismertelek, mert te vagy az a személy, akinek azt köszönhetem, hogy visszatérhettem oda, ahova tartozom, a Manézsba. A páratlan szakértelmed segítségével rengeteget javult az állapotom. A gyógyulás és a regeneráció mellett nagyon sokat tanulhattam tőled, és a mai napig hasznosítom ezt a tudást. A segítséged mellé egy igaz barátságot is kaptam! Életem végéig hálás leszek neked!',
+    authorName: 'Tarba Patrícia',
+    authorTitle: 'artista',
+    featured: false,
+    order: 9,
+  },
+  {
+    quote:
+      '2024. szeptemberében kerültem Kocsis Katához, amiért örökre hálás leszek. Mérhetetlen könyökfájdalmam volt a bal kezemben, és társult hozzá egy hüvelykujj-panasz is. Alapos vizsgálat után elmagyarázta, mi a probléma, és megkezdte a kezelést. A kedves mosolya és zseniális szakmai tudása felbecsülhetetlen! Már az első kezelés mérföldkő volt, hiszen tudtam használni a kezem, és elmúlt a fájdalom. Ajánlani? IGEN, de inkább kötelezővé tenném mindenkinek, akinek kézpanasza van az élete bármely szakaszában.',
+    authorName: 'Varró Barbara',
+    authorTitle: 'Nagy Sportágválasztó ügyvezető',
+    featured: false,
+    order: 10,
+  },
+  {
+    quote:
+      'Kata minden újonnan jövő kihívást egy megoldandó feladatként kezel, és látszik rajta az elhivatottság a szakmája iránt. Így volt ez legutóbb a síelésre való felkészítéssel is, a mozgásformához szükséges erősítő feladatokat végeztük. A gyakorlatsorok végrehajtását mindig kellő szigorral és odafigyeléssel ellenőrzi – ez az a precízitás és hozzáállás, amit a páciensek később meghálálnak. Az erőfeszítéseidet mindig dicsérő szavak követik, neki pedig az a legnagyobb dicséret, ha az óra végén mosolyogva, jóleső fáradtsággal, de panaszmentesen lépsz ki az ajtón.',
+    authorName: 'Takács Mátyás',
+    authorTitle: 'építészmérnök',
+    featured: false,
+    order: 11,
+  },
+  {
+    quote:
+      'Teniszkönyökömmel évek óta küzdök, hol jobban, hol kevésbé. Sok mindennek már utánaolvastam, de még így is sok meglepetést okozott a kurzus. A gyakorlatok és a plusz kiegészítő tippek pedig egyszerűen zseniálisak!',
+    authorName: 'P. Benjámin',
+    authorTitle: 'informatikus',
+    featured: false,
+    order: 12,
+  },
+  {
+    quote:
+      'A kurzusban gyors és egyszerű gyakorlatok voltak, amik tényleg SOS megoldások!',
+    authorName: 'D. Anna',
+    authorTitle: 'logisztikus',
+    featured: false,
+    order: 13,
+  },
+  {
+    quote:
+      'Olyan információkat kaptam a kéztőalagút-szindrómámról, amik új nézőpontot adtak. Már most hálás vagyok!',
+    authorName: 'H. Gabi',
+    authorTitle: 'coach',
+    featured: false,
+    order: 14,
+  },
+]
+
+// ---------------------------------------------------------------------------
 // UPSERT-segédek
 // ---------------------------------------------------------------------------
 
@@ -1078,6 +1235,72 @@ const ensureMenuItem = async (
     })
   }
   naploLetrehozas(payload, cimke)
+}
+
+/**
+ * A vélemény dedup-kulcsának második fele: a szöveg eleje. Csak a név nem elég
+ * (egy pácienstől több visszajelzés is származhat), a teljes szöveg viszont túl
+ * merev kulcs lenne — egy adminban javított elgépelés már duplikálást okozna.
+ */
+const QUOTE_KEY_LENGTH = 60
+
+/**
+ * Vélemény idempotens visszaállítása: név + a szöveg eleje alapján UPSERT.
+ * A lekérdezés a névre szűkít (pontos egyezés), a szöveg-eleji egyezést pedig
+ * itt, memóriában ellenőrizzük: a Payload `like` operátora szavakra bontva,
+ * részszövegre keres, ezért szöveg-ELEJI egyezésre nem alkalmas.
+ */
+const upsertTestimonial = async (payload: Payload, input: LegacyTestimonial): Promise<void> => {
+  const cimke = `vélemény: ${input.authorName}`
+  const kulcs = input.quote.slice(0, QUOTE_KEY_LENGTH)
+  const talalatok = await payload.find({
+    collection: 'testimonials',
+    where: { authorName: { equals: input.authorName } },
+    limit: 100,
+    overrideAccess: true,
+  })
+  const existing = talalatok.docs.find((doc) => doc.quote.startsWith(kulcs))
+  const data = {
+    quote: input.quote,
+    ...(input.shortQuote !== undefined ? { shortQuote: input.shortQuote } : {}),
+    authorName: input.authorName,
+    authorTitle: input.authorTitle,
+    featured: input.featured,
+    order: input.order,
+    visible: true,
+  }
+  if (existing) {
+    if (!felulirhato(payload, cimke)) {
+      return
+    }
+    if (!DRY_RUN) {
+      await payload.update({
+        collection: 'testimonials',
+        id: existing.id,
+        data,
+        overrideAccess: true,
+      })
+    }
+    naploFeluliras(payload, `${cimke} (szöveg, rövid szöveg, titulus, kiemelés, sorrend)`)
+    return
+  }
+  if (DRY_RUN) {
+    naploLetrehozas(payload, cimke)
+    return
+  }
+  await payload.create({ collection: 'testimonials', data, overrideAccess: true })
+  naploLetrehozas(payload, cimke)
+}
+
+/**
+ * A 14 valós vélemény betöltése — idempotens, ugyanazok a kapuk vonatkoznak rá,
+ * mint az oldalakra/termékekre (LEGACY_RESTORE_CONFIRM az íráshoz,
+ * LEGACY_OVERWRITE a meglévő rekord felülírásához).
+ */
+const restoreTestimonials = async (payload: Payload): Promise<void> => {
+  for (const testimonial of LEGACY_TESTIMONIALS) {
+    await upsertTestimonial(payload, testimonial)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1407,6 +1630,9 @@ async function restoreLegacyContent(): Promise<void> {
     url: '/kapcsolat',
     order: 6,
   })
+
+  // --- Vélemények (a régi oldalak valós páciens-visszajelzései) ---------------
+  await restoreTestimonials(payload)
 
   // --- Demó-tartalom depublikálása (opcionális, a confirm-kapu mögött) --------
   if (ARCHIVE_DEMO) {

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import type { Page, Post, Product } from '../../payload-types'
+import type { Page, Post, Product, Testimonial } from '../../payload-types'
 import { faqPageJsonLd, organizationJsonLd } from '../../lib/seo'
 import { HERO_VIDEO_STREAM_ID } from '../../lib/hero-video'
 import { Container } from '../ui/Container'
@@ -16,6 +16,7 @@ import { FAQ_ITEMS, Faq } from './home/Faq'
 import { FreeSos } from './home/FreeSos'
 import { HeroCta } from './home/HeroCta'
 import { HowItWorks } from './home/HowItWorks'
+import { TestimonialsSection } from './home/TestimonialsSection'
 import { hasLexicalContent } from '../lexical/serialize'
 import { RichText } from '../lexical/RichText'
 
@@ -36,9 +37,13 @@ import { RichText } from '../lexical/RichText'
  * M4 Ingyenes SOS Kézrelax — lead-magnet VISSZAFOGOTT, másodlagos súllyal,
  *    közvetlenül a fizetős blokk után, tint háttérrel elválasztva (FreeSos).
  * M5 „Így működik az online kurzus" — 3 lépés, statikus (HowItWorks).
- * M6 A CMS-oldal richText-tartalma (ha van) — a staff által írt szekciók; a
- *    valódi RÖVID vélemények is ide érkeznek majd (fiktív idézet
- *    fogyasztóvédelmi okból nem kerülhet ki — docs/feladatlista.md A8).
+ * M6 Vélemények — a CMS `testimonials` collectionjéből, a termékblokk UTÁN
+ *    (TestimonialsSection): legfeljebb 3 kiemelt és látható vélemény, `order`
+ *    szerint, a rövid változat elsőbbségével. Kiemelt vélemény nélkül a szekció
+ *    elmarad — fiktív idézet fogyasztóvédelmi okból nem kerülhet ki, ezért
+ *    helykitöltő sincs.
+ * M6+ A CMS-oldal richText-tartalma (ha van) — a staff által írt szabad
+ *    szekciók, a vélemények után, a tudástár előtt.
  * M7 Legfrissebb posztok — tudástár (SEO, hosszútáv) + „Összes bejegyzés".
  * M8 Gyakori kérdések — ellenérv-kezelés a lap alján (Faq; a FAQPage JSON-LD
  *    miatt a szekció főoldali jelenléte SEO-kötelezettség, lásd
@@ -52,6 +57,12 @@ export interface HomeViewProps {
   home: Page | null
   products: Product[]
   posts: Post[]
+  /**
+   * Vélemények (M6). Opcionális, hogy a kizárólag a hero/JSON-LD viselkedést
+   * vizsgáló renderek is meghívhassák — hiányzó vagy üres listánál a szekció
+   * egyszerűen elmarad.
+   */
+  testimonials?: Testimonial[]
 }
 
 function HeroSection({ home }: { home: Page | null }) {
@@ -85,7 +96,7 @@ function HeroSection({ home }: { home: Page | null }) {
   )
 }
 
-export function HomeView({ home, products, posts }: HomeViewProps) {
+export function HomeView({ home, products, posts, testimonials = [] }: HomeViewProps) {
   const visibleProducts = products.filter(isPubliclyVisibleProduct)
   const paidProducts = visibleProducts.filter(isPaidProduct)
   const freeProduct = visibleProducts.find((product) => !isPaidProduct(product)) ?? null
@@ -104,6 +115,8 @@ export function HomeView({ home, products, posts }: HomeViewProps) {
       <FreeSos freeProduct={freeProduct} />
 
       <HowItWorks />
+
+      <TestimonialsSection testimonials={testimonials} />
 
       {home?.content && hasLexicalContent(home.content) ? (
         <Section>

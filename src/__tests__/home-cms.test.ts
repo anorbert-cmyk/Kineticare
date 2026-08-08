@@ -17,15 +17,15 @@ import {
   resolveSeoDescription,
   resolveSeoTitle,
 } from '../lib/seo'
-import type { Category, Media, Page, Post, Product, User } from '../payload-types'
+import type { Category, Media, Page, Post, Product, Testimonial, User } from '../payload-types'
 
 /**
  * Oldal-render tesztek (kezdőlap + CMS/blog) — fixture-adattal, DB nélkül.
  * Lefedi: a docs/ux-hierarchia-audit.md 3. szakaszának cél-hierarchiájú
  * kezdőlapot (M1 hero CTA, M2 hitel-csík, M3 fizetős kurzus-kiemelés cím/ár,
- * M4 visszafogott ingyenes SOS-sáv, M5 hogyan-működik, M8 GYIK a lap alján;
- * a vélemény-szekció szándékosan NINCS implementálva — fiktív idézet nem
- * kerülhet ki, a valódi rövid idézetek CMS-tartalomként érkeznek, M6), a friss posztokat, a
+ * M4 visszafogott ingyenes SOS-sáv, M5 hogyan-működik, M6 vélemények a
+ * termékblokk után — CMS-ből, max 3, rövid változattal, kiemelt vélemény
+ * híján a szekció elmarad, M8 GYIK a lap alján), a friss posztokat, a
  * poszt-oldal meta-részeit, a draft/published viselkedést és az SEO-fallbackláncot.
  */
 
@@ -129,6 +129,21 @@ function product(overrides: Partial<Product> & { id: number }): Product {
     createdAt: '',
     ...overrides,
   } as unknown as Product
+}
+
+function testimonial(overrides: Partial<Testimonial> & { id: number }): Testimonial {
+  return {
+    quote: `Teljes vélemény ${overrides.id}.`,
+    shortQuote: null,
+    authorName: `Szerző ${overrides.id}`,
+    authorTitle: null,
+    featured: true,
+    order: overrides.id,
+    visible: true,
+    updatedAt: '',
+    createdAt: '',
+    ...overrides,
+  } as unknown as Testimonial
 }
 
 function category(overrides: Partial<Category> & { id: number }): Category {
@@ -236,6 +251,79 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(html).toContain('Otthon gyakorolsz')
   })
 
+  it('M6 vélemények: legfeljebb 3 kiemelt+látható jelenik meg, a többi kimarad', () => {
+    const html = render(
+      createElement(HomeView, {
+        home: null,
+        products: [],
+        posts: [],
+        testimonials: [
+          testimonial({ id: 1, authorName: 'Garami Gábor', authorTitle: 'zenész, műsorvezető' }),
+          testimonial({ id: 2, authorName: 'Kállai Dóra' }),
+          testimonial({ id: 3, authorName: 'Bagdal Szilvia' }),
+          testimonial({ id: 4, authorName: 'Negyedik kiemelt' }),
+          testimonial({ id: 5, authorName: 'Nem kiemelt', featured: false }),
+          testimonial({ id: 6, authorName: 'Rejtett vélemény', visible: false }),
+        ],
+      }),
+    )
+    expect(html).toContain('Pácienseink mondták')
+    expect(html).toContain('Garami Gábor')
+    expect(html).toContain('zenész, műsorvezető')
+    expect(html).toContain('Kállai Dóra')
+    expect(html).toContain('Bagdal Szilvia')
+    // A 4. kiemelt már nem fér bele (UX-skill M6: max 2–3), a nem kiemelt és a
+    // rejtett vélemény pedig sosem jelenhet meg.
+    expect(html).not.toContain('Negyedik kiemelt')
+    expect(html).not.toContain('Nem kiemelt')
+    expect(html).not.toContain('Rejtett vélemény')
+    expect(html.match(/<blockquote/g) ?? []).toHaveLength(3)
+  })
+
+  it('M6 vélemények: a rövid változat elsőbbséget élvez a teljes szöveg felett', () => {
+    const html = render(
+      createElement(HomeView, {
+        home: null,
+        products: [],
+        posts: [],
+        testimonials: [
+          testimonial({
+            id: 1,
+            quote: 'A teljes, hosszú vélemény, ami a főoldalon már túl sok lenne.',
+            shortQuote: 'A rövid, főoldalra szánt változat.',
+          }),
+          testimonial({ id: 2, quote: 'Csak a teljes szöveg van megadva.', shortQuote: '   ' }),
+        ],
+      }),
+    )
+    expect(html).toContain('A rövid, főoldalra szánt változat.')
+    expect(html).not.toContain('A teljes, hosszú vélemény')
+    // Üres (csak szóköz) rövid változatnál a teljes szöveg jelenik meg.
+    expect(html).toContain('Csak a teljes szöveg van megadva.')
+  })
+
+  it('M6 vélemények: kiemelt vélemény nélkül a szekció elmarad (nincs helykitöltő, nincs fiktív idézet)', () => {
+    const emptyHtml = render(
+      createElement(HomeView, { home: null, products: [], posts: [], testimonials: [] }),
+    )
+    expect(emptyHtml).not.toContain('id="velemenyek"')
+    expect(emptyHtml).not.toContain('Pácienseink mondták')
+
+    const hiddenOnlyHtml = render(
+      createElement(HomeView, {
+        home: null,
+        products: [],
+        posts: [],
+        testimonials: [
+          testimonial({ id: 1, featured: false }),
+          testimonial({ id: 2, visible: false }),
+        ],
+      }),
+    )
+    expect(hiddenOnlyHtml).not.toContain('id="velemenyek"')
+    expect(hiddenOnlyHtml).not.toContain('Pácienseink mondták')
+  })
+
   it('M2 hitel-csík: kondenzált szakmai érvek + a Rólunk oldalra mutató link', () => {
     const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
     expect(html).toContain('Gyógytornász és manuálterapeuta')
@@ -251,9 +339,14 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(html).toContain('<summary')
   })
 
-  it('szekció-sorrend az audit szerint: hero → hitel-csík → fizetős kurzusok → ingyenes SOS → hogyan működik → GYIK a végén', () => {
+  it('szekció-sorrend az audit szerint: hero → hitel-csík → fizetős kurzusok → ingyenes SOS → hogyan működik → vélemények → CMS-tartalom → GYIK a végén', () => {
     const html = render(
-      createElement(HomeView, { home: null, products: [product({ id: 1 })], posts: [] }),
+      createElement(HomeView, {
+        home: page({ id: 1, content: contentWithWords(10) as unknown as Page['content'] }),
+        products: [product({ id: 1 })],
+        posts: [],
+        testimonials: [testimonial({ id: 1 })],
+      }),
     )
     const order = [
       'kc-hero__title',
@@ -261,6 +354,8 @@ describe('HomeView (kezdőlap-render)', () => {
       'id="kurzusok"',
       'id="ingyenes"',
       'Így működik az online kurzus',
+      'id="velemenyek"',
+      'kc-richtext',
       'Gyakori kérdések',
     ]
     const positions = order.map((marker) => html.indexOf(marker))

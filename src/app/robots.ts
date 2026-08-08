@@ -39,6 +39,9 @@ const DISALLOWED_PATHS = [
   '/regisztracio',
   '/elfelejtett-jelszo',
   '/jelszo-visszaallitas',
+  // Piszkozat-előnézet be-/kikapcsoló végpontok — a válaszaik amúgy is
+  // noindexeltek, ez csak plusz védőháló a felesleges crawl ellen.
+  '/next/',
 ]
 
 /**

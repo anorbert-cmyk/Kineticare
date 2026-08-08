@@ -1,7 +1,7 @@
 import { getPayload } from 'payload'
 
 import config from '../payload.config'
-import type { Category, Page, Post, Product } from '../payload-types'
+import type { Category, Page, Post, Product, Testimonial } from '../payload-types'
 import { HOME_PAGE_SLUG } from './content-slugs'
 import { logger } from './logger'
 
@@ -325,6 +325,35 @@ export async function getPublishedProducts(limit = 12): Promise<Product[]> {
         sort: '-createdAt',
         depth: 1,
         draft: false,
+        overrideAccess: true,
+      })
+      return docs
+    },
+    [],
+  )
+}
+
+/**
+ * Kiemelt vélemények a kezdőlapra (M6): látható ÉS kiemelt rekordok, `order`
+ * szerint növekvő sorrendben, legfeljebb 3.
+ *
+ * A testimonials collectionben nincs verziózás/piszkozat (a láthatóságot a
+ * `visible` pipa dönti el), ezért itt sem draft-, sem published-szűrő nem kell.
+ * `depth: 0` — a szekciónak csak a szöveg és a szerző kell, reláció nincs.
+ * Hiba esetén üres lista: a kezdőlap véleményszekciója ilyenkor egyszerűen
+ * elmarad (kitalált idézet helykitöltőként sem jelenhet meg).
+ */
+export async function getTestimonials(limit = 3): Promise<Testimonial[]> {
+  return safeQuery(
+    'velemenyek',
+    async () => {
+      const payload = await getPayload({ config })
+      const { docs } = await payload.find({
+        collection: 'testimonials',
+        where: { visible: { equals: true }, featured: { equals: true } },
+        limit,
+        sort: 'order',
+        depth: 0,
         overrideAccess: true,
       })
       return docs
