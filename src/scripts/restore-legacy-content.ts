@@ -1167,7 +1167,10 @@ const depublikaldDemoTartalmat = async (payload: Payload): Promise<void> => {
       await payload.update({
         collection: 'pages',
         id: demoOldal.id,
-        data: { status: 'draft' },
+        // A `status` a `_status`-ból szinkronizálódik (src/lib/publish-status.ts),
+        // ezért a depublikálásnál a `_status`-t is állítani kell — enélkül a hook
+        // visszaírná a published értéket.
+        data: { status: 'draft', _status: 'draft' },
         overrideAccess: true,
       })
     }

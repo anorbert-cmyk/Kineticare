@@ -3,6 +3,7 @@ import type { CollectionConfig } from 'payload'
 import { isStaffOrOwner } from './isStaffOrOwner'
 import { visibleMenusOrAdmin } from './menus-visibility'
 import { publishedOrAdmin } from './publishedOrAdmin'
+import { visibleTestimonialsOrAdmin } from './testimonials-visibility'
 
 /**
  * Collection-szintű access-politika a jogosultsági mátrix szerint.
@@ -20,6 +21,9 @@ import { publishedOrAdmin } from './publishedOrAdmin'
  *   sorok látszanak (visibleMenusOrAdmin); create/update/delete staff+owner.
  * - categories: nincs státusz-mezője, a frontend-navigáció miatt a read
  *   nyilvános; create/update/delete staff+owner.
+ * - testimonials: a menus mintájára — a read nyilvános, de nem-adminoknak csak
+ *   a visible=true sorok látszanak (visibleTestimonialsOrAdmin);
+ *   create/update/delete staff+owner.
  * - media: read nyilvános (a Media collectionben már így van), write staff+owner.
  */
 export const publicRead: NonNullable<CollectionConfig['access']>['read'] = () => true
@@ -50,6 +54,11 @@ export const collectionAccessPolicies: Record<string, CollectionConfig['access']
   },
   categories: {
     read: publicRead,
+    ...staffOrOwnerWrite,
+  },
+  testimonials: {
+    // A nyilvános olvasó csak a látható véleményeket kapja; staff/owner mindent.
+    read: visibleTestimonialsOrAdmin,
     ...staffOrOwnerWrite,
   },
   media: {

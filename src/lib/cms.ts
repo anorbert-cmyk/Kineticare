@@ -2,6 +2,7 @@ import { getPayload } from 'payload'
 
 import config from '../payload.config'
 import type { Category, Page, Post, Product } from '../payload-types'
+import { HOME_PAGE_SLUG } from './content-slugs'
 import { logger } from './logger'
 
 /**
@@ -23,7 +24,26 @@ import { logger } from './logger'
 /** A publikáltsági where-feltétel — a draft/published viselkedés egységes forrása. */
 export const PUBLISHED_WHERE = { status: { equals: 'published' } } as const
 
-export const HOME_PAGE_SLUG = 'kezdolap'
+// A slug definíciója az src/lib/content-slugs.ts-ben él (a Payload-config oldala
+// is hivatkozik rá); itt csak továbbexportáljuk, hogy a meglévő
+// `import { HOME_PAGE_SLUG } from '@/lib/cms'` hívások változatlanul működjenek.
+export { HOME_PAGE_SLUG }
+
+/**
+ * Az egy-dokumentumos getterek opcionális kapcsolói.
+ *
+ * `draft: true` esetén a lekérdezés a legutóbbi PISZKOZAT verziót adja vissza, és
+ * a published-szűrő is kikapcsol — enélkül a még sosem publikált tartalom
+ * egyáltalán nem lenne megtalálható. Ezt kizárólag a szerkesztői előnézet
+ * (Next draft mode, `/next/preview`) használhatja: oda csak staff/owner jut be.
+ * A paraméter opcionális, a meglévő hívások viselkedése változatlan.
+ */
+export interface CmsDocQueryOptions {
+  draft?: boolean
+}
+
+/** A publikáltsági szűrő — előnézetben (draft) szándékosan üres. */
+const publishedWhere = (draft: boolean): Record<string, unknown> => (draft ? {} : PUBLISHED_WHERE)
 
 async function safeQuery<T>(label: string, query: () => Promise<T>, fallback: T): Promise<T> {
   try {
@@ -37,17 +57,18 @@ async function safeQuery<T>(label: string, query: () => Promise<T>, fallback: T)
 }
 
 /** Kezdőlap-tartalom: a 'kezdolap' slugú published oldal (hero + bevezető forrása). */
-export async function getHomePage(): Promise<Page | null> {
+export async function getHomePage(options: CmsDocQueryOptions = {}): Promise<Page | null> {
+  const draft = options.draft === true
   return safeQuery(
     'kezdolap',
     async () => {
       const payload = await getPayload({ config })
       const { docs } = await payload.find({
         collection: 'pages',
-        where: { slug: { equals: HOME_PAGE_SLUG }, ...PUBLISHED_WHERE },
+        where: { slug: { equals: HOME_PAGE_SLUG }, ...publishedWhere(draft) },
         limit: 1,
         depth: 1,
-        draft: false,
+        draft,
         overrideAccess: true,
       })
       return docs[0] ?? null
@@ -56,18 +77,22 @@ export async function getHomePage(): Promise<Page | null> {
   )
 }
 
-/** CMS-oldal slug alapján (csak published; a draft 404-et ad a route-ban). */
-export async function getPageBySlug(slug: string): Promise<Page | null> {
+/** CMS-oldal slug alapján (alapból csak published; előnézetben a piszkozat is). */
+export async function getPageBySlug(
+  slug: string,
+  options: CmsDocQueryOptions = {},
+): Promise<Page | null> {
+  const draft = options.draft === true
   return safeQuery(
     `oldal:${slug}`,
     async () => {
       const payload = await getPayload({ config })
       const { docs } = await payload.find({
         collection: 'pages',
-        where: { slug: { equals: slug }, ...PUBLISHED_WHERE },
+        where: { slug: { equals: slug }, ...publishedWhere(draft) },
         limit: 1,
         depth: 1,
-        draft: false,
+        draft,
         overrideAccess: true,
       })
       return docs[0] ?? null
@@ -161,17 +186,21 @@ export async function getAllPublishedPages(limit = 500): Promise<Page[]> {
 }
 
 /** Poszt slug alapján — author/categories/relatedPosts populate-olva (depth 2). */
-export async function getPostBySlug(slug: string): Promise<Post | null> {
+export async function getPostBySlug(
+  slug: string,
+  options: CmsDocQueryOptions = {},
+): Promise<Post | null> {
+  const draft = options.draft === true
   return safeQuery(
     `poszt:${slug}`,
     async () => {
       const payload = await getPayload({ config })
       const { docs } = await payload.find({
         collection: 'posts',
-        where: { slug: { equals: slug }, ...PUBLISHED_WHERE },
+        where: { slug: { equals: slug }, ...publishedWhere(draft) },
         limit: 1,
         depth: 2,
-        draft: false,
+        draft,
         overrideAccess: true,
       })
       return docs[0] ?? null

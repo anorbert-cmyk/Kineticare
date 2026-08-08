@@ -49,8 +49,16 @@ const validateMenu: CollectionBeforeValidateHook = async ({ data, originalDoc, r
 
 export const Menus: CollectionConfig = {
   slug: 'menus',
+  labels: {
+    singular: 'Menüpont',
+    plural: 'Menüpontok',
+  },
   admin: {
     useAsTitle: 'label',
+    group: 'Navigáció',
+    defaultColumns: ['label', 'type', 'order', 'visible'],
+    description:
+      'Az oldal tetején látszó menü. Legfeljebb 2 szint: főmenüpont és alatta almenüpontok.',
   },
   access: {
     // T-013: nyilvános olvasás, de nem-admin csak a visible=true sorokat látja.
@@ -66,59 +74,81 @@ export const Menus: CollectionConfig = {
       name: 'label',
       type: 'text',
       required: true,
+      label: 'Felirat',
+      admin: {
+        description: 'Ez a szöveg jelenik meg a menüben (pl. „Kurzusok").',
+      },
     },
     {
       name: 'type',
       type: 'select',
       required: true,
       defaultValue: 'page',
+      label: 'Hová mutat',
       options: [
-        { label: 'Page', value: 'page' },
-        { label: 'Post', value: 'post' },
-        { label: 'URL', value: 'url' },
-        { label: 'Product', value: 'product' },
+        { label: 'Oldal', value: 'page' },
+        { label: 'Bejegyzés', value: 'post' },
+        { label: 'Külső link', value: 'url' },
+        { label: 'Kurzus', value: 'product' },
       ],
+      admin: {
+        description: 'Válaszd ki, milyen tartalomra visz a menüpont; ettől függ a következő mező.',
+      },
     },
     {
       name: 'ref',
       type: 'relationship',
       relationTo: ['pages', 'posts', 'products'],
+      label: 'Cél',
       admin: {
         condition: (_, siblingData) => siblingData?.type !== 'url',
-        description: 'A menüpont célja — a type-nak megfelelő collectionből.',
+        description: 'A menüpont célja — a fent választott típusnak megfelelő listából.',
       },
     },
     {
       name: 'url',
       type: 'text',
+      label: 'Külső webcím',
       admin: {
         condition: (_, siblingData) => siblingData?.type === 'url',
+        description: 'Teljes webcím más oldalra, https://-sel kezdve.',
       },
     },
     {
       name: 'parent',
       type: 'relationship',
       relationTo: 'menus',
+      label: 'Fölérendelt menüpont',
       admin: {
-        description: 'Legfeljebb 2 szintű menüfa: csak gyökér menüpont választható szülőnek.',
+        description:
+          'Csak akkor töltsd ki, ha ez almenüpont. Legfeljebb 2 szintű a menü: almenüpont alá már nem tehetsz továbbit.',
       },
     },
     {
       name: 'order',
       type: 'number',
+      label: 'Sorrend',
       admin: {
-        description: 'A menün belüli sorrend (kisebb = előrébb).',
+        description: 'A menün belüli sorrend (kisebb szám = előrébb).',
       },
     },
     {
       name: 'visible',
       type: 'checkbox',
       defaultValue: true,
+      label: 'Látható',
+      admin: {
+        description: 'Ha kiveszed a pipát, a menüpont eltűnik az oldalról, de nem vész el.',
+      },
     },
     {
       name: 'openInNewTab',
       type: 'checkbox',
       defaultValue: false,
+      label: 'Új lapon nyíljon',
+      admin: {
+        description: 'Külső linkeknél szokás bekapcsolni, hogy a látogató ne hagyja el az oldalt.',
+      },
     },
   ],
 }

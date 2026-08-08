@@ -23,6 +23,16 @@ import type { CollectionConfig } from 'payload'
  */
 export const Media: CollectionConfig = {
   slug: 'media',
+  labels: {
+    singular: 'Kép',
+    plural: 'Képek',
+  },
+  admin: {
+    useAsTitle: 'alt',
+    group: 'Tartalom',
+    defaultColumns: ['alt', 'filename', 'mimeType', 'updatedAt'],
+    description: 'Az oldalon használt képek. Feltöltés után bármelyik oldalról kiválaszthatók.',
+  },
   access: {
     read: () => true,
   },
@@ -31,6 +41,11 @@ export const Media: CollectionConfig = {
       name: 'alt',
       type: 'text',
       required: true,
+      label: 'Képleírás (alt)',
+      admin: {
+        description:
+          'A kép szöveges leírása — kötelező, a képernyőolvasók és a Google miatt. Írd le egy mondatban, mi látszik a képen.',
+      },
     },
   ],
   upload: {

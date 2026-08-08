@@ -141,7 +141,11 @@ async function seed(): Promise<void> {
         slug: 'bemutatkozas',
         excerpt: 'A Kineticare kézrehabilitációs kurzusplatform bemutatkozó oldala.',
         content: minimalRichText('Üdvözöl a Kineticare — ez a bemutatkozó demó oldal.'),
+        // A `status` a `_status`-ból szinkronizálódik (src/lib/publish-status.ts),
+        // ezért a kettőt együtt kell megadni — `_status` nélkül a rekord piszkozat
+        // maradna, és a demó oldal nem jelenne meg a storefronton.
         status: 'published',
+        _status: 'published',
         publishedAt: new Date().toISOString(),
       },
       overrideAccess: true,
@@ -166,7 +170,9 @@ async function seed(): Promise<void> {
         slug: 'kezrehabilitacio-alapok',
         excerpt: 'Bevezető a kézrehabilitációs gyakorlatok világába.',
         content: minimalRichText('Ez a demó bejegyzés a kézrehabilitáció alapjairól.'),
+        // Lásd a demó oldalnál: a `status` a `_status`-ból szinkronizálódik.
         status: 'published',
+        _status: 'published',
         publishedAt: new Date().toISOString(),
         author: ownerId,
         categories: [contentCategoryId],

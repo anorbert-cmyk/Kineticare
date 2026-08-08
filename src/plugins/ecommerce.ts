@@ -1,5 +1,6 @@
 import { ecommercePlugin } from '@payloadcms/plugin-ecommerce'
 import type { CollectionOverride, Currency } from '@payloadcms/plugin-ecommerce/types'
+import type { JSONSchema4 } from 'json-schema'
 import type { Config, Field, FieldAccess } from 'payload'
 
 import {
@@ -138,6 +139,35 @@ const withOrderItemSnapshots = (field: Field): Field => {
 }
 
 /**
+ * Az orders.refunds json-mező ERŐS típusa a generált payload-types.ts-hez.
+ *
+ * A `json` mezőkből a típusgenerátor alapból `unknown`-t (bármit) csinál — a
+ * refunds-t viszont pénzügyi kód olvassa (src/lib/refund/*), ezért itt kézzel
+ * megadjuk a séma-alakot. Így a `npm run generate:types` újrafuttatása után is
+ * a bejegyzés-szintű mezők (transactionId, amountHuf, status, refundedAt, type,
+ * reason) típusosak maradnak, és a fordító elkapja az elgépeléseket.
+ *
+ * A séma a refund-szolgáltatás által írt alakot tükrözi — ha ott új mező kerül
+ * a bejegyzésbe, ezt is bővíteni kell.
+ */
+const refundsTypescriptSchema: JSONSchema4 = {
+  type: ['array', 'null'],
+  items: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['transactionId', 'amountHuf', 'status', 'refundedAt', 'type'],
+    properties: {
+      transactionId: { type: 'string' },
+      amountHuf: { type: 'number' },
+      status: { type: 'string' },
+      refundedAt: { type: 'string' },
+      type: { type: 'string', enum: ['full', 'partial'] },
+      reason: { type: ['string', 'null'] },
+    },
+  },
+}
+
+/**
  * T-021/T-063: az orders `status` mező üzleti állapotgépe.
  *
  * A plugin gyári állapotait (processing/completed/cancelled/refunded) a
@@ -175,14 +205,27 @@ const visitOrderFields = (field: Field): Field =>
   withOrderStatusStateMachine(withOrderItemSnapshots(field))
 
 /**
+ * Admin-csoport a webshop-collectionöknek: a plugin gyári collectionjei
+ * egységesen a „Webshop" fül alá kerülnek, magyar megnevezéssel — így a
+ * szerkesztő az oldalsávban elkülönítve látja a tartalmat és a webshopot.
+ */
+const WEBSHOP_GROUP = 'Webshop'
+
+/**
  * Products override: a plugin gyári mezői (inventory, priceInHUF…) megmaradnak,
  * a kurzus-specifikus mezők mögéjük kerülnek.
  */
 const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) => ({
   ...defaultCollection,
+  labels: {
+    singular: 'Kurzus',
+    plural: 'Kurzusok',
+  },
   admin: {
     ...defaultCollection.admin,
     useAsTitle: 'sku',
+    group: WEBSHOP_GROUP,
+    description: 'A megvásárolható kurzusok. Az árat és a közzétételt csak tulajdonos állíthatja.',
   },
   fields: [
     ...mapFieldsDeep(defaultCollection.fields, withOwnerOnlyPriceAccess),
@@ -309,6 +352,16 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
  */
 const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => ({
   ...defaultCollection,
+  labels: {
+    singular: 'Rendelés',
+    plural: 'Rendelések',
+  },
+  admin: {
+    ...defaultCollection.admin,
+    group: WEBSHOP_GROUP,
+    description:
+      'A leadott rendelések és a fizetésük állapota. A rendeléseket a rendszer kezeli — kézzel ne módosítsd őket.',
+  },
   fields: [
     ...mapFieldsDeep(defaultCollection.fields, visitOrderFields),
     {
@@ -414,6 +467,10 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       // owner-only, mert pénzügyi tranzakció-adatokat hordoz.
       name: 'refunds',
       type: 'json',
+      // A generált típus erős marad (lásd refundsTypescriptSchema). A kapott
+      // sémát nem eldobjuk, hanem kiegészítjük — így az admin.description-ből
+      // származó JSDoc-komment is megmarad a generált típuson.
+      typescriptSchema: [({ jsonSchema }) => ({ ...jsonSchema, ...refundsTypescriptSchema })],
       access: {
         read: isOwnerFieldAccess,
         create: () => false,
@@ -477,6 +534,18 @@ export const ecommerce = async (config: Config): Promise<Config> => {
     addresses: false,
     carts: {
       allowGuestCarts: false,
+      cartsCollectionOverride: ({ defaultCollection }) => ({
+        ...defaultCollection,
+        labels: {
+          singular: 'Kosár',
+          plural: 'Kosarak',
+        },
+        admin: {
+          ...defaultCollection.admin,
+          group: WEBSHOP_GROUP,
+          description: 'A vásárlók félbehagyott kosarai. Automatikusan keletkezik — ne szerkeszd.',
+        },
+      }),
     },
     currencies: {
       defaultCurrency: 'HUF',
@@ -495,7 +564,20 @@ export const ecommerce = async (config: Config): Promise<Config> => {
       productsCollectionOverride,
       variants: false,
     },
-    transactions: true,
+    transactions: {
+      transactionsCollectionOverride: ({ defaultCollection }) => ({
+        ...defaultCollection,
+        labels: {
+          singular: 'Tranzakció',
+          plural: 'Tranzakciók',
+        },
+        admin: {
+          ...defaultCollection.admin,
+          group: WEBSHOP_GROUP,
+          description: 'A fizetési tranzakciók nyoma. Csak a rendszer írja — ne szerkeszd.',
+        },
+      }),
+    },
   })(config)
 
   withEcommerce.collections = applyCollectionAccessPolicies(
