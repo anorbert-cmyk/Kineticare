@@ -20,6 +20,7 @@ describe('payload.config', () => {
       'posts',
       'menus',
       'categories',
+      'testimonials',
       // ecommerce plugin collectionjei
       'products',
       'carts',
@@ -39,6 +40,29 @@ describe('payload.config', () => {
 
     // T-019: a feltöltési méretkorlát globálisan 10 MB (bájtban).
     expect(config.upload?.limits?.fileSize).toBe(10485760)
+  })
+
+  /**
+   * Magyar admin felület: a staff („a lányok") nem szakember, ezért az admin
+   * alapnyelve magyar. A fallbackLanguage a döntő beállítás — a nem szerkesztett
+   * kulcsok is ezen a nyelven jelennek meg —, az `en` pedig választható marad.
+   * A teszt őrzi, hogy az i18n-blokk ne essen ki a configból.
+   */
+  it('az admin felület magyar (i18n fallback: hu, en választható)', async () => {
+    const config = await configPromise
+
+    expect(config.i18n.fallbackLanguage).toBe('hu')
+
+    const supported = Object.keys(config.i18n.supportedLanguages ?? {})
+    expect(supported).toContain('hu')
+    expect(supported).toContain('en')
+  })
+
+  /** A böngészőfülön látszó cím-utótag (admin.meta) — szintén magyar felület. */
+  it('az admin cím-utótagja be van állítva', async () => {
+    const config = await configPromise
+
+    expect(config.admin?.meta?.titleSuffix).toBe(' – Kineticare admin')
   })
 
   /**
