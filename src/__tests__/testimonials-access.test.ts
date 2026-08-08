@@ -4,7 +4,11 @@ import { describe, expect, it } from 'vitest'
 import { applyCollectionAccessPolicies, collectionAccessPolicies, isStaffOrOwner } from '../access'
 import { visibleMenusOrAdmin } from '../access/menus-visibility'
 import { visibleTestimonialsOrAdmin } from '../access/testimonials-visibility'
-import { Testimonials } from '../collections/Testimonials'
+import {
+  SHORT_QUOTE_MAX_LENGTH,
+  Testimonials,
+  validateFeaturedTestimonial,
+} from '../collections/Testimonials'
 
 /**
  * Vélemények jogosultsága (A8).
@@ -101,5 +105,62 @@ describe('a testimonials politika a centrális mátrixban', () => {
 
   it('a collection nem használ verziózást (egyszerű: látszik vagy nem)', () => {
     expect(Testimonials.versions).toBeUndefined()
+  })
+})
+
+/**
+ * Kiemelés-ellenőrzés (D2-3).
+ *
+ * A kezdőlap a `shortQuote || quote` szabály szerint jelenít meg, ezért rövid
+ * változat nélkül a TELJES szöveg kerül ki. A validate ezt a csapdát zárja le:
+ * kiemelt véleményhez vagy rövid változat kell, vagy elég rövid teljes szöveg.
+ */
+describe('validateFeaturedTestimonial', () => {
+  const longQuote = 'a'.repeat(SHORT_QUOTE_MAX_LENGTH + 1)
+  const shortEnoughQuote = 'a'.repeat(SHORT_QUOTE_MAX_LENGTH)
+
+  it('nem kiemelt vélemény: bármilyen hosszú teljes szöveg átmegy', () => {
+    expect(validateFeaturedTestimonial(false, { quote: longQuote })).toBe(true)
+    expect(validateFeaturedTestimonial(undefined, { quote: longQuote })).toBe(true)
+    expect(validateFeaturedTestimonial(null, { quote: longQuote })).toBe(true)
+  })
+
+  it('kiemelt + rövid változat: átmegy (a hosszú teljes szöveg nem baj)', () => {
+    expect(
+      validateFeaturedTestimonial(true, { quote: longQuote, shortQuote: 'Rövid változat.' }),
+    ).toBe(true)
+  })
+
+  it('kiemelt + rövid teljes szöveg (határeset: pontosan a limit): átmegy', () => {
+    expect(validateFeaturedTestimonial(true, { quote: shortEnoughQuote })).toBe(true)
+  })
+
+  it.each([
+    ['hiányzó rövid változat', undefined],
+    ['üres rövid változat', ''],
+    ['csak szóköz', '   '],
+  ])(
+    'kiemelt + hosszú teljes szöveg (%s): magyar hibaüzenet',
+    (_label, shortQuote) => {
+      const result = validateFeaturedTestimonial(true, { quote: longQuote, shortQuote })
+
+      expect(result).toBe(
+        `Kiemelt véleményhez adj meg rövid változatot, vagy legyen a teljes szöveg legfeljebb ${SHORT_QUOTE_MAX_LENGTH} karakter.`,
+      )
+      expect(result).toContain('Kiemelt véleményhez')
+    },
+  )
+
+  it('hiányzó testvéradat esetén sem dob (fail-safe: a required mezők külön ellenőrzöttek)', () => {
+    expect(validateFeaturedTestimonial(true, undefined)).toBe(true)
+    expect(validateFeaturedTestimonial(true, null)).toBe(true)
+  })
+
+  it('a featured mező validate-je ezt a függvényt használja', () => {
+    const featured = Testimonials.fields.find(
+      (field) => 'name' in field && field.name === 'featured',
+    )
+
+    expect(featured && 'validate' in featured ? typeof featured.validate : null).toBe('function')
   })
 })

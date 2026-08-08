@@ -21,6 +21,44 @@ import type { CollectionConfig } from 'payload'
 /** A rövid változat felső határa — ennél hosszabb már nem „1–2 mondat". */
 export const SHORT_QUOTE_MAX_LENGTH = 260
 
+/**
+ * Egy szöveges mező értéke a Payload ismeretlen alakú `siblingData`-jából.
+ * (A checkbox-validate típusa `unknown` testvéradatot ad, ezért kell a szűkítés.)
+ */
+const readTextField = (source: unknown, key: string): string => {
+  if (typeof source !== 'object' || source === null) {
+    return ''
+  }
+  const value = (source as Record<string, unknown>)[key]
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
+ * Kiemelt vélemény ellenőrzése: a kezdőlapra rövid szöveg való.
+ *
+ * A megjelenítés a `shortQuote || quote` szabályt követi (lásd
+ * TestimonialsSection), ezért rövid változat NÉLKÜL a teljes szöveg kerül ki —
+ * hosszú idézetnél ez tolná szét a kezdőlapot (UX-skill M6). A kiemelésnél
+ * tehát vagy legyen rövid változat, vagy legyen maga a teljes szöveg elég rövid.
+ *
+ * Tiszta függvény (tesztelhetőség), a `featured` mező `validate`-je ezt hívja.
+ */
+export const validateFeaturedTestimonial = (
+  featured: unknown,
+  siblingData: unknown,
+): string | true => {
+  if (featured !== true) {
+    return true
+  }
+  if (readTextField(siblingData, 'shortQuote').length > 0) {
+    return true
+  }
+  if (readTextField(siblingData, 'quote').length > SHORT_QUOTE_MAX_LENGTH) {
+    return `Kiemelt véleményhez adj meg rövid változatot, vagy legyen a teljes szöveg legfeljebb ${SHORT_QUOTE_MAX_LENGTH} karakter.`
+  }
+  return true
+}
+
 export const Testimonials: CollectionConfig = {
   slug: 'testimonials',
   labels: {
@@ -49,8 +87,7 @@ export const Testimonials: CollectionConfig = {
       type: 'textarea',
       label: 'Vélemény szövege (rövid)',
       admin: {
-        description:
-          'Rövid, 1–2 mondatos változat a főoldalra; ha üres, a teljes szöveg rövidsége esetén az jelenik meg.',
+        description: `Rövid, 1–2 mondatos változat a főoldalra (legfeljebb ${SHORT_QUOTE_MAX_LENGTH} karakter). Ha üresen hagyod, a kezdőlapon a TELJES szöveg jelenik meg — hosszú véleménynél ezért töltsd ki.`,
       },
       validate: (value: string | null | undefined) => {
         if (typeof value === 'string' && value.trim().length > SHORT_QUOTE_MAX_LENGTH) {
@@ -82,8 +119,11 @@ export const Testimonials: CollectionConfig = {
       defaultValue: false,
       label: 'Kiemelt',
       admin: {
-        description: 'Főoldalon megjelenik (legfeljebb 3 kiemelt).',
+        description:
+          'Főoldalon megjelenik (a Sorrend szerinti első 3 kiemelt). Kiemeléshez rövid változat kell, vagy elég rövid teljes szöveg.',
       },
+      validate: (value: boolean | null | undefined, { siblingData }: { siblingData?: unknown }) =>
+        validateFeaturedTestimonial(value, siblingData),
     },
     {
       name: 'order',

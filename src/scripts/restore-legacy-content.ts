@@ -13,7 +13,9 @@
  *    menüpontok mellé, label-alapú deduppal;
  *  - vélemények (testimonials): a régi oldalakon megjelent 14 VALÓS páciens-
  *    visszajelzés — név + a szöveg eleje alapján UPSERT; a kezdőlapra szánt
- *    3 kiemelt (featured) rövid változatot (shortQuote) is kap.
+ *    3 kiemelt (featured) rövid változatot (shortQuote) is kap, ami mindig a
+ *    teljes idézet betűhív, összefüggő RÉSZLETE (lásd a testimonials-blokk
+ *    kommentjét).
  *
  * Többször futtatva sem duplikál: minden entitást egyedi kulcs (fájlnév / slug /
  * sku / label / név+szövegkezdet) alapján keres meg, és csak a hiányzót hozza
@@ -914,11 +916,17 @@ const kezrelaxLongDescription = (): Product['longDescription'] =>
 //
 // A `quote` mindenhol BETŰHÍVEN azonos a fenti oldal-tartalmakban szereplő
 // idézettel — kitalált vagy „szépített" visszajelzés ide nem kerülhet.
-// A `shortQuote` a kezdőlapra szánt rövid változat: pontosan az a három, amit a
-// megújult kezdőlap-terv (higgsfield-site/app/src/routes/index.tsx) is mutat.
-// (Kállai Dóránál a terv rövidített szövege 283 karakter, a mező viszont
-// legfeljebb 260-at enged — ezért annak a betűhív ELSŐ MONDATA kerül ide, ami
-// egyben a teljes idézet eleje is; szó nem változott és nem került bele.)
+//
+// A `shortQuote` a kezdőlapra szánt rövid változat (mezőkorlát: 260 karakter),
+// és mind a három kiemeltnél a teljes idézet ÖSSZEFÜGGŐ, BETŰHÍV RÉSZLETE — nem
+// átfogalmazás és nem több mondatból összeollózott kivonat. A megújult
+// kezdőlap-terv (higgsfield-site/app/src/routes/index.tsx) rövidített szövegei
+// ezt a próbát nem állták ki: a Kállai-változat 283 karakteres volt, a
+// Garami-/Bagdal-változat pedig nem szomszédos mondatokat fűzött össze és
+// szavakat is módosított (pl. gondolatjel helyett vessző, kihagyott „akkor
+// már"). Idézőjelbe tett, de valójában el nem hangzott mondat fogyasztóvédelmi
+// szempontból is kockázat, ezért mindhárom rövid változat a teljes idézet
+// szó szerinti részlete — ellenőrizhetően: `quote.includes(shortQuote) === true`.
 // ---------------------------------------------------------------------------
 
 interface LegacyTestimonial {
@@ -926,7 +934,8 @@ interface LegacyTestimonial {
   quote: string
   /**
    * Rövid, kezdőlapra szánt változat (M6: legfeljebb 3 vélemény, 1–2 mondat).
-   * Csak a kiemelt véleményeknél van kitöltve.
+   * Csak a kiemelt véleményeknél van kitöltve, és mindig a `quote` betűhív,
+   * összefüggő részlete — a rövidítés nem írhatja át az elhangzott szöveget.
    */
   shortQuote?: string
   authorName: string
@@ -943,7 +952,7 @@ const LEGACY_TESTIMONIALS: readonly LegacyTestimonial[] = [
     quote:
       'Kocsis Katát kézproblémával kerestem fel, és már az első alkalommal éreztem, hogy jó kezekben vagyok – szó szerint is. Nagy odafigyeléssel, alázattal és valódi szakértelemmel kezelt minden alkalommal. Nemcsak a tüneteket enyhítette, hanem segített megérteni a kiváltó okokat is. Őszintén ajánlom mindenkinek, aki nemcsak gyors enyhülést, hanem tartós megoldást keres.',
     shortQuote:
-      'Már az első alkalommal éreztem, hogy jó kezekben vagyok, szó szerint is. Nemcsak a tüneteket enyhítette, hanem segített megérteni a kiváltó okokat is.',
+      'Nemcsak a tüneteket enyhítette, hanem segített megérteni a kiváltó okokat is. Őszintén ajánlom mindenkinek, aki nemcsak gyors enyhülést, hanem tartós megoldást keres.',
     authorName: 'Garami Gábor',
     authorTitle: 'zenész / műsorvezető',
     featured: true,
@@ -971,7 +980,7 @@ const LEGACY_TESTIMONIALS: readonly LegacyTestimonial[] = [
     quote:
       'A KINETICARE lányokat ajánlás alapján kerestem meg, ugyanis akkor már pár hónapja erős fájdalommal járt a hüvelykujjam és a csuklóm mozgatása. Ez a munkámat is nehezítette, hiszen jógaoktatóként folyamatosan használnom kellett, nem pihentethettem. A közös munkának, a világos magyarázatoknak, hogy mi történik velem, illetve a szuper feladatoknak és életvezetési tanácsoknak hála sikerült a gyógyulás! Nagyon hálás vagyok a KINETICARE-nek, hiszen azóta fájdalommentesen élek, és újra visszatérhettem kedvenc gyakorlatomhoz, a kézenálláshoz is.',
     shortQuote:
-      'A KINETICARE lányokat ajánlás alapján kerestem meg, ugyanis pár hónapja erős fájdalommal járt a hüvelykujjam és a csuklóm mozgatása. A közös munkának, a világos magyarázatoknak, a szuper feladatoknak és életvezetési tanácsoknak hála, sikerült a gyógyulás!',
+      'A közös munkának, a világos magyarázatoknak, hogy mi történik velem, illetve a szuper feladatoknak és életvezetési tanácsoknak hála sikerült a gyógyulás!',
     authorName: 'Bagdal Szilvia',
     authorTitle: 'Sziszi Yoga: haladó jógaoktató / mobility- és meditációs tréner',
     featured: true,

@@ -17,6 +17,11 @@ import { Section } from '../../ui/Section'
  *
  * Nincs interaktív elem és nincs animáció: a fókuszkezelés és a
  * `prefers-reduced-motion` szempontjából a szekció semleges.
+ *
+ * Akadálymentesség: a szekció NEVÉT a saját címsora adja (`aria-labelledby` a
+ * `section` elemen, nem a belső listán) — enélkül a landmark névtelen maradna.
+ * A szerző nevét szándékosan `span` hordozza: a HTML `cite` eleme a MŰ címére
+ * való, személynévre szabványsértő lenne.
  */
 
 /** A kezdőlapon megjelenő vélemények felső korlátja (UX-skill M6: max 2–3). */
@@ -54,15 +59,20 @@ export function TestimonialsSection({ testimonials }: TestimonialsSectionProps) 
   }
 
   return (
-    <Section className="kc-testimonials" id="velemenyek" variant="tint">
+    <Section
+      aria-labelledby="velemenyek-cim"
+      className="kc-testimonials"
+      id="velemenyek"
+      variant="tint"
+    >
       <Container>
         <div className="kc-testimonials__head">
           <p className="kc-testimonials__eyebrow">Vélemények</p>
-          <h2 className="kc-testimonials__title" id="velemenyek-cim">
+          <h2 className="kc-section-title kc-testimonials__title" id="velemenyek-cim">
             Pácienseink mondták
           </h2>
         </div>
-        <ul aria-labelledby="velemenyek-cim" className="kc-testimonials__list">
+        <ul className="kc-testimonials__list">
           {items.map((testimonial) => {
             const role = testimonial.authorTitle?.trim() ?? ''
             return (
@@ -76,7 +86,7 @@ export function TestimonialsSection({ testimonials }: TestimonialsSectionProps) 
                       <p className="kc-testimonials__text">{testimonialQuoteText(testimonial)}</p>
                     </blockquote>
                     <figcaption className="kc-testimonials__attribution">
-                      <cite className="kc-testimonials__cite">{testimonial.authorName.trim()}</cite>
+                      <span className="kc-testimonials__cite">{testimonial.authorName.trim()}</span>
                       {role.length > 0 ? <span className="kc-testimonials__role">{role}</span> : null}
                     </figcaption>
                   </figure>

@@ -1,6 +1,6 @@
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
-import { EXIT_PREVIEW_PATH } from './preview-target'
+import { EXIT_PREVIEW_PATH, hasControlCharacter } from './preview-target'
 
 /**
  * Piszkozat-előnézetből való KILÉPÉS (`/next/exit-preview`).
@@ -20,21 +20,6 @@ export const RETURN_PATH_PARAM = 'vissza'
 
 /** Kilépés után ide megyünk, ha nincs (vagy nem biztonságos) a visszatérési útvonal. */
 const DEFAULT_RETURN_PATH = '/'
-
-/**
- * Vezérlőkarakter (pl. soremelés) a Location fejlécben fejléc-injekciót
- * jelentene, ezért az ilyen értéket elutasítjuk. Regex helyett kódpont-vizsgálat:
- * a vezérlőkaraktert tartalmazó regex az ESLint no-control-regex szabályába ütközne.
- */
-function hasControlCharacter(value: string): boolean {
-  for (const character of value) {
-    const code = character.codePointAt(0) ?? 0
-    if (code < 0x20 || code === 0x7f) {
-      return true
-    }
-  }
-  return false
-}
 
 /**
  * A visszatérési útvonal ellenőrzése.

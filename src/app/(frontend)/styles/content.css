@@ -237,9 +237,10 @@
 }
 
 /* ---- Vélemények (kezdőlap M6) ---------------------------------------------
-   Fehér kártyák a tint szekció-háttéren. Kontraszt: --kc-color-text fehéren
-   ~16:1, --kc-color-text-muted fehéren 7.9:1, a tint sávon 6.5:1 — mindkettő
-   AA felett. Nincs interakció és nincs átmenet, így fókusz-/reduced-motion
+   Fehér kártyák a tint szekció-háttéren. Kontraszt (a tokens.css értékeiből
+   számolva): --kc-color-text (#1a1a1a) fehéren 17,40:1; --kc-color-text-muted
+   (#4a5560) fehéren 7,61:1, a tint sávon (#ebf7ff) 6,99:1 — mindegyik AA
+   felett. Nincs interakció és nincs átmenet, így fókusz-/reduced-motion
    kezelést nem igényel. */
 
 .kc-testimonials__head {
@@ -256,13 +257,10 @@
   color: var(--kc-color-text-muted);
 }
 
+/* A tipográfiát a .kc-section-title adja (a komponens mindkét osztályt viseli),
+   itt csak a szemöldök-sorhoz igazított margó tér el a szekció-alapértéktől. */
 .kc-testimonials__title {
   margin: var(--kc-space-3) 0 0;
-  font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-2xl);
-  font-weight: var(--kc-font-weight-normal);
-  line-height: var(--kc-leading-heading);
-  color: var(--kc-color-text);
 }
 
 .kc-testimonials__list {

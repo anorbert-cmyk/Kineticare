@@ -103,6 +103,7 @@ const orderItemSnapshotFields: Field[] = [
   {
     name: 'titleSnapshot',
     type: 'text',
+    label: 'Kurzus neve a megrendeléskor',
     access: {
       create: () => false,
       update: () => false,
@@ -116,6 +117,7 @@ const orderItemSnapshotFields: Field[] = [
   {
     name: 'priceHufSnapshot',
     type: 'number',
+    label: 'Ár a megrendeléskor (Ft)',
     access: {
       create: () => false,
       update: () => false,
@@ -232,24 +234,45 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
     {
       name: 'shortDescription',
       type: 'textarea',
+      label: 'Rövid leírás',
+      admin: {
+        description: '1–3 mondat. A kurzuskártyákon és a kezdőlapon ez látszik.',
+      },
     },
     {
       name: 'longDescription',
       type: 'richText',
+      label: 'Részletes leírás',
+      admin: {
+        description: 'A kurzus oldalán megjelenő teljes szöveg.',
+      },
     },
     {
       name: 'coverImage',
       type: 'upload',
       relationTo: 'media',
+      label: 'Borítókép',
+      admin: {
+        description: 'A kurzus kártyáján és az oldala tetején megjelenő kép.',
+      },
     },
     {
       name: 'gallery',
       type: 'array',
+      label: 'Képgaléria',
+      labels: {
+        singular: 'Kép',
+        plural: 'Képek',
+      },
+      admin: {
+        description: 'További képek a kurzus oldalára (nem kötelező).',
+      },
       fields: [
         {
           name: 'image',
           type: 'upload',
           relationTo: 'media',
+          label: 'Kép',
         },
       ],
     },
@@ -258,42 +281,70 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       type: 'relationship',
       relationTo: 'categories',
       required: true,
+      label: 'Kategória',
+      admin: {
+        description: 'Kötelező. Ha nincs megfelelő, előbb hozd létre a Tartalom → Kategóriák alatt.',
+      },
     },
     {
       name: 'previewVideoStreamId',
       type: 'text',
+      label: 'Bemutató videó azonosítója',
+      admin: {
+        description:
+          'A Cloudflare Stream videó azonosítója az ingyenes előzeteshez. Ha nem tudod, hagyd üresen.',
+      },
     },
     {
       name: 'videos',
       type: 'array',
+      label: 'Videók',
+      labels: {
+        singular: 'Videó',
+        plural: 'Videók',
+      },
+      admin: {
+        description: 'A kurzus videói — a vásárlók ezeket nézhetik meg.',
+      },
       fields: [
         {
           name: 'title',
           type: 'text',
+          label: 'Videó címe',
         },
         {
           name: 'streamAssetId',
           type: 'text',
+          label: 'Videó azonosítója',
+          admin: {
+            description: 'A Cloudflare Stream azonosítója. Feltöltéskor a rendszer tölti ki.',
+          },
         },
         {
           name: 'durationSec',
           type: 'number',
+          label: 'Hossz (másodperc)',
         },
         {
           name: 'status',
           type: 'select',
           defaultValue: 'processing',
+          label: 'Videó állapota',
           options: [
-            { label: 'Processing', value: 'processing' },
-            { label: 'Ready', value: 'ready' },
-            { label: 'Error', value: 'error' },
+            { label: 'Feldolgozás alatt', value: 'processing' },
+            { label: 'Kész', value: 'ready' },
+            { label: 'Hiba', value: 'error' },
           ],
+          admin: {
+            description: 'A videó feldolgozottsága — a rendszer állítja, ne írd át.',
+          },
         },
       ],
     },
     {
       name: 'accessDurationDays',
       type: 'number',
+      label: 'Hozzáférés hossza (nap)',
       admin: {
         description:
           'Hány napig érvényes a hozzáférés vásárlás után. Üres (null) = örök hozzáférés.',
@@ -302,6 +353,7 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
     {
       name: 'status',
       type: 'select',
+      label: 'Állapot',
       // A Payload a drafts `_status` mezőnek ugyanazt az enum-nevet generálná
       // (toSnakeCase('_status') === 'status'), így az alapértelmezett névütközés
       // miatt a 'archived' érték elveszne az adatbázis-enumokból. Külön enum-név
@@ -309,10 +361,13 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       // API-mezőnév változatlanul `status` marad.
       enumName: ({ tableName }) => `enum_${tableName}_product_status`,
       options: [
-        { label: 'Draft', value: 'draft' },
-        { label: 'Published', value: 'published' },
-        { label: 'Archived', value: 'archived' },
+        { label: 'Piszkozat', value: 'draft' },
+        { label: 'Közzétéve', value: 'published' },
+        { label: 'Archivált', value: 'archived' },
       ],
+      admin: {
+        description: 'Csak a közzétett kurzus látszik az oldalon. Ezt csak tulajdonos állíthatja.',
+      },
       // T-011: a publikálás/archiválás (status create/update) kizárólag owneri
       // döntés — a staff draftot készíthet, de nem publikálhat.
       access: {
@@ -324,12 +379,21 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       name: 'sku',
       type: 'text',
       unique: true,
+      label: 'Kurzus neve (azonosító)',
+      admin: {
+        description:
+          'Ez a kurzus megjelenő neve és egyben egyedi azonosítója — két kurzusnak nem lehet ugyanaz.',
+      },
     },
     {
       name: 'relatedProducts',
       type: 'relationship',
       relationTo: 'products',
       hasMany: true,
+      label: 'Kapcsolódó kurzusok',
+      admin: {
+        description: 'A kurzus oldalán ajánlott további kurzusok.',
+      },
     },
   ],
 })
@@ -367,6 +431,7 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
     {
       name: 'orderNumber',
       type: 'text',
+      label: 'Rendelésszám',
       // Postgresben a unique index több NULL-t is megenged, így gyakorlatilag sparse.
       unique: true,
       index: true,
@@ -383,6 +448,7 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
     {
       name: 'totalHufSnapshot',
       type: 'number',
+      label: 'Végösszeg a megrendeléskor (Ft)',
       access: {
         create: () => false,
         update: () => false,
@@ -396,20 +462,26 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
     {
       name: 'barionPaymentId',
       type: 'text',
+      label: 'Barion fizetésazonosító',
       // Postgresben a unique index több NULL-t is megenged, így gyakorlatilag sparse.
       unique: true,
       index: true,
       access: {
         read: isOwnerFieldAccess,
       },
+      admin: {
+        description: 'A Barion oldali fizetés azonosítója — hibakereséshez.',
+      },
     },
     {
       name: 'barionPaymentRequestId',
       type: 'text',
+      label: 'Barion kérésazonosító',
     },
     {
       name: 'invoiceNumber',
       type: 'text',
+      label: 'Számla sorszáma',
       access: {
         read: isOwnerFieldAccess,
       },
@@ -417,37 +489,53 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
     {
       name: 'invoicePdfUrl',
       type: 'text',
+      label: 'Számla PDF linkje',
     },
     {
       name: 'invoiceStatus',
       type: 'select',
       defaultValue: 'none',
+      label: 'Számla állapota',
       options: [
-        { label: 'None', value: 'none' },
-        { label: 'Pending', value: 'pending' },
-        { label: 'Issued', value: 'issued' },
-        { label: 'Failed', value: 'failed' },
+        { label: 'Nincs', value: 'none' },
+        { label: 'Függőben', value: 'pending' },
+        { label: 'Kiállítva', value: 'issued' },
+        { label: 'Sikertelen', value: 'failed' },
       ],
+      admin: {
+        description: 'A számlázás állapota. A rendszer állítja — ne írd át.',
+      },
     },
     {
       name: 'customerSnapshot',
       type: 'json',
+      label: 'Vásárlói adatok a megrendeléskor',
       access: {
         read: isOwnerFieldAccess,
+      },
+      admin: {
+        description: 'A számlázási adatok mentett másolata a rendelés idejéből.',
       },
     },
     {
       name: 'consentWithdrawalWaiver',
       type: 'checkbox',
       defaultValue: false,
+      label: 'Lemondott az elállási jogról',
+      admin: {
+        description:
+          'A vásárló a megrendeléskor kérte az azonnali hozzáférést, és tudomásul vette, hogy ezzel elveszti a 14 napos elállási jogát.',
+      },
     },
     {
       name: 'consentWithdrawalWaiverAt',
       type: 'date',
+      label: 'Elállási jogról lemondás időpontja',
     },
     {
       name: 'refundReason',
       type: 'text',
+      label: 'Visszatérítés indoka',
       access: {
         update: isOwnerFieldAccess,
       },
@@ -455,6 +543,7 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
     {
       name: 'refundedAt',
       type: 'date',
+      label: 'Visszatérítés időpontja',
       access: {
         update: isOwnerFieldAccess,
       },
@@ -467,6 +556,7 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       // owner-only, mert pénzügyi tranzakció-adatokat hordoz.
       name: 'refunds',
       type: 'json',
+      label: 'Visszatérítések',
       // A generált típus erős marad (lásd refundsTypescriptSchema). A kapott
       // sémát nem eldobjuk, hanem kiegészítjük — így az admin.description-ből
       // származó JSDoc-komment is megmarad a generált típuson.
@@ -485,8 +575,12 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
     {
       name: 'ipAddress',
       type: 'text',
+      label: 'IP-cím a megrendeléskor',
       access: {
         read: isOwnerFieldAccess,
+      },
+      admin: {
+        description: 'A megrendelés IP-címe — csalásgyanús eset kivizsgálásához.',
       },
     },
   ],

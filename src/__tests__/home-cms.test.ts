@@ -167,6 +167,26 @@ function normalizeNbsp(html: string): string {
   return html.replace(/\u00a0/g, ' ')
 }
 
+type SectionBand = 'feher' | 'tint'
+
+/** A kezd\u0151lap szekci\u00f3-s\u00e1vjai renderel\u00e9si sorrendben (feh\u00e9r / tint h\u00e1tt\u00e9r). */
+function sectionBands(html: string): SectionBand[] {
+  return Array.from(html.matchAll(/<section[^>]*\sclass="([^"]*)"/g)).map(([, classes]) =>
+    classes.includes('kc-section--tint') ? 'tint' : 'feher',
+  )
+}
+
+/** Az adott sz\u00f6veget tartalmaz\u00f3 szekci\u00f3 h\u00e1tt\u00e9r-s\u00e1vja. */
+function bandOfSectionWith(html: string, marker: string): SectionBand {
+  const markerIndex = html.indexOf(marker)
+  if (markerIndex < 0) {
+    throw new Error(`A jel\u00f6l\u0151 nem szerepel a renderelt oldalon: ${marker}`)
+  }
+  const openIndex = html.lastIndexOf('<section', markerIndex)
+  const openTag = html.slice(openIndex, html.indexOf('>', openIndex))
+  return openTag.includes('kc-section--tint') ? 'tint' : 'feher'
+}
+
 // ---------------------------------------------------------------------------
 // Kezdőlap-render
 // ---------------------------------------------------------------------------
@@ -364,6 +384,68 @@ describe('HomeView (kezdőlap-render)', () => {
     }
     const sorted = [...positions].sort((a, b) => a - b)
     expect(positions).toEqual(sorted)
+  })
+
+  /**
+   * Sávritmus: a kezdőlap fehér és tint szekciókat váltogat. A vélemény-szekció
+   * (tint) és a CMS-blokk (fehér) is feltételes, ezért CMS-tartalom nélkül a
+   * tudástár közvetlenül a vélemények után jönne — két tint sáv egyetlen nagy
+   * folttá olvadna, és elveszne a szekcióhatár.
+   */
+  it.each([
+    ['CMS-tartalommal', contentWithWords(10) as unknown as Page['content']],
+    ['CMS-tartalom nélkül', emptyContent()],
+  ])('sávritmus (%s): nincs két egymást követő tint sáv', (_label, content) => {
+    const html = render(
+      createElement(HomeView, {
+        home: page({ id: 1, content }),
+        products: [product({ id: 1 })],
+        posts: [post({ id: 1 })],
+        testimonials: [testimonial({ id: 1 })],
+      }),
+    )
+    const bands = sectionBands(html)
+
+    expect(bands.length).toBeGreaterThan(0)
+    expect(bands).toContain('tint')
+    for (let index = 1; index < bands.length; index += 1) {
+      expect([bands[index - 1], bands[index]]).not.toEqual(['tint', 'tint'])
+    }
+  })
+
+  it('sávritmus: a tudástár csak akkor tint, ha a fehér CMS-blokk elválasztja a véleményektől', () => {
+    const withCms = render(
+      createElement(HomeView, {
+        home: page({ id: 1, content: contentWithWords(10) as unknown as Page['content'] }),
+        products: [],
+        posts: [post({ id: 1 })],
+        testimonials: [testimonial({ id: 1 })],
+      }),
+    )
+    expect(bandOfSectionWith(withCms, 'Pácienseink mondták')).toBe('tint')
+    expect(bandOfSectionWith(withCms, 'Legfrissebb a tudástárból')).toBe('tint')
+
+    const withoutCms = render(
+      createElement(HomeView, {
+        home: page({ id: 1 }),
+        products: [],
+        posts: [post({ id: 1 })],
+        testimonials: [testimonial({ id: 1 })],
+      }),
+    )
+    expect(bandOfSectionWith(withoutCms, 'Pácienseink mondták')).toBe('tint')
+    expect(bandOfSectionWith(withoutCms, 'Legfrissebb a tudástárból')).toBe('feher')
+
+    // Kiemelt vélemény nélkül a tudástár előtt fehér szekció áll, így visszakapja a tint sávot.
+    const withoutTestimonials = render(
+      createElement(HomeView, {
+        home: page({ id: 1 }),
+        products: [],
+        posts: [post({ id: 1 })],
+        testimonials: [],
+      }),
+    )
+    expect(bandOfSectionWith(withoutTestimonials, 'Legfrissebb a tudástárból')).toBe('tint')
   })
 
   it('isPaidProduct: csak az árazott (priceInHUFEnabled + szám ár) termék fizetős', () => {

@@ -22,12 +22,35 @@ export const isPreviewCollection = (value: unknown): value is PreviewCollection 
   typeof value === 'string' && (PREVIEW_COLLECTIONS as readonly string[]).includes(value)
 
 /**
+ * Vezérlőkarakter (pl. soremelés) az útvonalban a Location fejlécben
+ * fejléc-injekciót jelentene, ezért az ilyen érték sehol nem engedhető át.
+ * Regex helyett kódpont-vizsgálat: a vezérlőkaraktert tartalmazó regex az
+ * ESLint no-control-regex szabályába ütközne.
+ */
+export function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0
+    if (code < 0x20 || code === 0x7f) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
  * A dokumentum NYILVÁNOS útvonala:
  * - poszt → `/blog/<slug>`
  * - kezdőlap-oldal → `/`
  * - egyéb oldal → `/<slug>`
  *
  * Üres/hiányzó slug esetén null (ilyen dokumentumra nincs értelmezhető előnézet).
+ *
+ * BIZTONSÁG (open redirect): a visszaadott útvonalból a route `Location` fejléc
+ * lesz, ezért a slug CSAK egyetlen útvonal-szegmens lehet. Az elválasztót (`/`,
+ * `\`), séma-jelölőt (`:`) vagy vezérlőkaraktert tartalmazó érték idegen
+ * eredetre vinne (pl. a `//evil.example` slugból `//evil.example` protokoll-
+ * relatív cím lenne), ezért az ilyen slug is null — a hívó route ilyenkor a
+ * meglévő 400-as ágon utasítja el a kérést, és a draft mode be sem kapcsol.
  */
 export const previewTargetPath = (collection: PreviewCollection, slug: unknown): string | null => {
   if (typeof slug !== 'string') {
@@ -35,6 +58,9 @@ export const previewTargetPath = (collection: PreviewCollection, slug: unknown):
   }
   const normalized = slug.trim()
   if (normalized.length === 0) {
+    return null
+  }
+  if (/[/\\:]/.test(normalized) || hasControlCharacter(normalized)) {
     return null
   }
   if (collection === 'posts') {

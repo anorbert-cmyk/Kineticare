@@ -119,16 +119,16 @@ export const WebhookEvents: CollectionConfig = {
       type: 'select',
       label: 'Üzleti kimenetel',
       options: [
-        { label: 'Paid (rendelés fizetve + jogosultság megadva)', value: 'paid' },
-        { label: 'Cancelled (rendelés lemondva)', value: 'cancelled' },
-        { label: 'Függő — újrapollolásra vár', value: 'pending_repoll' },
+        { label: 'Fizetve (rendelés fizetve + jogosultság megadva)', value: 'paid' },
+        { label: 'Lemondva (rendelés lemondva)', value: 'cancelled' },
+        { label: 'Függő — újrakérdezésre vár', value: 'pending_repoll' },
         { label: 'Átmenet elutasítva (állapotgép-védelem)', value: 'rejected' },
         { label: 'Sikertelen feldolgozás (újrapróbálható)', value: 'failed' },
       ],
       admin: {
         readOnly: true,
         description:
-          'Az utolsó feldolgozás üzleti kimenetele. pending_repoll = a fizetés még függő, a poll-job (külön ticket) dolgozza fel újra.',
+          'Az utolsó feldolgozás üzleti kimenetele. A „Függő" azt jelenti, hogy a fizetés még nem dőlt el: a rendszer később magától újra rákérdez a szolgáltatónál.',
       },
     },
   ],

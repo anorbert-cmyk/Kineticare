@@ -83,9 +83,15 @@ tartalom azonnal eltűnik az oldalról, de nem vész el, piszkozatként megmarad
 
 ### Előnézet
 
-Az **Előnézet** gombbal megnézheted, hogyan fest a **piszkozatod** az éles oldal
-kinézetében, mielőtt bárki más látná. A gomb akkor jelenik meg, ha a
-dokumentumnak már van címe (és így webcíme is).
+Az előnézettel megnézheted, hogyan fest a **piszkozatod** az éles oldal
+kinézetében, mielőtt bárki más látná.
+
+**Hol találod?** A dokumentum tetején, a jobb felső sarokban lévő gombsorban
+(a **Mentés** / **Közzététel** gombok mellett) van egy kis **ikon: négyzetből
+kifelé mutató nyíl**. Nincs mellette felirat — ha ráviszed az egeret, megjelenik
+a buborék: „Előnézet". Erre kattintva **új lapon** nyílik meg az oldal a
+piszkozat tartalmával. Az ikon csak akkor jelenik meg, ha a dokumentumnak már
+van webcíme (slugja) — vagyis miután először elmentetted.
 
 Az előnézet csak bejelentkezett munkatársnak/tulajdonosnak működik: ha valaki
 másnak küldöd el a linket, ő nem fogja látni a piszkozatot.
@@ -133,7 +139,8 @@ visszahozható.
 11. **Kategóriák** — több is választható. Ha még nincs megfelelő, előbb hozd létre
     (5. pont).
 12. **Kapcsolódó bejegyzések** — legfeljebb 3 cikk, amit a bejegyzés alján ajánlunk.
-13. Kattints az **Előnézet**re, nézd meg, jól fest-e.
+13. Mentés után kattints a jobb fenti **előnézet-ikonra** (négyzetből kifelé
+    mutató nyíl), és nézd meg új lapon, jól fest-e.
 14. Ha jó: **Közzététel**.
 
 A kész cikk itt jelenik meg:
@@ -174,7 +181,8 @@ blogbejegyzéssel, ami idővel régivé válik.
    blogbejegyzésnél (4. pont).
 3. **Fejléckép** — az oldal tetején megjelenő nagy kép (nem kötelező).
 4. **SEO-cím**, **SEO-leírás**, **Megosztási kép** — mint a bejegyzésnél.
-5. **Előnézet**, majd **Közzététel**.
+5. Mentés, **előnézet** (jobb fent a kifelé mutató nyíl ikonja), majd
+   **Közzététel**.
 
 A kész oldal a webcímén él: pl. `/rolunk`.
 
@@ -240,8 +248,12 @@ jelennek meg.
 5. **Titulus, foglalkozás** — nem kötelező, pl. „zenész / műsorvezető".
 6. **Kiemelt** — ez a pipa jelenti azt, hogy **megjelenik a kezdőlapon**.
    A kezdőlapon **legfeljebb 3** vélemény látszik: a kiemeltek közül a
-   **Sorrend** szerint első három. Ha többet pipálsz ki, attól nem lesz több
-   a kezdőlapon, csak nem lesz kiszámítható, melyik három marad ki.
+   **Sorrend** szerint **első három** (a legkisebb sorszámúak), a többi
+   egyszerűen kimarad. Ezért adj a kiemelteknek **különböző** sorszámot —
+   azonos sorszám esetén nem garantált, melyikük kerül ki a kezdőlapra.
+   Ha kiemelsz egy véleményt rövid szöveg nélkül, és a teljes szöveg hosszabb
+   260 karakternél, a mentés magyar hibaüzenettel megáll: ilyenkor vagy tölts
+   ki rövid változatot, vagy vedd ki a Kiemelt pipát.
 7. **Sorrend** — kisebb szám = előrébb (a kezdőlapon 1, 2, 3 a három kiemelt).
 8. **Látható** — ha kiveszed a pipát, a vélemény sehol nem jelenik meg, de nem
    vész el.

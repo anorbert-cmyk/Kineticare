@@ -16,7 +16,7 @@ import { FAQ_ITEMS, Faq } from './home/Faq'
 import { FreeSos } from './home/FreeSos'
 import { HeroCta } from './home/HeroCta'
 import { HowItWorks } from './home/HowItWorks'
-import { TestimonialsSection } from './home/TestimonialsSection'
+import { featuredTestimonials, TestimonialsSection } from './home/TestimonialsSection'
 import { hasLexicalContent } from '../lexical/serialize'
 import { RichText } from '../lexical/RichText'
 
@@ -44,7 +44,9 @@ import { RichText } from '../lexical/RichText'
  *    helykitöltő sincs.
  * M6+ A CMS-oldal richText-tartalma (ha van) — a staff által írt szabad
  *    szekciók, a vélemények után, a tudástár előtt.
- * M7 Legfrissebb posztok — tudástár (SEO, hosszútáv) + „Összes bejegyzés".
+ * M7 Legfrissebb posztok — tudástár (SEO, hosszútáv) + „Összes bejegyzés". A
+ *    háttere a sávritmust követi: ha a (tint) vélemény-szekció után nincs
+ *    fehér CMS-blokk, a tudástár fehér, hogy ne álljon össze két tint sáv.
  * M8 Gyakori kérdések — ellenérv-kezelés a lap alján (Faq; a FAQPage JSON-LD
  *    miatt a szekció főoldali jelenléte SEO-kötelezettség, lásd
  *    docs/seo-geo-llm.md).
@@ -102,6 +104,15 @@ export function HomeView({ home, products, posts, testimonials = [] }: HomeViewP
   const freeProduct = visibleProducts.find((product) => !isPaidProduct(product)) ?? null
   const visiblePosts = posts.filter((post) => post.status === 'published' && post.slug)
 
+  // Sávritmus: a kezdőlap fehér és tint (világoskék) szekciókat váltogat. A
+  // vélemény-szekció (tint) és a CMS-blokk (fehér) is FELTÉTELES, ezért a
+  // tudástár háttere nem lehet fix: CMS-tartalom nélkül a tudástár közvetlenül
+  // a vélemények után jönne, és a két tint sáv egyetlen nagy folttá olvadna
+  // (elveszne a szekcióhatár). Ilyenkor a tudástár fehérre vált.
+  const hasCmsContent = Boolean(home?.content && hasLexicalContent(home.content))
+  const testimonialsVisible = featuredTestimonials(testimonials).length > 0
+  const previousBandIsTint = testimonialsVisible && !hasCmsContent
+
   return (
     <>
       <JsonLd data={organizationJsonLd()} />
@@ -118,7 +129,7 @@ export function HomeView({ home, products, posts, testimonials = [] }: HomeViewP
 
       <TestimonialsSection testimonials={testimonials} />
 
-      {home?.content && hasLexicalContent(home.content) ? (
+      {hasCmsContent && home?.content ? (
         <Section>
           <Container size="narrow">
             <RichText content={home.content} />
@@ -127,7 +138,7 @@ export function HomeView({ home, products, posts, testimonials = [] }: HomeViewP
       ) : null}
 
       {visiblePosts.length > 0 ? (
-        <Section variant="tint">
+        <Section variant={previousBandIsTint ? 'default' : 'tint'}>
           <Container>
             <h2 className="kc-section-title">Legfrissebb a tudástárból</h2>
             <div className="kc-card-grid">

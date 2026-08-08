@@ -109,6 +109,24 @@ describe('previewTargetPath / isPreviewCollection', () => {
     expect(previewTargetPath('posts', undefined)).toBeNull()
     expect(previewTargetPath('posts', 7)).toBeNull()
   })
+
+  /**
+   * A slug egyetlen útvonal-szegmens: az elválasztót (`/`, `\`), séma-jelölőt
+   * (`:`) vagy vezérlőkaraktert tartalmazó érték idegen eredetre vinne, ezért
+   * nincs értelmezhető előnézeti útvonal.
+   */
+  it.each([
+    ['gyökérből induló útvonal', '/evil.example'],
+    ['visszaperjeles változat', '\\evil.example'],
+    ['protokoll-relatív cím', '//evil.example'],
+    ['abszolút URL', 'https://evil.example/atveres'],
+    ['javascript-séma', 'javascript:alert(1)'],
+    ['útvonal-szegmens a slugban', 'rolunk/../admin'],
+    ['soremelés (fejléc-injekció)', 'rolunk\nLocation: https://evil.example'],
+  ])('%s: a slugból nem lehet előnézeti útvonal', (_label, slug) => {
+    expect(previewTargetPath('pages', slug)).toBeNull()
+    expect(previewTargetPath('posts', slug)).toBeNull()
+  })
 })
 
 describe('buildAdminPreviewUrl (az admin „Előnézet" gombja)', () => {
@@ -223,6 +241,32 @@ describe('/next/preview — hibás kérés és technikai hiba', () => {
     expect(response.status).toBe(400)
     expect(await errorMessage(response)).toContain('hiányzik vagy hibás a tartalom azonosítója')
     expect(harness.draftEnabled()).toBe(false)
+  })
+
+  /**
+   * Open-redirect elleni védelem: a `slug` query-paraméterből lesz a válasz
+   * `Location` fejléce, ezért az elválasztót tartalmazó slug (`/evil.example`,
+   * `\evil.example`, `//evil.example`) már a cél-számításnál elbukik. Így a
+   * meglévő 400-as ág fut, és a draft mode be sem kapcsol — az „előnézet" nem
+   * használható idegen oldalra való átirányításra.
+   */
+  it.each([
+    ['gyökérből induló útvonal', '/evil.example'],
+    ['visszaperjeles változat', '\\evil.example'],
+    ['protokoll-relatív cím', '//evil.example'],
+  ])('open redirect (%s): 400, a draft mode NEM kapcsol be', async (_label, slug) => {
+    const harness = harnessWithUser(owner)
+
+    const response = await harness.handler(
+      previewRequest(`?collection=pages&slug=${encodeURIComponent(slug)}`),
+    )
+    const message = await errorMessage(response)
+
+    expect(response.status).toBe(400)
+    expect(message).toContain('hiányzik vagy hibás a tartalom azonosítója')
+    expect(hasHungarianAccent(message)).toBe(true)
+    expect(harness.draftEnabled()).toBe(false)
+    expect(response.headers.get('Location')).toBeNull()
   })
 
   it('auth-hiba esetén 500, magyar üzenettel, draft mode nélkül', async () => {
