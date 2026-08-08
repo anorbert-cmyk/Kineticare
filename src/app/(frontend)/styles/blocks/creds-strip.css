@@ -1,0 +1,94 @@
+/**
+ * Szakmai hitel-csík (CredentialsStrip) — szekció-stílus.
+ *
+ * Forrás: a landing hajszálvonalas csík-nyelve
+ * (higgsfield-site/app/src/kineticare.css: a `.kc-usp` / `.kc-service-row`
+ * hairline-jei és a `.kc-inline-link`, 522.). A szín, a méret és a térköz
+ * KIZÁRÓLAG szerep-tokenről jön (tokens.css) — nyers hex és nyers legacy token
+ * nélkül.
+ *
+ * A csík keskeny: felül-alul hajszálvonal, közte egy sor. A szekció `flush`
+ * (nincs saját vertikális padding), a sávot ez a lap adja — így a hitel-csík
+ * a hero és a kurzus-blokk közé szorosan illeszkedik (UX-skill M2: támogató
+ * súly, nem önálló szekció-tömb).
+ *
+ * A link a közös `.kc-text-link` nyelvét viseli (content.css — a landing
+ * `kc-inline-link`-je), itt CSAK a nyíl mozgása jön hozzá.
+ *
+ * KONTRASZT (tokens.css jegyzőkönyve): a tétel-szöveg `text-muted` a paperen
+ * 8,80:1, a tinten 8,05:1; a link `primary` (accent-deep) a paperen 5,16:1 —
+ * mind AA felett. A tétel-pont `accent`-je DEKORÁCIÓ (nem hordoz szöveget),
+ * ezért rá az akcent-korlát nem vonatkozik.
+ *
+ * Betöltés: src/components/content/home/CredentialsStrip.tsx.
+ */
+
+.kc-creds {
+  --kc-creds-muted: var(--kc-color-text-muted);
+  --kc-creds-rule: var(--kc-color-border);
+  --kc-creds-dot: var(--kc-color-accent);
+}
+
+/* Sötét sávon (kc-section--dark) a hajszálvonal és a szöveg világosra vált:
+   halvány akcent az inken 8,49:1 (AA/AAA). */
+.kc-section--dark.kc-creds {
+  --kc-creds-muted: var(--kc-color-on-dark-muted);
+  --kc-creds-rule: color-mix(in srgb, var(--kc-color-on-dark) 35%, transparent);
+  --kc-creds-dot: var(--kc-color-on-dark-muted);
+}
+
+.kc-creds__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kc-space-2) var(--kc-space-6);
+  padding-block: var(--kc-space-4);
+  border-top: 1px solid var(--kc-creds-rule);
+  border-bottom: 1px solid var(--kc-creds-rule);
+}
+
+.kc-creds__items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--kc-space-3) var(--kc-space-6);
+}
+
+.kc-creds__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kc-space-2);
+  font-size: var(--kc-text-sm);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-creds-muted);
+}
+
+/* Dekoratív elválasztó pont (a markupban aria-hidden). */
+.kc-creds__dot {
+  flex-shrink: 0;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: var(--kc-radius-full);
+  background-color: var(--kc-creds-dot);
+}
+
+/* A landing inline-linkjén a nyíl hoverre elmozdul (a többit a .kc-text-link
+   adja: akcent-mély szín, 1px aláhúzás nagy offsettel, 44px célfelület). */
+.kc-creds__link span {
+  transition: transform var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-creds__link:hover span {
+  transform: translateX(0.2rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kc-creds__link span {
+    transition: none;
+  }
+
+  .kc-creds__link:hover span {
+    transform: none;
+  }
+}

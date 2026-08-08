@@ -1,0 +1,100 @@
+/**
+ * Film-hero blokk — a KinetiCare-arculat a ScrollScrub filmsávon.
+ *
+ * A landing-tükör `.kc-root .scroll-scrub__*` felülírásainak portja
+ * (higgsfield-site/app/src/kineticare.css), a szekció-rendszer terv 3.1/3.3
+ * pontja szerint. A szerkezet és a mozgás a komponens saját lapjában él
+ * (src/components/scroll-scrub/scroll-scrub.css) — itt CSAK a bőr: betűcsalád,
+ * színsáv, gombok.
+ *
+ * SZABÁLYOK (docs/ertekesitesi-ux-skill.md):
+ * - Fontméret elemre írt px/rem NÉLKÜL: minden méret a --kc-text-* skáláról
+ *   jön (a címsor a scroll-scrub.css-ben a display-lépcsőt kapja, ennél
+ *   nagyobb nem lehet). Ez a lap SEMMILYEN font-size-t nem ír felül.
+ * - Szín kizárólag tokenről (tokens.css). A landing `ink #10243e` a fő site
+ *   `navy-900`-ára, a landing `bg #f6f9fc` a `white`-ra képződik le.
+ * - Akcent-korlát: az `accent` itt csak dekorációra (fátyol-gradiens) megy; a
+ *   folyamatjelző és a fókuszgyűrű `accent-deep`/`focus` — lásd a tokens.css
+ *   kontraszt-jegyzetét.
+ */
+
+/* A fejléc a fő site-on sticky (layout.css), a landingen nem volt az: a
+   film tetején futó elemeket ezért a fejléc alá csúsztatjuk, különben
+   takarásban maradnának. */
+.kc-film-hero .scroll-scrub__progress {
+  top: var(--kc-header-height);
+}
+
+.kc-film-hero .scroll-scrub__route {
+  top: calc(var(--kc-header-height) + var(--kc-space-2));
+}
+
+/* Hangulat-fátyol a filmkockák felett: hűvös kékes derengés, alul a fehér
+   szekció-háttérbe olvadva, hogy a film és a következő szekció között ne
+   legyen éles vágás. Dekoratív réteg, a szöveg fölötte marad. */
+.kc-film-hero .scroll-scrub__stage::after {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  content: '';
+  background:
+    linear-gradient(to bottom, transparent 55%, var(--kc-color-white) 100%),
+    linear-gradient(
+      152deg,
+      color-mix(in srgb, var(--kc-color-accent) 18%, transparent),
+      color-mix(in srgb, var(--kc-color-navy-900) 4%, transparent)
+    );
+  pointer-events: none;
+}
+
+/* Olvashatósági fátyol erősítése: a szöveg fotó fölött áll, ezért a folt
+   közepe teljesen fedő — így a címsor és a bevezető kontrasztja a film
+   BÁRMELY kockáján AA felett marad (UX-skill 3. pont, „legrosszabb eset"). */
+.kc-film-hero .scroll-scrub__copy::before {
+  background: radial-gradient(
+    ellipse at center,
+    var(--kc-color-white) 0%,
+    color-mix(in srgb, var(--kc-color-white) 78%, transparent) 55%,
+    transparent 78%
+  );
+}
+
+/* Címsor: a márka display-betűje. Méret és sortáv a komponens-lapról
+   (--kc-text-4xl / --kc-leading-tight) — itt csak a metszet és a tracking. */
+.kc-film-hero .scroll-scrub__title {
+  font-family: var(--kc-font-heading);
+  font-weight: var(--kc-font-weight-normal);
+  letter-spacing: 0.01em;
+}
+
+.kc-film-hero .scroll-scrub__tags li {
+  border-color: color-mix(in srgb, var(--kc-color-navy-900) 25%, transparent);
+  border-radius: var(--kc-radius-full);
+  background: color-mix(in srgb, var(--kc-color-white) 60%, transparent);
+}
+
+/* ---- Gombok (M1: 1 hangsúlyos + 1 visszafogott) -------------------------- */
+
+/* 2.75rem = 44px: a legkisebb megengedett érintési célfelület. */
+.kc-film-hero .kc-film-hero__cta {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+/* A másodlagos gomb a filmen áttetsző maradna, ezért tömör fehér lapot kap —
+   a navy körvonal és felirat így minden filmkockán olvasható. */
+.kc-film-hero .kc-film-hero__cta--quiet {
+  background-color: var(--kc-color-white);
+}
+
+.kc-film-hero .kc-film-hero__cta--quiet:hover:not(:disabled):not(.kc-button--disabled) {
+  background-color: var(--kc-color-tint-cool);
+}
+
+/* Fókuszgyűrű a film felett: a navy gyűrűt fehér elválasztó öleli körbe, így
+   világos ÉS sötét filmkockán is látszik. */
+.kc-film-hero .kc-film-hero__cta:focus-visible {
+  outline: 3px solid var(--kc-color-focus);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px var(--kc-color-white);
+}

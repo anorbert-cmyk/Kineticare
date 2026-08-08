@@ -1,34 +1,128 @@
 /**
  * Layout-stílusok: fejléc, navigáció (desktop + mobil drawer), lábléc,
  * hibaoldalak. Töréspont: 900px (mobil < 900px) — lásd tokens.css.
+ *
+ * Vizuális nyelv: a kineticare.higgsfield.app landing minimál fejléce és
+ * lábléce (higgsfield-site/app/src/kineticare.css — `.kc-nav` 144. sortól,
+ * `.kc-footer` 880. sortól), a fő site SZEREP-tokenjeire portolva:
+ *   landing bg  → var(--kc-color-surface)
+ *   landing ink → var(--kc-color-text)   (a `primary` szerep az akcent-mély
+ *                 kitöltésé — G1 paletta-átvétel, lásd tokens.css)
+ *   accent-deep → var(--kc-color-primary) (CTA-kitöltés, .kc-button--primary)
+ *   akcent-szöveg a sávban → var(--kc-color-accent-deeper) (a fátyol miatt,
+ *                 lásd a fejléc kontraszt-jegyzetét)
+ *   tint        → var(--kc-color-surface-tint)
+ *   fehér („lap fölé emelt" réteg) → var(--kc-color-surface-raised)
+ *   hairline    → var(--kc-color-border)
+ * Nyers hexa érték itt NINCS; a méretek a --kc-text-* / --kc-space-* skáláról
+ * jönnek (értékesítési UX-skill 4. pont).
+ *
+ * A menüSTRUKTÚRA (CMS-menüfa, „Kurzusok" CTA, mobil drawer viselkedése) NEM
+ * változott — a fájl kizárólag a megjelenést írja le.
  */
 
 /* ---- Fejléc -------------------------------------------------------------- */
+/**
+ * Sticky sáv két állapottal (UX-skill 3. pont):
+ *   TETŐ (alap)           — áttetszőbb, halvány blur, vonal nélkül;
+ *   LEGÖRGETVE            — szolid lap-háttér + alsó hajszálvonal.
+ * A váltást a HeaderScrollFx `html[data-kc-scrolled]` jelzője kapcsolja, a
+ * változás CSS-átmenettel folytonos (nem ugrás). Árnyékot a sáv NEM kap: a
+ * landing hairline-alapú nyelvében az elválasztás 1px-es vonal, nem
+ * lebegtetés (lásd a tokens.css árnyék-szakaszát) — árnyéka csak a tartalom
+ * fölé ÚSZÓ rétegnek (almenü, mobil drawer) van.
+ *
+ * KONTRASZT — a sáv MINDEN állapotára kiszámolva, a LEGROSSZABB mögöttes
+ * tartalom ellen (UX-skill 3. pont). A sáv alatt a film-hero elgördül, és a
+ * film felső sávja tényleg sötét: a poszter felső 9%-ának átlaga rgb(76,86,99),
+ * a legsötétebb pixel rgb(33,48,62) — ezért a méretezés TISZTA FEKETE mögöttes
+ * ellen történt, ami minden filmkockát lefed.
+ *
+ * Fekete mögöttes + a lap-háttér (#f6f9fc) fátyla:
+ *                              ink szöveg   wordmark-akcent   CTA-pirula határa
+ *   tető, blur-rel (86%) ....... 10,73:1        4,86:1             3,74:1
+ *   tető, blur nélkül (92%) .... 12,36:1        5,63:1             4,31:1
+ *   legörgetve, blur-rel (94%) . 12,94:1        5,86:1             4,51:1
+ *   legörgetve, szolid ......... 14,79:1        6,70:1             5,16:1
+ * Fehér mögöttes tartalomnál minden érték magasabb (ink ≥ 14,79:1). A szöveg
+ * mindenütt AA (≥ 4,5:1), a pirula határa mindenütt ≥ 3:1.
+ *
+ * KÉT KÖVETKEZMÉNY, amit nem szabad visszabontani:
+ *  1. A „tető" fátyol nem mehet 86% alá: 80%-on a wordmark akcent-tagja
+ *     4,18:1-re esne a fekete kockán — AA-bukás.
+ *  2. A fejléc akcent-SZÖVEGE (wordmark-tag, menülink hover) a MÉLYEBB
+ *     akcent-lépcsőt kapja (`--kc-color-accent-deeper`, #275c87); a sima
+ *     akcent-mély (#2f6e9f) a fátylon csak 3,74:1 lenne. Ugyanez a lépcső fut
+ *     a lap fölé emelt panelen (almenü, mobil fiók) is — ott fehéren 7,08:1,
+ *     a tint hover-felületen 6,13:1, tehát bőven AA.
+ * A CTA-pirula KITÖLTÉSE viszont marad `--kc-color-primary` (akcent-mély):
+ * ott a fehér felirat kontrasztja a kitöltéshez mérendő (5,45:1), nem a sávhoz.
+ */
 .kc-site-header {
+  /* Szerep-tokenek egy helyen; a fallback mindig meglévő token, sosem hexa. */
+  --kc-header-surface: var(--kc-color-surface);
+  --kc-header-ink: var(--kc-color-text);
+  /* A SÁVBAN álló akcent-szöveg mélyebb lépcsője — lásd a kontraszt-jegyzetet. */
+  --kc-header-accent: var(--kc-color-accent-deeper);
+  --kc-header-accent-soft: var(--kc-color-surface-tint); /* = hűvös tint */
+  --kc-header-hairline: var(--kc-color-border);
+
   position: sticky;
   top: 0;
   z-index: 50;
-  background-color: var(--kc-color-surface-tint); /* legacy fejléc-sáv */
-  border-bottom: 1px solid var(--kc-color-blue-200);
-  transition:
-    background-color var(--kc-motion-base) var(--kc-ease-out),
-    box-shadow var(--kc-motion-base) var(--kc-ease-out);
 }
 
-/* Legörgetve (html[data-kc-scrolled] — a HeaderScrollFx kliens-jelzője) a sáv
-   tömör, enyhén áttetsző felületre vált. A navy-900 szöveg kontrasztja a
-   legrosszabb esetben (tiszta fehér mögöttes tartalom) is bőven AA feletti;
-   blur-támogatás nélkül 94%-os fedettség a tartalék — lásd
-   docs/ertekesitesi-ux-skill.md 3. pont. */
-html[data-kc-scrolled] .kc-site-header {
-  background-color: color-mix(in srgb, var(--kc-color-surface) 94%, transparent);
-  box-shadow: var(--kc-shadow-sm);
+/**
+ * A sáv fátyla KÜLÖN rétegen (::before) él, nem magán a fejlécen.
+ *
+ * MIÉRT: a `backdrop-filter` — a `transform`-hoz és `filter`-hez hasonlóan —
+ * tartalmazó blokkot csinál a `position: fixed` leszármazottaknak. A mobil
+ * drawer és az overlay (MobileNav) fixed pozíciójú, ÉS a fejléc DOM-gyereke:
+ * ha a blur a fejlécen ülne, a teljes képernyős drawer a fejléc-sávba
+ * szorulna. A pszeudo-elemnek nincs leszármazottja, így a drawer a
+ * viewporthoz marad kötve — a MobileNav viselkedése változatlan.
+ * (Ez a korábbi kódban valós hiba volt: legörgetve, blur-támogatás mellett a
+ * drawer a 4,5rem-es sávra csuklott össze.)
+ *
+ * A hajszálvonal is ide kerül (a pszeudo saját alsó kerete), így a tető
+ * állapotban nincs kitakaratlan 1px-es rés a sáv alján.
+ */
+.kc-site-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-bottom: 1px solid transparent; /* legörgetve kap színt — nincs ugrás */
+  background-color: color-mix(in srgb, var(--kc-header-surface) 92%, transparent);
+  transition:
+    background-color var(--kc-motion-base) var(--kc-ease-out),
+    border-color var(--kc-motion-base) var(--kc-ease-out),
+    backdrop-filter var(--kc-motion-base) var(--kc-ease-out);
+}
+
+html[data-kc-scrolled] .kc-site-header::before {
+  border-bottom-color: var(--kc-header-hairline);
+  background-color: var(--kc-header-surface);
 }
 
 @supports (backdrop-filter: blur(8px)) {
-  html[data-kc-scrolled] .kc-site-header {
-    background-color: color-mix(in srgb, var(--kc-color-surface) 86%, transparent);
-    backdrop-filter: blur(8px);
+  .kc-site-header::before {
+    background-color: color-mix(in srgb, var(--kc-header-surface) 86%, transparent);
+    backdrop-filter: blur(6px) saturate(1.08);
+  }
+
+  html[data-kc-scrolled] .kc-site-header::before {
+    background-color: color-mix(in srgb, var(--kc-header-surface) 94%, transparent);
+    backdrop-filter: blur(12px) saturate(1.08);
+  }
+}
+
+/* prefers-reduced-motion: a base.css globálisan is kinullázza az átmeneteket;
+   itt kifejezetten is rögzítjük, hogy a sáv-váltás ilyenkor átmenet nélküli
+   (UX-skill 3. pont). */
+@media (prefers-reduced-motion: reduce) {
+  .kc-site-header::before {
+    transition: none;
   }
 }
 
@@ -42,22 +136,80 @@ html[data-kc-scrolled] .kc-site-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--kc-space-4);
-  min-height: var(--kc-header-height);
+  gap: var(--kc-space-3);
+  min-height: 3.5rem; /* landing mobil-sáv (@media max-width: 860px) */
 }
 
+@media (min-width: 900px) {
+  .kc-site-header__bar {
+    gap: var(--kc-space-4);
+    min-height: var(--kc-header-height);
+  }
+}
+
+/* Wordmark a landing `.kc-wordmark` mintájára: Tenor Sans, ritkított verzál, a
+   „care" tag akcentesen (a DOM-szöveg „Kineticare" marad, a verzál csak
+   transzformáció). A tag a MÉLYEBB akcent-lépcsőt kapja, mert a fátylas sávon
+   normál méretű szövegként is 4,5:1 felett kell maradnia — a világos
+   `--kc-color-accent` (a lap-háttéren 4,45:1) és a sima akcent-mély (a fátylon
+   3,74:1) egyaránt AA alá esne. Lásd a fenti kontraszt-jegyzetet. */
 .kc-site-header__brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--kc-space-3);
+  min-height: 2.75rem; /* 44px érintési cél */
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
-  color: var(--kc-color-navy-900);
+  font-size: var(--kc-text-base);
+  letter-spacing: 0.14em;
+  line-height: var(--kc-leading-tight);
+  white-space: nowrap;
+  color: var(--kc-header-ink);
   text-decoration: none;
+  text-transform: uppercase;
 }
 
 .kc-site-header__brand:hover {
   text-decoration: none;
+}
+
+.kc-site-header__brand-accent {
+  color: var(--kc-header-accent);
+}
+
+@media (max-width: 400px) {
+  /* Szűk készüléken a ritkítás fogy, hogy a wordmark + CTA + hamburger elférjen. */
+  .kc-site-header__brand {
+    font-size: var(--kc-text-sm);
+    letter-spacing: 0.1em;
+  }
+}
+
+@media (min-width: 900px) {
+  .kc-site-header__brand {
+    font-size: var(--kc-text-lg);
+    letter-spacing: 0.22em;
+  }
+}
+
+/* CTA-pirula a landing `.kc-nav-cta` nyelvén, lekerekítve. A KITÖLTÉS a
+   `.kc-button--primary`-től jön (akcent-mély + fehér = 5,45:1, hover
+   akcent-mélyebb = 7,08:1 — lásd ui.css), itt csak a FORMA változik: pirula,
+   44px magasság, a landing 600-as súlya és finom ritkítása. A magasabb
+   specifikusság (`.kc-site-header .kc-site-header__cta`) az importsorrendtől
+   függetlenül nyer a `.kc-button--sm` méret-szabálya felett. */
+.kc-site-header .kc-site-header__cta {
+  min-height: 2.75rem;
+  padding-inline: var(--kc-space-5);
+  border-radius: var(--kc-radius-full);
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-medium);
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 400px) {
+  .kc-site-header .kc-site-header__cta {
+    padding-inline: var(--kc-space-4);
+    font-size: var(--kc-text-xs);
+  }
 }
 
 /* ---- Desktop navigáció ---------------------------------------------------- */
@@ -86,21 +238,33 @@ html[data-kc-scrolled] .kc-site-header {
   position: relative;
 }
 
+/* Menülink: a landing csendes, aláhúzás-alapú linknyelve (`.kc-inline-link`) —
+   kitöltött háttér helyett akcent-szín + aláhúzás hoveren/fókuszban.
+   Az érintési cél 44×44px (UX-skill 3. pont). */
 .kc-nav-desktop__link {
   display: inline-flex;
   align-items: center;
   gap: var(--kc-space-1);
+  min-height: 2.75rem;
   padding: var(--kc-space-2) var(--kc-space-3);
-  border-radius: var(--kc-radius-md);
+  border-radius: var(--kc-radius-sm);
   font-size: var(--kc-text-sm);
-  font-weight: var(--kc-font-weight-bold);
-  color: var(--kc-color-navy-900);
+  font-weight: var(--kc-font-weight-medium);
+  letter-spacing: 0.02em;
+  color: var(--kc-header-ink);
   text-decoration: none;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.3em;
+  transition:
+    color var(--kc-motion-fast) var(--kc-ease-out),
+    text-underline-offset var(--kc-motion-fast) var(--kc-ease-out);
 }
 
-.kc-nav-desktop__link:hover {
-  background-color: rgb(11 36 63 / 0.06);
-  text-decoration: none;
+.kc-nav-desktop__link:hover,
+.kc-nav-desktop__item:focus-within > .kc-nav-desktop__link {
+  color: var(--kc-header-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.35em;
 }
 
 .kc-nav-desktop__caret {
@@ -109,7 +273,9 @@ html[data-kc-scrolled] .kc-site-header {
   flex: none;
 }
 
-/* Almenü: hover ÉS billentyűzet-fókusz (focus-within) alatt is nyitva. */
+/* Almenü: hover ÉS billentyűzet-fókusz (focus-within) alatt is nyitva.
+   A lap FÖLÉ emelt réteg (`surface-raised` = fehér), így a hűvös lap-háttéren
+   elválik; ez az egyik réteg, amely a tokens.css szerint árnyékot is kaphat. */
 .kc-nav-desktop__submenu {
   position: absolute;
   inset-inline-start: 0;
@@ -119,9 +285,9 @@ html[data-kc-scrolled] .kc-site-header {
   margin: 0;
   padding: var(--kc-space-2);
   list-style: none;
-  background-color: var(--kc-color-white);
-  border: 1px solid var(--kc-color-border);
-  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-surface-raised);
+  border: 1px solid var(--kc-header-hairline);
+  border-radius: var(--kc-radius-sm);
   box-shadow: var(--kc-shadow-md);
   opacity: 0;
   visibility: hidden;
@@ -140,7 +306,9 @@ html[data-kc-scrolled] .kc-site-header {
 }
 
 .kc-nav-desktop__sublink {
-  display: block;
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
   padding: var(--kc-space-2) var(--kc-space-3);
   border-radius: var(--kc-radius-sm);
   font-size: var(--kc-text-sm);
@@ -148,9 +316,10 @@ html[data-kc-scrolled] .kc-site-header {
   text-decoration: none;
 }
 
+/* Hover: hűvös tint háttér + mélyebb akcent felirat = 6,13:1 (AA felett). */
 .kc-nav-desktop__sublink:hover {
-  background-color: var(--kc-color-blue-100);
-  color: var(--kc-color-navy-900);
+  background-color: var(--kc-header-accent-soft);
+  color: var(--kc-header-accent);
   text-decoration: none;
 }
 
@@ -173,6 +342,7 @@ html[data-kc-scrolled] .kc-site-header {
   }
 }
 
+/* Hamburger / bezáró gomb — 44×44px érintési cél (UX-skill 3. pont). */
 .kc-nav-mobile__toggle {
   display: inline-flex;
   align-items: center;
@@ -180,14 +350,18 @@ html[data-kc-scrolled] .kc-site-header {
   width: 2.75rem;
   height: 2.75rem;
   border: 0;
-  border-radius: var(--kc-radius-md);
+  border-radius: var(--kc-radius-full);
   background-color: transparent;
-  color: var(--kc-color-navy-900);
+  color: var(--kc-header-ink);
   cursor: pointer;
+  transition:
+    background-color var(--kc-motion-fast) var(--kc-ease-out),
+    color var(--kc-motion-fast) var(--kc-ease-out);
 }
 
 .kc-nav-mobile__toggle:hover {
-  background-color: rgb(11 36 63 / 0.06);
+  background-color: var(--kc-header-accent-soft);
+  color: var(--kc-header-accent);
 }
 
 .kc-nav-mobile__toggle svg {
@@ -199,7 +373,7 @@ html[data-kc-scrolled] .kc-site-header {
   position: fixed;
   inset: 0;
   z-index: 70;
-  background-color: rgb(11 36 63 / 0.5);
+  background-color: rgb(16 36 62 / 0.5); /* márka-sötét fátyol a drawer mögött */
   opacity: 0;
   visibility: hidden;
   transition:
@@ -220,7 +394,7 @@ html[data-kc-scrolled] .kc-site-header {
   display: flex;
   flex-direction: column;
   width: min(20rem, 85vw);
-  background-color: var(--kc-color-white);
+  background-color: var(--kc-color-surface-raised); /* lap FÖLÉ emelt réteg */
   box-shadow: var(--kc-shadow-lg);
   transform: translateX(100%);
   visibility: hidden;
@@ -239,14 +413,18 @@ html[data-kc-scrolled] .kc-site-header {
   align-items: center;
   justify-content: space-between;
   gap: var(--kc-space-3);
-  padding: var(--kc-space-4);
-  border-bottom: 1px solid var(--kc-color-border);
+  min-height: 3.5rem; /* a mobil sáv magassága — a drawer folytatja a fejlécet */
+  padding: var(--kc-space-3) var(--kc-space-4);
+  border-bottom: 1px solid var(--kc-header-hairline);
 }
 
+/* A landing feliratnyelve: ritkított verzál (vö. `.kc-eyebrow`). */
 .kc-nav-mobile__drawer-title {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
-  color: var(--kc-color-navy-900);
+  font-size: var(--kc-text-base);
+  letter-spacing: var(--kc-tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--kc-header-ink);
 }
 
 .kc-nav-mobile__list {
@@ -261,16 +439,19 @@ html[data-kc-scrolled] .kc-site-header {
   align-items: center;
   justify-content: space-between;
   gap: var(--kc-space-2);
+  min-height: 2.75rem; /* 44px érintési cél */
   padding: var(--kc-space-3) var(--kc-space-2);
-  border-radius: var(--kc-radius-md);
+  border-radius: var(--kc-radius-sm);
   font-size: var(--kc-text-base);
   font-weight: var(--kc-font-weight-bold);
-  color: var(--kc-color-navy-900);
+  letter-spacing: 0.01em;
+  color: var(--kc-header-ink);
   text-decoration: none;
 }
 
 .kc-nav-mobile__link:hover {
-  background-color: var(--kc-color-blue-100);
+  background-color: var(--kc-header-accent-soft);
+  color: var(--kc-header-accent);
   text-decoration: none;
 }
 
@@ -288,81 +469,176 @@ html[data-kc-scrolled] .kc-site-header {
   display: flex;
   align-items: center;
   gap: var(--kc-space-2);
+  min-height: 2.75rem; /* 44px érintési cél */
   padding: var(--kc-space-2);
-  border-radius: var(--kc-radius-md);
+  border-radius: var(--kc-radius-sm);
   font-size: var(--kc-text-sm);
   color: var(--kc-color-text);
   text-decoration: none;
 }
 
 .kc-nav-mobile__sublink:hover {
-  background-color: var(--kc-color-blue-100);
+  background-color: var(--kc-header-accent-soft);
+  color: var(--kc-header-accent);
   text-decoration: none;
 }
 
 /* ---- Lábléc --------------------------------------------------------------- */
+/**
+ * A landing `.kc-footer` nyelve: óriás, aláhúzott serif „Kapcsolat" link,
+ * mellette a ritkított wordmark, alatta a meta-sor (jogi linkek + copyright).
+ * A korábbi navy sáv MEGSZŰNT — a lábléc a lap-hátteret viszi, felül
+ * hajszálvonallal elválasztva.
+ *
+ * KONTRASZT a lap-háttéren (#f6f9fc; fehér háttéren minden érték magasabb):
+ *   óriás link + meta-linkek — ink (#10243e) ....... 14,79:1
+ *   link hover — akcent-mély (#2f6e9f) .............. 5,16:1
+ *   wordmark akcent-tag — akcent-mély ............... 5,16:1
+ *   meta-szöveg — text-muted (#33495f) .............. 8,80:1
+ * Mind AA (4,5:1) felett. A világosabb `--kc-color-accent` itt SEHOL nem
+ * szöveg-szín (a lap-háttéren 4,45:1 lenne — lásd tokens.css akcent-korlát).
+ * A hajszálvonal (1,24:1) tudatosan dekoratív elválasztó, nem UI-határ.
+ */
 .kc-site-footer {
-  background-color: var(--kc-color-navy-900); /* legacy lábléc */
-  color: var(--kc-color-white);
-  padding-block: var(--kc-space-6);
+  --kc-footer-ink: var(--kc-color-text);
+  --kc-footer-accent: var(--kc-color-link-hover); /* = akcent-mély */
+  --kc-footer-muted: var(--kc-color-text-muted);
+  --kc-footer-hairline: var(--kc-color-border);
+
+  border-top: 1px solid var(--kc-footer-hairline);
+  background-color: var(--kc-color-surface);
+  color: var(--kc-color-text);
+  padding-block: var(--kc-space-7) var(--kc-space-6);
 }
 
 .kc-site-footer__grid {
-  display: grid;
-  gap: var(--kc-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-6);
+}
+
+/* Felső sáv — a landing `.kc-footer-top`: mobilon egymás alatt, 900px felett
+   szemben (link balra, wordmark jobbra). */
+.kc-site-footer__top {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--kc-space-4);
 }
 
 @media (min-width: 900px) {
-  .kc-site-footer__grid {
-    grid-template-columns: auto 1fr auto;
+  .kc-site-footer__top {
+    flex-direction: row;
     align-items: center;
+    justify-content: space-between;
     gap: var(--kc-space-6);
   }
 }
 
+/* Óriás serif link (`.kc-footer-link`). Mérete a skála legnagyobb, display
+   lépcsője — egyedi px/rem érték tilos (UX-skill 4. pont). */
+.kc-site-footer__link {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-4xl);
+  font-weight: var(--kc-font-weight-normal);
+  line-height: var(--kc-leading-tight);
+  color: var(--kc-footer-ink);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.12em;
+  transition:
+    color var(--kc-motion-base) var(--kc-ease-out),
+    text-underline-offset var(--kc-motion-base) var(--kc-ease-out);
+}
+
+.kc-site-footer__link:hover {
+  color: var(--kc-footer-accent);
+  text-underline-offset: 0.17em;
+}
+
+@media (min-width: 900px) {
+  .kc-site-footer__mark {
+    text-align: end;
+  }
+}
+
+/* Ritkított wordmark (`.kc-footer-mark`) — a fejléc-wordmark párja. */
 .kc-site-footer__brand {
   font-family: var(--kc-font-heading);
   font-size: var(--kc-text-lg);
-  color: var(--kc-color-white);
+  letter-spacing: 0.28em;
+  line-height: var(--kc-leading-tight);
+  color: var(--kc-footer-ink);
+  text-transform: uppercase;
+}
+
+.kc-site-footer__brand-accent {
+  color: var(--kc-footer-accent);
 }
 
 .kc-site-footer__tagline {
+  margin-block-start: var(--kc-space-2);
   font-size: var(--kc-text-sm);
-  color: rgb(255 255 255 / 0.8);
-  margin-block-start: var(--kc-space-1);
+  color: var(--kc-footer-muted);
+}
+
+/* Meta-sor (`.kc-footer-meta`): a jogi linkek + kapcsolat + copyright. */
+.kc-site-footer__meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-3);
+  padding-block-start: var(--kc-space-5);
+  border-top: 1px solid var(--kc-footer-hairline);
+}
+
+@media (min-width: 900px) {
+  .kc-site-footer__meta {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kc-space-6);
+  }
 }
 
 .kc-site-footer__legal {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--kc-space-2) var(--kc-space-4);
+  align-items: center;
+  gap: 0 var(--kc-space-5);
   list-style: none;
   margin: 0;
   padding: 0;
   font-size: var(--kc-text-sm);
+  color: var(--kc-footer-muted);
 }
 
 .kc-site-footer__legal a {
-  color: var(--kc-color-white);
-  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem; /* 44px érintési cél */
+  color: var(--kc-footer-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
 }
 
 .kc-site-footer__legal a:hover {
-  text-decoration: underline;
+  color: var(--kc-footer-accent);
 }
 
 .kc-site-footer__contact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kc-space-1);
   font-size: var(--kc-text-sm);
 }
 
 .kc-site-footer__contact a {
-  color: var(--kc-color-white);
   font-weight: var(--kc-font-weight-bold);
 }
 
 .kc-site-footer__copy {
   font-size: var(--kc-text-xs);
-  color: rgb(255 255 255 / 0.7);
+  color: var(--kc-footer-muted);
 }
 
 /* ---- Hibaoldalak (404/500) ------------------------------------------------- */
@@ -374,7 +650,7 @@ html[data-kc-scrolled] .kc-site-header {
   font-family: var(--kc-font-heading);
   font-size: var(--kc-text-4xl);
   line-height: var(--kc-leading-tight);
-  color: var(--kc-color-navy-900);
+  color: var(--kc-color-text);
 }
 
 .kc-error-page__title {

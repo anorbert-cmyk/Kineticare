@@ -275,6 +275,29 @@ export interface Page {
     [k: string]: unknown;
   };
   /**
+   * Az oldal „építőkockás" része. A lap alján lévő + gombbal veszel fel új szekciót; a sorok bal szélén lévő fogantyúval fogd-és-vidd módszerrel átrendezed őket; a szekción belüli Szekció-beállítások → Látható pipával pedig elrejtheted az egyiket úgy, hogy a tartalma megmarad. Ha üresen hagyod, az oldal a megszokott módon jelenik meg — semmi nem vész el.
+   */
+  layout?:
+    | (
+        | BlockFilmHero
+        | BlockCredsStrip
+        | BlockCourseCards
+        | BlockFreeSos
+        | BlockPressLogos
+        | BlockWelcome
+        | BlockUsps
+        | BlockStates
+        | BlockServices
+        | BlockAbout
+        | BlockHowItWorks
+        | BlockTestimonials
+        | BlockKnowledge
+        | BlockFaq
+        | BlockRichText
+        | BlockCtaBanner
+      )[]
+    | null;
+  /**
    * Az oldal tetején megjelenő nagy kép (nem kötelező).
    */
   heroImage?: (number | null) | Media;
@@ -302,6 +325,839 @@ export interface Page {
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockFilmHero".
+ */
+export interface BlockFilmHero {
+  /**
+   * A lap legfontosabb mondata, ez a legnagyobb betűs szöveg az oldal tetején. Egy tömör állítás működik a legjobban.
+   */
+  title: string;
+  /**
+   * A cím alatti 1–3 mondat: kinek és miben segít a Kineticare.
+   */
+  lead?: string | null;
+  /**
+   * Rövid szavak a hero alatt, amik megmutatják, mivel foglalkozunk (pl. Kéz, Csukló, Könyök, Váll). Nem kötelező.
+   */
+  tags?:
+    | {
+        /**
+         * Egy-két szó, pl. „Csukló".
+         */
+        label: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Legfeljebb 2 gomb. Az ELSŐ a hangsúlyos (ez vigyen a kurzusokhoz), a második visszafogottabb. Ha üresen hagyod, nem jelenik meg gomb.
+   */
+  ctas?:
+    | {
+        /**
+         * Ez a szöveg jelenik meg a gombon (pl. „Kurzusok megtekintése").
+         */
+        felirat: string;
+        /**
+         * Saját oldalra elég a perjellel kezdődő rész (pl. /kurzusok), másik weboldalra a teljes cím https://-sel kezdve.
+         */
+        url: string;
+        /**
+         * Másik weboldalra mutató linknél szokás bekapcsolni, hogy a látogató ne hagyja el a Kineticare oldalát.
+         */
+        ujAblakban?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'filmHero';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockCredsStrip".
+ */
+export interface BlockCredsStrip {
+  /**
+   * Rövid, tényszerű állítások egymás mellett (pl. „Gyógytornász és manuálterapeuta szakmai háttér"). 2–4 tétel a legjobb; a hosszú mondatok itt elvesznek.
+   */
+  items?:
+    | {
+        /**
+         * Egy tömör mondatrész, pont nélkül.
+         */
+        text: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Nem kötelező. Ide szokott kerülni a „Bővebben a szakmai hátterünkről" hivatkozás a Rólunk oldalra.
+   */
+  link?: {
+    /**
+     * Ez a szöveg jelenik meg a gombon (pl. „Kurzusok megtekintése").
+     */
+    felirat?: string | null;
+    /**
+     * Saját oldalra elég a perjellel kezdődő rész (pl. /kurzusok), másik weboldalra a teljes cím https://-sel kezdve.
+     */
+    url?: string | null;
+    /**
+     * Másik weboldalra mutató linknél szokás bekapcsolni, hogy a látogató ne hagyja el a Kineticare oldalát.
+     */
+    ujAblakban?: boolean | null;
+  };
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'credsStrip';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockCourseCards".
+ */
+export interface BlockCourseCards {
+  /**
+   * Nem kötelező. Ha üresen hagyod, a beépített cím marad („Így tudunk neked segíteni").
+   */
+  heading?: string | null;
+  /**
+   * A cím alatti 1–2 mondat a kártyák előtt. Nem kötelező.
+   */
+  lead?: string | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'courseCards';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockFreeSos".
+ */
+export interface BlockFreeSos {
+  /**
+   * A sáv címe (pl. „SOS KézRelax villámkurzus").
+   */
+  title: string;
+  /**
+   * Pár mondat arról, mit kap a látogató az ingyenes anyagban.
+   */
+  body?: string | null;
+  /**
+   * A sáv gombja — ez visz az ingyenes kurzushoz.
+   */
+  cta?: {
+    /**
+     * Ez a szöveg jelenik meg a gombon (pl. „Kurzusok megtekintése").
+     */
+    felirat?: string | null;
+    /**
+     * Saját oldalra elég a perjellel kezdődő rész (pl. /kurzusok), másik weboldalra a teljes cím https://-sel kezdve.
+     */
+    url?: string | null;
+    /**
+     * Másik weboldalra mutató linknél szokás bekapcsolni, hogy a látogató ne hagyja el a Kineticare oldalát.
+     */
+    ujAblakban?: boolean | null;
+  };
+  /**
+   * Nem kötelező. Halvány, nem zavaró kép a sáv mögé — a szöveg olvashatósága a fontosabb.
+   */
+  backgroundImage?: (number | null) | Media;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'freeSos';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockPressLogos".
+ */
+export interface BlockPressLogos {
+  /**
+   * A logók fölötti rövid szöveg (pl. „Ismerhetsz minket innen").
+   */
+  heading?: string | null;
+  /**
+   * A logókat előbb töltsd fel a Tartalom → Képek közé, itt már csak kiválasztod őket. Átlátszó hátterű (PNG) logó néz ki a legjobban.
+   */
+  logos?:
+    | {
+        /**
+         * A médium vagy szervezet logója.
+         */
+        image: number | Media;
+        /**
+         * Nem kötelező. Ha üresen hagyod, a Képek közt megadott képleírás jelenik meg — általában az a jó.
+         */
+        alt?: string | null;
+        /**
+         * Nem kötelező. A médium cikkének vagy a szervezet oldalának teljes címe https://-sel.
+         */
+        url?: string | null;
+        /**
+         * Másik weboldalra mutató linknél szokás bekapcsolni, hogy a látogató ne hagyja el a Kineticare oldalát.
+         */
+        ujAblakban?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'pressLogos';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockWelcome".
+ */
+export interface BlockWelcome {
+  /**
+   * A szekció címe — jellemzően kérdés, ami a látogató helyzetét mondja ki (pl. „Szeretnél megszabadulni a fájdalomtól…?").
+   */
+  title: string;
+  /**
+   * Rövid átvezetés a felsorolás elé (pl. „Tudjuk, milyen, amikor:").
+   */
+  lead?: string | null;
+  /**
+   * A látogató ismerős helyzetei, egy-egy mondatban. 3–5 tétel a legjobb — ennél több már hosszú lista.
+   */
+  checklist?:
+    | {
+        text: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * A felsorolás mellé kerülő szöveg: mit tudunk kezdeni ezzel a helyzettel. A lezáró, ígéretet megfogalmazó bekezdésnél kapcsold be a „Kiemelt" pipát.
+   */
+  sideParagraphs?:
+    | {
+        text: string;
+        /**
+         * Vastag betűvel jelenik meg. Egy szekcióban legfeljebb egy bekezdésnél használd.
+         */
+        emphasized?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'welcome';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockUsps".
+ */
+export interface BlockUsps {
+  /**
+   * A kártyák fölötti cím (pl. „Erre számíthatsz velünk").
+   */
+  title?: string | null;
+  /**
+   * Legfeljebb 4 kártya. Sorrendjük fogd-és-vidd módszerrel átrendezhető.
+   */
+  cards?:
+    | {
+        /**
+         * Egy tömör állítás, nem szlogen.
+         */
+        title: string;
+        /**
+         * Mit jelent ez a gyakorlatban.
+         */
+        body: string;
+        /**
+         * Nem kötelező — a részletek, példák helye.
+         */
+        extra?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'usps';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockStates".
+ */
+export interface BlockStates {
+  /**
+   * A kártyák fölötti cím (pl. „Három állapot, egy folyamat").
+   */
+  title?: string | null;
+  /**
+   * Pár mondat arról, mit mutat a három kép. Nem kötelező.
+   */
+  lead?: string | null;
+  /**
+   * Három kártya: a zárt, a nyíló és a nyitott kéz — ebben a sorrendben. A képeket előbb töltsd fel a Tartalom → Képek közé.
+   */
+  cards?:
+    | {
+        /**
+         * A kártya képe. A képleírást (alt) a Képek közt add meg egyszer.
+         */
+        image?: (number | null) | Media;
+        /**
+         * Nem kötelező. Pl. „01". Ha üresen hagyod, a rendszer maga számoz.
+         */
+        number?: string | null;
+        /**
+         * Egy szó a legjobb (pl. „Zárt", „Nyíló", „Nyitott").
+         */
+        title: string;
+        /**
+         * 1–2 mondat arról, mit jelent ez az állapot.
+         */
+        text: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'states';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockServices".
+ */
+export interface BlockServices {
+  /**
+   * A cím fölötti apró szöveg (pl. „Szolgáltatásaink"). Nem kötelező.
+   */
+  eyebrow?: string | null;
+  /**
+   * A szekció nagybetűs címe (pl. „Így tudunk segíteni").
+   */
+  title?: string | null;
+  /**
+   * A sorok mellé kerülő kép (pl. terapeuta keze munka közben). Nem kötelező — kép nélkül a sorok teljes szélességben állnak.
+   */
+  image?: (number | null) | Media;
+  /**
+   * Egy sor = egy szolgáltatás. Legfeljebb 5.
+   */
+  rows?:
+    | {
+        /**
+         * Nem kötelező. Pl. „01". Ha üresen hagyod, a rendszer maga számoz.
+         */
+        number?: string | null;
+        /**
+         * A szolgáltatás neve (pl. „Rendelői kezelések").
+         */
+        title: string;
+        /**
+         * 2–4 mondat arról, kinek és miben segít.
+         */
+        body: string;
+        /**
+         * A sor végi hivatkozás szövege (pl. „Tovább a kezelésekre").
+         */
+        felirat?: string | null;
+        /**
+         * Saját oldalra elég a perjellel kezdődő rész (pl. /kurzusok), másik weboldalra a teljes cím https://-sel kezdve.
+         */
+        url?: string | null;
+        /**
+         * Másik weboldalra mutató linknél szokás bekapcsolni, hogy a látogató ne hagyja el a Kineticare oldalát.
+         */
+        ujAblakban?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'services';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockAbout".
+ */
+export interface BlockAbout {
+  /**
+   * A cím fölötti apró szöveg (pl. „Rólunk"). Nem kötelező.
+   */
+  eyebrow?: string | null;
+  /**
+   * A bemutatkozás címe (pl. „Kiss Kata és Kocsis Kata vagyunk").
+   */
+  title?: string | null;
+  /**
+   * A bemutatkozás szövege bekezdésenként. Az első, összefoglaló bekezdésnél szokás bekapcsolni a „Kiemelt" pipát.
+   */
+  paragraphs?:
+    | {
+        text: string;
+        /**
+         * Vastag betűvel jelenik meg. Egy szekcióban legfeljebb egy bekezdésnél használd.
+         */
+        emphasized?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * A bekezdések alatti, keretes kiemelés — egy fontos ígéret pár szóban. Ha mindkét mezőt üresen hagyod, nem jelenik meg.
+   */
+  feature?: {
+    /**
+     * Pl. „Személyre szabott kezelések".
+     */
+    label?: string | null;
+    /**
+     * Egy mondat a felirat alá.
+     */
+    note?: string | null;
+  };
+  /**
+   * A szekció melletti fénykép. A képleírást (alt) a Képek közt add meg egyszer.
+   */
+  photo?: (number | null) | Media;
+  /**
+   * Rövid, VALÓS adatok (pl. „10+ év szakmai tapasztalat"). Kitalált számot ne írj ide.
+   */
+  stats?:
+    | {
+        /**
+         * A nagy betűs szám (pl. „10+", „5000+").
+         */
+        value: string;
+        /**
+         * A szám alatti magyarázat (pl. „év szakmai tapasztalat").
+         */
+        label: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'about';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockHowItWorks".
+ */
+export interface BlockHowItWorks {
+  /**
+   * A lépések fölötti cím (pl. „Így működik az online kurzus").
+   */
+  title?: string | null;
+  /**
+   * A folyamat lépései sorrendben — 3 lépés a legérthetőbb. A sorszámokat a rendszer teszi ki.
+   */
+  steps?:
+    | {
+        /**
+         * Rövid, cselekvő megfogalmazás (pl. „Kiválasztod a kurzust").
+         */
+        title: string;
+        /**
+         * 1–2 mondat arról, mi történik ebben a lépésben.
+         */
+        text: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'howItWorks';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockTestimonials".
+ */
+export interface BlockTestimonials {
+  /**
+   * A cím fölötti apró szöveg (pl. „Vélemények"). Nem kötelező.
+   */
+  eyebrow?: string | null;
+  /**
+   * Nem kötelező. Ha üresen hagyod, a beépített cím marad („Pácienseink mondták").
+   */
+  heading?: string | null;
+  /**
+   * Legfeljebb 3 — a kezdőlap nem lehet több képernyőnyi idézet. A megjelenő véleményeket a Tartalom → Vélemények alatt a „Kiemelt" pipa és a „Sorrend" dönti el.
+   */
+  maxItems?: number | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'testimonials';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockKnowledge".
+ */
+export interface BlockKnowledge {
+  /**
+   * Nem kötelező. Ha üresen hagyod, a beépített cím marad („Legfrissebb a tudástárból").
+   */
+  heading?: string | null;
+  /**
+   * 1 és 6 közötti szám. A kezdőlapon 3 a szokásos.
+   */
+  limit?: number | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'knowledge';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockFaq".
+ */
+export interface BlockFaq {
+  /**
+   * A kérdések fölötti cím (pl. „Gyakori kérdések").
+   */
+  heading?: string | null;
+  /**
+   * A látogatók tényleges kérdései, a válasszal együtt. Ezekből készül a Google-nek szóló strukturált adat is, ezért ide csak sima szöveg kerüljön — formázás és link nélkül.
+   */
+  items?:
+    | {
+        /**
+         * Úgy fogalmazd, ahogy a látogató kérdezné (pl. „Műtét után is végezhetem a gyakorlatokat?").
+         */
+        question: string;
+        /**
+         * Rövid, egyértelmű válasz 2–4 mondatban. Gyógyulást ne ígérj; műtét utáni kérdésnél utalj a kezelőorvos jóváhagyására.
+         */
+        answer: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'faq';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockRichText".
+ */
+export interface BlockRichText {
+  /**
+   * Szabadon szerkeszthető szöveg. A felső eszköztárral formázhatsz, listát és linket szúrhatsz be.
+   */
+  content: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  };
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'richText';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockCtaBanner".
+ */
+export interface BlockCtaBanner {
+  /**
+   * Egy rövid, cselekvésre hívó mondat.
+   */
+  title: string;
+  /**
+   * Nem kötelező. Egy-két mondat a cím alá.
+   */
+  text?: string | null;
+  /**
+   * A sáv gombja. Felirat és cím nélkül a sáv gomb nélkül jelenik meg.
+   */
+  cta?: {
+    /**
+     * Ez a szöveg jelenik meg a gombon (pl. „Kurzusok megtekintése").
+     */
+    felirat?: string | null;
+    /**
+     * Saját oldalra elég a perjellel kezdődő rész (pl. /kurzusok), másik weboldalra a teljes cím https://-sel kezdve.
+     */
+    url?: string | null;
+    /**
+     * Másik weboldalra mutató linknél szokás bekapcsolni, hogy a látogató ne hagyja el a Kineticare oldalát.
+     */
+    ujAblakban?: boolean | null;
+  };
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'ctaBanner';
 }
 /**
  * A Tudástár (blog) cikkei. A közzétett bejegyzések azonnal megjelennek az oldalon.
@@ -438,7 +1294,13 @@ export interface Product {
   inventory?: number | null;
   priceInHUFEnabled?: boolean | null;
   priceInHUF?: number | null;
+  /**
+   * 1–3 mondat. A kurzuskártyákon és a kezdőlapon ez látszik.
+   */
   shortDescription?: string | null;
+  /**
+   * A kurzus oldalán megjelenő teljes szöveg.
+   */
   longDescription?: {
     root: {
       type: string;
@@ -454,20 +1316,41 @@ export interface Product {
     };
     [k: string]: unknown;
   } | null;
+  /**
+   * A kurzus kártyáján és az oldala tetején megjelenő kép.
+   */
   coverImage?: (number | null) | Media;
+  /**
+   * További képek a kurzus oldalára (nem kötelező).
+   */
   gallery?:
     | {
         image?: (number | null) | Media;
         id?: string | null;
       }[]
     | null;
+  /**
+   * Kötelező. Ha nincs megfelelő, előbb hozd létre a Tartalom → Kategóriák alatt.
+   */
   category: number | Category;
+  /**
+   * A Cloudflare Stream videó azonosítója az ingyenes előzeteshez. Ha nem tudod, hagyd üresen.
+   */
   previewVideoStreamId?: string | null;
+  /**
+   * A kurzus videói — a vásárlók ezeket nézhetik meg.
+   */
   videos?:
     | {
         title?: string | null;
+        /**
+         * A Cloudflare Stream azonosítója. Feltöltéskor a rendszer tölti ki.
+         */
         streamAssetId?: string | null;
         durationSec?: number | null;
+        /**
+         * A videó feldolgozottsága — a rendszer állítja, ne írd át.
+         */
         status?: ('processing' | 'ready' | 'error') | null;
         id?: string | null;
       }[]
@@ -476,8 +1359,17 @@ export interface Product {
    * Hány napig érvényes a hozzáférés vásárlás után. Üres (null) = örök hozzáférés.
    */
   accessDurationDays?: number | null;
+  /**
+   * Csak a közzétett kurzus látszik az oldalon. Ezt csak tulajdonos állíthatja.
+   */
   status?: ('draft' | 'published' | 'archived') | null;
+  /**
+   * Ez a kurzus megjelenő neve és egyben egyedi azonosítója — két kurzusnak nem lehet ugyanaz.
+   */
   sku?: string | null;
+  /**
+   * A kurzus oldalán ajánlott további kurzusok.
+   */
   relatedProducts?: (number | Product)[] | null;
   updatedAt: string;
   createdAt: string;
@@ -524,7 +1416,7 @@ export interface Testimonial {
    */
   quote: string;
   /**
-   * Rövid, 1–2 mondatos változat a főoldalra; ha üres, a teljes szöveg rövidsége esetén az jelenik meg.
+   * Rövid, 1–2 mondatos változat a főoldalra (legfeljebb 260 karakter). Ha üresen hagyod, a kezdőlapon a TELJES szöveg jelenik meg — hosszú véleménynél ezért töltsd ki.
    */
   shortQuote?: string | null;
   /**
@@ -536,7 +1428,7 @@ export interface Testimonial {
    */
   authorTitle?: string | null;
   /**
-   * Főoldalon megjelenik (legfeljebb 3 kiemelt).
+   * Főoldalon megjelenik (a Sorrend szerinti első 3 kiemelt). Kiemeléshez rövid változat kell, vagy elég rövid teljes szöveg.
    */
   featured?: boolean | null;
   /**
@@ -679,11 +1571,20 @@ export interface Order {
    * A rendelés végösszege a megrendeléskor (az item-snapshotok ár × mennyiség összege). A plugin amount mezője ugyanezt tükrözi.
    */
   totalHufSnapshot?: number | null;
+  /**
+   * A Barion oldali fizetés azonosítója — hibakereséshez.
+   */
   barionPaymentId?: string | null;
   barionPaymentRequestId?: string | null;
   invoiceNumber?: string | null;
   invoicePdfUrl?: string | null;
+  /**
+   * A számlázás állapota. A rendszer állítja — ne írd át.
+   */
   invoiceStatus?: ('none' | 'pending' | 'issued' | 'failed') | null;
+  /**
+   * A számlázási adatok mentett másolata a rendelés idejéből.
+   */
   customerSnapshot?:
     | {
         [k: string]: unknown;
@@ -693,6 +1594,9 @@ export interface Order {
     | number
     | boolean
     | null;
+  /**
+   * A vásárló a megrendeléskor kérte az azonnali hozzáférést, és tudomásul vette, hogy ezzel elveszti a 14 napos elállási jogát.
+   */
   consentWithdrawalWaiver?: boolean | null;
   consentWithdrawalWaiverAt?: string | null;
   refundReason?: string | null;
@@ -710,6 +1614,9 @@ export interface Order {
         reason?: string | null;
       }[]
     | null;
+  /**
+   * A megrendelés IP-címe — csalásgyanús eset kivizsgálásához.
+   */
   ipAddress?: string | null;
   updatedAt: string;
   createdAt: string;
@@ -971,7 +1878,7 @@ export interface WebhookEvent {
    */
   processedAt?: string | null;
   /**
-   * Az utolsó feldolgozás üzleti kimenetele. pending_repoll = a fizetés még függő, a poll-job (külön ticket) dolgozza fel újra.
+   * Az utolsó feldolgozás üzleti kimenetele. A „Függő" azt jelenti, hogy a fizetés még nem dőlt el: a rendszer később magától újra rákérdez a szolgáltatónál.
    */
   result?: ('paid' | 'cancelled' | 'pending_repoll' | 'rejected' | 'failed') | null;
   updatedAt: string;
@@ -1311,6 +2218,26 @@ export interface PagesSelect<T extends boolean = true> {
   slug?: T;
   excerpt?: T;
   content?: T;
+  layout?:
+    | T
+    | {
+        filmHero?: T | BlockFilmHeroSelect<T>;
+        credsStrip?: T | BlockCredsStripSelect<T>;
+        courseCards?: T | BlockCourseCardsSelect<T>;
+        freeSos?: T | BlockFreeSosSelect<T>;
+        pressLogos?: T | BlockPressLogosSelect<T>;
+        welcome?: T | BlockWelcomeSelect<T>;
+        usps?: T | BlockUspsSelect<T>;
+        states?: T | BlockStatesSelect<T>;
+        services?: T | BlockServicesSelect<T>;
+        about?: T | BlockAboutSelect<T>;
+        howItWorks?: T | BlockHowItWorksSelect<T>;
+        testimonials?: T | BlockTestimonialsSelect<T>;
+        knowledge?: T | BlockKnowledgeSelect<T>;
+        faq?: T | BlockFaqSelect<T>;
+        richText?: T | BlockRichTextSelect<T>;
+        ctaBanner?: T | BlockCtaBannerSelect<T>;
+      };
   heroImage?: T;
   seoTitle?: T;
   seoDescription?: T;
@@ -1321,6 +2248,399 @@ export interface PagesSelect<T extends boolean = true> {
   updatedAt?: T;
   createdAt?: T;
   _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockFilmHero_select".
+ */
+export interface BlockFilmHeroSelect<T extends boolean = true> {
+  title?: T;
+  lead?: T;
+  tags?:
+    | T
+    | {
+        label?: T;
+        id?: T;
+      };
+  ctas?:
+    | T
+    | {
+        felirat?: T;
+        url?: T;
+        ujAblakban?: T;
+        id?: T;
+      };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockCredsStrip_select".
+ */
+export interface BlockCredsStripSelect<T extends boolean = true> {
+  items?:
+    | T
+    | {
+        text?: T;
+        id?: T;
+      };
+  link?:
+    | T
+    | {
+        felirat?: T;
+        url?: T;
+        ujAblakban?: T;
+      };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockCourseCards_select".
+ */
+export interface BlockCourseCardsSelect<T extends boolean = true> {
+  heading?: T;
+  lead?: T;
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockFreeSos_select".
+ */
+export interface BlockFreeSosSelect<T extends boolean = true> {
+  title?: T;
+  body?: T;
+  cta?:
+    | T
+    | {
+        felirat?: T;
+        url?: T;
+        ujAblakban?: T;
+      };
+  backgroundImage?: T;
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockPressLogos_select".
+ */
+export interface BlockPressLogosSelect<T extends boolean = true> {
+  heading?: T;
+  logos?:
+    | T
+    | {
+        image?: T;
+        alt?: T;
+        url?: T;
+        ujAblakban?: T;
+        id?: T;
+      };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockWelcome_select".
+ */
+export interface BlockWelcomeSelect<T extends boolean = true> {
+  title?: T;
+  lead?: T;
+  checklist?:
+    | T
+    | {
+        text?: T;
+        id?: T;
+      };
+  sideParagraphs?:
+    | T
+    | {
+        text?: T;
+        emphasized?: T;
+        id?: T;
+      };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockUsps_select".
+ */
+export interface BlockUspsSelect<T extends boolean = true> {
+  title?: T;
+  cards?:
+    | T
+    | {
+        title?: T;
+        body?: T;
+        extra?: T;
+        id?: T;
+      };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockStates_select".
+ */
+export interface BlockStatesSelect<T extends boolean = true> {
+  title?: T;
+  lead?: T;
+  cards?:
+    | T
+    | {
+        image?: T;
+        number?: T;
+        title?: T;
+        text?: T;
+        id?: T;
+      };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockServices_select".
+ */
+export interface BlockServicesSelect<T extends boolean = true> {
+  eyebrow?: T;
+  title?: T;
+  image?: T;
+  rows?:
+    | T
+    | {
+        number?: T;
+        title?: T;
+        body?: T;
+        felirat?: T;
+        url?: T;
+        ujAblakban?: T;
+        id?: T;
+      };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockAbout_select".
+ */
+export interface BlockAboutSelect<T extends boolean = true> {
+  eyebrow?: T;
+  title?: T;
+  paragraphs?:
+    | T
+    | {
+        text?: T;
+        emphasized?: T;
+        id?: T;
+      };
+  feature?:
+    | T
+    | {
+        label?: T;
+        note?: T;
+      };
+  photo?: T;
+  stats?:
+    | T
+    | {
+        value?: T;
+        label?: T;
+        id?: T;
+      };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockHowItWorks_select".
+ */
+export interface BlockHowItWorksSelect<T extends boolean = true> {
+  title?: T;
+  steps?:
+    | T
+    | {
+        title?: T;
+        text?: T;
+        id?: T;
+      };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockTestimonials_select".
+ */
+export interface BlockTestimonialsSelect<T extends boolean = true> {
+  eyebrow?: T;
+  heading?: T;
+  maxItems?: T;
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockKnowledge_select".
+ */
+export interface BlockKnowledgeSelect<T extends boolean = true> {
+  heading?: T;
+  limit?: T;
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockFaq_select".
+ */
+export interface BlockFaqSelect<T extends boolean = true> {
+  heading?: T;
+  items?:
+    | T
+    | {
+        question?: T;
+        answer?: T;
+        id?: T;
+      };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockRichText_select".
+ */
+export interface BlockRichTextSelect<T extends boolean = true> {
+  content?: T;
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockCtaBanner_select".
+ */
+export interface BlockCtaBannerSelect<T extends boolean = true> {
+  title?: T;
+  text?: T;
+  cta?:
+    | T
+    | {
+        felirat?: T;
+        url?: T;
+        ujAblakban?: T;
+      };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

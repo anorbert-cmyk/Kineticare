@@ -2,6 +2,12 @@
  * UI-primitívek stílusai (Button, Card, Field, Badge, PriceTag, Container,
  * Section). A komponensek az src/components/ui alatt élnek; a className-ek
  * kc-* előtaggal, dokumentált prop-megfeleltetéssel.
+ *
+ * A felületi nyelv a kineticare.higgsfield.app landingé (G1): paper-földek,
+ * fehér felület + 1px hairline keret, árnyék helyett vonal, akcent-mély
+ * kitöltésű elsődleges gomb, 2px ink-keretes másodlagos (a landing
+ * `kc-sos-cta` nyelve), aláhúzott szöveglink-jellegű ghost.
+ * Minden szín szerep-tokenről jön (tokens.css) — nyers hex TILOS.
  */
 
 /* ---- Container / Section ------------------------------------------------ */
@@ -16,9 +22,11 @@
   max-width: var(--kc-container-narrow);
 }
 
+/* Az alapértelmezett szekció a landing „paper" földjén ül (kc-main), nem
+   fehéren — a fehér a kiemelt felületeké (kártya, mező). */
 .kc-section {
   padding-block: var(--kc-space-7);
-  background-color: var(--kc-color-surface);
+  background-color: var(--kc-color-bg);
 }
 
 @media (min-width: 900px) {
@@ -31,25 +39,48 @@
   background-color: var(--kc-color-surface-tint);
 }
 
+/* Sötét sáv: a landing ink-je (#10243e). Kontraszt a sávon: fehér 15,63:1,
+   halvány akcent (#9ec4df) 8,49:1 — mindkettő AA/AAA. */
 .kc-section--dark {
-  background-color: var(--kc-color-navy-900);
-  color: var(--kc-color-white);
+  background-color: var(--kc-color-surface-dark);
+  color: var(--kc-color-on-dark);
 }
 
 .kc-section--dark h1,
 .kc-section--dark h2,
 .kc-section--dark h3,
 .kc-section--dark a {
-  color: var(--kc-color-white);
+  color: var(--kc-color-on-dark);
+}
+
+.kc-section--dark a:hover {
+  color: var(--kc-color-on-dark-muted);
+}
+
+/* Az akcent-mély fókuszgyűrű az inken csak 2,87:1 lenne (3:1 alatt), ezért a
+   sötét sávon fehérre vált (15,63:1). */
+.kc-section--dark :focus-visible {
+  outline-color: var(--kc-color-focus-on-dark);
 }
 
 .kc-section--flush {
   padding-block: 0;
 }
 
-/* ---- Button ------------------------------------------------------------- */
+/* ---- Button -------------------------------------------------------------
+   Kontraszt (számolt, WCAG 2.2):
+     primary: fehér az accent-deep (#2f6e9f) kitöltésen ......... 5,45:1  AA ✓
+     primary hover: fehér az accent-deeper (#275c87) kitöltésen .. 7,08:1  AA ✓
+     secondary: ink szöveg és 2px ink keret a paperen ........... 14,79:1  AA ✓
+     secondary hover: fehér az ink kitöltésen .................. 15,63:1  AA ✓
+     ghost: accent-deep szöveg a paperen ........................ 5,16:1  AA ✓
+     ghost hover: ink szöveg a paperen ......................... 14,79:1  AA ✓
+   Érintési célfelület: min-height 2.75rem (44px) MINDEN méretben, a kis
+   változatban is (UX-skill 3. pont). A fókuszgyűrűt a globális
+   :focus-visible adja; sötét sávon fehérre vált (lásd .kc-section--dark). */
 .kc-button {
   display: inline-flex;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: center;
   gap: var(--kc-space-2);
@@ -81,26 +112,63 @@
 
 .kc-button--primary:hover:not(:disabled):not(.kc-button--disabled) {
   background-color: var(--kc-color-primary-hover);
+  color: var(--kc-color-on-primary);
 }
 
+/* A landing `kc-sos-cta` nyelve: 2px-es keret, átlátszó háttér, a hover
+   invertál (tömör kitöltés + ellenszín). */
 .kc-button--secondary {
   background-color: transparent;
-  border-color: var(--kc-color-primary);
-  color: var(--kc-color-primary);
+  border-color: var(--kc-color-text);
+  color: var(--kc-color-text);
 }
 
 .kc-button--secondary:hover:not(:disabled):not(.kc-button--disabled) {
-  background-color: var(--kc-color-blue-100);
+  background-color: var(--kc-color-text);
+  color: var(--kc-color-on-dark);
 }
 
+/* Aláhúzott szöveglink-jelleg (a landing `kc-inline-link` nyelve). */
 .kc-button--ghost {
+  padding-inline: var(--kc-space-3);
+  border-color: transparent;
   background-color: transparent;
   color: var(--kc-color-primary);
-  padding-inline: var(--kc-space-3);
+  font-weight: var(--kc-font-weight-medium);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.4em;
+  transition:
+    color var(--kc-motion-fast) var(--kc-ease-out),
+    text-underline-offset var(--kc-motion-fast) var(--kc-ease-out);
 }
 
 .kc-button--ghost:hover:not(:disabled):not(.kc-button--disabled) {
-  background-color: var(--kc-color-blue-100);
+  background-color: transparent;
+  color: var(--kc-color-text);
+  text-decoration: underline;
+  text-underline-offset: 0.5em;
+}
+
+/* Sötét sávon a másodlagos gomb fehér keretes/fehér szövegű, a hover fehérre
+   telik (a landing SOS-sávja): fehér az inken 15,63:1, ink a fehéren 15,63:1.
+   A ghost ott halvány akcentre vált (8,49:1 az inken). */
+.kc-section--dark .kc-button--secondary {
+  border-color: var(--kc-color-on-dark);
+  color: var(--kc-color-on-dark);
+}
+
+.kc-section--dark .kc-button--secondary:hover:not(:disabled):not(.kc-button--disabled) {
+  background-color: var(--kc-color-on-dark);
+  color: var(--kc-color-surface-dark);
+}
+
+.kc-section--dark .kc-button--ghost {
+  color: var(--kc-color-on-dark);
+}
+
+.kc-section--dark .kc-button--ghost:hover:not(:disabled):not(.kc-button--disabled) {
+  color: var(--kc-color-on-dark-muted);
 }
 
 .kc-button:disabled,
@@ -114,12 +182,16 @@
   font-size: var(--kc-text-xs);
 }
 
-/* ---- Card --------------------------------------------------------------- */
+/* ---- Card ---------------------------------------------------------------
+   A landing minimál nyelve: fehér felület + 1px hairline keret, árnyék
+   NÉLKÜL. A hairline (#d8e2eb) tudatosan halk (fehéren 1,31:1) — dekoratív
+   elválasztó, nem azonosító UI-határ; a kártya tartalma hordozza a jelentést.
+   Interaktív kártyán a visszajelzés akcent-keret + 2px emelés, nem árnyék
+   (az akcent itt kizárólag dekoráció, szöveget nem hordoz). */
 .kc-card {
-  background-color: var(--kc-color-white);
+  background-color: var(--kc-color-surface-raised);
   border: 1px solid var(--kc-color-border);
   border-radius: var(--kc-radius-lg);
-  box-shadow: var(--kc-shadow-sm);
 }
 
 .kc-card--padded {
@@ -128,13 +200,13 @@
 
 .kc-card--interactive {
   transition:
-    box-shadow var(--kc-motion-base) var(--kc-ease-out),
+    border-color var(--kc-motion-base) var(--kc-ease-out),
     transform var(--kc-motion-base) var(--kc-ease-out);
 }
 
 .kc-card--interactive:hover,
 .kc-card--interactive:focus-within {
-  box-shadow: var(--kc-shadow-md);
+  border-color: var(--kc-color-accent);
   transform: translateY(-2px);
 }
 
@@ -148,18 +220,22 @@
 .kc-field__label {
   font-size: var(--kc-text-sm);
   font-weight: var(--kc-font-weight-bold);
-  color: var(--kc-color-navy-900);
+  color: var(--kc-color-text);
 }
 
 .kc-field__required {
   color: var(--kc-color-danger);
 }
 
+/* Az űrlapmező kerete AZONOSÍTJA a komponenst, ezért nem a dekoratív
+   hairline-t viseli, hanem a `border-strong`-ot: #6b7f94 fehéren 4,13:1, a
+   paperen 3,91:1, a tint sávon 3,57:1 — mind a 3:1-es UI-küszöb felett. */
 .kc-field__input {
+  min-height: 2.75rem;
   padding: var(--kc-space-3) var(--kc-space-4);
-  border: 1px solid var(--kc-color-border);
+  border: 1px solid var(--kc-color-border-strong);
   border-radius: var(--kc-radius-md);
-  background-color: var(--kc-color-white);
+  background-color: var(--kc-color-surface-raised);
   font-size: var(--kc-text-base);
   line-height: 1.5;
   transition:
@@ -173,17 +249,17 @@
 }
 
 .kc-field__input:hover:not(:disabled) {
-  border-color: var(--kc-color-navy-700);
+  border-color: var(--kc-color-primary);
 }
 
 .kc-field__input:focus-visible {
   outline: none;
   border-color: var(--kc-color-focus);
-  box-shadow: 0 0 0 3px rgb(22 64 110 / 0.25);
+  box-shadow: 0 0 0 3px rgb(47 110 159 / 0.3);
 }
 
 .kc-field__input:disabled {
-  background-color: var(--kc-color-blue-100);
+  background-color: var(--kc-color-surface-tint);
   cursor: not-allowed;
 }
 
@@ -222,14 +298,21 @@
   line-height: 1.6;
 }
 
+/* Badge színpárok — mind számolt, AA felett (a badge kis, félkövér szöveg,
+   tehát a szigorúbb 4,5:1-es küszöb vonatkozik rá):
+     neutral: ink a hűvös tinten (#e6f0f8) ........ 13,53:1 ✓
+     info:    ink a halvány akcenten (#9ec4df) .....  8,49:1 ✓
+     success: #166534 a #e8f5ec felületen ..........  6,35:1 ✓
+     warning: #8a5a00 a #fdf3e0 felületen ..........  5,38:1 ✓
+     danger:  #b3261e a #fdecea felületen ..........  5,72:1 ✓ */
 .kc-badge--neutral {
-  background-color: var(--kc-color-blue-100);
-  color: var(--kc-color-navy-900);
+  background-color: var(--kc-color-surface-tint);
+  color: var(--kc-color-text);
 }
 
 .kc-badge--info {
-  background-color: var(--kc-color-blue-200);
-  color: var(--kc-color-navy-900);
+  background-color: var(--kc-color-accent-quiet);
+  color: var(--kc-color-text);
 }
 
 .kc-badge--success {
@@ -238,8 +321,8 @@
 }
 
 .kc-badge--warning {
-  background-color: #fdf3e0;
-  color: #8a5a00;
+  background-color: var(--kc-color-warning-surface);
+  color: var(--kc-color-warning);
 }
 
 .kc-badge--danger {
@@ -254,7 +337,7 @@
   gap: var(--kc-space-2);
   font-family: var(--kc-font-heading);
   font-size: var(--kc-text-xl);
-  color: var(--kc-color-navy-900);
+  color: var(--kc-color-text);
   white-space: nowrap;
 }
 

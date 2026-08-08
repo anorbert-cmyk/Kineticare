@@ -1,0 +1,212 @@
+/**
+ * Vélemények (TestimonialsSection) — szekció-stílus.
+ *
+ * Forrás: a landing idézet-táblája (higgsfield-site/app/src/kineticare.css
+ * 673–795.): `.kc-quotes-section` középre zárt fejléce, `.kc-quote-big` a nagy
+ * nyitó idézet a nagy idézőjel-jellel, `.kc-quote-small` az oldalsó kis
+ * idézetek hajszálvonallal elválasztva, `.kc-attribution` a vonal-előtagos
+ * névsor. Minden szín/méret/térköz szerep-tokenről (tokens.css).
+ *
+ * A landing 100dvh-s táblája NEM jött át (UX-skill M6: a vélemény támogató
+ * súlyú, nem lehet három képernyőnyi) — a szekció a közös vertikális
+ * ritmusban él.
+ *
+ * ÚJRAHASZNOSÍTÁS: a felvezető sort és a címsort a content.css közös
+ * szabályai adják (`.kc-testimonials__eyebrow`, `.kc-section-title`); itt a
+ * rács, a nagy/kis idézet aránya és a névsor vonal-előtagja jön hozzá.
+ *
+ * MIÉRT SZŰKÍTETT SZELEKTOROK: ugyanezeknek az osztályoknak a globális
+ * content.css-ben is van alap-szabálya (kártyás, egyhasábos rács). A felülírás
+ * a szekció gyökér-osztályára szűkítéssel, SPECIFICITÁSBÓL történik — így a
+ * betöltési sorrendtől függetlenül érvényes.
+ *
+ * KONTRASZT (tokens.css jegyzőkönyve): a nagy idézet és a név `text` (ink) a
+ * tint sávon 13,53:1, a kis idézetek `text-muted` a tinten 8,05:1 — AA/AAA
+ * felett. Az idézőjel-jel és a névsor előtti vonal DEKORÁCIÓ (a jel a
+ * markupban aria-hidden), rájuk kontraszt-küszöb nem hat.
+ *
+ * Betöltés: src/components/content/home/TestimonialsSection.tsx.
+ */
+
+.kc-testimonials {
+  --kc-testimonials-ink: var(--kc-color-text);
+  --kc-testimonials-muted: var(--kc-color-text-muted);
+  --kc-testimonials-rule: var(--kc-color-border);
+  --kc-testimonials-accent: var(--kc-color-accent);
+}
+
+/* Sötét sávon (kc-section--dark): fehér 15,63:1, halvány akcent 8,49:1. */
+.kc-section--dark.kc-testimonials {
+  --kc-testimonials-ink: var(--kc-color-on-dark);
+  --kc-testimonials-muted: var(--kc-color-on-dark-muted);
+  --kc-testimonials-rule: color-mix(in srgb, var(--kc-color-on-dark) 35%, transparent);
+  --kc-testimonials-accent: var(--kc-color-on-dark-muted);
+}
+
+/* ---- Fejléc -------------------------------------------------------------- */
+
+.kc-testimonials .kc-testimonials__head {
+  margin-bottom: var(--kc-space-7);
+}
+
+.kc-testimonials .kc-testimonials__title {
+  margin-bottom: 0;
+  font-size: var(--kc-text-3xl);
+}
+
+/* A landing középre zárt fejlécében a cím alatt fut a rövid akcent-vonal
+   (a felvezető sor alatt ilyenkor nincs). */
+.kc-testimonials .kc-testimonials__title::after {
+  content: '';
+  display: block;
+  width: 4.5rem;
+  height: 1px;
+  margin: var(--kc-space-4) auto 0;
+  background-color: var(--kc-testimonials-accent);
+}
+
+/* ---- Rács: nagy nyitó idézet + oldalsó kis idézetek ----------------------- */
+
+.kc-testimonials .kc-testimonials__list {
+  display: grid;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr);
+  list-style: none;
+}
+
+.kc-testimonials .kc-testimonials__item {
+  display: flex;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  /* Két hasáb: balra a nagy idézet, jobbra a kis idézetek egymás alatt. A
+     sorok számát a lista módosítója rögzíti, mert a nagy idézetnek EXPLICIT
+     sorokat kell átfognia (implicit rácsban a `grid-row` nem tudná). */
+  .kc-testimonials .kc-testimonials__list--pair,
+  .kc-testimonials .kc-testimonials__list--trio {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .kc-testimonials .kc-testimonials__list--trio {
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .kc-testimonials .kc-testimonials__item--big {
+    grid-column: 1;
+    align-items: center;
+    padding-right: var(--kc-space-6);
+  }
+
+  .kc-testimonials .kc-testimonials__list--trio .kc-testimonials__item--big {
+    grid-row: 1 / span 2;
+  }
+
+  .kc-testimonials .kc-testimonials__item--small {
+    grid-column: 2;
+  }
+}
+
+/* A kártya-krómot (fehér lap, keret) itt levesszük: a landingen az idézeteket
+   tipográfia és hajszálvonal tartja. A `Card` szemantikája (article) és a
+   figure/blockquote/figcaption minta VÁLTOZATLAN. */
+.kc-testimonials .kc-testimonials__card {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+/* ---- Nagy nyitó idézet --------------------------------------------------- */
+
+/* Dekoratív idézőjel-jel (a markupban aria-hidden). */
+.kc-testimonials .kc-testimonials__item--big .kc-testimonials__mark {
+  display: block;
+  font-size: var(--kc-text-4xl);
+  line-height: 0.8;
+}
+
+.kc-testimonials .kc-testimonials__quote {
+  margin: var(--kc-space-3) 0 0;
+}
+
+.kc-testimonials .kc-testimonials__item--big .kc-testimonials__text {
+  max-width: 24ch;
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-2xl);
+  line-height: var(--kc-leading-heading);
+  letter-spacing: 0.01em;
+  color: var(--kc-testimonials-ink);
+  text-wrap: balance;
+}
+
+/* ---- Oldalsó kis idézetek ------------------------------------------------ */
+
+.kc-testimonials .kc-testimonials__item--small {
+  margin-top: var(--kc-space-5);
+  padding-top: var(--kc-space-5);
+  border-top: 1px solid var(--kc-testimonials-rule);
+}
+
+.kc-testimonials .kc-testimonials__item--small .kc-testimonials__mark {
+  display: block;
+  font-size: var(--kc-text-2xl);
+  line-height: 0.8;
+}
+
+.kc-testimonials .kc-testimonials__item--small .kc-testimonials__text {
+  max-width: 44ch;
+  font-size: var(--kc-text-base);
+  color: var(--kc-testimonials-muted);
+}
+
+@media (min-width: 900px) {
+  /* A jobb hasáb a landing `.kc-quotes-side` függőleges hajszálvonalát kapja;
+     a hasáb ELSŐ kis idézete (mindig a 2. lista-elem) fölött nincs elválasztó. */
+  .kc-testimonials .kc-testimonials__item--small {
+    margin-top: 0;
+    padding: var(--kc-space-5) 0 var(--kc-space-5) var(--kc-space-6);
+    border-left: 1px solid var(--kc-testimonials-rule);
+  }
+
+  .kc-testimonials .kc-testimonials__item--small:nth-child(2) {
+    padding-top: 0;
+    border-top: 0;
+  }
+}
+
+/* ---- Névsor (landing `kc-attribution`) ----------------------------------- */
+
+.kc-testimonials .kc-testimonials__attribution {
+  margin-top: auto;
+  padding-top: var(--kc-space-5);
+  border-top: 0;
+}
+
+/* Dekoratív vonal-előtag a név fölött (a landingen ez váltja a keretet). */
+.kc-testimonials .kc-testimonials__attribution::before {
+  content: '';
+  display: block;
+  width: 2.6rem;
+  height: 1px;
+  margin-bottom: var(--kc-space-3);
+  background-color: var(--kc-testimonials-accent);
+}
+
+.kc-testimonials .kc-testimonials__cite {
+  font-size: var(--kc-text-2xs);
+  font-weight: var(--kc-font-weight-medium);
+  letter-spacing: var(--kc-tracking-eyebrow);
+  line-height: var(--kc-leading-heading);
+  text-transform: uppercase;
+  color: var(--kc-testimonials-ink);
+}
+
+.kc-testimonials .kc-testimonials__role {
+  font-size: var(--kc-text-sm);
+  color: var(--kc-testimonials-muted);
+}

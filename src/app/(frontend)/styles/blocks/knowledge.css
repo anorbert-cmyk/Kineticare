@@ -1,0 +1,113 @@
+/**
+ * Tudástár (KnowledgeSection) és posztkártya (PostCard) — szekció-stílus.
+ *
+ * Forrás: a landing szekció- és kártya-nyelve
+ * (higgsfield-site/app/src/kineticare.css): `.kc-state-card` (381.) kép-kártyája
+ * és `.kc-inline-link` (522.). Minden szín/méret/térköz szerep-tokenről
+ * (tokens.css).
+ *
+ * A kártya-nyelv AZONOS a kurzuskártyáéval (styles/blocks/course-cards.css):
+ * a közös `.kc-card` alap (fehér felület, 1px hairline, árnyék nélkül, hoverre
+ * akcent-keret) fölé a borító-ív, a finom ráközelítés és a hajszálvonalas
+ * kártya-láb jön. A két lap szándékosan önálló: mindkettőt a saját
+ * kártya-komponense importálja, így a stílus a kezdőlaptól függetlenül, a /blog
+ * listán és a kapcsolódó posztoknál is betöltődik.
+ *
+ * ÚJRAHASZNOSÍTÁS: a szekciócím a közös `.kc-section-title`, a záró link a
+ * `.kc-text-link` (content.css) — itt csak a blokk-specifikus réteg van.
+ *
+ * MIÉRT SZŰKÍTETT SZELEKTOROK: ugyanezeknek az osztályoknak a globális
+ * content.css-ben is van alap-szabálya. A felülírás a kártya
+ * gyökér-osztályára szűkítéssel, SPECIFICITÁSBÓL történik — így a betöltési
+ * sorrendtől függetlenül érvényes.
+ *
+ * KONTRASZT (tokens.css jegyzőkönyve): cím `text` (ink) fehéren 15,63:1,
+ * kivonat és dátum `text-muted` fehéren 9,30:1, a záró link `primary` a
+ * paperen 5,16:1 — mind AA felett. Az `accent` (keret, nyíl) DEKORÁCIÓ.
+ *
+ * Betöltés: src/components/content/home/KnowledgeSection.tsx és
+ * src/components/content/PostCard.tsx.
+ */
+
+/* A szekció-rendszer blokkjaival azonos címsor-lépcső. */
+.kc-knowledge .kc-section-title {
+  max-width: 30ch;
+  margin-bottom: var(--kc-space-6);
+  font-size: var(--kc-text-3xl);
+}
+
+/* A landing inline-linkjén a nyíl hoverre elmozdul (a többit a .kc-text-link
+   adja: akcent-mély szín, 1px aláhúzás nagy offsettel, 44px célfelület). */
+.kc-knowledge__link span {
+  transition: transform var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-knowledge__link:hover span {
+  transform: translateX(0.2rem);
+}
+
+/* ---- Posztkártya (a /blog listán és a kapcsolódó posztoknál is) ----------- */
+
+/* A borító íve kövesse a kártyáét (a közös alap a kisebb `md` ívet adja). */
+.kc-post-card .kc-post-card__cover {
+  border-radius: var(--kc-radius-lg) var(--kc-radius-lg) 0 0;
+}
+
+.kc-post-card .kc-post-card__cover img {
+  transition: transform var(--kc-motion-base) var(--kc-ease-out);
+}
+
+.kc-card--interactive.kc-post-card:hover .kc-post-card__cover img,
+.kc-card--interactive.kc-post-card:focus-within .kc-post-card__cover img {
+  transform: scale(1.02);
+}
+
+.kc-post-card .kc-post-card__title {
+  text-wrap: balance;
+}
+
+/* Kártya-láb: hajszálvonal fölött a dátum és a dekoratív nyíl. */
+.kc-post-card .kc-post-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kc-space-3);
+  margin-top: auto;
+  padding-top: var(--kc-space-3);
+  border-top: 1px solid var(--kc-color-border);
+}
+
+/* A `margin-top: auto` a lábra került, a dátumra már nem kell. */
+.kc-post-card .kc-post-card__date {
+  margin-top: 0;
+}
+
+/* `margin-left: auto`: dátum nélküli poszton is a láb jobb szélén marad. */
+.kc-post-card .kc-post-card__arrow {
+  margin-left: auto;
+  font-size: var(--kc-text-lg);
+  line-height: 1;
+  color: var(--kc-color-accent);
+  transition: transform var(--kc-motion-base) var(--kc-ease-out);
+}
+
+.kc-card--interactive.kc-post-card:hover .kc-post-card__arrow,
+.kc-card--interactive.kc-post-card:focus-within .kc-post-card__arrow {
+  transform: translateX(0.2rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kc-knowledge__link span,
+  .kc-post-card .kc-post-card__cover img,
+  .kc-post-card .kc-post-card__arrow {
+    transition: none;
+  }
+
+  .kc-knowledge__link:hover span,
+  .kc-card--interactive.kc-post-card:hover .kc-post-card__cover img,
+  .kc-card--interactive.kc-post-card:focus-within .kc-post-card__cover img,
+  .kc-card--interactive.kc-post-card:hover .kc-post-card__arrow,
+  .kc-card--interactive.kc-post-card:focus-within .kc-post-card__arrow {
+    transform: none;
+  }
+}

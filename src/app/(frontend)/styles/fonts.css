@@ -1,48 +1,82 @@
 /**
- * Self-hostolt betűtípusok — a legacy kineticare.hu fontjai.
+ * Self-hostolt betűtípusok — a kineticare.hu valós márkabetűi.
  *
- * A legacy oldal a Google Fonts-családokat a systeme.io CloudFront-tükréről
- * töltötte (hotlink TILOS), ezért a woff2 fájlok most a repóban,
- * a public/assets/fonts alatt élnek. A font-family nevek szándékosan
- * megegyeznek a tokens.css-ben definiált stack első elemeivel
- * (--kc-font-heading: 'Tenor Sans', --kc-font-body: 'Nunito Sans'),
- * így a tokenek módosítása nélkül aktiválódnak.
+ * A metszetek a landing-tükörből (higgsfield-site/app/public/fonts) érkeztek,
+ * subsetelve és latin / latin-ext bontásban (szekció-rendszer terv 3.2):
+ *   - 'Tenor Sans' 400        → címsorok (--kc-font-heading)
+ *   - 'Nunito Sans' 400–700   → törzsszöveg (--kc-font-body); VARIÁBILIS
+ *                               metszet, egyetlen fájl fedi a 400–700 sávot
+ * A fájlok a public/fonts/ alatt élnek — hotlink (Google Fonts, CDN) TILOS.
+ * A font-family nevek szándékosan egyeznek a tokens.css stackjeinek első
+ * elemével, így a tokenek módosítása nélkül aktiválódnak.
  *
- * A fájlok TELJES (nem subset) woff2-k, tartalmazzák a latin-ext
- * karaktereket (ő, ű stb.) is, ezért unicode-range korlátozás nem kell.
- * font-display: swap — a legacy is ezt használta.
+ * unicode-range: a magyar ő és ű a latin-ext fájlból jön, minden más ékezet
+ * (á, é, í, ó, ö, ú, ü) a latin fájlból — a böngésző csak azt tölti le, amire
+ * az adott lapon ténylegesen szükség van. A két latin metszetre a
+ * (frontend)/layout.tsx preloadot ad (kritikus metszet).
+ *
+ * font-display: swap — a szöveg azonnal olvasható, a metszet megérkezésekor
+ * cserélődik.
+ *
+ * Dőlt szöveghez a tükörben NINCS subsetelt metszet, ezért a dőlt Nunito Sans
+ * marad a korábbi, teljes (nem subsetelt) fájlon: valódi dőlt metszet a
+ * böngésző szintetikus döntése helyett. Licencek (SIL OFL 1.1):
+ * public/assets/fonts/OFL-tenor-sans.txt, public/assets/fonts/OFL-nunito-sans.txt.
  */
 
-/* Címsorok: Tenor Sans 400 */
+/* ---- Címsorok: Tenor Sans 400 -------------------------------------------- */
 @font-face {
   font-family: 'Tenor Sans';
-  src: url('/assets/fonts/tenor-sans-400.woff2') format('woff2');
+  src: url('/fonts/tenor-sans-400-latin.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* Törzsszöveg: Nunito Sans 400 / 400 italic / 700 */
+@font-face {
+  font-family: 'Tenor Sans';
+  src: url('/fonts/tenor-sans-400-latin-ext.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* ---- Törzsszöveg: Nunito Sans, variábilis 400–700 ------------------------ */
 @font-face {
   font-family: 'Nunito Sans';
-  src: url('/assets/fonts/nunito-sans-400.woff2') format('woff2');
-  font-weight: 400;
+  src: url('/fonts/nunito-sans-var-latin.woff2') format('woff2');
+  font-weight: 400 700;
   font-style: normal;
   font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
+@font-face {
+  font-family: 'Nunito Sans';
+  src: url('/fonts/nunito-sans-var-latin-ext.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* ---- Törzsszöveg dőlt változata (teljes metszet, subset nélkül) ---------- */
 @font-face {
   font-family: 'Nunito Sans';
   src: url('/assets/fonts/nunito-sans-400-italic.woff2') format('woff2');
   font-weight: 400;
   font-style: italic;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Nunito Sans';
-  src: url('/assets/fonts/nunito-sans-700.woff2') format('woff2');
-  font-weight: 700;
-  font-style: normal;
   font-display: swap;
 }

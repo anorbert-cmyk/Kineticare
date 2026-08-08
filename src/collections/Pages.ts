@@ -1,5 +1,6 @@
 import type { CollectionConfig } from 'payload'
 
+import { pageBlocks } from '../blocks'
 import { slugField } from '../fields/slug'
 import {
   clearPublishedAtBeforeDuplicate,
@@ -24,6 +25,13 @@ import { setPublishedAtOnFirstPublish, syncStatusFromDraftStatus } from '../lib/
  *    beforeDuplicate hookjával '<eredeti>-masodpeldany' lesz, a status/publishedAt
  *    mezőhookok draftot + üres publishedAt-et, a forceDraftVersionOnDuplicate
  *    pedig a `_status`-t is draftra állítja (lásd src/lib/duplicate.ts).
+ *
+ * Szekció-rendszer (docs/szekcio-rendszer-terv.md): az opcionális `layout`
+ * blokk-mező az oldal szerkeszthető szekció-listája (src/blocks). Szándékosan
+ * OPCIONÁLIS — layout nélkül a kezdőlap a mai kód-szintű kompozíciót
+ * (HomeView) rendereli, így a bevezetés semmit nem tör el, és a layout
+ * kiürítése sem hagy üres oldalt. A verziózás/autosave a layoutra is érvényes:
+ * a szerkesztő piszkozatban rendezhet át, és csak a Közzététellel élesít.
  */
 export const Pages: CollectionConfig = {
   slug: 'pages',
@@ -78,6 +86,21 @@ export const Pages: CollectionConfig = {
       label: 'Tartalom',
       admin: {
         description: 'Az oldal szövege. A felső eszköztárral formázhatsz, listázhatsz, linkelhetsz.',
+      },
+    },
+    {
+      name: 'layout',
+      type: 'blocks',
+      label: 'Szekciók',
+      labels: {
+        singular: 'Szekció',
+        plural: 'Szekciók',
+      },
+      blocks: pageBlocks,
+      admin: {
+        initCollapsed: true,
+        description:
+          'Az oldal „építőkockás" része. A lap alján lévő + gombbal veszel fel új szekciót; a sorok bal szélén lévő fogantyúval fogd-és-vidd módszerrel átrendezed őket; a szekción belüli Szekció-beállítások → Látható pipával pedig elrejtheted az egyiket úgy, hogy a tartalma megmarad. Ha üresen hagyod, az oldal a megszokott módon jelenik meg — semmi nem vész el.',
       },
     },
     {

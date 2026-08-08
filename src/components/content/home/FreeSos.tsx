@@ -1,10 +1,12 @@
-import type { CSSProperties } from 'react'
-
 import type { Product } from '../../../payload-types'
 import { Badge } from '../../ui/Badge'
 import { Button } from '../../ui/Button'
 import { Container } from '../../ui/Container'
 import { Section } from '../../ui/Section'
+import { MediaImage } from '../MediaImage'
+import type { MediaLike } from '../media-url'
+
+import '../../../app/(frontend)/styles/blocks/free-sos.css'
 
 /**
  * FreeSos — az ingyenes SOS Kézrelax lead-magnet VISSZAFOGOTT megjelenése
@@ -15,60 +17,80 @@ import { Section } from '../../ui/Section'
  * kurzus-oldalára mutat; egyébként a kurzuslistára, ahol az ingyenes anyag
  * szintén elérhető. A szekció mindig megjelenik — az audit szerint az ingyenes
  * SOS-tartalom a márka állandó eleme, csak a súlya változik.
+ *
+ * Megjelenés: a landing `kc-sos` sávja (akcent-színű háttér, fehér serif cím,
+ * jobb oldalt kép-art gradiens-átmenettel, 2px fehér keretes CTA) — MÉRSÉKELT
+ * magassággal, mert az ingyenes ajánlat nem előzheti a fizetős blokkot. A
+ * stílus és a fehér szöveg kontraszt-garanciája: styles/blocks/free-sos.css.
  */
+
+export interface FreeSosCta {
+  label: string
+  href: string
+  newTab?: boolean
+}
 
 export interface FreeSosProps {
   /** Az első ingyenes (priceInHUFEnabled: false) published termék, ha van. */
   freeProduct: Product | null
+  /** Cím-felülírás a `freeSos` blokkból — üresen a termék/beépített cím marad. */
+  title?: string
+  /** Szöveg-felülírás a blokkból. */
+  body?: string
+  /** Gomb-felülírás; hiányában a gomb az ingyenes termékre (vagy a listára) visz. */
+  cta?: FreeSosCta
+  /**
+   * Kép a sáv jobb oldalán (a blokk Media-mezője). Dekoratív hangulati elem: a
+   * sávszínbe olvadó gradiens tartja a fehér szöveg AA-kontrasztját, keskeny
+   * kijelzőn pedig a kép meg sem jelenik.
+   */
+  backgroundImage?: MediaLike | null
+  id?: string
+  variant?: 'default' | 'tint' | 'dark'
 }
 
-const cardStyle: CSSProperties = {
-  border: '1px solid var(--kc-color-border)',
-  borderRadius: 'var(--kc-radius-lg, 0.75rem)',
-  padding: 'var(--kc-space-5, 1.5rem)',
-  display: 'flex',
-  flexWrap: 'wrap',
-  alignItems: 'center',
-  gap: 'var(--kc-space-4, 1rem) var(--kc-space-6, 2rem)',
-}
-
-const textBlockStyle: CSSProperties = {
-  flex: '1 1 20rem',
-  maxWidth: '100%',
-}
-
-const titleStyle: CSSProperties = {
-  fontFamily: 'var(--kc-font-heading)',
-  fontSize: 'var(--kc-text-lg)',
-  lineHeight: 'var(--kc-leading-heading)',
-  margin: '0 0 var(--kc-space-2, 0.5rem)',
-}
-
-const leadStyle: CSSProperties = {
-  margin: 0,
-  color: 'var(--kc-color-text-muted)',
-}
-
-export function FreeSos({ freeProduct }: FreeSosProps) {
-  const title = freeProduct?.sku?.trim() || 'SOS Kézrelax — ingyenes villámkurzus'
-  const href = freeProduct ? `/kurzusok/${freeProduct.id}` : '/kurzusok'
+export function FreeSos({
+  freeProduct,
+  title,
+  body,
+  cta,
+  backgroundImage,
+  id = 'ingyenes',
+  variant = 'tint',
+}: FreeSosProps) {
+  const heading = title?.trim() || freeProduct?.sku?.trim() || 'SOS Kézrelax — ingyenes villámkurzus'
+  const text =
+    body?.trim() ||
+    freeProduct?.shortDescription?.trim() ||
+    'Ha előbb kipróbálnád a módszert: rövid, azonnal használható gyakorlatok hirtelen jelentkező kézfájdalomra.'
+  const button: FreeSosCta = cta ?? {
+    label: 'Elindítom az ingyenes kurzust',
+    href: freeProduct ? `/kurzusok/${freeProduct.id}` : '/kurzusok',
+  }
 
   return (
-    <Section id="ingyenes" variant="tint">
+    <Section className="kc-free-sos" id={id} variant={variant}>
+      {backgroundImage ? (
+        <span aria-hidden="true" className="kc-free-sos__art">
+          {/* 900px alatt a kép nem jelenik meg (free-sos.css), ezért ott a
+              legkisebb metszet is elég — a sáv szövege mindig a színen ül. */}
+          <MediaImage media={backgroundImage} preferredSize="md" sizes="(max-width: 900px) 1px, 44vw" />
+        </span>
+      ) : null}
       <Container>
-        <div style={cardStyle}>
-          <div style={textBlockStyle}>
-            <p style={{ margin: '0 0 var(--kc-space-2, 0.5rem)' }}>
-              <Badge tone="success">Ingyenes</Badge>
-            </p>
-            <h2 style={titleStyle}>{title}</h2>
-            <p style={leadStyle}>
-              {freeProduct?.shortDescription?.trim() ||
-                'Ha előbb kipróbálnád a módszert: rövid, azonnal használható gyakorlatok hirtelen jelentkező kézfájdalomra.'}
-            </p>
-          </div>
-          <Button href={href} variant="secondary">
-            Elindítom az ingyenes kurzust
+        <div className="kc-free-sos__inner">
+          <p className="kc-free-sos__badge">
+            <Badge tone="success">Ingyenes</Badge>
+          </p>
+          <h2 className="kc-free-sos__title">{heading}</h2>
+          <p className="kc-free-sos__text">{text}</p>
+          <Button
+            className="kc-free-sos__cta"
+            href={button.href}
+            openInNewTab={button.newTab === true}
+            variant="secondary"
+          >
+            {button.label} <span aria-hidden="true">→</span>
           </Button>
         </div>
       </Container>

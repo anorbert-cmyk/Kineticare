@@ -4,16 +4,22 @@ import type { ReactNode } from 'react'
 /**
  * Button — a storefront elsődleges akcióeleme.
  *
- * Props:
- * - variant: 'primary' (navy töltött, alap) | 'secondary' (navy körvonal) | 'ghost' (sima szöveges)
- * - size: 'md' (alap) | 'sm'
+ * A vizuális nyelv a kineticare.higgsfield.app landingé (a stílus az
+ * `src/app/(frontend)/styles/ui.css`-ben él, minden szín szerep-tokenről):
+ * - variant:
+ *     'primary'   — akcent-mély kitöltés fehér szöveggel (5,45:1 — AA), alap
+ *     'secondary' — 2px-es ink keret átlátszó háttéren, a hover invertál
+ *                   (a landing `kc-sos-cta` nyelve); sötét sávon fehér keret
+ *     'ghost'     — aláhúzott szöveglink-jelleg (a landing `kc-inline-link`)
+ * - size: 'md' (alap) | 'sm' — az érintési célfelület mindkettőben ≥ 44px
  * - href: megadva linkként renderel (belső útvonalhoz next/link, külsőhöz <a>);
  *   nélküle <button>
  * - disabled: letiltott állapot (gombként valódi disabled; linkként aria-disabled
  *   + tabindex -1 + osztály, a href ilyenkor nem navigál)
  * - type: a <button> type-ja (alap 'button' — űrlapban 'submit'-re állítható)
  *
- * A fókusz-állapotot a globális :focus-visible szabály kezeli (lásd base.css).
+ * A fókusz-állapotot a globális :focus-visible szabály kezeli (lásd base.css);
+ * sötét szekcióban a gyűrű fehérre vált (ui.css, .kc-section--dark).
  */
 
 export interface ButtonProps {
@@ -26,7 +32,11 @@ export interface ButtonProps {
   className?: string
   /** Csak <button>-rendernél értelmezett. */
   onClick?: () => void
-  /** Külső href esetén új lapon nyitás (target="_blank" rel="noopener noreferrer"). */
+  /**
+   * Új lapon nyitás (target="_blank" + noopener) — belső és külső href-re is
+   * érvényes: a CMS linkmezők „Új lapon nyíljon" kapcsolója ide fut be, és a
+   * szerkesztő döntése akkor sem veszhet el némán, ha az útvonal belső.
+   */
   openInNewTab?: boolean
 }
 
@@ -64,7 +74,11 @@ export function Button({
       )
     }
     return (
-      <Link className={classes} href={href}>
+      <Link
+        className={classes}
+        href={href}
+        {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      >
         {children}
       </Link>
     )

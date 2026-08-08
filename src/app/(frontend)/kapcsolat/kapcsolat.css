@@ -104,7 +104,7 @@
 
 .kc-contact-success__title {
   margin: 0;
-  color: var(--kc-color-navy-900);
+  color: var(--kc-color-text);
 }
 
 .kc-contact-success__title:focus-visible {
