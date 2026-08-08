@@ -11,7 +11,12 @@ import { Section } from '../../ui/Section'
  * hangneme: szakmai, meleg, bizalomépítő (nincs marketing-hype).
  */
 
-const STEPS: { title: string; text: string }[] = [
+export interface HowItWorksStep {
+  title: string
+  text: string
+}
+
+const STEPS: HowItWorksStep[] = [
   {
     title: 'Kiválasztod a kurzust',
     text: 'A panaszodhoz illő programot néhány kattintással megvásárolod — bankkártyával, biztonságosan.',
@@ -64,11 +69,23 @@ const textStyle: CSSProperties = {
   margin: 0,
 }
 
-export function HowItWorks() {
+export interface HowItWorksProps {
+  /** Cím-felülírás a `howItWorks` blokkból — üresen a beépített cím marad. */
+  title?: string
+  /** Lépés-felülírás a blokkból; üresen/hiányozva a beépített 3 lépés jön. */
+  steps?: HowItWorksStep[]
+  id?: string
+  variant?: 'default' | 'tint' | 'dark'
+}
+
+export function HowItWorks({ title, steps, id, variant = 'default' }: HowItWorksProps = {}) {
+  const heading = title?.trim() || 'Így működik az online kurzus'
+  const shownSteps = steps && steps.length > 0 ? steps : STEPS
+
   return (
-    <Section variant="default">
+    <Section id={id} variant={variant}>
       <Container>
-        <h2 className="kc-section-title">Így működik az online kurzus</h2>
+        <h2 className="kc-section-title">{heading}</h2>
         <ol
           style={{
             ...gridStyle,
@@ -76,7 +93,7 @@ export function HowItWorks() {
             padding: 0,
           }}
         >
-          {STEPS.map((step, index) => (
+          {shownSteps.map((step, index) => (
             <li key={step.title} style={stepStyle}>
               <span aria-hidden="true" style={numberStyle}>
                 {index + 1}

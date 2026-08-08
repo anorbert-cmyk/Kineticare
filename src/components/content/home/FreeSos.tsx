@@ -5,6 +5,7 @@ import { Badge } from '../../ui/Badge'
 import { Button } from '../../ui/Button'
 import { Container } from '../../ui/Container'
 import { Section } from '../../ui/Section'
+import { pickMediaUrl, type MediaLike } from '../media-url'
 
 /**
  * FreeSos — az ingyenes SOS Kézrelax lead-magnet VISSZAFOGOTT megjelenése
@@ -17,9 +18,28 @@ import { Section } from '../../ui/Section'
  * SOS-tartalom a márka állandó eleme, csak a súlya változik.
  */
 
+export interface FreeSosCta {
+  label: string
+  href: string
+  newTab?: boolean
+}
+
 export interface FreeSosProps {
   /** Az első ingyenes (priceInHUFEnabled: false) published termék, ha van. */
   freeProduct: Product | null
+  /** Cím-felülírás a `freeSos` blokkból — üresen a termék/beépített cím marad. */
+  title?: string
+  /** Szöveg-felülírás a blokkból. */
+  body?: string
+  /** Gomb-felülírás; hiányában a gomb az ingyenes termékre (vagy a listára) visz. */
+  cta?: FreeSosCta
+  /**
+   * Halvány háttérkép a kártya mögé (a blokk Media-mezője). A fehér fedőréteg
+   * tartja az AA-kontrasztot — a kép csak hangulati elem marad.
+   */
+  backgroundImage?: MediaLike | null
+  id?: string
+  variant?: 'default' | 'tint' | 'dark'
 }
 
 const cardStyle: CSSProperties = {
@@ -49,26 +69,48 @@ const leadStyle: CSSProperties = {
   color: 'var(--kc-color-text-muted)',
 }
 
-export function FreeSos({ freeProduct }: FreeSosProps) {
-  const title = freeProduct?.sku?.trim() || 'SOS Kézrelax — ingyenes villámkurzus'
-  const href = freeProduct ? `/kurzusok/${freeProduct.id}` : '/kurzusok'
+export function FreeSos({
+  freeProduct,
+  title,
+  body,
+  cta,
+  backgroundImage,
+  id = 'ingyenes',
+  variant = 'tint',
+}: FreeSosProps) {
+  const heading = title?.trim() || freeProduct?.sku?.trim() || 'SOS Kézrelax — ingyenes villámkurzus'
+  const text =
+    body?.trim() ||
+    freeProduct?.shortDescription?.trim() ||
+    'Ha előbb kipróbálnád a módszert: rövid, azonnal használható gyakorlatok hirtelen jelentkező kézfájdalomra.'
+  const button: FreeSosCta = cta ?? {
+    label: 'Elindítom az ingyenes kurzust',
+    href: freeProduct ? `/kurzusok/${freeProduct.id}` : '/kurzusok',
+  }
+
+  const backgroundUrl = backgroundImage ? pickMediaUrl(backgroundImage, 'md') : null
+  const cardBackground: CSSProperties = backgroundUrl
+    ? {
+        backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.92)), url(${backgroundUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundColor: 'var(--kc-color-surface, #fff)',
+      }
+    : {}
 
   return (
-    <Section id="ingyenes" variant="tint">
+    <Section id={id} variant={variant}>
       <Container>
-        <div style={cardStyle}>
+        <div style={{ ...cardStyle, ...cardBackground }}>
           <div style={textBlockStyle}>
             <p style={{ margin: '0 0 var(--kc-space-2, 0.5rem)' }}>
               <Badge tone="success">Ingyenes</Badge>
             </p>
-            <h2 style={titleStyle}>{title}</h2>
-            <p style={leadStyle}>
-              {freeProduct?.shortDescription?.trim() ||
-                'Ha előbb kipróbálnád a módszert: rövid, azonnal használható gyakorlatok hirtelen jelentkező kézfájdalomra.'}
-            </p>
+            <h2 style={titleStyle}>{heading}</h2>
+            <p style={leadStyle}>{text}</p>
           </div>
-          <Button href={href} variant="secondary">
-            Elindítom az ingyenes kurzust
+          <Button href={button.href} openInNewTab={button.newTab === true} variant="secondary">
+            {button.label}
           </Button>
         </div>
       </Container>

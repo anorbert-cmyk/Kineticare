@@ -1,0 +1,70 @@
+import Link from 'next/link'
+
+import type { Post } from '../../../payload-types'
+import { Container } from '../../ui/Container'
+import { Section } from '../../ui/Section'
+import { PostCard } from '../PostCard'
+
+/**
+ * KnowledgeSection — „Legfrissebb a tudástárból" (audit M7, SEO/hosszútáv).
+ *
+ * A HomeView-ból kiemelt szekció, hogy a rögzített kezdőlap és a
+ * szekció-rendszer `knowledge` blokkja (RenderBlocks) ugyanazt a megjelenést
+ * kapja. A posztok published-szűrése itt védőháló — a lekérdezés is szűr.
+ *
+ * A `limit` a MEGJELENŐ posztok száma (a blokk 1–6 között engedi); a
+ * lekérdezésnek legalább ennyit kell hoznia — lásd KNOWLEDGE_POSTS_FETCH_LIMIT.
+ */
+
+/**
+ * Ennyi posztot kér le a kezdőlap adatrétege (page.tsx), hogy a blokk
+ * legnagyobb megengedett `limit`-je (6) is kiszolgálható legyen egyetlen,
+ * párhuzamosítható lekérdezésből.
+ */
+export const KNOWLEDGE_POSTS_FETCH_LIMIT = 6
+
+export interface KnowledgeSectionProps {
+  posts: Post[]
+  /** Szekciócím-felülírás — üresen a beépített cím marad. */
+  heading?: string
+  /** Megjelenő posztok száma; a lista ennél hosszabb részét levágja. */
+  limit?: number
+  id?: string
+  variant?: 'default' | 'tint' | 'dark'
+}
+
+export function KnowledgeSection({
+  posts,
+  heading,
+  limit,
+  id,
+  variant = 'tint',
+}: KnowledgeSectionProps) {
+  const visiblePosts = posts.filter((post) => post.status === 'published' && post.slug)
+  const shownPosts =
+    typeof limit === 'number' && limit > 0 ? visiblePosts.slice(0, limit) : visiblePosts
+
+  if (shownPosts.length === 0) {
+    return null
+  }
+
+  const title = heading?.trim() || 'Legfrissebb a tudástárból'
+
+  return (
+    <Section id={id} variant={variant}>
+      <Container>
+        <h2 className="kc-section-title">{title}</h2>
+        <div className="kc-card-grid">
+          {shownPosts.map((post) => (
+            <PostCard key={post.id} post={post} />
+          ))}
+        </div>
+        <p className="kc-section-more">
+          <Link className="kc-text-link" href="/blog">
+            Összes bejegyzés a tudástárban
+          </Link>
+        </p>
+      </Container>
+    </Section>
+  )
+}

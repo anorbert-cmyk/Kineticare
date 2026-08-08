@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { draftMode } from 'next/headers'
 
 import { HomeView } from '@/components/content/HomeView'
+import { KNOWLEDGE_POSTS_FETCH_LIMIT } from '@/components/content/home/KnowledgeSection'
 import { PreviewBar } from '@/components/preview/PreviewBar'
 import { getHomePage, getLatestPosts, getPublishedProducts, getTestimonials } from '@/lib/cms'
 import { withDraftRobots } from '@/lib/preview/draft-metadata'
@@ -30,10 +31,13 @@ export default async function HomePage() {
   // staff/owner jut be. A termék-, poszt- és vélemény-listák published-szűrtek
   // maradnak — a piszkozat-előnézet a kezdőlap SAJÁT tartalmára vonatkozik.
   const { isEnabled: isDraft } = await draftMode()
+  // A posztokból a knowledge blokk felső limitjéig (6) kérünk, hogy a
+  // szekciósor bármely beállítása egyetlen párhuzamos lekérdezésből kijöjjön;
+  // a rögzített kezdőlap továbbra is 3-at mutat (KnowledgeSection limit).
   const [home, products, posts, testimonials] = await Promise.all([
     getHomePage({ draft: isDraft }),
     getPublishedProducts(),
-    getLatestPosts(3),
+    getLatestPosts(KNOWLEDGE_POSTS_FETCH_LIMIT),
     getTestimonials(),
   ])
 

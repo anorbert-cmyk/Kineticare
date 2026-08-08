@@ -32,13 +32,18 @@ export const MAX_HOME_TESTIMONIALS = 3
  *
  * A cms.ts `getTestimonials()` lekérdezése ugyanezt szűri — ez a védőháló (a
  * kártyakomponensek mintájára), hogy a szekció fixture-ből és éles adatból is
- * azonosan viselkedjen.
+ * azonosan viselkedjen. A `limit` 1 és MAX_HOME_TESTIMONIALS közé szorítva
+ * érvényesül — a kezdőlapi felső korlátot a blokk sem lépheti át.
  */
-export function featuredTestimonials(testimonials: Testimonial[]): Testimonial[] {
+export function featuredTestimonials(
+  testimonials: Testimonial[],
+  limit: number = MAX_HOME_TESTIMONIALS,
+): Testimonial[] {
+  const clampedLimit = Math.min(Math.max(1, Math.floor(limit)), MAX_HOME_TESTIMONIALS)
   return testimonials
     .filter((testimonial) => testimonial.featured === true && testimonial.visible !== false)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    .slice(0, MAX_HOME_TESTIMONIALS)
+    .slice(0, clampedLimit)
 }
 
 /** A megjelenő idézet: a rövid változat elsőbbséget élvez a teljes szöveg felett. */
@@ -49,27 +54,46 @@ export function testimonialQuoteText(testimonial: Testimonial): string {
 
 export interface TestimonialsSectionProps {
   testimonials: Testimonial[]
+  /** Kis felső felirat-felülírás a `testimonials` blokkból. */
+  eyebrow?: string
+  /** Cím-felülírás a blokkból — üresen a beépített cím marad. */
+  heading?: string
+  /** Megjelenő vélemények száma (1–3 közé szorítva). */
+  maxItems?: number
+  id?: string
+  variant?: 'default' | 'tint' | 'dark'
+  /**
+   * A címsor egyedi id-je az `aria-labelledby`-hoz — akkor kell felülírni, ha
+   * a blokk többször szerepel egy oldalon (különben duplikált id születne).
+   */
+  headingId?: string
 }
 
-export function TestimonialsSection({ testimonials }: TestimonialsSectionProps) {
-  const items = featuredTestimonials(testimonials)
+export function TestimonialsSection({
+  testimonials,
+  eyebrow,
+  heading,
+  maxItems,
+  id = 'velemenyek',
+  variant = 'tint',
+  headingId = 'velemenyek-cim',
+}: TestimonialsSectionProps) {
+  const items = featuredTestimonials(testimonials, maxItems ?? MAX_HOME_TESTIMONIALS)
 
   if (items.length === 0) {
     return null
   }
 
+  const eyebrowText = eyebrow?.trim() || 'Vélemények'
+  const title = heading?.trim() || 'Pácienseink mondták'
+
   return (
-    <Section
-      aria-labelledby="velemenyek-cim"
-      className="kc-testimonials"
-      id="velemenyek"
-      variant="tint"
-    >
+    <Section aria-labelledby={headingId} className="kc-testimonials" id={id} variant={variant}>
       <Container>
         <div className="kc-testimonials__head">
-          <p className="kc-testimonials__eyebrow">Vélemények</p>
-          <h2 className="kc-section-title kc-testimonials__title" id="velemenyek-cim">
-            Pácienseink mondták
+          <p className="kc-testimonials__eyebrow">{eyebrowText}</p>
+          <h2 className="kc-section-title kc-testimonials__title" id={headingId}>
+            {title}
           </h2>
         </div>
         <ul className="kc-testimonials__list">

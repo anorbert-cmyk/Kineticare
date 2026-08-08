@@ -24,21 +24,39 @@ export function isPaidProduct(product: {
 
 export interface CourseCardsProps {
   products: Product[]
+  /** Cím-felülírás a `courseCards` blokkból — üresen a beépített cím marad. */
+  heading?: string
+  /** Bevezető-felülírás a blokkból — üresen a beépített szöveg marad. */
+  lead?: string
+  /**
+   * Horgony. Alapból „kurzusok" — a sticky nav /#kurzusok linkje erre épül,
+   * ezért az alapérték felülírásakor a navigáció célját is ellenőrizni kell.
+   */
+  id?: string
+  variant?: 'default' | 'tint' | 'dark'
 }
 
-export function CourseCards({ products }: CourseCardsProps) {
+export function CourseCards({
+  products,
+  heading,
+  lead,
+  id = 'kurzusok',
+  variant = 'default',
+}: CourseCardsProps) {
   if (products.length === 0) {
     return null
   }
 
+  const title = heading?.trim() || 'Így tudunk neked segíteni'
+  const leadText =
+    lead?.trim() ||
+    'Online kézrehabilitációs kurzusaink lépésről lépésre vezetnek végig az otthoni felépülésen.'
+
   return (
-    <Section id="kurzusok" variant="default">
+    <Section id={id} variant={variant}>
       <Container>
-        <h2 className="kc-section-title">Így tudunk neked segíteni</h2>
-        <p className="kc-section-lead">
-          Online kézrehabilitációs kurzusaink lépésről lépésre vezetnek végig az otthoni
-          felépülésen.
-        </p>
+        <h2 className="kc-section-title">{title}</h2>
+        <p className="kc-section-lead">{leadText}</p>
         <div className="kc-card-grid">
           {products.map((product) => (
             <ProductCard key={product.id} product={product} />
