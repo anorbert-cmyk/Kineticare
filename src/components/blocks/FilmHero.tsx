@@ -3,6 +3,8 @@ import { Button } from '../ui/Button'
 import { ScrollScrub } from '../scroll-scrub/scroll-scrub'
 import type { ScrollScrubScene, ScrollScrubTheme } from '../scroll-scrub/scroll-scrub'
 
+import '../../app/(frontend)/styles/blocks/film-hero.css'
+
 /**
  * FilmHero — a kezdőlap nyitó filmsávja (szekció-rendszer terv 2. és 3.3, M1).
  *
