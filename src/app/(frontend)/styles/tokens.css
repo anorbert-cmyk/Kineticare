@@ -12,9 +12,10 @@
  *   - tartalom-szélességek: wide 1120px, small 720px
  *
  * Betűkészlet-megjegyzés: a legacy a fontokat CDN-ről töltötte — hotlink
- * TILOS, ezért a stack első eleme a név, a fallback rendszerszintű. Ha
- * később self-hostoljuk a woff2-t (public/assets/fonts alá, ugyanilyen
- * családnéven), az itt definiált stack változás nélkül aktiválódik.
+ * TILOS, ezért a stack első eleme a név, a fallback rendszerszintű. A
+ * self-hostolt woff2-k (subsetelt latin / latin-ext metszetek) a
+ * public/fonts/ alatt élnek, ugyanezekkel a családnevekkel — lásd
+ * fonts.css. Az itt definiált stackek változtatás nélkül aktiválják őket.
  */
 
 :root {
@@ -34,6 +35,24 @@
   --kc-color-success: #166534;
   --kc-color-success-surface: #e8f5ec;
   --kc-color-focus: #16406e; /* látható fókuszgyűrű */
+
+  /* ---- Akcent-pár és hűvös tint (landing-átvétel, terv 3.1) -------------- */
+  /* A kineticare.higgsfield.app landing közép-kék akcentpárja és hűvösebb
+     tintje — a fő site-ról eddig hiányzott. A meglévő --kc-color-blue-100
+     VÁLTOZATLAN marad a régi komponenseknek.
+
+     KONTRASZT-KORLÁT (számolt értékek, WCAG 2.2 relatív luminancia szerint):
+       accent (#3d78aa) tint-cool (#e6f0f8) háttéren ....... 4,07:1
+       accent-deep (#2f6e9f) fehéren ....................... 5,45:1
+       accent-deep tint-cool háttéren ...................... 4,72:1
+     A 4,07:1 a normál szöveg 4,5:1-es küszöbe ALATT van, tehát AA-bukás.
+     Ezért az `accent` KIZÁRÓLAG nagy szövegre (≥ 24px, vagy ≥ 18,66px
+     félkövér — ott a küszöb 3:1) vagy dekorációra (vonal, keret, kitöltés,
+     ikon) használható. Szöveg-linkre és normál méretű szövegre `accent-deep`
+     vagy navy jár. Lásd docs/ertekesitesi-ux-skill.md 3. pont. */
+  --kc-color-accent: #3d78aa;
+  --kc-color-accent-deep: #2f6e9f;
+  --kc-color-tint-cool: #e6f0f8;
 
   /* Szerep-tokenek (a komponensek EZEKET használják) */
   --kc-color-primary: var(--kc-color-navy-900);
