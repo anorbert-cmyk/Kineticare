@@ -1,0 +1,183 @@
+/**
+ * Szolgáltatás-sorok (Services) — szekció-stílus.
+ *
+ * Forrás: a landing `kc-services` „board"-ja, a terv 3.1 pontja szerint
+ * portolva. A landing fix 1440 × 810-es, `100dvh`-hoz kötött rácsa NEM jött át:
+ * a fő site szekciói a közös `kc-container` szélességben és a szekció saját
+ * vertikális ritmusában élnek, így a blokk bárhová beszúrható a lapon
+ * (szekció-rendszer: a sorrend a szerkesztőé). A látvány — kis felirat, nagy
+ * cím, kép, számozott sorok — változatlan.
+ *
+ * AKCENT-KORLÁT (terv 3.1): a kis felső felirat, a sorszámok és a
+ * sor-hivatkozás `accent-deep` (fehéren 5,45:1, tinten 5,00:1 — AA felett);
+ * a nyers `accent` (tinten 4,07:1) KIZÁRÓLAG dekoráció: a felirat alatti
+ * vékony vonal.
+ *
+ * Betöltés: a szekció-komponens importálja (src/components/blocks/Services.tsx).
+ */
+
+.kc-services {
+  --kc-services-ink: var(--kc-color-navy-900);
+  --kc-services-muted: var(--kc-color-text-muted);
+  --kc-services-rule: var(--kc-color-border);
+  /* Csak dekoratív vonal — lásd az akcent-korlátot. */
+  --kc-services-accent: var(--kc-color-accent, var(--kc-color-blue-200));
+  --kc-services-accent-text: var(--kc-color-accent-deep, var(--kc-color-navy-700));
+}
+
+/* Sötétkék sáv: fehér 15,7:1, blue-200 12,5:1 a navy-900 háttéren. */
+.kc-section--dark.kc-services {
+  --kc-services-ink: var(--kc-color-white);
+  --kc-services-muted: var(--kc-color-blue-200);
+  --kc-services-rule: rgb(255 255 255 / 0.35);
+  --kc-services-accent: rgb(255 255 255 / 0.55);
+  --kc-services-accent-text: var(--kc-color-blue-200);
+}
+
+.kc-services__grid {
+  display: grid;
+  gap: var(--kc-space-6);
+  align-items: start;
+}
+
+/* `auto-fit`: két hasáb, ha a bal oldali blokk (felirat/cím/kép) is kitöltött;
+   ha a szerkesztő egyiket sem adta meg, a bal oszlop nem is renderelődik, és a
+   sorok a teljes szélességet kapják. */
+@media (min-width: 900px) {
+  .kc-services__grid {
+    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+    gap: var(--kc-space-8);
+  }
+}
+
+.kc-services__eyebrow {
+  margin: 0 0 var(--kc-space-4);
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-bold);
+  letter-spacing: 0.24em;
+  line-height: var(--kc-leading-heading);
+  text-transform: uppercase;
+  color: var(--kc-services-accent-text);
+}
+
+/* Dekoratív vonal a felirat alatt — nem hordoz információt. */
+.kc-services__eyebrow::after {
+  content: '';
+  display: block;
+  width: 3.75rem;
+  height: 2px;
+  margin-top: var(--kc-space-3);
+  background-color: var(--kc-services-accent);
+}
+
+.kc-services__title {
+  margin: 0;
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-3xl);
+  font-weight: var(--kc-font-weight-normal);
+  line-height: var(--kc-leading-tight);
+  color: var(--kc-services-ink);
+  text-wrap: balance;
+}
+
+.kc-services__media {
+  display: block;
+  margin-top: var(--kc-space-6);
+  overflow: hidden;
+  border-radius: var(--kc-radius-lg);
+  background-color: var(--kc-color-surface-tint);
+  aspect-ratio: 4 / 3;
+}
+
+.kc-services__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 48%;
+}
+
+.kc-services__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kc-services__row {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: var(--kc-space-4);
+  padding: var(--kc-space-5) 0;
+  border-top: 1px solid var(--kc-services-rule);
+}
+
+.kc-services__row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+@media (min-width: 900px) {
+  .kc-services__row {
+    grid-template-columns: 3rem minmax(0, 1fr);
+    gap: var(--kc-space-5);
+    padding: var(--kc-space-6) 0;
+  }
+}
+
+/* A látható sorszám dekoratív (a sorrendet a rendezett lista hordozza). */
+.kc-services__num {
+  margin: 0;
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-lg);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-services-accent-text);
+}
+
+.kc-services__row-title {
+  margin: 0 0 var(--kc-space-3);
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-2xl);
+  font-weight: var(--kc-font-weight-normal);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-services-ink);
+  text-wrap: balance;
+}
+
+.kc-services__text {
+  margin: 0;
+  max-width: 60ch;
+  font-size: var(--kc-text-base);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-services-muted);
+  white-space: pre-line;
+}
+
+.kc-services__link {
+  display: inline-flex;
+  min-height: 2.75rem; /* 44px érintési célfelület (UX-skill 3. pont) */
+  align-items: center;
+  gap: var(--kc-space-2);
+  margin-top: var(--kc-space-2);
+  font-size: var(--kc-text-base);
+  font-weight: var(--kc-font-weight-bold);
+  color: var(--kc-services-accent-text);
+  text-decoration: underline;
+  text-underline-offset: 0.35em;
+  transition: color var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-services__link:hover {
+  color: var(--kc-services-ink);
+}
+
+/* A ui.css `.kc-section--dark a` szabálya fehérre váltja a linket (15,7:1) —
+   a hover-állapotot itt kell visszavenni, hogy sötét sávon se olvadjon be. */
+.kc-section--dark .kc-services__link:hover {
+  color: var(--kc-color-blue-200);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kc-services__link {
+    transition: none;
+  }
+}

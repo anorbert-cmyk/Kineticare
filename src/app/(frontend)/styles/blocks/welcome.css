@@ -1,0 +1,159 @@
+/**
+ * Üdvözlő / probléma-blokk (Welcome) — szekció-stílus.
+ *
+ * Forrás: a landing `kc-welcome` blokkja (higgsfield-site/app/src/kineticare.css),
+ * a szekció-rendszer terv 3.1 pontja szerint a fő site tokenjeire portolva:
+ *  - a landing `ink` (#10243e) → `--kc-color-navy-900` (egységesített márka-sötét),
+ *  - `muted` → `--kc-color-text-muted`, `hairline` → `--kc-color-border`,
+ *  - a landing inline `clamp()` fontméretei → a `--kc-text-*` skála lépcsői
+ *    (értékesítési UX-skill 4. pont: fontméret KIZÁRÓLAG tokenről),
+ *  - a `kc-rise` betöltés-animáció NEM jött át (terv 3.5).
+ *
+ * AKCENT-KORLÁT (terv 3.1, számolt kontrasztok):
+ *  - `--kc-color-accent` (#3d78aa) a hűvös tinten csak 4,07:1 → normál szövegre
+ *    AA ALATT. Itt ezért KIZÁRÓLAG dekorációként (vonal, keret) szerepel.
+ *  - Szöveg és link `--kc-color-accent-deep` (#2f6e9f): fehéren 5,45:1, a
+ *    tint-cool háttéren 4,72:1, a legacy tinten 5,00:1 — mind AA felett.
+ * A `var()` tartalékai meglévő tokenek (navy-700 / blue-*), hogy a szekció akkor
+ * is helyes kontraszttal jelenjen meg, ha az új akcent-tokenek még hiányoznak.
+ *
+ * Betöltés: a szekció-komponens importálja (src/components/blocks/Welcome.tsx),
+ * így a stílus csak azokon az oldalakon kerül a bundle-be, ahol a blokk szerepel.
+ */
+
+.kc-welcome {
+  --kc-welcome-ink: var(--kc-color-navy-900);
+  --kc-welcome-muted: var(--kc-color-text-muted);
+  --kc-welcome-rule: var(--kc-color-border);
+  /* Csak dekoráció (függőleges elválasztó vonal) — lásd az akcent-korlátot. */
+  --kc-welcome-accent: var(--kc-color-accent, var(--kc-color-blue-200));
+  /* Szöveg-akcent: a felvezető sor és a pipa-jel. */
+  --kc-welcome-accent-text: var(--kc-color-accent-deep, var(--kc-color-navy-700));
+  --kc-welcome-badge: var(--kc-color-tint-cool, var(--kc-color-blue-100));
+}
+
+/* Tint sávon a hűvös tint-korong beleolvadna a háttérbe — ott fehér a korong. */
+.kc-section--tint.kc-welcome {
+  --kc-welcome-badge: var(--kc-color-white);
+}
+
+/* Sötétkék sáv (hatter: 'sotet'). Kontraszt a navy-900 (#0b243f) háttéren:
+   fehér 15,7:1, blue-200 (#d2e9fa) 12,5:1 — mindkettő AA/AAA felett. */
+.kc-section--dark.kc-welcome {
+  --kc-welcome-ink: var(--kc-color-white);
+  --kc-welcome-muted: var(--kc-color-blue-200);
+  --kc-welcome-rule: rgb(255 255 255 / 0.35);
+  --kc-welcome-accent: rgb(255 255 255 / 0.55);
+  --kc-welcome-accent-text: var(--kc-color-blue-200);
+  --kc-welcome-badge: rgb(255 255 255 / 0.14);
+}
+
+.kc-welcome__head {
+  max-width: 30ch;
+}
+
+.kc-welcome__title {
+  margin: 0;
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-3xl);
+  font-weight: var(--kc-font-weight-normal);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-welcome-ink);
+  text-wrap: balance;
+}
+
+.kc-welcome__lead {
+  margin: var(--kc-space-4) 0 0;
+  font-size: var(--kc-text-base);
+  font-weight: var(--kc-font-weight-bold);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-welcome-accent-text);
+}
+
+.kc-welcome__grid {
+  display: grid;
+  gap: var(--kc-space-6);
+  align-items: start;
+  margin-top: var(--kc-space-6);
+}
+
+/* `auto-fit`: két hasáb, ha a felsorolás ÉS az oldalsó szöveg is ki van töltve;
+   ha a szerkesztő csak az egyiket használja, az üres sáv összeomlik, és a
+   meglévő oszlop a teljes szélességet kapja. */
+@media (min-width: 900px) {
+  .kc-welcome__grid {
+    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+    gap: var(--kc-space-7);
+    margin-top: var(--kc-space-7);
+  }
+}
+
+.kc-welcome__checklist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kc-welcome__checklist-item {
+  position: relative;
+  padding: var(--kc-space-4) 0 var(--kc-space-4) var(--kc-space-7);
+  border-top: 1px solid var(--kc-welcome-rule);
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-xl);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-welcome-ink);
+  /* A mező textarea: a szerkesztő sortörései maradjanak meg. */
+  white-space: pre-line;
+}
+
+/* Dekoratív pipa-korong (a tartalmat a lista-elem szövege hordozza). */
+.kc-welcome__checklist-item::before {
+  content: '\2713';
+  position: absolute;
+  top: var(--kc-space-4);
+  left: 0;
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--kc-radius-full);
+  background-color: var(--kc-welcome-badge);
+  font-family: var(--kc-font-body);
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-bold);
+  line-height: 1;
+  color: var(--kc-welcome-accent-text);
+}
+
+.kc-welcome__side {
+  padding-top: var(--kc-space-5);
+  border-top: 1px solid var(--kc-welcome-accent);
+}
+
+@media (min-width: 900px) {
+  .kc-welcome__side {
+    padding-top: 0;
+    padding-left: var(--kc-space-6);
+    border-top: 0;
+    border-left: 1px solid var(--kc-welcome-accent);
+  }
+}
+
+.kc-welcome__side-text {
+  margin: 0 0 var(--kc-space-4);
+  max-width: 68ch;
+  font-size: var(--kc-text-base);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-welcome-muted);
+  white-space: pre-line;
+}
+
+.kc-welcome__side-text:last-child {
+  margin-bottom: 0;
+}
+
+.kc-welcome__side-text strong {
+  font-weight: var(--kc-font-weight-bold);
+  color: var(--kc-welcome-ink);
+}
