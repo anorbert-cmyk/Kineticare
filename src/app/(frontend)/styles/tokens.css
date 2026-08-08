@@ -3,61 +3,113 @@
  * nyelvéhez. A komponensek és oldalak KIZÁRÓLAG ezeket a változókat
  * használhatják (var(--kc-*)), szétszórt hardcode-olt érték TILOS.
  *
- * Forrás: docs/legacy (a régi kineticare.hu klónja) — a színek, a tipográfia
- * és a térközök a legacy oldal inline stílusaiból kinyerve:
- *   - navy:  rgba(11, 36, 63, 1)   — legacy lábléc-háttér / márka-sötét
- *   - tint:  rgba(235, 247, 255, 1) — legacy fejléc-sáv háttér
- *   - fehér szekciók, fekete címsor-szín
- *   - címsor: "Tenor Sans" 400; szöveg: "Nunito Sans" 400, 18px/30px alap
- *   - tartalom-szélességek: wide 1120px, small 720px
+ * PALETTA-FORRÁS (G1, 2026-08): a kineticare.higgsfield.app landing teljes
+ * vizuális rendszere (higgsfield-site/app/src/kineticare.css, :root). A teljes
+ * site — minden aloldal — ezt a palettát viseli; a korábbi legacy kinézet
+ * (navy #0b243f + #ebf7ff tint-sáv) megszűnt.
  *
- * Betűkészlet-megjegyzés: a legacy a fontokat CDN-ről töltötte — hotlink
- * TILOS, ezért a stack első eleme a név, a fallback rendszerszintű. A
- * self-hostolt woff2-k (subsetelt latin / latin-ext metszetek) a
- * public/fonts/ alatt élnek, ugyanezekkel a családnevekkel — lásd
- * fonts.css. Az itt definiált stackek változtatás nélkül aktiválják őket.
+ *   háttér (paper) .... #f6f9fc · tint-sáv ...... #e6f0f8
+ *   ink (szöveg) ...... #10243e · másodlagos .... #33495f
+ *   akcent ............ #3d78aa · akcent-mély ... #2f6e9f
+ *   halvány akcent .... #9ec4df · hairline ...... #d8e2eb
+ *   címsor: "Tenor Sans" · szöveg: "Nunito Sans"
+ *
+ * A legacy nyers tokenek (--kc-color-navy-*, --kc-color-blue-*) DEFINIÁLVA
+ * maradnak — még hivatkozik rájuk néhány, más ügynök tulajdonában lévő
+ * szekció-stíluslap —, de SZEREPET (primary, text, border, surface…) egyik
+ * sem kap többé. Új kódban nyers legacy tokent használni tilos.
+ *
+ * Betűkészlet-megjegyzés: a fontokat hotlink helyett self-hostoljuk; a
+ * subsetelt woff2-k (latin / latin-ext) a public/fonts/ alatt élnek,
+ * ugyanezekkel a családnevekkel — lásd fonts.css. Az itt definiált stackek
+ * változtatás nélkül aktiválják őket.
  */
 
 :root {
-  /* ---- Színek ---------------------------------------------------------- */
-  --kc-color-navy-900: #0b243f; /* legacy lábléc/márka-sötét — primary gomb, footer, fejléc-szöveg */
-  --kc-color-navy-700: #16406e; /* hover/fókusz árnyalat a navy-900-hoz */
-  --kc-color-blue-100: #ebf7ff; /* legacy tint-sáv (fejléc háttér, tint-section) */
-  --kc-color-blue-200: #d2e9fa; /* tint-határvonal, badge-háttér */
+  /* ---- Nyers paletta: a landing színei ---------------------------------- */
   --kc-color-white: #ffffff;
-  --kc-color-text: #1a1a1a; /* legacy: rgba(0,0,0,1) címsor + szöveg, kontraszt-miatt finomítva */
-  --kc-color-text-muted: #4a5560; /* másodlagos szöveg — #fff-en 7.9:1 (AA/AAA) */
-  --kc-color-border: #d7dee6;
-  --kc-color-surface: var(--kc-color-white);
-  --kc-color-surface-tint: var(--kc-color-blue-100);
-  --kc-color-danger: #b3261e; /* hibaállapot — fehéren 7.3:1 */
+  --kc-color-paper: #f6f9fc; /* landing --kc-bg: az oldal alap-földje */
+  --kc-color-tint-cool: #e6f0f8; /* landing --kc-tint: hűvös sáv-háttér */
+  --kc-color-ink: #10243e; /* landing --kc-ink: szöveg + sötét felület */
+  --kc-color-ink-soft: #33495f; /* landing --kc-muted: másodlagos szöveg */
+  --kc-color-accent: #3d78aa; /* landing --kc-accent */
+  --kc-color-accent-deep: #2f6e9f; /* landing --kc-accent-deep */
+  --kc-color-accent-deeper: #275c87; /* hover-lépcső: accent-deep + 25% ink */
+  --kc-color-accent-quiet: #9ec4df; /* landing --kc-accent-quiet */
+  --kc-color-hairline: #d8e2eb; /* landing --kc-hairline: 1px elválasztó */
+  --kc-color-hairline-strong: #6b7f94; /* űrlapmező-keret (UI-határ, ≥ 3:1) */
+
+  /* Állapotszínek (a landingen nincs megfelelőjük — a meglévő, AA-ellenőrzött
+     hármas marad, hűvösebb felületekkel). */
+  --kc-color-danger: #b3261e;
   --kc-color-danger-surface: #fdecea;
   --kc-color-success: #166534;
   --kc-color-success-surface: #e8f5ec;
-  --kc-color-focus: #16406e; /* látható fókuszgyűrű */
+  --kc-color-warning: #8a5a00;
+  --kc-color-warning-surface: #fdf3e0;
 
-  /* ---- Akcent-pár és hűvös tint (landing-átvétel, terv 3.1) -------------- */
-  /* A kineticare.higgsfield.app landing közép-kék akcentpárja és hűvösebb
-     tintje — a fő site-ról eddig hiányzott. A meglévő --kc-color-blue-100
-     VÁLTOZATLAN marad a régi komponenseknek.
+  /* ---- Legacy nyers tokenek (csak kompatibilitás, szerep nélkül) --------- */
+  --kc-color-navy-900: #0b243f; /* legacy márka-sötét — új kódban NE használd */
+  --kc-color-navy-700: #16406e; /* legacy hover-árnyalat — új kódban NE használd */
+  --kc-color-blue-100: #ebf7ff; /* legacy tint-sáv — új kódban NE használd */
+  --kc-color-blue-200: #d2e9fa; /* legacy tint-határvonal — új kódban NE használd */
 
-     KONTRASZT-KORLÁT (számolt értékek, WCAG 2.2 relatív luminancia szerint):
-       accent (#3d78aa) tint-cool (#e6f0f8) háttéren ....... 4,07:1
-       accent-deep (#2f6e9f) fehéren ....................... 5,45:1
-       accent-deep tint-cool háttéren ...................... 4,72:1
-     A 4,07:1 a normál szöveg 4,5:1-es küszöbe ALATT van, tehát AA-bukás.
-     Ezért az `accent` KIZÁRÓLAG nagy szövegre (≥ 24px, vagy ≥ 18,66px
-     félkövér — ott a küszöb 3:1) vagy dekorációra (vonal, keret, kitöltés,
-     ikon) használható. Szöveg-linkre és normál méretű szövegre `accent-deep`
-     vagy navy jár. Lásd docs/ertekesitesi-ux-skill.md 3. pont. */
-  --kc-color-accent: #3d78aa;
-  --kc-color-accent-deep: #2f6e9f;
-  --kc-color-tint-cool: #e6f0f8;
+  /* ---- Szerep-tokenek (a komponensek KIZÁRÓLAG ezeket használják) --------
+     KONTRASZT-JEGYZŐKÖNYV (számolt értékek, WCAG 2.2 relatív luminancia;
+     normál szöveg ≥ 4,5:1 · nagy szöveg ≥ 3:1 · UI-határ/fókusz ≥ 3:1):
 
-  /* Szerep-tokenek (a komponensek EZEKET használják) */
-  --kc-color-primary: var(--kc-color-navy-900);
-  --kc-color-primary-hover: var(--kc-color-navy-700);
+       ink (#10243e)          paper (#f6f9fc) ....... 14,79:1  AA/AAA ✓
+       ink                    fehér ................. 15,63:1  AA/AAA ✓
+       ink                    tint (#e6f0f8) ........ 13,53:1  AA/AAA ✓
+       ink-soft (#33495f)     paper .................  8,80:1  AA/AAA ✓
+       ink-soft               fehér .................  9,30:1  AA/AAA ✓
+       ink-soft               tint ..................  8,05:1  AA/AAA ✓
+       accent-deep (#2f6e9f)  paper .................  5,16:1  AA ✓
+       accent-deep            fehér .................  5,45:1  AA ✓
+       accent-deep            tint ..................  4,72:1  AA ✓
+       fehér                  accent-deep ...........  5,45:1  AA ✓ (primary gomb)
+       fehér                  accent-deeper (#275c87)  7,08:1  AA/AAA ✓ (primary hover)
+       accent-deeper          paper .................  6,70:1  AA ✓
+       fehér                  ink ................... 15,63:1  AA/AAA ✓ (dark szekció)
+       accent-quiet (#9ec4df) ink ...................  8,49:1  AA/AAA ✓ (halvány szöveg sötéten)
+       ink                    accent-quiet ..........  8,49:1  AA/AAA ✓ (info badge, kijelölés)
+       hairline-strong        fehér .................  4,13:1  UI-határ ✓
+       hairline-strong        paper .................  3,91:1  UI-határ ✓
+       hairline-strong        tint ..................  3,57:1  UI-határ ✓
+
+     AKCENT-KORLÁT (változatlan): az `accent` (#3d78aa) a tinten csak 4,07:1,
+     a paperen 4,45:1, fehéren 4,70:1 — a normál szöveg 4,5:1-es küszöbét a
+     hűvös felületeken NEM éri el. Ezért az `accent` KIZÁRÓLAG dekoráció
+     (vonal, keret, kitöltés, ikon) vagy nagy szöveg (≥ 24px, ill. ≥ 18,66px
+     félkövér) alatt használható; szöveg-szerepet `accent-deep` visz.
+
+     FELÜLET-RÉTEGEK: a landingen a lap (body, sáv, fejléc, lábléc) egyetlen
+     „paper" földön ül, és csak a FÖLÉ emelt elemek (kártya, űrlapmező, mobil
+     fiók, almenü) fehérek. Ezért `surface` = lap-háttér, `surface-raised` =
+     fehér. Az ink mindkettőn AA/AAA (14,79:1 ill. 15,63:1).
+
+     A `hairline` (#d8e2eb) fehéren 1,31:1 — TUDATOSAN dekoratív: a landing
+     minimál nyelvének 1px-es elválasztója, sosem egy UI-komponens azonosító
+     határa. Ahol a keret azonosít (űrlapmező, chip), `border-strong` jár.
+     Lásd docs/ertekesitesi-ux-skill.md 3. pont. */
+  --kc-color-bg: var(--kc-color-paper); /* lap-háttér: body, szekció, fejléc, lábléc */
+  --kc-color-surface: var(--kc-color-bg); /* a lap-felület alias-a (a landingen a kettő egy) */
+  --kc-color-surface-raised: var(--kc-color-white); /* a lap FÖLÉ emelt felület: kártya, mező, fiók, almenü */
+  --kc-color-surface-tint: var(--kc-color-tint-cool); /* tint-sáv (kc-section--tint) */
+  --kc-color-surface-dark: var(--kc-color-ink); /* sötét sáv (kc-section--dark) — a lábléc a landing nyelvén paper hátterű */
+  --kc-color-text: var(--kc-color-ink);
+  --kc-color-text-muted: var(--kc-color-ink-soft);
+  --kc-color-on-dark: var(--kc-color-white);
+  --kc-color-on-dark-muted: var(--kc-color-accent-quiet);
+  --kc-color-border: var(--kc-color-hairline); /* dekoratív 1px elválasztó */
+  --kc-color-border-strong: var(--kc-color-hairline-strong); /* azonosító UI-határ */
+  --kc-color-primary: var(--kc-color-accent-deep);
+  --kc-color-primary-hover: var(--kc-color-accent-deeper);
   --kc-color-on-primary: var(--kc-color-white);
+  --kc-color-link: var(--kc-color-text); /* landing footer-meta: ink + aláhúzás */
+  --kc-color-link-hover: var(--kc-color-accent-deep);
+  --kc-color-focus: var(--kc-color-accent-deep); /* fókuszgyűrű világos felületen */
+  --kc-color-focus-on-dark: var(--kc-color-white); /* sötét sávon (accent-deep az inken csak 2,87:1) */
 
   /* ---- Tipográfia ------------------------------------------------------ */
   --kc-font-heading: 'Tenor Sans', 'Georgia', 'Times New Roman', serif;
@@ -68,7 +120,15 @@
      alap" komment nem a valós renderelt méretet írta le). A felső lépcsők
      360px→1200px között viewport-arányosan nőnek; a --kc-text-4xl a
      display-lépcső, egyben a hero-címsor felső korlátja
-     (docs/ertekesitesi-ux-skill.md, 4. pont). */
+     (docs/ertekesitesi-ux-skill.md, 4. pont).
+
+     A landing-átvétel (G1) EGY lépcsővel bővítette a skálát: a --kc-text-2xs
+     a landing `kc-eyebrow` felvezető-sorának mérete (ott elemre írt
+     clamp(0.65rem, 0.82vw, 0.75rem) volt; a skill 4. pontja szerint egyedi
+     px/rem tilos, ezért lett tokenné). A 4xl FÖLÉ szándékosan NEM került új
+     lépcső: a landing 4–5,6rem-es tábla-címsorai a skill 4. pontjának
+     felső korlátja fölé esnének. */
+  --kc-text-2xs: clamp(0.7rem, 0.67rem + 0.13vw, 0.77rem);
   --kc-text-xs: 0.777rem;
   --kc-text-sm: 0.888rem;
   --kc-text-base: 1rem;
@@ -83,7 +143,11 @@
   --kc-leading-body: 1.67;   /* legacy 30/18 */
 
   --kc-font-weight-normal: 400;
+  --kc-font-weight-medium: 600; /* landing eyebrow / inline-link súlya */
   --kc-font-weight-bold: 700;
+
+  /* Betűköz: a landing nagybetűs felvezető-sora (kc-eyebrow) és attribúciója. */
+  --kc-tracking-eyebrow: 0.24em;
 
   /* ---- Térközök (4px rács) --------------------------------------------- */
   --kc-space-1: 0.25rem;  /* 4px */
@@ -102,10 +166,14 @@
   --kc-radius-lg: 0.75rem;  /* 12px */
   --kc-radius-full: 999px;  /* badge/tabletta */
 
-  /* ---- Árnyékok ---------------------------------------------------------- */
-  --kc-shadow-sm: 0 1px 2px rgb(11 36 63 / 0.08);
-  --kc-shadow-md: 0 4px 12px rgb(11 36 63 / 0.12);
-  --kc-shadow-lg: 0 12px 32px rgb(11 36 63 / 0.16);
+  /* ---- Árnyékok -----------------------------------------------------------
+     A landing árnyék NÉLKÜLI, hairline-alapú nyelvet használ: a felületeket
+     1px-es vonal határolja, nem lebegtetés. Ezért árnyékot már CSAK a
+     ténylegesen a tartalom FÖLÉ úszó rétegek kapnak (mobil-fiók, almenü);
+     kártya, kép és sáv nem. A színük az ink (16 36 62). */
+  --kc-shadow-sm: 0 1px 2px rgb(16 36 62 / 0.07);
+  --kc-shadow-md: 0 4px 12px rgb(16 36 62 / 0.1);
+  --kc-shadow-lg: 0 12px 32px rgb(16 36 62 / 0.14);
 
   /* ---- Layout ------------------------------------------------------------ */
   --kc-container-wide: 1120px;  /* legacy "wide" tartalom-szélesség */

@@ -3,8 +3,12 @@ import type { ReactNode } from 'react'
 /**
  * Section — oldal-szekció egységes vertikális ritmussal és háttér-változatokkal.
  *
- * Props:
- * - variant: 'default' (fehér) | 'tint' (legacy világoskék sáv) | 'dark' (navy)
+ * A háttereket szerep-tokenek adják (tokens.css), a landing palettájáról:
+ * - variant:
+ *     'default' — lap-háttér (`--kc-color-bg`, #f6f9fc)
+ *     'tint'    — hűvös tint-sáv (`--kc-color-surface-tint`, #e6f0f8)
+ *     'dark'    — ink sáv (`--kc-color-surface-dark`, #10243e); a szöveg,
+ *                 a linkek és a fókuszgyűrű automatikusan világosra vált
  * - flush: vertikális padding elhagyása (saját ritmusú szekciókhoz)
  * - as: alap 'section'; 'div' adható, ha nem önálló szekció
  */

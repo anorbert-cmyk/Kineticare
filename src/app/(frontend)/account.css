@@ -109,7 +109,7 @@
 .kc-player__stage {
   position: relative;
   aspect-ratio: 16 / 9;
-  background-color: var(--kc-color-navy-900);
+  background-color: var(--kc-color-surface-dark);
   border-radius: var(--kc-radius-lg);
   overflow: hidden;
 }
@@ -163,7 +163,7 @@
 }
 
 .kc-player__episode:hover {
-  background-color: var(--kc-color-blue-100);
+  background-color: var(--kc-color-surface-tint);
 }
 
 .kc-player__episode[aria-current='true'] {
