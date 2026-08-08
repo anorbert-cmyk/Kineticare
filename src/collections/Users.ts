@@ -6,6 +6,7 @@ import {
   validatePasswordStrength,
 } from '../lib/security/password-policy'
 import { createLogger } from '../lib/logger'
+import { resolveClientIp } from '../lib/client-ip'
 import {
   APIError,
   AuthenticationError,
@@ -98,8 +99,9 @@ const logFailedLogin: CollectionAfterErrorHook = ({ error, req }) => {
     return
   }
   const email = typeof req.data?.email === 'string' ? req.data.email : undefined
-  const ip =
-    req.headers?.get?.('x-forwarded-for') ?? req.headers?.get?.('x-real-ip') ?? 'ismeretlen'
+  // Az x-forwarded-for a teljes proxy-láncot tartalmazza — csak az első,
+  // kliens-oldali elem naplózandó (lásd src/lib/client-ip.ts).
+  const ip = resolveClientIp(req.headers) ?? 'ismeretlen'
   logger.warn('Sikertelen bejelentkezés', {
     email,
     ip,
