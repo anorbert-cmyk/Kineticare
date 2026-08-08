@@ -1,0 +1,129 @@
+/**
+ * Kurzus-kiemelés (CourseCards) és kurzuskártya (ProductCard) — szekció-stílus.
+ *
+ * Forrás: a landing szekció- és kártya-nyelve
+ * (higgsfield-site/app/src/kineticare.css): `.kc-eyebrow` (229.) felvezető
+ * sora, `.kc-state-card` (381.) kép-kártyája, `.kc-inline-link` (522.) záró
+ * hivatkozása. Minden szín/méret/térköz szerep-tokenről (tokens.css).
+ *
+ * ÚJRAHASZNOSÍTÁS: a felvezető sor a közös `.kc-eyebrow`, a szekciócím a közös
+ * `.kc-section-title`, a bevezető a `.kc-section-lead`, a záró link a
+ * `.kc-text-link` (mind content.css) — ez a lap CSAK azt teszi hozzá, ami a
+ * blokk sajátja: a cím lépcsőjét a szekció-rendszer többi blokkjához igazítja
+ * (--kc-text-3xl), és megadja a kártya-nyelvet.
+ *
+ * A kártya-nyelv: a `.kc-card` alap (fehér felület, 1px hairline, árnyék
+ * nélkül, hoverre akcent-keret) fölé itt a landing kép-kártya részletei
+ * jönnek: a borító a kártya sarkával azonos ívű, hoverre finoman ráközelít, a
+ * kártya lábában pedig hajszálvonal fölött áll az ÁR (ink, serif) és a
+ * dekoratív nyíl (M3: név + ár + CTA a kártyán).
+ *
+ * MIÉRT ITT VAN A KÁRTYA IS: a ProductCard nemcsak a kezdőlapon, hanem a
+ * /kurzusok listán is él, ezért ezt a lapot MAGA a kártya-komponens is
+ * importálja — így a restyle ott is érvényesül. A szabályok a kártya
+ * gyökér-osztályára szűkítve írják felül a globális content.css alapértékeit,
+ * tehát a betöltési sorrendtől függetlenül, specificitásból érvényesek.
+ *
+ * KONTRASZT (tokens.css jegyzőkönyve): cím `text` (ink) fehéren 15,63:1,
+ * leírás `text-muted` fehéren 9,30:1, ár `text` fehéren 15,63:1, a záró link
+ * `primary` a paperen 5,16:1 — mind AA felett. Az `accent` (keret, nyíl)
+ * DEKORÁCIÓ: szöveget nem hordoz, így az akcent-korlát nem érinti.
+ *
+ * Betöltés: src/components/content/home/CourseCards.tsx és
+ * src/components/content/ProductCard.tsx.
+ */
+
+.kc-course-cards__head {
+  max-width: 34ch;
+  margin-bottom: var(--kc-space-6);
+}
+
+.kc-course-cards__head .kc-eyebrow {
+  margin-bottom: var(--kc-space-4);
+}
+
+/* A szekció-rendszer blokkjaival azonos címsor-lépcső (a közös
+   .kc-section-title alapból a kisebb, 2xl lépcsőn áll). */
+.kc-course-cards .kc-section-title {
+  font-size: var(--kc-text-3xl);
+}
+
+.kc-course-cards .kc-section-lead {
+  margin-bottom: 0;
+}
+
+/* A landing inline-linkjén a nyíl hoverre elmozdul (a többit a .kc-text-link
+   adja: akcent-mély szín, 1px aláhúzás nagy offsettel, 44px célfelület). */
+.kc-course-cards__link span {
+  transition: transform var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-course-cards__link:hover span {
+  transform: translateX(0.2rem);
+}
+
+/* ---- Kurzuskártya (a /kurzusok listán is) -------------------------------- */
+
+/* A borító íve kövesse a kártyáét (a közös alap a kisebb `md` ívet adja). */
+.kc-product-card .kc-product-card__cover {
+  border-radius: var(--kc-radius-lg) var(--kc-radius-lg) 0 0;
+}
+
+.kc-product-card .kc-product-card__cover img {
+  transition: transform var(--kc-motion-base) var(--kc-ease-out);
+}
+
+.kc-card--interactive.kc-product-card:hover .kc-product-card__cover img,
+.kc-card--interactive.kc-product-card:focus-within .kc-product-card__cover img {
+  transform: scale(1.02);
+}
+
+.kc-product-card .kc-product-card__title {
+  text-wrap: balance;
+}
+
+/* Kártya-láb: hajszálvonal fölött az ár és a dekoratív nyíl. */
+.kc-product-card .kc-product-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kc-space-3);
+  margin-top: auto;
+  padding-top: var(--kc-space-3);
+  border-top: 1px solid var(--kc-color-border);
+}
+
+/* A `margin-top: auto` a lábra került, az árra már nem kell. */
+.kc-product-card .kc-product-card__price {
+  margin-top: 0;
+}
+
+/* `margin-left: auto`: ár nélküli (ingyenes) kurzusnál is a láb jobb szélén marad. */
+.kc-product-card .kc-product-card__arrow {
+  margin-left: auto;
+  font-size: var(--kc-text-lg);
+  line-height: 1;
+  color: var(--kc-color-accent);
+  transition: transform var(--kc-motion-base) var(--kc-ease-out);
+}
+
+.kc-card--interactive.kc-product-card:hover .kc-product-card__arrow,
+.kc-card--interactive.kc-product-card:focus-within .kc-product-card__arrow {
+  transform: translateX(0.2rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kc-course-cards__link span,
+  .kc-product-card .kc-product-card__cover img,
+  .kc-product-card .kc-product-card__arrow {
+    transition: none;
+  }
+
+  .kc-course-cards__link:hover span,
+  .kc-card--interactive.kc-product-card:hover .kc-product-card__cover img,
+  .kc-card--interactive.kc-product-card:focus-within .kc-product-card__cover img,
+  .kc-card--interactive.kc-product-card:hover .kc-product-card__arrow,
+  .kc-card--interactive.kc-product-card:focus-within .kc-product-card__arrow {
+    transform: none;
+  }
+}

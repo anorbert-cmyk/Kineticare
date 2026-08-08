@@ -1,0 +1,91 @@
+/**
+ * Sajtó-logósor (PressLogos) — szekció-stílus.
+ *
+ * Forrás: a landing `kc-press` sávja, a terv 3.1 pontja szerint portolva
+ * (muted → text-muted, hairline → border, inline méretek → token-skála).
+ *
+ * Kontraszt: a felirat `--kc-color-text-muted` (fehéren 7,6:1, tinten 7,0:1).
+ * A logók WCAG 1.4.3 szerint logotípiák — rájuk nincs kontraszt-követelmény —,
+ * de a landing 0,55-ös áttetszősége helyett 0,75 az alap, hogy a szürkeárnyalatos
+ * változat is felismerhető maradjon; hover/fókusz esetén teljes erővel látszik.
+ * Akcent-szín itt nem szerepel, így az akcent AA-korlátja (terv 3.1) nem érintett.
+ *
+ * Betöltés: a szekció-komponens importálja (src/components/blocks/PressLogos.tsx).
+ */
+
+.kc-press {
+  --kc-press-muted: var(--kc-color-text-muted);
+}
+
+/* Sötétkék sáv: blue-200 a navy-900 háttéren 12,5:1. */
+.kc-section--dark.kc-press {
+  --kc-press-muted: var(--kc-color-blue-200);
+}
+
+.kc-press__label {
+  margin: 0;
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-bold);
+  letter-spacing: 0.24em;
+  line-height: var(--kc-leading-heading);
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--kc-press-muted);
+}
+
+.kc-press__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kc-space-5) var(--kc-space-6);
+  align-items: center;
+  justify-content: center;
+  margin: var(--kc-space-6) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kc-press__item {
+  display: flex;
+  align-items: center;
+}
+
+.kc-press__row img {
+  width: auto;
+  height: var(--kc-space-6);
+  filter: grayscale(1);
+  opacity: 0.75;
+  transition:
+    filter var(--kc-motion-base) var(--kc-ease-out),
+    opacity var(--kc-motion-base) var(--kc-ease-out);
+}
+
+.kc-press__link {
+  display: inline-flex;
+  min-height: 2.75rem; /* 44px érintési célfelület (UX-skill 3. pont) */
+  align-items: center;
+  padding-inline: var(--kc-space-2);
+}
+
+.kc-press__link:hover img,
+.kc-press__link:focus-visible img {
+  filter: grayscale(0);
+  opacity: 1;
+}
+
+/* Sötét sávon a jellemzően sötét tintás logók beleolvadnának a háttérbe, ezért
+   világos alátétet kapnak (a logó saját színei így maradnak felismerhetők). */
+.kc-section--dark .kc-press__item {
+  padding: var(--kc-space-2) var(--kc-space-3);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-white);
+}
+
+.kc-section--dark .kc-press__row img {
+  opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kc-press__row img {
+    transition: none;
+  }
+}

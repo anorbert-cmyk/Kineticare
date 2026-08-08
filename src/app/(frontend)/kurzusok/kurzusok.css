@@ -41,12 +41,12 @@
 .kc-course-filter__chip {
   display: inline-block;
   padding: var(--kc-space-1) var(--kc-space-3);
-  border: 1px solid var(--kc-color-border);
+  border: 1px solid var(--kc-color-border-strong);
   border-radius: var(--kc-radius-full);
   color: var(--kc-color-text);
   text-decoration: none;
   font-size: var(--kc-text-sm);
-  background-color: var(--kc-color-surface);
+  background-color: var(--kc-color-surface-raised);
   transition:
     background-color var(--kc-motion-fast) var(--kc-ease-out),
     border-color var(--kc-motion-fast) var(--kc-ease-out);
@@ -287,7 +287,7 @@
 .kc-course-preview {
   position: relative;
   aspect-ratio: 16 / 9;
-  background-color: var(--kc-color-navy-900);
+  background-color: var(--kc-color-surface-dark);
   border-radius: var(--kc-radius-lg);
   overflow: hidden;
 }

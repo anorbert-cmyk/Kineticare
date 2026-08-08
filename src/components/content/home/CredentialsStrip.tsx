@@ -1,17 +1,25 @@
 import Link from 'next/link'
-import type { CSSProperties } from 'react'
 
 import { Container } from '../../ui/Container'
 import { Section } from '../../ui/Section'
+
+import '../../../app/(frontend)/styles/blocks/creds-strip.css'
 
 /**
  * CredentialsStrip — kondenzált szakmai hitel-csík (audit M2/K5).
  *
  * A legerősebb bizalmi érvek (gyógytornász–manuálterapeuta háttér, sportolói/
  * olimpikoni bizalom, szakmai egyesületi tagság) egyetlen visszafogott csíkban,
- * a Rólunk oldalra mutató linkkel. A home CMS-mezői között nincs külön
- * hitel-tartalom, ezért az audit által rögzített tények rövid statikus
- * szövegként jelennek meg (a részletek a /rolunk oldalon).
+ * a Rólunk oldalra mutató linkkel.
+ *
+ * Két hívási mód:
+ *  - prop nélkül (rögzített kezdőlap): az audit által rögzített statikus tények,
+ *  - a szekció-rendszer `credsStrip` blokkjából (RenderBlocks): a tételek és a
+ *    link a CMS-ből jönnek; `link: null` = a szerkesztő nem kért linket.
+ *
+ * Megjelenés: a landing hajszálvonalas csík-nyelve — a stílus a
+ * styles/blocks/creds-strip.css-ben él (elemre írt inline stílus nincs). A
+ * link a közös `kc-text-link` nyelvét viseli, a nyíl-span dekoratív.
  */
 
 const CREDENTIALS: string[] = [
@@ -20,48 +28,69 @@ const CREDENTIALS: string[] = [
   'Szakmai egyesületi tagság',
 ]
 
-const stripStyle: CSSProperties = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  alignItems: 'center',
-  gap: 'var(--kc-space-3, 0.75rem) var(--kc-space-6, 2rem)',
+const DEFAULT_LINK: CredentialsLink = {
+  label: 'Bővebben a szakmai hátterünkről',
+  href: '/rolunk',
 }
 
-const itemStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 'var(--kc-space-2, 0.5rem)',
-  color: 'var(--kc-color-text-muted)',
-  fontSize: 'var(--kc-text-sm)',
+export interface CredentialsLink {
+  label: string
+  href: string
+  /** Külső linknél új lapon nyitás (target="_blank" + noopener). */
+  newTab?: boolean
 }
 
-const dotStyle: CSSProperties = {
-  width: '0.375rem',
-  height: '0.375rem',
-  borderRadius: 'var(--kc-radius-full, 999px)',
-  background: 'var(--kc-color-primary)',
-  flexShrink: 0,
+export interface CredentialsStripProps {
+  /** Tétel-felülírás a CMS-ből; üresen/hiányozva a beépített tények jönnek. */
+  items?: string[]
+  /** `null` = nincs link; `undefined` = a beépített Rólunk-link. */
+  link?: CredentialsLink | null
+  id?: string
+  variant?: 'default' | 'tint' | 'dark'
 }
 
-export function CredentialsStrip() {
+export function CredentialsStrip({
+  items,
+  link = DEFAULT_LINK,
+  id,
+  variant = 'default',
+}: CredentialsStripProps = {}) {
+  const credentials = items && items.length > 0 ? items : CREDENTIALS
+  // A nyíl dekoratív (a linket a felirat nevezi meg), ezért aria-hidden.
+  const linkContent = link ? (
+    <>
+      {link.label} <span aria-hidden="true">→</span>
+    </>
+  ) : null
+
   return (
-    <Section flush>
+    <Section className="kc-creds" flush id={id} variant={variant}>
       <Container>
-        <div
-          style={{
-            ...stripStyle,
-            padding: 'var(--kc-space-5, 1.5rem) 0',
-          }}
-        >
-          {CREDENTIALS.map((credential) => (
-            <span key={credential} style={itemStyle}>
-              <span aria-hidden="true" style={dotStyle} />
-              {credential}
-            </span>
-          ))}
-          <Link className="kc-text-link" href="/rolunk">
-            Bővebben a szakmai hátterünkről
-          </Link>
+        <div className="kc-creds__inner">
+          <div className="kc-creds__items">
+            {credentials.map((credential) => (
+              <span className="kc-creds__item" key={credential}>
+                <span aria-hidden="true" className="kc-creds__dot" />
+                {credential}
+              </span>
+            ))}
+          </div>
+          {link ? (
+            link.newTab ? (
+              <a
+                className="kc-text-link kc-creds__link"
+                href={link.href}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                {linkContent}
+              </a>
+            ) : (
+              <Link className="kc-text-link kc-creds__link" href={link.href}>
+                {linkContent}
+              </Link>
+            )
+          ) : null}
         </div>
       </Container>
     </Section>

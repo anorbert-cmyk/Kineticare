@@ -15,6 +15,9 @@ html {
   /* A lapon belüli horgonyok (#kurzusok, #ingyenes) ne csússzanak a sticky
      fejléc alá. */
   scroll-padding-top: calc(var(--kc-header-height) + var(--kc-space-2));
+  /* A landing alap-földje: a túlgörgetett sáv is a paper legyen, ne fehér. */
+  background-color: var(--kc-color-bg);
+  color-scheme: light;
 }
 
 body {
@@ -23,8 +26,15 @@ body {
   font-size: var(--kc-text-base);
   line-height: var(--kc-leading-body);
   color: var(--kc-color-text);
-  background-color: var(--kc-color-surface);
+  background-color: var(--kc-color-bg);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Kijelölés: halvány akcent + ink (8,49:1 — AA/AAA). */
+::selection {
+  background-color: var(--kc-color-accent-quiet);
+  color: var(--kc-color-ink);
 }
 
 h1,
@@ -54,7 +64,9 @@ h6 {
   font-family: var(--kc-font-heading);
   font-weight: var(--kc-font-weight-normal);
   line-height: var(--kc-leading-heading);
-  color: var(--kc-color-navy-900);
+  /* A landing serif címsorának finom nyitottsága (kc-serif: 0.01em). */
+  letter-spacing: 0.01em;
+  color: var(--kc-color-text);
 }
 
 h1 {
@@ -87,39 +99,49 @@ textarea {
   margin: 0;
 }
 
+/* Link-alapnyelv a landing `kc-footer-meta` mintájára: ink-színű szöveg, a
+   hangsúly az aláhúzáson (offset), a hover viszi akcent-mélybe. Az aláhúzás
+   alapból nem jelenik meg (navigáció, gombok, kártya-linkek), a folyószöveg
+   linkjei viszont explicit aláhúzottak — lásd .kc-text-link és .kc-richtext a. */
 a {
-  color: var(--kc-color-navy-700);
+  color: var(--kc-color-link);
   text-decoration: none;
+  text-underline-offset: 0.25em;
 }
 
 a:hover {
+  color: var(--kc-color-link-hover);
   text-decoration: underline;
 }
 
-/* Fókusz-láthatóság: minden interaktív elemre egységes, jól látható gyűrű. */
+/* Fókusz-láthatóság: minden interaktív elemre egységes, jól látható gyűrű.
+   Kontraszt: accent-deep (#2f6e9f) a paper (#f6f9fc) alapon 5,16:1, fehéren
+   5,45:1, a tint sávon 4,72:1 — mind az UI-komponensek 3:1-es küszöbe felett. */
 :focus-visible {
   outline: 3px solid var(--kc-color-focus);
   outline-offset: 2px;
   border-radius: var(--kc-radius-sm);
 }
 
-/* Képernyőolvasóknak szóló „ugrás a tartalomra" link. */
+/* Képernyőolvasóknak szóló „ugrás a tartalomra" link — a landing
+   `kc-skip-link`-je: ink sáv, fehér szöveg (15,63:1 — AA/AAA). */
 .kc-skip-link {
   position: absolute;
   inset-inline-start: var(--kc-space-4);
   top: var(--kc-space-2);
   z-index: 100;
   transform: translateY(-250%);
-  padding: var(--kc-space-2) var(--kc-space-4);
-  background-color: var(--kc-color-navy-900);
-  color: var(--kc-color-white);
+  padding: var(--kc-space-3) var(--kc-space-4);
+  background-color: var(--kc-color-surface-dark);
+  color: var(--kc-color-on-dark);
+  font-weight: var(--kc-font-weight-medium);
   border-radius: var(--kc-radius-md);
   transition: transform var(--kc-motion-fast) var(--kc-ease-out);
 }
 
 .kc-skip-link:focus-visible {
   transform: translateY(0);
-  color: var(--kc-color-white);
+  color: var(--kc-color-on-dark);
   text-decoration: none;
 }
 

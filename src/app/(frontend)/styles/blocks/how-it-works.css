@@ -1,0 +1,98 @@
+/**
+ * „Így működik az online kurzus" (HowItWorks) — szekció-stílus.
+ *
+ * Forrás: a landing számozott-sor nyelve — `.kc-usp` / `.kc-usp-num` (335.) és
+ * `.kc-service-row` / `.kc-service-num` (482.) hibridje
+ * (higgsfield-site/app/src/kineticare.css): hajszálvonallal elválasztott sorok,
+ * nagy halvány serif sorszám, serif lépéscím, muted törzsszöveg. Minden
+ * szín/méret/térköz szerep-tokenről (tokens.css).
+ *
+ * A korábbi tömör, sötét sorszám-korong helyett a landing halvány, nagy
+ * sorszáma áll: a sorszám DEKORÁCIÓ (a sorrendet a rendezett lista hordozza, a
+ * markupban aria-hidden), ezért viheti az `accent-quiet` halk árnyalatát —
+ * kontraszt-küszöb nem vonatkozik rá, a jelentést a lépéscím hordozza.
+ *
+ * A szekciócím a közös `.kc-section-title` (content.css); itt csak a
+ * szekció-rendszer többi blokkjával azonos lépcsőre (3xl) állítjuk.
+ *
+ * KONTRASZT (tokens.css jegyzőkönyve): lépéscím `text` (ink) a paperen
+ * 14,79:1, törzs `text-muted` a paperen 8,80:1, a tinten 8,05:1 — AA felett.
+ *
+ * Betöltés: src/components/content/home/HowItWorks.tsx.
+ */
+
+.kc-how {
+  --kc-how-ink: var(--kc-color-text);
+  --kc-how-muted: var(--kc-color-text-muted);
+  --kc-how-rule: var(--kc-color-border);
+  --kc-how-num: var(--kc-color-accent-quiet);
+}
+
+/* Sötét sávon (kc-section--dark): fehér 15,63:1, halvány akcent 8,49:1 az inken. */
+.kc-section--dark.kc-how {
+  --kc-how-ink: var(--kc-color-on-dark);
+  --kc-how-muted: var(--kc-color-on-dark-muted);
+  --kc-how-rule: color-mix(in srgb, var(--kc-color-on-dark) 35%, transparent);
+}
+
+.kc-how .kc-section-title {
+  max-width: 30ch;
+  margin-bottom: 0;
+  font-size: var(--kc-text-3xl);
+}
+
+/* A base.css `ol { padding-inline-start }` alapértékét itt vesszük vissza. */
+.kc-how__list {
+  margin: var(--kc-space-6) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kc-how__row {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr);
+  gap: var(--kc-space-4);
+  padding: var(--kc-space-5) 0;
+  border-top: 1px solid var(--kc-how-rule);
+}
+
+.kc-how__row:last-child {
+  border-bottom: 1px solid var(--kc-how-rule);
+}
+
+@media (min-width: 900px) {
+  .kc-how__row {
+    grid-template-columns: 5rem minmax(0, 1fr);
+    gap: var(--kc-space-6);
+    padding: var(--kc-space-6) 0;
+  }
+}
+
+/* Nagy, halvány serif sorszám (dekoratív — lásd a lap fejlécét). */
+.kc-how__num {
+  margin: 0;
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-3xl);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--kc-how-num);
+}
+
+.kc-how__step-title {
+  margin: 0 0 var(--kc-space-2);
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-2xl);
+  font-weight: var(--kc-font-weight-normal);
+  line-height: var(--kc-leading-heading);
+  letter-spacing: 0.01em;
+  color: var(--kc-how-ink);
+  text-wrap: balance;
+}
+
+.kc-how__text {
+  margin: 0;
+  max-width: 60ch;
+  font-size: var(--kc-text-base);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-how-muted);
+}

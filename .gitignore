@@ -28,3 +28,7 @@
 # Munkamenetenként/gépenként eltérnek, nem a projekt kódja.
 .agents/
 skills-lock.json
+
+# Payload upload-mappa (Media collection staticDir) — futásidejű adat, nem forrás.
+# Helyi seed-futás is ide tölt; élesben a kötet/volume tartalma, sosem verziózandó.
+/media/

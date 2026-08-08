@@ -1,14 +1,12 @@
-import Link from 'next/link'
-
 import type { Page, Post, Product, Testimonial } from '../../payload-types'
 import { faqPageJsonLd, organizationJsonLd } from '../../lib/seo'
 import { HERO_VIDEO_STREAM_ID } from '../../lib/hero-video'
+import { RenderBlocks } from '../blocks/RenderBlocks'
 import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
 import { HeroVideo } from './HeroVideo'
 import { JsonLd } from './JsonLd'
 import { MediaImage } from './MediaImage'
-import { PostCard } from './PostCard'
 import { isPubliclyVisibleProduct } from './ProductCard'
 import { CourseCards, isPaidProduct } from './home/CourseCards'
 import { CredentialsStrip } from './home/CredentialsStrip'
@@ -16,6 +14,7 @@ import { FAQ_ITEMS, Faq } from './home/Faq'
 import { FreeSos } from './home/FreeSos'
 import { HeroCta } from './home/HeroCta'
 import { HowItWorks } from './home/HowItWorks'
+import { KnowledgeSection } from './home/KnowledgeSection'
 import { featuredTestimonials, TestimonialsSection } from './home/TestimonialsSection'
 import { hasLexicalContent } from '../lexical/serialize'
 import { RichText } from '../lexical/RichText'
@@ -99,6 +98,21 @@ function HeroSection({ home }: { home: Page | null }) {
 }
 
 export function HomeView({ home, products, posts, testimonials = [] }: HomeViewProps) {
+  // Szekció-rendszer: ha a kezdőlap CMS-oldalán VAN összeállított szekciósor
+  // (Pages → Szekciók), azt rendereljük — a sorrend és a láthatóság teljes
+  // egészében a szerkesztőé. A FAQPage JSON-LD-t ilyenkor a faq blokk adja a
+  // saját tételeiből (FaqBlock), ezért itt csak az Organization séma marad.
+  // Üres layout → az alábbi rögzített, audit szerinti M1–M8 kezdőlap.
+  const layout = home?.layout ?? []
+  if (layout.length > 0) {
+    return (
+      <>
+        <JsonLd data={organizationJsonLd()} />
+        <RenderBlocks layout={layout} posts={posts} products={products} testimonials={testimonials} />
+      </>
+    )
+  }
+
   const visibleProducts = products.filter(isPubliclyVisibleProduct)
   const paidProducts = visibleProducts.filter(isPaidProduct)
   const freeProduct = visibleProducts.find((product) => !isPaidProduct(product)) ?? null
@@ -137,23 +151,11 @@ export function HomeView({ home, products, posts, testimonials = [] }: HomeViewP
         </Section>
       ) : null}
 
-      {visiblePosts.length > 0 ? (
-        <Section variant={previousBandIsTint ? 'default' : 'tint'}>
-          <Container>
-            <h2 className="kc-section-title">Legfrissebb a tudástárból</h2>
-            <div className="kc-card-grid">
-              {visiblePosts.map((post) => (
-                <PostCard key={post.id} post={post} />
-              ))}
-            </div>
-            <p className="kc-section-more">
-              <Link className="kc-text-link" href="/blog">
-                Összes bejegyzés a tudástárban
-              </Link>
-            </p>
-          </Container>
-        </Section>
-      ) : null}
+      <KnowledgeSection
+        limit={3}
+        posts={visiblePosts}
+        variant={previousBandIsTint ? 'default' : 'tint'}
+      />
 
       <Faq />
     </>

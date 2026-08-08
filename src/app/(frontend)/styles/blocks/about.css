@@ -1,0 +1,205 @@
+/**
+ * Rólunk + statisztikák (About) — szekció-stílus.
+ *
+ * Forrás: a landing `kc-about` „board"-ja, a terv 3.1 pontja szerint portolva.
+ * A landing fix magasságú, `100dvh`-hoz kötött hárompályás rácsa NEM jött át
+ * (ott a szekció önálló „poszter" volt); helyette a fő site konténer-szélessége
+ * és mobil-first rácsa adja a szerkezetet: mobilon egymás alatt, 900px felett
+ * szöveg + fotó, a számok pedig a fotó alatt/mellett.
+ *
+ * A landing kiemelt blokkjának Phosphor-ikonja NEM jött át: a fő site-on nincs
+ * ikonkészlet-függőség, és az ikon tisztán dekoratív volt — a keretes,
+ * tint-hátterű kiemelés ugyanazt a vizuális súlyt adja.
+ *
+ * AKCENT-KORLÁT (terv 3.1): a kis felső felirat, a kiemelt blokk felirata és a
+ * nagy számok `accent-deep` (fehéren 5,45:1, tinten 5,00:1 — AA felett);
+ * a nyers `accent` (tinten 4,07:1) csak dekoratív vonal/keret.
+ *
+ * Betöltés: a szekció-komponens importálja (src/components/blocks/About.tsx).
+ */
+
+.kc-about {
+  --kc-about-ink: var(--kc-color-navy-900);
+  --kc-about-muted: var(--kc-color-text-muted);
+  --kc-about-rule: var(--kc-color-border);
+  /* Csak dekoráció (vonalak, keret) — lásd az akcent-korlátot. */
+  --kc-about-accent: var(--kc-color-accent, var(--kc-color-blue-200));
+  --kc-about-accent-text: var(--kc-color-accent-deep, var(--kc-color-navy-700));
+  --kc-about-feature-bg: var(--kc-color-tint-cool, var(--kc-color-blue-100));
+}
+
+.kc-section--tint.kc-about {
+  --kc-about-feature-bg: var(--kc-color-white);
+}
+
+/* Sötétkék sáv: fehér 15,7:1, blue-200 12,5:1 a navy-900 háttéren. */
+.kc-section--dark.kc-about {
+  --kc-about-ink: var(--kc-color-white);
+  --kc-about-muted: var(--kc-color-blue-200);
+  --kc-about-rule: rgb(255 255 255 / 0.35);
+  --kc-about-accent: rgb(255 255 255 / 0.55);
+  --kc-about-accent-text: var(--kc-color-blue-200);
+  --kc-about-feature-bg: rgb(255 255 255 / 0.1);
+}
+
+.kc-about__grid {
+  display: grid;
+  gap: var(--kc-space-6);
+  align-items: start;
+}
+
+/* `auto-fit`: két hasáb, ha a fotó vagy a számok oszlopa is kitöltött; ha a
+   szerkesztő egyiket sem adta meg, az oldalsó oszlop nem renderelődik, és a
+   szöveg a teljes szélességet kapja. */
+@media (min-width: 900px) {
+  .kc-about__grid {
+    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+    gap: var(--kc-space-7);
+  }
+}
+
+/* Az oldalsó oszlopban a fotó fölött, a számok alatta — mobilon egymás után. */
+.kc-about__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-5);
+}
+
+.kc-about__copy {
+  padding-left: var(--kc-space-5);
+  border-left: 1px solid var(--kc-about-accent);
+}
+
+.kc-about__eyebrow {
+  margin: 0 0 var(--kc-space-4);
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-bold);
+  letter-spacing: 0.24em;
+  line-height: var(--kc-leading-heading);
+  text-transform: uppercase;
+  color: var(--kc-about-accent-text);
+}
+
+.kc-about__title {
+  margin: 0 0 var(--kc-space-5);
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-3xl);
+  font-weight: var(--kc-font-weight-normal);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-about-ink);
+  text-wrap: balance;
+}
+
+/* Dekoratív záróvonal a cím alatt. */
+.kc-about__title::after {
+  content: '';
+  display: block;
+  width: 2.5rem;
+  height: 2px;
+  margin-top: var(--kc-space-4);
+  background-color: var(--kc-about-accent);
+}
+
+.kc-about__text {
+  margin: 0 0 var(--kc-space-4);
+  max-width: 60ch;
+  font-size: var(--kc-text-base);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-about-muted);
+  white-space: pre-line;
+}
+
+.kc-about__text strong {
+  font-weight: var(--kc-font-weight-bold);
+  color: var(--kc-about-ink);
+}
+
+.kc-about__feature {
+  margin-top: var(--kc-space-5);
+  padding: var(--kc-space-4) var(--kc-space-5);
+  border-radius: var(--kc-radius-lg);
+  background-color: var(--kc-about-feature-bg);
+}
+
+.kc-about__feature-label {
+  margin: 0;
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-bold);
+  letter-spacing: 0.16em;
+  line-height: var(--kc-leading-heading);
+  text-transform: uppercase;
+  color: var(--kc-about-accent-text);
+}
+
+.kc-about__feature-note {
+  margin: var(--kc-space-2) 0 0;
+  max-width: 44ch;
+  font-size: var(--kc-text-sm);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-about-muted);
+  white-space: pre-line;
+}
+
+.kc-about__figure {
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--kc-radius-lg);
+  background-color: var(--kc-color-surface-tint);
+  aspect-ratio: 4 / 3;
+}
+
+/* A base.css `img { height: auto }` szabályát felül kell írni, hogy a fotó
+   kitöltse az arányos keretet (a next/image intrinsic méretei mellett is). */
+.kc-about__figure img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* A csapatfotón a fejek a kép felső harmadában vannak — a vágás oda igazít. */
+  object-position: 50% 25%;
+}
+
+.kc-about__stats {
+  margin: 0;
+  padding: 0;
+}
+
+.kc-about__stat {
+  display: flex;
+  flex-direction: column-reverse;
+  padding: var(--kc-space-4) 0;
+  border-bottom: 1px solid var(--kc-about-rule);
+}
+
+.kc-about__stat:last-child {
+  border-bottom: 0;
+}
+
+.kc-about__stat-value {
+  margin: 0 0 var(--kc-space-1);
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-2xl);
+  line-height: 1;
+  color: var(--kc-about-accent-text);
+}
+
+.kc-about__stat-label {
+  margin: 0;
+  max-width: 24ch;
+  font-size: var(--kc-text-sm);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-about-muted);
+}
+
+/* Kis kijelzőn a számok egymás mellett is elférnek — a hármas ritmus marad. */
+@media (min-width: 560px) and (max-width: 899px) {
+  .kc-about__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: var(--kc-space-4);
+  }
+
+  .kc-about__stat {
+    border-bottom: 0;
+    border-top: 1px solid var(--kc-about-rule);
+  }
+}

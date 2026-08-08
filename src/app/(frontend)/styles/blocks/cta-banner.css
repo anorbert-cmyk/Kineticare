@@ -1,0 +1,76 @@
+/**
+ * CTA-sáv (CtaBanner) — szekció-stílus.
+ *
+ * A landingen a lezáró sáv az SOS-blokk volt (az a `freeSos` blokké, F3);
+ * ez a szekció annak visszafogott, általános célú változata: cím + szöveg +
+ * EGY gomb. Minden méret a `--kc-text-*` skáláról, minden szín a fő site
+ * tokenjeiről (terv 3.1). Akcent-színt a sáv nem használ, így az akcent
+ * AA-korlátja itt nem érintett.
+ *
+ * Betöltés: a szekció-komponens importálja (src/components/blocks/CtaBanner.tsx).
+ */
+
+.kc-cta-banner {
+  --kc-cta-ink: var(--kc-color-navy-900);
+  --kc-cta-muted: var(--kc-color-text-muted);
+}
+
+/* Sötétkék sáv: fehér 15,7:1, blue-200 12,5:1 a navy-900 háttéren. */
+.kc-section--dark.kc-cta-banner {
+  --kc-cta-ink: var(--kc-color-white);
+  --kc-cta-muted: var(--kc-color-blue-200);
+}
+
+.kc-cta-banner__inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kc-space-4) var(--kc-space-6);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kc-cta-banner__copy {
+  flex: 1 1 20rem;
+  max-width: 100%;
+}
+
+.kc-cta-banner__title {
+  margin: 0;
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-2xl);
+  font-weight: var(--kc-font-weight-normal);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-cta-ink);
+  text-wrap: balance;
+}
+
+.kc-cta-banner__text {
+  margin: var(--kc-space-2) 0 0;
+  max-width: 60ch;
+  font-size: var(--kc-text-base);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-cta-muted);
+  white-space: pre-line;
+}
+
+.kc-cta-banner__action {
+  flex: 0 0 auto;
+}
+
+/* Sötét sávon a navy töltésű elsődleges gomb beleolvadna a háttérbe, a
+   ui.css `.kc-section--dark a` szabálya pedig fehérre írná a feliratát is.
+   Ezért itt fordul a gomb: fehér alap, navy felirat — 15,7:1 (AA/AAA). */
+.kc-section--dark .kc-cta-banner__action .kc-button--primary {
+  background-color: var(--kc-color-white);
+  color: var(--kc-color-navy-900);
+}
+
+.kc-section--dark .kc-cta-banner__action .kc-button--primary:hover {
+  background-color: var(--kc-color-blue-100);
+  color: var(--kc-color-navy-900);
+}
+
+/* A globális navy fókuszgyűrű a sötét sávon nem látszana (base.css). */
+.kc-section--dark .kc-cta-banner__action .kc-button:focus-visible {
+  outline-color: var(--kc-color-white);
+}

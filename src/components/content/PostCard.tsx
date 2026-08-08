@@ -5,9 +5,16 @@ import { Badge } from '../ui/Badge'
 import { Card } from '../ui/Card'
 import { MediaImage } from './MediaImage'
 
+import '../../app/(frontend)/styles/blocks/knowledge.css'
+
 /**
  * PostCard — blogposzt-kártya (borító / cím / kivonat / dátum / kategóriák).
  * A /blog/<slug> útvonalra mutat; csak published poszttal renderel.
+ *
+ * Megjelenés: a landing kártya-nyelve (hajszálvonalas keret, serif cím, a
+ * lábban hajszálvonal fölött a dátum). A stílust maga a kártya importálja, mert
+ * a kezdőlapon KÍVÜL a /blog listán és a kapcsolódó posztoknál is megjelenik —
+ * lásd styles/blocks/knowledge.css.
  */
 export interface PostCardProps {
   post: Pick<
@@ -65,13 +72,20 @@ export function PostCard({ post }: PostCardProps) {
           ) : null}
           <span className="kc-post-card__title">{post.title}</span>
           {post.excerpt ? <span className="kc-post-card__excerpt">{post.excerpt}</span> : null}
-          {date ? (
-            <span className="kc-post-card__date">
-              <time dateTime={typeof post.publishedAt === 'string' ? post.publishedAt : undefined}>
-                {date}
-              </time>
+          <span className="kc-post-card__foot">
+            {date ? (
+              <span className="kc-post-card__date">
+                <time dateTime={typeof post.publishedAt === 'string' ? post.publishedAt : undefined}>
+                  {date}
+                </time>
+              </span>
+            ) : null}
+            {/* A kártya EGÉSZE a posztra vivő link, ezért a CTA dekoratív nyíl
+                (aria-hidden) — beágyazott gomb/link nem lehet benne. */}
+            <span aria-hidden="true" className="kc-post-card__arrow">
+              →
             </span>
-          ) : null}
+          </span>
         </span>
       </Link>
     </Card>

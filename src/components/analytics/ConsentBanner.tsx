@@ -26,10 +26,10 @@ const bannerStyle: CSSProperties = {
   right: 0,
   bottom: 0,
   zIndex: 1000, // a legmagasabb meglévő réteg (100) fölött
-  backgroundColor: 'var(--kc-color-navy-900)',
-  color: 'var(--kc-color-white)',
+  backgroundColor: 'var(--kc-color-surface-dark)',
+  color: 'var(--kc-color-on-dark)',
   padding: 'var(--kc-space-4) var(--kc-space-5)',
-  boxShadow: '0 -2px 12px rgba(11, 36, 63, 0.35)',
+  boxShadow: '0 -2px 12px rgba(16, 36, 62, 0.35)',
 }
 
 const innerStyle: CSSProperties = {
@@ -49,7 +49,7 @@ const textStyle: CSSProperties = {
 }
 
 const linkStyle: CSSProperties = {
-  color: 'var(--kc-color-blue-200)',
+  color: 'var(--kc-color-on-dark-muted)',
   textDecoration: 'underline',
 }
 
@@ -70,16 +70,16 @@ const buttonBaseStyle: CSSProperties = {
 
 const acceptStyle: CSSProperties = {
   ...buttonBaseStyle,
-  border: '2px solid var(--kc-color-white)',
-  backgroundColor: 'var(--kc-color-white)',
-  color: 'var(--kc-color-navy-900)',
+  border: '2px solid var(--kc-color-on-dark)',
+  backgroundColor: 'var(--kc-color-on-dark)',
+  color: 'var(--kc-color-surface-dark)',
 }
 
 const declineStyle: CSSProperties = {
   ...buttonBaseStyle,
-  border: '2px solid var(--kc-color-blue-200)',
+  border: '2px solid var(--kc-color-on-dark)',
   backgroundColor: 'transparent',
-  color: 'var(--kc-color-white)',
+  color: 'var(--kc-color-on-dark)',
 }
 
 /**
