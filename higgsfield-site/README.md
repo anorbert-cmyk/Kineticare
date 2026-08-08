@@ -51,8 +51,13 @@ additív migrációként a `app/migrations/000N_*.sql`-be — a preview és a pr
 | `app/migrations/` | D1-migrációk helye — jelenleg üres sablon |
 | `app/tests/` | 3 teszt: landing-szerződés, security-headerek, history-performance |
 | `tools/scroll-scrub-video.sh` | A scroll-film enkódoló szkriptje |
-| `.scratch/` | Nyers munkaanyag: `film.mp4` (35 MB vágatlan kézfilm), `storyboard.png`, `services-board.png`, `sos-art.png` |
 | `.github/workflows/ci.yml` | Az **upstream** CI-je. Itt inaktív: a GitHub csak a repógyökér `.github/workflows/`-ból futtat workflow-t, és a benne hivatkozott `arc-runners-frontend` runner sem létezik ebben a repóban. Referenciaként maradt bent. |
+
+A korábbi `.scratch/` mappa (46 MB nyers munkaanyag: `film.mp4` vágatlan
+kézfilm, `storyboard.png`, `services-board.png` és a `brand/sos-art.png`
+bájtazonos másolata) **kikerült a munkakönyvtárból** — semmi nem hivatkozott rá,
+a kiszolgált médiák az `app/public/assets/` alatt vannak. A git-előzményben
+megmarad, onnan bármikor visszanyerhető.
 
 ## Fejlesztés és deploy
 

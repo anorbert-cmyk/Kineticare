@@ -4,8 +4,8 @@
 
 ## Tartalom
 
-- `html/` — az élő oldal 19 oldalának nyers HTML-másolata (a Systeme.io funnel-rendszerből generált markup, inline CSS/JS-sel). Referencia a tartalomhoz, szöveghez, oldalszerkezethez — NEM buildelhető kód.
-- `assets/` — az oldalakon hivatkozott összes kép (111 fájl, ~20 MB), a CloudFront CDN-ről letölbtve, eredeti fájlnévvel.
+- `html/` — nyers HTML-másolat a Systeme.io funnel-rendszerből generált markupról (inline CSS/JS-sel). Referencia a tartalomhoz, szöveghez, oldalszerkezethez — NEM buildelhető kód. A repóba az alábbi sitemapból **egyetlen oldal** került be mintaként: `typ-kezrehab.html`.
+- Az assetek (a CDN-ről letöltött ~111 kép, ~20 MB) **nincsenek a repóban** — lásd a kiszolgálási mintát: `public/assets/legacy/README.md`.
 
 ## Oldalak (sitemap alapján)
 
