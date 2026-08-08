@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import type { Payload } from 'payload'
+import { describe, expect, it, vi } from 'vitest'
 
 import configPromise from '../payload.config'
 
@@ -86,5 +87,35 @@ describe('payload.config', () => {
     expect(poolOptions.connectionTimeoutMillis).toBe(10_000)
     expect(poolOptions.statement_timeout).toBe(30_000)
     expect(poolOptions.query_timeout).toBe(30_000)
+  })
+
+  /**
+   * A pool `error` eseményét le KELL kezelni: a Railway privát hálója elvágja a
+   * tétlen TCP-kapcsolatokat, és a kezeletlen esemény `uncaughtException`-ként
+   * viszi el a Next.js szerverfolyamatot (CLAUDE.md 7. üzemeltetési tanulság).
+   * A regisztráció korábban az űrlap-seedelő mellékhatásaként futott — ez a
+   * teszt őrzi, hogy önálló, az induláskori lánc ELSŐ lépése maradjon, és
+   * akkor is megtörténjen, ha a seedelő elhasal (pl. migráció előtti DB).
+   */
+  it('induláskor regisztrálja a Postgres-pool error-handlerét', async () => {
+    const config = await configPromise
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const on = vi.fn()
+    const fakePayload = {
+      db: { pool: { on } },
+      // A seedelő első lépése — a hibája (best-effort ág) nem akadályozhatja meg
+      // a handler regisztrációját.
+      find: async () => {
+        throw new Error('nincs adatbázis')
+      },
+    } as unknown as Payload
+
+    try {
+      await config.onInit?.(fakePayload)
+    } finally {
+      logSpy.mockRestore()
+    }
+
+    expect(on).toHaveBeenCalledWith('error', expect.any(Function))
   })
 })
