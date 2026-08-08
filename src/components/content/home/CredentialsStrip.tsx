@@ -1,8 +1,9 @@
 import Link from 'next/link'
-import type { CSSProperties } from 'react'
 
 import { Container } from '../../ui/Container'
 import { Section } from '../../ui/Section'
+
+import '../../../app/(frontend)/styles/blocks/creds-strip.css'
 
 /**
  * CredentialsStrip — kondenzált szakmai hitel-csík (audit M2/K5).
@@ -15,6 +16,10 @@ import { Section } from '../../ui/Section'
  *  - prop nélkül (rögzített kezdőlap): az audit által rögzített statikus tények,
  *  - a szekció-rendszer `credsStrip` blokkjából (RenderBlocks): a tételek és a
  *    link a CMS-ből jönnek; `link: null` = a szerkesztő nem kért linket.
+ *
+ * Megjelenés: a landing hajszálvonalas csík-nyelve — a stílus a
+ * styles/blocks/creds-strip.css-ben él (elemre írt inline stílus nincs). A
+ * link a közös `kc-text-link` nyelvét viseli, a nyíl-span dekoratív.
  */
 
 const CREDENTIALS: string[] = [
@@ -44,29 +49,6 @@ export interface CredentialsStripProps {
   variant?: 'default' | 'tint' | 'dark'
 }
 
-const stripStyle: CSSProperties = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  alignItems: 'center',
-  gap: 'var(--kc-space-3, 0.75rem) var(--kc-space-6, 2rem)',
-}
-
-const itemStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 'var(--kc-space-2, 0.5rem)',
-  color: 'var(--kc-color-text-muted)',
-  fontSize: 'var(--kc-text-sm)',
-}
-
-const dotStyle: CSSProperties = {
-  width: '0.375rem',
-  height: '0.375rem',
-  borderRadius: 'var(--kc-radius-full, 999px)',
-  background: 'var(--kc-color-primary)',
-  flexShrink: 0,
-}
-
 export function CredentialsStrip({
   items,
   link = DEFAULT_LINK,
@@ -74,30 +56,38 @@ export function CredentialsStrip({
   variant = 'default',
 }: CredentialsStripProps = {}) {
   const credentials = items && items.length > 0 ? items : CREDENTIALS
+  // A nyíl dekoratív (a linket a felirat nevezi meg), ezért aria-hidden.
+  const linkContent = link ? (
+    <>
+      {link.label} <span aria-hidden="true">→</span>
+    </>
+  ) : null
 
   return (
-    <Section flush id={id} variant={variant}>
+    <Section className="kc-creds" flush id={id} variant={variant}>
       <Container>
-        <div
-          style={{
-            ...stripStyle,
-            padding: 'var(--kc-space-5, 1.5rem) 0',
-          }}
-        >
-          {credentials.map((credential) => (
-            <span key={credential} style={itemStyle}>
-              <span aria-hidden="true" style={dotStyle} />
-              {credential}
-            </span>
-          ))}
+        <div className="kc-creds__inner">
+          <div className="kc-creds__items">
+            {credentials.map((credential) => (
+              <span className="kc-creds__item" key={credential}>
+                <span aria-hidden="true" className="kc-creds__dot" />
+                {credential}
+              </span>
+            ))}
+          </div>
           {link ? (
             link.newTab ? (
-              <a className="kc-text-link" href={link.href} rel="noopener noreferrer" target="_blank">
-                {link.label}
+              <a
+                className="kc-text-link kc-creds__link"
+                href={link.href}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                {linkContent}
               </a>
             ) : (
-              <Link className="kc-text-link" href={link.href}>
-                {link.label}
+              <Link className="kc-text-link kc-creds__link" href={link.href}>
+                {linkContent}
               </Link>
             )
           ) : null}

@@ -5,6 +5,8 @@ import { Container } from '../../ui/Container'
 import { Section } from '../../ui/Section'
 import { ProductCard } from '../ProductCard'
 
+import '../../../app/(frontend)/styles/blocks/course-cards.css'
+
 /**
  * CourseCards — a FIZETŐS kurzusok kiemelése közvetlenül a hero után
  * (audit M3/K1: az értékesítés motorja, kártyánként cím/rövid leírás/ÁR/CTA).
@@ -12,7 +14,19 @@ import { ProductCard } from '../ProductCard'
  * Az ingyenes (lead-magnet) termékek NEM itt jelennek meg — azok a visszafogott
  * FreeSos szekcióban kapnak helyet (audit K2). Üres listánál a szekció elmarad
  * (nincs törött üres blokk).
+ *
+ * Megjelenés: a landing szekció- és kártya-nyelve (kis felső felirat + serif
+ * cím, hajszálvonalas kártyák). A közös osztályok (`kc-eyebrow`,
+ * `kc-section-title`, `kc-section-lead`, `kc-text-link`) a content.css-ből
+ * jönnek, a blokk-specifikus réteg a styles/blocks/course-cards.css-ben él.
  */
+
+/**
+ * A szekció kis felső felirata (landing `kc-eyebrow`). Állandó felület-felirat,
+ * nem szerkeszthető marketingszöveg: a blokk `heading`/`lead` mezői adják a
+ * CMS-ből felülírható tartalmat.
+ */
+const EYEBROW = 'Kurzusok'
 
 /** Fizetős-e a termék (az ár-megjelenítés szabályával azonos feltétel). */
 export function isPaidProduct(product: {
@@ -53,18 +67,21 @@ export function CourseCards({
     'Online kézrehabilitációs kurzusaink lépésről lépésre vezetnek végig az otthoni felépülésen.'
 
   return (
-    <Section id={id} variant={variant}>
+    <Section className="kc-course-cards" id={id} variant={variant}>
       <Container>
-        <h2 className="kc-section-title">{title}</h2>
-        <p className="kc-section-lead">{leadText}</p>
+        <div className="kc-course-cards__head">
+          <p className="kc-eyebrow">{EYEBROW}</p>
+          <h2 className="kc-section-title">{title}</h2>
+          <p className="kc-section-lead">{leadText}</p>
+        </div>
         <div className="kc-card-grid">
           {products.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
         <p className="kc-section-more">
-          <Link className="kc-text-link" href="/kurzusok">
-            Összes kurzus megtekintése
+          <Link className="kc-text-link kc-course-cards__link" href="/kurzusok">
+            Összes kurzus megtekintése <span aria-hidden="true">→</span>
           </Link>
         </p>
       </Container>

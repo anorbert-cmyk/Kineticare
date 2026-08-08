@@ -5,6 +5,8 @@ import { Container } from '../../ui/Container'
 import { Section } from '../../ui/Section'
 import { PostCard } from '../PostCard'
 
+import '../../../app/(frontend)/styles/blocks/knowledge.css'
+
 /**
  * KnowledgeSection — „Legfrissebb a tudástárból" (audit M7, SEO/hosszútáv).
  *
@@ -14,6 +16,11 @@ import { PostCard } from '../PostCard'
  *
  * A `limit` a MEGJELENŐ posztok száma (a blokk 1–6 között engedi); a
  * lekérdezésnek legalább ennyit kell hoznia — lásd KNOWLEDGE_POSTS_FETCH_LIMIT.
+ *
+ * Megjelenés: a landing kártya- és szekció-nyelve (serif cím, hajszálvonalas
+ * kártyák, inline-link a záró hivatkozáson). A közös osztályok
+ * (`kc-section-title`, `kc-section-more`, `kc-text-link`) a content.css-ből
+ * jönnek, a blokk-specifikus réteg a styles/blocks/knowledge.css-ben él.
  */
 
 /**
@@ -51,7 +58,7 @@ export function KnowledgeSection({
   const title = heading?.trim() || 'Legfrissebb a tudástárból'
 
   return (
-    <Section id={id} variant={variant}>
+    <Section className="kc-knowledge" id={id} variant={variant}>
       <Container>
         <h2 className="kc-section-title">{title}</h2>
         <div className="kc-card-grid">
@@ -60,8 +67,8 @@ export function KnowledgeSection({
           ))}
         </div>
         <p className="kc-section-more">
-          <Link className="kc-text-link" href="/blog">
-            Összes bejegyzés a tudástárban
+          <Link className="kc-text-link kc-knowledge__link" href="/blog">
+            Összes bejegyzés a tudástárban <span aria-hidden="true">→</span>
           </Link>
         </p>
       </Container>

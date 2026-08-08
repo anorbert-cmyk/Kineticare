@@ -5,6 +5,8 @@ import { Card } from '../ui/Card'
 import { PriceTag } from '../ui/PriceTag'
 import { MediaImage } from './MediaImage'
 
+import '../../app/(frontend)/styles/blocks/course-cards.css'
+
 /**
  * ProductCard — kurzus-kiemelés kártyája (cover / cím / ár).
  *
@@ -12,6 +14,11 @@ import { MediaImage } from './MediaImage'
  * lásd src/lib/menu-tree.ts); a kurzus-oldal a következő hullám (5C) feladata.
  * Csak published termék kerülhet a kártyára — a szűrés a lekérdezésben
  * (src/lib/cms.ts PUBLISHED_WHERE) történik, itt védőhálóként újra ellenőrizzük.
+ *
+ * Megjelenés: a landing kártya-nyelve (hajszálvonalas keret, serif cím, a
+ * lábban hajszálvonal fölött az ár). A stílust maga a kártya importálja, mert
+ * a kezdőlapon KÍVÜL a /kurzusok listán is megjelenik — lásd
+ * styles/blocks/course-cards.css.
  */
 export interface ProductCardProps {
   // A plugin products collectionében NINCS title mező — a megjelenített név az sku
@@ -50,11 +57,18 @@ export function ProductCard({ product }: ProductCardProps) {
           {product.shortDescription ? (
             <span className="kc-product-card__description">{product.shortDescription}</span>
           ) : null}
-          {showPrice ? (
-            <span className="kc-product-card__price">
-              <PriceTag label="Ár:" priceHuf={product.priceInHUF as number} />
+          <span className="kc-product-card__foot">
+            {showPrice ? (
+              <span className="kc-product-card__price">
+                <PriceTag label="Ár:" priceHuf={product.priceInHUF as number} />
+              </span>
+            ) : null}
+            {/* A kártya EGÉSZE a kurzus-oldalra vivő link, ezért a CTA dekoratív
+                nyíl (aria-hidden) — beágyazott gomb/link nem lehet benne. */}
+            <span aria-hidden="true" className="kc-product-card__arrow">
+              →
             </span>
-          ) : null}
+          </span>
         </span>
       </Link>
     </Card>

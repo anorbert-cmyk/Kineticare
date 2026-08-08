@@ -3,6 +3,8 @@ import { Card } from '../../ui/Card'
 import { Container } from '../../ui/Container'
 import { Section } from '../../ui/Section'
 
+import '../../../app/(frontend)/styles/blocks/testimonials.css'
+
 /**
  * TestimonialsSection — páciens-vélemények a kezdőlapon (audit M6/K4).
  *
@@ -22,6 +24,12 @@ import { Section } from '../../ui/Section'
  * `section` elemen, nem a belső listán) — enélkül a landmark névtelen maradna.
  * A szerző nevét szándékosan `span` hordozza: a HTML `cite` eleme a MŰ címére
  * való, személynévre szabványsértő lenne.
+ *
+ * Megjelenés: a landing idézet-táblájának nyelve — az ELSŐ vélemény nagy nyitó
+ * idézetként, a 2–3. oldalt kis idézetként, hajszálvonallal elválasztva
+ * (styles/blocks/testimonials.css). Ez kizárólag vizuális réteg: a sorrendet
+ * továbbra is a `featuredTestimonials` adja, egyetlen véleménynél csak a nagy
+ * idézet marad.
  */
 
 /** A kezdőlapon megjelenő vélemények felső korlátja (UX-skill M6: max 2–3). */
@@ -86,6 +94,9 @@ export function TestimonialsSection({
 
   const eyebrowText = eyebrow?.trim() || 'Vélemények'
   const title = heading?.trim() || 'Pácienseink mondták'
+  // Rács-változat: 1 vélemény = csak a nagy idézet, 2 = nagy + 1 kis, 3 = nagy
+  // + 2 kis (a nagy idézet ilyenkor két rácssort fog át).
+  const listVariant = items.length >= 3 ? 'trio' : items.length === 2 ? 'pair' : 'single'
 
   return (
     <Section aria-labelledby={headingId} className="kc-testimonials" id={id} variant={variant}>
@@ -96,12 +107,16 @@ export function TestimonialsSection({
             {title}
           </h2>
         </div>
-        <ul className="kc-testimonials__list">
-          {items.map((testimonial) => {
+        <ul className={`kc-testimonials__list kc-testimonials__list--${listVariant}`}>
+          {items.map((testimonial, index) => {
             const role = testimonial.authorTitle?.trim() ?? ''
+            const emphasis = index === 0 ? 'big' : 'small'
             return (
-              <li className="kc-testimonials__item" key={testimonial.id}>
-                <Card as="article" className="kc-testimonials__card">
+              <li
+                className={`kc-testimonials__item kc-testimonials__item--${emphasis}`}
+                key={testimonial.id}
+              >
+                <Card as="article" className="kc-testimonials__card" padded={false}>
                   <figure className="kc-testimonials__figure">
                     <span aria-hidden="true" className="kc-testimonials__mark">
                       „

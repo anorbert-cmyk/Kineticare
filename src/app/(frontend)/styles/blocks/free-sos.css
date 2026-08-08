@@ -1,0 +1,174 @@
+/**
+ * Ingyenes SOS-sáv (FreeSos) — szekció-stílus.
+ *
+ * Forrás: a landing `.kc-sos` blokkja (higgsfield-site/app/src/kineticare.css
+ * 802–880.): akcent-mély színsáv, fehér serif cím, jobb oldalt kép-art
+ * gradiens-átmenettel a sáv színébe, 2px fehér keretes CTA nyíllal. A sáv
+ * színe a `primary` szerep-token (= accent-deep), a szövegé az `on-primary`
+ * (= fehér) — nyers hex nélkül.
+ *
+ * ELTÉRÉS A LANDINGTŐL (értékesítési UX-skill M4/K2): a landingen a sáv egy
+ * teljes képernyős tábla volt. Itt NEM az: normál szekció-ritmusban él
+ * (`.kc-section` padding + mérsékelt min-height), mert az INGYENES ajánlat
+ * vizuálisan nem előzheti meg a fizetős kurzus-blokkot. Ezért a cím is a
+ * `--kc-text-2xl` lépcsőn marad, míg a kurzus-blokké `--kc-text-3xl`.
+ *
+ * KONTRASZT — a fehér szöveg GARANCIÁJA (UX-skill 3. pont, „legrosszabb eset"):
+ *  - fehér az accent-deep (#2f6e9f) sávon 5,45:1 — AA ✓ normál szövegre is;
+ *    a sötét (ink) változaton 15,63:1.
+ *  - a szöveg SOSEM ül a képen: 900px alatt a kép-art el sem indul
+ *    (`display: none`), 900px felett a kép a jobb 44%-on áll, a szekcióra
+ *    fektetett gradiens pedig a bal 58%-ig TÖMÖR sávszín — a szövegoszlop
+ *    szélessége itt max. 56%, tehát végig a tömör sávon marad.
+ *  - a fehér 2px keret és a fehér fókuszgyűrű a sávon 5,45:1 (UI-küszöb 3:1) ✓;
+ *    a globális accent-deep fókuszgyűrű a saját sávján nem látszana.
+ *
+ * Betöltés: src/components/content/home/FreeSos.tsx.
+ */
+
+.kc-free-sos {
+  --kc-free-sos-band: var(--kc-color-primary);
+  --kc-free-sos-on-band: var(--kc-color-on-primary);
+}
+
+/* A sáv színe a szekció-variánstól függetlenül az akcent — a `.kc-section`
+   (és a `--tint`) háttérszínét ezért kettős osztállyal, specificitásból írjuk
+   felül, nem a betöltési sorrendre bízva. */
+.kc-section.kc-free-sos {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--kc-free-sos-band);
+  color: var(--kc-free-sos-on-band);
+}
+
+/* A szerkesztő által kért sötét sáv marad ink-színű (a `hatter: 'sotet'`
+   választás nem íródhat felül). Fehér szöveg rajta 15,63:1. */
+.kc-section--dark.kc-free-sos {
+  --kc-free-sos-band: var(--kc-color-surface-dark);
+  --kc-free-sos-on-band: var(--kc-color-on-dark);
+}
+
+.kc-free-sos .kc-container {
+  position: relative;
+  z-index: 2;
+}
+
+.kc-free-sos__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.kc-free-sos__badge {
+  margin: 0 0 var(--kc-space-3);
+}
+
+/* A zöld „siker" tabletta a kék sávon idegen, és a kontrasztja sem garantált:
+   a sávon áttetsző alap + fehér keret + fehér felirat (5,45:1) marad. */
+.kc-free-sos .kc-badge {
+  border: 1px solid var(--kc-free-sos-on-band);
+  background-color: transparent;
+  color: var(--kc-free-sos-on-band);
+}
+
+.kc-free-sos__title {
+  margin: 0;
+  max-width: 22ch;
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-2xl);
+  font-weight: var(--kc-font-weight-normal);
+  line-height: var(--kc-leading-heading);
+  letter-spacing: 0.01em;
+  color: var(--kc-free-sos-on-band);
+  text-wrap: balance;
+}
+
+/* A sávon a halvány (muted) szürke szöveg AA alá esne, ezért a törzs is fehér. */
+.kc-free-sos__text {
+  margin: var(--kc-space-3) 0 0;
+  max-width: 58ch;
+  font-size: var(--kc-text-base);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-free-sos-on-band);
+}
+
+/* Landing `kc-sos-cta`: 2px fehér keret átlátszó alapon, hoverre invertál.
+   A közös `.kc-button--secondary` ink-keretes alapját írja felül. */
+.kc-free-sos .kc-free-sos__cta.kc-button {
+  gap: var(--kc-space-4);
+  margin-top: var(--kc-space-5);
+  padding: var(--kc-space-3) var(--kc-space-6);
+  border-color: var(--kc-free-sos-on-band);
+  background-color: transparent;
+  font-size: var(--kc-text-base);
+  color: var(--kc-free-sos-on-band);
+}
+
+.kc-free-sos .kc-free-sos__cta > span {
+  font-size: var(--kc-text-xl);
+  font-weight: var(--kc-font-weight-normal);
+  line-height: 1;
+}
+
+.kc-free-sos .kc-free-sos__cta.kc-button:hover:not(:disabled):not(.kc-button--disabled) {
+  background-color: var(--kc-free-sos-on-band);
+  color: var(--kc-free-sos-band);
+}
+
+/* A globális fókuszgyűrű az akcent-mély — a saját sávján nem látszana. */
+.kc-free-sos :focus-visible {
+  outline-color: var(--kc-free-sos-on-band);
+}
+
+/* ---- Kép-art (csak 900px felett) ----------------------------------------- */
+
+.kc-free-sos__art {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .kc-section.kc-free-sos {
+    display: flex;
+    min-height: 20rem;
+    align-items: center;
+  }
+
+  .kc-free-sos__inner {
+    max-width: 56%;
+  }
+
+  .kc-free-sos__art {
+    position: absolute;
+    z-index: 0;
+    inset: 0 0 0 auto;
+    display: block;
+    width: 44%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* A base.css `img { height: auto }`-ját felül kell írni, hogy a kép kitöltse
+     a sávot (a next/image intrinsic méretei mellett is). */
+  .kc-free-sos__art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  /* A landing `.kc-sos::after` átmenete: balról tömör sávszín, jobbra a képbe
+     olvadva. Kép nélkül láthatatlan (a sáv színe önmagára fut ki). */
+  .kc-section.kc-free-sos::after {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      var(--kc-free-sos-band) 0 58%,
+      color-mix(in srgb, var(--kc-free-sos-band) 70%, transparent) 78%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+}
