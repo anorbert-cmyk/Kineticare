@@ -620,6 +620,19 @@ const ensureHomeLayout = async (payload: Payload, media: HomeMediaIds): Promise<
 async function seed(): Promise<void> {
   const payload = await getPayload({ config })
 
+  // --- Szűkített hatókör (SEED_SCOPE=kezdolap) -------------------------------
+  // Éles környezetben CSAK ezt futtatjuk: a landing tartalmi képei a Médiatárba
+  // + a kezdőlap alap-szekciósora. A demó-tartalmi lépések (owner-felhasználó,
+  // kategóriák, oldalak, demó-poszt, demó-termék, menü) élesben nem jöhetnek
+  // létre — azok a fejlesztői/üres-adatbázisos teljes seed részei maradnak.
+  // Mindkét lépés idempotens, és meglévő szekciósort sosem ír felül.
+  if (process.env.SEED_SCOPE === 'kezdolap') {
+    const homeMediaIds = await ensureHomeImages(payload)
+    await ensureHomeLayout(payload, homeMediaIds)
+    payload.logger.info('Seed: kész (hatókör: kezdolap).')
+    return
+  }
+
   // --- Owner-felhasználó -----------------------------------------------------
   const existingOwner = await payload.find({
     collection: 'users',
