@@ -13,6 +13,7 @@ import {
   barionPaymentAdapter,
   withoutPluginPaymentEndpoints,
 } from '../lib/payments/barion-adapter'
+import { RATE_LIMIT_RULES, SlidingWindowRateLimiter } from '../lib/security/rate-limit'
 import configPromise from '../payload.config'
 
 /**
@@ -371,16 +372,27 @@ describe('startCheckout — Barion-hibaág', () => {
 })
 
 describe('POST /api/checkout/start route-handler', () => {
-  const makeRequest = (body: unknown): NextRequest =>
+  const makeRequest = (body: unknown, ip = '203.0.113.20'): NextRequest =>
     new NextRequest('https://shop.example.test/api/checkout/start', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
       body: typeof body === 'string' ? body : JSON.stringify(body),
+    })
+
+  /**
+   * A handler A2 óta IP-alapú kérés-korlátozón megy át. Minden teszt SAJÁT,
+   * üres számlálót kap, hogy a tesztek se egymást, se a közös (folyamaton
+   * belüli) számlálót ne befolyásolják.
+   */
+  const makeHandler = (getPayload: () => Promise<Payload>) =>
+    createCheckoutStartHandler({
+      getPayload,
+      rateLimit: { limiter: new SlidingWindowRateLimiter() },
     })
 
   it('bejelentkezés nélkül → 401, magyar üzenettel', async () => {
     const { payload } = createMockPayload({ authUser: null })
-    const POST = createCheckoutStartHandler({ getPayload: async () => payload })
+    const POST = makeHandler(async () => payload)
 
     const response = await POST(makeRequest(happyInput))
 
@@ -394,7 +406,7 @@ describe('POST /api/checkout/start route-handler', () => {
   it('bejelentkezett vevő → 200 { orderNumber, gatewayUrl }', async () => {
     fetchMock.mockResolvedValueOnce(barionStartSuccess())
     const { payload } = createMockPayload()
-    const POST = createCheckoutStartHandler({ getPayload: async () => payload })
+    const POST = makeHandler(async () => payload)
 
     const response = await POST(makeRequest(happyInput))
 
@@ -409,7 +421,7 @@ describe('POST /api/checkout/start route-handler', () => {
           ? { docs: [{ id: 55 }], totalDocs: 1 }
           : { docs: [], totalDocs: 0 },
     })
-    const POST = createCheckoutStartHandler({ getPayload: async () => payload })
+    const POST = makeHandler(async () => payload)
 
     const response = await POST(makeRequest(happyInput))
 
@@ -420,7 +432,7 @@ describe('POST /api/checkout/start route-handler', () => {
 
   it('nem-JSON törzs → 400', async () => {
     const { payload } = createMockPayload()
-    const POST = createCheckoutStartHandler({ getPayload: async () => payload })
+    const POST = makeHandler(async () => payload)
 
     const response = await POST(makeRequest('ez nem json {'))
 
@@ -429,10 +441,8 @@ describe('POST /api/checkout/start route-handler', () => {
   })
 
   it('váratlan technikai hiba → 500, általános magyar üzenettel (a részletek csak a naplóba)', async () => {
-    const POST = createCheckoutStartHandler({
-      getPayload: async () => {
-        throw new Error('DB-kapcsolat megszakadt')
-      },
+    const POST = makeHandler(async () => {
+      throw new Error('DB-kapcsolat megszakadt')
     })
 
     const response = await POST(makeRequest(happyInput))
@@ -441,6 +451,39 @@ describe('POST /api/checkout/start route-handler', () => {
     const body = (await response.json()) as { error: string }
     expect(body.error).toContain('Váratlan hiba')
     expect(body.error).not.toContain('DB-kapcsolat')
+  })
+
+  it('A2 — az IP-nkénti keret felett 429, magyar üzenettel; Payload és Barion NEM hívódik', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    let payloadLoads = 0
+    const { payload } = createMockPayload()
+    const POST = createCheckoutStartHandler({
+      getPayload: async () => {
+        payloadLoads += 1
+        return payload
+      },
+      rateLimit: { limiter },
+    })
+
+    const allowed = RATE_LIMIT_RULES['checkout-start'].limit
+    for (let index = 0; index < allowed; index += 1) {
+      fetchMock.mockResolvedValueOnce(barionStartSuccess())
+      expect((await POST(makeRequest(happyInput, '203.0.113.30'))).status).toBe(200)
+    }
+
+    const throttled = await POST(makeRequest(happyInput, '203.0.113.30'))
+
+    expect(throttled.status).toBe(429)
+    expect(Number(throttled.headers.get('Retry-After'))).toBeGreaterThan(0)
+    const body = (await throttled.json()) as { error: string }
+    expect(body.error).toContain('Túl sok próbálkozás')
+    // A korlát a DRÁGA lépések előtt fog: nincs újabb Payload-betöltés és Barion-hívás.
+    expect(payloadLoads).toBe(allowed)
+    expect(fetchMock).toHaveBeenCalledTimes(allowed)
+
+    // Másik IP kerete érintetlen.
+    fetchMock.mockResolvedValueOnce(barionStartSuccess())
+    expect((await POST(makeRequest(happyInput, '203.0.113.31'))).status).toBe(200)
   })
 })
 
