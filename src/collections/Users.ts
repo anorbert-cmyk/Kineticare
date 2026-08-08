@@ -14,6 +14,7 @@ import {
   type CollectionAfterErrorHook,
   type CollectionBeforeChangeHook,
   type CollectionConfig,
+  type PayloadRequest,
 } from 'payload'
 import {
   isOwner,
@@ -23,6 +24,35 @@ import {
 } from '../access'
 
 const logger = createLogger({ module: 'users' })
+
+/** A kérésen belül megosztott users-darabszám kulcsa a `req.context`-ben. */
+const EXISTING_USER_COUNT = 'kineticareExistingUserCount'
+
+/**
+ * A meglévő felhasználók száma — kérésenként EGYSZER kérdezve le.
+ *
+ * A `promoteFirstUserToOwner` és az `enforcePasswordPolicy` ugyanazt kérdezi
+ * („van-e már felhasználó?"), és mindkettő ugyanabban a beforeChange-láncban,
+ * a beszúrás ELŐTT fut — a válasz a kérésen belül nem változhat, tehát a két
+ * külön `count` ugyanazt a számot adta. A Payload `req.context`-je a hookok közt
+ * megosztott, ezért az elsőként lefutó hook eredményét a másik onnan olvassa:
+ * create-enként egy DB-kérdés kettő helyett.
+ *
+ * A hiányzó `context`-et is elviseli (unit-tesztek egyszerűsített req-mockja):
+ * ilyenkor nincs megosztás, csak a friss lekérdezés — a visszaadott érték
+ * mindkét ágon ugyanaz.
+ */
+async function countExistingUsers(req: PayloadRequest): Promise<number> {
+  const cached = req.context?.[EXISTING_USER_COUNT]
+  if (typeof cached === 'number') {
+    return cached
+  }
+  const { totalDocs } = await req.payload.count({ collection: 'users' })
+  if (req.context) {
+    req.context[EXISTING_USER_COUNT] = totalDocs
+  }
+  return totalDocs
+}
 
 // OWASP A07: jelszó-erősségi politika. A Payload 3.86-ban nincs natív
 // passwordMinLength/komplexitási beállítás, ezért hookból érvényesítjük.
@@ -45,11 +75,8 @@ const enforcePasswordPolicy: CollectionBeforeChangeHook = async ({
   // a politika NEM érvényesül — különben az első admin létrehozása is
   // elbukna egy gyengébb jelszón, és a rendszer elérhetetlenné válna.
   // A politika csak a 2. usertől kezdve él (a create műveletnél).
-  if (operation === 'create') {
-    const count = await req.payload.count({ collection: 'users' })
-    if (count.totalDocs === 0) {
-      return data
-    }
+  if (operation === 'create' && (await countExistingUsers(req)) === 0) {
+    return data
   }
   // Update-nél az e-mail gyakran nincs a payloadban — ilyenkor a
   // meglévő rekord e-mail-címével vetjük össze a jelszót.
@@ -80,8 +107,7 @@ const promoteFirstUserToOwner: CollectionBeforeChangeHook = async ({ data, req, 
   if (operation !== 'create') {
     return data
   }
-  const count = await req.payload.count({ collection: 'users' })
-  if (count.totalDocs > 0) {
+  if ((await countExistingUsers(req)) > 0) {
     return data
   }
   logger.info('Az első felhasználó owner szerepkörrel jön létre')
