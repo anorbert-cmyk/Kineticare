@@ -38,7 +38,11 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0b243f',
+  // A mobil böngésző-króm a fejléc-sáv színét viseli. Ez a `--kc-color-bg`
+  // (landing „paper") értéke — CSS-változó itt nem használható, ezért a
+  // tokens.css-szel EGYÜTT kell mozgatni. A korábbi navy (#0b243f) a régi,
+  // sötét fejléc/lábléc maradványa volt.
+  themeColor: '#f6f9fc',
 }
 
 export default function FrontendLayout({ children }: { children: ReactNode }) {
