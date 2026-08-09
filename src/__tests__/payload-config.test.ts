@@ -114,6 +114,31 @@ describe('payload.config', () => {
   })
 
   /**
+   * C13 — a 2026-08-06-i sorzár-incidens: egy nyitva maradt, TÉTLEN tranzakció
+   * zárolta a `users` sort, és minden írás/bejelentkezés befagyott (olvasás
+   * közben gyors maradt). A statement_timeout ezen nem segít, mert az a futó
+   * lekérdezést öli meg — itt viszont éppen nem futott lekérdezés. Az
+   * `idle_in_transaction_session_timeout` a kapcsolat startup-paramétereként
+   * megy át a Postgresnek, így DB-oldali ALTER SYSTEM nélkül is minden
+   * pool-kapcsolatra érvényes. Ez a teszt őrzi, hogy ne essen ki a configból.
+   */
+  it('a pool kapcsolat-szinten kikényszeríti az idle_in_transaction_session_timeout-ot', async () => {
+    const config = await configPromise
+
+    const adapter = (
+      config.db as unknown as { init: (args: { payload: unknown }) => { poolOptions?: unknown } }
+    ).init({ payload: {} })
+    const poolOptions = adapter.poolOptions as Record<string, unknown>
+
+    expect(poolOptions.idle_in_transaction_session_timeout).toBe(60_000)
+    // A tétlen tranzakcióra szabott korlát a futó lekérdezésé fölött van, hogy
+    // a normál (aktív) hosszú műveletekbe — migráció, seed — ne szóljon bele.
+    expect(poolOptions.idle_in_transaction_session_timeout).toBeGreaterThan(
+      poolOptions.statement_timeout as number,
+    )
+  })
+
+  /**
    * A pool `error` eseményét le KELL kezelni: a Railway privát hálója elvágja a
    * tétlen TCP-kapcsolatokat, és a kezeletlen esemény `uncaughtException`-ként
    * viszi el a Next.js szerverfolyamatot (CLAUDE.md 7. üzemeltetési tanulság).

@@ -332,6 +332,22 @@ export default buildConfig({
       // Egyetlen kérés se álljon percekig egy beragadt lekérdezésen.
       statement_timeout: 30_000,
       query_timeout: 30_000,
+      // C13 — a 2026-08-06-i sorzár-incidens ellenszere. Akkor egy nyitva
+      // maradt, TÉTLEN tranzakció („idle in transaction", a kliens EOF-ja után
+      // is nyitva ragadva) zárolta a `users` sort, és minden írás/bejelentkezés
+      // befagyott, miközben az olvasás gyors maradt. A statement_timeout ezen
+      // nem segít: az a futó LEKÉRDEZÉST öli meg, itt viszont éppen nem futott
+      // lekérdezés. A Postgres ezt a beállítást a kapcsolat startup-paramétereként
+      // kapja meg (a `pg` a pool-configból továbbadja), így nem kell DB-oldali
+      // ALTER SYSTEM: minden pool-kapcsolat magával viszi.
+      //
+      // A migrate/seed útvonalat nem töri el: a Postgres csak azt a session-t
+      // bontja, amelyik nyitott tranzakcióval TÉTLEN — a folyamatosan utasítást
+      // futtató (tehát `active` állapotú) hosszú migráció vagy seed nem esik
+      // bele, a mérce a két utasítás közti szünet, nem a tranzakció hossza.
+      // 60 mp bőven a statement_timeout fölött van, így normál működés közben
+      // nem tud beütni.
+      idle_in_transaction_session_timeout: 60_000,
     },
   }),
   sharp,
