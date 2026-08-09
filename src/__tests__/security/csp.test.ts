@@ -2,18 +2,21 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildContentSecurityPolicy,
-  CLOUDFLARE_STREAM_WILDCARD_SOURCE,
-  cloudflareStreamCustomerSource,
+  BUNNY_PULL_ZONE_WILDCARD_SOURCE,
+  BUNNY_STREAM_IFRAME_SOURCE,
+  bunnyPullZoneSource,
 } from '../../lib/security/csp'
 
 /**
  * CSP-regressziós tesztek (C2).
  *
- * A legfontosabb védendő hiba: a `https://customer-*.cloudflarestream.com`
- * alak ÉRVÉNYTELEN CSP-forrás (a joker csak a legbaloldalibb, TELJES címke
- * helyén állhat), amit a böngésző NÉMÁN eldob — a hiba csak a Cloudflare
- * Stream élesítésekor derülne ki, fekete lejátszó formájában. Böngészőben
- * bizonyítva: lásd docs/video-stream-keszenlet.md „A CSP-javítás bizonyítéka".
+ * A legfontosabb védendő hiba: a CSP host-forrásában a joker (`*`) KIZÁRÓLAG a
+ * legbaloldalibb, TELJES címke helyén állhat. A `https://vz-*.b-cdn.net` alak
+ * ezért ÉRVÉNYTELEN — a böngésző NÉMÁN eldobja, és a Bunny pull-zone hostja
+ * egyáltalán nem kerül fel a listára (fekete lejátszó, csak konzolhibával).
+ * Ugyanez a hiba élt korábban a `https://customer-*.cloudflarestream.com`
+ * mintában, valódi Chromiumban bizonyítva: docs/video-stream-keszenlet.md
+ * „A CSP-javítás bizonyítéka".
  */
 
 /** A fejléc egy direktívájának forrásait adja vissza (a direktíva neve nélkül). */
@@ -23,48 +26,79 @@ function directive(csp: string, name: string): string[] {
   return (found as string).split(' ').slice(1)
 }
 
-describe('cloudflareStreamCustomerSource', () => {
-  it('fiókkód nélkül a SZABÁLYOS, egy címkés jokerre esik vissza', () => {
-    expect(cloudflareStreamCustomerSource(undefined)).toBe(CLOUDFLARE_STREAM_WILDCARD_SOURCE)
-    expect(cloudflareStreamCustomerSource('')).toBe(CLOUDFLARE_STREAM_WILDCARD_SOURCE)
-    expect(cloudflareStreamCustomerSource('   ')).toBe(CLOUDFLARE_STREAM_WILDCARD_SOURCE)
+describe('bunnyPullZoneSource', () => {
+  it('hosztnév nélkül a SZABÁLYOS, egy címkés jokerre esik vissza', () => {
+    expect(bunnyPullZoneSource(undefined)).toBe(BUNNY_PULL_ZONE_WILDCARD_SOURCE)
+    expect(bunnyPullZoneSource('')).toBe(BUNNY_PULL_ZONE_WILDCARD_SOURCE)
+    expect(bunnyPullZoneSource('   ')).toBe(BUNNY_PULL_ZONE_WILDCARD_SOURCE)
   })
 
-  it('ismert fiókkóddal a PONTOS hostot adja (joker nélkül)', () => {
-    expect(cloudflareStreamCustomerSource('f33zs165nr7gyrs8')).toBe(
-      'https://customer-f33zs165nr7gyrs8.cloudflarestream.com',
+  it('ismert hosztnévvel a PONTOS hostot adja (joker nélkül)', () => {
+    expect(bunnyPullZoneSource('vz-1a2b3c4d-5e6.b-cdn.net')).toBe(
+      'https://vz-1a2b3c4d-5e6.b-cdn.net',
     )
-    expect(cloudflareStreamCustomerSource('  abc123  ')).toBe(
-      'https://customer-abc123.cloudflarestream.com',
-    )
+    expect(bunnyPullZoneSource('  vz-abc123.b-cdn.net  ')).toBe('https://vz-abc123.b-cdn.net')
+    // A DNS-név nem kis-nagybetű-érzékeny — a nagybetűs env se essen jokerre.
+    expect(bunnyPullZoneSource('VZ-ABC123.B-CDN.NET')).toBe('https://vz-abc123.b-cdn.net')
   })
 
-  it('gyanús (nem alfanumerikus) env-értéket nem enged a fejlécbe — fejléc-injekció ellen', () => {
-    for (const evil of ['abc; script-src *', 'abc def', 'abc.def', 'abc/def', '*']) {
-      expect(cloudflareStreamCustomerSource(evil)).toBe(CLOUDFLARE_STREAM_WILDCARD_SOURCE)
+  it('gyanús env-értéket nem enged a fejlécbe — fejléc-injekció ellen', () => {
+    for (const evil of [
+      'vz-abc.b-cdn.net; script-src *',
+      'vz abc.b-cdn.net',
+      'vz-abc.b-cdn.net/utvonal',
+      'https://vz-abc.b-cdn.net',
+      'vz-abc.evil.example',
+      'vz-abc.b-cdn.net.evil.example',
+      'sub.vz-abc.b-cdn.net',
+      '*',
+    ]) {
+      expect(bunnyPullZoneSource(evil), evil).toBe(BUNNY_PULL_ZONE_WILDCARD_SOURCE)
     }
+  })
+
+  it('a `vz-*` JOKER-alak érvénytelen forrás — sosem adhatja vissza', () => {
+    expect(bunnyPullZoneSource('vz-*.b-cdn.net')).toBe(BUNNY_PULL_ZONE_WILDCARD_SOURCE)
+    expect(bunnyPullZoneSource('vz-*.b-cdn.net')).not.toContain('vz-*')
   })
 })
 
 describe('buildContentSecurityPolicy — a bizonyított hiba nem térhet vissza', () => {
-  it('SEHOL nem szerepel az érvénytelen customer-* minta', () => {
-    expect(buildContentSecurityPolicy()).not.toContain('customer-*')
-    expect(buildContentSecurityPolicy('abc123')).not.toContain('customer-*')
-  })
-
-  it('a Stream hostja mindhárom érintett direktívában ott van', () => {
-    const csp = buildContentSecurityPolicy()
-    for (const name of ['frame-src', 'img-src', 'media-src']) {
-      expect(directive(csp, name), name).toContain(CLOUDFLARE_STREAM_WILDCARD_SOURCE)
+  it('SEHOL nem szerepel érvénytelen, címke-belseji joker (`vz-*` / `customer-*`)', () => {
+    for (const csp of [
+      buildContentSecurityPolicy(),
+      buildContentSecurityPolicy('vz-abc123.b-cdn.net'),
+      buildContentSecurityPolicy('vz-*.b-cdn.net'),
+      buildContentSecurityPolicy('vz abc'),
+    ]) {
+      expect(csp).not.toContain('vz-*')
+      expect(csp).not.toContain('customer-*')
+      // A joker csak TELJES címke helyén állhat: a `*` előtt mindig `//` vagy
+      // pont áll (pl. https://*.b-cdn.net), sosem betű/kötőjel.
+      expect(csp).not.toMatch(/[a-z0-9-]\*/)
     }
   })
 
-  it('fiókkóddal a pontos host kerül a három direktívába, joker nélkül', () => {
-    const csp = buildContentSecurityPolicy('abc123')
-    const exact = 'https://customer-abc123.cloudflarestream.com'
-    for (const name of ['frame-src', 'img-src', 'media-src']) {
+  it('a Bunny pull-zone hostja az img-src és a media-src direktívában ott van', () => {
+    const csp = buildContentSecurityPolicy()
+    for (const name of ['img-src', 'media-src']) {
+      expect(directive(csp, name), name).toContain(BUNNY_PULL_ZONE_WILDCARD_SOURCE)
+    }
+  })
+
+  it('ismert hosztnévvel a pontos host kerül a fejlécbe, joker nélkül', () => {
+    const csp = buildContentSecurityPolicy('vz-abc123.b-cdn.net')
+    const exact = 'https://vz-abc123.b-cdn.net'
+    for (const name of ['img-src', 'media-src']) {
       expect(directive(csp, name), name).toContain(exact)
-      expect(directive(csp, name), name).not.toContain(CLOUDFLARE_STREAM_WILDCARD_SOURCE)
+      expect(directive(csp, name), name).not.toContain(BUNNY_PULL_ZONE_WILDCARD_SOURCE)
+    }
+  })
+
+  it('a Cloudflare Stream forrásai KIKERÜLTEK (elfelejtett domain-csere ellen)', () => {
+    for (const csp of [buildContentSecurityPolicy(), buildContentSecurityPolicy('vz-a.b-cdn.net')]) {
+      expect(csp).not.toContain('cloudflarestream.com')
+      expect(csp).not.toContain('videodelivery.net')
     }
   })
 })
@@ -72,7 +106,7 @@ describe('buildContentSecurityPolicy — a bizonyított hiba nem térhet vissza'
 describe('buildContentSecurityPolicy — direktívák', () => {
   const csp = buildContentSecurityPolicy()
 
-  it('media-src blob: — enélkül a kezdőlap filmsávja (ScrollScrub) elhal', () => {
+  it('media-src blob: — enélkül a kezdőlap LOKÁLIS filmsávja (ScrollScrub) elhal', () => {
     expect(directive(csp, 'media-src')).toContain('blob:')
   })
 
@@ -81,13 +115,17 @@ describe('buildContentSecurityPolicy — direktívák', () => {
   })
 
   it("connect-src 'self' — a PostHog a /ingest elsőfél-proxyn megy", () => {
+    // Iframe-es lejátszásnál a videó-kérések az iframe dokumentumából mennek,
+    // arra a beágyazott oldal saját CSP-je vonatkozik — a pull-zone host ide
+    // NEM kell (csak saját <video> + hls.js lejátszó esetén kellene).
     expect(directive(csp, 'connect-src')).toEqual(["'self'"])
   })
 
-  it('script-src: Turnstile igen, Cloudflare Stream nem (az csak iframe)', () => {
+  it('script-src: Turnstile igen, videó-szolgáltató nem (az csak iframe)', () => {
     const sources = directive(csp, 'script-src')
     expect(sources).toContain('https://challenges.cloudflare.com')
-    expect(sources.some((source) => source.includes('cloudflarestream.com'))).toBe(false)
+    expect(sources.some((source) => source.includes('mediadelivery.net'))).toBe(false)
+    expect(sources.some((source) => source.includes('b-cdn.net'))).toBe(false)
   })
 
   it("script-src: 'unsafe-eval' TILOS (a Next.js inline bootstrap miatt csak 'unsafe-inline' kell)", () => {
@@ -95,9 +133,11 @@ describe('buildContentSecurityPolicy — direktívák', () => {
     expect(csp).not.toContain("'unsafe-eval'")
   })
 
-  it('frame-src: a hero-, a kurzus- és a szerkesztői videó-beágyazás hostjai', () => {
+  it('frame-src: a Bunny lejátszó és a szerkesztői videó-beágyazás hostjai', () => {
     const sources = directive(csp, 'frame-src')
-    expect(sources).toContain('https://iframe.cloudflarestream.com')
+    // Ugyanaz a host viszi a hero-videót, az előzetest és a védett lejátszót.
+    expect(sources).toContain(BUNNY_STREAM_IFRAME_SOURCE)
+    expect(BUNNY_STREAM_IFRAME_SOURCE).toBe('https://iframe.mediadelivery.net')
     expect(sources).toContain('https://www.youtube-nocookie.com')
     expect(sources).toContain('https://player.vimeo.com')
     expect(sources).toContain('https://challenges.cloudflare.com')

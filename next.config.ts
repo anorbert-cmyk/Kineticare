@@ -32,8 +32,8 @@ const nextConfig: NextConfig = {
   // indoklással és egységteszttel) — itt csak a válaszfejlécbe kerül.
   //
   // FIGYELEM: a headers() a BUILD idején értékelődik ki, és a
-  // .next/routes-manifest.json-be sül bele — env-változtatás (pl. a Stream
-  // fiókkód) után ÚJRA KELL BUILDELNI, különben a régi fejléc megy ki
+  // .next/routes-manifest.json-be sül bele — env-változtatás (pl. a Bunny
+  // pull-zone hoszt) után ÚJRA KELL BUILDELNI, különben a régi fejléc megy ki
   // (vö. CLAUDE.md „a SUCCESS deploy nem jelenti, hogy az új kód fut").
   async headers() {
     return [
@@ -46,7 +46,9 @@ const nextConfig: NextConfig = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
           {
             key: 'Content-Security-Policy',
-            value: buildContentSecurityPolicy(process.env.NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE),
+            value: buildContentSecurityPolicy(
+              process.env.NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST,
+            ),
           },
         ],
       },
