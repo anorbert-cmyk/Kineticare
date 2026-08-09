@@ -21,6 +21,12 @@ const DUMMY_POS_KEY = 'DUMMY-POSKEY-NEM-VALODI-TITOK'
 
 const PAYMENT_ID = '11111111-2222-3333-4444-555555555555'
 const ORDER_NUMBER = 'KH-2026-000123'
+/**
+ * A rendelés szerver-oldali végösszege. Az S2 összeg-assert miatt a
+ * GetState-válasz Total/Currency mezőjének EGYEZNIE kell ezzel — enélkül a
+ * paid-átmenet elutasított.
+ */
+const ORDER_TOTAL_HUF = 19990
 
 const fetchMock = vi.fn()
 vi.stubGlobal('fetch', fetchMock)
@@ -107,6 +113,7 @@ interface OrderFixture {
   barionPaymentId?: string | null
   customer?: number
   productIds?: number[]
+  totalHufSnapshot?: number | null
 }
 
 function createOrder(fixture: OrderFixture = {}): Order {
@@ -116,6 +123,9 @@ function createOrder(fixture: OrderFixture = {}): Order {
     status: fixture.status ?? 'payment_pending',
     barionPaymentId: fixture.barionPaymentId === undefined ? PAYMENT_ID : fixture.barionPaymentId,
     customer: fixture.customer ?? 7,
+    currency: 'HUF',
+    totalHufSnapshot:
+      fixture.totalHufSnapshot === undefined ? ORDER_TOTAL_HUF : fixture.totalHufSnapshot,
     items: (fixture.productIds ?? [42]).map((productId) => ({
       product: productId,
       quantity: 1,
@@ -171,13 +181,23 @@ function createMockPayload(options: MockPayloadOptions = {}) {
   return { payload: payload as unknown as Payload, calls, order, user }
 }
 
-/** GetState-válasz a Bariontól. */
-function getStateResponse(status: string, paymentId = PAYMENT_ID): Response {
+interface StateOverrides {
+  paymentId?: string
+  /** null = a mező teljesen hiányzik a válaszból (S2 összeg-assert bukása). */
+  total?: number | null
+  currency?: string | null
+}
+
+/** GetState-válasz a Bariontól (alapból a rendelés összegével/devizájával). */
+function getStateResponse(status: string, overrides: StateOverrides = {}): Response {
+  const { paymentId = PAYMENT_ID, total = ORDER_TOTAL_HUF, currency = 'HUF' } = overrides
   return new Response(
     JSON.stringify({
       PaymentId: paymentId,
       PaymentRequestId: ORDER_NUMBER,
       Status: status,
+      ...(total === null ? {} : { Total: total }),
+      ...(currency === null ? {} : { Currency: currency }),
       Transactions: [],
       Errors: [],
     }),
@@ -511,6 +531,49 @@ describe('orderNumber-fallback és titokvédelem', () => {
     expect(order?.status).toBe('paid')
     expect(order?.barionPaymentId).toBe(PAYMENT_ID)
     expect(calls.update.some((call) => call.data.barionPaymentId === PAYMENT_ID)).toBe(true)
+  })
+
+  /**
+   * S2 — a fallback-párosítás a LEGGYENGÉBB bizonyíték: nem a barionPaymentId
+   * kötötte a fizetést a rendeléshez. Ha az összeg nem stimmel, SEMMIT nem
+   * írunk a rendelésre (a barionPaymentId-t sem), és az esemény rejected.
+   */
+  it('orderNumber-fallback + eltérő Total → semmilyen írás, rejected + riasztás', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { POST, docs, calls, order, capture } = setup({
+      order: createOrder({ barionPaymentId: null }),
+    })
+    fetchMock.mockResolvedValueOnce(getStateResponse('Succeeded', { total: 1 }))
+
+    await POST(makeRequest({ PaymentId: PAYMENT_ID }))
+    await capture.runAll()
+
+    expect(order?.status).toBe('payment_pending')
+    expect(order?.barionPaymentId ?? null).toBeNull()
+    expect(calls.update).toHaveLength(0)
+    expect(docs[0]).toMatchObject({ status: 'processed', result: 'rejected' })
+    const logs = logOutput(logSpy)
+    expect(logs).toContain('RIASZT')
+    expect(logs).toContain('orderNumber-alapú párosítás')
+  })
+
+  /**
+   * S2 — az elsődleges (barionPaymentId szerinti) ágon is kötelező az
+   * összeg-egyezés: a Barion Succeeded önmagában NEM elég bizonyíték.
+   */
+  it('eltérő Total az elsődleges ágon → a rendelés NEM lesz paid, rejected', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { POST, docs, calls, order, capture } = setup()
+    fetchMock.mockResolvedValueOnce(getStateResponse('Succeeded', { total: 990 }))
+
+    await POST(makeRequest({ PaymentId: PAYMENT_ID }))
+    await capture.runAll()
+
+    expect(order?.status).toBe('payment_pending')
+    expect(calls.update.filter((call) => call.collection === 'orders')).toHaveLength(0)
+    expect(calls.update.filter((call) => call.collection === 'users')).toHaveLength(0)
+    expect(docs[0]).toMatchObject({ status: 'processed', result: 'rejected' })
+    expect(logOutput(logSpy)).toContain('RIASZT')
   })
 
   it('a naplóban sosem szerepel a POSKey', async () => {

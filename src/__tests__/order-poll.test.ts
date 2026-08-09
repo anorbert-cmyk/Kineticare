@@ -19,6 +19,12 @@ import type { Order } from '../payload-types'
 const PAYMENT_ID = '11111111-2222-3333-4444-555555555555'
 const ORDER_NUMBER = 'KH-2026-000123'
 const NOW = Date.parse('2026-08-04T12:00:00Z')
+/**
+ * A rendelés szerver-oldali végösszege. Az S2 összeg-assert miatt a
+ * GetState-válasz Total/Currency mezőjének egyeznie kell ezzel, különben a
+ * paid-átmenet elutasított.
+ */
+const ORDER_TOTAL_HUF = 19990
 
 function isoHoursAgo(hours: number): string {
   return new Date(NOW - hours * 3600_000).toISOString()
@@ -32,19 +38,34 @@ function createPendingOrder(overrides: Partial<Order> = {}): Order {
     barionPaymentId: PAYMENT_ID,
     customer: 7,
     customerEmail: 'anna@example.test',
-    items: [{ product: 42, quantity: 1, titleSnapshot: 'DEMO-KEZREHAB-001', priceHufSnapshot: 19990 }],
+    currency: 'HUF',
+    totalHufSnapshot: ORDER_TOTAL_HUF,
+    items: [
+      {
+        product: 42,
+        quantity: 1,
+        titleSnapshot: 'DEMO-KEZREHAB-001',
+        priceHufSnapshot: ORDER_TOTAL_HUF,
+      },
+    ],
     createdAt: isoHoursAgo(1),
     updatedAt: isoHoursAgo(1),
     ...overrides,
   } as unknown as Order
 }
 
-function getStateResponse(status: string): BarionPaymentStateResponse {
+function getStateResponse(
+  status: string,
+  overrides: Partial<BarionPaymentStateResponse> = {},
+): BarionPaymentStateResponse {
   return {
     PaymentId: PAYMENT_ID,
     PaymentRequestId: ORDER_NUMBER,
     Status: status as BarionPaymentStateResponse['Status'],
+    Total: ORDER_TOTAL_HUF,
+    Currency: 'HUF',
     Transactions: [],
+    ...overrides,
   }
 }
 
@@ -53,6 +74,8 @@ interface SetupOptions {
   paidResweep?: Order[]
   stateStatus?: string
   stateError?: Error
+  /** A GetState-válasz felülírásai (pl. eltérő Total az összeg-assert teszteléséhez). */
+  stateOverrides?: Partial<BarionPaymentStateResponse>
 }
 
 function setup(options: SetupOptions = {}) {
@@ -90,7 +113,7 @@ function setup(options: SetupOptions = {}) {
     if (options.stateError) {
       throw options.stateError
     }
-    return getStateResponse(options.stateStatus ?? 'Succeeded')
+    return getStateResponse(options.stateStatus ?? 'Succeeded', options.stateOverrides)
   }
 
   const onPaid = async (order: Order): Promise<void> => {
@@ -155,6 +178,29 @@ describe('order-poll — elveszett callback-mentés', () => {
 
     expect(summary.stillPending).toBe(1)
     expect(orderUpdates).toHaveLength(0)
+  })
+
+  /**
+   * S2 összeg-assert: a poll-job UGYANAZT a magot futtatja, mint a callback,
+   * tehát a Total-eltérés itt is elutasított paid-átmenetet jelent — a
+   * „mentőháló" nem kerülheti meg az összeg-ellenőrzést.
+   */
+  it('Barion Succeeded, de eltérő Total → NINCS paid átmenet (failed), a státusz érintetlen', async () => {
+    const order = createPendingOrder()
+    const { payload, fetchState, onPaid, queueInvoice, user, paidCalls, orderUpdates } = setup({
+      pending: [order],
+      stateStatus: 'Succeeded',
+      stateOverrides: { Total: 1 },
+    })
+
+    const summary = await pollPendingOrders({ payload, fetchState, onPaid, queueInvoice, now: NOW })
+
+    expect(summary.transitionedPaid).toBe(0)
+    expect(summary.failed).toBe(1)
+    expect(order.status).toBe('payment_pending')
+    expect(orderUpdates).toHaveLength(0)
+    expect(user.purchases).toEqual([])
+    expect(paidCalls).toHaveLength(0)
   })
 
   it('GetState-hiba → a rendelés kimarad (failed), a státusz érintetlen', async () => {

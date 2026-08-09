@@ -11,7 +11,10 @@ import {
 } from '../idempotency'
 import { logger, type Logger } from '../logger'
 import { onOrderPaid } from '../order-paid'
-import { applyBarionStateTransition } from '../order-status/apply-barion-state'
+import {
+  applyBarionStateTransition,
+  assertPaymentAmountMatches,
+} from '../order-status/apply-barion-state'
 
 /**
  * Barion-callback aszinkron feldolgozó (T-022, W4-02 refaktor).
@@ -141,6 +144,38 @@ export function createBarionCallbackProcessor(deps: BarionCallbackProcessorDeps)
       }
       const { order } = found
       if (found.foundByOrderNumber) {
+        // FALLBACK-PÁROSÍTÁS: itt NEM a barionPaymentId kötötte a fizetést a
+        // rendeléshez, hanem a Barion által visszaadott PaymentRequestId. A
+        // párosítás ezért önmagában gyengébb bizonyíték — mielőtt bármit
+        // írnánk a rendelésre, az ÖSSZEG-ASSERTNEK is teljesülnie kell.
+        const pairing = assertPaymentAmountMatches(order, state)
+        if (!pairing.ok) {
+          eventLog.error(
+            'RIASZTÁS: orderNumber-alapú párosítás ELUTASÍTVA — a fizetés összege/devizája nem egyezik a rendeléssel',
+            {
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              detail: pairing.detail,
+              expectedTotal: pairing.expectedTotal ?? null,
+              actualTotal: pairing.actualTotal ?? null,
+              expectedCurrency: pairing.expectedCurrency ?? null,
+              actualCurrency: pairing.actualCurrency ?? null,
+              barionStatus: state.Status,
+            },
+          )
+          await closeEvent(store, event, 'rejected')
+          return { status: 'rejected', reason: 'total-mismatch', orderId: order.id }
+        }
+        if (order.barionPaymentId && order.barionPaymentId !== paymentId) {
+          // A rendeléshez MÁS fizetés van kötve: a felülírás elszakítaná a
+          // valódi fizetéstől. Nem írunk, riasztunk.
+          eventLog.error(
+            'RIASZTÁS: a rendeléshez már MÁS Barion-fizetés tartozik — a barionPaymentId felülírása elutasítva',
+            { orderId: order.id, orderNumber: order.orderNumber },
+          )
+          await closeEvent(store, event, 'rejected')
+          return { status: 'rejected', reason: 'payment-id-conflict', orderId: order.id }
+        }
         eventLog.warn(
           'barion-callback: a rendelés orderNumber alapján találódott — barionPaymentId pótolva',
           {
@@ -158,10 +193,16 @@ export function createBarionCallbackProcessor(deps: BarionCallbackProcessorDeps)
       const orderLog = eventLog.child({ orderId: order.id, orderNumber: order.orderNumber })
 
       // 3. Állapotgép-átmenet a KÖZÖS MAGGAL (a poll-job is ezt futtatja).
+      //    A NYERS state is átmegy: a mag a Total/Currency mezőt a rendelés
+      //    szerver-oldali snapshotjához méri, és eltérésnél elutasít. Ez az
+      //    orderNumber-alapú fallback-párosítási ágra IS vonatkozik — ott a
+      //    rendelést nem a barionPaymentId kötötte a fizetéshez, tehát az
+      //    összeg-egyezés az egyetlen, ami a párosítást igazolja.
       const transition = await applyBarionStateTransition({
         payload: deps.payload,
         order,
         mapped,
+        state,
         log: orderLog,
       })
 
