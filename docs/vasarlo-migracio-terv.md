@@ -6,7 +6,11 @@
 > történik**.
 >
 > **Eszköz:** `src/scripts/import-customers.ts` (CSV-import) +
-> `src/lib/customer-import/` (parser / terv / végrehajtás / aktiválási linkek).
+> `src/lib/customer-import/` (parser / terv / végrehajtás / aktiválási linkek /
+> aktiváló levelek).
+>
+> **E-mail-szolgáltató: Resend** (megrendelői döntés) — az élesítés lépései a
+> **10.1.** pontban.
 >
 > **Kapcsolódó:** `docs/manualis-vasarlas-hozzaadas.md` (egy-egy vevő kézi
 > jóváírása), feladatlista **C8 / T-061**.
@@ -53,7 +57,7 @@ kapacitás a válaszokra. Ne péntek, ne ünnep előtt.
 | **T−12** | A nem leképezett kurzusnevek tisztázása, `--map` kiegészítése, újabb próbafutás | Katák | tiszta próbafutás (0 ismeretlen kurzusnév) |
 | **T−10** | **1. levél — Bejelentés** (teendő nincs) | Katák | minden meglévő vevő értesítve |
 | **T−3** | Éles import futtatása (fiókok + hozzáférések létrejönnek), aktiválási linkek generálása | technikai | mérleg + `linkek.csv` |
-| **T−3** | **2. levél — Aktiváló, személyre szóló linkkel** | Katák | mindenki tud jelszót állítani |
+| **T−3** | **2. levél — Aktiváló, személyre szóló linkkel** (`--send-invites`, vagy körlevél a `linkek.csv`-ből) | technikai / Katák | mindenki tud jelszót állítani |
 | **T−1** | **3. levél — Emlékeztető** csak azoknak, akik még nem léptek be | Katák | lemorzsolódás csökkentése |
 | **T** | **Átállás napja:** a régi felület kezdőlapján/levélben átirányítás az újra | Katák | egyetlen belépési pont |
 | **T+2** | Utókövetés: kik nem léptek be még → egyéni megkeresés | Katák | senki nem marad kint |
@@ -268,6 +272,8 @@ npx tsx src/scripts/import-customers.ts \
 | `--dry-run` | Próbafutás: nulla írás. |
 | `--out-links=<út>` | Aktiválási linkek CSV-be (éles futásnál). |
 | `--invite-all` | Link ne csak az új fiókoknak, hanem minden érintett vevőnek. |
+| `--send-invites` | **Aktiváló levél kiküldése** az új fiókoknak (lásd 6.4.1.). |
+| `--send-invites=all` | Levél minden tervbeli vevőnek — a kihagyottaknak is. |
 | `--help` | Súgó. |
 
 ### 6.3. Éles futtatás
@@ -302,6 +308,47 @@ nem leképezett kurzusnév: 0.
   - a körlevél kiküldése után **töröld**.
 - Új linkgenerálás felülírja a korábbi tokent: a régi link ilyenkor
   érvénytelen. Ne keverd a köröket — mindig a legfrissebb fájlból küldj.
+
+### 6.4.1. Levélküldés a scriptből (`--send-invites`)
+
+A körlevél helyett a script maga is kiküldheti a **magyar aktiváló levelet**
+(4.2. szövege), címzettenként a saját linkjével. A szolgáltató **Resend** —
+az élesítés feltételeit lásd a 10. pontban.
+
+```bash
+npx tsx src/scripts/import-customers.ts \
+  --file=export.csv \
+  --map "Kéz Rehab Alap=KEZ-ALAP" \
+  --send-invites
+```
+
+**A sorrend kötött: `--dry-run` → éles futás → küldés.**
+
+| Amit tudni kell | Miért |
+| --- | --- |
+| `--dry-run`-nal EGYÜTT nem használható | A script hibaüzenettel, `1`-es kóddal áll meg, **még a fájl beolvasása előtt**. Próbaképp nem megy ki 300 valódi levél. |
+| `RESEND_API_KEY` nélkül el sem indul | Kulcs híján a levelek csendben elnyelődnének, és a futás sikeresnek látszana. |
+| Alapból csak az **új fiókok** kapnak levelet | `--send-invites=all` esetén minden tervbeli vevő (a `KIHAGY`-ottak is) — ez az „újraküldés mindenkinek" eset. |
+| Egy bukott küldés nem állítja meg a kört | A hibás címzettek a végén listázódnak, a kilépési kód `1`. Javítás után újrafuttatható. |
+| A küldések közt kis szünet van | Rate-limit-barát: egy több százas kör nem fut bele a szolgáltató korlátjába. |
+| A token és a link **nem kerül naplóba** | A napló csak maszkolt címet (`k***@example.com`) és darabszámot lát. |
+
+A futás végén a mérleg egy sorral bővül:
+
+```text
+AKTIVÁLÓ LEVELEK — elküldve: 128, sikertelen: 0.
+```
+
+Ha nincs kinek küldeni (pl. újrafuttatás, ahol minden sor `KIHAGY`), a script
+ezt írja ki — **ez nem hiba**:
+
+```text
+Nincs kinek küldeni — levél nem ment ki. Ez nem hiba.
+```
+
+A `--out-links` és a `--send-invites` **együtt is használható**: a linkek
+egyetlen körben készülnek, tehát a CSV-be írt link ugyanaz, mint amit a levél
+tartalmaz. (Külön körben a második generálás érvénytelenítené az elsőt.)
 
 ### 6.5. Ellenőrzés az import után
 
@@ -342,6 +389,9 @@ a linkgenerálást csak akkor kérd, ha a leveleket még nem küldtétek ki.
 | `Nem leképezett kurzusnevek (…)` | Hiányzó `--map` pár | Egészítsd ki, vagy tudatosan hagyd ki (pl. hírlevél-címke). |
 | `a users kollekció üres…` (exit 1) | Nincs még admin-felhasználó | Előbb hozd létre az admint — az első user owner szerepkört kapna. |
 | Egy soron `HIBA` | Adatbázis-hiba annál a sornál | A futás folytatódik; a végén exit-kód 1. **Futtasd újra** — az idempotencia miatt csak a hiányzó sorok készülnek el. |
+| `a --send-invites és a --dry-run nem használható együtt` (exit 1) | A két kapcsoló egyszerre | **Semmi nem történt.** Előbb próbafutás, aztán éles futás a küldéssel. |
+| `nincs beállítva e-mail-szolgáltató…` (exit 1) | Hiányzik a `RESEND_API_KEY` | **Semmi nem történt.** Állítsd be a kulcsot a Railway → Variables felületén (10. pont), és indítsd újra. |
+| Egy címzetten `SIKERTELEN` | A szolgáltató elutasította vagy nem érte el | A kör folytatódik a többi címzettel; a végén exit-kód 1. A hibás címzetteknek küldj újra (`--send-invites=all` vagy kézi körlevél a `linkek.csv`-ből). |
 
 **Kilépési kódok:** `0` = hibátlan futás; `1` = indítási hiba (fájl, argumentum,
 ismeretlen SKU, üres users-kollekció) **vagy** legalább egy hibás sor a futásban.
@@ -381,7 +431,10 @@ próbafutás: a terv átnézése olcsóbb, mint a takarítás.
   naplóba csak e-mail, felhasználó-azonosító, termék-azonosító és darabszám kerül.
 - A generált kezdőjelszó véletlen, sehol nem jelenik meg, és a vevő úgysem
   használja: a jelszavát az aktiválási linkkel ő maga állítja be.
-- Az import **nem küld e-mailt** — a kiküldés emberi, ellenőrzött lépés.
+- Az import **alapból nem küld e-mailt**. A küldés külön, tudatos kapcsoló
+  (`--send-invites`, 6.4.1.), ami próbafutással és e-mail-kulcs nélkül el sem
+  indul. A küldő út is naplózás-tiszta: a levélbe kerülő link és token sosem
+  kerül a naplóba, a címzett is csak maszkolva (`k***@example.com`).
 
 ---
 
@@ -393,7 +446,42 @@ Ezek a nyitott pontok — nélkülük az eszköz kész, de az átállás nem ind
 | --- | --- | --- | --- |
 | 1 | **A systeme.io-export pontos formátuma** — egy valódi (akár 3 soros, anonimizált) mintafájl a fejléccel | Katák | Ebből derül ki az elválasztó, az oszlopnevek, és hogy a kurzusok egy cellában vagy több sorban jönnek. A parser mindkettőt tudja, de a kapcsolókat előre be kell állítani. |
 | 2 | **Kurzusnév → SKU tábla** — minden systeme.io-kurzusnévhez a Kineticare-termék azonosítója | Katák | Enélkül a kurzusnevek nem leképezettként kimaradnak (a vevő fiók nélkül nem, de kurzus nélkül maradna). |
-| 3 | **E-mail-küldés döntése (SMTP/szolgáltató)** — a script csak linket állít elő | üzemeltetés | El kell dönteni, hogy a körlevél a Katák levelezőjéből, meglévő hírlevél-eszközből vagy beállított SMTP-ből megy-e ki. Ettől függ a feladó-cím és a kézbesíthetőség. |
+| 3 | ~~E-mail-küldés döntése~~ → **ELDÖNTVE: Resend.** Az élesítés lépései a 10.1. pontban | üzemeltetés | A döntés megvan, de a Resend-fiók, a **domain-hitelesítés** és az API-kulcs beállítása nélkül a levél nem megy ki. |
 | 4 | **Adatbázis-mentés** (feladatlista C14) | üzemeltetés | Tömeges írás előtt kötelező visszaállítási pont. |
 | 5 | **Az átállás dátuma** és a levelek aláírása | Katák | A levélsablonok `{{datum_*}}` és aláírás-mezői. |
 | 6 | **Kettős e-mail-címek listája** (aki más címmel vásárolt, mint amit használ) | Katák | Ezek kézi összevezetést igényelnek — az import e-mail-cím alapján dolgozik. |
+
+### 10.1. E-mail-küldés élesítése (Resend)
+
+A szolgáltató **Resend** (megrendelői döntés). A kódoldal kész — ami hiányzik,
+az kizárólag üzemeltetői beállítás. Sorrendben:
+
+1. **Resend-fiók** létrehozása a Kineticare nevére (ne magánfiók legyen: a
+   kulcsokat és a domaint a cégnek kell birtokolnia).
+2. **A `kineticare.hu` feladó-domain hitelesítése** a Resend felületén
+   (*Domains → Add Domain*). A Resend kiír néhány **DNS-rekordot** — ezeket a
+   domain szolgáltatójánál kell felvenni:
+   - **SPF** (TXT) — melyik szerver küldhet a domain nevében,
+   - **DKIM** (TXT) — a levelek kriptográfiai aláírása,
+   - (ajánlott) **DMARC** (TXT) — mi történjen a nem hitelesíthető levéllel.
+   A rekordok terjedése akár órákig tarthat; a Resend felületén a domain
+   állapotának **Verified**-re kell váltania. **Amíg nem az, a küldés
+   elutasításra kerül** — ne az átállás napján kezdjétek.
+3. **API-kulcs** létrehozása (küldési joggal), és beállítása **KIZÁRÓLAG a
+   Railway → Variables** felületén: `RESEND_API_KEY`. A kulcs
+   **soha** nem kerülhet a repóba, PR-be, jegybe vagy chat-üzenetbe. Ha
+   véletlenül mégis kikerül: a Resendben azonnal vonjátok vissza és
+   generáljatok újat.
+4. **Feladó beállítása:** `EMAIL_FROM` (pl. `Kineticare <no-reply@kineticare.hu>`)
+   — a domain rész legyen az a domain, amit a 2. lépésben hitelesítettetek.
+   Beállítás nélkül a rendszer `noreply@localhost`-ra esik vissza, ami élesben
+   biztosan visszapattan.
+5. **Próbalevél**: az oldalon az „Elfelejtett jelszó" gombbal kérjetek
+   visszaállítást egy saját címre. Ha megérkezik és a linkről be tudtok
+   állítani jelszót, a lánc működik.
+6. Csak ezután futtassátok a `--send-invites`-t (6.4.1.).
+
+**Amíg ezek nincsenek kész:** a rendszer nem hibázik, csak nem küld levelet —
+naplóban egyszer figyelmeztet („noop-provider aktív"), a `--send-invites` pedig
+érthető magyar üzenettel elutasít. Az átállás ilyenkor a **`linkek.csv` +
+kézi körlevél** úton is végigvihető (6.4.).
