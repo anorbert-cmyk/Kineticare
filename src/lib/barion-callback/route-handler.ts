@@ -8,6 +8,12 @@ import {
   type WebhookEventStore,
 } from '../idempotency'
 import { logger } from '../logger'
+import {
+  checkRateLimit,
+  getNamedRateLimiter,
+  ipRateLimitKey,
+  type RateLimiter,
+} from '../rate-limit'
 import { generateRequestId, getRequestId } from '../request-id'
 import { createBarionCallbackProcessor } from './process-callback'
 
@@ -17,6 +23,10 @@ import { createBarionCallbackProcessor } from './process-callback'
  * A Barion 15 mp-en belül HTTP 200-at vár, különben a retry-lépcsője
  * (2s/6s/18s/54s/102s) újra és újra kézbesít — ezért a handler:
  *
+ *  0. RATE-LIMIT (per-IP, 30/perc — a retry-lépcső bőven belefér) és PaymentId
+ *     FORMÁTUMvalidáció (Barion GUID-minta + max-hossz) fut MINDEN más előtt:
+ *     a callback-flood és a szemét-PaymentId így a webhook-events táblát sem
+ *     éri el (blackhat-review: DB-növekedés a hamis callbackoktól).
  *  1. AZONNAL dedupol: a webhook-events-be (provider='barion',
  *     externalId=PaymentId) ír; a (provider, externalId) UNIQUE-ütközés =
  *     már feldolgozva/feldolgozás alatt → 200, no-op.
@@ -52,6 +62,8 @@ export interface BarionCallbackHandlerDeps {
    */
   schedule?: (task: () => Promise<void>) => void
   store?: WebhookEventStore
+  /** Per-IP rate-limiter injektálható (teszt); alapból a megosztott barionCallback singleton. */
+  rateLimiter?: RateLimiter
 }
 
 /** A PaymentId kinyerése — hiányzó/üres esetén null (a hívó 400-zal válaszol). */
@@ -69,16 +81,40 @@ function extractPaymentId(body: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
+/**
+ * PaymentId FORMÁTUMvalidáció (blackhat-review): a Barion v3/v4 PaymentId
+ * GUID — bármi más (túl hosszú, nem GUID karakterek) biztosan hamisítvány,
+ * és MÉG a webhook-events írás ELŐTT 400-zal elutasítjuk, hogy a flood ne
+ * növeszthesse a táblát szemét-rekordokkal. A max-hossz védőháló: ha a
+ * Barion valaha nem-GUID azonosítót vezetne be, a hosszkorlát akkor is
+ * megfogja a túlméretezett payloadot.
+ */
+const BARION_PAYMENT_ID_PATTERN =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+const BARION_PAYMENT_ID_MAX_LENGTH = 64
+
+function isValidPaymentIdFormat(paymentId: string): boolean {
+  return paymentId.length <= BARION_PAYMENT_ID_MAX_LENGTH && BARION_PAYMENT_ID_PATTERN.test(paymentId)
+}
+
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return Response.json(body, { status })
 }
 
 export function createBarionCallbackHandler(deps: BarionCallbackHandlerDeps) {
   const schedule = deps.schedule ?? ((task: () => Promise<void>) => after(task))
+  const rateLimiter = deps.rateLimiter ?? getNamedRateLimiter('barionCallback')
 
   return async function POST(request: Request): Promise<Response> {
     const requestId = getRequestId(request.headers) ?? generateRequestId()
     const log = logger.child({ requestId, route: 'barion-callback' })
+
+    // 0. RATE-LIMIT (per-IP) — a legolcsóbb flood-fal, még a body-parse ELŐTT.
+    //    A Barion retry-lépcsője (2s…102s) bőven a 30/perc limit alatt marad.
+    const limited = checkRateLimit({ limiter: rateLimiter, key: ipRateLimitKey(request.headers), log })
+    if (limited) {
+      return limited
+    }
 
     let body: unknown
     try {
@@ -92,6 +128,13 @@ export function createBarionCallbackHandler(deps: BarionCallbackHandlerDeps) {
     if (!paymentId) {
       log.warn('barion-callback: hiányzó vagy üres PaymentId — 400')
       return jsonResponse({ ok: false, error: 'Hiányzó vagy üres PaymentId.' }, 400)
+    }
+    if (!isValidPaymentIdFormat(paymentId)) {
+      // Formátumhiba → 400, MÉG a webhook-events írás ELŐTT (lásd a validátor
+      // fejléckommentjét). A Barion sosem küld nem-GUID PaymentId-t, így a
+      // valódi kézbesítéseket ez nem érinti.
+      log.warn('barion-callback: érvénytelen PaymentId formátum — 400')
+      return jsonResponse({ ok: false, error: 'Érvénytelen PaymentId formátum.' }, 400)
     }
     const eventLog = log.child({ paymentId })
 

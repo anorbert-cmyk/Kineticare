@@ -1,6 +1,7 @@
 import type { Payload } from 'payload'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest'
 
+import { createRateLimiter } from '../lib/rate-limit'
 import { createRefundHandler } from '../lib/refund/route-handler'
 import { readRefundEntries } from '../lib/refund/refund-order'
 import type { Order, User } from '../payload-types'
@@ -187,7 +188,12 @@ function makeContext(orderNumber = ORDER_NUMBER) {
 
 function setup(options: MockPayloadOptions = {}) {
   const mock = createMockPayload(options)
-  const POST = createRefundHandler({ getPayload: async () => mock.payload })
+  const POST = createRefundHandler({
+    getPayload: async () => mock.payload,
+    // Tesztenként friss limiter: a fájl ~15 kérése egy owner-kulcson meghaladná
+    // a megosztott 10/perces keretet — így a tesztek izoláltak maradnak.
+    rateLimiter: createRateLimiter({ windowMs: 60_000, max: 10, cleanupIntervalMs: 0 }),
+  })
   return { POST, ...mock }
 }
 

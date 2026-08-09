@@ -4,6 +4,7 @@ import { hasOwnerRole } from '../../access/roles'
 import { resolveClientIp } from '../audit'
 import { BarionApiError } from '../barion'
 import { logger } from '../logger'
+import { checkRateLimit, getNamedRateLimiter, type RateLimiter } from '../rate-limit'
 import { generateRequestId, getRequestId } from '../request-id'
 import { RefundError, refundOrder, type RefundOrderInput } from './refund-order'
 
@@ -34,6 +35,8 @@ import { RefundError, refundOrder, type RefundOrderInput } from './refund-order'
  */
 export interface RefundHandlerDeps {
   getPayload: () => Promise<Payload>
+  /** Rate-limiter injektálható (teszt); alapból a megosztott refund singleton. */
+  rateLimiter?: RateLimiter
 }
 
 /** Next 15 route-context (async params). */
@@ -59,6 +62,8 @@ function mapBarionError(error: BarionApiError): { status: number; message: strin
 export function createRefundHandler(
   deps: RefundHandlerDeps,
 ): (request: Request, context: RefundRouteContext) => Promise<Response> {
+  const rateLimiter = deps.rateLimiter ?? getNamedRateLimiter('refund')
+
   return async function POST(request: Request, context: RefundRouteContext): Promise<Response> {
     const requestId = getRequestId(request.headers) ?? generateRequestId()
     const log = logger.child({ requestId, route: 'admin-order-refund' })
@@ -83,6 +88,13 @@ export function createRefundHandler(
           { error: 'A visszatérítés kizárólag owner szerepkörrel indítható.' },
           { status: 403 },
         )
+      }
+
+      // RATE-LIMIT (per-owner, 10/perc) — a refund Barion-hívást és pénzügyi
+      // állapotátmenetet indít; a kézi admintempó jóval a limit alatt van.
+      const limited = checkRateLimit({ limiter: rateLimiter, key: `owner:${user.id}`, log })
+      if (limited) {
+        return limited
       }
 
       const { orderNumber } = await context.params

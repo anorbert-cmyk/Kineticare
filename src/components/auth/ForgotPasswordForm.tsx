@@ -9,8 +9,9 @@ import { forgotPassword } from '../../lib/auth-client'
 /**
  * ForgotPasswordForm — jelszó-visszaállító link kérése.
  *
- * A Payload forgot-password végpontja mindig 200-at ad (ne szivárogjon,
- * létezik-e a cím) — a kliens ugyanazt a megerősítő üzenetet mutatja.
+ * A Payload forgot-password végpontja 200-at ad (ne szivárogjon, létezik-e a
+ * cím); rate-limitnél 429 jöhet — a kliens mindkettőre ugyanazt a megerősítő
+ * üzenetet mutatja (lásd auth-client.ts).
  */
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState('')

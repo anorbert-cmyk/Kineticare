@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import type { Payload } from 'payload'
 
 import { logger } from '../logger'
+import { checkRateLimit, getNamedRateLimiter, type RateLimiter } from '../rate-limit'
 import { generateRequestId, getRequestId } from '../request-id'
 import { issueStreamToken, StreamTokenError } from './issue-stream-token'
 
@@ -12,18 +13,23 @@ import { issueStreamToken, StreamTokenError } from './issue-stream-token'
  * egységtesztelhető; a tényleges route az
  * src/app/(frontend)/api/stream-token/route.ts köti be a valódi configgal.
  *
- * Folyamat: auth (payload.auth) → query-validáció + paywall + token-kiállítás
- * (issueStreamToken) → { token, expiresAt }. Hibaágak: magyar felhasználói
- * üzenet + technikai részlet csak a naplóba, requestId-vel.
+ * Folyamat: auth (payload.auth) → rate-limit (per-user, 60/perc) →
+ * query-validáció + paywall + token-kiállítás (issueStreamToken) →
+ * { token, expiresAt }. Hibaágak: magyar felhasználói üzenet + technikai
+ * részlet csak a naplóba, requestId-vel.
  */
 export interface StreamTokenHandlerDeps {
   getPayload: () => Promise<Payload>
+  /** Rate-limiter injektálható (teszt); alapból a megosztott streamToken singleton. */
+  rateLimiter?: RateLimiter
 }
 
 export function createStreamTokenHandler(
   deps: StreamTokenHandlerDeps,
-): (request: NextRequest) => Promise<NextResponse> {
-  return async function GET(request: NextRequest): Promise<NextResponse> {
+): (request: NextRequest) => Promise<Response> {
+  const rateLimiter = deps.rateLimiter ?? getNamedRateLimiter('streamToken')
+
+  return async function GET(request: NextRequest): Promise<Response> {
     const requestId = getRequestId(request.headers) ?? generateRequestId()
     const log = logger.child({ requestId, route: 'stream-token' })
 
@@ -37,6 +43,13 @@ export function createStreamTokenHandler(
           { error: 'A videó lejátszásához bejelentkezés szükséges.' },
           { status: 401 },
         )
+      }
+
+      // RATE-LIMIT (per-user) — a normál lejátszó oldalbetöltésenként 1 tokent
+      // kér; a limit a tokenfarmolás/lekérdezés-flood ellen szól.
+      const limited = checkRateLimit({ limiter: rateLimiter, key: `user:${user.id}`, log })
+      if (limited) {
+        return limited
       }
 
       const { searchParams } = new URL(request.url)

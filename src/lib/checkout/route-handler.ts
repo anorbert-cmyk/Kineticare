@@ -3,6 +3,12 @@ import type { Payload } from 'payload'
 
 import { resolveClientIp } from '../audit'
 import { logger } from '../logger'
+import {
+  checkRateLimit,
+  getNamedRateLimiter,
+  ipRateLimitKey,
+  type RateLimiter,
+} from '../rate-limit'
 import { generateRequestId, getRequestId } from '../request-id'
 import { CheckoutError, startCheckout, type CheckoutStartInput } from './start-checkout'
 
@@ -13,18 +19,22 @@ import { CheckoutError, startCheckout, type CheckoutStartInput } from './start-c
  * egységtesztelhető; a tényleges route az src/app/(frontend)/api/checkout/start/route.ts
  * köti be a valódi configgal.
  *
- * Folyamat: auth (payload.auth) → JSON-parse → startCheckout szolgáltatás →
- * { orderNumber, gatewayUrl }. Hibaágak: magyar felhasználói üzenet +
- * technikai hiba naplózva requestId-vel.
+ * Folyamat: auth (payload.auth) → rate-limit (per-user + per-IP, 10/perc) →
+ * JSON-parse → startCheckout szolgáltatás → { orderNumber, gatewayUrl }.
+ * Hibaágak: magyar felhasználói üzenet + technikai hiba naplózva requestId-vel.
  */
 export interface CheckoutStartHandlerDeps {
   getPayload: () => Promise<Payload>
+  /** Rate-limiter injektálható (teszt); alapból a megosztott checkoutStart singleton. */
+  rateLimiter?: RateLimiter
 }
 
 export function createCheckoutStartHandler(
   deps: CheckoutStartHandlerDeps,
-): (request: NextRequest) => Promise<NextResponse> {
-  return async function POST(request: NextRequest): Promise<NextResponse> {
+): (request: NextRequest) => Promise<Response> {
+  const rateLimiter = deps.rateLimiter ?? getNamedRateLimiter('checkoutStart')
+
+  return async function POST(request: NextRequest): Promise<Response> {
     const requestId = getRequestId(request.headers) ?? generateRequestId()
     const log = logger.child({ requestId, route: 'checkout-start' })
 
@@ -39,6 +49,16 @@ export function createCheckoutStartHandler(
           { error: 'A fizetés indításához bejelentkezés szükséges.' },
           { status: 401 },
         )
+      }
+
+      // RATE-LIMIT (per-user + per-IP) — a Barion Start-hívás költséges; a
+      // korlát a checkout-flood (Barion API DoS) ellen véd. Az első elutasítás
+      // nyer; a másik kulcson esetleg elfogyasztott részlet elvész (dokumentált).
+      const limited =
+        checkRateLimit({ limiter: rateLimiter, key: `user:${user.id}`, log }) ??
+        checkRateLimit({ limiter: rateLimiter, key: ipRateLimitKey(request.headers), log })
+      if (limited) {
+        return limited
       }
 
       let body: unknown

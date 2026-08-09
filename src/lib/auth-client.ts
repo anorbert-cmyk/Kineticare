@@ -5,7 +5,8 @@
  * API-szerződés (Payload REST, /api/users):
  * - POST /api/users/login { email, password } → { user, token } (süti is jön);
  * - POST /api/users { email, password, name, billingName?, ... } → { doc } (regisztráció);
- * - POST /api/users/forgot-password { email } → 200 (mindig 200, ne szivárogjon);
+ * - POST /api/users/forgot-password { email } → 200 (ne szivárogjon, létezik-e
+ *   a cím; rate-limit esetén 429 — a kliens ezt szándékosan ugyanúgy kezeli);
  * - POST /api/users/reset-password { token, password } → { user };
  * - GET /api/users/me → { user } (a session-ből).
  *
@@ -105,8 +106,9 @@ export async function forgotPassword(
       body: JSON.stringify({ email }),
       credentials: 'include',
     })
-    // A Payload mindig 200-at ad (ne szivárogjon, létezik-e a cím) — a kliens
-    // ugyanazt a megerősítő üzenetet mutatja.
+    // A Payload 200-at ad (ne szivárogjon, létezik-e a cím); rate-limitnél 429
+    // jöhet — a kliens ezt is megerősítő üzenettel kezeli (a throttling-állapot
+    // sem árul el semmit a címzett fiókjáról).
     return { ok: true }
   } catch {
     return { ok: false, message: GENERIC_AUTH_ERROR }

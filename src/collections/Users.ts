@@ -6,6 +6,7 @@ import {
   validatePasswordStrength,
 } from '../lib/security/password-policy'
 import { createLogger } from '../lib/logger'
+import { createUsersAuthRateLimitHook } from '../lib/users-auth-rate-limit'
 import {
   APIError,
   AuthenticationError,
@@ -221,6 +222,11 @@ export const Users: CollectionConfig = {
     },
   ],
   hooks: {
+    // A forgot-password / nyilvános regisztráció (beépített REST végpontok)
+    // per-IP + per-email rate-limitje — a részletek és a tesztelhető factory a
+    // src/lib/users-auth-rate-limit.ts-ben. A limiter a Payload OPERATION
+    // szintjén fut (beforeOperation), MÉG a token-generálás/e-mail-küldés előtt.
+    beforeOperation: [createUsersAuthRateLimitHook()],
     beforeChange: [promoteFirstUserToOwner, enforcePasswordPolicy],
     afterError: [logFailedLogin],
   },

@@ -29,6 +29,16 @@ function requiredBarionPosKeyEnv(): string {
   return process.env.BARION_ENVIRONMENT === 'prod' ? 'BARION_POSKEY_PROD' : 'BARION_POSKEY_TEST'
 }
 
+/**
+ * Turnstile (spam-védelem) production-ben KÖTELEZŐ: a TURNSTILE_SECRET_KEY
+ * hiánya eddig csendesen KIKAPCSOLTA az ellenőrzést (lásd payload.config.ts
+ * verifyTurnstile), ami élesben elfogadhatatlan. Dev-ben/stagingen továbbra
+ * is opcionális, hogy a helyi fejlesztéshez ne kelljen Cloudflare-kulcs.
+ */
+function isProductionEnv(): boolean {
+  return process.env.NODE_ENV === 'production'
+}
+
 export function assertRequiredEnv(): void {
   const missing: string[] = requiredEnvVars.filter((key) => {
     const value = process.env[key]
@@ -39,6 +49,13 @@ export function assertRequiredEnv(): void {
   const posKeyValue = process.env[posKeyEnv]
   if (typeof posKeyValue !== 'string' || posKeyValue.trim().length === 0) {
     missing.push(posKeyEnv)
+  }
+
+  if (isProductionEnv()) {
+    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY
+    if (typeof turnstileSecret !== 'string' || turnstileSecret.trim().length === 0) {
+      missing.push('TURNSTILE_SECRET_KEY')
+    }
   }
 
   if (missing.length > 0) {

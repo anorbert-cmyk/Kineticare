@@ -20,6 +20,7 @@ import { Users } from './collections/Users'
 import { WebhookEvents } from './collections/WebhookEvents'
 import { jobsConfig } from './jobs'
 import { contactStaffEmail, kineticareEmailAdapter, sendMail, usersAuthEmails } from './lib/email'
+import { createFormSubmissionRateLimitHook } from './lib/form-submission-rate-limit'
 import { logger } from './lib/logger'
 import { adminGroups } from './plugins/admin-groups'
 import { audit } from './plugins/audit'
@@ -38,8 +39,11 @@ const isAdmin: Access = ({ req }) => req.user?.role === 'owner' || req.user?.rol
 /**
  * Turnstile-előkészítés: a form-submissions rekord opcionális turnstileToken
  * mezőjét a TURNSTILE_SECRET_KEY jelenléte kapcsolja be — env nélkül a
- * spam-ellenőrzés KI van kapcsolva, a beküldés akadálytalan. (A kliensoldali
- * widget a TURNSTILE_SITE_KEY-val kerül a frontendre egy későbbi sprintben.)
+ * spam-ellenőrzés KI van kapcsolva (DEV/staging kényelmi funkció; production-ben
+ * a kulcs kötelező, az induláskori ENV-assert megakadályozza a védtelen éles
+ * futást — lásd src/env.ts). A beküldés előtt a formSubmission rate-limit is
+ * lefut (külön beforeValidate hook). (A kliensoldali widget a TURNSTILE_SITE_KEY-val
+ * kerül a frontendre egy későbbi sprintben.)
  */
 const verifyTurnstile = async (data: unknown): Promise<unknown> => {
   const secret = process.env.TURNSTILE_SECRET_KEY
@@ -370,7 +374,12 @@ export default buildConfig({
           },
         ],
         hooks: {
-          beforeValidate: [async ({ data }) => verifyTurnstile(data)],
+          // Rate-limit ELŐBB fut, mint a Turnstile (olcsó, külső hívás nélküli
+          // flood-fal — a Turnstile-logika érintetlen marad).
+          beforeValidate: [
+            createFormSubmissionRateLimitHook(),
+            async ({ data }) => verifyTurnstile(data),
+          ],
           afterChange: [async ({ doc, operation }) => notifyStaffOnSubmission({ doc, operation })],
         },
       },
