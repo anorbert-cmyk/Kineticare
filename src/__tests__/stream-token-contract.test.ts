@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import { NextRequest } from 'next/server'
 import type { Payload } from 'payload'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -23,12 +25,23 @@ import type { Order, Product, User } from '../payload-types'
  * várt), így két, egymásnak ELLENTMONDÓ feltevést rögzítettek, és a valós
  * lánc törése (a fizető vevő sem tudott lejátszani) átcsúszott rajtuk.
  *
+ * A Bunny-átállás óta ez a teszt EGY FOKKAL többet is bizonyít: a jegy hash-e
+ * a lejáratot is köti, ezért ha az `expiresAt` oda-vissza alakítása akár egy
+ * másodpercet csúszna, a kliens által ismert számmal újraszámolt hash NEM
+ * egyezne a szerver jegyével — ez a teszt pont ezt az elcsúszást fogja meg
+ * (docs/video-platform-dontes.md 4.3).
+ *
  * A paywall (vásárlás-ellenőrzés, lejárat) itt csak regresszió-őrként
  * szerepel — a szabályok forrása változatlanul az src/lib/course-access*.
  */
 
-// DUMMY érték, egyértelműen jelölve — NEM valódi Cloudflare Stream signing key.
-const DUMMY_SIGNING_KEY = 'DUMMY-CF-STREAM-SIGNING-KEY-NEM-VALODI-TITOK'
+// DUMMY érték, egyértelműen jelölve — NEM valódi Bunny token-hitelesítési kulcs.
+const DUMMY_TOKEN_KEY = 'DUMMY-BUNNY-TOKEN-AUTH-KEY-NEM-VALODI-TITOK'
+
+/** A jegy független újraszámítása (Bunny: SHA256_HEX(kulcs + guid + expires)). */
+function expectedToken(videoId: string, expires: number): string {
+  return createHash('sha256').update(`${DUMMY_TOKEN_KEY}${videoId}${expires}`).digest('hex')
+}
 
 const buyerUser = {
   id: 7,
@@ -38,12 +51,6 @@ const buyerUser = {
 } as unknown as User
 
 const nonBuyerUser = { ...buyerUser, id: 8, purchases: [] } as unknown as User
-
-function decodeClaims(token: string): Record<string, unknown> {
-  const parts = token.split('.')
-  expect(parts).toHaveLength(3)
-  return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<string, unknown>
-}
 
 type VideoRow = NonNullable<Product['videos']>[number]
 
@@ -88,6 +95,7 @@ interface HarnessOptions {
  */
 function createHarness(options: HarnessOptions = {}) {
   const requestedUrls: string[] = []
+  const responseBodies: string[] = []
   const payload = {
     auth: vi.fn(async () => ({
       user: options.user === undefined ? buyerUser : options.user,
@@ -105,29 +113,33 @@ function createHarness(options: HarnessOptions = {}) {
       typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
     requestedUrls.push(requested)
     const url = new URL(requested, 'https://shop.example.test')
-    return await GET(new NextRequest(url.toString(), { method: 'GET' }))
+    const response = await GET(new NextRequest(url.toString(), { method: 'GET' }))
+    // A választörzs eredeti SZÖVEGE is kell (a szerializált `expiresAt` alakja
+    // a round-trip bizonyíték része), ezért másolatot adunk vissza.
+    responseBodies.push(await response.clone().text())
+    return response
   }
 
-  return { fetchImpl, payload, requestedUrls }
+  return { fetchImpl, payload, requestedUrls, responseBodies }
 }
 
-const savedSigningKey: { value: string | undefined } = { value: undefined }
+const savedTokenKey: { value: string | undefined } = { value: undefined }
 
 beforeAll(() => {
-  savedSigningKey.value = process.env.CF_STREAM_SIGNING_KEY
-  process.env.CF_STREAM_SIGNING_KEY = DUMMY_SIGNING_KEY
+  savedTokenKey.value = process.env.BUNNY_STREAM_TOKEN_AUTH_KEY
+  process.env.BUNNY_STREAM_TOKEN_AUTH_KEY = DUMMY_TOKEN_KEY
 })
 
 afterAll(() => {
-  if (savedSigningKey.value === undefined) {
-    delete process.env.CF_STREAM_SIGNING_KEY
+  if (savedTokenKey.value === undefined) {
+    delete process.env.BUNNY_STREAM_TOKEN_AUTH_KEY
   } else {
-    process.env.CF_STREAM_SIGNING_KEY = savedSigningKey.value
+    process.env.BUNNY_STREAM_TOKEN_AUTH_KEY = savedTokenKey.value
   }
 })
 
 describe('stream-token szerződés — a kliens a szerver VALÓDI válaszát dolgozza fel', () => {
-  it('a vevő jegyet kap, és a lejárat epoch másodpercként áll elő a JWT exp claimjéből', async () => {
+  it('a vevő jegyet kap, és a lejárat epoch másodpercként áll elő', async () => {
     const { fetchImpl } = createHarness()
 
     const result = await fetchStreamToken({ productId: 42 }, fetchImpl)
@@ -136,10 +148,9 @@ describe('stream-token szerződés — a kliens a szerver VALÓDI válaszát dol
     if (result.kind !== 'token') {
       return
     }
-    const claims = decodeClaims(result.token)
-    expect(claims.sub).toBe('elso-asset')
+    // A jegy a videóra ÉS a kliens által ismert lejáratra van kötve.
+    expect(result.token).toBe(expectedToken('elso-asset', result.expiresAtEpochSec))
     // A kliens időaritmetikája (frissítés exp−5 percben) epoch MÁSODPERCET vár.
-    expect(result.expiresAtEpochSec).toBe(claims.exp)
     expect(result.expiresAtEpochSec).toBeGreaterThan(Math.floor(Date.now() / 1000))
   })
 
@@ -164,7 +175,7 @@ describe('stream-token szerződés — a kliens a szerver VALÓDI válaszát dol
     if (result.kind !== 'token') {
       return
     }
-    expect(decodeClaims(result.token).sub).toBe('masodik-asset')
+    expect(result.token).toBe(expectedToken('masodik-asset', result.expiresAtEpochSec))
   })
 
   it('feldolgozás alatti epizód nem csúsztatja el a jegyet (sorszám-független azonosítás)', async () => {
@@ -198,7 +209,7 @@ describe('stream-token szerződés — a kliens a szerver VALÓDI válaszát dol
     if (result.kind !== 'token') {
       return
     }
-    expect(decodeClaims(result.token).sub).toBe('masodik-asset')
+    expect(result.token).toBe(expectedToken('masodik-asset', result.expiresAtEpochSec))
   })
 
   it('a szerver a streamAssetId-t is elfogadja azonosítóként (sor-id nélküli sor)', async () => {
@@ -218,7 +229,7 @@ describe('stream-token szerződés — a kliens a szerver VALÓDI válaszát dol
     if (result.kind !== 'token') {
       return
     }
-    expect(decodeClaims(result.token).sub).toBe('csak-asset')
+    expect(result.token).toBe(expectedToken('csak-asset', result.expiresAtEpochSec))
   })
 
   it('ismeretlen videó-azonosító → a kliens általános hibaüzenetet ad (szerver 404)', async () => {
@@ -249,78 +260,158 @@ describe('stream-token szerződés — a kliens a szerver VALÓDI válaszát dol
     expect(result).toEqual({ kind: 'forbidden' })
   })
 
-  it('hiányzó CF signing key → unavailable (a szerver 503-a)', async () => {
-    const original = process.env.CF_STREAM_SIGNING_KEY
-    delete process.env.CF_STREAM_SIGNING_KEY
+  it('hiányzó Bunny token-kulcs → unavailable (a szerver 503-a)', async () => {
+    const original = process.env.BUNNY_STREAM_TOKEN_AUTH_KEY
+    delete process.env.BUNNY_STREAM_TOKEN_AUTH_KEY
     try {
       const { fetchImpl } = createHarness()
       const result = await fetchStreamToken({ productId: 42 }, fetchImpl)
       expect(result).toEqual({ kind: 'unavailable' })
     } finally {
-      process.env.CF_STREAM_SIGNING_KEY = original
+      process.env.BUNNY_STREAM_TOKEN_AUTH_KEY = original
     }
+  })
+})
+
+describe('lejárat oda-vissza (round-trip) — a néma, végzetes elcsúszás ellen', () => {
+  it('exp (epoch mp) → ISO expiresAt → kliens-oldali epoch mp: BITRE ugyanaz az egész', () => {
+    // Határesetek: a 32 bites előjeles határ, a jelenhez közeli érték, és egy
+    // nagyon távoli lejárat. Ezredmásodperc SEHOL nem keletkezhet.
+    for (const exp of [1, 1785600000, 2147483647, 2147483648, 253402300799]) {
+      const expiresAt = new Date(exp * 1000).toISOString()
+      expect(expiresAt).toMatch(/T\d{2}:\d{2}:\d{2}\.000Z$/)
+      const parsed = parseStreamTokenResponseBody({ token: 'jegy', expiresAt })
+      expect(parsed?.expiresAtEpochSec).toBe(exp)
+      expect(Number.isInteger(parsed?.expiresAtEpochSec)).toBe(true)
+    }
+  })
+
+  it('a VALÓDI láncon: a kliens számával újraszámolt hash egyezik a szerver jegyével', async () => {
+    const { fetchImpl, responseBodies } = createHarness()
+
+    const result = await fetchStreamToken({ productId: 42 }, fetchImpl)
+
+    expect(result.kind).toBe('token')
+    if (result.kind !== 'token') {
+      return
+    }
+    // 1) A szerver ISO-alakja egész másodperc (nincs ezredmásodperc-rész).
+    const body = JSON.parse(responseBodies[0]) as { token: string; expiresAt: string }
+    expect(body.expiresAt).toMatch(/T\d{2}:\d{2}:\d{2}\.000Z$/)
+    // 2) A kliens által visszaalakított szám ugyanaz, mint amit a szerver
+    //    hashelt — ha bármelyik oldal elcsúszna, ez a hash NEM egyezne, és
+    //    élesben MINDEN lejátszás elhalna (a hibaüzenet nélkül).
+    expect(result.expiresAtEpochSec).toBe(Math.floor(Date.parse(body.expiresAt) / 1000))
+    expect(result.token).toBe(expectedToken('elso-asset', result.expiresAtEpochSec))
+  })
+
+  it('az embed-URL expires paramétere ugyanaz a szám, amit a hash köt', async () => {
+    const { fetchImpl } = createHarness()
+
+    const result = await fetchStreamToken({ productId: 42 }, fetchImpl)
+    expect(result.kind).toBe('token')
+    if (result.kind !== 'token') {
+      return
+    }
+
+    const src = streamIframeSrc({
+      libraryId: '123456',
+      streamAssetId: 'elso-asset',
+      token: result.token,
+      expiresAtEpochSec: result.expiresAtEpochSec,
+    })
+    const params = new URL(src as string).searchParams
+    expect(params.get('expires')).toBe(String(result.expiresAtEpochSec))
+    expect(params.get('token')).toBe(expectedToken('elso-asset', Number(params.get('expires'))))
   })
 })
 
 describe('parseStreamTokenResponseBody — a válasz-szerződés egyetlen olvasója', () => {
   it('ISO-8601 expiresAt → epoch másodperc', () => {
     const parsed = parseStreamTokenResponseBody({
-      token: 'jwt.abc',
+      token: 'jegy-hex',
       expiresAt: '2026-08-01T12:10:00.000Z',
     })
     expect(parsed).toEqual({
-      token: 'jwt.abc',
+      token: 'jegy-hex',
       expiresAtEpochSec: Math.floor(Date.parse('2026-08-01T12:10:00.000Z') / 1000),
     })
   })
 
   it('szám alakú expiresAt-et NEM fogad el (a régi, hibás kliens-feltevés)', () => {
-    expect(parseStreamTokenResponseBody({ token: 'jwt.abc', expiresAt: 1785588000 })).toBeNull()
+    expect(parseStreamTokenResponseBody({ token: 'jegy-hex', expiresAt: 1785588000 })).toBeNull()
   })
 
   it('értelmezhetetlen vagy hiányzó mezők → null', () => {
-    expect(parseStreamTokenResponseBody({ token: 'jwt.abc', expiresAt: 'tegnap' })).toBeNull()
-    expect(parseStreamTokenResponseBody({ token: 'jwt.abc' })).toBeNull()
+    expect(parseStreamTokenResponseBody({ token: 'jegy-hex', expiresAt: 'tegnap' })).toBeNull()
+    expect(parseStreamTokenResponseBody({ token: 'jegy-hex' })).toBeNull()
     expect(parseStreamTokenResponseBody({ expiresAt: '2026-08-01T12:10:00.000Z' })).toBeNull()
     expect(parseStreamTokenResponseBody(null)).toBeNull()
   })
 })
 
-describe('streamIframeSrc — a lejátszó beágyazási URL-je', () => {
-  it('customer-kóddal érvényes, kódolt URL-t ad', () => {
+describe('streamIframeSrc — a Bunny lejátszó beágyazási URL-je', () => {
+  it('library-id + GUID + jegy + lejárat → pontos Bunny embed-URL', () => {
     const src = streamIframeSrc({
-      customerCode: 'abc123',
+      libraryId: '123456',
       streamAssetId: 'elso-asset',
-      token: 'jwt.abc',
-    })
-    expect(src).toBe('https://customer-abc123.cloudflarestream.com/elso-asset/iframe?token=jwt.abc')
-    expect(new URL(src as string).origin).toBe('https://customer-abc123.cloudflarestream.com')
-  })
-
-  it('hiányzó customer-kód / asset / token esetén null (nem némán törött iframe)', () => {
-    expect(
-      streamIframeSrc({ customerCode: undefined, streamAssetId: 'elso-asset', token: 'jwt.abc' }),
-    ).toBeNull()
-    expect(streamIframeSrc({ customerCode: ' ', streamAssetId: 'a', token: 'jwt.abc' })).toBeNull()
-    expect(streamIframeSrc({ customerCode: 'abc123', streamAssetId: '', token: 'x' })).toBeNull()
-    expect(
-      streamIframeSrc({ customerCode: 'abc123', streamAssetId: 'elso-asset', token: '' }),
-    ).toBeNull()
-  })
-
-  it('a hoszt nem tágítható idegen originre (a kód és az asset kódolva megy)', () => {
-    const src = streamIframeSrc({
-      customerCode: 'abc/@evil.example',
-      streamAssetId: '../szoke',
-      token: 'jwt.abc',
+      token: 'abcdef0123456789',
+      expiresAtEpochSec: 1785600000,
     })
     expect(src).toBe(
-      'https://customer-abc%2F%40evil.example.cloudflarestream.com/..%2Fszoke/iframe?token=jwt.abc',
+      'https://iframe.mediadelivery.net/embed/123456/elso-asset?token=abcdef0123456789&expires=1785600000',
     )
-    // A hoszt-részbe nem szivárog nyers '/' vagy '@', amivel más originre
-    // lehetne mutatni; a mögötte álló útvonal sem léphet ki a mappából.
-    const authority = (src as string).slice('https://'.length).split('/')[0]
-    expect(authority).toBe('customer-abc%2F%40evil.example.cloudflarestream.com')
-    expect(authority).not.toContain('@')
+    expect(new URL(src as string).origin).toBe('https://iframe.mediadelivery.net')
+  })
+
+  it('hiányzó library-id / GUID / token esetén null (magyar üzenet, nem fekete iframe)', () => {
+    const base = { streamAssetId: 'elso-asset', token: 'jegy', expiresAtEpochSec: 1785600000 }
+    expect(streamIframeSrc({ ...base, libraryId: undefined })).toBeNull()
+    expect(streamIframeSrc({ ...base, libraryId: null })).toBeNull()
+    expect(streamIframeSrc({ ...base, libraryId: '   ' })).toBeNull()
+    expect(streamIframeSrc({ ...base, libraryId: '123456', streamAssetId: '' })).toBeNull()
+    expect(streamIframeSrc({ ...base, libraryId: '123456', streamAssetId: '  ' })).toBeNull()
+    expect(streamIframeSrc({ ...base, libraryId: '123456', token: '' })).toBeNull()
+    expect(streamIframeSrc({ ...base, libraryId: '123456', token: '   ' })).toBeNull()
+  })
+
+  it('értelmetlen lejárat (tört, nem véges, nem pozitív) → null, nem elrontott URL', () => {
+    const base = { libraryId: '123456', streamAssetId: 'elso-asset', token: 'jegy' }
+    // Ezredmásodperc/másodperc keverés jellemző jele a tört érték.
+    expect(streamIframeSrc({ ...base, expiresAtEpochSec: 1785600000.5 })).toBeNull()
+    expect(streamIframeSrc({ ...base, expiresAtEpochSec: Number.NaN })).toBeNull()
+    expect(streamIframeSrc({ ...base, expiresAtEpochSec: Number.POSITIVE_INFINITY })).toBeNull()
+    expect(streamIframeSrc({ ...base, expiresAtEpochSec: 0 })).toBeNull()
+    expect(streamIframeSrc({ ...base, expiresAtEpochSec: -1 })).toBeNull()
+  })
+
+  it('MÚLTBELI lejárat esetén is URL épül (a lejárat-kezelés nem itt lakik)', () => {
+    const src = streamIframeSrc({
+      libraryId: '123456',
+      streamAssetId: 'elso-asset',
+      token: 'jegy',
+      expiresAtEpochSec: 1,
+    })
+    // A Bunny utasítja el a lejárt jegyet, a lejátszó pedig a lejárat előtt 5
+    // perccel amúgy is újat kér — itt új lejárat-logika nem keletkezhet.
+    expect(src).toBe('https://iframe.mediadelivery.net/embed/123456/elso-asset?token=jegy&expires=1')
+  })
+
+  it('a hoszt nem tágítható idegen originre (a library-id, a GUID és a jegy kódolva megy)', () => {
+    const src = streamIframeSrc({
+      libraryId: '../evil',
+      streamAssetId: '../szoke',
+      token: 'a b&expires=999#',
+      expiresAtEpochSec: 1785600000,
+    })
+    expect(src).toBe(
+      'https://iframe.mediadelivery.net/embed/..%2Fevil/..%2Fszoke?token=a%20b%26expires%3D999%23&expires=1785600000',
+    )
+    const url = new URL(src as string)
+    expect(url.origin).toBe('https://iframe.mediadelivery.net')
+    // A jegybe csempészett paraméter nem lesz ÖNÁLLÓ query-paraméter, és a
+    // valódi lejáratot sem írja felül.
+    expect(url.searchParams.get('expires')).toBe('1785600000')
+    expect(url.searchParams.get('token')).toBe('a b&expires=999#')
   })
 })
