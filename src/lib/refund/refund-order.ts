@@ -356,6 +356,16 @@ async function refundOrderLocked(
   }
   const type: 'full' | 'partial' = alreadyRefunded + amountHuf >= totalHuf ? 'full' : 'partial'
 
+  if (order.paymentProvider === 'stripe') {
+    // A Stripe-visszatérítés külön fejlesztés — a Barion-refund út Stripe-
+    // rendelésen sosem futhat (félrevezető provider-hiba helyett tiszta üzenet).
+    orderLog.error('refund: Stripe-rendelésre érkezett refund-kísérlet (nem támogatott út)')
+    throw new RefundError(
+      409,
+      'A rendelés Stripe-ben teljesült — a Stripe-os visszatérítés egyelőre csak a Stripe-dashboardon végezhető el, itt nem.',
+    )
+  }
+
   if (!order.barionPaymentId) {
     orderLog.error('refund: a paid rendeléshez nem tartozik Barion PaymentId')
     throw new RefundError(

@@ -460,6 +460,20 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       },
     },
     {
+      name: 'paymentProvider',
+      type: 'select',
+      defaultValue: 'barion',
+      label: 'Fizetési szolgáltató',
+      options: [
+        { label: 'Barion', value: 'barion' },
+        { label: 'Stripe', value: 'stripe' },
+      ],
+      admin: {
+        description:
+          'Melyik fizetési gateway indította a rendelést (Barion az alapértelmezett). A rendszer állítja — ne írd át.',
+      },
+    },
+    {
       name: 'barionPaymentId',
       type: 'text',
       label: 'Barion fizetésazonosító',
@@ -477,6 +491,20 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       name: 'barionPaymentRequestId',
       type: 'text',
       label: 'Barion kérésazonosító',
+    },
+    {
+      name: 'stripeSessionId',
+      type: 'text',
+      label: 'Stripe Checkout Session azonosító',
+      // Postgresben a unique index több NULL-t is megenged, így gyakorlatilag sparse.
+      unique: true,
+      index: true,
+      access: {
+        read: isOwnerFieldAccess,
+      },
+      admin: {
+        description: 'A Stripe Checkout Session azonosítója (cs_...) — hibakereséshez.',
+      },
     },
     {
       name: 'invoiceNumber',

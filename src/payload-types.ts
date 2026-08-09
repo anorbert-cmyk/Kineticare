@@ -1572,10 +1572,18 @@ export interface Order {
    */
   totalHufSnapshot?: number | null;
   /**
+   * Melyik fizetési gateway indította a rendelést (Barion az alapértelmezett). A rendszer állítja — ne írd át.
+   */
+  paymentProvider?: ('barion' | 'stripe') | null;
+  /**
    * A Barion oldali fizetés azonosítója — hibakereséshez.
    */
   barionPaymentId?: string | null;
   barionPaymentRequestId?: string | null;
+  /**
+   * A Stripe Checkout Session azonosítója (cs_...) — hibakereséshez.
+   */
+  stripeSessionId?: string | null;
   invoiceNumber?: string | null;
   invoicePdfUrl?: string | null;
   /**
@@ -1857,7 +1865,7 @@ export interface FormSubmission {
  */
 export interface WebhookEvent {
   id: number;
-  provider: 'barion' | 'stream' | 'szamlazz';
+  provider: 'barion' | 'stream' | 'szamlazz' | 'stripe';
   externalId: string;
   eventType?: string | null;
   payload?:
@@ -2803,8 +2811,10 @@ export interface OrdersSelect<T extends boolean = true> {
   currency?: T;
   orderNumber?: T;
   totalHufSnapshot?: T;
+  paymentProvider?: T;
   barionPaymentId?: T;
   barionPaymentRequestId?: T;
+  stripeSessionId?: T;
   invoiceNumber?: T;
   invoicePdfUrl?: T;
   invoiceStatus?: T;

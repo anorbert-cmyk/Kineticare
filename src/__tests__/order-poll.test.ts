@@ -237,6 +237,72 @@ describe('order-poll — árva rendelés (barionPaymentId nélkül)', () => {
   })
 })
 
+describe('order-poll — Stripe-rendelések (provider-semleges árva-logika)', () => {
+  const stripeOrder = (overrides: Partial<Order> = {}): Order =>
+    createPendingOrder({
+      paymentProvider: 'stripe',
+      stripeSessionId: 'cs_test_poll1234',
+      barionPaymentId: null,
+      ...overrides,
+    })
+
+  it('stripe rendelés stripeSessionId-vel → DOKUMENTÁLT NO-OP (skipped): a GetState NEM hívódik, a státusz érintetlen', async () => {
+    const { payload, fetchState, onPaid, queueInvoice, orderUpdates } = setup({
+      pending: [stripeOrder()],
+      // Ha a poll mégis provider-függetlenül GetState-et hívna, ez a hiba
+      // failed-et jelentene — a skipped=1/failed=0 elvárás így bizonyítja a no-opot.
+      stateError: new Error('a Barion GetState Stripe-rendelésnél nem hívható'),
+    })
+
+    const summary = await pollPendingOrders({ payload, fetchState, onPaid, queueInvoice, now: NOW })
+
+    expect(summary.scanned).toBe(1)
+    expect(summary.skipped).toBe(1)
+    expect(summary.failed).toBe(0)
+    expect(summary.orphaned).toBe(0)
+    expect(orderUpdates).toHaveLength(0)
+  })
+
+  it('stripe rendelés stripeSessionId NÉLKÜL, türelmi időn belül → skipped (még nem árva)', async () => {
+    const orphanCandidate = stripeOrder({ stripeSessionId: null, createdAt: isoHoursAgo(0.5) })
+    const { payload, fetchState, onPaid, queueInvoice, orderUpdates } = setup({
+      pending: [orphanCandidate],
+    })
+
+    const summary = await pollPendingOrders({ payload, fetchState, onPaid, queueInvoice, now: NOW })
+
+    expect(summary.skipped).toBe(1)
+    expect(summary.orphaned).toBe(0)
+    expect(orderUpdates).toHaveLength(0)
+  })
+
+  it('stripe rendelés stripeSessionId NÉLKÜL, ORPHAN_GRACE-nél régebbi → cancelled (a checkout félbeszakadt, Stripe-ban nincs fizetés)', async () => {
+    const orphan = stripeOrder({
+      stripeSessionId: null,
+      createdAt: new Date(NOW - ORPHAN_ORDER_GRACE_MS - 60_000).toISOString(),
+    })
+    const { payload, fetchState, onPaid, queueInvoice } = setup({ pending: [orphan] })
+
+    const summary = await pollPendingOrders({ payload, fetchState, onPaid, queueInvoice, now: NOW })
+
+    expect(summary.orphaned).toBe(1)
+    expect(orphan.status).toBe('cancelled')
+  })
+
+  it('a hiányzó barionPaymentId stripe-rendelésnél NEM minősül árvának (24 órán túl sem)', async () => {
+    const old = stripeOrder({ createdAt: new Date(NOW - ORPHAN_ORDER_GRACE_MS - 60_000).toISOString() })
+    const { payload, fetchState, onPaid, queueInvoice, orderUpdates } = setup({ pending: [old] })
+
+    const summary = await pollPendingOrders({ payload, fetchState, onPaid, queueInvoice, now: NOW })
+
+    // A Stripe-webhook retry-lépcsője viszi — a poll nem árt a rendelésnek.
+    expect(summary.skipped).toBe(1)
+    expect(summary.orphaned).toBe(0)
+    expect(orderUpdates).toHaveLength(0)
+    expect(old.status).toBe('payment_pending')
+  })
+})
+
 describe('order-poll — számla-resweep', () => {
   it("paid + invoiceStatus 'none' → újra sorba állítja az invoice-issue jobot", async () => {
     const paidOrder = createPendingOrder({ id: 202, status: 'paid', invoiceStatus: 'none' })

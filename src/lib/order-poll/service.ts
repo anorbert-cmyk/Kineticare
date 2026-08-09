@@ -11,6 +11,17 @@ import { applyBarionStateTransition } from '../order-status/apply-barion-state'
  * utánpollolása a Barion v4 GetState-tel. Ez a "második védővonal": ha egy
  * callback elveszik (hálózati hiba, deploy, Barion-késés), a fizetés akkor is
  * lezárul — a v4 válasz a végső igazság, a callback csak gyorsító.
+ *
+ * PROVIDER-SZABÁLY (Stripe-bővítés): a paymentProvider='stripe' rendelések a
+ * pollban DOKUMENTÁLT NO-OP-ok (skipped) — a lezárást a Stripe-webhook
+ * hordozza, amelynek retry-lépcsője ~3 napig újra kézbesít, a failed eseményeket
+ * pedig a webhook-retry job viszi (sessions.retrieve-alapú utánpollolás a
+ * pollban szándékosan nincs: a webhook-fedezet ezt elegendővé teszi).
+ * Az ÁRVA-takarítás viszont provider-semleges: a gateway-azonosító
+ * (Barionnál barionPaymentId, Stripe-nál stripeSessionId) nélküli rendelés a
+ * checkout félbeszakadását jelenti — a gatewayben ilyen fizetés nem létezik,
+ * a türelmi idő után mindkét providernél cancelled-re zárul. (A hiányzó
+ * barionPaymentId Stripe-rendelésnél természetesen NEM minősül árvának.)
  */
 
 export const ORDER_POLL_BATCH_SIZE = 25
@@ -107,10 +118,18 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
 
   for (const order of pending.docs as Order[]) {
     const orderLog = log.child({ orderId: order.id, orderNumber: order.orderNumber ?? null })
+    const provider = order.paymentProvider ?? 'barion'
 
-    if (!order.barionPaymentId) {
-      // Árva rendelés: a Barion Payment/Start sosem jött létre (a checkout a
-      // rendelés létrehozása után, a paymentId mentése előtt állt le).
+    // Árva-ellenőrzés PROVIDER SZERINT: a gateway-azonosító hiánya azt jelenti,
+    // hogy a checkout a rendelés létrehozása után, a gateway-azonosító mentése
+    // előtt állt le — a gatewayben ilyen fizetés sosem jött létre.
+    const gatewayReferenceField = provider === 'stripe' ? 'stripeSessionId' : 'barionPaymentId'
+    const gatewayReference =
+      provider === 'stripe' ? order.stripeSessionId : order.barionPaymentId
+
+    if (!gatewayReference) {
+      // Árva rendelés: a gateway-fizetés sosem jött létre (a checkout a
+      // rendelés létrehozása után, az azonosító mentése előtt állt le).
       const createdAtMs = Date.parse(order.createdAt ?? '')
       if (Number.isFinite(createdAtMs) && now - createdAtMs >= ORPHAN_ORDER_GRACE_MS) {
         await deps.payload.update({
@@ -121,7 +140,7 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
         })
         summary.orphaned += 1
         orderLog.warn(
-          'árva rendelés (barionPaymentId nélkül) lejárt — cancelled; a vevő újrakezdheti a vásárlást',
+          `árva rendelés (${gatewayReferenceField} nélkül) lejárt — cancelled; a vevő újrakezdheti a vásárlást`,
           { ageMs: now - createdAtMs },
         )
       } else {
@@ -130,9 +149,18 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
       continue
     }
 
+    if (provider === 'stripe') {
+      // DOKUMENTÁLT NO-OP (lásd a modul fejlécét): a Stripe-webhook retryja
+      // (~3 nap) + a webhook-retry job hordozza a lezárást — a poll a Stripe-
+      // rendeléseket szándékosan nem pollolja, de NEM is takarítja ki őket.
+      summary.skipped += 1
+      continue
+    }
+
     let state: BarionPaymentStateResponse
     try {
-      state = await fetchState(order.barionPaymentId)
+      // Itt a provider biztosan 'barion', így a gatewayReference a barionPaymentId (truthy → string).
+      state = await fetchState(gatewayReference)
     } catch (error) {
       summary.failed += 1
       orderLog.warn('order-poll: GetState-hiba (a következő futás újrapollolja)', {

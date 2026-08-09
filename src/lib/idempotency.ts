@@ -15,7 +15,7 @@ import { logger } from './logger'
  * a registerWebhookProcessor regisztráció szolgálja.
  */
 
-export type WebhookProvider = 'barion' | 'stream' | 'szamlazz'
+export type WebhookProvider = 'barion' | 'stream' | 'szamlazz' | 'stripe'
 
 export type WebhookEventStatus = 'received' | 'processed' | 'failed'
 

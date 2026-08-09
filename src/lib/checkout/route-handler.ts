@@ -4,21 +4,27 @@ import type { Payload } from 'payload'
 import { resolveClientIp } from '../audit'
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
+import type { StripeClientConfig, StripeGatewayClient } from '../stripe'
 import { CheckoutError, startCheckout, type CheckoutStartInput } from './start-checkout'
 
 /**
- * POST /api/checkout/start route-handler factory (T-021).
+ * POST /api/checkout/start route-handler factory (T-021, Stripe-bővítés).
  *
  * A függősségek (Payload-példány) injektálva vannak, így a handler maga is
  * egységtesztelhető; a tényleges route az src/app/(frontend)/api/checkout/start/route.ts
  * köti be a valódi configgal.
  *
  * Folyamat: auth (payload.auth) → JSON-parse → startCheckout szolgáltatás →
- * { orderNumber, gatewayUrl }. Hibaágak: magyar felhasználói üzenet +
+ * { orderNumber, gatewayUrl }. A body opcionális paymentMethod mezője
+ * ('barion' | 'stripe', default 'barion') a szolgáltatásban validálódik —
+ * érvénytelen értékre 400 jön vissza. Hibaágak: magyar felhasználói üzenet +
  * technikai hiba naplózva requestId-vel.
  */
 export interface CheckoutStartHandlerDeps {
   getPayload: () => Promise<Payload>
+  /** Injektálható Stripe-függőségek (teszteléshez); alapból az envből oldódnak. */
+  stripeClient?: StripeGatewayClient
+  stripeConfig?: StripeClientConfig
 }
 
 export function createCheckoutStartHandler(
@@ -57,6 +63,8 @@ export function createCheckoutStartHandler(
         input: (body ?? {}) as CheckoutStartInput,
         ipAddress: resolveClientIp(request.headers),
         logger: log,
+        ...(deps.stripeClient ? { stripeClient: deps.stripeClient } : {}),
+        ...(deps.stripeConfig ? { stripeConfig: deps.stripeConfig } : {}),
       })
 
       return NextResponse.json(result, { status: 200 })

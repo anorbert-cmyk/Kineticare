@@ -13,6 +13,10 @@ import {
   barionPaymentAdapter,
   withoutPluginPaymentEndpoints,
 } from '../lib/payments/barion-adapter'
+import type {
+  StripeClientConfig,
+  StripeGatewayClient,
+} from '../lib/stripe'
 import configPromise from '../payload.config'
 
 /**
@@ -590,6 +594,198 @@ describe('POST /api/checkout/start route-handler', () => {
     const body = (await response.json()) as { error: string }
     expect(body.error).toContain('Váratlan hiba')
     expect(body.error).not.toContain('DB-kapcsolat')
+  })
+})
+
+describe('startCheckout — paymentMethod: stripe ág (a Barion marad a default)', () => {
+  // DUMMY értékek, egyértelműen jelölve — NEM valódi Stripe-titkok.
+  const STRIPE_SESSION_ID = 'cs_test_checkoutstart1234'
+  const STRIPE_SESSION_URL = `https://checkout.stripe.com/c/pay/${STRIPE_SESSION_ID}`
+  const stripeConfig: StripeClientConfig = {
+    enabled: true,
+    secretKey: 'sk_test_DUMMY-NEM-VALODI-TITOK',
+    webhookSecret: 'whsec_DUMMY-NEM-VALODI-TITOK',
+  }
+
+  interface StripeCreateCall {
+    params: {
+      mode?: string
+      client_reference_id?: string | null
+      success_url?: string
+      cancel_url?: string
+      customer_email?: string
+      line_items?: Array<{ quantity: number; price_data: { currency: string; unit_amount: number } }>
+    }
+    options?: { idempotencyKey?: string }
+  }
+
+  function createFakeStripeClient(options: { createError?: unknown } = {}) {
+    const calls: StripeCreateCall[] = []
+    const client: StripeGatewayClient = {
+      checkout: {
+        sessions: {
+          create: async (params, opts) => {
+            calls.push({ params: params as StripeCreateCall['params'], ...(opts ? { options: opts } : {}) })
+            if (options.createError) {
+              throw options.createError
+            }
+            return { id: STRIPE_SESSION_ID, url: STRIPE_SESSION_URL } as never
+          },
+          retrieve: async () => {
+            throw new Error('a checkout-tesztekben retrieve nem történik')
+          },
+        },
+      },
+      webhooks: {
+        constructEvent: () => {
+          throw new Error('a checkout-tesztekben webhook-verifikáció nem történik')
+        },
+      },
+    }
+    return { client, calls }
+  }
+
+  it('stripe: Checkout Session a libből, FILLÉR-amounttal, idempotencyKey=orderNumber; stripeSessionId mentődik; gatewayUrl = session.url', async () => {
+    const { client, calls: stripeCalls } = createFakeStripeClient()
+    const { payload, calls } = createMockPayload()
+
+    const result = await startCheckout({
+      payload,
+      user: mockUser,
+      input: { ...happyInput, paymentMethod: 'stripe' },
+      stripeClient: client,
+      stripeConfig,
+    })
+
+    expect(result).toEqual({ orderNumber: ORDER_NUMBER, gatewayUrl: STRIPE_SESSION_URL })
+    // A Barion NEM hívódik meg a stripe-ágban.
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    // A rendelés a providerrel jön létre.
+    expect(calls.create[0]).toMatchObject({ paymentProvider: 'stripe' })
+
+    // A Stripe Session: idempotencyKey = client_reference_id = orderNumber, HUF fillérben.
+    expect(stripeCalls).toHaveLength(1)
+    const { params, options } = stripeCalls[0]!
+    expect(params.mode).toBe('payment')
+    expect(params.client_reference_id).toBe(ORDER_NUMBER)
+    expect(params.success_url).toBe('https://shop.example.test/fizetes/koszonom')
+    expect(params.cancel_url).toBe('https://shop.example.test/sikertelen')
+    expect(params.customer_email).toBe('vevo@example.test')
+    expect(options?.idempotencyKey).toBe(ORDER_NUMBER)
+    // 5000 Ft → 500000 fillér (a HUF terhelésnél kéttizedes a Stripe-ban!).
+    expect(params.line_items?.[0]?.price_data.unit_amount).toBe(500_000)
+    expect(params.line_items?.[0]?.price_data.currency).toBe('huf')
+
+    // A stripeSessionId a rendelésre mentődik (és a státusz NEM lesz paid).
+    expect(calls.update[0]).toMatchObject({ id: 101, data: { stripeSessionId: STRIPE_SESSION_ID } })
+    expect(
+      calls.update.every((call) => (call.data as { status?: string }).status !== 'paid'),
+    ).toBe(true)
+  })
+
+  it('default (paymentMethod nélkül): változatlanul Barion, paymentProvider=barion', async () => {
+    fetchMock.mockResolvedValueOnce(barionStartSuccess())
+    const { payload, calls } = createMockPayload()
+
+    await startCheckout({ payload, user: mockUser, input: happyInput })
+
+    expect(calls.create[0]).toMatchObject({ paymentProvider: 'barion' })
+    expect(lastBarionRequestBody().PaymentRequestId).toBe(ORDER_NUMBER)
+  })
+
+  it('paymentMethod: "barion" explicit is a Barion-ág', async () => {
+    fetchMock.mockResolvedValueOnce(barionStartSuccess())
+    const { payload } = createMockPayload()
+
+    const result = await startCheckout({
+      payload,
+      user: mockUser,
+      input: { ...happyInput, paymentMethod: 'barion' },
+    })
+
+    expect(result.gatewayUrl).toBe(GATEWAY_URL)
+  })
+
+  it('érvénytelen paymentMethod → 400, rendelés NEM jön létre, gateway NEM hívódik', async () => {
+    const { payload, calls } = createMockPayload()
+
+    const promise = startCheckout({
+      payload,
+      user: mockUser,
+      input: { ...happyInput, paymentMethod: 'paypal' },
+    })
+
+    await expect(promise).rejects.toBeInstanceOf(CheckoutError)
+    await expect(promise).rejects.toMatchObject({ status: 400 })
+    await expect(promise).rejects.toThrowError(/Érvénytelen fizetési mód/)
+    expect(calls.create).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('kikapcsolt Stripe (STRIPE_SECRET_KEY nélkül) → 503 + a rendelés payment_failed (a Barion-hibaág mintája)', async () => {
+    const { client, calls: stripeCalls } = createFakeStripeClient()
+    const { payload, calls } = createMockPayload()
+
+    const promise = startCheckout({
+      payload,
+      user: mockUser,
+      input: { ...happyInput, paymentMethod: 'stripe' },
+      stripeClient: client,
+      stripeConfig: { enabled: false },
+    })
+
+    await expect(promise).rejects.toBeInstanceOf(CheckoutError)
+    await expect(promise).rejects.toMatchObject({ status: 503 })
+    await expect(promise).rejects.toThrowError(/Stripe fizetés jelenleg nem érhető el/)
+    // A session-létrehozás el sem indul, a rendelés payment_failed-re áll.
+    expect(stripeCalls).toHaveLength(0)
+    expect(calls.update[0]).toMatchObject({ id: 101, data: { status: 'payment_failed' } })
+  })
+
+  it('Stripe create-hiba → 502 + a rendelés payment_failed', async () => {
+    const { client } = createFakeStripeClient({
+      createError: Object.assign(new Error('Rate limited'), {
+        type: 'StripeRateLimitError',
+        statusCode: 429,
+      }),
+    })
+    const { payload, calls } = createMockPayload()
+
+    const promise = startCheckout({
+      payload,
+      user: mockUser,
+      input: { ...happyInput, paymentMethod: 'stripe' },
+      stripeClient: client,
+      stripeConfig,
+    })
+
+    await expect(promise).rejects.toBeInstanceOf(CheckoutError)
+    await expect(promise).rejects.toMatchObject({ status: 502 })
+    await expect(promise).rejects.toThrowError(/fizetés indítása jelenleg nem sikerült/)
+    expect(calls.update[0]).toMatchObject({ id: 101, data: { status: 'payment_failed' } })
+  })
+
+  it('route-handler: paymentMethod=stripe a végponton is a Stripe-ágra fut (injektált deps)', async () => {
+    const { client } = createFakeStripeClient()
+    const { payload, calls } = createMockPayload()
+    const POST = createCheckoutStartHandler({
+      getPayload: async () => payload,
+      stripeClient: client,
+      stripeConfig,
+    })
+
+    const response = await POST(
+      new NextRequest('https://shop.example.test/api/checkout/start', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...happyInput, paymentMethod: 'stripe' }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ orderNumber: ORDER_NUMBER, gatewayUrl: STRIPE_SESSION_URL })
+    expect(calls.create[0]).toMatchObject({ paymentProvider: 'stripe' })
   })
 })
 

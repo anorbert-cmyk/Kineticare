@@ -5,14 +5,21 @@ import { withAdvisoryLock } from '../advisory-lock'
 import { BARION_DEFAULT_PAYMENT_WINDOW, BarionApiError, startPayment } from '../barion'
 import { isUniqueViolation } from '../idempotency'
 import { logger, type Logger } from '../logger'
+import {
+  createCheckoutSession,
+  getStripeConfig,
+  type StripeClientConfig,
+  type StripeGatewayClient,
+} from '../stripe'
 
 /**
- * Checkout-start szolgáltatás (T-021) — a POST /api/checkout/start végpont
- * üzleti logikája, transportfüggetlenül (a Payload-példány és a felhasználó
+ * Checkout-start szolgáltatás (T-021, Stripe-bővítés) — a POST /api/checkout/start
+ * végpont üzleti logikája, transportfüggetlenül (a Payload-példány és a felhasználó
  * injektálva, így mockolt fetch-csel egységtesztelhető).
  *
  * A pénzügyi főlánc első láncszeme:
- *  1. input-validáció (productId, quantity, opcionális kliens-ár, waiver),
+ *  1. input-validáció (productId, quantity, opcionális kliens-ár, waiver,
+ *     opcionális paymentMethod: 'barion' (default) | 'stripe'),
  *  2. termék- és státuszellenőrzés (archived/draft nem megvásárolható),
  *  3. duplavásárlás-blokk (paid vagy aktív payment_pending → 409) — a
  *     kritikus szakasz (ellenőrzés + rendelés-létrehozás) Postgres advisory
@@ -25,13 +32,19 @@ import { logger, type Logger } from '../logger'
  *     max+1 alapú sorszám párhuzamos checkoutnál ütközhet (unique 23505 az
  *     orders_order_number_idx indexen) — ezért a create ilyen hibára
  *     újrapróbálkozik (más hiba azonnal továbbmegy),
- *  5. Barion Payment/Start a tesztelt src/lib/barion klienssel — a zár
- *     feloldása UTÁN (a külső hívás nem tartozik a kritikus szakaszba)
- *     (PaymentRequestId = orderNumber → Barion-oldali idempotencia),
- *  6. barionPaymentId + barionPaymentRequestId mentése a rendelésre.
+ *  5. gateway-indítás a zár feloldása UTÁN (a külső hívás nem tartozik a
+ *     kritikus szakaszba) — ez az EGYETLEN provider-függő lépés:
+ *     - barion (default): Barion Payment/Start a tesztelt src/lib/barion
+ *       klienssel (PaymentRequestId = orderNumber → Barion-oldali
+ *       idempotencia), majd barionPaymentId + barionPaymentRequestId mentése;
+ *     - stripe: Stripe Checkout Session a src/lib/stripe wrapperrel
+ *       (idempotencyKey = client_reference_id = orderNumber), majd
+ *       stripeSessionId mentése; a session.url a gatewayUrl. Kikapcsolt
+ *       Stripe-konfiguráció (STRIPE_SECRET_KEY nélkül) → a rendelés
+ *       payment_failed + 503 magyar üzenet.
  *
  * A rendelés `paid`-re állítása NEM itt történik: az kizárólag a
- * Barion-callback-útvonal (T-022) joga (T-063).
+ * Barion-callback (T-022) / a Stripe-webhook útvonal joga (T-063).
  */
 
 /** Üzleti hiba HTTP-státusszal — a route-handler ezt képezi válaszra. */
@@ -45,6 +58,9 @@ export class CheckoutError extends Error {
   }
 }
 
+/** A választható fizetési gatewayk — a Barion az alapértelmezett. */
+export type CheckoutPaymentMethod = 'barion' | 'stripe'
+
 export interface CheckoutStartInput {
   productId?: unknown
   quantity?: unknown
@@ -52,6 +68,8 @@ export interface CheckoutStartInput {
   priceHuf?: unknown
   /** Az elállási jogról való lemondás elfogadása — kötelező (true). */
   consentWithdrawalWaiver?: unknown
+  /** Fizetési gateway — opcionális, alapértelmezés 'barion'. */
+  paymentMethod?: unknown
 }
 
 export interface CheckoutStartOptions {
@@ -60,9 +78,13 @@ export interface CheckoutStartOptions {
   input: CheckoutStartInput
   /** A kliens IP-címe (proxy-fejlécekből feloldva) — a rendelésen rögzítjük. */
   ipAddress?: string
-  /** Publikus szerver-URL a Barion Redirect/Callback URL-ekhez; alapból NEXT_PUBLIC_SERVER_URL. */
+  /** Publikus szerver-URL a gateway visszairányítás/callback URL-ekhez; alapból NEXT_PUBLIC_SERVER_URL. */
   serverUrl?: string
   logger?: Logger
+  /** Injektálható Stripe-kliens (teszteléshez); alapból a valódi SDK-példány. */
+  stripeClient?: StripeGatewayClient
+  /** Injektálható Stripe-konfig (teszteléshez); alapból az envből oldódik. */
+  stripeConfig?: StripeClientConfig
 }
 
 export interface CheckoutStartResult {
@@ -84,6 +106,7 @@ interface ParsedInput {
   productId: number
   quantity: number
   priceHuf?: number
+  paymentMethod: CheckoutPaymentMethod
 }
 
 function parseInput(input: CheckoutStartInput): ParsedInput {
@@ -112,6 +135,19 @@ function parseInput(input: CheckoutStartInput): ParsedInput {
     priceHuf = rawPrice
   }
 
+  // A fizetési gateway választható, de alapértelmezésben a Barion marad — a
+  // meglévő viselkedés változatlan, ha a kliens nem küldi a mezőt.
+  let paymentMethod: CheckoutPaymentMethod = 'barion'
+  if (input.paymentMethod !== undefined) {
+    if (input.paymentMethod !== 'barion' && input.paymentMethod !== 'stripe') {
+      throw new CheckoutError(
+        400,
+        'Érvénytelen fizetési mód (paymentMethod): csak „barion" vagy „stripe" adható meg.',
+      )
+    }
+    paymentMethod = input.paymentMethod
+  }
+
   // Az elállási-jog-lemondás (waiver) rögzítése API-szinten kötelező — a
   // kétlépcsős waiver-UX a storefront-ticketé, itt a mező biztos rögzítése a cél.
   if (input.consentWithdrawalWaiver !== true) {
@@ -121,7 +157,7 @@ function parseInput(input: CheckoutStartInput): ParsedInput {
     )
   }
 
-  return { productId, quantity, ...(priceHuf !== undefined ? { priceHuf } : {}) }
+  return { productId, quantity, paymentMethod, ...(priceHuf !== undefined ? { priceHuf } : {}) }
 }
 
 /** A termék megvásárolhatóságának ellenőrzése (státusz + ár), magyar üzenetekkel. */
@@ -242,7 +278,7 @@ function isOrderNumberUniqueViolation(error: unknown): boolean {
 export async function startCheckout(options: CheckoutStartOptions): Promise<CheckoutStartResult> {
   const { payload, user } = options
   const log = options.logger ?? logger
-  const { productId, quantity, priceHuf } = parseInput(options.input)
+  const { productId, quantity, priceHuf, paymentMethod } = parseInput(options.input)
 
   // A terméket a legfrissebb (draft) verzióval olvassuk — a vásárlási
   // jogosultságot a szerkesztői `status` mező dönti el, nem a drafts _status.
@@ -285,6 +321,7 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
               customerEmail: user.email ?? null,
               status: 'payment_pending',
               currency: 'HUF',
+              paymentProvider: paymentMethod,
               items: [{ product: productId, quantity }],
               consentWithdrawalWaiver: true,
               consentWithdrawalWaiverAt: nowIso,
@@ -344,7 +381,7 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
     '',
   )
 
-  /** Barion Start-hiba esetén a rendelést payment_failed-re állítjuk (best-effort). */
+  /** Gateway Start-hiba esetén a rendelést payment_failed-re állítjuk (best-effort). */
   const markPaymentFailed = async (): Promise<void> => {
     await payload
       .update({
@@ -361,6 +398,81 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
       )
   }
 
+  // A rendelés-létrehozás eddig KÖZÖS volt — innentől ágazik a két gateway.
+  const gatewayUrl =
+    paymentMethod === 'stripe'
+      ? await startStripeGateway({
+          payload,
+          order,
+          orderNumber,
+          snapshotItems,
+          totalHuf,
+          serverUrl,
+          user,
+          product,
+          productId,
+          stripeClient: options.stripeClient,
+          stripeConfig: options.stripeConfig,
+          markPaymentFailed,
+          log,
+        })
+      : await startBarionGateway({
+          payload,
+          order,
+          orderNumber,
+          snapshotItems,
+          totalHuf,
+          serverUrl,
+          user,
+          product,
+          productId,
+          markPaymentFailed,
+          log,
+        })
+
+  log.info('checkout-start: fizetés elindítva', {
+    orderId: order.id,
+    orderNumber,
+    userId: user.id,
+    productId,
+    totalHuf,
+    paymentMethod,
+  })
+
+  return { orderNumber, gatewayUrl }
+}
+
+/** A rendelés item-snapshotjainak közös alakja (a hook által írt mezők szelete). */
+interface OrderSnapshotItem {
+  titleSnapshot?: string | null
+  priceHufSnapshot?: number | null
+  quantity?: number | null
+}
+
+interface GatewayStartCommonArgs {
+  payload: Payload
+  order: Order
+  orderNumber: string
+  snapshotItems: OrderSnapshotItem[]
+  /** A szerver-oldali snapshot-végösszeg Ft-ban (totalHufSnapshot, fallback: item-összeg). */
+  totalHuf: number
+  serverUrl: string
+  user: User
+  product: Product
+  productId: number
+  /** Gateway Start-hiba esetén payment_failed-re állítja a rendelést (best-effort). */
+  markPaymentFailed: () => Promise<void>
+  log: Logger
+}
+
+/**
+ * Barion-gateway indítása (T-021 eredeti ága, változatlan viselkedés):
+ * Payment/Start (PaymentRequestId = orderNumber → Barion-oldali idempotencia),
+ * majd barionPaymentId + barionPaymentRequestId mentése a rendelésre.
+ */
+async function startBarionGateway(args: GatewayStartCommonArgs): Promise<string> {
+  const { payload, order, orderNumber, snapshotItems, totalHuf, serverUrl, user, product, productId } =
+    args
   let gatewayUrl: string
   let barionPaymentId: string
   let barionPaymentRequestId: string
@@ -404,8 +516,8 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
     barionPaymentId = startResponse.PaymentId
     barionPaymentRequestId = startResponse.PaymentRequestId ?? orderNumber
   } catch (error) {
-    await markPaymentFailed()
-    log.error('checkout-start: Barion fizetésindítás sikertelen', {
+    await args.markPaymentFailed()
+    args.log.error('checkout-start: Barion fizetésindítás sikertelen', {
       orderId: order.id,
       orderNumber,
       error: error instanceof Error ? error.message : String(error),
@@ -426,13 +538,85 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
     overrideAccess: true,
   })
 
-  log.info('checkout-start: fizetés elindítva', {
-    orderId: order.id,
-    orderNumber,
-    userId: user.id,
-    productId,
-    totalHuf,
+  return gatewayUrl
+}
+
+/**
+ * Stripe-gateway indítása (a Barion-ág tükreképe): Checkout Session létrehozása
+ * (idempotencyKey = client_reference_id = orderNumber → Stripe-oldali
+ * idempotencia és webhook-oldali fallback-azonosító), majd stripeSessionId
+ * mentése a rendelésre. A vevőt a session.url-re irányítjuk.
+ *
+ * Kikapcsolt Stripe-konfiguráció (STRIPE_SECRET_KEY nélkül): a Barion
+ * Start-hibaág mintájára a rendelés payment_failed + 503 magyar üzenet.
+ */
+async function startStripeGateway(
+  args: GatewayStartCommonArgs & {
+    stripeClient?: StripeGatewayClient
+    stripeConfig?: StripeClientConfig
+  },
+): Promise<string> {
+  const { payload, order, orderNumber, snapshotItems, totalHuf, serverUrl, user, product, productId } =
+    args
+  const stripeConfig = args.stripeConfig ?? getStripeConfig()
+  if (!stripeConfig.enabled) {
+    await args.markPaymentFailed()
+    args.log.warn(
+      'checkout-start: Stripe fizetést kért a vevő, de az integráció ki van kapcsolva (STRIPE_SECRET_KEY hiányzik)',
+      { orderId: order.id, orderNumber },
+    )
+    throw new CheckoutError(
+      503,
+      'A Stripe fizetés jelenleg nem érhető el. Kérjük, válaszd a Barion fizetést, vagy próbáld újra később.',
+    )
+  }
+
+  let session: { sessionId: string; url: string }
+  try {
+    session = await createCheckoutSession(
+      {
+        orderNumber,
+        successUrl: `${serverUrl}/fizetes/koszonom`,
+        cancelUrl: `${serverUrl}/sikertelen`,
+        customerEmail: user.email ?? undefined,
+        // Fallback-tétel: ha valamiért üres lenne a snapshot-lista, a végösszeg
+        // akkor is pontosan egy sorban megy át (a Stripe line_items nem lehet üres).
+        items:
+          snapshotItems.length > 0
+            ? snapshotItems.map((item) => ({
+                name: item.titleSnapshot ?? product.sku ?? `Termék #${productId}`,
+                quantity: item.quantity ?? 1,
+                unitPriceHuf: item.priceHufSnapshot ?? 0,
+              }))
+            : [
+                {
+                  name: `Kineticare rendelés ${orderNumber}`,
+                  quantity: 1,
+                  unitPriceHuf: totalHuf,
+                },
+              ],
+      },
+      { client: args.stripeClient, config: stripeConfig },
+    )
+  } catch (error) {
+    await args.markPaymentFailed()
+    args.log.error('checkout-start: Stripe fizetésindítás sikertelen', {
+      orderId: order.id,
+      orderNumber,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    throw new CheckoutError(
+      502,
+      'A fizetés indítása jelenleg nem sikerült. Kérjük, próbáld újra néhány perc múlva.',
+    )
+  }
+
+  await payload.update({
+    collection: 'orders',
+    id: order.id,
+    data: { stripeSessionId: session.sessionId },
+    overrideAccess: true,
   })
 
-  return { orderNumber, gatewayUrl }
+  return session.url
 }
