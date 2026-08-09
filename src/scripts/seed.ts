@@ -32,6 +32,7 @@ import {
   buildHomeLayout,
   ensureHomeImages,
   ensureHomeLayout,
+  ensureHomeTestimonials,
   minimalRichText,
   type HomeMediaIds,
 } from '../lib/home-seed'
@@ -55,6 +56,7 @@ async function seed(): Promise<void> {
   if (process.env.SEED_SCOPE === 'kezdolap') {
     const homeMediaIds = await ensureHomeImages(payload)
     await ensureHomeLayout(payload, homeMediaIds)
+    await ensureHomeTestimonials(payload)
     payload.logger.info('Seed: kész (hatókör: kezdolap).')
     return
   }
@@ -319,6 +321,7 @@ async function seed(): Promise<void> {
   // --- Kezdőlapi képek + alap-szekciósor -------------------------------------
   const homeMediaIds = await ensureHomeImages(payload)
   await ensureHomeLayout(payload, homeMediaIds)
+  await ensureHomeTestimonials(payload)
 
   payload.logger.info('Seed: kész.')
 }
