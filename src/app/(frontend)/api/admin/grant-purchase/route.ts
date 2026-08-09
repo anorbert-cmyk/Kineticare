@@ -1,7 +1,7 @@
 import { getPayload } from 'payload'
 
-import { createGrantPurchaseHandler } from '../../../../lib/grant-purchase-route'
-import config from '../../../../payload.config'
+import { createGrantPurchaseHandler } from '../../../../../lib/grant-purchase-route'
+import config from '../../../../../payload.config'
 
 /**
  * POST /api/admin/grant-purchase — kézi kurzus-hozzáférés adása (staff/owner).
