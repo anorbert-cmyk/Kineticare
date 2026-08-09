@@ -8,6 +8,8 @@ import { Section } from '@/components/ui/Section'
 import { CourseList } from '@/components/account/CourseList'
 import { toCourseAccessView, type CourseAccessView } from '@/lib/course-access'
 import { resolveCourseAccessForUser } from '@/lib/course-access-lookup'
+import { fetchWatchedRefs } from '@/lib/course-progress/lookup'
+import { summarizeCourseProgress, type CourseProgressSummary } from '@/lib/course-progress/progress'
 import { logger } from '@/lib/logger'
 import type { Product, User } from '@/payload-types'
 
@@ -54,8 +56,47 @@ async function getAccessViews(
 }
 
 /**
+ * Kurzusonkénti haladás-összegzés (E1) — „3/7 megnézve".
+ *
+ * A számítás a JELENLEGI videólistához mér: az időközben törölt videóra mutató
+ * (orphan) haladás-sor nem számít bele, a videó nélküli kurzus pedig a
+ * „Még nincs videó" feliratot kapja (nincs osztás nullával). Hiba esetén üres
+ * térkép — a lista ilyenkor haladás-sor nélkül, a mai módon jelenik meg.
+ */
+async function getProgressSummaries(
+  userId: number,
+  products: Product[],
+): Promise<Record<number, CourseProgressSummary>> {
+  const summaries: Record<number, CourseProgressSummary> = {}
+  if (products.length === 0) {
+    return summaries
+  }
+  try {
+    const payload = await getPayload({ config })
+    const watchedByProduct = await fetchWatchedRefs({
+      payload,
+      userId,
+      productIds: products.map((product) => product.id),
+      logger,
+    })
+    for (const product of products) {
+      summaries[product.id] = summarizeCourseProgress(
+        product.videos,
+        watchedByProduct.get(product.id) ?? [],
+      )
+    }
+  } catch (error) {
+    logger.warn('kurzusaim: a kurzus-haladás betöltése sikertelen', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+  return summaries
+}
+
+/**
  * /kurzusaim — a megvett kurzusok listája (users.purchases alapján), a
- * hozzáférés lejáratával együtt.
+ * hozzáférés lejáratával és a videó-haladással együtt.
  */
 export default async function KurzusaimPage() {
   const user = await getCurrentUser()
@@ -69,12 +110,17 @@ export default async function KurzusaimPage() {
     .filter((entry): entry is Product => entry !== null)
 
   const accessByProductId = await getAccessViews(user.id, products)
+  const progressByProductId = await getProgressSummaries(user.id, products)
 
   return (
     <Section>
       <Container>
         <h1>Kurzusaim</h1>
-        <CourseList accessByProductId={accessByProductId} products={products} />
+        <CourseList
+          accessByProductId={accessByProductId}
+          products={products}
+          progressByProductId={progressByProductId}
+        />
       </Container>
     </Section>
   )

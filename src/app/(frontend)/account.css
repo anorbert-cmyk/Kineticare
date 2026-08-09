@@ -198,6 +198,60 @@
   font-size: var(--kc-text-xs);
 }
 
+/* ---- Kurzus-haladás (E1) -------------------------------------------------
+   „X/Y videó megnézve" a lejátszó fejlécében, epizódonként jelölő gomb és a
+   megnézett állapot pipája. Méret és szín KIZÁRÓLAG a közös tokenekről
+   (UX-skill 4. pont) — új szín nem került be. A „megnézve" a meglévő
+   --kc-color-success (#166534): a kártya/lap hátterén 7,4:1, illetve 6,9:1 —
+   mindkettő az AA normál szöveg 4,5:1-es küszöbe felett. */
+
+.kc-player__progress {
+  margin: calc(-1 * var(--kc-space-4)) 0 var(--kc-space-5);
+  font-size: var(--kc-text-sm);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-player__episode-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--kc-space-2);
+  margin-bottom: var(--kc-space-3);
+}
+
+.kc-player__episode-item > .kc-button {
+  margin-left: var(--kc-space-3);
+}
+
+.kc-player__episode-check {
+  margin-right: var(--kc-space-2);
+  color: var(--kc-color-success);
+}
+
+.kc-player__episode-watched {
+  margin: 0 0 0 var(--kc-space-3);
+  font-size: var(--kc-text-sm);
+  color: var(--kc-color-success);
+}
+
+.kc-player__episode-error {
+  margin: 0 0 0 var(--kc-space-3);
+  font-size: var(--kc-text-sm);
+  color: var(--kc-color-danger);
+}
+
+/* A kurzuslista visszafogott haladás-sora („3/7 megnézve"). */
+.kc-course-progress {
+  display: block;
+  margin: 0 0 var(--kc-space-3);
+  font-size: var(--kc-text-sm);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-course-progress--complete {
+  color: var(--kc-color-success);
+}
+
 .kc-player--forbidden h2 {
   margin: 0 0 var(--kc-space-3);
 }

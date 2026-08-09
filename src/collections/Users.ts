@@ -212,6 +212,21 @@ export const Users: CollectionConfig = {
       },
     },
     {
+      // Kézi kurzus-hozzáférés panel (UI-mező, NEM tárol adatot → nincs
+      // séma-változás, migrációt nem igényel). A purchases mező field-access-e
+      // változatlanul rendszer-írású marad: a panel nem ír közvetlenül, hanem a
+      // POST /api/admin/grant-purchase végpontot hívja (staff/owner, idempotens,
+      // audit-naplózott) — ugyanaz a szolgáltatás, amit a CLI-script használ.
+      name: 'grantPurchasePanel',
+      type: 'ui',
+      label: 'Kurzus-hozzáférés adása',
+      admin: {
+        components: {
+          Field: '/components/admin/GrantPurchasePanel#GrantPurchasePanel',
+        },
+      },
+    },
+    {
       name: 'billingName',
       type: 'text',
       label: 'Számlázási név',

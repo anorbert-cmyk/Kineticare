@@ -10,6 +10,7 @@ import { CoursePlayer } from '@/components/account/CoursePlayer'
 import { logger } from '@/lib/logger'
 import { accessExpiredMessage } from '@/lib/course-access'
 import { resolveSingleCourseAccess } from '@/lib/course-access-lookup'
+import { fetchWatchedRefs } from '@/lib/course-progress/lookup'
 import { courseTitle, hasUserPurchased, parseCourseIdParam } from '@/lib/courses'
 import type { Product, User } from '@/payload-types'
 
@@ -73,6 +74,31 @@ async function getAccessExpiredMessage(userId: number, product: Product): Promis
 }
 
 /**
+ * A már megnézettként jelölt videók refjei (E1). Kényelmi adat: lekérdezési
+ * hiba esetén üres lista megy a lejátszóba (a `fetchWatchedRefs` maga is
+ * fail-open) — a haladás jelzése sosem akadályozhatja meg a lejátszást.
+ */
+async function getWatchedRefs(userId: number, productId: number): Promise<string[]> {
+  try {
+    const payload = await getPayload({ config })
+    const byProduct = await fetchWatchedRefs({
+      payload,
+      userId,
+      productIds: [productId],
+      logger,
+    })
+    return [...(byProduct.get(productId) ?? [])]
+  } catch (error) {
+    logger.warn('lejátszó: a kurzus-haladás betöltése sikertelen', {
+      userId,
+      productId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return []
+  }
+}
+
+/**
  * /kurzusaim/[id] — a kurzus lejátszóoldala (epizódlista + Cloudflare Stream
  * player, signed token a T-032 végpontról, token-frissítés exp−5 percben).
  */
@@ -95,6 +121,9 @@ export default async function KurzusaimPlayerPage({ params }: KurzusaimPlayerPag
 
   const purchased = hasUserPurchased(user.purchases, product.id)
   const expiredMessage = purchased ? await getAccessExpiredMessage(user.id, product) : null
+  const hasAccess = purchased && expiredMessage === null
+  // Haladás csak akkor kell, ha a vevő ténylegesen nézheti a kurzust.
+  const watchedRefs = hasAccess ? await getWatchedRefs(user.id, product.id) : []
 
   return (
     <Section>
@@ -114,7 +143,8 @@ export default async function KurzusaimPlayerPage({ params }: KurzusaimPlayerPag
                 }))
               : [],
           }}
-          hasAccess={purchased && expiredMessage === null}
+          hasAccess={hasAccess}
+          watchedRefs={watchedRefs}
         />
       </Container>
     </Section>

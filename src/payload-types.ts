@@ -78,6 +78,7 @@ export interface Config {
     categories: Category;
     testimonials: Testimonial;
     menus: Menu;
+    'course-progress': CourseProgress;
     products: Product;
     carts: Cart;
     orders: Order;
@@ -101,6 +102,7 @@ export interface Config {
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     testimonials: TestimonialsSelect<false> | TestimonialsSelect<true>;
     menus: MenusSelect<false> | MenusSelect<true>;
+    'course-progress': CourseProgressSelect<false> | CourseProgressSelect<true>;
     products: ProductsSelect<false> | ProductsSelect<true>;
     carts: CartsSelect<false> | CartsSelect<true>;
     orders: OrdersSelect<false> | OrdersSelect<true>;
@@ -1346,6 +1348,10 @@ export interface Product {
    */
   category: number | Category;
   /**
+   * Ez dönti el, hogy a Kurzusok oldalon melyik sávban jelenik meg: „Otthoni gyakorlóknak" vagy „Szakembereknek". Ha üresen marad, az otthoni sávba kerül.
+   */
+  audience?: ('laikus' | 'szakember') | null;
+  /**
    * A Cloudflare Stream videó azonosítója az ingyenes előzeteshez. Ha nem tudod, hagyd üresen.
    */
   previewVideoStreamId?: string | null;
@@ -1506,6 +1512,27 @@ export interface Menu {
    * Külső linkeknél szokás bekapcsolni, hogy a látogató ne hagyja el az oldalt.
    */
   openInNewTab?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Ki melyik kurzus melyik videóját nézte meg. A rendszer tölti a lejátszóból — kézzel nem szerkeszthető, hibás sor törölhető.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "course-progress".
+ */
+export interface CourseProgress {
+  id: number;
+  user: number | User;
+  product: number | Product;
+  /**
+   * A videó STABIL azonosítója (a CMS-sor id-ja, ennek hiányában a Cloudflare Stream azonosító). Sorszám sosem kerül ide.
+   */
+  videoRef: string;
+  /**
+   * A megjelölés időpontja — kizárólag a szerver állítja.
+   */
+  watchedAt: string;
   updatedAt: string;
   createdAt: string;
 }
@@ -2070,6 +2097,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'menus';
         value: number | Menu;
+      } | null)
+    | ({
+        relationTo: 'course-progress';
+        value: number | CourseProgress;
       } | null)
     | ({
         relationTo: 'products';
@@ -2722,6 +2753,18 @@ export interface MenusSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "course-progress_select".
+ */
+export interface CourseProgressSelect<T extends boolean = true> {
+  user?: T;
+  product?: T;
+  videoRef?: T;
+  watchedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "products_select".
  */
 export interface ProductsSelect<T extends boolean = true> {
@@ -2741,6 +2784,7 @@ export interface ProductsSelect<T extends boolean = true> {
   seoDescription?: T;
   ogImage?: T;
   category?: T;
+  audience?: T;
   previewVideoStreamId?: T;
   videos?:
     | T

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import type { CourseAccessView } from '../../lib/course-access'
+import type { CourseProgressSummary } from '../../lib/course-progress/progress'
 import { courseCover, courseTitle } from '../../lib/courses'
 import type { Product } from '../../payload-types'
 
@@ -14,14 +15,23 @@ import type { Product } from '../../payload-types'
  * - él a hozzáférés + van lejárat → „Hozzáférés eddig: 2027. 03. 04.";
  * - lejárt hozzáférés → empatikus üzenet + a kurzus oldalára mutató link
  *   (a lejátszó ilyenkor nem indul el, a stream-token 403-at ad).
+ *
+ * A haladás-sor (E1, „3/7 megnézve") ugyanígy kész, szerveren számolt adatból
+ * jön (src/lib/course-progress/progress.ts) — a kártya nem számol semmit.
  */
 export interface CourseListProps {
   products: Product[]
   /** productId → hozzáférés-állapot; hiányzó bejegyzés = korlátlan hozzáférés. */
   accessByProductId?: Record<number, CourseAccessView>
+  /** productId → haladás-összegzés; hiányzó bejegyzés = nincs haladás-sor. */
+  progressByProductId?: Record<number, CourseProgressSummary>
 }
 
-export function CourseList({ accessByProductId, products }: CourseListProps) {
+export function CourseList({
+  accessByProductId,
+  products,
+  progressByProductId,
+}: CourseListProps) {
   if (products.length === 0) {
     return (
       <div className="kc-cart-empty" role="status">
@@ -37,6 +47,7 @@ export function CourseList({ accessByProductId, products }: CourseListProps) {
         const cover = courseCover(product)
         const access = accessByProductId?.[product.id]
         const expired = access?.hasAccess === false
+        const progress = progressByProductId?.[product.id]
         const target = expired ? `/kurzusok/${product.id}` : `/kurzusaim/${product.id}`
         return (
           <li key={product.id}>
@@ -69,6 +80,19 @@ export function CourseList({ accessByProductId, products }: CourseListProps) {
                   </p>
                 ) : access?.expiryLabel ? (
                   <p className="kc-course-access">{access.expiryLabel}</p>
+                ) : null}
+                {/* Haladás-sor: lejárt hozzáférésnél nem releváns, ott az
+                    empatikus lejárat-üzenet a fontos. */}
+                {progress && !expired ? (
+                  <p
+                    className={
+                      progress.complete
+                        ? 'kc-course-progress kc-course-progress--complete'
+                        : 'kc-course-progress'
+                    }
+                  >
+                    {progress.shortLabel}
+                  </p>
                 ) : null}
                 <Button href={target} size="sm">
                   {expired ? 'A kurzus megtekintése' : 'Tovább a lejátszáshoz'}

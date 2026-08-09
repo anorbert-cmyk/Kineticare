@@ -21,13 +21,19 @@
  *
  * A script NEM hoz létre felhasználót és NEM rendelést — kizárólag a
  * users.purchases mezőt egészíti ki (missing-only), overrideAccess-szel.
+ *
+ * A tényleges logika az src/lib/grant-purchase.ts-ben él (ugyanazt hívja az
+ * admin felület POST /api/admin/grant-purchase végpontja is) — ez a fájl
+ * vékony CLI-burkolat: argumentum-feldolgozás, magyar konzol-üzenetek és
+ * kilépési kódok. A CLI viselkedése (argumentumok, kimenet, exit-kódok,
+ * idempotencia) változatlan.
  */
 
 import { getPayload } from 'payload'
 
+import { grantPurchase as grantPurchaseService } from '../lib/grant-purchase'
 import { createLogger } from '../lib/logger'
 import config from '../payload.config'
-import type { User } from '../payload-types'
 
 const log = createLogger({ script: 'grant-purchase' })
 
@@ -88,85 +94,40 @@ function parseArgs(argv: string[]): CliArgs | null {
   }
 }
 
-/** A users.purchases bejegyzéseinek id-listája (depth: 0 mellett nyers id-k). */
-function userPurchaseIds(user: User): number[] {
-  const purchases = user.purchases ?? []
-  return purchases.map((entry) => (typeof entry === 'object' ? entry.id : entry))
-}
-
 async function grantPurchase(args: CliArgs): Promise<void> {
   const payload = await getPayload({ config })
 
-  // --- Felhasználó feloldása email alapján (NEM hozunk létre újat) ---------
-  const users = await payload.find({
-    collection: 'users',
-    where: { email: { equals: args.email } },
-    limit: 1,
-    depth: 0,
-    overrideAccess: true,
+  // A közös szolgáltatás végzi a feloldást, az idempotens írást és az
+  // audit-naplózást; a CLI csak a kimenetet és a kilépési kódot képezi.
+  const result = await grantPurchaseService({
+    payload,
+    email: args.email,
+    productIdOrSku: args.product,
+    ...(args.reason !== undefined ? { reason: args.reason } : {}),
+    logger: log,
   })
-  if (users.docs.length === 0) {
+
+  if (result.status === 'user-not-found') {
     throw new Error(
       `Nincs ilyen felhasználó: ${args.email}. A script nem hoz létre felhasználót — előbb regisztráltasd a vevőt.`,
     )
   }
-  const user = users.docs[0]
-
-  // --- Termék feloldása sku VAGY numerikus id alapján -----------------------
-  // (A products kollekcióban nincs külön slug mező — az egyedi üzleti kulcs a sku.)
-  const productRef = args.product
-  const isNumericId = /^\d+$/.test(productRef)
-  const products = await payload.find({
-    collection: 'products',
-    where: isNumericId
-      ? { id: { equals: Number(productRef) } }
-      : { sku: { equals: productRef } },
-    limit: 1,
-    depth: 0,
-    overrideAccess: true,
-  })
-  if (products.docs.length === 0) {
+  if (result.status === 'product-not-found') {
     throw new Error(
-      isNumericId
-        ? `Nincs ilyen termék (id: ${productRef}). Ellenőrizd az azonosítót az admin felületen.`
-        : `Nincs ilyen termék (sku: ${productRef}). Ellenőrizd a sku-t az admin felületen.`,
+      result.productRefKind === 'id'
+        ? `Nincs ilyen termék (id: ${result.productRef}). Ellenőrizd az azonosítót az admin felületen.`
+        : `Nincs ilyen termék (sku: ${result.productRef}). Ellenőrizd a sku-t az admin felületen.`,
     )
   }
-  const product = products.docs[0]
-
-  // --- IDEMPOTENS ellenőrzés: már megvan? (no-op, NEM hiba) -----------------
-  const owned = new Set(userPurchaseIds(user).map(String))
-  if (owned.has(String(product.id))) {
-    log.info('manuális hozzáférés: a termék már a vevőnél van — no-op', {
-      email: args.email,
-      userId: user.id,
-      productId: product.id,
-      sku: product.sku,
-      ...(args.reason !== undefined ? { reason: args.reason } : {}),
-    })
+  if (result.status === 'already-had') {
     console.log(
-      `Már megvan: ${args.email} már rendelkezik a(z) "${product.sku ?? product.id}" termékkel — nincs teendő.`,
+      `Már megvan: ${args.email} már rendelkezik a(z) "${result.productLabel}" termékkel — nincs teendő.`,
     )
     return
   }
 
-  // --- Hozzáférés rögzítése (missing-only, a grantPurchases mintájára) ------
-  await payload.update({
-    collection: 'users',
-    id: user.id,
-    data: { purchases: [...userPurchaseIds(user), product.id] },
-    overrideAccess: true,
-  })
-
-  log.info('manuális hozzáférés rögzítve', {
-    email: args.email,
-    userId: user.id,
-    productId: product.id,
-    sku: product.sku,
-    ...(args.reason !== undefined ? { reason: args.reason } : {}),
-  })
   console.log(
-    `Kész: ${args.email} hozzáférést kapott a(z) "${product.sku ?? product.id}" termékhez (felhasználó #${user.id}, termék #${product.id}).`,
+    `Kész: ${args.email} hozzáférést kapott a(z) "${result.productLabel}" termékhez (felhasználó #${result.userId}, termék #${result.productId}).`,
   )
 }
 

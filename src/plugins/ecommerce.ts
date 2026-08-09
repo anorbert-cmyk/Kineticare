@@ -318,6 +318,24 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       },
     },
     {
+      // Kétirányú kurzusstruktúra: a kínálat két ága. NEM kötelező, mert a mező
+      // bevezetése előtti sorokban NULL marad — a felület minden nem-'szakember'
+      // értéket a laikus ágba sorol (src/lib/course-audience.ts).
+      name: 'audience',
+      type: 'select',
+      label: 'Kinek szól',
+      defaultValue: 'laikus',
+      options: [
+        { label: 'Otthoni gyakorlóknak', value: 'laikus' },
+        { label: 'Szakembereknek', value: 'szakember' },
+      ],
+      admin: {
+        position: 'sidebar',
+        description:
+          'Ez dönti el, hogy a Kurzusok oldalon melyik sávban jelenik meg: „Otthoni gyakorlóknak" vagy „Szakembereknek". Ha üresen marad, az otthoni sávba kerül.',
+      },
+    },
+    {
       name: 'previewVideoStreamId',
       type: 'text',
       label: 'Bemutató videó azonosítója',
@@ -562,6 +580,20 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       name: 'consentWithdrawalWaiverAt',
       type: 'date',
       label: 'Elállási jogról lemondás időpontja',
+    },
+    {
+      // Visszatérítés-panel (UI-mező, NEM tárol adatot → nincs séma-változás,
+      // migrációt nem igényel). A meglévő, kész refund-szolgáltatás fölé épült
+      // felület: a kliens-komponens a POST /api/admin/orders/[orderNumber]/refund
+      // végpontot hívja (owner-only, minden szabályt a szerver kényszerít ki).
+      name: 'refundPanel',
+      type: 'ui',
+      label: 'Visszatérítés',
+      admin: {
+        components: {
+          Field: '/components/admin/RefundPanel#RefundPanel',
+        },
+      },
     },
     {
       name: 'refundReason',

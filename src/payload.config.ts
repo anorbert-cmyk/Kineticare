@@ -12,6 +12,7 @@ import { AuditLogs } from './collections/AuditLogs'
 import { ensureHomeImages, ensureHomeLayout, ensureHomeTestimonials } from './lib/home-seed'
 import { ensureMediaFiles } from './lib/media-restore'
 import { Categories } from './collections/Categories'
+import { CourseProgress } from './collections/CourseProgress'
 import { Media } from './collections/Media'
 import { Menus } from './collections/Menus'
 import { Pages } from './collections/Pages'
@@ -291,6 +292,7 @@ export default buildConfig({
     Menus,
     Categories,
     Testimonials,
+    CourseProgress,
     WebhookEvents,
     AuditLogs,
   ],

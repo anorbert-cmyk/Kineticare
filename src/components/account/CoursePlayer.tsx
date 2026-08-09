@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { markVideoWatched } from '../../lib/course-progress/client'
+import { summarizeCourseProgress } from '../../lib/course-progress/progress'
 import { playableStreamVideos, streamIframeSrc, streamVideoRef } from '../../lib/stream/contract'
 import { fetchStreamToken } from '../../lib/stream-token-client'
 
@@ -16,6 +18,12 @@ import { fetchStreamToken } from '../../lib/stream-token-client'
  * `streamVideoRef`-je), nem a sorszámát: az epizódlista a feldolgozás alatti
  * videókat kiszűri, így a sorszám a szerver teljes listájához képest
  * elcsúszna, és a vevő idegen (vagy hibás) videóra kapna jegyet.
+ *
+ * Haladás (E1): a már megnézett videók refjei a SZERVERTŐL érkeznek propként
+ * (`watchedRefs`), a jelölés pedig a POST /api/course-progress/mark-watched
+ * végpontra megy. A felület OPTIMISTA: a pipa azonnal megjelenik, és hiba
+ * esetén visszagördül, magyar üzenettel az érintett epizód alatt. A visszavonás
+ * (megnézett → nem megnézett) szándékosan nincs ebben a körben.
  */
 export interface CourseVideo {
   id?: string
@@ -38,6 +46,12 @@ export interface CoursePlayerProps {
    * hozzáférés (pl. sosem vette meg).
    */
   expiredMessage?: string | null
+  /**
+   * A már megnézettként jelölt videók STABIL refjei (E1) — a szerver-komponens
+   * tölti be a course-progress collectionből. Az orphan ref (időközben törölt
+   * videó) itt is előfordulhat: a lista egyszerűen nem talál hozzá epizódot.
+   */
+  watchedRefs?: readonly string[]
 }
 
 /** A token-frissítés a lejárat előtt ennyivel korábban (másodperc). */
@@ -54,9 +68,24 @@ type PlayerState =
 /** A lejátszó-betöltő szignatúrája (a token-frissítés önhivatkozásához kell). */
 type LoadVideo = (index: number, isRefresh?: boolean) => Promise<void>
 
-export function CoursePlayer({ expiredMessage = null, product, hasAccess }: CoursePlayerProps) {
+export function CoursePlayer({
+  expiredMessage = null,
+  product,
+  hasAccess,
+  watchedRefs,
+}: CoursePlayerProps) {
   const [state, setState] = useState<PlayerState>({ kind: 'idle' })
   const [activeIndex, setActiveIndex] = useState(0)
+  /**
+   * A megnézett refek KLIENS-oldali állapota. A kezdőérték a szerverről jön; az
+   * optimista jelölés ezt bővíti, hiba esetén pedig visszavesz belőle. Új Set
+   * készül minden változásnál — a meglévő állapotot sosem mutáljuk.
+   */
+  const [watched, setWatched] = useState<ReadonlySet<string>>(() => new Set(watchedRefs ?? []))
+  /** Épp mentés alatt lévő refek — a gomb ilyenkor letiltva, dupla kattintás ellen. */
+  const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set<string>())
+  /** A legutóbbi sikertelen jelölés (ref + magyar üzenet) — az epizód alatt jelenik meg. */
+  const [markError, setMarkError] = useState<{ ref: string; message: string } | null>(null)
   const refreshTimerRef = useRef<number | null>(null)
   /**
    * A token-frissítés `setTimeout`-ja korábban magát a `loadVideo` konstanst
@@ -73,6 +102,48 @@ export function CoursePlayer({ expiredMessage = null, product, hasAccess }: Cour
    * lejátszható videónak.
    */
   const videos = useMemo(() => playableStreamVideos(product.videos), [product.videos])
+
+  /**
+   * „X/Y videó megnézve" — a JELENLEGI videólistához mérve (a közös, tesztelt
+   * számítóval). A törölt videóra mutató (orphan) ref nem számít bele, és a
+   * 0 videós kurzuson sincs osztás nullával.
+   */
+  const progress = useMemo(
+    () => summarizeCourseProgress(product.videos, watched),
+    [product.videos, watched],
+  )
+
+  /**
+   * Optimista jelölés: a pipa azonnal látszik, a szerverhívás hibája esetén
+   * visszagördül, és az epizód alatt magyar üzenet jelenik meg.
+   */
+  const markWatched = useCallback(
+    async (videoRef: string) => {
+      if (watched.has(videoRef) || pending.has(videoRef)) {
+        return
+      }
+      setMarkError(null)
+      setPending((previous) => new Set(previous).add(videoRef))
+      setWatched((previous) => new Set(previous).add(videoRef))
+
+      const result = await markVideoWatched({ productId: product.id, videoRef })
+
+      setPending((previous) => {
+        const next = new Set(previous)
+        next.delete(videoRef)
+        return next
+      })
+      if (result.kind !== 'ok') {
+        setWatched((previous) => {
+          const next = new Set(previous)
+          next.delete(videoRef)
+          return next
+        })
+        setMarkError({ ref: videoRef, message: result.message })
+      }
+    },
+    [pending, product.id, watched],
+  )
 
   const clearRefreshTimer = useCallback(() => {
     if (refreshTimerRef.current !== null) {
@@ -187,6 +258,9 @@ export function CoursePlayer({ expiredMessage = null, product, hasAccess }: Cour
   return (
     <div className="kc-player">
       <h1>{product.title}</h1>
+      <p className="kc-player__progress" role="status">
+        {progress.label}
+      </p>
 
       <div className="kc-player__layout">
         <div className="kc-player__stage">
@@ -230,8 +304,15 @@ export function CoursePlayer({ expiredMessage = null, product, hasAccess }: Cour
           <ol className="kc-player__episode-list">
             {videos.map((video, index) => {
               const isActive = index === activeIndex
+              // A haladás-jelölés a videó STABIL refjével megy — ugyanaz az
+              // azonosító, amit a lejátszási token is kap.
+              const videoRef = streamVideoRef(video)
+              const isWatched = videoRef !== null && watched.has(videoRef)
+              const isPending = videoRef !== null && pending.has(videoRef)
+              const errorMessage =
+                videoRef !== null && markError?.ref === videoRef ? markError.message : null
               return (
-                <li key={video.streamAssetId ?? index}>
+                <li className="kc-player__episode-item" key={video.streamAssetId ?? index}>
                   <button
                     aria-current={isActive ? 'true' : undefined}
                     className="kc-player__episode"
@@ -239,6 +320,11 @@ export function CoursePlayer({ expiredMessage = null, product, hasAccess }: Cour
                     type="button"
                   >
                     <span className="kc-player__episode-title">
+                      {isWatched ? (
+                        <span aria-hidden="true" className="kc-player__episode-check">
+                          ✓
+                        </span>
+                      ) : null}
                       {video.title ?? `Rész ${index + 1}`}
                     </span>
                     {video.durationSec ? (
@@ -247,6 +333,23 @@ export function CoursePlayer({ expiredMessage = null, product, hasAccess }: Cour
                       </span>
                     ) : null}
                   </button>
+                  {videoRef === null ? null : isWatched ? (
+                    <p className="kc-player__episode-watched">Megnézve</p>
+                  ) : (
+                    <Button
+                      disabled={isPending}
+                      onClick={() => void markWatched(videoRef)}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      {isPending ? 'Mentés…' : 'Megjelölöm megnézettnek'}
+                    </Button>
+                  )}
+                  {errorMessage === null ? null : (
+                    <p className="kc-player__episode-error" role="alert">
+                      {errorMessage}
+                    </p>
+                  )}
                 </li>
               )
             })}
