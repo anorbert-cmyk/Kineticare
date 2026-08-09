@@ -247,6 +247,36 @@ describe('issueCorrectiveInvoiceForOrder', () => {
     expect(order.correctiveInvoiceSeq).toBe(2)
   })
 
+  it('a KÉSŐBBI seq már kiállt, a KORÁBBI retry mégis továbbmegy a providerhez', async () => {
+    // Sorrendtörés: a seq=1 kiállítása timeoutolt és jobba került, közben a
+    // seq=2 inline sikerült (correctiveInvoiceSeq=2). A seq=1 retry-ja NEM
+    // lehet no-op — a korábbi részrefund bizonylata még nem készült el; a
+    // duplikáció ellen a provider-oldali kulsoAzon-horgony véd.
+    const order = createOrder({
+      correctiveInvoiceStatus: 'issued',
+      correctiveInvoiceNumber: 'KIN-2026-10',
+      correctiveInvoiceSeq: 2,
+    })
+    const { payload } = createMockPayload(order)
+    const sentXml: string[] = []
+    const result = await issueCorrectiveInvoiceForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      refundSeq: 1,
+      amountHuf: REFUND_HUF,
+      postXml: async (xml) => {
+        sentXml.push(xml)
+        return { szamlaszam: 'KIN-2026-9' }
+      },
+    })
+    expect(result).toEqual({ outcome: 'issued', correctiveInvoiceNumber: 'KIN-2026-9' })
+    expect(sentXml[0]).toContain(`<szamlaKulsoAzon>${ORDER_NUMBER}-HELYESBITO-1</szamlaKulsoAzon>`)
+    // A rendelésen rögzített LEGUTÓBBI szám/sorszám nem íródik vissza régebbire.
+    expect(order.correctiveInvoiceSeq).toBe(2)
+    expect(order.correctiveInvoiceNumber).toBe('KIN-2026-10')
+    expect(order.correctiveInvoiceStatus).toBe('issued')
+  })
+
   it('kikapcsolt integrációnál disabled (a rendeléshez sem nyúl)', async () => {
     const { payload, order, updates } = createMockPayload(createOrder())
     const result = await issueCorrectiveInvoiceForOrder(order as Order, {

@@ -38,8 +38,14 @@ import {
  *    duplikálhat.
  * 2. Alkalmazás-oldal: a rendelés correctiveInvoiceSeq mezője azt tárolja,
  *    hányadik refund-bejegyzéshez készült el a legutóbbi helyesbítő. Ha ez
- *    eléri a kért sorszámot (és van correctiveInvoiceNumber), a szolgáltatás
- *    hálózati hívás nélkül 'already-issued' no-opot ad.
+ *    PONTOSAN a kért sorszám (és van correctiveInvoiceNumber), a szolgáltatás
+ *    hálózati hívás nélkül 'already-issued' no-opot ad. A rövidzár SZIGORÚAN
+ *    egyezésre szűkített: a kiállítás nem feltétlenül sorrendi — ha egy
+ *    korábbi seq job-újrapróbálása (retry-queue) AZUTÁN fut le, hogy egy
+ *    későbbi seq inline már kiállt, a recordedSeq nagyobb a kértnél, de a
+ *    korábbi refund bizonylata MÉG NEM készült el. Ilyenkor a kérés
+ *    továbbmegy a Számlázz.hu-nak — a duplikációt a provider-oldali
+ *    kulsoAzon-horgony (1. réteg) így is kizárja.
  */
 
 export const CORRECTIVE_KULSO_AZON_INFIX = '-HELYESBITO-'
@@ -179,10 +185,13 @@ export async function issueCorrectiveInvoiceForOrder(
   }
 
   // Idempotencia (alkalmazás-oldal): ehhez a refund-bejegyzéshez már készült
-  // helyesbítő? A seq monoton nő, ezért a >= reláció a helyes összehasonlítás.
+  // helyesbítő? KIZÁRÓLAG pontos seq-egyezésnél no-op: recordedSeq > refundSeq
+  // esetén egy KORÁBBI refund elmaradt bizonylatának újrapróbálása fut (a
+  // retry-queue megtöri a sorrendi kiállítást), ezért a kérést TOVÁBB kell
+  // engedni — a duplikáció ellen a provider-oldali kulsoAzon-horgony véd.
   const recordedNumber = order.correctiveInvoiceNumber?.trim()
   const recordedSeq = order.correctiveInvoiceSeq ?? 0
-  if (recordedNumber && recordedSeq >= deps.refundSeq) {
+  if (recordedNumber && recordedSeq === deps.refundSeq) {
     log.info('ehhez a visszatérítéshez már készült helyesbítő számla — idempotens no-op', {
       correctiveInvoiceNumber: recordedNumber,
       recordedSeq,
@@ -236,11 +245,18 @@ export async function issueCorrectiveInvoiceForOrder(
   try {
     const postXml = deps.postXml ?? postInvoiceXml
     const result = await postXml(xml, config)
-    await saveState({
-      correctiveInvoiceStatus: 'issued',
-      correctiveInvoiceNumber: result.szamlaszam,
-      correctiveInvoiceSeq: deps.refundSeq,
-    })
+    // Ha egy KORÁBBI seq elmaradt bizonylata készült el utólag (retry), a
+    // rendelésen rögzített legutóbbi szám/sorszám nem íródhat vissza egy
+    // régebbire — ilyenkor csak a státusz áll vissza 'issued'-ra.
+    await saveState(
+      deps.refundSeq >= recordedSeq
+        ? {
+            correctiveInvoiceStatus: 'issued',
+            correctiveInvoiceNumber: result.szamlaszam,
+            correctiveInvoiceSeq: deps.refundSeq,
+          }
+        : { correctiveInvoiceStatus: 'issued' },
+    )
     log.info('helyesbítő számla kiállítva', {
       correctiveInvoiceNumber: result.szamlaszam,
       originalInvoiceNumber,
