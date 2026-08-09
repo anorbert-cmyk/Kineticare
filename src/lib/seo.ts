@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 
-import type { Media, Page, Post, Product } from '../payload-types'
+import { courseTitle } from './courses'
+import type { Media, Post, Product } from '../payload-types'
 
 /**
- * Storefront SEO-segédek — a pages/posts meta-fallbacklánca egy helyen.
+ * Storefront SEO-segédek — a pages/posts/products meta-fallbacklánca egy helyen.
  *
  * Fallback-szabályok (a hullám-követelmény szerint):
  * - title:        seoTitle → title
@@ -15,7 +16,27 @@ import type { Media, Page, Post, Product } from '../payload-types'
  * (a keret-layout metadataBase-e ezt a gyökeret használja).
  */
 
-type SeoDoc = Pick<Page, 'title' | 'excerpt' | 'seoTitle' | 'seoDescription' | 'ogImage' | 'heroImage'>
+/**
+ * Egy dokumentum SEO-szempontból lényeges mezői.
+ *
+ * Szándékosan STRUKTURÁLIS típus (nem `Pick<Page, …>`): a pages/posts mellett a
+ * products collection is beleillik, csak más mezőnevekkel — a cím a `sku`-ból
+ * számolt kurzusnév, a kivonat a `shortDescription`, a képtartalék a
+ * `coverImage`. A terméket a `productSeoDoc` adapter fordítja erre az alakra,
+ * így a fallback-lánc EGY helyen él; párhuzamos meta-logika nincs.
+ */
+export interface SeoDoc {
+  /** Megjelenített cím (pages/posts: `title`; products: a `sku`-ból számolt név). */
+  title: string
+  /** Rövid bevezető (pages/posts: `excerpt`; products: `shortDescription`). */
+  excerpt?: string | null
+  seoTitle?: string | null
+  seoDescription?: string | null
+  /** Megosztási kép — csak populate-olva (Media) használható, nyers id-ként nem. */
+  ogImage?: (number | null) | Media
+  /** Kép-tartalék az og:image-hez (pages/posts: `heroImage`; products: `coverImage`). */
+  heroImage?: (number | null) | Media
+}
 
 export const SITE_NAME = 'Kineticare'
 export const SITE_URL = process.env.NEXT_PUBLIC_SERVER_URL ?? 'http://localhost:3000'
@@ -47,28 +68,42 @@ function isMedia(value: unknown): value is Media {
   return typeof value === 'object' && value !== null && 'url' in value
 }
 
-/** og:image URL feloldása: og-méret előnyben, aztán az eredeti fájl. */
-function mediaOgUrl(media: Media | null | undefined): string | undefined {
+/** Feloldott megosztási kép: abszolút URL + a Media kötelező alt-szövege. */
+interface ResolvedOgImage {
+  url: string
+  alt: string
+}
+
+/** og:image feloldása egy Media-rekordból: og-méret előnyben, aztán az eredeti fájl. */
+function mediaOgImage(media: Media | null | undefined): ResolvedOgImage | undefined {
   if (!media) return undefined
   const sized = media.sizes?.og?.url
-  if (typeof sized === 'string' && sized.length > 0) return absoluteUrl(sized)
-  if (typeof media.url === 'string' && media.url.length > 0) return absoluteUrl(media.url)
+  if (typeof sized === 'string' && sized.length > 0) {
+    return { url: absoluteUrl(sized), alt: media.alt }
+  }
+  if (typeof media.url === 'string' && media.url.length > 0) {
+    return { url: absoluteUrl(media.url), alt: media.alt }
+  }
   return undefined
 }
 
-export function resolveOgImageUrl(doc: SeoDoc): string | undefined {
+function resolveOgImage(doc: SeoDoc): ResolvedOgImage | undefined {
   const og = isMedia(doc.ogImage) ? doc.ogImage : null
   const hero = isMedia(doc.heroImage) ? doc.heroImage : null
-  return mediaOgUrl(og) ?? mediaOgUrl(hero)
+  return mediaOgImage(og) ?? mediaOgImage(hero)
+}
+
+export function resolveOgImageUrl(doc: SeoDoc): string | undefined {
+  return resolveOgImage(doc)?.url
 }
 
 /**
- * Next Metadata-objektum egy CMS-dokumentumhoz (page/post közös).
+ * Next Metadata-objektum egy CMS-dokumentumhoz (page/post/product közös).
  * A title a keret-layout template-je (%s | Kineticare) alá kerül.
  */
 export function buildDocMetadata(doc: SeoDoc, path: string): Metadata {
   const description = resolveSeoDescription(doc)
-  const ogImage = resolveOgImageUrl(doc)
+  const ogImage = resolveOgImage(doc)
   return {
     title: resolveSeoTitle(doc),
     ...(description ? { description } : {}),
@@ -77,7 +112,7 @@ export function buildDocMetadata(doc: SeoDoc, path: string): Metadata {
       title: resolveSeoTitle(doc),
       ...(description ? { description } : {}),
       url: absoluteUrl(path),
-      ...(ogImage ? { images: [{ url: ogImage }] } : {}),
+      ...(ogImage ? { images: [{ url: ogImage.url, alt: ogImage.alt }] } : {}),
     },
   }
 }
@@ -89,6 +124,49 @@ export function buildDocMetadata(doc: SeoDoc, path: string): Metadata {
  */
 export function buildPageMetadata(doc: SeoDoc, path: string): Metadata {
   return buildDocMetadata(doc, path)
+}
+
+/**
+ * Kurzus (products) → SeoDoc adapter.
+ *
+ * A products collectionnek nincs `title`/`excerpt`/`heroImage` mezője: a
+ * megjelenített név a `sku` (courseTitle), a bevezető a `shortDescription`, a
+ * képtartalék a `coverImage`. Az adapter csak ÁTNEVEZ — a fallback-lánc maga a
+ * közös `buildDocMetadata`-ban fut, hogy a kurzusoldal ugyanazt a logikát
+ * használja, mint a poszt- és az oldal-útvonal.
+ */
+export function productSeoDoc(
+  product: Pick<
+    Product,
+    'id' | 'sku' | 'shortDescription' | 'seoTitle' | 'seoDescription' | 'ogImage' | 'coverImage'
+  >,
+): SeoDoc {
+  const name = courseTitle(product)
+  return {
+    title: name,
+    // A rövid leírás hiánya ne hagyja meta-description nélkül a fő céloldalt:
+    // ilyenkor a kurzus nevével képzett általános mondat megy ki (ez a lánc
+    // HARMADIK foka, a seoDescription és a rövid leírás után).
+    excerpt:
+      typeof product.shortDescription === 'string' && product.shortDescription.trim().length > 0
+        ? product.shortDescription
+        : `${name} — online kézrehabilitációs kurzus a Kineticare kínálatából.`,
+    seoTitle: product.seoTitle,
+    seoDescription: product.seoDescription,
+    ogImage: product.ogImage,
+    heroImage: product.coverImage,
+  }
+}
+
+/**
+ * Kurzus-szintű Metadata a /kurzusok/[slug] generateMetadata-jához.
+ * Ugyanaz a fallback-lánc + canonical, mint a pages/posts útvonalakon.
+ */
+export function buildProductMetadata(
+  product: Parameters<typeof productSeoDoc>[0],
+  path: string,
+): Metadata {
+  return buildDocMetadata(productSeoDoc(product), path)
 }
 
 // ---------------------------------------------------------------------------
@@ -166,43 +244,70 @@ export function breadcrumbJsonLd(
 }
 
 /**
- * Course JSON-LD a kurzusoldalakhoz.
+ * Kurzusoldal strukturált adata: EGY entitás, kettős típussal —
+ * `["Course", "Product"]` + `Offer`.
  *
- * Miért `Course` és nem `Product`: a termék valójában online videókurzus, és a
- * `Course` séma pontosabban írja le (Google is támogatja a Course rich resultot).
- * Az ár az `offers`-ben él — a `CreativeWork` (és így a `Course`) érvényes
- * property-je. Ár nélkül (`priceInHUFEnabled` kikapcsolva) az `offers` kimarad,
- * mert a 0 Ft-os vagy hiányzó ár félrevezető strukturált adat lenne.
+ * Miért kettős típus és nem két külön blokk: a kurzusoldal egyetlen dolgot ír le,
+ * ami egyszerre online videókurzus (`Course` — Google Course rich result) és
+ * megvásárolható termék (`Product` — ár, elérhetőség, márka). Két külön JSON-LD
+ * node ugyanarról az oldalról KÉT entitásnak látszana a gépi olvasó szemében
+ * (ugyanaz a hiba, amit a kezdőlapon a duplikált Organization okozott), ezért a
+ * schema.org által megengedett többszörös `@type`-ot használjuk.
+ *
+ * A LÁTHATÓ tartalommal való egyezés kötelező (különben a Google elveti):
+ * - `name`      ← a H1 szövege (courseTitle → `sku`),
+ * - `description` ← a hero lead bekezdése (`shortDescription`) — SZÁNDÉKOSAN nem
+ *   a `seoDescription`, mert az csak a meta-tagben látszik, az oldalon nem,
+ * - `image`     ← a buyboxban megjelenített borítókép,
+ * - `offers.price` ← a kiírt ár (`coursePriceHuf` → PriceTag).
+ *
+ * Ár nélkül (`priceInHUFEnabled` kikapcsolva) az `offers` kimarad, mert a
+ * 0 Ft-os vagy hiányzó ár félrevezető strukturált adat lenne.
+ *
+ * `aggregateRating` / `review` SZÁNDÉKOSAN nincs: a products collectionben nincs
+ * értékelés-adat, kitalált értékelést pedig sem a fogyasztóvédelem, sem a
+ * Google strukturált adat irányelve nem tűr.
  *
  * FONTOS karbantartási szabály: minden ár- vagy csomagváltozásnál ez a séma is
  * frissül (a `priceInHUF` mezőből származik) — az elavult strukturált adat
  * gyorsan téves árat terjeszt az AI-válaszokban.
  */
 export function courseJsonLd(args: {
-  product: Pick<Product, 'shortDescription' | 'status'>
+  product: Pick<Product, 'shortDescription' | 'status' | 'sku'>
   name: string
   path: string
   priceHuf: number | null
   imageUrl?: string
 }): Record<string, unknown> {
   const { product, name, path, priceHuf, imageUrl } = args
+  const url = absoluteUrl(path)
   const description =
     typeof product.shortDescription === 'string' && product.shortDescription.trim().length > 0
       ? product.shortDescription.trim()
       : undefined
+  const sku =
+    typeof product.sku === 'string' && product.sku.trim().length > 0
+      ? product.sku.trim()
+      : undefined
+  const organization = {
+    '@type': 'Organization',
+    name: SITE_NAME,
+    url: absoluteUrl('/'),
+  }
   return {
     '@context': 'https://schema.org',
-    '@type': 'Course',
+    '@type': ['Course', 'Product'],
     name,
     ...(description ? { description } : {}),
-    url: absoluteUrl(path),
+    url,
     inLanguage: 'hu-HU',
     ...(imageUrl ? { image: [imageUrl] } : {}),
-    provider: {
-      '@type': 'Organization',
+    ...(sku ? { sku } : {}),
+    brand: {
+      '@type': 'Brand',
       name: SITE_NAME,
-      url: absoluteUrl('/'),
     },
+    provider: organization,
     hasCourseInstance: {
       '@type': 'CourseInstance',
       courseMode: 'online',
@@ -214,11 +319,12 @@ export function courseJsonLd(args: {
             '@type': 'Offer',
             price: priceHuf,
             priceCurrency: 'HUF',
-            url: absoluteUrl(path),
+            url,
             availability:
               product.status === 'published'
                 ? 'https://schema.org/InStock'
                 : 'https://schema.org/Discontinued',
+            seller: organization,
           },
         }
       : {}),

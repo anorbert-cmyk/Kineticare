@@ -74,7 +74,9 @@ describe('Course JSON-LD', () => {
     const jsonLd = courseJsonLd({ product, name: 'Kéz-rehab alapprogram', path: '/kurzusok/7', priceHuf: 19990 })
     const offers = jsonLd.offers as Record<string, unknown>
 
-    expect(jsonLd['@type']).toBe('Course')
+    // Egy entitás, kettős típussal: online kurzus ÉS megvásárolható termék.
+    // A Product-oldali mezőket (sku, brand, offers) a product-seo.test.ts fedi.
+    expect(jsonLd['@type']).toEqual(['Course', 'Product'])
     expect(jsonLd.description).toBe(product.shortDescription)
     expect(offers.price).toBe(19990)
     expect(offers.priceCurrency).toBe('HUF')

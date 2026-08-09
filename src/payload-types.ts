@@ -1330,6 +1330,18 @@ export interface Product {
       }[]
     | null;
   /**
+   * Ha üresen hagyod, a Google a kurzus nevét használja.
+   */
+  seoTitle?: string | null;
+  /**
+   * A Google találati listáján megjelenő rövid leírás (kb. 150 karakter).
+   */
+  seoDescription?: string | null;
+  /**
+   * Ez a kép jelenik meg, ha valaki Facebookon vagy Messengeren megosztja a kurzust.
+   */
+  ogImage?: (number | null) | Media;
+  /**
    * Kötelező. Ha nincs megfelelő, előbb hozd létre a Tartalom → Kategóriák alatt.
    */
   category: number | Category;
@@ -2725,6 +2737,9 @@ export interface ProductsSelect<T extends boolean = true> {
         image?: T;
         id?: T;
       };
+  seoTitle?: T;
+  seoDescription?: T;
+  ogImage?: T;
   category?: T;
   previewVideoStreamId?: T;
   videos?:

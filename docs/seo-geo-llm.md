@@ -22,14 +22,30 @@ Ez a dokumentum két részre bomlik:
 | `robots.txt` | `src/app/robots.ts` | Privát útvonalak kizárása + **AI-crawlerek kifejezett engedélyezése** |
 | `sitemap.xml` | `src/app/sitemap.ts` | Oldalak, posztok, kategóriák, kurzusok — kérésidőben, mindig friss |
 | Metadata + canonical | `src/lib/seo.ts` | title/description/og fallbacklánc, canonical, `metadataBase` |
+| SEO-mezők a CMS-ben | pages, posts **és products** | `seoTitle` / `seoDescription` / `ogImage` — azonos mezőnevek és helyek mindhárom collectionben |
 | Organization JSON-LD | kezdőlap | Entitás-azonosítás, `inLanguage`, `knowsAbout` |
 | **FAQPage** JSON-LD | kezdőlap | A GYIK közvetlenül kivonatolható AI-válaszba |
-| **Course** JSON-LD | kurzusoldalak | Név, leírás, **ár HUF-ban**, elérhetőség, szolgáltató |
+| **Course + Product** JSON-LD | kurzusoldalak | Egy entitás, kettős `@type` — név, leírás, kép, `sku`, márka, **Offer: ár HUF-ban**, elérhetőség, eladó/szolgáltató |
 | **BreadcrumbList** JSON-LD | poszt- és kurzusoldalak | Struktúra gépi olvasónak |
 | Article JSON-LD | blogposztok | `datePublished` / `dateModified` |
 
-Védelem: `src/__tests__/seo-structured-data.test.ts` — ezek a hibák csendesek
-(nincs futásidejű hiba, csak eltűnik a láthatóság hetekre), ezért tesztelt.
+Védelem: `src/__tests__/seo-structured-data.test.ts` és
+`src/__tests__/product-seo.test.ts` — ezek a hibák csendesek (nincs futásidejű
+hiba, csak eltűnik a láthatóság hetekre), ezért tesztelt.
+
+### Miért kettős `@type` a kurzusoldalon
+
+A kurzusoldal egyetlen dolgot ír le, ami egyszerre online videókurzus (`Course`)
+és megvásárolható termék (`Product`). Két külön JSON-LD blokk ugyanarról az
+oldalról **két entitásnak** látszana a gépi olvasó szemében — ez ugyanaz a hiba,
+amit a kezdőlapon a duplikált `Organization` okozott —, ezért a schema.org által
+megengedett többszörös `@type`-ot használjuk, egyetlen `Offer`-rel.
+
+A séma minden mezője a **látható** tartalomból jön: a név a H1, a leírás a hero
+lead bekezdése (a `shortDescription`, **nem** a csak meta-tagben látszó
+`seoDescription`), a kép a buybox borítóképe, az ár pedig a kiírt ár-címke
+forrása. `aggregateRating` / `review` szándékosan nincs: értékelés-adat nem
+létezik a kurzusokon, kitalált értékelés pedig tilos.
 
 ### Miért van külön ALLOW az AI-crawlereknek
 
