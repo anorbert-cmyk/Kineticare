@@ -6,6 +6,7 @@ import * as migration_20260808_150710_szekcio_rendszer_blokkok from './20260808_
 import * as migration_20260809_123608_kurzus_seo_mezok from './20260809_123608_kurzus_seo_mezok';
 import * as migration_20260809_140731_kurzus_haladas_es_celkozonseg from './20260809_140731_kurzus_haladas_es_celkozonseg';
 import * as migration_20260809_180031_storno_statusz_es_kurzus_slug from './20260809_180031_storno_statusz_es_kurzus_slug';
+import * as migration_20260809_223906_szamlazz_megfeleles from './20260809_223906_szamlazz_megfeleles';
 
 export const migrations = [
   {
@@ -46,6 +47,11 @@ export const migrations = [
   {
     up: migration_20260809_180031_storno_statusz_es_kurzus_slug.up,
     down: migration_20260809_180031_storno_statusz_es_kurzus_slug.down,
-    name: '20260809_180031_storno_statusz_es_kurzus_slug'
+    name: '20260809_180031_storno_statusz_es_kurzus_slug',
+  },
+  {
+    up: migration_20260809_223906_szamlazz_megfeleles.up,
+    down: migration_20260809_223906_szamlazz_megfeleles.down,
+    name: '20260809_223906_szamlazz_megfeleles'
   },
 ];
