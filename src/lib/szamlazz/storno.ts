@@ -4,10 +4,12 @@ import type { Order } from '../../payload-types'
 import { logger as rootLogger, type Logger } from '../logger'
 import {
   getSzamlazzConfig,
+  isDuplicateOrderError,
   parseAgentResponse,
   type SzamlazzParsedSuccess,
 } from './client'
 import { escapeXml } from './invoice'
+import { queryInvoiceByKulsoAzon, type InvoiceLookupResult } from './pdf'
 import { writeOrderInvoicingState, writeOrderInvoicingStateBestEffort } from './order-state'
 import {
   SzamlazzApiError,
@@ -58,8 +60,6 @@ export interface BuildStornoXmlInput {
   originalInvoiceNumber: string
   /** A rendelésszám — a szamlaKulsoAzon `${orderNumber}-STORNO` lesz. */
   orderNumber: string
-  /** A stornó-számla kelte (YYYY-MM-DD) — kelt és teljesítés egységesen. */
-  issueDate: string
   /** A sztornózás oka (a <megjegyzes> mezőbe; üres is lehet). */
   reason?: string
   /** A vevő e-mail-címe (a stornó-értesítő kiküldéséhez; üres is lehet). */
@@ -70,6 +70,12 @@ export interface BuildStornoXmlInput {
  * A teljes stornó-XML (xmlszamlast) a hivatalos tag-sorrendben.
  * A váz-tagok üresen is jelen vannak (a mezősorrend kötött, a mintának
  * megfelelően), a dinamikus értékek XML-escape-elve.
+ *
+ * DÁTUMOK SZÁNDÉKOSAN KIHAGYVA: a stornó számlán a teljesítési dátumnak az
+ * EREDETI számláéval azonosnak KELL lennie (tudastar/gyik/szamla-sztornozasa).
+ * A keltDatum/teljesitesDatum az Agent-kérésben opcionális — kihagyva a
+ * Számlázz.hu tölti ki őket, a teljesítést garantáltan az eredetivel
+ * egyezően; explicit (esetleg eltérő) érték küldése csak kockázat volna.
  */
 export function buildStornoXml(input: BuildStornoXmlInput): string {
   const esc = escapeXml
@@ -87,8 +93,6 @@ export function buildStornoXml(input: BuildStornoXmlInput): string {
   </beallitasok>
   <fejlec>
     <szamlaszam>${esc(input.originalInvoiceNumber)}</szamlaszam>
-    <keltDatum>${input.issueDate}</keltDatum>
-    <teljesitesDatum>${input.issueDate}</teljesitesDatum>
     <megjegyzes>${megjegyzes}</megjegyzes>
     <tipus>SS</tipus>
   </fejlec>
@@ -195,8 +199,15 @@ export interface IssueStornoForOrderDeps {
   logger?: Logger
   /** Injektálható HTTP-hívó (teszteléshez); alapból a valódi postStornoXml. */
   postXml?: (xml: string, config: SzamlazzClientConfig) => Promise<SzamlazzParsedSuccess>
-  /** A kelt-dátum felülírása (teszteléshez); alapból a mai dátum. */
-  issueDate?: string
+  /**
+   * Injektálható bizonylat-lekérdező (teszteléshez); alapból a valódi
+   * queryInvoiceByKulsoAzon — a 71/152-es duplikátum-jelzés feloldásához és a
+   * retry-előtti ellenőrzéshez.
+   */
+  queryByKulsoAzon?: (
+    kulsoAzon: string,
+    config: SzamlazzClientConfig,
+  ) => Promise<InvoiceLookupResult | null>
   /** A stornó indoka (pl. a refund reason) — a <megjegyzes> mezőbe kerül. */
   reason?: string | null
 }
@@ -306,20 +317,45 @@ export async function issueStornoForOrder(
   }
   const attempts = previousAttempts + 1
 
-  const issueDate = deps.issueDate ?? new Date().toISOString().slice(0, 10)
   const buyerEmail = buyerEmailFromOrder(order)
   const xml = buildStornoXml({
     agentKey: config.agentKey as string,
     originalInvoiceNumber,
     orderNumber: order.orderNumber,
-    issueDate,
     ...(deps.reason ? { reason: deps.reason } : {}),
     ...(buyerEmail ? { buyerEmail } : {}),
   })
 
   await saveState({ stornoStatus: 'pending', stornoAttempts: attempts })
 
+  const kulsoAzon = `${order.orderNumber}${STORNO_KULSO_AZON_SUFFIX}`
+  const lookup = deps.queryByKulsoAzon ?? queryInvoiceByKulsoAzon
+  /** A meglévő stornó átvétele (lekérdezés-találat vagy 71/152-feloldás). */
+  const adoptExisting = async (szamlaszam: string, via: string): Promise<IssueStornoResult> => {
+    await saveState({
+      stornoStatus: 'storned',
+      stornoNumber: szamlaszam,
+      stornoAttempts: attempts,
+      stornoLastError: null,
+    })
+    log.info('a stornó már korábban kiállt — a meglévő bizonylat átvéve', {
+      stornoNumber: szamlaszam,
+      via,
+      attempts,
+    })
+    return { outcome: 'storned', stornoNumber: szamlaszam }
+  }
+
   try {
+    // A12: újrapróbáláskor a beküldés megismétlése ELŐTT lekérdezés — a
+    // „kérés elment, válasz elveszett" esetben a stornó már létezhet.
+    if (previousAttempts > 0) {
+      const found = await lookup(kulsoAzon, config)
+      if (found) {
+        return await adoptExisting(found.szamlaszam, 'retry-elotti lekerdezes')
+      }
+    }
+
     const postXml = deps.postXml ?? postStornoXml
     const result = await postXml(xml, config)
     await saveState({
@@ -332,11 +368,34 @@ export async function issueStornoForOrder(
       stornoNumber: result.szamlaszam,
       originalInvoiceNumber,
       attempts,
-      szamlaKulsoAzon: `${order.orderNumber}${STORNO_KULSO_AZON_SUFFIX}`,
+      szamlaKulsoAzon: kulsoAzon,
       persisted: payload !== undefined,
     })
     return { outcome: 'storned', stornoNumber: result.szamlaszam }
   } catch (error) {
+    // 71/152 — duplikátum-jelzés: a meglévő stornó átvétele lekérdezéssel.
+    if (isDuplicateOrderError(error)) {
+      log.info('a Számlázz.hu duplikátum-jelzést adott (71/152) — a meglévő stornó lekérdezése', {
+        agentErrorCodes: error.agentErrors.map((entry) => entry.code),
+      })
+      try {
+        const found = await lookup(kulsoAzon, config)
+        if (found) {
+          return await adoptExisting(found.szamlaszam, 'duplikatum-feloldas')
+        }
+        const reason =
+          'a Számlázz.hu duplikátumot jelzett (71/152), de a szamlaKulsoAzon-lekérdezés nem talál stornót — kézi egyeztetés szükséges'
+        log.error(`RIASZTÁS: ${reason}`)
+        await saveStateBestEffort({
+          stornoStatus: 'failed',
+          stornoAttempts: attempts,
+          stornoLastError: reason,
+        })
+        return { outcome: 'failed', reason }
+      } catch (lookupError) {
+        error = lookupError
+      }
+    }
     const message = error instanceof Error ? error.message : String(error)
     await saveStateBestEffort({
       stornoStatus: 'failed',

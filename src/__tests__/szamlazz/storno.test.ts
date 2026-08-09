@@ -69,7 +69,6 @@ describe('buildStornoXml — hivatalos Számla Agent sztornó séma (xmlszamlast
     agentKey: DUMMY_AGENT_KEY,
     originalInvoiceNumber: ORIGINAL_INVOICE_NUMBER,
     orderNumber: ORDER_NUMBER,
-    issueDate: '2026-08-04',
     reason: 'Elállás a vásárlástól',
     buyerEmail: 'anna@example.test',
   })
@@ -89,7 +88,14 @@ describe('buildStornoXml — hivatalos Számla Agent sztornó séma (xmlszamlast
   it('hivatkozás: a fejlec szamlaszam mezője az EREDETI számla száma; tipus=SS', () => {
     expect(xml).toContain(`<szamlaszam>${ORIGINAL_INVOICE_NUMBER}</szamlaszam>`)
     expect(xml).toContain('<tipus>SS</tipus>')
-    expect(xml).toContain('<keltDatum>2026-08-04</keltDatum>')
+  })
+
+  it('C6 — dátumokat NEM küldünk: a teljesítésnek az eredetivel kell egyeznie, ezt a rendszer garantálja', () => {
+    // A keltDatum/teljesitesDatum opcionális; kihagyva a Számlázz.hu tölti ki
+    // őket — a teljesítést garantáltan az eredeti számláéval egyezően. Explicit
+    // (mai napos) érték küldése a szabályt sértené, ha a refund később történik.
+    expect(xml).not.toContain('<keltDatum>')
+    expect(xml).not.toContain('<teljesitesDatum>')
   })
 
   it('beallitasok: agent-kulcs, eszamla, valaszVerzio 2, szamlaKulsoAzon = orderNumber-STORNO', () => {
@@ -116,7 +122,6 @@ describe('buildStornoXml — hivatalos Számla Agent sztornó séma (xmlszamlast
       agentKey: DUMMY_AGENT_KEY,
       originalInvoiceNumber: ORIGINAL_INVOICE_NUMBER,
       orderNumber: ORDER_NUMBER,
-      issueDate: '2026-08-04',
     })
     expect(withoutReason).toContain(`<megjegyzes>Visszatérítés (refund) — rendelés: ${ORDER_NUMBER}</megjegyzes>`)
   })
@@ -126,7 +131,6 @@ describe('buildStornoXml — hivatalos Számla Agent sztornó séma (xmlszamlast
       agentKey: DUMMY_AGENT_KEY,
       originalInvoiceNumber: ORIGINAL_INVOICE_NUMBER,
       orderNumber: ORDER_NUMBER,
-      issueDate: '2026-08-04',
       reason: 'Ár <eltérés> & "jelölés"',
     })
     expect(escaped).toContain('Ár &lt;eltérés&gt; &amp; &quot;jelölés&quot;')
@@ -138,7 +142,6 @@ describe('issueStornoForOrder', () => {
     const sentXml: string[] = []
     const result = await issueStornoForOrder(createOrder(), {
       config: ENABLED_CONFIG,
-      issueDate: '2026-08-04',
       reason: 'Elállás',
       postXml: async (xml) => {
         sentXml.push(xml)
@@ -227,7 +230,6 @@ describe('issueStornoForOrder — állapot a rendelésen (C4)', () => {
     const result = await issueStornoForOrder(order, {
       payload,
       config: ENABLED_CONFIG,
-      issueDate: '2026-08-09',
       postXml: async () => ({ szamlaszam: 'KIN-2026-8' }),
     })
 
@@ -254,6 +256,9 @@ describe('issueStornoForOrder — állapot a rendelésen (C4)', () => {
       issueStornoForOrder(order, {
         payload,
         config: ENABLED_CONFIG,
+        // Retry-ág (stornoAttempts=1): a beküldés előtti lekérdezés üres —
+        // injektált mock, hogy a teszt SOHA ne hívja a valódi Számlázz.hu-t.
+        queryByKulsoAzon: async () => null,
         postXml: async () => {
           throw error
         },
@@ -264,6 +269,68 @@ describe('issueStornoForOrder — állapot a rendelésen (C4)', () => {
     expect(order.stornoAttempts).toBe(2)
     expect(order.stornoLastError).toContain('nem válaszolt')
     expect(isRetryableStornoError(error)).toBe(true)
+  })
+
+  it('A12 — retry előtt lekérdezés: ha a stornó már kiállt, átveszi és NEM küld be újra', async () => {
+    const { payload, order } = createMockPayload(createOrder({ stornoAttempts: 2 }))
+    const lookups: string[] = []
+    let posts = 0
+    const result = await issueStornoForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      queryByKulsoAzon: async (kulsoAzon) => {
+        lookups.push(kulsoAzon)
+        return { szamlaszam: 'KIN-2026-8' }
+      },
+      postXml: async () => {
+        posts += 1
+        return { szamlaszam: 'X' }
+      },
+    })
+    expect(result).toEqual({ outcome: 'storned', stornoNumber: 'KIN-2026-8' })
+    expect(lookups).toEqual([`${ORDER_NUMBER}${STORNO_KULSO_AZON_SUFFIX}`])
+    expect(posts).toBe(0)
+    expect(order.stornoStatus).toBe('storned')
+  })
+
+  it('71/152 duplikátum-jelzésnél a meglévő stornó lekérdezéssel átvéve (nem hiba)', async () => {
+    const { payload, order } = createMockPayload(createOrder())
+    const result = await issueStornoForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      queryByKulsoAzon: async () => ({ szamlaszam: 'KIN-2026-8' }),
+      postXml: async () => {
+        throw new SzamlazzApiError({
+          message: 'Számla Agent hiba: 152 — Már létező rendelésszám.',
+          kind: 'duplicate',
+          agentErrors: [{ code: '152', message: 'Már létező rendelésszám.' }],
+          retryable: false,
+        })
+      },
+    })
+    expect(result).toEqual({ outcome: 'storned', stornoNumber: 'KIN-2026-8' })
+    expect(order.stornoStatus).toBe('storned')
+    expect(order.stornoNumber).toBe('KIN-2026-8')
+  })
+
+  it('duplikátum-jelzés TALÁLAT NÉLKÜL: failed + kézi egyeztetést kérő hibaüzenet', async () => {
+    const { payload, order } = createMockPayload(createOrder())
+    const result = await issueStornoForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      queryByKulsoAzon: async () => null,
+      postXml: async () => {
+        throw new SzamlazzApiError({
+          message: 'Számla Agent hiba: 71 — Már létező rendelésszám.',
+          kind: 'duplicate',
+          agentErrors: [{ code: '71', message: 'Már létező rendelésszám.' }],
+          retryable: false,
+        })
+      },
+    })
+    expect(result.outcome).toBe('failed')
+    expect(result.reason).toContain('kézi egyeztetés')
+    expect(order.stornoStatus).toBe('failed')
   })
 
   it('nem retryable hibánál failed állapot, de NEM dob (nincs job-retry)', async () => {

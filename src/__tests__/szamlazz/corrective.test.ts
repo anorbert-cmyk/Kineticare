@@ -188,11 +188,15 @@ describe('issueCorrectiveInvoiceForOrder', () => {
     })
 
     expect(result).toEqual({ outcome: 'issued', correctiveInvoiceNumber: 'KIN-2026-9' })
-    expect(updates[0]).toEqual({ correctiveInvoiceStatus: 'pending' })
+    expect(updates[0]).toEqual({
+      correctiveInvoiceStatus: 'pending',
+      correctiveInvoiceAttempts: 1,
+    })
     expect(updates[1]).toEqual({
       correctiveInvoiceStatus: 'issued',
       correctiveInvoiceNumber: 'KIN-2026-9',
       correctiveInvoiceSeq: 1,
+      correctiveInvoiceLastError: null,
     })
     expect(order?.correctiveInvoiceNumber).toBe('KIN-2026-9')
     expect(sentXml[0]).toContain(

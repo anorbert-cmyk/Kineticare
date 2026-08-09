@@ -29,9 +29,23 @@ describe('getSzamlazzConfig', () => {
     const config = getSzamlazzConfig({})
     expect(config.enabled).toBe(false)
     expect(config.agentKey).toBeUndefined()
-    expect(config.apiUrl).toBe('https://www.szamlazz.hu/szamla')
+    // ZÁRÓ PERJELLEL: a perjel nélküli alak redirectet kaphat, ami a POST-ot
+    // GET-té alakítaná (a multipart törzs elveszne).
+    expect(config.apiUrl).toBe('https://www.szamlazz.hu/szamla/')
     expect(config.invoicePrefix).toBe('KIN')
+    expect(config.vatMode).toBe('27')
     expect(config.timeoutMs).toBe(15_000)
+  })
+
+  it('SZAMLAZZ_API_URL perjel nélkül megadva is záró perjelet kap', () => {
+    const config = getSzamlazzConfig({ SZAMLAZZ_API_URL: 'https://www.szamlazz.hu/szamla' })
+    expect(config.apiUrl).toBe('https://www.szamlazz.hu/szamla/')
+  })
+
+  it('SZAMLAZZ_AFAKULCS: AAM elfogadott, ismeretlen érték hangosan dob', () => {
+    expect(getSzamlazzConfig({ SZAMLAZZ_AFAKULCS: 'AAM' }).vatMode).toBe('AAM')
+    expect(() => getSzamlazzConfig({ SZAMLAZZ_AFAKULCS: '0' })).toThrowError(/SZAMLAZZ_AFAKULCS/)
+    expect(() => getSzamlazzConfig({ SZAMLAZZ_AFAKULCS: 'TAM' })).toThrowError(/AAM/)
   })
 
   it('kulccsal enabled; prefix és timeout felülírható', () => {
@@ -117,9 +131,11 @@ describe('buildInvoiceXml — hivatalos Számla Agent séma', () => {
     expect(xml).toContain(`<szamlaKulsoAzon>${ORDER_NUMBER}</szamlaKulsoAzon>`)
   })
 
-  it('fejlec: dátumok, fizmod=bankkártya, HUF, hu, rendelesSzam, előtag', () => {
+  it('fejlec: dátumok, fizmod=Barion, HUF, hu, rendelesSzam, előtag', () => {
     expect(xml).toContain('<keltDatum>2026-08-04</keltDatum>')
-    expect(xml).toContain('<fizmod>bankkártya</fizmod>')
+    // A10: a fizmod normalizált értékkészletében a 'Barion' dedikált érték —
+    // ez adja a legjobb fizmodunified-besorolást a kimenő-adatkapcsolatban.
+    expect(xml).toContain('<fizmod>Barion</fizmod>')
     expect(xml).toContain('<penznem>HUF</penznem>')
     expect(xml).toContain('<szamlaNyelve>hu</szamlaNyelve>')
     expect(xml).toContain(`<rendelesSzam>${ORDER_NUMBER}</rendelesSzam>`)
