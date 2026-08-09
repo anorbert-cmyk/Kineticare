@@ -158,10 +158,13 @@ export function createBarionCallbackProcessor(deps: BarionCallbackProcessorDeps)
       const orderLog = eventLog.child({ orderId: order.id, orderNumber: order.orderNumber })
 
       // 3. Állapotgép-átmenet a KÖZÖS MAGGAL (a poll-job is ezt futtatja).
+      //    A teljes GetState-választ is átadjuk: a paid-átmenet Total/Currency-
+      //    assertje a közös magban történik.
       const transition = await applyBarionStateTransition({
         payload: deps.payload,
         order,
         mapped,
+        state,
         log: orderLog,
       })
 

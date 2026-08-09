@@ -1,6 +1,7 @@
 import type { Payload } from 'payload'
 
 import type { Order, User } from '../../payload-types'
+import { withAdvisoryLock } from '../advisory-lock'
 import { auditLogStore, writeAuditLog } from '../audit'
 import { BarionApiError, fetchPaymentState, refundPayment } from '../barion'
 import { logger, type Logger } from '../logger'
@@ -15,6 +16,17 @@ import { issueStornoForOrder, type IssueStornoForOrderDeps } from '../szamlazz'
  *
  * Folyamat:
  *  1. rendelés-keresés orderNumber alapján (ismeretlen → 404),
+ *  1/b. RACE-VÉDELEM: a 2–9. lépés Postgres advisory zár alatt fut,
+ *     rendelésenként kulcsolva (refund:order:<id>). A zár belsejében a
+ *     rendelés ÚJRAOLVASÁSRA kerül, így két párhuzamos refund kérés nem
+ *     indulhat ugyanazzal a (lejárt) alreadyRefunded-állapottal — egyszerre
+ *     legfeljebb egy refund folyamat dolgozik egy rendelésen.
+ *     KOMPROMISSZUM (dokumentált): a zár tartománya átfogja a Barion
+ *     GetState/Refund külső hívásokat is — a check-then-act (alreadyRefunded-
+ *     ellenőrzés → Barion refund → nyilvántartás) csak így atomikus. A
+ *     drizzle-tranzakció, ami a zárat tartja, NEM végez DB-írást (kizárólag
+ *     zár-tartomány); a tényleges DB-írások a Payload-műveletek saját
+ *     kapcsolatain, autocommitben történnek, miközben a zár még él.
  *  2. állapotgép-validáció: KIZÁRÓLAG paid státuszú rendelés téríthető;
  *     már refunded rendelésnél (dupla refund) → 409,
  *  3. összeg-validáció: a kérésben megadott részösszeg 0 < x ≤ (fizetett
@@ -225,25 +237,59 @@ async function revokePurchases(
 }
 
 /**
- * A teljes refund-folyamat. Barion-hiba esetén a rendelés érintetlen marad —
- * a BarionApiError változatlanul propagálódik (a route-handler képezi válaszra).
+ * A teljes refund-folyamat belépési pontja: rendelés-keresés, majd a
+ * tényleges folyamat a rendelés advisory zárja alatt (refundOrderLocked).
  */
 export async function refundOrder(options: RefundOrderOptions): Promise<RefundOrderResult> {
   const { payload, orderNumber } = options
   const log = options.logger ?? logger
 
-  // 1. Rendelés-keresés — ismeretlen orderNumber → 404.
-  const found = await payload.find({
+  // 1. Rendelés-keresés — ismeretlen orderNumber → 404 (a zár előtti gyors út).
+  const orderQuery = {
     collection: 'orders',
     where: { orderNumber: { equals: orderNumber } },
     limit: 1,
     depth: 0,
     overrideAccess: true,
-  } as unknown as Parameters<Payload['find']>[0])
-  const order = found.docs[0] as Order | undefined
-  if (!order) {
+  } as unknown as Parameters<Payload['find']>[0]
+  const found = await payload.find(orderQuery)
+  const orderRef = found.docs[0] as Order | undefined
+  if (!orderRef) {
     throw new RefundError(404, 'A megadott rendelés nem található.')
   }
+
+  // 1/b. RACE-VÉDELEM: a teljes refund-folyamat a rendelésre kulcsolt advisory
+  // zár alatt fut (a modulfejléc kompromisszuma szerint a zár a Barion-hívást
+  // is átfogja — a check-then-act csak így atomikus). A zár BELSÉJÉBEN a
+  // rendelés újraolvasódik: a zár megvárása alatt egy párhuzamos refund már
+  // módosíthatta a státuszt vagy a refunds-nyomot.
+  return withAdvisoryLock(
+    payload,
+    `refund:order:${orderRef.id}`,
+    async () => {
+      const locked = await payload.find(orderQuery)
+      const order = locked.docs[0] as Order | undefined
+      if (!order) {
+        throw new RefundError(404, 'A megadott rendelés nem található.')
+      }
+      return refundOrderLocked(options, order, log)
+    },
+    log,
+  )
+}
+
+/**
+ * A refund tényleges folyamata (2–10. lépés) — KIZÁRÓLAG a rendelés advisory
+ * zárjának belsejében, a zár alatt ÚJRAOLVASOTT rendelésen hívható.
+ * Barion-hiba esetén a rendelés érintetlen marad — a BarionApiError
+ * változatlanul propagálódik (a route-handler képezi válaszra).
+ */
+async function refundOrderLocked(
+  options: RefundOrderOptions,
+  order: Order,
+  log: Logger,
+): Promise<RefundOrderResult> {
+  const { payload, orderNumber } = options
   const orderLog = log.child({ orderId: order.id, orderNumber: order.orderNumber })
 
   // 2. Állapotgép-validáció: dupla refund → 409; nem paid → 409.

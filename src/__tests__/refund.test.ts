@@ -2,7 +2,7 @@ import type { Payload } from 'payload'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 import { createRefundHandler } from '../lib/refund/route-handler'
-import { readRefundEntries } from '../lib/refund/refund-order'
+import { readRefundEntries, refundOrder } from '../lib/refund/refund-order'
 import type { Order, User } from '../payload-types'
 
 /**
@@ -488,5 +488,80 @@ describe('hibaágak', () => {
     await POST(makeRequest({}), makeContext())
 
     expect(logOutput(logSpy)).not.toContain(DUMMY_POS_KEY)
+  })
+})
+
+describe('párhuzamos refund — összeg-race védelem (advisory lock)', () => {
+  it('két párhuzamos teljes refund ugyanarra a rendelésre: pontosan egy Barion-refund, a másik 409', async () => {
+    const { payload, order } = createMockPayload()
+    // Sorosító fake postgres drizzle: a második tranzakció (és vele a zár
+    // belseje) az első végéig vár — a zár alatti ÚJRAOLVASÁS így már a
+    // frissített (refunded) státuszt látja.
+    let queue: Promise<unknown> = Promise.resolve()
+    const drizzle = {
+      transaction: <T>(
+        fn: (tx: { execute: (query: unknown) => Promise<unknown> }) => Promise<T>,
+      ): Promise<T> => {
+        const run = queue.then(() => fn({ execute: async () => undefined }))
+        queue = run.then(
+          () => undefined,
+          () => undefined,
+        )
+        return run
+      },
+    }
+    ;(payload as unknown as { db: unknown }).db = { drizzle }
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) =>
+      String(input).includes('/PaymentState') ? getStateResponse() : refundResponse(TOTAL_HUF),
+    )
+
+    const actor = { id: 1, role: 'owner' } as unknown as User
+    const outcomes = await Promise.allSettled([
+      refundOrder({ payload, orderNumber: ORDER_NUMBER, input: {}, actor }),
+      refundOrder({ payload, orderNumber: ORDER_NUMBER, input: {}, actor }),
+    ])
+
+    const fulfilled = outcomes.filter((outcome) => outcome.status === 'fulfilled')
+    const rejected = outcomes.filter((outcome) => outcome.status === 'rejected')
+    expect(fulfilled).toHaveLength(1)
+    expect(rejected).toHaveLength(1)
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ status: 409 })
+
+    // Pontosan EGY pénzmozgató Barion-hívás történt — a rendelés összege nem léphető túl.
+    const refundCalls = fetchMock.mock.calls.filter(([url]) => String(url).includes('/Refund'))
+    expect(refundCalls).toHaveLength(1)
+    expect(order?.status).toBe('refunded')
+  })
+
+  it('a zár alatti újraolvasás a friss refunds-nyomot látja: a maradékot meghaladó részrefund 400', async () => {
+    // A rendelésen már van egy korábbi részrefund (a "párhuzamos" folyamat
+    // által rögzítve) — a zár belsejében újraolvasott állapot ezt tartalmazza.
+    const existingEntry = {
+      transactionId: TRANSACTION_ID,
+      amountHuf: TOTAL_HUF - 1000,
+      status: 'PartiallyRefunded',
+      refundedAt: '2026-08-01T10:00:00.000Z',
+      type: 'partial',
+    }
+    const { payload } = createMockPayload({ order: createOrder({ refunds: [existingEntry] }) })
+    const drizzle = {
+      transaction: <T>(
+        fn: (tx: { execute: (query: unknown) => Promise<unknown> }) => Promise<T>,
+      ): Promise<T> => fn({ execute: async () => undefined }),
+    }
+    ;(payload as unknown as { db: unknown }).db = { drizzle }
+
+    const actor = { id: 1, role: 'owner' } as unknown as User
+    const promise = refundOrder({
+      payload,
+      orderNumber: ORDER_NUMBER,
+      input: { amountHuf: 5000 }, // a maradék csak 1000 Ft
+      actor,
+    })
+
+    await expect(promise).rejects.toMatchObject({ status: 400 })
+    await expect(promise).rejects.toThrowError(/visszatéríthető összeget/)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

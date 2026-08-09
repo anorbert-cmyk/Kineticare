@@ -21,6 +21,8 @@ const DUMMY_POS_KEY = 'DUMMY-POSKEY-NEM-VALODI-TITOK'
 
 const PAYMENT_ID = '11111111-2222-3333-4444-555555555555'
 const ORDER_NUMBER = 'KH-2026-000123'
+/** A rendelés snapshot-végösszege — a GetState Total-assert ezzel veti össze. */
+const TOTAL_HUF = 5000
 
 const fetchMock = vi.fn()
 vi.stubGlobal('fetch', fetchMock)
@@ -114,6 +116,8 @@ function createOrder(fixture: OrderFixture = {}): Order {
     id: 101,
     orderNumber: ORDER_NUMBER,
     status: fixture.status ?? 'payment_pending',
+    totalHufSnapshot: TOTAL_HUF,
+    currency: 'HUF',
     barionPaymentId: fixture.barionPaymentId === undefined ? PAYMENT_ID : fixture.barionPaymentId,
     customer: fixture.customer ?? 7,
     items: (fixture.productIds ?? [42]).map((productId) => ({
@@ -171,15 +175,22 @@ function createMockPayload(options: MockPayloadOptions = {}) {
   return { payload: payload as unknown as Payload, calls, order, user }
 }
 
-/** GetState-válasz a Bariontól. */
-function getStateResponse(status: string, paymentId = PAYMENT_ID): Response {
+/** GetState-válasz a Bariontól (a v4 válasz tényleges mezőivel: Total + Currency). */
+function getStateResponse(
+  status: string,
+  paymentId = PAYMENT_ID,
+  overrides: Record<string, unknown> = {},
+): Response {
   return new Response(
     JSON.stringify({
       PaymentId: paymentId,
       PaymentRequestId: ORDER_NUMBER,
       Status: status,
+      Total: TOTAL_HUF,
+      Currency: 'HUF',
       Transactions: [],
       Errors: [],
+      ...overrides,
     }),
     { status: 200, headers: { 'Content-Type': 'application/json' } },
   )
@@ -476,6 +487,74 @@ describe('(g) paid → cancelled visszaállítás TILOS (állapotgép-védelem)'
     expect(docs[0]).toMatchObject({ status: 'processed', result: 'rejected' })
     expect(logOutput(logSpy)).toContain('RIASZT')
     expect(logOutput(logSpy)).toContain('paid')
+  })
+})
+
+describe('(h) Total/Currency-assert a paid-átmenet előtt', () => {
+  it('Succeeded, de Total < totalHufSnapshot → NINCS paid-átmenet: rejected + RIASZTÁS', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { POST, docs, calls, order, user, capture } = setup()
+    fetchMock.mockResolvedValueOnce(
+      getStateResponse('Succeeded', PAYMENT_ID, { Total: TOTAL_HUF - 1 }),
+    )
+
+    const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
+    expect(response.status).toBe(200)
+    await capture.runAll()
+
+    // A státusz VÁLTOZATLAN, purchases-beírás NINCS; az esemény rejected-ként zárul.
+    expect(order?.status).toBe('payment_pending')
+    expect(
+      calls.update.filter((call) => (call.data as { status?: string }).status === 'paid'),
+    ).toHaveLength(0)
+    expect(user.purchases).toEqual([])
+    expect(docs[0]).toMatchObject({ status: 'processed', result: 'rejected' })
+    expect(logOutput(logSpy)).toContain('RIASZT')
+    expect(logOutput(logSpy)).toContain('paid-átmenet MEGTAGADVA')
+  })
+
+  it('Succeeded, de eltérő Currency → NINCS paid-átmenet: rejected + RIASZTÁS', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { POST, docs, order, capture } = setup()
+    fetchMock.mockResolvedValueOnce(
+      getStateResponse('Succeeded', PAYMENT_ID, { Currency: 'EUR' }),
+    )
+
+    const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
+    expect(response.status).toBe(200)
+    await capture.runAll()
+
+    expect(order?.status).toBe('payment_pending')
+    expect(docs[0]).toMatchObject({ status: 'processed', result: 'rejected' })
+    expect(logOutput(logSpy)).toContain('RIASZT')
+  })
+
+  it('Succeeded, de hiányzó Total (nem ellenőrizhető) → NINCS paid-átmenet', async () => {
+    const { POST, docs, order, capture } = setup()
+    fetchMock.mockResolvedValueOnce(
+      getStateResponse('Succeeded', PAYMENT_ID, { Total: undefined }),
+    )
+
+    const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
+    expect(response.status).toBe(200)
+    await capture.runAll()
+
+    expect(order?.status).toBe('payment_pending')
+    expect(docs[0]).toMatchObject({ status: 'processed', result: 'rejected' })
+  })
+
+  it('Succeeded, nagyobb Total (túlfizetés/pl. díjak) → a paid-átmenet megtörténik', async () => {
+    const { POST, docs, order, capture } = setup()
+    fetchMock.mockResolvedValueOnce(
+      getStateResponse('Succeeded', PAYMENT_ID, { Total: TOTAL_HUF + 500 }),
+    )
+
+    const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
+    expect(response.status).toBe(200)
+    await capture.runAll()
+
+    expect(order?.status).toBe('paid')
+    expect(docs[0]).toMatchObject({ status: 'processed', result: 'paid' })
   })
 })
 

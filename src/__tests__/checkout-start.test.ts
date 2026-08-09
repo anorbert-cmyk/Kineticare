@@ -69,6 +69,10 @@ interface MockPayloadOptions {
   findOrders?: (where: unknown) => { docs: unknown[]; totalDocs: number }
   orderDoc?: Order
   authUser?: User | null
+  /** A create ennyiszer dobja sorban ezeket a hibákat, mielőtt sikerülne. */
+  createFailures?: Error[]
+  /** Fake postgres drizzle-felület (advisory-lock tesztekhez). */
+  drizzle?: unknown
 }
 
 function createMockPayload(options: MockPayloadOptions = {}) {
@@ -78,6 +82,7 @@ function createMockPayload(options: MockPayloadOptions = {}) {
     find: [] as unknown[],
   }
   const payload = {
+    ...(options.drizzle !== undefined ? { db: { drizzle: options.drizzle } } : {}),
     auth: vi.fn(async () => ({ user: options.authUser === undefined ? mockUser : options.authUser })),
     findByID: vi.fn(async () => {
       if (options.product === null) {
@@ -93,6 +98,10 @@ function createMockPayload(options: MockPayloadOptions = {}) {
     }),
     create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
       calls.create.push(data)
+      const failure = options.createFailures?.shift()
+      if (failure) {
+        throw failure
+      }
       // A valódi rendszerben az orderIntegrity-beforeChange hook írja felül
       // (snapshot, orderNumber) — a mock a hook-OUTPUTOT adja vissza.
       return { ...data, ...(options.orderDoc ?? createdOrderDoc), id: 101 }
@@ -367,6 +376,146 @@ describe('startCheckout — Barion-hibaág', () => {
     await expect(promise).rejects.toThrowError(/fizetés indítása jelenleg nem sikerült/)
 
     expect(calls.update[0]).toMatchObject({ id: 101, data: { status: 'payment_failed' } })
+  })
+})
+
+/** Sorosító fake postgres drizzle-felület: a tranzakciók (és vele az advisory zár) egymásra várnak. */
+function createSerialFakeDrizzle() {
+  let queue: Promise<unknown> = Promise.resolve()
+  const executions: unknown[] = []
+  const drizzle = {
+    transaction: <T>(fn: (tx: { execute: (query: unknown) => Promise<unknown> }) => Promise<T>): Promise<T> => {
+      const run = queue.then(() =>
+        fn({
+          execute: async (query) => {
+            executions.push(query)
+          },
+        }),
+      )
+      queue = run.then(
+        () => undefined,
+        () => undefined,
+      )
+      return run
+    },
+  }
+  return { drizzle, executions }
+}
+
+describe('startCheckout — advisory lock (duplavásárlás TOCTOU-védelem)', () => {
+  it('a kritikus szakasz a (user, product) kulcsú advisory zár belsejében fut', async () => {
+    fetchMock.mockResolvedValueOnce(barionStartSuccess())
+    const { drizzle, executions } = createSerialFakeDrizzle()
+    const { payload } = createMockPayload({ drizzle })
+
+    await startCheckout({ payload, user: mockUser, input: happyInput })
+
+    // Pontosan egy tranzakció-hatókörű advisory-lock acquire történt.
+    expect(executions).toHaveLength(1)
+  })
+
+  it('két párhuzamos checkout ugyanarra a (user, product) párra: pontosan egy rendelés jön létre', async () => {
+    // Megosztott "adatbázis": a create payment_pending rendelést rögzít, a
+    // duplikáció-ellenőrző find ezt olvassa — a sorosító fake drizzle miatt a
+    // második kérés a zár belsejében már látja az első rendelését (409).
+    const orders: Array<Record<string, unknown>> = []
+    const { drizzle } = createSerialFakeDrizzle()
+    const payload = {
+      db: { drizzle },
+      findByID: vi.fn(async () => publishedProduct),
+      find: vi.fn(async ({ where }: { where?: unknown }) => {
+        const json = JSON.stringify(where ?? {})
+        if (json.includes('payment_pending')) {
+          const active = orders.filter((order) => order.status === 'payment_pending')
+          return { docs: active, totalDocs: active.length }
+        }
+        return { docs: [], totalDocs: 0 }
+      }),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        orders.push({ status: data.status })
+        return { ...data, ...createdOrderDoc, id: 101 }
+      }),
+      update: vi.fn(async ({ id, data }: { id: number | string; data: Record<string, unknown> }) => ({
+        id,
+        ...data,
+      })),
+    } as unknown as Payload
+
+    fetchMock.mockResolvedValue(barionStartSuccess())
+
+    const outcomes = await Promise.allSettled([
+      startCheckout({ payload, user: mockUser, input: happyInput }),
+      startCheckout({ payload, user: mockUser, input: happyInput }),
+    ])
+
+    const fulfilled = outcomes.filter((outcome) => outcome.status === 'fulfilled')
+    const rejected = outcomes.filter((outcome) => outcome.status === 'rejected')
+    expect(fulfilled).toHaveLength(1)
+    expect(rejected).toHaveLength(1)
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ status: 409 })
+    expect(orders).toHaveLength(1)
+  })
+})
+
+describe('startCheckout — orderNumber unique-ütközés retry', () => {
+  const orderNumberConflict = (): Error =>
+    Object.assign(
+      new Error('duplicate key value violates unique constraint "orders_order_number_idx"'),
+      { code: '23505' },
+    )
+
+  it('23505 az orderNumber-indexen → újrapróbálkozás friss sorszámmal, végül sikeres checkout', async () => {
+    fetchMock.mockResolvedValueOnce(barionStartSuccess())
+    const { payload, calls } = createMockPayload({
+      createFailures: [orderNumberConflict(), orderNumberConflict()],
+    })
+
+    const result = await startCheckout({ payload, user: mockUser, input: happyInput })
+
+    expect(result).toEqual({ orderNumber: ORDER_NUMBER, gatewayUrl: GATEWAY_URL })
+    // 1 eredeti + 2 újrapróbálkozás — a hook minden kísérletnél friss sorszámot ad.
+    expect(calls.create).toHaveLength(3)
+  })
+
+  it('minden kísérlet ütközik (1 eredeti + 3 retry) → 500, Barion Start NEM hívódik', async () => {
+    const { payload, calls } = createMockPayload({
+      createFailures: [
+        orderNumberConflict(),
+        orderNumberConflict(),
+        orderNumberConflict(),
+        orderNumberConflict(),
+      ],
+    })
+
+    const promise = startCheckout({ payload, user: mockUser, input: happyInput })
+    await expect(promise).rejects.toBeInstanceOf(CheckoutError)
+    await expect(promise).rejects.toMatchObject({ status: 500 })
+    expect(calls.create).toHaveLength(4)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('MÁS unique-megszorítás hibája NEM újrapróbálandó — azonnal továbbmegy', async () => {
+    const otherConflict = Object.assign(
+      new Error('duplicate key value violates unique constraint "orders_customer_email_idx"'),
+      { code: '23505' },
+    )
+    const { payload, calls } = createMockPayload({ createFailures: [otherConflict] })
+
+    await expect(
+      startCheckout({ payload, user: mockUser, input: happyInput }),
+    ).rejects.toThrowError(/orders_customer_email_idx/)
+    expect(calls.create).toHaveLength(1)
+  })
+
+  it('nem-23505 technikai hiba szintén azonnal továbbmegy (nincs retry)', async () => {
+    const { payload, calls } = createMockPayload({
+      createFailures: [new Error('DB-kapcsolat megszakadt')],
+    })
+
+    await expect(
+      startCheckout({ payload, user: mockUser, input: happyInput }),
+    ).rejects.toThrowError('DB-kapcsolat megszakadt')
+    expect(calls.create).toHaveLength(1)
   })
 })
 

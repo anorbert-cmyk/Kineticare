@@ -1,7 +1,9 @@
 import type { Payload } from 'payload'
 
 import type { Order, Product, User } from '../../payload-types'
+import { withAdvisoryLock } from '../advisory-lock'
 import { BARION_DEFAULT_PAYMENT_WINDOW, BarionApiError, startPayment } from '../barion'
+import { isUniqueViolation } from '../idempotency'
 import { logger, type Logger } from '../logger'
 
 /**
@@ -12,11 +14,19 @@ import { logger, type Logger } from '../logger'
  * A pénzügyi főlánc első láncszeme:
  *  1. input-validáció (productId, quantity, opcionális kliens-ár, waiver),
  *  2. termék- és státuszellenőrzés (archived/draft nem megvásárolható),
- *  3. duplavásárlás-blokk (paid vagy aktív payment_pending → 409),
+ *  3. duplavásárlás-blokk (paid vagy aktív payment_pending → 409) — a
+ *     kritikus szakasz (ellenőrzés + rendelés-létrehozás) Postgres advisory
+ *     zár alatt fut (user, product) kulccsal, így párhuzamos kéréseknél sem
+ *     csúszhat át két aktív fizetés (TOCTOU-védelem),
  *  4. rendelés létrehozása `payment_pending` státusszal — az árakat KIZÁRÓLAG
  *     szerver-oldalon olvassuk és az orders beforeChange-hookja SNAPSHOTOLJA
- *     (orderIntegrityBeforeChange); a kliens által küldött ár sosem forrás,
- *  5. Barion Payment/Start a tesztelt src/lib/barion klienssel
+ *     (orderIntegrityBeforeChange); a kliens által küldött ár sosem forrás.
+ *     A hook minden create-kísérletnél friss rendelésszámot generál; a
+ *     max+1 alapú sorszám párhuzamos checkoutnál ütközhet (unique 23505 az
+ *     orders_order_number_idx indexen) — ezért a create ilyen hibára
+ *     újrapróbálkozik (más hiba azonnal továbbmegy),
+ *  5. Barion Payment/Start a tesztelt src/lib/barion klienssel — a zár
+ *     feloldása UTÁN (a külső hívás nem tartozik a kritikus szakaszba)
  *     (PaymentRequestId = orderNumber → Barion-oldali idempotencia),
  *  6. barionPaymentId + barionPaymentRequestId mentése a rendelésre.
  *
@@ -181,8 +191,37 @@ async function assertNoDuplicatePurchase(
   }
 }
 
-/** Vevő-snapshot a rendelésre (számlázási/audit célokra, szerver-oldali adatokból). */
-function buildCustomerSnapshot(user: User): Record<string, unknown> {
+/**
+ * A create-kísérletek száma orderNumber-ütközésnél: 1 eredeti + max 3
+ * újrapróbálkozás. Minden kísérletnél az orderIntegrityBeforeChange hook
+ * ÚJRA lefut, így friss sorszám generálódik — az ütközés csak extrém
+ * párhuzamosságnál marad fenn minden kísérleten át.
+ */
+const MAX_ORDER_CREATE_ATTEMPTS = 4
+
+/**
+ * Postgres unique-violation (23505) az orders_order_number_idx indexen?
+ * A hibalánc (cause-ok) message-ei között keressük az index nevét — MÁS
+ * unique-megszorítás hibája NEM újrapróbálandó, azonnal továbbdobjuk.
+ */
+function isOrderNumberUniqueViolation(error: unknown): boolean {
+  if (!isUniqueViolation(error)) {
+    return false
+  }
+  let current: unknown = error
+  const seen = new Set<unknown>()
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current)
+    const candidate = current as { message?: unknown; cause?: unknown }
+    if (typeof candidate.message === 'string' && candidate.message.includes('order_number')) {
+      return true
+    }
+    current = candidate.cause
+  }
+  return false
+}
+
+/** Vevő-snapshot a rendelésre (számlázási/audit célokra, szerver-oldali adatokból). */function buildCustomerSnapshot(user: User): Record<string, unknown> {
   return {
     id: user.id,
     email: user.email,
@@ -221,28 +260,63 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
   }
   assertPurchasable(product, priceHuf)
 
-  await assertNoDuplicatePurchase(payload, user.id, productId)
+  // KRITIKUS SZAKASZ advisory zár alatt (TOCTOU-védelem): a duplavásárlás-
+  // ellenőrzés és a rendelés-létrehozás ugyanarra a (user, product) párra
+  // párhuzamos kéréseknél is sorosítva fut. A Barion-hívás a zár UTÁN, kívül
+  // történik — a külső hívás nem tartozik a kritikus szakaszba.
+  const order = await withAdvisoryLock(
+    payload,
+    `checkout:${user.id}:${productId}`,
+    async () => {
+      await assertNoDuplicatePurchase(payload, user.id, productId)
 
-  // Rendelés létrehozása: az árakat és a rendelésszámot az orders
-  // beforeChange-hookja tölti szerver-oldali (DB) forrásból — a kliens
-  // sem árat, sem snapshotot nem adhat meg (a mezők access-e is zárt).
-  const nowIso = new Date().toISOString()
-  const order = (await payload.create({
-    collection: 'orders',
-    data: {
-      customer: user.id,
-      customerEmail: user.email ?? null,
-      status: 'payment_pending',
-      currency: 'HUF',
-      items: [{ product: productId, quantity }],
-      consentWithdrawalWaiver: true,
-      consentWithdrawalWaiverAt: nowIso,
-      customerSnapshot: buildCustomerSnapshot(user),
-      ...(options.ipAddress ? { ipAddress: options.ipAddress } : {}),
+      // Rendelés létrehozása: az árakat és a rendelésszámot az orders
+      // beforeChange-hookja tölti szerver-oldali (DB) forrásból — a kliens
+      // sem árat, sem snapshotot nem adhat meg (a mezők access-e is zárt).
+      // orderNumber-ütközésnél (unique 23505) újrapróbálkozás: a hook minden
+      // kísérletnél friss sorszámot generál; MÁS hiba azonnal továbbmegy.
+      const nowIso = new Date().toISOString()
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          return (await payload.create({
+            collection: 'orders',
+            data: {
+              customer: user.id,
+              customerEmail: user.email ?? null,
+              status: 'payment_pending',
+              currency: 'HUF',
+              items: [{ product: productId, quantity }],
+              consentWithdrawalWaiver: true,
+              consentWithdrawalWaiverAt: nowIso,
+              customerSnapshot: buildCustomerSnapshot(user),
+              ...(options.ipAddress ? { ipAddress: options.ipAddress } : {}),
+            },
+            overrideAccess: true,
+            depth: 0,
+          })) as Order
+        } catch (error) {
+          if (!isOrderNumberUniqueViolation(error)) {
+            throw error
+          }
+          if (attempt >= MAX_ORDER_CREATE_ATTEMPTS) {
+            log.error(
+              'checkout-start: a rendelésszám-ütközés az újrapróbálkozások ellenére fennáll',
+              { userId: user.id, productId, attempts: attempt },
+            )
+            throw new CheckoutError(
+              500,
+              'A rendelés létrehozása nem sikerült. Kérjük, próbáld újra.',
+            )
+          }
+          log.warn(
+            'checkout-start: rendelésszám-ütközés (unique 23505) — újrapróbálkozás friss sorszámmal',
+            { userId: user.id, productId, attempt },
+          )
+        }
+      }
     },
-    overrideAccess: true,
-    depth: 0,
-  })) as Order
+    log,
+  )
 
   const orderNumber = order.orderNumber
   if (!orderNumber) {

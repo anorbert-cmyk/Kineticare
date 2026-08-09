@@ -32,6 +32,8 @@ function createPendingOrder(overrides: Partial<Order> = {}): Order {
     barionPaymentId: PAYMENT_ID,
     customer: 7,
     customerEmail: 'anna@example.test',
+    totalHufSnapshot: 19990,
+    currency: 'HUF',
     items: [{ product: 42, quantity: 1, titleSnapshot: 'DEMO-KEZREHAB-001', priceHufSnapshot: 19990 }],
     createdAt: isoHoursAgo(1),
     updatedAt: isoHoursAgo(1),
@@ -39,12 +41,18 @@ function createPendingOrder(overrides: Partial<Order> = {}): Order {
   } as unknown as Order
 }
 
-function getStateResponse(status: string): BarionPaymentStateResponse {
+function getStateResponse(
+  status: string,
+  overrides: Partial<BarionPaymentStateResponse> = {},
+): BarionPaymentStateResponse {
   return {
     PaymentId: PAYMENT_ID,
     PaymentRequestId: ORDER_NUMBER,
     Status: status as BarionPaymentStateResponse['Status'],
+    Total: 19990,
+    Currency: 'HUF',
     Transactions: [],
+    ...overrides,
   }
 }
 
@@ -166,6 +174,27 @@ describe('order-poll — elveszett callback-mentés', () => {
 
     expect(summary.failed).toBe(1)
     expect(orderUpdates).toHaveLength(0)
+  })
+
+  it('Succeeded, de a GetState Total kisebb a snapshotnál → NINCS paid-átmenet (rejected → failed), onPaid sem fut', async () => {
+    const order = createPendingOrder()
+    const { payload, onPaid, queueInvoice, paidCalls, user } = setup({ pending: [order] })
+    const mismatchedFetchState = async (): Promise<BarionPaymentStateResponse> =>
+      getStateResponse('Succeeded', { Total: 1 })
+
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState: mismatchedFetchState,
+      onPaid,
+      queueInvoice,
+      now: NOW,
+    })
+
+    expect(summary.failed).toBe(1)
+    expect(summary.transitionedPaid).toBe(0)
+    expect(order.status).toBe('payment_pending')
+    expect(user.purchases).toEqual([])
+    expect(paidCalls).toHaveLength(0)
   })
 })
 

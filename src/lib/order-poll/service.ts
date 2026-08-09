@@ -158,6 +158,7 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
       payload: deps.payload,
       order,
       mapped,
+      state,
       log: orderLog,
     })
 

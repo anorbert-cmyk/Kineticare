@@ -1,7 +1,7 @@
 import type { Payload } from 'payload'
 
 import type { Order, User } from '../../payload-types'
-import type { OrderPaymentState } from '../barion'
+import type { BarionPaymentStateResponse, OrderPaymentState } from '../barion'
 import type { Logger } from '../logger'
 
 /**
@@ -17,6 +17,11 @@ import type { Logger } from '../logger'
  * - paid: order payment_pending/created → paid (már paid → no-op, NEM hiba),
  *   purchases-beírás a users-re (már megvan → no-op). Más kiinduló státuszból
  *   (cancelled/refunded/payment_failed) TILOS — 'rejected' + naplózott riasztás.
+ *   ÖSSZEG/DEVIZA-ASSERT: a Succeeded Barion-státusz ÖNMAGÁBAN nem elég — a
+ *   friss paid-átmenet csak akkor történik meg, ha a GetState-válasz Total
+ *   értéke ≥ a rendelés totalHufSnapshot-ja ÉS a Currency egyezik. Eltérés
+ *   (vagy nem ellenőrizhető/hiányzó érték) esetén NINCS paid-átmenet:
+ *   'rejected' (total-mismatch) + error-szintű riasztás.
  * - cancelled: payment_pending → cancelled; paid felé TILOS visszaállítani
  *   (állapotgép-védelem, riasztás); más kiindulóból figyelmeztetés, marad.
  * - payment_pending: státusz marad (a poll-job ütemezzi az újrapollolást).
@@ -31,6 +36,8 @@ export interface BarionTransitionInput {
   order: Order
   /** A v4 GetState-ból leképezett rendelés-oldali állapot. */
   mapped: OrderPaymentState
+  /** A teljes v4 GetState-válasz — a paid-átmenet Total/Currency-assertje ebből dolgozik. */
+  state: BarionPaymentStateResponse
   log: Logger
 }
 
@@ -116,7 +123,7 @@ export async function grantPurchases(
 export async function applyBarionStateTransition(
   input: BarionTransitionInput,
 ): Promise<BarionTransitionResult> {
-  const { payload, order, mapped, log } = input
+  const { payload, order, mapped, state, log } = input
 
   if (mapped === 'payment_pending') {
     if (order.status !== 'payment_pending' && order.status !== 'created') {
@@ -170,6 +177,32 @@ export async function applyBarionStateTransition(
 
   const alreadyPaid = order.status === 'paid'
   if (!alreadyPaid) {
+    // ÖSSZEG/DEVIZA-ASSERT a paid-átmenet előtt: a Succeeded státusz önmagában
+    // NEM bizonyíték — a Barion által hitelesített GetState Totalnak el kell
+    // érnie a rendelés snapshot-végösszegét, és a devizának egyeznie kell.
+    // Hiányzó/nem ellenőrizhető érték is elutasítás: ismeretlen helyzetben
+    // sosem jelölünk paid-et (konzervatív default, riasztással).
+    const expectedTotalHuf =
+      typeof order.totalHufSnapshot === 'number' ? order.totalHufSnapshot : null
+    const expectedCurrency = order.currency ?? 'HUF'
+    const barionTotal = typeof state.Total === 'number' ? state.Total : null
+    if (
+      expectedTotalHuf === null ||
+      barionTotal === null ||
+      barionTotal < expectedTotalHuf ||
+      state.Currency !== expectedCurrency
+    ) {
+      log.error(
+        'RIASZTÁS: a GetState Total/Currency nem felel meg a rendelés snapshotjának — paid-átmenet MEGTAGADVA, manuális ellenőrzés szükséges',
+        {
+          barionTotal,
+          barionCurrency: state.Currency ?? null,
+          expectedTotalHuf,
+          expectedCurrency,
+        },
+      )
+      return { action: 'rejected', reason: 'total-mismatch' }
+    }
     if (order.status === 'created') {
       log.warn('created státuszú rendelés ugrik paid-re (payment_pending átugorva)')
     }
