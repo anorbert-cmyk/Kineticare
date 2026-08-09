@@ -14,6 +14,11 @@
 
 # környezeti változók — titkok sosem kerülhetnek a repóba
 .env*
+# Kivétel: a mintafájl a repó része. (A gitignore a már tracked fájlt amúgy
+# sem érintené, de így explicit — és ha a fájl valaha kikerülne az indexből,
+# sem tűnne el némán.) Új .env.*-példafájl felvételekor ide további kivétel
+# kell, különben a fenti minta ignorálná.
+!.env.example
 
 # typescript
 *.tsbuildinfo

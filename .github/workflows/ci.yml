@@ -6,11 +6,15 @@
 #   build  job : next build (futásidőben generált álértékekkel)
 #   audit  job : npm audit (critical szint = bukás)
 #
-# MIÉRT --legacy-peer-deps? A @payloadcms/* 3.86.0 csomagok peer-tartománya
-# `next >=15.4.11 <15.5.0 || >=16.2.6 <17.0.0`, a repó viszont a biztonsági
-# javítás miatt next@15.5.22-re van pinelve. Amíg a Payload ki nem adja a
-# 15.5.x-et engedő peer-range-et, a telepítés csak --legacy-peer-deps-szel
-# oldható fel (a pinned @payloadcms/* verziókhoz nem nyúlunk — CLAUDE.md 5.).
+# MIÉRT --legacy-peer-deps? Történetileg: amíg a repó a biztonsági javítás
+# miatt next@15.5.22-re volt pinelve, a @payloadcms/* 3.86.0 peer-tartománya
+# (`>=15.4.11 <15.5.0 || >=16.2.6 <17.0.0`) nem engedte az 15.5.x-et, így a
+# telepítés csak ezzel a flaggel oldható fel. A repó közben next@16.3.0-ra
+# váltott, ami már beleesik a `>=16.2.6 <17.0.0` sávba — a 2026-08-09-i
+# ellenőrzés (`npm ci --dry-run` a flag NÉLKÜL is sikeresen feloldódott)
+# szerint a flag ma valószínűleg elhagyható. Eltávolítása külön, CI-val
+# verifikált PR-ben történhet; a pinned @payloadcms/* verziókhoz továbbra
+# sem nyúlunk (CLAUDE.md TILOS ZÓNÁK 5.).
 # ============================================================================
 
 name: CI

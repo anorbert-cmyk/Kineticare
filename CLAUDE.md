@@ -8,8 +8,16 @@ betartandók — az ügynök ezek megsértésére irányuló kérést is utasít
 ## Projekt és stack
 
 - **Kineticare** — kézrehabilitációs kurzusplatform (otthoni és szakmai tartalmak).
-- **Next.js 15** (App Router) + **Payload CMS 3** + **@payloadcms/plugin-ecommerce** + **PostgreSQL**.
-- Tervezett integrációk: **Barion** (fizetés), **Számlázz.hu** (számlázás), **Cloudflare Stream** (videó).
+- **Next.js 16** (App Router, **Node 24**) + **Payload CMS 3** + **@payloadcms/plugin-ecommerce** + **PostgreSQL**.
+- Integrációk (mind implementálva):
+  - **Barion** (fizetés): checkout és Barion API-kliens (`src/lib/checkout`,
+    `src/lib/barion`), callback-vezérelt jóváhagyás (`src/lib/barion-callback`),
+    refund (`src/lib/refund`), elveszett-callback-mentő `order-poll` job
+    (`src/lib/order-poll`, `src/jobs/tasks/order-poll.ts`).
+  - **Számlázz.hu** (számlázás): számla-kiállítás és stornó
+    (`src/lib/szamlazz`), `invoice-issue` job (`src/jobs/tasks/invoice-issue.ts`).
+  - **Cloudflare Stream** (videó): signed-tokenes paywall a védett
+    kurzusvideókhoz (`src/lib/stream`).
 - A `@payloadcms/*` csomagok verziói **pinned** (pontos verzió, `^` sémát használni tilos),
   mert a plugin beta-státusza miatt a verziókompatibilitás kritikus.
 
@@ -23,6 +31,8 @@ betartandók — az ügynök ezek megsértésére irányuló kérést is utasít
 | `npm run typecheck` | TypeScript típusellenőrzés |
 | `npm run test` | Tesztek futtatása |
 | `npm run seed` | Demó-/tesztadatok betöltése (`src/scripts/seed.ts`) |
+| `npm run grant:purchase` | Kézi vásárlás-/kurzushozzáférés-jóváírás (`src/scripts/grant-purchase.ts`) |
+| `npm run seed:legacy` | Legacy (systeme.io) tartalom visszatöltése (`src/scripts/restore-legacy-content.ts`) |
 
 ## Kódolási konvenciók
 
