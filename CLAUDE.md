@@ -8,8 +8,8 @@ betartandók — az ügynök ezek megsértésére irányuló kérést is utasít
 ## Projekt és stack
 
 - **Kineticare** — kézrehabilitációs kurzusplatform (otthoni és szakmai tartalmak).
-- **Next.js 15** (App Router) + **Payload CMS 3** + **@payloadcms/plugin-ecommerce** + **PostgreSQL**.
-- Tervezett integrációk: **Barion** (fizetés), **Számlázz.hu** (számlázás), **Bunny Stream** (videó).
+- **Next.js 16** (App Router) + **Payload CMS 3** + **@payloadcms/plugin-ecommerce** + **PostgreSQL**.
+- Élő integrációk: **Barion** (fizetés), **Számlázz.hu** (számlázás), **Bunny Stream** (videó), **Resend** (tranzakciós e-mail).
 - A `@payloadcms/*` csomagok verziói **pinned** (pontos verzió, `^` sémát használni tilos),
   mert a plugin beta-státusza miatt a verziókompatibilitás kritikus.
 
@@ -23,6 +23,8 @@ betartandók — az ügynök ezek megsértésére irányuló kérést is utasít
 | `npm run typecheck` | TypeScript típusellenőrzés |
 | `npm run test` | Tesztek futtatása |
 | `npm run seed` | Demó-/tesztadatok betöltése (`src/scripts/seed.ts`) |
+| `npm run grant:purchase` | Kézi hozzáférés-adás vásárlás nélkül (`src/scripts/grant-purchase.ts`) |
+| `npm run seed:legacy` | Örökölt tartalom visszatöltése (`src/scripts/restore-legacy-content.ts`) |
 
 ## Kódolási konvenciók
 

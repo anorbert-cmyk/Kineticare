@@ -1,34 +1,41 @@
 # Állapot-pillanatkép
 
-> Frissítve: **2026-07-31** · Alap-commit: `f015bc3` (`main`) · Commitok száma: 74
+> Frissítve: **2026-08-09** · Alap-commit: `38761c7` (`main`) · Commitok száma: 73
+
+> **Frissítési jegyzet (2026-08-09):** a fejléc, ez a bekezdés és a
+> stack-tábla a mai állapotot tükrözi; a lentebbi részletes szakaszok a
+> 2026-07-31-i mélyfelmérés pillanatképei — az azóta történteket a
+> `naplo.md` kronológiája és a PR-történet fedi.
 
 ## Egy bekezdésben
 
-A Kineticare egy kézrehabilitációs kurzusplatform: Next.js 15 (App Router) +
-Payload CMS 3 monorepo egyetlen alkalmazásban, PostgreSQL adatbázissal. A repó
-a **backend-alapozás** fázisában van, de a **pénzügyi főlánc végponttól
-végpontig összeállt**: checkout-start → Barion → callback-verifikáció →
-rendelés `paid` → `purchases`-jogosultság → aláírt Cloudflare Stream
-videó-token, plusz owner-indítású visszatérítés. Mellette készen áll a
-tartalom-collectionök köre, a jogosultsági mátrix, az audit- és
-webhook-infrastruktúra és az e-mail-réteg. Ami még hiányzik: **számlázás**
-(Számlázz.hu), a függő fizetéseket újrapollozó **poll-job**, és gyakorlatilag a
-**teljes frontend** — az `src/app/(frontend)` API-route-okon kívül egy
-alapértelmezett oldal.
+A Kineticare egy kézrehabilitációs kurzusplatform: Next.js 16 (App Router) +
+Payload CMS 3 monorepo egyetlen alkalmazásban, PostgreSQL adatbázissal. A
+pénzügyi főlánc élesben jár: checkout-start → Barion → callback-vezérelt
+állapotgép (+ utánpollozó job) → rendelés `paid` → `purchases`-jogosultság →
+tokenes Bunny Stream videó, valamint owner-indítású (rész)visszatérítés
+stornó/helyesbítő számlával (Számlázz.hu). A frontend teljes: filmsávos,
+CMS-ből szerkeszthető kezdőlap, kurzusoldalak kanonikus slug-URL-ekkel,
+fiók + kurzus-haladás, pénztár, kapcsolat-űrlap. Mellette: Resend-alapú
+tranzakciós e-mail, GA4 + PostHog consent-kapuval, kérés-korlátozás,
+audit- és webhook-infrastruktúra. A 2026-08-09-i „biztonsági kör 2" az élő
+triázs-találatokat zárta (M-07, M-11, M-13, M-15 — ld. `megfigyelesek.md`);
+nyitott: adatbázis-mentés (C14) és az M-12 emberi döntése.
 
 ## Stack és verziók
 
 | Csomag | Verzió | Megjegyzés |
 | --- | --- | --- |
 | `payload`, `@payloadcms/db-postgres`, `@payloadcms/next`, `@payloadcms/plugin-ecommerce`, `@payloadcms/plugin-form-builder`, `@payloadcms/richtext-lexical` | `3.86.0` | **Pinned** — a Dependabot ezekre nem nyit PR-t (T-072) |
-| `next` | `15.4.11` | |
+| `next` | `16.3.0` | |
 | `react` / `react-dom` | `19.2.8` | |
 | `typescript` | `5.9.3` | strict mód |
-| `vitest` | `3.2.4` | `npm run test` |
+| `vitest` | `4.1.10` | `npm run test` |
 | `eslint` | `9.39.5` | flat config (`eslint.config.mjs`) |
 
-Node **20+**, PostgreSQL **16**, npm (lockfile commitolva). Hosting: Railway
-(staging/prod), deploy nem a CI része.
+Node **24** (engines: `24.x`), PostgreSQL **16**, npm (lockfile commitolva,
+legacy-peer-deps módban — ld. `.npmrc` és a `ci.yml` fejléc-kommentje).
+Hosting: Railway (staging/prod), deploy nem a CI része.
 
 ## Modultérkép (`src/`)
 
@@ -91,9 +98,10 @@ checkout-start, sem a plugin `confirmOrder`-je nem állíthatja.
 
 Az átmenetek védettek: `paid` rendelést a `cancelled` callback sem billenti
 vissza (riasztás + `rejected` eredmény), és `cancelled`/`refunded`/
-`payment_failed` kiindulóból sem lehet `paid`-be lépni. **A `payment_failed`
-állapot jelenleg egyetlen kódúton sem érhető el** — lásd `megfigyelesek.md`
-M-07.
+`payment_failed` kiindulóból sem lehet `paid`-be lépni. A `payment_failed`
+állapot kódúton továbbra sincs bekötve — az M-07 2026-08-09-én úgy zárult,
+hogy a Barion `Failed` a meglévő készlet `cancelled` végállapotára képződik
+(lásd `megfigyelesek.md` M-07).
 
 **Rendelés-integritás (T-017):** `orderNumber` (`KH-<év>-<6 jegyű sorszám>`),
 `totalHufSnapshot`, item-szintű `titleSnapshot` / `priceHufSnapshot` — mind
