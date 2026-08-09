@@ -50,12 +50,24 @@
 | `SEED_OWNER_EMAIL` | csak az első seed futtatásához (4. pont), utána törölhető |
 | `SEED_OWNER_PASSWORD` | csak az első seed futtatásához, utána törölhető |
 
+> ⚠️ **Turnstile: a két kulcs CSAK PÁRBAN állítható be.** A Railway
+> `next start`-tal fut (`NODE_ENV=production`), és az induláskori ENV-assert
+> (`src/env.ts`, `turnstileEnvPair`) fél-lábas konfigurációnál — csak
+> `TURNSTILE_SITE_KEY` VAGY csak `TURNSTILE_SECRET_KEY` — MEGAKASZTJA az
+> indulást: site key secret nélkül a widget látszana, de a szerver némán
+> mindent átengedne; secret site key nélkül minden beküldés elakadna. Amíg
+> egyik sincs beállítva, az app elindul, de a `server_start` után
+> `turnstile_kikapcsolva` warn jelzi, hogy a kapcsolat-űrlapot csak az
+> IP-keret védi. Egyik kulcs sem `NEXT_PUBLIC_`, tehát a beállításukhoz
+> újrabuild nem kell — a Turnstile élesítése tisztán env-művelet.
+
 Később (amikor a funkció aktuális lesz): `BUNNY_STREAM_TOKEN_AUTH_KEY`,
 `NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID`,
 `NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID`,
 `NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST` (a `NEXT_PUBLIC_` kulcsok után
 ÚJRABUILD kell!), `EMAIL_FROM` + SMTP/Resend,
-`TURNSTILE_*`, `SZAMLAZZ_AGENT_KEY`, `SZAMLAZZ_INVOICE_PREFIX`.
+`TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` (CSAK párban — lásd a keretes
+figyelmeztetést), `SZAMLAZZ_AGENT_KEY`, `SZAMLAZZ_INVOICE_PREFIX`.
 
 > ⛔ **Tilos stagingen:** `BARION_POSKEY_PROD`, éles Számlázz.hu-kulcs,
 > bármilyen éles titok. (CLAUDE.md: a staging soha nem mutathat éles fiókra.)

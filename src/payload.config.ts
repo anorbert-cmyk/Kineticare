@@ -42,7 +42,14 @@ const isAdmin: Access = ({ req }) => req.user?.role === 'owner' || req.user?.rol
  * Turnstile-előkészítés: a form-submissions rekord opcionális turnstileToken
  * mezőjét a TURNSTILE_SECRET_KEY jelenléte kapcsolja be — env nélkül a
  * spam-ellenőrzés KI van kapcsolva, a beküldés akadálytalan. (A kliensoldali
- * widget a TURNSTILE_SITE_KEY-val kerül a frontendre egy későbbi sprintben.)
+ * widget a TURNSTILE_SITE_KEY-val kerül a frontendre.)
+ *
+ * Ez a „nincs kulcs → nincs ellenőrzés" ág addig él, amíg a Turnstile nincs
+ * élesítve. Production-ben az induláskori assert (`turnstileEnvPair`,
+ * src/env.ts) a kulcsPÁR konzisztenciáját követeli meg: fél-lábas
+ * konfigurációval (csak site key VAGY csak secret) az app el sem indul,
+ * teljes hiánynál pedig induláskori warn jelzi, hogy a védelem kikapcsolt —
+ * csendben fél-védett állapot tehát élesben nem létezhet.
  */
 const verifyTurnstile = async (data: unknown): Promise<unknown> => {
   const secret = process.env.TURNSTILE_SECRET_KEY
