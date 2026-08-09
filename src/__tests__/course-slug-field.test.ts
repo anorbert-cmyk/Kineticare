@@ -200,6 +200,20 @@ describe('a webcím élettartama: piszkozatban követi a címet, közzététel u
     expect(run.collections).toEqual([])
   })
 
+  it('ARCHIVÁLT kurzusnál a cím átírása NEM mozdítja el a webcímet (élő, linkelt URL)', async () => {
+    // Az archivált oldal nyilvánosan kiszolgált (a lejárt hozzáférésű vevők
+    // linkjei is ide mutatnak), és a régi slugról nincs átirányítás — a
+    // cím-követés itt néma 404-et okozna. Részleges (slug mezőt nem hordozó)
+    // frissítés a tipikus eset: pl. REST PATCH csak displayTitle-lel.
+    const run = await runHook({
+      rows: [{ id: 7, slug: 'kez-torna' }],
+      data: { displayTitle: 'Kéztorna otthon' },
+      originalDoc: { id: 7, slug: 'kez-torna', displayTitle: 'Kéz torna', status: 'archived' },
+    })
+    expect(run.slug).toBe('kez-torna')
+    expect(run.collections).toEqual([])
+  })
+
   it('a kézzel írt webcímet piszkozatban sem írja felül a cím', async () => {
     const run = await runHook({
       rows: [{ id: 1, slug: 'sajat-webcim' }],
