@@ -7,6 +7,7 @@ import { headers } from 'next/headers'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { RegisterForm } from '@/components/auth/RegisterForm'
+import { sanitizeReturnUrl } from '@/lib/return-url'
 import type { User } from '@/payload-types'
 
 import config from '../../../payload.config'
@@ -35,11 +36,11 @@ export default async function RegisztracioPage({ searchParams }: RegisztracioPag
   const user = await getCurrentUser()
 
   if (user !== null) {
-    const returnUrl = typeof params.returnUrl === 'string' && params.returnUrl.startsWith('/') ? params.returnUrl : '/kurzusaim'
+    const returnUrl = sanitizeReturnUrl(params.returnUrl, '/kurzusaim')
     redirect(returnUrl)
   }
 
-  const returnUrl = typeof params.returnUrl === 'string' && params.returnUrl.startsWith('/') ? params.returnUrl : '/kurzusaim'
+  const returnUrl = sanitizeReturnUrl(params.returnUrl, '/kurzusaim')
 
   return (
     <Section>

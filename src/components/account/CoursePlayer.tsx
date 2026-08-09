@@ -83,7 +83,7 @@ export function CoursePlayer({ product, hasAccess }: CoursePlayerProps) {
 
       const result = await fetchStreamToken({
         productId: product.id,
-        videoIndex: index,
+        videoId: video.streamAssetId,
       })
 
       if (result.kind === 'forbidden') {
@@ -100,7 +100,9 @@ export function CoursePlayer({ product, hasAccess }: CoursePlayerProps) {
       }
 
       clearRefreshTimer()
-      const expiresAt = result.expiresAt
+      // A szerver ISO 8601 lejáratot ad — a PlayerState és a refresh-timer
+      // továbbra is unix másodpercben dolgozik.
+      const expiresAt = Math.floor(Date.parse(result.expiresAt) / 1000)
       const nowSec = Math.floor(Date.now() / 1000)
       const refreshInSec = Math.max(30, expiresAt - nowSec - TOKEN_REFRESH_BEFORE_EXPIRY_SEC)
 
