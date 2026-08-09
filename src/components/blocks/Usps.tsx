@@ -1,5 +1,4 @@
 import type { BlockUsps } from '../../payload-types'
-import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
 
 import '../../app/(frontend)/styles/blocks/usps.css'
@@ -13,6 +12,9 @@ import '../../app/(frontend)/styles/blocks/usps.css'
  * képernyőolvasó is megkapja, a látható korong pedig dekoratív.
  *
  * Kártya nélkül a szekció kimarad.
+ *
+ * TÁBLA (board): teljes képernyős, teljes szélességű szekció — `kc-container`
+ * helyett `kc-board__inner` (lásd `.kc-board`, styles/ui.css).
  */
 export interface UspsProps {
   block: BlockUsps
@@ -34,11 +36,11 @@ export function Usps({ block }: UspsProps) {
   return (
     <Section
       aria-labelledby={title.length > 0 ? headingId : undefined}
-      className="kc-usps"
+      className="kc-usps kc-board"
       id={anchorId}
       variant={variant}
     >
-      <Container>
+      <div className="kc-board__inner">
         {title.length > 0 ? (
           <h2 className="kc-usps__title" id={headingId}>
             {title}
@@ -62,7 +64,7 @@ export function Usps({ block }: UspsProps) {
             )
           })}
         </ol>
-      </Container>
+      </div>
     </Section>
   )
 }

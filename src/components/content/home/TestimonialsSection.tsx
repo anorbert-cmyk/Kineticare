@@ -1,6 +1,5 @@
 import type { Testimonial } from '../../../payload-types'
 import { Card } from '../../ui/Card'
-import { Container } from '../../ui/Container'
 import { Section } from '../../ui/Section'
 
 import '../../../app/(frontend)/styles/blocks/testimonials.css'
@@ -25,11 +24,14 @@ import '../../../app/(frontend)/styles/blocks/testimonials.css'
  * A szerző nevét szándékosan `span` hordozza: a HTML `cite` eleme a MŰ címére
  * való, személynévre szabványsértő lenne.
  *
- * Megjelenés: a landing idézet-táblájának nyelve — az ELSŐ vélemény nagy nyitó
- * idézetként, a 2–3. oldalt kis idézetként, hajszálvonallal elválasztva
+ * Megjelenés: a landing idézet-TÁBLÁJA — teljes képernyős, teljes szélességű
+ * board (`kc-board--edge`, ezért `kc-container` helyett `kc-board__inner`),
+ * középre zárt fejléccel; az ELSŐ vélemény nagy nyitó idézetként, a 2–3.
+ * oldalt kis idézetként, függőleges hajszálvonallal elválasztva
  * (styles/blocks/testimonials.css). Ez kizárólag vizuális réteg: a sorrendet
  * továbbra is a `featuredTestimonials` adja, egyetlen véleménynél csak a nagy
- * idézet marad.
+ * idézet marad. A tábla-magasság az M6-korlátot nem sérti: a szekció továbbra
+ * is legfeljebb 3 RÖVID véleményt mutat, egyetlen képernyőn.
  */
 
 /** A kezdőlapon megjelenő vélemények felső korlátja (UX-skill M6: max 2–3). */
@@ -99,8 +101,13 @@ export function TestimonialsSection({
   const listVariant = items.length >= 3 ? 'trio' : items.length === 2 ? 'pair' : 'single'
 
   return (
-    <Section aria-labelledby={headingId} className="kc-testimonials" id={id} variant={variant}>
-      <Container>
+    <Section
+      aria-labelledby={headingId}
+      className="kc-testimonials kc-board kc-board--edge"
+      id={id}
+      variant={variant}
+    >
+      <div className="kc-board__inner">
         <div className="kc-testimonials__head">
           <p className="kc-testimonials__eyebrow">{eyebrowText}</p>
           <h2 className="kc-section-title kc-testimonials__title" id={headingId}>
@@ -134,7 +141,7 @@ export function TestimonialsSection({
             )
           })}
         </ul>
-      </Container>
+      </div>
     </Section>
   )
 }

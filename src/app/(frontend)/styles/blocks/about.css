@@ -1,155 +1,213 @@
 /**
- * Rólunk + statisztikák (About) — szekció-stílus.
+ * Rólunk + statisztikák (About) — TÁBLA-szekció stílusa.
  *
- * Forrás: a landing `kc-about` „board"-ja, a terv 3.1 pontja szerint portolva.
- * A landing fix magasságú, `100dvh`-hoz kötött hárompályás rácsa NEM jött át
- * (ott a szekció önálló „poszter" volt); helyette a fő site konténer-szélessége
- * és mobil-first rácsa adja a szerkezetet: mobilon egymás alatt, 900px felett
- * szöveg + fotó, a számok pedig a fotó alatt/mellett.
+ * Forrás: a landing `kc-about` board-ja (higgsfield-site/app/src/kineticare.css
+ * 542–670., tablet-kalibráció 947–956., mobil 1030–1055.). A tükör HÁROMPÁLYÁS,
+ * teljes képernyős táblája MOST MÁR ÁTJÖTT (a korábbi port konténer-szélességbe
+ * szorította): balra a felirat/cím/bekezdések + ikonos kiemelés, középen az álló
+ * csapatfotó a tábla aljáig, jobbra a hajszálvonalas szám-oszlop.
  *
- * A landing kiemelt blokkjának Phosphor-ikonja NEM jött át: a fő site-on nincs
- * ikonkészlet-függőség, és az ikon tisztán dekoratív volt — a keretes,
- * tint-hátterű kiemelés ugyanazt a vizuális súlyt adja.
+ * A tábla-viselkedést (teljes szélesség, 100dvh 2K-ig, 80vw 2K felett) a közös
+ * `.kc-board`/`.kc-board--edge` adja (styles/ui.css); itt csak a szekció saját
+ * rács-geometriája és tipográfiája él.
+ *
+ * MÉRETEK: minden betűméret a skáláról jön — a tábla-címek és a tábla apró
+ * szövegei a `--kc-text-board-*` lépcsőkről (tokens.css), amelyek a tükör
+ * pontos clamp-jei (UX-skill 4. pont: elemre írt px/rem TILOS).
  *
  * AKCENT-KORLÁT (terv 3.1): a kis felső felirat, a kiemelt blokk felirata és a
- * nagy számok `accent-deep` (fehéren 5,45:1, tinten 5,00:1 — AA felett);
+ * nagy számok `accent-deep` (paperen 5,16:1, tinten 4,72:1 — AA felett);
  * a nyers `accent` (tinten 4,07:1) csak dekoratív vonal/keret.
  *
  * Betöltés: a szekció-komponens importálja (src/components/blocks/About.tsx).
  */
 
 .kc-about {
-  --kc-about-ink: var(--kc-color-navy-900);
+  --kc-about-ink: var(--kc-color-text);
   --kc-about-muted: var(--kc-color-text-muted);
   --kc-about-rule: var(--kc-color-border);
   /* Csak dekoráció (vonalak, keret) — lásd az akcent-korlátot. */
-  --kc-about-accent: var(--kc-color-accent, var(--kc-color-blue-200));
-  --kc-about-accent-text: var(--kc-color-accent-deep, var(--kc-color-navy-700));
-  --kc-about-feature-bg: var(--kc-color-tint-cool, var(--kc-color-blue-100));
+  --kc-about-accent: var(--kc-color-accent);
+  --kc-about-accent-text: var(--kc-color-primary);
+  --kc-about-feature-bg: var(--kc-color-surface-tint);
 }
 
 .kc-section--tint.kc-about {
-  --kc-about-feature-bg: var(--kc-color-white);
+  --kc-about-feature-bg: var(--kc-color-surface-raised);
 }
 
-/* Sötétkék sáv: fehér 15,7:1, blue-200 12,5:1 a navy-900 háttéren. */
+/* Sötét sáv: fehér 15,63:1, halvány akcent 8,49:1 az inken. */
 .kc-section--dark.kc-about {
-  --kc-about-ink: var(--kc-color-white);
-  --kc-about-muted: var(--kc-color-blue-200);
-  --kc-about-rule: rgb(255 255 255 / 0.35);
-  --kc-about-accent: rgb(255 255 255 / 0.55);
-  --kc-about-accent-text: var(--kc-color-blue-200);
-  --kc-about-feature-bg: rgb(255 255 255 / 0.1);
+  --kc-about-ink: var(--kc-color-on-dark);
+  --kc-about-muted: var(--kc-color-on-dark-muted);
+  --kc-about-rule: color-mix(in srgb, var(--kc-color-on-dark) 35%, transparent);
+  --kc-about-accent: color-mix(in srgb, var(--kc-color-on-dark) 55%, transparent);
+  --kc-about-accent-text: var(--kc-color-on-dark-muted);
+  --kc-about-feature-bg: color-mix(in srgb, var(--kc-color-on-dark) 10%, transparent);
 }
+
+/* ---- Rács ---------------------------------------------------------------
+   Mobil-first: egy hasáb, természetes magasság. A tábla 900px-től kapcsol be. */
 
 .kc-about__grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--kc-space-6);
-  align-items: start;
 }
 
-/* `auto-fit`: két hasáb, ha a fotó vagy a számok oszlopa is kitöltött; ha a
-   szerkesztő egyiket sem adta meg, az oldalsó oszlop nem renderelődik, és a
-   szöveg a teljes szélességet kapja. */
 @media (min-width: 900px) {
+  /* A tükör tábla-szegélye aszimmetrikus: a bal hasáb beljebb kezdődik, a
+     szám-oszlop a jobb szélhez simul (kineticare.css 553.). */
+  .kc-section.kc-board.kc-about {
+    padding: var(--kc-board-y) clamp(2.5rem, 4.3vw, 3.875rem) 0 clamp(3.5rem, 6.25vw, 5.625rem);
+  }
+
   .kc-about__grid {
-    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-    gap: var(--kc-space-7);
+    grid-template-columns: minmax(20rem, 30.5%) minmax(30rem, 55.5%) minmax(7rem, 14%);
+    gap: 0;
   }
 }
 
-/* Az oldalsó oszlopban a fotó fölött, a számok alatta — mobilon egymás után. */
-.kc-about__side {
-  display: flex;
-  flex-direction: column;
-  gap: var(--kc-space-5);
+/* Tablet-kalibráció a tükörből (941–956.): szűkebb hasábok, kisebb címméret. */
+@media (min-width: 900px) and (max-width: 1100px) {
+  .kc-section.kc-board.kc-about {
+    padding-left: var(--kc-space-7);
+  }
+
+  .kc-about__grid {
+    grid-template-columns: 35% 49% 16%;
+  }
+
+  .kc-about__copy {
+    padding-right: var(--kc-space-4);
+  }
 }
 
+/* ---- Bal hasáb: szöveg --------------------------------------------------- */
+
 .kc-about__copy {
+  align-self: stretch;
   padding-left: var(--kc-space-5);
   border-left: 1px solid var(--kc-about-accent);
 }
 
+@media (min-width: 900px) {
+  .kc-about__copy {
+    padding: 0 clamp(1.5rem, 2.25vw, 2rem) var(--kc-space-5) clamp(1.5rem, 2.2vw, 2rem);
+  }
+}
+
 .kc-about__eyebrow {
-  margin: 0 0 var(--kc-space-4);
-  font-size: var(--kc-text-sm);
-  font-weight: var(--kc-font-weight-bold);
-  letter-spacing: 0.24em;
-  line-height: var(--kc-leading-heading);
+  margin: 0;
+  font-size: var(--kc-text-2xs);
+  font-weight: var(--kc-font-weight-medium);
+  letter-spacing: var(--kc-tracking-eyebrow);
+  line-height: 1.3;
   text-transform: uppercase;
   color: var(--kc-about-accent-text);
 }
 
+.kc-about__eyebrow::after {
+  content: '';
+  display: block;
+  width: 3.75rem;
+  height: 1.5px;
+  margin-top: var(--kc-space-3);
+  background-color: var(--kc-about-accent);
+}
+
 .kc-about__title {
-  margin: 0 0 var(--kc-space-5);
+  margin: var(--kc-space-5) 0 0;
+  max-width: 7.4ch;
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-3xl);
+  font-size: var(--kc-text-board-4xl);
   font-weight: var(--kc-font-weight-normal);
-  line-height: var(--kc-leading-heading);
+  line-height: var(--kc-leading-board-tight);
   color: var(--kc-about-ink);
   text-wrap: balance;
 }
 
-/* Dekoratív záróvonal a cím alatt. */
+/* Dekoratív akcent-aláhúzás a cím alatt (tükör: .kc-about-title::after). */
 .kc-about__title::after {
   content: '';
   display: block;
   width: 2.5rem;
-  height: 2px;
+  height: 1.5px;
   margin-top: var(--kc-space-4);
   background-color: var(--kc-about-accent);
 }
 
 .kc-about__text {
-  margin: 0 0 var(--kc-space-4);
-  max-width: 60ch;
-  font-size: var(--kc-text-base);
-  line-height: var(--kc-leading-body);
+  margin: 0 0 var(--kc-space-2);
+  max-width: 38ch;
+  font-size: var(--kc-text-board-xs);
+  line-height: 1.55;
   color: var(--kc-about-muted);
   white-space: pre-line;
 }
 
+.kc-about__text:first-of-type {
+  margin-top: var(--kc-space-5);
+}
+
 .kc-about__text strong {
-  font-weight: var(--kc-font-weight-bold);
+  font-weight: var(--kc-font-weight-medium);
   color: var(--kc-about-ink);
 }
 
+/* ---- Ikonos kiemelés ----------------------------------------------------- */
+
 .kc-about__feature {
+  display: flex;
+  gap: var(--kc-space-4);
+  align-items: flex-start;
   margin-top: var(--kc-space-5);
-  padding: var(--kc-space-4) var(--kc-space-5);
-  border-radius: var(--kc-radius-lg);
+}
+
+.kc-about__feature-icon {
+  display: inline-flex;
+  width: 3.25rem;
+  height: 3.25rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--kc-radius-full);
   background-color: var(--kc-about-feature-bg);
+  color: var(--kc-about-accent-text);
 }
 
 .kc-about__feature-label {
   margin: 0;
-  font-size: var(--kc-text-sm);
-  font-weight: var(--kc-font-weight-bold);
+  font-size: var(--kc-text-board-2xs);
+  font-weight: var(--kc-font-weight-medium);
   letter-spacing: 0.16em;
-  line-height: var(--kc-leading-heading);
+  line-height: 1.4;
   text-transform: uppercase;
   color: var(--kc-about-accent-text);
 }
 
 .kc-about__feature-note {
-  margin: var(--kc-space-2) 0 0;
-  max-width: 44ch;
-  font-size: var(--kc-text-sm);
-  line-height: var(--kc-leading-body);
+  margin: var(--kc-space-1) 0 0;
+  max-width: 28ch;
+  font-size: var(--kc-text-board-2xs);
+  line-height: 1.5;
   color: var(--kc-about-muted);
   white-space: pre-line;
 }
 
+/* ---- Középső hasáb: csapatfotó -------------------------------------------
+   A tükörben a fotó a tábla ALJÁIG fut (a rács alsó szegélye 0), ezért a
+   figure a rács teljes magasságát kapja. Mobilon arányos képkeret. */
+
 .kc-about__figure {
   margin: 0;
   overflow: hidden;
-  border-radius: var(--kc-radius-lg);
   background-color: var(--kc-color-surface-tint);
   aspect-ratio: 4 / 3;
 }
 
 /* A base.css `img { height: auto }` szabályát felül kell írni, hogy a fotó
-   kitöltse az arányos keretet (a next/image intrinsic méretei mellett is). */
+   kitöltse a keretet (a next/image intrinsic méretei mellett is). */
 .kc-about__figure img {
   width: 100%;
   height: 100%;
@@ -158,15 +216,44 @@
   object-position: 50% 25%;
 }
 
+@media (min-width: 900px) {
+  /* A fotó abszolút pozícióban tölti ki a hasábot, ezért a SAJÁT képaránya nem
+     nyújthatja meg a táblát: az álló (2:3) fotó a ~750px széles középső
+     hasábban különben 1120px-t követelne, és a tábla nem lenne 100dvh magas.
+     A tükör ezt a figure explicit magasságával oldja meg (kineticare.css 626.);
+     itt a rugalmas rács-magassághoz igazodó, robusztusabb megoldás áll. */
+  .kc-about__figure {
+    position: relative;
+    align-self: stretch;
+    min-height: 0;
+    aspect-ratio: auto;
+  }
+
+  .kc-about__figure img {
+    position: absolute;
+    inset: 0;
+  }
+}
+
+/* ---- Jobb hasáb: szám-oszlop --------------------------------------------- */
+
 .kc-about__stats {
   margin: 0;
   padding: 0;
 }
 
+@media (min-width: 900px) {
+  .kc-about__stats {
+    align-self: center;
+    padding-left: clamp(1.25rem, 2vw, 1.8rem);
+  }
+}
+
 .kc-about__stat {
   display: flex;
   flex-direction: column-reverse;
-  padding: var(--kc-space-4) 0;
+  margin: 0;
+  padding: var(--kc-space-5) 0;
   border-bottom: 1px solid var(--kc-about-rule);
 }
 
@@ -175,22 +262,23 @@
 }
 
 .kc-about__stat-value {
-  margin: 0 0 var(--kc-space-1);
+  margin: 0 0 var(--kc-space-2);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-text-board-xl);
   line-height: 1;
   color: var(--kc-about-accent-text);
 }
 
 .kc-about__stat-label {
   margin: 0;
-  max-width: 24ch;
-  font-size: var(--kc-text-sm);
-  line-height: var(--kc-leading-body);
+  max-width: 12ch;
+  font-size: var(--kc-text-board-2xs);
+  line-height: 1.55;
   color: var(--kc-about-muted);
 }
 
-/* Kis kijelzőn a számok egymás mellett is elférnek — a hármas ritmus marad. */
+/* Kis kijelzőn a számok egymás mellett is elférnek — a hármas ritmus marad
+   (a tükör mobil-szabálya, kineticare.css 1047–1055.). */
 @media (min-width: 560px) and (max-width: 899px) {
   .kc-about__stats {
     display: grid;
@@ -199,7 +287,7 @@
   }
 
   .kc-about__stat {
-    border-bottom: 0;
     border-top: 1px solid var(--kc-about-rule);
+    border-bottom: 0;
   }
 }

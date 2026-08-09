@@ -1,8 +1,12 @@
 /**
- * Sajtó-logósor (PressLogos) — szekció-stílus.
+ * Sajtó-logósor (PressLogos) — full-bleed SÁV (nem tábla).
  *
- * Forrás: a landing `kc-press` sávja, a terv 3.1 pontja szerint portolva
- * (muted → text-muted, hairline → border, inline méretek → token-skála).
+ * Forrás: a landing `kc-press` sávja (higgsfield-site/app/src/kineticare.css
+ * 1096–1131.). A tükörben ez a szekció teljes szélességű, DE nem teljes
+ * képernyős — ezért `kc-board--band`: full-bleed, természetes magasság,
+ * `--kc-board-x` oldalszegéllyel és a tábla-sor fölötti hajszálvonallal.
+ * A tokenek portolása változatlan (muted → text-muted, hairline → border,
+ * inline méretek → token-skála).
  *
  * Kontraszt: a felirat `--kc-color-text-muted` (fehéren 7,6:1, tinten 7,0:1).
  * A logók WCAG 1.4.3 szerint logotípiák — rájuk nincs kontraszt-követelmény —,
@@ -17,17 +21,23 @@
   --kc-press-muted: var(--kc-color-text-muted);
 }
 
-/* Sötétkék sáv: blue-200 a navy-900 háttéren 12,5:1. */
+/* Sötét sáv: halvány akcent az inken 8,49:1. */
 .kc-section--dark.kc-press {
-  --kc-press-muted: var(--kc-color-blue-200);
+  --kc-press-muted: var(--kc-color-on-dark-muted);
+}
+
+/* A tükörben a sávot fölül hajszálvonal választja el az előtte álló tábla
+   aljától (kineticare.css 1097–1101.). */
+.kc-section.kc-board.kc-press {
+  border-top: 1px solid var(--kc-color-border);
 }
 
 .kc-press__label {
   margin: 0;
-  font-size: var(--kc-text-sm);
-  font-weight: var(--kc-font-weight-bold);
-  letter-spacing: 0.24em;
-  line-height: var(--kc-leading-heading);
+  font-size: var(--kc-text-2xs);
+  font-weight: var(--kc-font-weight-medium);
+  letter-spacing: var(--kc-tracking-eyebrow);
+  line-height: 1.3;
   text-align: center;
   text-transform: uppercase;
   color: var(--kc-press-muted);
@@ -36,7 +46,7 @@
 .kc-press__row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--kc-space-5) var(--kc-space-6);
+  gap: clamp(1.5rem, 4vw, 3.5rem);
   align-items: center;
   justify-content: center;
   margin: var(--kc-space-6) 0 0;
@@ -51,7 +61,7 @@
 
 .kc-press__row img {
   width: auto;
-  height: var(--kc-space-6);
+  height: clamp(1.7rem, 2.6vw, 2.5rem);
   filter: grayscale(1);
   opacity: 0.75;
   transition:

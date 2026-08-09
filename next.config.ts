@@ -30,6 +30,18 @@ const nextConfig: NextConfig = {
   // hostjaival van felépítve (a PostHog a /ingest elsőfél-proxyn megy, ezért
   // connect-src 'self' elég). Stagingen érdemes a karcolás-mentes bevezetéshez
   // Content-Security-Policy-Report-Only-val kezdeni.
+  //
+  // media-src `blob:` — KÖTELEZŐ a kezdőlapi filmsávhoz (ScrollScrub). A
+  // görgetés-vezérelt scrub a klipet `fetch`-csel tölti le, majd
+  // `URL.createObjectURL(blob)`-ból játssza: csak a memóriában lévő teljes
+  // fájlon lehet akadásmentesen `currentTime`-ot ugrálni (a hálózati
+  // Range-kérésekre épülő <video src="…mp4"> seekelése szaggat). A `blob:`
+  // sémát a CSP NEM fedi le a `'self'` kulcsszóval, ezért külön kell
+  // engedélyezni — enélkül a böngésző „Refused to load media from 'blob:…'"
+  // hibával eldobja a videót, a ScrollScrub `data-video-failed`-re vált, és
+  // élesben VÉGIG a poszterkép marad (a film letöltődik, de sosem játszik).
+  // Kockázat: minimális — a `blob:` forrás csak a saját dokumentum által
+  // létrehozott, azonos eredetű objektum-URL-eket engedi, külső hostot nem.
   async headers() {
     return [
       {
@@ -46,7 +58,7 @@ const nextConfig: NextConfig = {
               "script-src 'self' 'unsafe-inline' https://iframe.cloudflarestream.com https://challenges.cloudflare.com",
               "frame-src 'self' https://iframe.cloudflarestream.com https://customer-*.cloudflarestream.com https://www.youtube-nocookie.com https://player.vimeo.com https://challenges.cloudflare.com",
               "img-src 'self' data: https://videodelivery.net https://customer-*.cloudflarestream.com",
-              "media-src 'self' https://videodelivery.net https://customer-*.cloudflarestream.com",
+              "media-src 'self' blob: https://videodelivery.net https://customer-*.cloudflarestream.com",
               "connect-src 'self'",
               "style-src 'self' 'unsafe-inline'",
               "font-src 'self'",

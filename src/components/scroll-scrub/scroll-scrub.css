@@ -80,6 +80,56 @@
   visibility: hidden;
 }
 
+/**
+ * Úszó feliratok (2. és 3. „állás").
+ *
+ * A vásznon ülnek, a stage-lejtő (::after, z-index 4) FÖLÖTT, de a
+ * folyamatjelző és a fejezet-navigáció alatt. Az átlátszatlanságot a
+ * scroll-scrub.tsx írja a scrub-arányból; itt csak a hely és a tipográfia van.
+ * A `visibility` az opacity-vel együtt mozog, hogy a 0-ra fadelt felirat ne
+ * fogjon el kattintást — a réteg amúgy is `pointer-events: none`.
+ */
+.scroll-scrub__captions {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  pointer-events: none;
+}
+
+/**
+ * A feliratok a vászon ALSÓ sávjában (a magasság ~80–92%-a) ülnek. Ez nem
+ * esztétikai szeszély: a stage alsó lejtője itt már a lap-háttér felé mos, így
+ * a sötét szöveg AA felett marad anélkül, hogy a szöveg mögé külön foltot
+ * kellene tenni. A vízszintes helyet (jobb / közép) a megrendelő kérése adja.
+ */
+.scroll-scrub__caption {
+  position: absolute;
+  /* A vászon magasságának ~78–86%-a: a mért kontraszt-sávon belül marad, és
+     elfér fölötte a süti-sáv is (az első látogatásnál az alsó ~90px-et takarja). */
+  bottom: clamp(6rem, 14vh, 9rem);
+  width: min(34rem, 40vw);
+  margin: 0;
+  opacity: 0;
+  color: var(--ss-ink);
+  font-size: var(--kc-text-2xl);
+  line-height: var(--kc-leading-tight);
+  text-wrap: balance;
+}
+
+/* 2. állás — jobb oldalt. */
+.scroll-scrub__caption--right {
+  right: clamp(1.25rem, 6vw, 6rem);
+  text-align: right;
+}
+
+/* 3. állás — vízszintesen középen. */
+.scroll-scrub__caption--center {
+  left: 50%;
+  width: min(42rem, 72vw);
+  text-align: center;
+  transform: translateX(-50%);
+}
+
 .scroll-scrub__progress {
   position: absolute;
   z-index: 5;
@@ -166,26 +216,19 @@
   justify-content: flex-end;
 }
 
+/**
+ * A szöveg mögött NINCS saját háttér-folt.
+ *
+ * A tükör itt egy radiális, világító ellipszist tett a szöveg mögé; az a fő
+ * site-on látható „fénypacniként" ült a filmen. Az olvashatóságot ehelyett a
+ * SZÍNPADRA tett irányított lejtő adja (a blokk bőrében:
+ * styles/blocks/film-hero.css `.scroll-scrub__stage::after`), ami a filmkocka
+ * részeként olvas, nem a szöveg mögé tett foltként.
+ */
 .scroll-scrub__copy {
   position: relative;
   width: min(40rem, 48vw);
   pointer-events: auto;
-}
-
-/* Olvashatósági fátyol: a szöveg mögé a háttérszín lágy foltját teszi, hogy a
-   film bármely kockáján AA felett maradjon a kontraszt. */
-.scroll-scrub__copy::before {
-  position: absolute;
-  z-index: -1;
-  inset: -3rem -5rem;
-  content: '';
-  background: radial-gradient(
-    ellipse at center,
-    color-mix(in srgb, var(--ss-bg) 88%, transparent) 0%,
-    color-mix(in srgb, var(--ss-bg) 58%, transparent) 52%,
-    transparent 76%
-  );
-  pointer-events: none;
 }
 
 .scroll-scrub__kicker {
@@ -272,18 +315,12 @@
     width: min(100%, 36rem);
   }
 
-  .scroll-scrub__copy::before {
-    inset: -3rem -2rem;
-    background: linear-gradient(
-      to top,
-      var(--ss-bg) 0%,
-      color-mix(in srgb, var(--ss-bg) 82%, transparent) 58%,
-      transparent 100%
-    );
-  }
-
   .scroll-scrub__title {
     max-width: 14ch;
+  }
+
+  .scroll-scrub__caption {
+    width: min(100%, 30rem);
   }
 }
 

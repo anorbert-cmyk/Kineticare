@@ -1,6 +1,5 @@
 import type { BlockAbout } from '../../payload-types'
 import { MediaImage } from '../content/MediaImage'
-import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
 
 import '../../app/(frontend)/styles/blocks/about.css'
@@ -8,8 +7,11 @@ import '../../app/(frontend)/styles/blocks/about.css'
 /**
  * About — „Rólunk + statisztikák" (szekció-rendszer terv 2. katalógus, 3.4).
  *
- * A landing `kc-about` szekciójának portja: bemutatkozó bekezdések, egy keretes
- * kiemelt blokk, csapatfotó (Media) és a számok listája.
+ * A landing `kc-about` TÁBLÁJÁNAK portja: teljes képernyős, teljes szélességű
+ * board három hasábban — balra a felirat/cím/bekezdések és az ikonos kiemelés,
+ * középen az álló csapatfotó a tábla aljáig, jobbra a hajszálvonalas
+ * szám-oszlop (higgsfield-site/app/src/kineticare.css 542–670.). Ezért nincs
+ * `kc-container`: a tábla szélességét a board-rendszer adja (styles/ui.css).
  *
  * A számokat a szerkesztő írja (VALÓS adatok — kitalált statisztika
  * fogyasztóvédelmi kockázat, lásd a blokk admin-leírását), ezért kódban sem
@@ -20,6 +22,25 @@ import '../../app/(frontend)/styles/blocks/about.css'
  */
 export interface AboutProps {
   block: BlockAbout
+}
+
+/**
+ * A kiemelt blokk dekoratív ikonja. A landingen ez egy Phosphor-glif volt; a fő
+ * site nem húz be ikonkészlet-függőséget, ezért beágyazott SVG — tisztán
+ * dekoratív (aria-hidden), a jelentést a felirat hordozza.
+ */
+function FeatureIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" focusable="false" height="26" viewBox="0 0 32 32" width="26">
+      <circle cx="16" cy="6.5" r="3.25" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M4 14.5h24M16 12v16M16 20l-6 8M16 20l6 8"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.6"
+      />
+    </svg>
+  )
 }
 
 export function About({ block }: AboutProps) {
@@ -54,29 +75,32 @@ export function About({ block }: AboutProps) {
   return (
     <Section
       aria-labelledby={title.length > 0 ? headingId : undefined}
-      className="kc-about"
+      className="kc-about kc-board kc-board--edge"
       id={anchorId}
       variant={variant}
     >
-      <Container>
-        <div className="kc-about__grid">
-          <div className="kc-about__copy">
-            {eyebrow.length > 0 ? <p className="kc-about__eyebrow">{eyebrow}</p> : null}
-            {title.length > 0 ? (
-              <h2 className="kc-about__title" id={headingId}>
-                {title}
-              </h2>
-            ) : null}
-            {paragraphs.map((item, index) => {
-              const text = item.text.trim()
-              return (
-                <p className="kc-about__text" key={item.id ?? `bekezdes-${index}`}>
-                  {item.emphasized ? <strong>{text}</strong> : text}
-                </p>
-              )
-            })}
-            {hasFeature ? (
-              <div className="kc-about__feature">
+      <div className="kc-board__inner kc-about__grid">
+        <div className="kc-about__copy">
+          {eyebrow.length > 0 ? <p className="kc-about__eyebrow">{eyebrow}</p> : null}
+          {title.length > 0 ? (
+            <h2 className="kc-about__title" id={headingId}>
+              {title}
+            </h2>
+          ) : null}
+          {paragraphs.map((item, index) => {
+            const text = item.text.trim()
+            return (
+              <p className="kc-about__text" key={item.id ?? `bekezdes-${index}`}>
+                {item.emphasized ? <strong>{text}</strong> : text}
+              </p>
+            )
+          })}
+          {hasFeature ? (
+            <div className="kc-about__feature">
+              <span className="kc-about__feature-icon">
+                <FeatureIcon />
+              </span>
+              <div className="kc-about__feature-copy">
                 {featureLabel.length > 0 ? (
                   <p className="kc-about__feature-label">{featureLabel}</p>
                 ) : null}
@@ -84,33 +108,27 @@ export function About({ block }: AboutProps) {
                   <p className="kc-about__feature-note">{featureNote}</p>
                 ) : null}
               </div>
-            ) : null}
-          </div>
-          {photo || stats.length > 0 ? (
-            <div className="kc-about__side">
-              {photo ? (
-                <figure className="kc-about__figure">
-                  <MediaImage
-                    media={photo}
-                    preferredSize="md"
-                    sizes="(max-width: 900px) 100vw, 480px"
-                  />
-                </figure>
-              ) : null}
-              {stats.length > 0 ? (
-                <dl className="kc-about__stats">
-                  {stats.map((item, index) => (
-                    <div className="kc-about__stat" key={item.id ?? `szam-${index}`}>
-                      <dt className="kc-about__stat-label">{item.label.trim()}</dt>
-                      <dd className="kc-about__stat-value">{item.value.trim()}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : null}
             </div>
           ) : null}
         </div>
-      </Container>
+        {photo ? (
+          <figure className="kc-about__figure">
+            {/* A fotó a tábla középső hasábja (a viewport ~55%-a), a tábla
+                tetejétől az aljáig — ezért vw-alapú méret-tipp. */}
+            <MediaImage media={photo} preferredSize="lg" sizes="(max-width: 900px) 100vw, 56vw" />
+          </figure>
+        ) : null}
+        {stats.length > 0 ? (
+          <dl className="kc-about__stats">
+            {stats.map((item, index) => (
+              <div className="kc-about__stat" key={item.id ?? `szam-${index}`}>
+                <dt className="kc-about__stat-label">{item.label.trim()}</dt>
+                <dd className="kc-about__stat-value">{item.value.trim()}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+      </div>
     </Section>
   )
 }

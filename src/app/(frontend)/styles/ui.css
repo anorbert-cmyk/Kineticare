@@ -67,6 +67,82 @@
   padding-block: 0;
 }
 
+/* ---- Board: teljes szélességű, teljes képernyős tábla-szekció -------------
+   A kezdőlap tábla-szekciói (Welcome, Usps, States, Services, Rólunk,
+   Vélemények) a higgsfield-tükör board-rendszerét viselik: a szekció a VIEWPORT
+   teljes szélességét kapja — belül NINCS `kc-container`, tehát az 1120px-es
+   tartalom-szélesség nem szorítja össze —, és 2K-ig 100dvh magas (a tükör
+   `.kc-vh` szabálya, higgsfield-site/app/src/kineticare.css 222–227.).
+   A NEM tábla-jellegű oldalak (kurzusok, blog, fiók) érintetlenek: ott a
+   szekciók változatlanul `kc-container`-t használnak.
+
+   Szegély-módok:
+     .kc-board .......... ritkább szekció-szegély, függőlegesen középre zárt
+                          tartalom (tükör: `.kc-section` + `.kc-vh`)
+                          — Welcome, Usps, States,
+     .kc-board--edge .... szűk tábla-szegély, alul szegély nélkül; a tartalom
+                          KITÖLTI a tábla magasságát, így a fotó/rács a tábla
+                          aljáig fut (tükör: `.kc-services-section`, `.kc-about`,
+                          `.kc-quotes-section`),
+     .kc-board--band .... teljes szélesség, TERMÉSZETES magasság (tükör:
+                          `.kc-press`) — full-bleed sáv, nem tábla.
+
+   2K FELETT (min-width: 2000px): a tartalom `--kc-board-max` (80vw) szélességre
+   mérséklődik és középre zár, a tábla magassága pedig a board-mester arányából
+   skálázódik — 0,8 × `--kc-board-ratio` (0,5625) = 0,45 →
+   `min(100dvh, 45vw)`. A tábla így nem nyúlik szét az ultraszéles kijelzőn.
+
+   900px ALATT nincs tábla: a magasság természetes (a tükör 860px-es
+   mobilszabálya, 963–1078. sor) — fix magassággal a tartalom levágódna. A
+   töréspont a repó közös 900px-e, a header/nav váltásával egyezően.
+
+   A kék SOS-sáv (`kc-free-sos`) SZÁNDÉKOSAN nem board: az ingyenes lead-magnet
+   vizuálisan nem előzheti meg a fizetős ajánlatot (UX-skill M4/K2). */
+.kc-section.kc-board {
+  display: flex;
+  flex-direction: column;
+  padding: var(--kc-section-y) var(--kc-section-x);
+}
+
+.kc-board__inner {
+  width: 100%;
+  min-width: 0;
+}
+
+.kc-section.kc-board.kc-board--edge {
+  padding: var(--kc-board-y) var(--kc-board-x) 0;
+}
+
+.kc-section.kc-board.kc-board--band {
+  padding: clamp(3rem, 8vh, 4.5rem) var(--kc-board-x);
+}
+
+@media (min-width: 900px) {
+  .kc-section.kc-board:not(.kc-board--band) {
+    justify-content: center;
+    min-height: var(--kc-board-min-h);
+  }
+
+  /* Az edge-tábla tartalma a tábla teljes magasságát kitölti (a tükörben a
+     belső rács kap `height: max(45rem, 100dvh)`-t; itt a flex-növekedés adja
+     ugyanezt, konténer-magasság öröklése nélkül). */
+  .kc-board--edge > .kc-board__inner {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+}
+
+@media (min-width: 2000px) {
+  .kc-section.kc-board:not(.kc-board--band) {
+    min-height: min(100dvh, calc(var(--kc-board-max) * var(--kc-board-ratio)));
+  }
+
+  .kc-board__inner {
+    max-width: var(--kc-board-max);
+    margin-inline: auto;
+  }
+}
+
 /* ---- Button -------------------------------------------------------------
    Kontraszt (számolt, WCAG 2.2):
      primary: fehér az accent-deep (#2f6e9f) kitöltésen ......... 5,45:1  AA ✓

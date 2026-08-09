@@ -2,7 +2,6 @@ import Link from 'next/link'
 
 import type { BlockPressLogos } from '../../payload-types'
 import { MediaImage } from '../content/MediaImage'
-import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
 
 import '../../app/(frontend)/styles/blocks/press-logos.css'
@@ -20,6 +19,9 @@ import '../../app/(frontend)/styles/blocks/press-logos.css'
  *
  * A szekció landmarkjának nevét a felirat adja; felirat nélkül a szekció
  * névtelen marad (nem találunk ki hozzá szöveget).
+ *
+ * SÁV (board `--band`): a tükörben a `kc-press` teljes szélességű, de NEM
+ * teljes képernyős — ezért full-bleed sáv természetes magassággal, nem tábla.
  */
 export interface PressLogosProps {
   block: BlockPressLogos
@@ -43,11 +45,11 @@ export function PressLogos({ block }: PressLogosProps) {
   return (
     <Section
       aria-labelledby={heading.length > 0 ? headingId : undefined}
-      className="kc-press"
+      className="kc-press kc-board kc-board--band"
       id={anchorId}
       variant={variant}
     >
-      <Container>
+      <div className="kc-board__inner">
         {heading.length > 0 ? (
           <p className="kc-press__label" id={headingId}>
             {heading}
@@ -94,7 +96,7 @@ export function PressLogos({ block }: PressLogosProps) {
             )
           })}
         </ul>
-      </Container>
+      </div>
     </Section>
   )
 }

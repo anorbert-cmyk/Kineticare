@@ -18,6 +18,30 @@
  *   kontraszt-jegyzetét.
  */
 
+/**
+ * A filmsáv a FEJLÉC ALÁ fut.
+ *
+ * A landing-tükör navja `position: fixed` és háttértelen (kineticare.css
+ * `.kc-nav`), tehát ott a film a viewport legtetejétől látszik. A fő site-on a
+ * fejléc sticky, vagyis a folyamban HELYET FOGLAL — enélkül a film a fejléc
+ * ALATT kezdődne, és a „teljesen átlátszó fejléc" a lap tetején semmit nem
+ * mutatna a filmből (csak a lap-hátteret), azaz a hatás elveszne.
+ *
+ * A negatív felső margó pontosan a fejléc magassága, ezért a lap görgetési
+ * hossza NEM változik. A szabály szándékosan CSAK az oldal legelső szekciójára
+ * érvényes (`:first-of-type` a <main> section-jei között): ha a szerkesztő a
+ * blokkot lejjebb húzza, nem csúszik rá az előtte lévő szekcióra.
+ */
+main > .kc-film-hero:first-of-type {
+  margin-top: -3.5rem; /* mobil fejléc-sáv magassága */
+}
+
+@media (min-width: 900px) {
+  main > .kc-film-hero:first-of-type {
+    margin-top: calc(-1 * var(--kc-header-height));
+  }
+}
+
 /* A fejléc a fő site-on sticky (layout.css), a landingen nem volt az: a
    film tetején futó elemeket ezért a fejléc alá csúsztatjuk, különben
    takarásban maradnának. */
@@ -29,16 +53,81 @@
   top: calc(var(--kc-header-height) + var(--kc-space-2));
 }
 
-/* Hangulat-fátyol a filmkockák felett: hűvös kékes derengés, alul a fehér
-   szekció-háttérbe olvadva, hogy a film és a következő szekció között ne
-   legyen éles vágás. Dekoratív réteg, a szöveg fölötte marad. */
+/**
+ * A SZÍNPAD LEJTŐI — az olvashatóság EGYETLEN eszköze a filmsávon.
+ *
+ * A szöveg mögül a világító radiális folt eltűnt (lásd scroll-scrub.css): a
+ * kontrasztot innentől a vászonra tett IRÁNYÍTOTT lejtők adják, ahogy a
+ * landing-tükör is csinálja (kineticare.css `.kc-root .scroll-scrub__stage::after`).
+ * A tükör két rétege (alsó összeolvadás + hűvös hangulat-fátyol) VÁLTOZATLANUL
+ * benne van; fölé két új réteg került, mert a fő site-on a fejléc sticky, a
+ * tükrön viszont nem volt az, és mert a tükör nem AA-auditált.
+ *
+ * MÉRÉS (a TÉNYLEGES filmkockákból, nem becslésből): a scene-02.mp4-ből 2
+ * másodpercenként kivett kockák + a poszter, 16x16 pixeles blokkokra átlagolva,
+ * WCAG 2.2 relatív luminanciával. A méretezés mindig a legrosszabb (legsötétebb)
+ * blokk ellen történt, az adott szövegdoboz területén belül:
+ *
+ *   régió                        legsötétebb blokk   ink NYERSEN a filmen
+ *   fejléc-sáv (felső 8%) ....... rgb(34,49,62) ..... 1,17:1   (olvashatatlan)
+ *   hero-szöveg (bal, közép) .... rgb(1,0,0) ........ 1,34:1   (olvashatatlan)
+ *   2. felirat (jobb, alsó sáv) . rgb(28,19,11) ..... 1,17:1   (olvashatatlan)
+ *   3. felirat (közép, alsó sáv)  rgb(105,60,37) .... 1,70:1   (olvashatatlan)
+ *
+ * A film tehát NYERSEN egyik szövegdoboz alatt sem olvasható — a lejtők nem
+ * dekorációk, hanem AA-feltételek. A lentiek a lap-hátteret (paper) keverik a
+ * kockára; a kapott kontraszt ink (#10243e) szöveggel:
+ *
+ *   réteg                       fedés   régió                 ink kontraszt
+ *   1. fejléc-sáv ............... 0,50   fejléc-sáv ........... 5,13:1  AA ✓
+ *   2. bal lejtő ................ 0,64   hero cím + bevezető .. 6,00:1  AA ✓
+ *   3+4. alsó lejtők ............ 0,60   2. felirat ........... 5,78:1  AA ✓
+ *   3+4. alsó lejtők ............ 0,60   3. felirat ........... 7,25:1  AA ✓
+ *
+ * A számítás konzervatív: minden régiónál CSAK az ott biztosan jelen lévő
+ * réteg(ek) fedését vettük — az átfedő lejtők (pl. a bal lejtő a fejléc-sávban)
+ * tovább javítanak. A fejléc-sáv fölé jövő fejléc-fátyol (layout.css) szintén
+ * csak hozzáad. RÉTEGSORREND: a CSS a legelöl felsorolt réteget rajzolja
+ * legfelülre, ezért a tükör két rétege maradt a lista végén.
+ */
 .kc-film-hero .scroll-scrub__stage::after {
   position: absolute;
   inset: 0;
   z-index: 4;
   content: '';
   background:
-    linear-gradient(to bottom, transparent 55%, var(--kc-color-white) 100%),
+    /* 1. Fejléc-sáv: a sticky fejléc alatt futó filmkockát világosítja. A
+       fedés a fejléc teljes magasságában (4,5rem) 0,50 felett marad. */
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--kc-color-bg) 58%, transparent) 0,
+      color-mix(in srgb, var(--kc-color-bg) 50%, transparent) var(--kc-header-height),
+      transparent 12rem
+    ),
+    /* 2. Bal lejtő: a hero-szöveg oszlopa alatt. A hero-doboz szélessége
+       min(40rem, 48vw), ezért a fedés 40rem-ig egyenletes, és csak utána fut ki.
+       Az erejét a `--ss-copy-scrim` (0..1) skálázza: amíg a hero-szöveg látszik,
+       1 (teljes 64%-os fedés), utána 0 — így a 2. és 3. állásban a filmkocka a
+       saját erejével látszik, nem fátyol alól. A fallback 1, tehát felirat
+       nélküli filmsávnál a viselkedés változatlan. */
+      linear-gradient(
+        to right,
+        color-mix(in srgb, var(--kc-color-bg) calc(64% * var(--ss-copy-scrim, 1)), transparent) 0,
+        color-mix(in srgb, var(--kc-color-bg) calc(64% * var(--ss-copy-scrim, 1)), transparent)
+          40rem,
+        transparent 64rem
+      ),
+    /* 3. Alsó pára: a 2. és 3. felirat sávját emeli meg a tükör alsó
+       összeolvadása FELETT — enélkül a felirat teteje AA alá esne. */
+      linear-gradient(
+        to top,
+        color-mix(in srgb, var(--kc-color-bg) 40%, transparent) 0%,
+        color-mix(in srgb, var(--kc-color-bg) 30%, transparent) 30%,
+        transparent 55%
+      ),
+    /* 4–5. A TÜKÖR két rétege, változatlanul: alul a lap-háttérbe olvadás
+       (nincs éles vágás a következő szekcióig), fölötte a hűvös hangulat. */
+      linear-gradient(to bottom, transparent 55%, var(--kc-color-white) 100%),
     linear-gradient(
       152deg,
       color-mix(in srgb, var(--kc-color-accent) 18%, transparent),
@@ -47,16 +136,13 @@
   pointer-events: none;
 }
 
-/* Olvashatósági fátyol erősítése: a szöveg fotó fölött áll, ezért a folt
-   közepe teljesen fedő — így a címsor és a bevezető kontrasztja a film
-   BÁRMELY kockáján AA felett marad (UX-skill 3. pont, „legrosszabb eset"). */
-.kc-film-hero .scroll-scrub__copy::before {
-  background: radial-gradient(
-    ellipse at center,
-    var(--kc-color-white) 0%,
-    color-mix(in srgb, var(--kc-color-white) 78%, transparent) 55%,
-    transparent 78%
-  );
+/* A feliratok a márka display-betűjét viszik, a hero-címmel egy nyelven. A
+   méret a közös skáláról jön (scroll-scrub.css: --kc-text-2xl) — itt csak a
+   metszet, ahogy a címsornál is. */
+.kc-film-hero .scroll-scrub__caption {
+  font-family: var(--kc-font-heading);
+  font-weight: var(--kc-font-weight-normal);
+  letter-spacing: 0.01em;
 }
 
 /* Címsor: a márka display-betűje. Méret és sortáv a komponens-lapról

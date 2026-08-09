@@ -9,7 +9,7 @@ import sharp from 'sharp'
 import { fileURLToPath } from 'node:url'
 
 import { AuditLogs } from './collections/AuditLogs'
-import { ensureHomeImages, ensureHomeLayout } from './lib/home-seed'
+import { ensureHomeImages, ensureHomeLayout, ensureHomeTestimonials } from './lib/home-seed'
 import { Categories } from './collections/Categories'
 import { Media } from './collections/Media'
 import { Menus } from './collections/Menus'
@@ -203,6 +203,7 @@ async function ensureHomeBaseline(payload: Payload): Promise<void> {
   try {
     const mediaIds = await ensureHomeImages(payload)
     await ensureHomeLayout(payload, mediaIds)
+    await ensureHomeTestimonials(payload)
   } catch (error) {
     logger.warn('Kezdőlap-alapállapot ellenőrzése/betöltése sikertelen (best-effort)', {
       error: error instanceof Error ? error.message : String(error),

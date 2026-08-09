@@ -35,6 +35,11 @@ import './scroll-scrub.css'
  * 4. A CSS-ben a betűméretek a fő site skálájáról jönnek (lásd scroll-scrub.css).
  * 5. Üres `body` esetén nem renderelünk üres bekezdést (a blokk „lead" mezője
  *    nem kötelező).
+ * 6. Új, opcionális `captions` prop — a scrub-pozícióhoz kötött, ÚSZÓ feliratok
+ *    (a filmsáv 2. és 3. „állása"). A tükrön nincs megfelelője; a megjelenésük
+ *    tisztán a görgetés-arányból (`--ss-progress`) számolódik, ugyanabban a
+ *    rAF-ciklusban, ahol a videó `currentTime`-ja is mozog — külön figyelő
+ *    (IntersectionObserver, scroll-listener) NEM indul miattuk.
  * A film-vezérlés, a reduced-motion-ág és a poszter-tartalék logikája érintetlen.
  */
 
@@ -79,6 +84,25 @@ export interface ScrollScrubTheme {
   accent: string
 }
 
+/**
+ * Görgetés-pozícióhoz kötött úszó felirat a filmsávon (a 2. és 3. „állás").
+ *
+ * A `from`/`to` a TELJES scrub 0..1 arányán értendő — ugyanaz a szám, amit a
+ * komponens `--ss-progress`-ként is kiír. A felirat a sáv két szélén lágyan
+ * úszik be és ki (`CAPTION_FADE`); ha a `to` eléri az 1-et, a kifutó ág elmarad,
+ * így a záró felirat a film végéig kint marad.
+ */
+export interface ScrollScrubCaption {
+  id: string
+  text: string
+  /** Vízszintes elhelyezés a filmvásznon. */
+  align: 'center' | 'right'
+  /** A sáv kezdete a teljes scrub arányában (0..1). */
+  from: number
+  /** A sáv vége a teljes scrub arányában (0..1). */
+  to: number
+}
+
 export interface ScrollScrubProps {
   scenes: ScrollScrubScene[]
   /** Folytonos, egyfelvonásos filmnél üresen marad. */
@@ -87,6 +111,8 @@ export interface ScrollScrubProps {
   className?: string
   /** Horgony-cél a szekció gyökerén (pl. a blokk anchorId mezője). */
   id?: string
+  /** Scrub-pozícióhoz kötött úszó feliratok; üres tömbnél semmi nem renderelődik. */
+  captions?: ScrollScrubCaption[]
   onActiveSectionChange?: (index: number) => void
 }
 
@@ -141,6 +167,32 @@ const lingerEase = (value: number, amount: number) => {
   const linger = clamp(amount, 0, 0.6)
   const centered = x - 0.5
   return (1 - linger) * x + linger * (4 * centered ** 3 + 0.5)
+}
+
+/** A felirat be- és kiúszásának hossza a scrub 0..1 arányán. */
+export const CAPTION_FADE = 0.07
+
+/**
+ * Egy úszó felirat átlátszatlansága a scrub-pozícióból.
+ *
+ * A `[from, to]` sávon belül 1, a sáv két szélén `CAPTION_FADE` hosszan
+ * smoothstep-pel úszik be/ki. Ha `to >= 1`, a kifutó ág elmarad — a záró
+ * felirat a film utolsó kockájáig kint marad. `reduced` esetén nincs átmenet:
+ * a felirat a sávon belül azonnal látszik, kívül azonnal eltűnik (állókép).
+ */
+export function captionOpacity(
+  progress: number,
+  from: number,
+  to: number,
+  reduced = false,
+): number {
+  const p = clamp(progress)
+  if (reduced) {
+    return p >= from && p <= to ? 1 : 0
+  }
+  const rise = (p - (from - CAPTION_FADE)) / CAPTION_FADE
+  const fall = to >= 1 ? 1 : (to + CAPTION_FADE - p) / CAPTION_FADE
+  return smoothstep(Math.min(rise, fall))
 }
 
 function buildSegments(
@@ -202,6 +254,7 @@ export function ScrollScrub({
   theme,
   className,
   id,
+  captions,
   onActiveSectionChange,
 }: ScrollScrubProps) {
   const rootRef = useRef<HTMLElement>(null)
@@ -209,6 +262,7 @@ export function ScrollScrub({
   const onActiveRef = useRef(onActiveSectionChange)
   const [activeSection, setActiveSection] = useState(0)
   const segments = useMemo(() => buildSegments(scenes, connectors ?? []), [connectors, scenes])
+  const captionList = useMemo(() => captions ?? [], [captions])
 
   // A legfrissebb callback elérhető marad a görgetés-ciklusból anélkül, hogy a
   // vezérlő-effekt függősége lenne. Effektben szinkronizáljuk, sosem renderelés
@@ -228,6 +282,20 @@ export function ScrollScrub({
     if (layerNodes.length !== segments.length || bandNodes.length !== segments.length) {
       throw new Error('A ScrollScrub szegmens-markupja nincs szinkronban')
     }
+
+    const captionNodes = [...root.querySelectorAll<HTMLElement>('[data-scroll-scrub-caption]')]
+    if (captionNodes.length !== captionList.length) {
+      throw new Error('A ScrollScrub felirat-markupja nincs szinkronban')
+    }
+
+    // A jelenet-szöveg (1. „állás") csak akkor úszik ki, ha VAN mit átadnia:
+    // felirat nélkül a viselkedés változatlan, a szöveg végig kint marad.
+    const copyNodes = captionList.length
+      ? [...root.querySelectorAll<HTMLElement>('.scroll-scrub__copy')]
+      : []
+    // Az 1. állás pontosan ott adja át a helyét, ahol a 2. beúszik: a kifutás
+    // vége = az első felirat sávkezdete, tehát a két görbe egymás tükörképe.
+    const copyHandoff = captionList[0] ? captionList[0].from - CAPTION_FADE : 1
 
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const coarsePointer = window.matchMedia('(hover: none) and (pointer: coarse)').matches
@@ -464,7 +532,41 @@ export function ScrollScrub({
         onActiveRef.current?.(active)
       }
 
-      root.style.setProperty('--ss-progress', String(clamp(y / total)))
+      const progress = clamp(y / total)
+      root.style.setProperty('--ss-progress', String(progress))
+
+      // A 2. és 3. „állás": a felirat láthatósága TISZTÁN a scrub-arányból jön,
+      // ugyanabban a ciklusban, ahol a film kockája is mozog. Csökkentett
+      // mozgásnál nincs átúszás — a felirat állóképként vált (lásd
+      // captionOpacity `reduced` ága).
+      for (const [index, caption] of captionList.entries()) {
+        const node = captionNodes[index]
+        const opacity = captionOpacity(progress, caption.from, caption.to, reduceMotion)
+        node.style.opacity = String(opacity)
+        node.setAttribute('aria-hidden', opacity < 0.05 ? 'true' : 'false')
+      }
+
+      // Az 1. állás kiúszása. Az `aria-hidden` NEM kerül rá: a jelenet címe az
+      // oldal H1-e, a dokumentum-vázlatból nem tűnhet el. A kattinthatóságot
+      // viszont el kell venni, különben a láthatatlan gombok elfognák az
+      // egérmutatót a film fölött.
+      if (copyNodes.length > 0) {
+        const opacity = captionOpacity(progress, 0, copyHandoff, reduceMotion)
+        for (const node of copyNodes) {
+          node.style.opacity = String(opacity)
+          node.style.pointerEvents = opacity < 0.05 ? 'none' : ''
+        }
+
+        // A jelenet-szöveg olvashatósági lejtője (film-hero.css 2. rétege) a
+        // szöveggel együtt tűnik el, hogy a film a 2. és 3. állásban a saját
+        // erejével látszódjon. SZÁNDÉKOSAN EGY FADE-DEL KÉSŐBB fut ki, mint a
+        // szöveg: amíg a szöveg egyáltalán látszik, a lejtő teljes erővel áll,
+        // tehát a kontraszt a kiúszás közben sem csökken.
+        root.style.setProperty(
+          '--ss-copy-scrim',
+          String(captionOpacity(progress, 0, copyHandoff + CAPTION_FADE, reduceMotion)),
+        )
+      }
     }
 
     const updateVideos = () => {
@@ -569,8 +671,18 @@ export function ScrollScrub({
         segment.layer.style.removeProperty('opacity')
         segment.layer.style.removeProperty('z-index')
       }
+
+      for (const node of captionNodes) {
+        node.style.removeProperty('opacity')
+      }
+
+      for (const node of copyNodes) {
+        node.style.removeProperty('opacity')
+        node.style.removeProperty('pointer-events')
+      }
+      root.style.removeProperty('--ss-copy-scrim')
     }
-  }, [segments])
+  }, [captionList, segments])
 
   if (scenes.length === 0) {
     return null
@@ -628,6 +740,23 @@ export function ScrollScrub({
             )
           })}
         </div>
+
+        {/* Úszó feliratok (2. és 3. állás). Rendes DOM-szöveg a vásznon: a
+            láthatóságot a görgetés adja, de a tartalom végig a fában marad,
+            így képernyőolvasóval és kereséssel is elérhető. */}
+        {captionList.length > 0 ? (
+          <div className="scroll-scrub__captions">
+            {captionList.map((caption) => (
+              <p
+                className={`scroll-scrub__caption scroll-scrub__caption--${caption.align}`}
+                data-scroll-scrub-caption=""
+                key={caption.id}
+              >
+                {caption.text}
+              </p>
+            ))}
+          </div>
+        ) : null}
 
         <div aria-hidden="true" className="scroll-scrub__progress">
           <span />

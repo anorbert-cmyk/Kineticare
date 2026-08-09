@@ -1,6 +1,5 @@
 import type { BlockStates } from '../../payload-types'
 import { MediaImage } from '../content/MediaImage'
-import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
 
 import '../../app/(frontend)/styles/blocks/states.css'
@@ -14,6 +13,9 @@ import '../../app/(frontend)/styles/blocks/states.css'
  * A képek a Media collectionből jönnek (terv 3.4), így a szerkesztők
  * cserélhetik őket. A képleírás (alt) a Media dokumentumon él — a MediaImage
  * onnan veszi. Kép nélkül a kártya szöveges marad, a szekció nem törik el.
+ *
+ * TÁBLA (board): teljes képernyős, teljes szélességű szekció — `kc-container`
+ * helyett `kc-board__inner` (lásd `.kc-board`, styles/ui.css).
  */
 export interface StatesProps {
   block: BlockStates
@@ -36,11 +38,11 @@ export function States({ block }: StatesProps) {
   return (
     <Section
       aria-labelledby={title.length > 0 ? headingId : undefined}
-      className="kc-states"
+      className="kc-states kc-board"
       id={anchorId}
       variant={variant}
     >
-      <Container>
+      <div className="kc-board__inner">
         {title.length > 0 ? (
           <h2 className="kc-states__title" id={headingId}>
             {title}
@@ -77,7 +79,7 @@ export function States({ block }: StatesProps) {
             )
           })}
         </ol>
-      </Container>
+      </div>
     </Section>
   )
 }

@@ -20,6 +20,8 @@ import { fileURLToPath } from 'node:url'
 
 import type { Payload } from 'payload'
 
+import { logger } from './logger'
+
 import { HOME_PAGE_SLUG } from './content-slugs'
 import type { Page } from '../payload-types'
 
@@ -602,4 +604,116 @@ export const ensureHomeLayout = async (payload: Payload, media: HomeMediaIds): P
     overrideAccess: true,
   })
   payload.logger.info(`Seed: kezdőlap alap-szekciósora felvéve (${layout.length} szekció).`)
+}
+
+// ---------------------------------------------------------------------------
+// A kezdőlap három kiemelt véleménye (B3).
+//
+// A „Pácienseink mondták" szekció (M6) adatvezérelt: kiemelt (`featured`) és
+// látható vélemény nélkül NEM renderelődik — élesben pontosan ez történt, a
+// collection üres volt. Az itteni alapállapot ezt pótolja, idempotensen.
+//
+// TARTALMI SZABÁLY (fogyasztóvédelem — lásd a TestimonialsSection fejkommentjét):
+// ide KIZÁRÓLAG a lányok meglévő oldalán publikált, VALÓS visszajelzés kerülhet,
+// betűhíven. A `quote` karakterre azonos a legacy-visszaépítő script
+// (src/scripts/restore-legacy-content.ts) LEGACY_TESTIMONIALS tételeivel; a
+// `shortQuote` a teljes idézet ÖSSZEFÜGGŐ, betűhív részlete (invariáns:
+// quote.includes(shortQuote)). A kezdőlap-terv rövidítései szándékosan nincsenek
+// átvéve: átfogalmazott / összeollózott idézet tilos.
+// ---------------------------------------------------------------------------
+
+interface HomeTestimonialSeed {
+  /** A vélemény teljes szövege — betűhíven, ahogy a lányok oldalán megjelent. */
+  quote: string
+  /** Kezdőlapi rövid változat: mindig a `quote` betűhív, összefüggő részlete. */
+  shortQuote: string
+  /** Az idempotencia-kulcs is: ilyen nevű vélemény esetén a seed nem nyúl semmihez. */
+  authorName: string
+  authorTitle: string
+  /** Kezdőlapi sorrend — az 1-es a nagy, nyitó idézet. */
+  order: number
+}
+
+export const HOME_TESTIMONIALS: readonly HomeTestimonialSeed[] = [
+  {
+    quote:
+      'Kocsis Katát kézproblémával kerestem fel, és már az első alkalommal éreztem, hogy jó kezekben vagyok – szó szerint is. Nagy odafigyeléssel, alázattal és valódi szakértelemmel kezelt minden alkalommal. Nemcsak a tüneteket enyhítette, hanem segített megérteni a kiváltó okokat is. Őszintén ajánlom mindenkinek, aki nemcsak gyors enyhülést, hanem tartós megoldást keres.',
+    shortQuote:
+      'Nemcsak a tüneteket enyhítette, hanem segített megérteni a kiváltó okokat is. Őszintén ajánlom mindenkinek, aki nemcsak gyors enyhülést, hanem tartós megoldást keres.',
+    authorName: 'Garami Gábor',
+    authorTitle: 'zenész, műsorvezető',
+    order: 1,
+  },
+  {
+    quote:
+      'Egy 10 éve tartó ganglion problémával, több operáció után jutottam el Katához, mert szikementes segítséget szerettem volna igénybe venni, és nem is dönthettem volna jobban! Nagyon hálás vagyok, hogy szakértelme által jelentős javulást és tünetmentességet értünk el a kezelések során, és rengeteg tudást is kaptam, pl. hogy tornáztathatom én magam is a fájó testrészeket, vagy hogyan tape-elhetem be magam akut fájdalom esetén.',
+    shortQuote:
+      'Egy 10 éve tartó ganglion problémával, több operáció után jutottam el Katához, mert szikementes segítséget szerettem volna igénybe venni, és nem is dönthettem volna jobban!',
+    authorName: 'Kállai Dóra',
+    authorTitle: 'biológus',
+    order: 2,
+  },
+  {
+    quote:
+      'A KINETICARE lányokat ajánlás alapján kerestem meg, ugyanis akkor már pár hónapja erős fájdalommal járt a hüvelykujjam és a csuklóm mozgatása. Ez a munkámat is nehezítette, hiszen jógaoktatóként folyamatosan használnom kellett, nem pihentethettem. A közös munkának, a világos magyarázatoknak, hogy mi történik velem, illetve a szuper feladatoknak és életvezetési tanácsoknak hála sikerült a gyógyulás! Nagyon hálás vagyok a KINETICARE-nek, hiszen azóta fájdalommentesen élek, és újra visszatérhettem kedvenc gyakorlatomhoz, a kézenálláshoz is.',
+    shortQuote:
+      'A közös munkának, a világos magyarázatoknak, hogy mi történik velem, illetve a szuper feladatoknak és életvezetési tanácsoknak hála sikerült a gyógyulás!',
+    authorName: 'Bagdal Szilvia',
+    authorTitle: 'jógaoktató',
+    order: 3,
+  },
+]
+
+/**
+ * A három kiemelt vélemény idempotens létrehozása.
+ *
+ * IDEMPOTENCIA: a kulcs a NÉV (`authorName`). Ha ilyen nevű vélemény már van a
+ * collectionben, a függvény kihagyja, és SEMMIT nem ír felül — a szerkesztői
+ * munka (javított titulus, más sorrend, levett kiemelés, akár teljesen más
+ * szöveg) sérthetetlen, ugyanúgy, ahogy a kezdőlap szekciósorát sem írja felül
+ * a seed.
+ *
+ * BEST-EFFORT: hiányzó tábla vagy adatbázis (pl. első migráció előtti indulás)
+ * és minden írási hiba csak figyelmeztetés — sem az app indulását, sem a seedet
+ * nem állítja meg. Ugyanez a minta védi a „Kapcsolat" űrlapot az onInitben,
+ * ezért a hibakezelés itt, egy helyen ül: mindkét hívási hely örökli.
+ */
+export async function ensureHomeTestimonials(payload: Payload): Promise<void> {
+  try {
+    for (const testimonial of HOME_TESTIMONIALS) {
+      const existing = await payload.find({
+        collection: 'testimonials',
+        where: { authorName: { equals: testimonial.authorName } },
+        limit: 1,
+        overrideAccess: true,
+      })
+      if (existing.docs.length > 0) {
+        logger.info('Kezdőlap: a vélemény már létezik, érintetlenül hagyva', {
+          authorName: testimonial.authorName,
+        })
+        continue
+      }
+      await payload.create({
+        collection: 'testimonials',
+        data: {
+          quote: testimonial.quote,
+          shortQuote: testimonial.shortQuote,
+          authorName: testimonial.authorName,
+          authorTitle: testimonial.authorTitle,
+          featured: true,
+          visible: true,
+          order: testimonial.order,
+        },
+        overrideAccess: true,
+      })
+      logger.info('Kezdőlap: kiemelt vélemény létrehozva', {
+        authorName: testimonial.authorName,
+        order: testimonial.order,
+      })
+    }
+  } catch (error) {
+    logger.warn('Kezdőlap: a kiemelt vélemények betöltése sikertelen (best-effort)', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
