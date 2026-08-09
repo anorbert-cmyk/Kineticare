@@ -23,8 +23,11 @@ import {
 
 const URL = 'http://localhost:3000/api/users/reset-password'
 const EMAIL = 'vevo@example.test'
-const TOKEN = 'a1b2c3d4e5f60718293a4b5c'
-const STRONG_PASSWORD = 'Rehabilitacio2026Jo'
+// DUMMY fixtúrák, egyértelműen jelölve — NEM valódi token/jelszó (a repo
+// titok-kapujának, a gitleaksnek a konvenciója: stopwordöt hordozó DUMMY-érték;
+// a jelszó a .gitleaks.toml-ban már triázsolt minta).
+const TOKEN = 'DUMMY-RESET-TOKEN-NEM-VALODI'
+const STRONG_PASSWORD = 'DUMMY-Eros-Teszt-Jelszo-42'
 
 interface HarnessOptions {
   /** A tokenhez feloldott e-mail; `null` = a token nem oldható fel (lejárt/ismeretlen). */
