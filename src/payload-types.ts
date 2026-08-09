@@ -1352,7 +1352,7 @@ export interface Product {
    */
   audience?: ('laikus' | 'szakember') | null;
   /**
-   * A Cloudflare Stream videó azonosítója az ingyenes előzeteshez. Ha nem tudod, hagyd üresen.
+   * Az ingyenes előzetes Bunny videó GUID-ja — a PUBLIKUS (jegy nélküli) libraryből, a Bunny felületén a videó adatlapján található. Ha nem tudod, hagyd üresen.
    */
   previewVideoStreamId?: string | null;
   /**
@@ -1362,12 +1362,12 @@ export interface Product {
     | {
         title?: string | null;
         /**
-         * A Cloudflare Stream azonosítója. Feltöltéskor a rendszer tölti ki.
+         * A Bunny Stream videó GUID-ja — a VÉDETT libraryből, a Bunny felületén a videó adatlapján található. Kézzel másolandó be.
          */
         streamAssetId?: string | null;
         durationSec?: number | null;
         /**
-         * A videó feldolgozottsága — a rendszer állítja, ne írd át.
+         * A videó feldolgozottsága. Nincs feltöltő-automatizmus, ezért KÉZZEL kell „Kész"-re állítani, miután a Bunny végzett a feldolgozással — csak a Kész állapotú videó játszható le.
          */
         status?: ('processing' | 'ready' | 'error') | null;
         id?: string | null;
@@ -1526,7 +1526,7 @@ export interface CourseProgress {
   user: number | User;
   product: number | Product;
   /**
-   * A videó STABIL azonosítója (a CMS-sor id-ja, ennek hiányában a Cloudflare Stream azonosító). Sorszám sosem kerül ide.
+   * A videó STABIL azonosítója (a CMS-sor id-ja, ennek hiányában a Bunny videó GUID-ja). Sorszám sosem kerül ide.
    */
   videoRef: string;
   /**

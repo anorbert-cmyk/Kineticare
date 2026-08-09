@@ -4,7 +4,7 @@ import type { Access, CollectionConfig } from 'payload'
  * Webhook-events collection (T-014) — fizetési/ügyfél-események idempotens
  * feldolgozásának nyilvántartása.
  *
- * Minden bejövő provider-webhook (Barion, Cloudflare Stream, Számlázz.hu) itt
+ * Minden bejövő provider-webhook (Barion, videó-szolgáltató, Számlázz.hu) itt
  * kap egy rekordot a feldolgozás előtt; a (provider, externalId) pár egyedi,
  * így ugyanaz az esemény sosem dolgozódhat fel kétszer — a deduplikációs
  * logika az src/lib/idempotency.ts-ben él.
@@ -50,7 +50,10 @@ export const WebhookEvents: CollectionConfig = {
       label: 'Szolgáltató',
       options: [
         { label: 'Barion', value: 'barion' },
-        { label: 'Cloudflare Stream', value: 'stream' },
+        // A tárolt ÉRTÉK szándékosan marad 'stream' (szolgáltató-független, és
+        // a séma sem változik tőle); csak a felületi címke követi a Bunnyra
+        // állást.
+        { label: 'Bunny Stream', value: 'stream' },
         { label: 'Számlázz.hu', value: 'szamlazz' },
       ],
     },

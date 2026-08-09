@@ -96,7 +96,7 @@ export const CourseProgress: CollectionConfig = {
       label: 'Videó azonosítója',
       admin: {
         description:
-          'A videó STABIL azonosítója (a CMS-sor id-ja, ennek hiányában a Cloudflare Stream azonosító). Sorszám sosem kerül ide.',
+          'A videó STABIL azonosítója (a CMS-sor id-ja, ennek hiányában a Bunny videó GUID-ja). Sorszám sosem kerül ide.',
       },
     },
     {
