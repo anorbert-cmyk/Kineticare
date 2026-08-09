@@ -5,6 +5,7 @@ import * as migration_20260808_123444_tartalomkezeles_admin_velemenyek from './2
 import * as migration_20260808_150710_szekcio_rendszer_blokkok from './20260808_150710_szekcio_rendszer_blokkok';
 import * as migration_20260809_123608_kurzus_seo_mezok from './20260809_123608_kurzus_seo_mezok';
 import * as migration_20260809_140731_kurzus_haladas_es_celkozonseg from './20260809_140731_kurzus_haladas_es_celkozonseg';
+import * as migration_20260809_180031_storno_statusz_es_kurzus_slug from './20260809_180031_storno_statusz_es_kurzus_slug';
 
 export const migrations = [
   {
@@ -40,6 +41,11 @@ export const migrations = [
   {
     up: migration_20260809_140731_kurzus_haladas_es_celkozonseg.up,
     down: migration_20260809_140731_kurzus_haladas_es_celkozonseg.down,
-    name: '20260809_140731_kurzus_haladas_es_celkozonseg'
+    name: '20260809_140731_kurzus_haladas_es_celkozonseg',
+  },
+  {
+    up: migration_20260809_180031_storno_statusz_es_kurzus_slug.up,
+    down: migration_20260809_180031_storno_statusz_es_kurzus_slug.down,
+    name: '20260809_180031_storno_statusz_es_kurzus_slug'
   },
 ];
