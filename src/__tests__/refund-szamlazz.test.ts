@@ -237,7 +237,11 @@ describe('teljes vs. részleges visszatérítés — bizonylat-döntés', () => 
     expect(spies.calls.corrective[0]).toMatchObject({ refundSeq: 2, amountHuf: 3000 })
   })
 
-  it('a maradékot lezáró refund már TELJES → stornó (nem helyesbítő)', async () => {
+  it('a maradékot lezáró refund TELJES ugyan, de a bizonylata HELYESBÍTŐ (nem stornó)', async () => {
+    // A korábbi részrefundhoz már helyesbítő számla készült — az eredeti
+    // számla teljes stornója a részösszeget MÁSODSZOR is jóváírná. A záró
+    // refund bizonylata ezért újabb helyesbítő, a most visszatérített
+    // összegre; a rendelés-státusz (refunded) ettől független.
     const existing = {
       transactionId: TRANSACTION_ID,
       amountHuf: 5000,
@@ -248,6 +252,30 @@ describe('teljes vs. részleges visszatérítés — bizonylat-döntés', () => 
     const { payload } = createMockPayload(createOrder({ refunds: [existing] }))
     const spies = createSzamlazzSpies()
     fetchMock.mockResolvedValueOnce(refundResponse(TOTAL_HUF - 5000))
+
+    const result = await refundOrder({
+      payload,
+      orderNumber: ORDER_NUMBER,
+      input: {},
+      actor: ACTOR,
+      issueStorno: spies.issueStorno,
+      issueCorrective: spies.issueCorrective,
+    })
+
+    expect(result.type).toBe('full')
+    expect(result.orderStatus).toBe('refunded')
+    expect(spies.calls.storno).toHaveLength(0)
+    expect(spies.calls.corrective).toHaveLength(1)
+    expect(spies.calls.corrective[0]).toMatchObject({
+      refundSeq: 2,
+      amountHuf: TOTAL_HUF - 5000,
+    })
+  })
+
+  it('ELSŐ refundként teljes összeg → továbbra is stornó (nincs korábbi helyesbítő)', async () => {
+    const { payload } = createMockPayload(createOrder())
+    const spies = createSzamlazzSpies()
+    fetchMock.mockResolvedValueOnce(getStateResponse()).mockResolvedValueOnce(refundResponse(TOTAL_HUF))
 
     const result = await refundOrder({
       payload,

@@ -48,9 +48,12 @@ import {
  *     a vevő hozzáférése megmarad,
  *  9. audit-logs bejegyzés (a collection létezik, best-effort writeAuditLog).
  * 10. számlázási bizonylat a visszatérítéshez (best-effort, a refund
- *     eredményét nem befolyásolja): TELJES refundnál STORNÓ (C4), RÉSZLEGESNÉL
- *     HELYESBÍTŐ (módosító) számla az eredeti számlára hivatkozva (C5).
- *     Újrapróbálható Számlázz.hu-hibánál a megfelelő job kerül sorba.
+ *     eredményét nem befolyásolja): ELSŐ, teljes összegű refundnál STORNÓ
+ *     (C4); RÉSZLEGES refundnál és a részrefundok utáni, maradékot LEZÁRÓ
+ *     refundnál HELYESBÍTŐ (módosító) számla az eredeti számlára hivatkozva
+ *     (C5) — a korábbi részrefundokhoz már helyesbítő készült, a teljes
+ *     stornó a részösszeget másodszor is jóváírná. Újrapróbálható
+ *     Számlázz.hu-hibánál a megfelelő job kerül sorba.
  *
  * Hibaág-szabály: BarionApiError (kind szerint naplózva requestId-vel) esetén
  * a rendelés NEM változik — a DB-írás kizárólag a sikeres Barion-refund UTÁN
@@ -576,20 +579,29 @@ export async function refundOrder(options: RefundOrderOptions): Promise<RefundOr
 
   // 10. Számlázási bizonylat a visszatérítéshez — BEST-EFFORT.
   //
-  // A bizonylat típusát a refund ÖSSZEGE dönti el:
-  //  - TELJES refund → STORNÓ: az eredeti számla teljes érvénytelenítése (C4);
+  // A bizonylat típusát NEM önmagában a refund összege, hanem a bizonylat-
+  // TÖRTÉNET dönti el:
+  //  - ELSŐ refundként TELJES összeg → STORNÓ: az eredeti számla teljes
+  //    érvénytelenítése (C4);
   //  - RÉSZLEGES refund → HELYESBÍTŐ (módosító) számla: az eredetire hivatkozó
   //    bizonylat, amely csak a visszatérített összeget hordozza negatív
   //    korrekciós tételként (C5). Stornó itt NEM készülhet, mert az a teljes
   //    számlát érvénytelenítené, miközben a vásárlás nagyobb része érvényben
-  //    marad (a vevő hozzáférése is megmarad).
+  //    marad (a vevő hozzáférése is megmarad);
+  //  - a MARADÉKOT LEZÁRÓ refund (type='full', de volt már korábbi részrefund)
+  //    → SZINTÉN HELYESBÍTŐ, a most visszatérített záró összegre. Stornó itt
+  //    TILOS: a korábbi részrefund(ok)hoz már helyesbítő számla készült, és a
+  //    teljes eredeti számla stornója a részösszeget MÁSODSZOR is jóváírná —
+  //    a bizonylatok a ténylegesen visszatérítettnél többet dokumentálnának.
+  //    A rendelés-státusz (refunded) és a purchases-levétel ettől független:
+  //    azt a fenti, összeg-alapú `type` vezérli.
   //
   // A bizonylat hibája (a retryable Számlázz.hu-hibákat is beleértve) NEM
   // billentheti ki a már sikeres refundot: minden ág elkapva és strukturáltan
   // naplózva. A refund szinkron route-handler, ezért a kiállítás itt, inline
   // fut; ÚJRAPRÓBÁLHATÓ hibánál a megfelelő job kerül sorba (storno-issue /
   // corrective-invoice-issue), így a bizonylat nem veszhet el.
-  if (type === 'full') {
+  if (type === 'full' && alreadyRefunded === 0) {
     await issueStornoBestEffort({ options, order, log: orderLog, reason })
   } else {
     await issueCorrectiveBestEffort({
