@@ -1,7 +1,11 @@
 import type { BlockFilmHero } from '../../payload-types'
 import { Button } from '../ui/Button'
 import { ScrollScrub } from '../scroll-scrub/scroll-scrub'
-import type { ScrollScrubScene, ScrollScrubTheme } from '../scroll-scrub/scroll-scrub'
+import type {
+  ScrollScrubCaption,
+  ScrollScrubScene,
+  ScrollScrubTheme,
+} from '../scroll-scrub/scroll-scrub'
 
 import '../../app/(frontend)/styles/blocks/film-hero.css'
 
@@ -54,13 +58,56 @@ const FILM_LINGER = 0.16
  * folyamatjelzőn kívül a fókuszgyűrűt is ez adja, ott pedig 3:1 feletti
  * kontraszt kell (a világosabb `accent` fehéren/tinten AA alatt lenne normál
  * szövegre — lásd a tokens.css kontraszt-jegyzetét).
+ *
+ * A `muted` szándékosan NEM a halvány `text-muted`, hanem a teljes erejű `ink`:
+ * a bevezető szöveg FILMKOCKÁN áll, ahol a hierarchiát a méret adja, nem a
+ * halványítás. A film legsötétebb foltján (rgb(1,0,0)) a `text-muted` a
+ * stage-lejtő 64%-os fátylával is csak 3,4:1 lenne — AA-bukás; az `ink`
+ * ugyanott 6,0:1. Lásd a kontraszt-levezetést a film-hero.css fejlécében.
  */
 const FILM_THEME: ScrollScrubTheme = {
   accent: 'var(--kc-color-accent-deep)',
   background: 'var(--kc-color-white)',
   ink: 'var(--kc-color-navy-900)',
-  muted: 'var(--kc-color-text-muted)',
+  muted: 'var(--kc-color-navy-900)',
 }
+
+/**
+ * A vászon a képernyőre TŰZÖTT szakasza a teljes scrub arányában.
+ *
+ * A színpad `position: sticky` és egy képernyőnyi magas, a görgetési sáv pedig
+ * FILM_SCROLL képernyőnyi — a vászon tehát addig áll a képernyőn, amíg a sáv
+ * alja el nem éri a képernyő alját: (FILM_SCROLL - 1) / FILM_SCROLL ≈ 0,78.
+ * A film utolsó ~22%-a már KIFELÉ görögve játszik le (ez a tükör viselkedése
+ * is), ezért feliratot oda tenni értelmetlen lenne: sosem látnánk állva.
+ */
+const PINNED = (FILM_SCROLL - 1) / FILM_SCROLL
+
+/**
+ * A 2. és 3. „állás" sávja. A megrendelő „~50%" és „~90%" kérése a LÁTHATÓ
+ * (tűzött) szakaszra értendő, ezért a PINNED-del skálázunk — különben a záró
+ * felirat akkor úszna be, amikor a film már félig kigörgött a képből.
+ *
+ * A záró felirat `to: 1` értéke szándékos: nincs kifutó ága (lásd
+ * captionOpacity), így a film végéig kint marad, és nem villan el a vászon
+ * távozása közben.
+ */
+const CAPTION_MID = { from: 0.44 * PINNED, to: 0.62 * PINNED } as const
+const CAPTION_END = { from: 0.84 * PINNED, to: 1 } as const
+
+/**
+ * A 2. és 3. állás SZÖVEGE — IDEIGLENES, kódban rögzített érték.
+ *
+ * A megrendelő adja meg a végleges szöveget — KÓDBAN CSERÉLENDŐ (a filmsáv
+ * feliratai szándékosan NEM CMS-mezők: a blokk sémája nem bővült, migráció sem
+ * kell hozzá). Az 1. állás szövege ezzel szemben marad CMS-tartalom: a blokk
+ * `title` / `lead` / `tags` / `ctas` mezőiből jön, ahogy eddig.
+ *
+ * Tartsd rövidnek: egy tömör mondat, amit a néző egy pillantásra elolvas
+ * görgetés közben. Üres string esetén az adott állás egyszerűen nem jelenik meg.
+ */
+const CAPTION_MID_TEXT = 'A terápia működik'
+const CAPTION_END_TEXT = 'Kezdd el még ma'
 
 /** A fejezet-navigáció felirata — egyetlen jelenetnél nem is jelenik meg. */
 const FILM_LABEL = 'A kéz nyílása'
@@ -100,6 +147,18 @@ export function FilmHero({ block }: FilmHeroProps) {
 
   const anchorId = block.sectionSettings?.anchorId?.trim()
 
+  // Üres szövegnél NEM renderelünk helykitöltőt: az adott állás egyszerűen
+  // kimarad. (A szövegek kódban élnek — lásd CAPTION_*_TEXT.)
+  const captions: ScrollScrubCaption[] = []
+  const midText = CAPTION_MID_TEXT.trim()
+  if (midText) {
+    captions.push({ align: 'right', id: 'film-scrub-kozep', text: midText, ...CAPTION_MID })
+  }
+  const endText = CAPTION_END_TEXT.trim()
+  if (endText) {
+    captions.push({ align: 'center', id: 'film-scrub-vege', text: endText, ...CAPTION_END })
+  }
+
   const scene: ScrollScrubScene = {
     actions,
     align: 'left',
@@ -118,6 +177,7 @@ export function FilmHero({ block }: FilmHeroProps) {
 
   return (
     <ScrollScrub
+      captions={captions}
       className="kc-film-hero"
       id={anchorId || undefined}
       scenes={[scene]}
