@@ -13,7 +13,7 @@ import {
 
 describe('validatePasswordStrength', () => {
   it('elfogadja az erős, minden szabálynak megfelelő jelszót', () => {
-    expect(validatePasswordStrength({ password: 'Kecskemeti42Futo' })).toEqual([])
+    expect(validatePasswordStrength({ password: 'DUMMY-Eros-Teszt-Jelszo-42' })).toEqual([])
   })
 
   it('elfogadja az ékezetes karaktereket tartalmazó erős jelszót', () => {
@@ -72,7 +72,7 @@ describe('validatePasswordStrength', () => {
   })
 
   it('e-mail nélkül is működik (pl. e-mailt nem módosító update)', () => {
-    expect(validatePasswordStrength({ password: 'Kecskemeti42Futo' })).toEqual([])
+    expect(validatePasswordStrength({ password: 'DUMMY-Eros-Teszt-Jelszo-42' })).toEqual([])
   })
 
   it('több szabálysértés esetén az összes hibaüzenetet visszaadja', () => {

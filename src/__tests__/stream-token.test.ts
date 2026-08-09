@@ -4,7 +4,8 @@ import { NextRequest } from 'next/server'
 import type { Payload } from 'payload'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import type { Product, User } from '../payload-types'
+import type { Order, Product, User } from '../payload-types'
+import { ACCESS_EXPIRED_TITLE } from '../lib/course-access'
 import { issueStreamToken, StreamTokenError } from '../lib/stream/issue-stream-token'
 import { createStreamTokenHandler } from '../lib/stream/route-handler'
 import {
@@ -68,6 +69,8 @@ const nonBuyerUser = {
 interface ProductOverrides {
   status?: 'draft' | 'published' | 'archived'
   videos?: Product['videos']
+  /** A1: a hozzáférés hossza napokban (üres = korlátlan). */
+  accessDurationDays?: number | null
 }
 
 function makeProduct(overrides: ProductOverrides = {}): Product {
@@ -75,6 +78,7 @@ function makeProduct(overrides: ProductOverrides = {}): Product {
     id: 42,
     sku: 'KURZUS-ALAP',
     status: overrides.status ?? 'published',
+    accessDurationDays: overrides.accessDurationDays ?? null,
     videos:
       overrides.videos !== undefined
         ? overrides.videos
@@ -90,9 +94,22 @@ function makeProduct(overrides: ProductOverrides = {}): Product {
   } as unknown as Product
 }
 
+/** Paid rendelés-fixtúra a vásárlás időpontjához (az orders sémában nincs paidAt). */
+function makePaidOrder(createdAt: string, productId = 42): Order {
+  return {
+    id: 1,
+    status: 'paid',
+    createdAt,
+    updatedAt: createdAt,
+    items: [{ id: 'sor-1', product: productId, quantity: 1 }],
+  } as unknown as Order
+}
+
 interface MockPayloadOptions {
   authUser?: User | null
   product?: Product | null
+  /** A vevő paid rendelései (A1 — a hozzáférés kezdőpontjának forrása). */
+  orders?: Order[]
 }
 
 function createMockPayload(options: MockPayloadOptions = {}) {
@@ -106,6 +123,7 @@ function createMockPayload(options: MockPayloadOptions = {}) {
       }
       return options.product ?? makeProduct()
     }),
+    find: vi.fn(async () => ({ docs: options.orders ?? [] })),
   }
   return { payload: payload as unknown as Payload }
 }
@@ -242,6 +260,63 @@ describe('issueStreamToken — paywall és token-kiállítás', () => {
     await expect(promise).rejects.toBeInstanceOf(StreamTokenError)
     await expect(promise).rejects.toMatchObject({ status: 403 })
     await expect(promise).rejects.toThrowError(/megvásárlása szükséges/)
+  })
+
+  it('A1 — időkorlát nélküli terméknél nem indul rendelés-lekérdezés (mai viselkedés)', async () => {
+    const { payload } = createMockPayload()
+
+    await issueStreamToken({ payload, user: buyerUser, productId: 42 })
+
+    expect(payload.find).not.toHaveBeenCalled()
+  })
+
+  it('A1 — érvényes időkorlátos hozzáférés (a vásárlás óta még nem telt le) → token', async () => {
+    const { payload } = createMockPayload({
+      product: makeProduct({ accessDurationDays: 365 }),
+      orders: [makePaidOrder(new Date().toISOString())],
+    })
+
+    const result = await issueStreamToken({ payload, user: buyerUser, productId: 42 })
+
+    expect(decodeJwt(result.token).claims.sub).toBe(DUMMY_ASSET_ID)
+    expect(payload.find).toHaveBeenCalledTimes(1)
+  })
+
+  it('A1 — LEJÁRT hozzáférés → 403, magyar üzenettel és a lejárat napjával', async () => {
+    const { payload } = createMockPayload({
+      product: makeProduct({ accessDurationDays: 30 }),
+      orders: [makePaidOrder('2020-01-01T10:00:00.000Z')],
+    })
+
+    const promise = issueStreamToken({ payload, user: buyerUser, productId: 42 })
+    await expect(promise).rejects.toBeInstanceOf(StreamTokenError)
+    await expect(promise).rejects.toMatchObject({ status: 403 })
+    await expect(promise).rejects.toThrowError(new RegExp(ACCESS_EXPIRED_TITLE))
+    // 2020-01-01 + 30 nap — a vevő megtudja, mikor járt le a hozzáférése.
+    await expect(promise).rejects.toThrowError(/2020\. 01\. 31\./)
+  })
+
+  it('A1 — időkorlátos termék paid rendelés nélkül (kézzel adott hozzáférés) → nem esik ki', async () => {
+    const { payload } = createMockPayload({
+      product: makeProduct({ accessDurationDays: 30 }),
+      orders: [],
+    })
+
+    const result = await issueStreamToken({ payload, user: buyerUser, productId: 42 })
+
+    expect(decodeJwt(result.token).claims.sub).toBe(DUMMY_ASSET_ID)
+  })
+
+  it('A1 — a lejárt hozzáférés a vásárlás-ellenőrzés UTÁN dől el (nem-vevő nem kap más üzenetet)', async () => {
+    const { payload } = createMockPayload({
+      authUser: nonBuyerUser,
+      product: makeProduct({ accessDurationDays: 30 }),
+      orders: [makePaidOrder('2020-01-01T10:00:00.000Z')],
+    })
+
+    const promise = issueStreamToken({ payload, user: nonBuyerUser, productId: 42 })
+    await expect(promise).rejects.toThrowError(/megvásárlása szükséges/)
+    expect(payload.find).not.toHaveBeenCalled()
   })
 
   it('nem-vevő → 403, és a termék lekérdezése MEG SEM történik (nincs létezés-szivárgás)', async () => {
@@ -405,6 +480,35 @@ describe('GET /api/stream-token route-handler', () => {
     // Minimális információ: a 403-as törzs csak az egységes üzenetet tartalmazza.
     expect(Object.keys(body)).toEqual(['error'])
     expect(payload.findByID).not.toHaveBeenCalled()
+  })
+
+  it('A1 — lejárt hozzáférésű vevő → 403, a lejárat napját is tartalmazó magyar üzenettel', async () => {
+    const { payload } = createMockPayload({
+      product: makeProduct({ accessDurationDays: 30 }),
+      orders: [makePaidOrder('2020-01-01T10:00:00.000Z')],
+    })
+    const GET = createStreamTokenHandler({ getPayload: async () => payload })
+
+    const response = await GET(makeRequest('?productId=42', { 'x-request-id': 'teszt-keres-1' }))
+
+    expect(response.status).toBe(403)
+    const body = (await response.json()) as { error: string }
+    expect(body.error).toContain(ACCESS_EXPIRED_TITLE)
+    expect(body.error).toContain('2020. 01. 31.')
+    // A válasz továbbra is csak a felhasználói üzenetet hordozza.
+    expect(Object.keys(body)).toEqual(['error'])
+  })
+
+  it('A1 — érvényes időkorlátos hozzáférésű vevő → 200', async () => {
+    const { payload } = createMockPayload({
+      product: makeProduct({ accessDurationDays: 365 }),
+      orders: [makePaidOrder(new Date().toISOString())],
+    })
+    const GET = createStreamTokenHandler({ getPayload: async () => payload })
+
+    const response = await GET(makeRequest('?productId=42'))
+
+    expect(response.status).toBe(200)
   })
 
   it('hiányzó productId → 400', async () => {

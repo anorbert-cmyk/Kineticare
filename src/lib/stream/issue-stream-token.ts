@@ -1,5 +1,7 @@
 import type { Payload } from 'payload'
 
+import { accessExpiredMessage } from '../course-access'
+import { resolveSingleCourseAccess } from '../course-access-lookup'
 import type { Product, User } from '../../payload-types'
 import { logger as rootLogger, type Logger } from '../logger'
 import { createStreamPlaybackToken } from './token'
@@ -13,9 +15,13 @@ import { createStreamPlaybackToken } from './token'
  *   (a T-022 Barion-callback írja, idempotensen) — egyébként 403.
  * - A termék státusza: published → rendben; archived → a meglévő vevő
  *   tovább nézi; draft (vagy ismeretlen) → senkinek sem (403).
+ * - A hozzáférés IDŐBELI érvényessége (A1): a termék `accessDurationDays`
+ *   mezője szerint lejárt hozzáférés → 403, magyar üzenettel és strukturált
+ *   naplóval. A szabály egyetlen forrása az src/lib/course-access.ts.
  * - Információminimalizálás: a nem-vevő 403-as válasza akkor is ugyanaz,
  *   ha a termék/videó nem létezik — a vásárlás-ellenőrzés a termék
- *   lekérdezése ELŐTT történik, így a 403 nem árulja el a létezést.
+ *   lekérdezése ELŐTT történik, így a 403 nem árulja el a létezést. A lejárt
+ *   hozzáférés eltérő üzenete csak a bizonyítottan vásárló vevőhöz jut el.
  *
  * A CF_STREAM_SIGNING_KEY környezeti változó NEM induláskori kötelező ENV
  * (az app annélkül is elindul) — itt, kérés-idejű lazy ellenőrzéssel
@@ -162,6 +168,25 @@ export async function issueStreamToken(
       productId,
     })
     throw new StreamTokenError(403, FORBIDDEN_MESSAGE)
+  }
+
+  // 3/b) Időbeli érvényesség: a termék accessDurationDays mezője szerint lejárt
+  //      hozzáférés → 403. Korlátlan terméknél (üres/0/negatív mező) ez extra
+  //      adatbázis-kör nélkül fut le.
+  const access = await resolveSingleCourseAccess({
+    payload: input.payload,
+    userId: input.user.id,
+    product,
+    logger: log,
+  })
+  if (!access.hasAccess) {
+    log.warn('stream-token: hozzáférés megtagadva (lejárt hozzáférés)', {
+      userId: input.user.id,
+      productId,
+      accessDurationDays: product.accessDurationDays ?? null,
+      expiresAt: access.expiresAt?.toISOString() ?? null,
+    })
+    throw new StreamTokenError(403, accessExpiredMessage(access.expiresAt))
   }
 
   // 4) Videó kiválasztása és lejátszhatóság-ellenőrzés.

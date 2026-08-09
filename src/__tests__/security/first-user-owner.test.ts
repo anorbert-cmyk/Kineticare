@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { Users } from '../../collections/Users'
 
@@ -17,10 +17,19 @@ import { Users } from '../../collections/Users'
 type HookArgs = {
   data: Record<string, unknown>
   operation: 'create' | 'update'
-  req: { payload: { count: () => Promise<{ totalDocs: number }> } }
+  originalDoc?: Record<string, unknown>
+  req: {
+    payload: { count: () => Promise<{ totalDocs: number }> }
+    /** A Payload kérés-scope-ú, hookok közt megosztott tárolója. */
+    context?: Record<string, unknown>
+  }
 }
 
 const promoteFirstUserToOwner = (Users.hooks?.beforeChange ?? [])[0] as unknown as (
+  args: HookArgs,
+) => Promise<Record<string, unknown>>
+
+const enforcePasswordPolicy = (Users.hooks?.beforeChange ?? [])[1] as unknown as (
   args: HookArgs,
 ) => Promise<Record<string, unknown>>
 
@@ -59,5 +68,76 @@ describe('promoteFirstUserToOwner', () => {
     })
 
     expect(data.role).toBeUndefined()
+  })
+})
+
+/**
+ * A két beforeChange hook (promoteFirstUserToOwner + enforcePasswordPolicy)
+ * ugyanazt kérdezi: „van-e már felhasználó?". Mivel mindkettő a beszúrás ELŐTT,
+ * ugyanabban a láncban fut, a válasz nem változhat közben — a darabszám ezért a
+ * `req.context`-ben megosztott, és create-enként egyetlen DB-kérdés fut.
+ * Ezek a tesztek azt őrzik, hogy a megosztás a VISELKEDÉST ne változtassa meg.
+ */
+describe('a users-darabszám megosztása a két beforeChange hook közt', () => {
+  /** Kérés-mock, amely számolja, hányszor kérdezték le a darabszámot. */
+  const countingReq = (
+    totalDocs: number,
+  ): HookArgs['req'] & { count: ReturnType<typeof vi.fn> } => {
+    const count = vi.fn(async () => ({ totalDocs }))
+    return { payload: { count }, context: {}, count }
+  }
+
+  const runBothHooks = async (req: HookArgs['req'], data: Record<string, unknown>) => {
+    const afterPromote = await promoteFirstUserToOwner({ data, operation: 'create', req })
+    return enforcePasswordPolicy({ data: afterPromote, operation: 'create', req })
+  }
+
+  it('a lánc egyetlen count-ot futtat két helyett', async () => {
+    const req = countingReq(0)
+
+    await runBothHooks(req, { email: 'elso@kineticare.test', password: 'gyenge' })
+
+    expect(req.count).toHaveBeenCalledTimes(1)
+  })
+
+  it('üres users-táblánál: owner szerepkör ÉS a jelszó-politika nem érvényesül', async () => {
+    const req = countingReq(0)
+
+    const data = await runBothHooks(req, { email: 'elso@kineticare.test', password: 'gyenge' })
+
+    expect(data.role).toBe('owner')
+    expect(data.password).toBe('gyenge')
+    expect(req.count).toHaveBeenCalledTimes(1)
+  })
+
+  it('meglévő usernél: nincs jogemelés, a gyenge jelszó pedig elbukik', async () => {
+    const req = countingReq(1)
+
+    await expect(
+      runBothHooks(req, { email: 'masodik@kineticare.test', password: 'gyenge' }),
+    ).rejects.toThrow(/karakter/)
+    expect(req.count).toHaveBeenCalledTimes(1)
+  })
+
+  it('meglévő usernél az erős jelszó átmegy, a role-hoz senki nem nyúl', async () => {
+    const req = countingReq(1)
+
+    const data = await runBothHooks(req, {
+      email: 'masodik@kineticare.test',
+      password: 'DUMMY-Eros-Teszt-Jelszo-42',
+    })
+
+    expect(data.role).toBeUndefined()
+    expect(req.count).toHaveBeenCalledTimes(1)
+  })
+
+  it('context nélküli kérésen is helyesen működik (nincs megosztás, azonos eredmény)', async () => {
+    const count = vi.fn(async () => ({ totalDocs: 0 }))
+    const req: HookArgs['req'] = { payload: { count } }
+
+    const data = await runBothHooks(req, { email: 'elso@kineticare.test', password: 'gyenge' })
+
+    expect(data.role).toBe('owner')
+    expect(count).toHaveBeenCalledTimes(2)
   })
 })

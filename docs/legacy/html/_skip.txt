@@ -1,9 +1,0 @@
-import { describe, expect, it } from 'vitest'
-
-import { buildNavTree } from '../../lib/menu-tree'
-
-describe('buildNavTree', () => {
-  it('visible=false elemeket és unpublished célokat kiszűr', () => {
-    // placeholder
-  })
-})

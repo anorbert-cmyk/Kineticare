@@ -6,6 +6,9 @@ import { headers } from 'next/headers'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { CourseList } from '@/components/account/CourseList'
+import { toCourseAccessView, type CourseAccessView } from '@/lib/course-access'
+import { resolveCourseAccessForUser } from '@/lib/course-access-lookup'
+import { logger } from '@/lib/logger'
 import type { Product, User } from '@/payload-types'
 
 import config from '../../../payload.config'
@@ -26,7 +29,33 @@ async function getCurrentUser(): Promise<User | null> {
 }
 
 /**
- * /kurzusaim — a megvett kurzusok listája (users.purchases alapján).
+ * A megvett kurzusok hozzáférés-állapota (A1) — a lejárat forrása egységesen az
+ * src/lib/course-access.ts. Hiba esetén üres térkép: a lista ilyenkor a mai,
+ * korlátlan viselkedést mutatja (a vevőt egy lekérdezési hiba nem zárhatja ki).
+ */
+async function getAccessViews(
+  userId: number,
+  products: Product[],
+): Promise<Record<number, CourseAccessView>> {
+  const views: Record<number, CourseAccessView> = {}
+  try {
+    const payload = await getPayload({ config })
+    const states = await resolveCourseAccessForUser({ payload, userId, products, logger })
+    for (const [productId, state] of states) {
+      views[productId] = toCourseAccessView(state)
+    }
+  } catch (error) {
+    logger.warn('kurzusaim: hozzáférés-állapot számítása sikertelen', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+  return views
+}
+
+/**
+ * /kurzusaim — a megvett kurzusok listája (users.purchases alapján), a
+ * hozzáférés lejáratával együtt.
  */
 export default async function KurzusaimPage() {
   const user = await getCurrentUser()
@@ -39,11 +68,13 @@ export default async function KurzusaimPage() {
     .map((entry) => (typeof entry === 'object' && entry !== null ? (entry as Product) : null))
     .filter((entry): entry is Product => entry !== null)
 
+  const accessByProductId = await getAccessViews(user.id, products)
+
   return (
     <Section>
       <Container>
         <h1>Kurzusaim</h1>
-        <CourseList products={products} />
+        <CourseList accessByProductId={accessByProductId} products={products} />
       </Container>
     </Section>
   )

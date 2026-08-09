@@ -4,10 +4,13 @@ Next.js 15 (App Router, server-component-first) + Payload CMS 3 (PostgreSQL) +
 Barion Smart Gateway (kártyás fizetés) + Számlázz.hu Számla Agent (számlázás) +
 Cloudflare Stream (kurzusvideók, signed URL) + PostHog (termék-analitika).
 
-A stack és a döntések részletei a megvalósíthatósági tanulmányban
-(`docs/kezrehabilitacios-weboldal-megvalosithatosagi-tanulmany.md`) és a
-végrehajtási tervben (`docs/kezrehabilitacio-vegrehajtasi-terv.md`,
-`docs/kezrehabilitacio-vegrehajtasi-terv-v2.md`).
+**Állapot.** A fizetési lánc (Barion-callback-vezérelt állapotgép + utánpollozó
+job), a számlázás (Számlázz.hu) és a videó-kiszolgálás (Cloudflare Stream,
+signed URL) implementálva és tesztelve. A kezdőlap CMS-ből szerkeszthető
+szekció-rendszeren fut, a Higgsfield-landing dizájnjával
+(`docs/szekcio-rendszer-terv.md`); a landing forrásának tükre a
+`higgsfield-site/` mappában él (külön stack, nem a Railway-deploy része).
+Ami hátra van: `docs/feladatlista.md`.
 
 ## Fejlesztői gyorsindítás
 
@@ -20,13 +23,17 @@ nvm use                  # vagy: fnm use — a .nvmrc szerint Node 24
 cp .env.example .env     # töltsd ki a kötelező értékeket (lásd a fájlt)
 npm install
 npm run dev              # http://localhost:3000 (admin: /admin)
+npm run seed             # induló tartalom + a kezdőlap szekciósora (idempotens)
 ```
+
+A `seed` többször futtatva sem duplikál, és a kezdőlap MEGLÉVŐ szekciósorát
+sosem írja felül — az már szerkesztői munka.
 
 Kapuk (minden változás előtt/után — a CI is ezt futtatja):
 
 ```bash
-npx tsc --noEmit         # typecheck
-npx vitest run           # egységtesztek
+npm run typecheck        # tsc --noEmit
+npm run test             # vitest run
 npm run lint             # eslint
 npm run build            # next build
 ```
@@ -44,8 +51,9 @@ kizárólag a kezdőlap szekciósorát és a landing tartalmi képeit tölti be
 | Terület | Fájl |
 |---|---|
 | **Feladatlista (mi van hátra)** | **`docs/feladatlista.md`** |
-| Megvalósíthatóság | `docs/kezrehabilitacios-weboldal-megvalosithatosagi-tanulmany.md` |
-| Végrehajtási terv | `docs/kezrehabilitacio-vegrehajtasi-terv.md` (+ `-v2.md`) |
+| Kezdőlap szekció-rendszer | `docs/szekcio-rendszer-terv.md` |
+| Értékesítési UX-skill (UI-munka előtt kötelező) | `docs/ertekesitesi-ux-skill.md` |
+| Szerkesztői útmutató (az adminhoz) | `docs/szerkesztoi-utmutato.md` |
 | Megrendelői igények | `docs/megrendeloi-igeny-specifikacio.txt`, `docs/igeny-valtozas-pontok.md` |
 | W3-indítási specifikáció | `docs/w3-inditas-specifikacio.md` |
 | Deploy (Railway) | `docs/deploy-railway.md` + `railway.json` |

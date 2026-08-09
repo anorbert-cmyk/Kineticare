@@ -35,3 +35,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_COMMENTS: true
           GITLEAKS_ENABLE_SUMMARY: true
+          # A gyári szabálykészletet megtartó, szűk allowlist: a jelszó-politika
+          # tesztjeinek kitalált fixtúráit engedi el, mást semmit. Az útvonalat
+          # kifejezetten megadjuk, hogy ne az automatikus konfigkeresésen múljon.
+          GITLEAKS_CONFIG: .gitleaks.toml

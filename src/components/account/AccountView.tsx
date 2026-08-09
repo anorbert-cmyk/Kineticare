@@ -8,16 +8,22 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Field } from '@/components/ui/Field'
 import { updateProfile, type ProfileUpdateInput } from '../../lib/account-client'
+import type { CourseAccessView } from '../../lib/course-access'
 import { courseTitle } from '../../lib/courses'
 import { formatPriceHuf } from '../../lib/format-price'
 import type { Order, User } from '../../payload-types'
 
 /**
  * AccountView — a fiók áttekintése (adataim, rendeléseim, kurzusaim).
+ *
+ * A kurzusoknál a hozzáférés lejárata is látszik (A1); a szöveget a szerver
+ * állítja elő (src/lib/course-access.ts), itt már csak megjelenítés történik.
  */
 export interface AccountViewProps {
   user: User
   orders: Order[]
+  /** productId → hozzáférés-állapot; hiányzó bejegyzés = korlátlan hozzáférés. */
+  accessByProductId?: Record<number, CourseAccessView>
 }
 
 const ORDER_STATUS_LABELS: Record<string, { label: string; tone: 'success' | 'warning' | 'danger' | 'neutral' | 'info' }> = {
@@ -29,7 +35,7 @@ const ORDER_STATUS_LABELS: Record<string, { label: string; tone: 'success' | 'wa
   refunded: { label: 'Visszatérítve', tone: 'info' },
 }
 
-export function AccountView({ user, orders }: AccountViewProps) {
+export function AccountView({ accessByProductId, user, orders }: AccountViewProps) {
   const [profile, setProfile] = useState<ProfileUpdateInput>({
     name: user.name ?? '',
     billingName: user.billingName ?? '',
@@ -129,11 +135,23 @@ export function AccountView({ user, orders }: AccountViewProps) {
               if (productId === null) {
                 return null
               }
+              const access = accessByProductId?.[productId]
+              const expired = access?.hasAccess === false
               return (
                 <li key={productId}>
-                  <a className="kc-account__course" href={`/kurzusaim/${productId}`}>
+                  <a
+                    className="kc-account__course"
+                    href={expired ? `/kurzusok/${productId}` : `/kurzusaim/${productId}`}
+                  >
                     {product ? courseTitle(product) : `Kurzus #${productId}`}
                   </a>
+                  {expired ? (
+                    <span className="kc-course-access kc-course-access--expired">
+                      {access?.expiredMessage}
+                    </span>
+                  ) : access?.expiryLabel ? (
+                    <span className="kc-course-access">{access.expiryLabel}</span>
+                  ) : null}
                 </li>
               )
             })}

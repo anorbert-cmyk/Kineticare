@@ -26,6 +26,12 @@ export interface CoursePlayerProps {
     videos: CourseVideo[]
   }
   hasAccess: boolean
+  /**
+   * Lejárt hozzáférés esetén a kész, magyar üzenet (A1 — a szöveget a szerver
+   * állítja elő az src/lib/course-access.ts-ből). null = nem lejárat miatt nincs
+   * hozzáférés (pl. sosem vette meg).
+   */
+  expiredMessage?: string | null
 }
 
 /** A token-frissítés a lejárat előtt ennyivel korábban (másodperc). */
@@ -42,7 +48,7 @@ type PlayerState =
 /** A lejátszó-betöltő szignatúrája (a token-frissítés önhivatkozásához kell). */
 type LoadVideo = (index: number, isRefresh?: boolean) => Promise<void>
 
-export function CoursePlayer({ product, hasAccess }: CoursePlayerProps) {
+export function CoursePlayer({ expiredMessage = null, product, hasAccess }: CoursePlayerProps) {
   const [state, setState] = useState<PlayerState>({ kind: 'idle' })
   const [activeIndex, setActiveIndex] = useState(0)
   const refreshTimerRef = useRef<number | null>(null)
@@ -132,10 +138,10 @@ export function CoursePlayer({ product, hasAccess }: CoursePlayerProps) {
   if (!hasAccess) {
     return (
       <Card className="kc-player kc-player--forbidden">
-        <h2>Nincs hozzáférésed ehhez a kurzushoz</h2>
+        <h2>{expiredMessage === null ? 'Nincs hozzáférésed ehhez a kurzushoz' : 'Lejárt a hozzáférésed'}</h2>
         <p>
-          A videók megtekintéséhez a kurzus megvásárlása szükséges. Ha már megvetted, jelentkezz
-          be azzal a fiókkal, amellyel vásároltad.
+          {expiredMessage ??
+            'A videók megtekintéséhez a kurzus megvásárlása szükséges. Ha már megvetted, jelentkezz be azzal a fiókkal, amellyel vásároltad.'}
         </p>
         <Button href={`/kurzusok/${product.id}`}>A kurzus megtekintése</Button>
       </Card>

@@ -212,8 +212,6 @@ async function ensureHomeBaseline(payload: Payload): Promise<void> {
 }
 
 async function ensureContactForm(payload: Payload): Promise<void> {
-  registerPoolErrorHandler(payload)
-  await ensureHomeBaseline(payload)
   try {
     const existing = await payload.find({
       // A forms collection a form-builder pluginből jön — a payload-types a
@@ -238,6 +236,25 @@ async function ensureContactForm(payload: Payload): Promise<void> {
       error: error instanceof Error ? error.message : String(error),
     })
   }
+}
+
+/**
+ * Induláskori lépések.
+ *
+ * A pool-error handler regisztrációja az ELSŐ lépés, és szándékosan önálló:
+ * korábban az `ensureContactForm` (űrlap-seedelő) belsejében történt,
+ * mellékhatásként — ha azt a form-seedeléssel együtt valaha eltávolítjuk, a
+ * handler is némán eltűnt volna, és visszatért volna a CLAUDE.md 7.
+ * üzemeltetési tanulságában leírt éles hiba: a Railway privát hálóján elvágott
+ * tétlen kapcsolat kezeletlen `error` eseménye `uncaughtException`-ként viszi
+ * el a Next.js szerverfolyamatot. A három lépésnek nincs köze egymáshoz, ezért
+ * itt látszik is, hogy külön dolog: pool-handler, kezdőlap-alapállapot
+ * (képek, szekciósor, kiemelt vélemények), majd a „Kapcsolat" űrlap.
+ */
+async function onInit(payload: Payload): Promise<void> {
+  registerPoolErrorHandler(payload)
+  await ensureHomeBaseline(payload)
+  await ensureContactForm(payload)
 }
 
 export default buildConfig({
@@ -316,7 +333,7 @@ export default buildConfig({
       fileSize: 10485760,
     },
   },
-  onInit: ensureContactForm,
+  onInit,
   plugins: [
     // ecommerce plugin pinned — frissítés csak changelog + staging-E2E után.
     // A részletes konfiguráció (HUF, customers=users, variants/addresses/guest cart

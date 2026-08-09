@@ -4,6 +4,11 @@ import type { Payload } from 'payload'
 import { resolveClientIp } from '../audit'
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
+import {
+  checkRequestRateLimit,
+  rateLimitHeaders,
+  type CheckRequestRateLimitOptions,
+} from '../security/rate-limit'
 import { CheckoutError, startCheckout, type CheckoutStartInput } from './start-checkout'
 
 /**
@@ -13,12 +18,14 @@ import { CheckoutError, startCheckout, type CheckoutStartInput } from './start-c
  * egységtesztelhető; a tényleges route az src/app/(frontend)/api/checkout/start/route.ts
  * köti be a valódi configgal.
  *
- * Folyamat: auth (payload.auth) → JSON-parse → startCheckout szolgáltatás →
- * { orderNumber, gatewayUrl }. Hibaágak: magyar felhasználói üzenet +
- * technikai hiba naplózva requestId-vel.
+ * Folyamat: IP-alapú kérés-korlát (A2) → auth (payload.auth) → JSON-parse →
+ * startCheckout szolgáltatás → { orderNumber, gatewayUrl }. Hibaágak: magyar
+ * felhasználói üzenet + technikai hiba naplózva requestId-vel.
  */
 export interface CheckoutStartHandlerDeps {
   getPayload: () => Promise<Payload>
+  /** Kérés-korlátozó felülírása (teszthez); alapból a közös, folyamaton belüli számláló. */
+  rateLimit?: CheckRequestRateLimitOptions
 }
 
 export function createCheckoutStartHandler(
@@ -27,6 +34,17 @@ export function createCheckoutStartHandler(
   return async function POST(request: NextRequest): Promise<NextResponse> {
     const requestId = getRequestId(request.headers) ?? generateRequestId()
     const log = logger.child({ requestId, route: 'checkout-start' })
+
+    // IP-alapú throttle (A2) — MINDEN drága lépés (Payload-betöltés, auth,
+    // rendelés-létrehozás, Barion Start) ELŐTT. A végpont dokumentált
+    // hibaformátuma { error }, ezért a 429-et itt építjük.
+    const rejection = checkRequestRateLimit(request, deps.rateLimit)
+    if (rejection) {
+      return NextResponse.json(
+        { error: rejection.message },
+        { status: 429, headers: rateLimitHeaders(rejection) },
+      )
+    }
 
     try {
       const payload = await deps.getPayload()
