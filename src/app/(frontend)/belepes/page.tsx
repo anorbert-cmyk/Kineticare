@@ -7,6 +7,7 @@ import { headers } from 'next/headers'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { LoginForm } from '@/components/auth/LoginForm'
+import { DEFAULT_AUTH_RETURN_URL, sanitizeReturnUrl } from '@/lib/return-url'
 import type { User } from '@/payload-types'
 
 import config from '../../../payload.config'
@@ -35,17 +36,20 @@ async function getCurrentUser(): Promise<User | null> {
  *
  * A returnUrl-paraméterrel tér vissza oda, ahonnan jött (a checkoutból is
  * érkezhet — open-redirect ellen védve: csak belső útvonal fogadott).
+ *
+ * A szűrés a közös `sanitizeReturnUrl`-lel történik, EGYSZER, még a redirect-ág
+ * előtt: a redirect és a form (`window.location.href`) így garantáltan ugyanazt
+ * az ellenőrzött értéket kapja. A puszta `startsWith('/')` kevés lenne — a
+ * `//evil.example` és a `/\evil.example` protokoll-relatív, azaz idegen eredetű.
  */
 export default async function BelepesPage({ searchParams }: BelepesPageProps) {
   const params = await searchParams
   const user = await getCurrentUser()
+  const returnUrl = sanitizeReturnUrl(params.returnUrl, DEFAULT_AUTH_RETURN_URL)
 
   if (user !== null) {
-    const returnUrl = typeof params.returnUrl === 'string' && params.returnUrl.startsWith('/') ? params.returnUrl : '/kurzusaim'
     redirect(returnUrl)
   }
-
-  const returnUrl = typeof params.returnUrl === 'string' && params.returnUrl.startsWith('/') ? params.returnUrl : '/kurzusaim'
 
   return (
     <Section>

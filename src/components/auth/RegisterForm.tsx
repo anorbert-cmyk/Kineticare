@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
+import { DEFAULT_AUTH_RETURN_URL, sanitizeReturnUrl } from '@/lib/return-url'
 import { registerUser, type RegisterInput } from '../../lib/auth-client'
 
 /**
@@ -14,6 +15,7 @@ import { registerUser, type RegisterInput } from '../../lib/auth-client'
  * Magyar hibaüzenetek (foglalt e-mail, gyenge jelszó — min. 12 karakter).
  */
 export interface RegisterFormProps {
+  /** Gyökér-relatív útvonal; a hívó oldal `sanitizeReturnUrl`-lel szűri. */
   returnUrl: string
 }
 
@@ -45,7 +47,10 @@ export function RegisterForm({ returnUrl }: RegisterFormProps) {
     const result = await registerUser(values)
     setSubmitting(false)
     if (result.ok) {
-      window.location.href = returnUrl
+      // A szűrés a sinknél is megismétlődik (lásd LoginForm): a prop a szerver
+      // oldalon már ellenőrzött, de az átirányítás itt történik, és idegen
+      // eredetre semmiképp nem mehet.
+      window.location.href = sanitizeReturnUrl(returnUrl, DEFAULT_AUTH_RETURN_URL)
       return
     }
     setError(result.message ?? 'A regisztráció nem sikerült. Próbáld újra.')
