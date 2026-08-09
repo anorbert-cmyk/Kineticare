@@ -6,11 +6,28 @@
 #   build  job : next build (futásidőben generált álértékekkel)
 #   audit  job : npm audit (critical szint = bukás)
 #
-# MIÉRT --legacy-peer-deps? A @payloadcms/* 3.86.0 csomagok peer-tartománya
-# `next >=15.4.11 <15.5.0 || >=16.2.6 <17.0.0`, a repó viszont a biztonsági
-# javítás miatt next@15.5.22-re van pinelve. Amíg a Payload ki nem adja a
-# 15.5.x-et engedő peer-range-et, a telepítés csak --legacy-peer-deps-szel
-# oldható fel (a pinned @payloadcms/* verziókhoz nem nyúlunk — CLAUDE.md 5.).
+# MIÉRT --legacy-peer-deps? NEM peer-ütközés miatt — az megszűnt. A repó ma
+# next@16.3.0-n áll, ami beleesik a @payloadcms/next 3.86.0 peer-tartományába
+# (`>=15.2.9 <15.3.0 || >=15.3.9 <15.4.0 || >=15.4.11 <15.5.0 || >=16.2.6
+# <17.0.0`), és az `npm install --dry-run --strict-peer-deps` egyetlen ERESOLVE
+# nélkül fut le.
+#
+# A flag a LOCKFILE miatt kell: a repóban élő package-lock.json legacy-peer-deps
+# módban készült, ezért nem tartalmazza azokat a peer-csomagokat, amiket a
+# szigorú feloldás magától telepítene (yjs, monaco-editor, dompurify, marked,
+# lib0, isomorphic.js), és néhány tranzitív függőséget más verzióra köt
+# (esbuild 0.25.12 vs 0.28.2, yaml 1.10.3 vs 2.9.0, picomatch 2.3.2 vs 4.0.5).
+# Flag nélkül az `npm ci` EUSAGE-dzsel elhasal: „package.json and
+# package-lock.json ... are not in sync". Ellenőrizve 2026-08-09-én, a repó
+# package.json + package-lock.json másolatán, .npmrc nélkül.
+#
+# A flag elhagyásához a lockfile-t újra kellene generálni — az külön, emberi
+# döntésű PR (a lockfile-hoz és a pinned @payloadcms/* verziókhoz nem nyúlunk,
+# CLAUDE.md 5.).
+#
+# Megjegyzés: a repó `.npmrc`-je is beállítja (legacy-peer-deps=true), ezek a
+# kapcsolók tehát ma redundáns védőhálók arra az esetre, ha az .npmrc valamiért
+# nem érvényesül (pl. más munkakönyvtárból indított telepítés).
 # ============================================================================
 
 name: CI
