@@ -577,6 +577,43 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       },
     },
     {
+      // A Számlázz.hu hivatalos szabálya (A14): ugyanaz a kérés legfeljebb
+      // ötször küldhető be, utána emberi beavatkozás kell — a perzisztens
+      // számláló a job-újrapróbálás és a resweep együttesét is plafonozza.
+      name: 'invoiceAttempts',
+      type: 'number',
+      defaultValue: 0,
+      label: 'Számla-kísérletek száma',
+      admin: {
+        readOnly: true,
+        description:
+          'A számlakiállítási kísérletek száma (legfeljebb 5, utána emberi beavatkozás kell). A rendszer állítja.',
+      },
+    },
+    {
+      name: 'invoiceLastError',
+      type: 'text',
+      label: 'Számlázás utolsó hibája',
+      admin: {
+        readOnly: true,
+        description: 'Az utolsó sikertelen számlakiállítási kísérlet hibaüzenete — hibakereséshez.',
+      },
+    },
+    {
+      // Az eredeti számla teljesítési dátuma (ÉÉÉÉ-HH-NN). A helyesbítő számla
+      // dátumszabálya (NAV): a helyesbítő teljesítési dátumának naptári hónapja
+      // nem térhet el az eredetiétől — a bevett gyakorlat az eredeti dátum
+      // megismétlése, ezért a kiállításkor küldött teljesítési dátum itt rögzül.
+      name: 'invoiceCompletionDate',
+      type: 'text',
+      label: 'Számla teljesítési dátuma',
+      admin: {
+        readOnly: true,
+        description:
+          'Az eredeti számla teljesítési dátuma (ÉÉÉÉ-HH-NN) — a helyesbítő számla ezt ismétli meg. A rendszer állítja.',
+      },
+    },
+    {
       // Stornó-számla állapota (C4). Az invoiceStatus mintáját követi: a
       // rendszer (refund-folyamat + storno-issue job) állítja, kézzel nem
       // írandó. A 'storned' a végállapot — az issueStornoForOrder ezt (vagy a
@@ -666,6 +703,27 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
         readOnly: true,
         description:
           'A refunds-nyom hányadik bejegyzéséhez tartozik a legutóbbi helyesbítő számla (idempotencia). A rendszer állítja.',
+      },
+    },
+    {
+      // A14: a helyesbítő-kiállítás kísérletei is plafonozva (max. 5).
+      name: 'correctiveInvoiceAttempts',
+      type: 'number',
+      defaultValue: 0,
+      label: 'Helyesbítő-kísérletek száma',
+      admin: {
+        readOnly: true,
+        description:
+          'A helyesbítő-kiállítási kísérletek száma (legfeljebb 5, utána emberi beavatkozás kell). A rendszer állítja.',
+      },
+    },
+    {
+      name: 'correctiveInvoiceLastError',
+      type: 'text',
+      label: 'Helyesbítő utolsó hibája',
+      admin: {
+        readOnly: true,
+        description: 'Az utolsó sikertelen helyesbítő-kísérlet hibaüzenete — hibakereséshez.',
       },
     },
     {
