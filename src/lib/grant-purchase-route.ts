@@ -10,7 +10,7 @@ import { generateRequestId, getRequestId } from './request-id'
  *
  * A függőségek (Payload-példány) injektálva vannak, így a handler
  * egységtesztelhető; a tényleges route az
- * src/app/api/admin/grant-purchase/route.ts köti be a valódi configgal
+ * src/app/(frontend)/api/admin/grant-purchase/route.ts köti be a valódi configgal
  * (a src/lib/refund/route-handler.ts mintája).
  *
  * RBAC-szerződés (a refund route-handler auth-mintáját tükrözi, de ez NEM

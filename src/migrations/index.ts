@@ -4,6 +4,7 @@ import * as migration_20260730_080404_sync_schema_code from './20260730_080404_s
 import * as migration_20260808_123444_tartalomkezeles_admin_velemenyek from './20260808_123444_tartalomkezeles_admin_velemenyek';
 import * as migration_20260808_150710_szekcio_rendszer_blokkok from './20260808_150710_szekcio_rendszer_blokkok';
 import * as migration_20260809_123608_kurzus_seo_mezok from './20260809_123608_kurzus_seo_mezok';
+import * as migration_20260809_140731_kurzus_haladas_es_celkozonseg from './20260809_140731_kurzus_haladas_es_celkozonseg';
 
 export const migrations = [
   {
@@ -34,6 +35,11 @@ export const migrations = [
   {
     up: migration_20260809_123608_kurzus_seo_mezok.up,
     down: migration_20260809_123608_kurzus_seo_mezok.down,
-    name: '20260809_123608_kurzus_seo_mezok'
+    name: '20260809_123608_kurzus_seo_mezok',
+  },
+  {
+    up: migration_20260809_140731_kurzus_haladas_es_celkozonseg.up,
+    down: migration_20260809_140731_kurzus_haladas_es_celkozonseg.down,
+    name: '20260809_140731_kurzus_haladas_es_celkozonseg'
   },
 ];
