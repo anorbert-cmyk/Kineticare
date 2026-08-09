@@ -9,6 +9,7 @@ import sharp from 'sharp'
 import { fileURLToPath } from 'node:url'
 
 import { AuditLogs } from './collections/AuditLogs'
+import { ensureHomeImages, ensureHomeLayout } from './lib/home-seed'
 import { Categories } from './collections/Categories'
 import { Media } from './collections/Media'
 import { Menus } from './collections/Menus'
@@ -191,8 +192,27 @@ function registerPoolErrorHandler(payload: Payload): void {
   })
 }
 
+/**
+ * Kezdőlap-alapállapot indulásnál: a landing tartalmi képei + a `kezdolap`
+ * alap-szekciósora (src/lib/home-seed.ts). Az ensureContactForm mintája:
+ * telepítési előfeltétel, ezért minden bootnál lefut — idempotens, meglévő
+ * képet és kitöltött szekciósort SOHA nem ír felül, így beállt rendszeren
+ * néhány olcsó olvasás az ára. Best-effort: hibája nem állíthatja meg az appot.
+ */
+async function ensureHomeBaseline(payload: Payload): Promise<void> {
+  try {
+    const mediaIds = await ensureHomeImages(payload)
+    await ensureHomeLayout(payload, mediaIds)
+  } catch (error) {
+    logger.warn('Kezdőlap-alapállapot ellenőrzése/betöltése sikertelen (best-effort)', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
 async function ensureContactForm(payload: Payload): Promise<void> {
   registerPoolErrorHandler(payload)
+  await ensureHomeBaseline(payload)
   try {
     const existing = await payload.find({
       // A forms collection a form-builder pluginből jön — a payload-types a
