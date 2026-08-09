@@ -582,6 +582,20 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       label: 'Elállási jogról lemondás időpontja',
     },
     {
+      // Visszatérítés-panel (UI-mező, NEM tárol adatot → nincs séma-változás,
+      // migrációt nem igényel). A meglévő, kész refund-szolgáltatás fölé épült
+      // felület: a kliens-komponens a POST /api/admin/orders/[orderNumber]/refund
+      // végpontot hívja (owner-only, minden szabályt a szerver kényszerít ki).
+      name: 'refundPanel',
+      type: 'ui',
+      label: 'Visszatérítés',
+      admin: {
+        components: {
+          Field: '/components/admin/RefundPanel#RefundPanel',
+        },
+      },
+    },
+    {
       name: 'refundReason',
       type: 'text',
       label: 'Visszatérítés indoka',
