@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { getPayload } from 'payload'
 import { cache } from 'react'
 
@@ -18,13 +18,8 @@ import { PriceTag } from '@/components/ui/PriceTag'
 import { Section } from '@/components/ui/Section'
 import { resolveSingleCourseAccess } from '@/lib/course-access-lookup'
 import { AUDIENCE_LABELS, normalizeAudience } from '@/lib/course-audience'
-import {
-  courseCover,
-  coursePriceHuf,
-  courseTitle,
-  hasUserPurchased,
-  parseCourseIdParam,
-} from '@/lib/courses'
+import { canonicalCourseRedirect, courseHref, parseCourseRouteParam } from '@/lib/course-url'
+import { courseCover, coursePriceHuf, courseTitle, hasUserPurchased } from '@/lib/courses'
 import { logger } from '@/lib/logger'
 import { absoluteUrl, breadcrumbJsonLd, buildProductMetadata, courseJsonLd } from '@/lib/seo'
 import type { Product, User } from '@/payload-types'
@@ -34,8 +29,11 @@ import config from '../../../../payload.config'
 /**
  * /kurzusok/[slug] — kurzus-oldal (az értékesítés motorja).
  *
- * - A [slug] szegmens a numerikus product id (a products collectionnek
- *   nincs slug mezője — a menu-tree /kurzusok/{id} konvenciója).
+ * - A [slug] szegmens ELSŐDLEGESEN a kurzus emberi olvasású `slug`-ja (C3).
+ *   A régi, numerikus id-s cím (és minden nem kanonikus alak, pl. nagybetűs
+ *   változat) továbbra is kiszolgálandó, de TARTÓS átirányítást kap a
+ *   kanonikus címre — így a régi linkek SEO-értéke átöröklődik. A szabályok
+ *   (feloldás + körmentes átirányítás) az src/lib/course-url.ts-ben élnek.
  * - published → mindenki láthatja; archived → az oldal megtekinthető, de a
  *   CTA INAKTÍV + „Ez a kurzus jelenleg nem vásárolható" jelölés (nem
  *   listázódik, a meglévő vevő a „Tovább a kurzusaimhoz" linket kapja);
@@ -53,20 +51,38 @@ interface CoursePageProps {
   params: Promise<{ slug: string }>
 }
 
-/** Kérés-idejű dedupe: a generateMetadata és a page ugyanazt a lekérdezést osztja meg. */
-const getCourseById = cache(async (id: number): Promise<Product | null> => {
+/**
+ * Kérés-idejű dedupe: a generateMetadata és a page ugyanazt a lekérdezést
+ * osztja meg. A szegmens slugként VAGY régi, numerikus id-ként oldódik fel
+ * (parseCourseRouteParam) — a kettő névtere diszjunkt, lásd course-url.ts.
+ */
+const getCourseByRouteParam = cache(async (param: string): Promise<Product | null> => {
+  const parsed = parseCourseRouteParam(param)
+  if (parsed === null) {
+    return null
+  }
   try {
     const payload = await getPayload({ config })
     // depth: 2 — a relatedProducts és a borítóképek populate-olva jönnek.
-    return await payload.findByID({
+    if (parsed.kind === 'id') {
+      return await payload.findByID({
+        collection: 'products',
+        id: parsed.id,
+        depth: 2,
+        overrideAccess: true,
+      })
+    }
+    const { docs } = await payload.find({
       collection: 'products',
-      id,
+      where: { slug: { equals: parsed.slug } },
+      limit: 1,
       depth: 2,
       overrideAccess: true,
     })
+    return docs[0] ?? null
   } catch (error) {
     logger.warn('kurzus-lekérdezés sikertelen — 404-cel renderelünk', {
-      productId: id,
+      courseParam: param,
       error: error instanceof Error ? error.message : String(error),
     })
     return null
@@ -122,27 +138,37 @@ function relatedProductsOf(product: Product): Product[] {
 
 export async function generateMetadata({ params }: CoursePageProps): Promise<Metadata> {
   const { slug } = await params
-  const id = parseCourseIdParam(slug)
-  const product = id === null ? null : await getCourseById(id)
+  const product = await getCourseByRouteParam(slug)
   if (!product || (product.status !== 'published' && product.status !== 'archived')) {
     return { title: 'A kurzus nem található' }
   }
   // Ugyanaz a fallback-lánc és canonical, mint a poszt- és az oldal-útvonalon
   // (src/lib/seo.ts): seoTitle → kurzusnév, seoDescription → rövid leírás,
-  // ogImage → borítókép. Párhuzamos meta-logika itt nincs.
-  return buildProductMetadata(product, `/kurzusok/${product.id}`)
+  // ogImage → borítókép. Párhuzamos meta-logika itt nincs. A canonical MINDIG
+  // a kanonikus (slugos) cím, akkor is, ha épp a régi id-s URL-t szolgáljuk ki.
+  return buildProductMetadata(product, courseHref(product))
 }
 
 export default async function CoursePage({ params }: CoursePageProps) {
   const { slug } = await params
-  const id = parseCourseIdParam(slug)
-  if (id === null) {
-    notFound()
-  }
-  const product = await getCourseById(id)
+  const product = await getCourseByRouteParam(slug)
   // Draft (és minden nem published/archived) termék nyilvánosan nem érhető el.
   if (!product || (product.status !== 'published' && product.status !== 'archived')) {
     notFound()
+  }
+
+  // Régi, id-alapú (vagy nem kanonikus alakú) cím → TARTÓS átirányítás.
+  // SZÁNDÉKOSAN a 404-ellenőrzés UTÁN: draft termék slugja így sem szivárog ki.
+  // A cél mindig maga a kanonikus cím, amely önmagára már nem irányít → nincs
+  // átirányítási kör (course-url.ts canonicalCourseRedirect).
+  // Státuszkód: a Next App Router tartós átirányítása 308 (Permanent Redirect).
+  // A keresők ezt a 301-gyel azonosan kezelik (a link-érték átöröklődik), és a
+  // 308 a 301-gyel ellentétben a metódust sem írja át — DB-vezérelt cél mellett
+  // ez az egyetlen elérhető tartós átirányítás (a next.config redirects() csak
+  // statikus szabályt tud).
+  const canonicalPath = canonicalCourseRedirect(slug, product)
+  if (canonicalPath !== null) {
+    permanentRedirect(canonicalPath)
   }
 
   const user = await getCurrentUser()
@@ -160,6 +186,9 @@ export default async function CoursePage({ params }: CoursePageProps) {
   // a kurzus (audience nélküli, régi soroknál a laikus fallback látszik).
   const audienceLabel = AUDIENCE_LABELS[normalizeAudience(product.audience)]
   const showPreview = hasPreviewVideo(product.previewVideoStreamId)
+  // A strukturált adat és a morzsamenü ugyanazt a KANONIKUS címet használja,
+  // mint a canonical meta — különben a gépi olvasó két URL-t látna egy oldalra.
+  const path = courseHref(product)
 
   return (
     <>
@@ -174,7 +203,7 @@ export default async function CoursePage({ params }: CoursePageProps) {
         data={courseJsonLd({
           product,
           name: title,
-          path: `/kurzusok/${product.id}`,
+          path,
           priceHuf: price,
           ...(cover ? { imageUrl: absoluteUrl(cover.url) } : {}),
         })}
@@ -182,7 +211,7 @@ export default async function CoursePage({ params }: CoursePageProps) {
       <JsonLd
         data={breadcrumbJsonLd([
           { name: 'Kurzusok', path: '/kurzusok' },
-          { name: title, path: `/kurzusok/${product.id}` },
+          { name: title, path },
         ])}
       />
       <Section>

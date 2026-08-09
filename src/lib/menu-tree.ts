@@ -1,5 +1,6 @@
 import type { Menu, Page, Post, Product } from '../payload-types'
 
+import { COURSE_BASE_PATH, courseHref } from './course-url'
 import { extractRelationshipId } from './menu-validation'
 
 /**
@@ -35,11 +36,13 @@ export interface NavItem {
   children: NavItem[]
 }
 
-/** A menü-célok URL-konvenciója (a következő hullám route-jai ezekre épülnek). */
+/** A menü-célok URL-konvenciója (a storefront route-jai ezekre épülnek). */
 export const MENU_HREF_PREFIX = {
   page: '',
   post: '/blog',
-  product: '/kurzusok',
+  // A kurzus-útvonalat a courseHref építi (slug vagy id) — a gyökér itt is a
+  // közös konstansból jön, hogy egy helyen legyen definiálva.
+  product: COURSE_BASE_PATH,
 } as const
 
 function resolveRef(menu: Menu): { relationTo: string; value: unknown } | null {
@@ -89,8 +92,9 @@ export function resolveMenuHref(menu: Menu): string | null {
     case 'products': {
       const doc = ref.value as Product
       if (!isPublishedTarget(doc)) return null
-      // A products collectionnek nincs slug mezője — azonosító alapú útvonal.
-      return `${MENU_HREF_PREFIX.product}/${doc.id}`
+      // A kurzus kanonikus címe: slug, ennek hiányában a régi, id-alapú út
+      // (a kurzus-route ezt átirányítja) — src/lib/course-url.ts.
+      return courseHref(doc)
     }
     default:
       return null

@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card'
 import { Field } from '@/components/ui/Field'
 import { updateProfile, type ProfileUpdateInput } from '../../lib/account-client'
 import type { CourseAccessView } from '../../lib/course-access'
+import { courseHref } from '../../lib/course-url'
 import { courseTitle } from '../../lib/courses'
 import { formatPriceHuf } from '../../lib/format-price'
 import type { Order, User } from '../../payload-types'
@@ -141,7 +142,13 @@ export function AccountView({ accessByProductId, user, orders }: AccountViewProp
                 <li key={productId}>
                   <a
                     className="kc-account__course"
-                    href={expired ? `/kurzusok/${productId}` : `/kurzusaim/${productId}`}
+                    href={
+                      expired
+                        ? // Nem populate-olt bejegyzésnél nincs slug — a régi,
+                          // id-alapú cím marad, amit a route átirányít.
+                          courseHref(product ?? { id: productId })
+                        : `/kurzusaim/${productId}`
+                    }
                   >
                     {product ? courseTitle(product) : `Kurzus #${productId}`}
                   </a>

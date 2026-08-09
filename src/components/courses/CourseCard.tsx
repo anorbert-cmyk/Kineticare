@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { courseHref } from '../../lib/course-url'
 import { courseCover, coursePriceHuf, courseTitle } from '../../lib/courses'
 import type { Product } from '../../payload-types'
 import { Card } from '../ui/Card'
@@ -7,9 +8,9 @@ import { PriceTag } from '../ui/PriceTag'
 
 /**
  * CourseCard — kurzuskártya a /kurzusok listán és a kapcsolódó kurzusok
- * (upsell) sávban. Borító (media sm-méret), cím (sku), rövid leírás és
- * az 5A Ár-címke (PriceTag, ezres tagolás); a cím linkje a kurzus-oldalra
- * visz (/kurzusok/{id} — a products collectionnek nincs slug mezője).
+ * (upsell) sávban. Borító (media sm-méret), cím, rövid leírás és az 5A
+ * Ár-címke (PriceTag, ezres tagolás); a cím linkje a kurzus KANONIKUS
+ * címére visz (courseHref: slug, ennek hiányában a régi id-s út).
  */
 export interface CourseCardProps {
   product: Product
@@ -19,7 +20,7 @@ export interface CourseCardProps {
 
 export function CourseCard({ product, headingLevel = 'h2' }: CourseCardProps) {
   const title = courseTitle(product)
-  const href = `/kurzusok/${product.id}`
+  const href = courseHref(product)
   const cover = courseCover(product)
   const price = coursePriceHuf(product)
   const Heading = headingLevel

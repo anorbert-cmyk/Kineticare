@@ -6,6 +6,7 @@ import { headers } from 'next/headers'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { CartView } from '@/components/checkout/CartView'
+import type { CartItem } from '@/lib/cart'
 import { logger } from '@/lib/logger'
 import { coursePriceHuf, courseTitle, hasUserPurchased } from '@/lib/courses'
 import type { Product, User } from '@/payload-types'
@@ -62,7 +63,7 @@ export default async function KosarPage({ searchParams }: KosarPageProps) {
       ? Number(termekParam.trim())
       : null
 
-  let termekItem: { productId: number; sku: string; shortDescription: string | null; priceHuf: number | null; isFree: boolean } | null = null
+  let termekItem: CartItem | null = null
   if (termekId !== null) {
     const product = await getProductById(termekId)
     if (product && (product.status === 'published' || product.status === 'archived')) {
@@ -70,6 +71,7 @@ export default async function KosarPage({ searchParams }: KosarPageProps) {
       termekItem = {
         productId: product.id,
         sku: courseTitle(product),
+        slug: product.slug ?? null,
         shortDescription: product.shortDescription ?? null,
         priceHuf: price,
         isFree: product.priceInHUFEnabled === false,

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { markVideoWatched } from '../../lib/course-progress/client'
 import { summarizeCourseProgress } from '../../lib/course-progress/progress'
+import { courseHref } from '../../lib/course-url'
 import { playableStreamVideos, streamIframeSrc, streamVideoRef } from '../../lib/stream/contract'
 import { fetchStreamToken } from '../../lib/stream-token-client'
 
@@ -36,6 +37,8 @@ export interface CourseVideo {
 export interface CoursePlayerProps {
   product: {
     id: number
+    /** A nyilvános kurzusoldalra mutató link slugja; hiányában a régi id-s cím. */
+    slug?: string | null
     title: string
     videos: CourseVideo[]
   }
@@ -229,7 +232,7 @@ export function CoursePlayer({
           {expiredMessage ??
             'A videók megtekintéséhez a kurzus megvásárlása szükséges. Ha már megvetted, jelentkezz be azzal a fiókkal, amellyel vásároltad.'}
         </p>
-        <Button href={`/kurzusok/${product.id}`}>A kurzus megtekintése</Button>
+        <Button href={courseHref(product)}>A kurzus megtekintése</Button>
       </Card>
     )
   }

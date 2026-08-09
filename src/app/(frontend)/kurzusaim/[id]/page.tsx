@@ -133,6 +133,7 @@ export default async function KurzusaimPlayerPage({ params }: KurzusaimPlayerPag
           expiredMessage={expiredMessage}
           product={{
             id: product.id,
+            slug: product.slug ?? null,
             title: courseTitle(product),
             videos: Array.isArray(product.videos)
               ? product.videos.map((video) => ({

@@ -8,9 +8,9 @@ import { formatPriceHuf } from './format-price'
  * (src/app/(frontend)/kurzusok/**) ezeket használják.
  *
  * Mező-konvenciók (products collection, src/plugins/ecommerce.ts):
- * - A products collectionnek NINCS slug és title mezője: a display-név a
- *   `sku`, az URL-azonosító a numerikus `id` (a menu-tree konvenciója:
- *   /kurzusok/{id}).
+ * - A megjelenő név a `displayTitle` → `sku` lánc (courseTitle); az URL a
+ *   `slug`, ennek hiányában a numerikus `id`. Az URL-építés és a slug-szabályok
+ *   EGY helyen élnek: src/lib/course-url.ts (courseHref).
  * - Ár: `priceInHUF` (bruttó egész forint), csak `priceInHUFEnabled` mellett
  *   értelmezett.
  * - Státusz: saját `status` select (draft/published/archived) — NEM a drafts
@@ -37,7 +37,7 @@ export const ARCHIVED_COURSE_NOTE = 'Ez a kurzus jelenleg nem vásárolható.'
 /** A kurzuslista kategória-szűrőjének query-param neve (/kurzusok?kategoria=<slug>). */
 export const CATEGORY_QUERY_PARAM = 'kategoria'
 
-/** Checkout-link a termékhez (a [slug] URL-szegmens a repo-konvenció szerint a numerikus id). */
+/** Checkout-link a termékhez (a pénztár a numerikus id-t kapja query-paraméterben). */
 export function checkoutHref(productId: number): string {
   return `${CHECKOUT_PATH}?termek=${productId}`
 }
@@ -140,9 +140,12 @@ export function resolveCourseCta(
 }
 
 /**
- * A /kurzusok/[slug] dinamikus szegmens feloldása. A products collectionnek
- * nincs slug mezője — a szegmens a numerikus product id (menu-tree
- * konvenció). Bármi más → null (a route 404-et ad).
+ * Numerikus kurzus-azonosító egy URL-szegmensből; bármi más → null.
+ *
+ * Két helyen kell: a védett lejátszó-útvonalon (/kurzusaim/[id]) és a
+ * nyilvános kurzus-URL feloldásában (src/lib/course-url.ts), ahol a régi,
+ * id-alapú címeket ismerjük fel — azok innen kapják a 301-es átirányítást a
+ * slugos címre.
  */
 export function parseCourseIdParam(slug: string | undefined): number | null {
   if (typeof slug !== 'string') {
@@ -156,8 +159,20 @@ export function parseCourseIdParam(slug: string | undefined): number | null {
   return Number.isSafeInteger(id) && id > 0 ? id : null
 }
 
-/** A kurzus megjelenített neve — a products display-mezője a sku. */
-export function courseTitle(product: Pick<Product, 'id' | 'sku'>): string {
+/**
+ * A kurzus megjelenített neve.
+ *
+ * Lánc: `displayTitle` (C3 — a látogatónak szóló cím) → `sku` (a régi, kettős
+ * szerepű azonosító-név) → azonosítós fallback. A `displayTitle` opcionális,
+ * ezért a szűkebb (csak `sku`-t hordozó) hívók változatlanul működnek.
+ */
+export function courseTitle(
+  product: Pick<Product, 'id' | 'sku'> & { displayTitle?: string | null },
+): string {
+  const displayTitle = typeof product.displayTitle === 'string' ? product.displayTitle.trim() : ''
+  if (displayTitle.length > 0) {
+    return displayTitle
+  }
   const sku = typeof product.sku === 'string' ? product.sku.trim() : ''
   return sku.length > 0 ? sku : `Kurzus #${product.id}`
 }

@@ -192,9 +192,18 @@ describe('kurzus URL- és címkezelés', () => {
     expect(parseCourseIdParam(undefined)).toBeNull()
   })
 
-  it('a kurzus display-neve a sku; hiányában azonosítós fallback', () => {
+  it('a kurzus display-neve a displayTitle → sku lánc; hiányában azonosítós fallback', () => {
     expect(courseTitle({ id: 1, sku: 'Kézrehabilitáció otthon' })).toBe('Kézrehabilitáció otthon')
     expect(courseTitle({ id: 9, sku: '  ' })).toBe('Kurzus #9')
     expect(courseTitle({ id: 9, sku: null })).toBe('Kurzus #9')
+  })
+
+  it('a látogatónak szóló kurzuscím (displayTitle) megelőzi az azonosítót (sku)', () => {
+    expect(courseTitle({ id: 1, sku: 'KURZUS-1', displayTitle: 'Kéztorna otthon' })).toBe(
+      'Kéztorna otthon',
+    )
+    // Üres cím esetén a régi viselkedés marad — a sku a megjelenő név.
+    expect(courseTitle({ id: 1, sku: 'KURZUS-1', displayTitle: '  ' })).toBe('KURZUS-1')
+    expect(courseTitle({ id: 1, sku: 'KURZUS-1', displayTitle: null })).toBe('KURZUS-1')
   })
 })

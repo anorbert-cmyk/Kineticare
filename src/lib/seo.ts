@@ -130,15 +130,22 @@ export function buildPageMetadata(doc: SeoDoc, path: string): Metadata {
  * Kurzus (products) → SeoDoc adapter.
  *
  * A products collectionnek nincs `title`/`excerpt`/`heroImage` mezője: a
- * megjelenített név a `sku` (courseTitle), a bevezető a `shortDescription`, a
- * képtartalék a `coverImage`. Az adapter csak ÁTNEVEZ — a fallback-lánc maga a
- * közös `buildDocMetadata`-ban fut, hogy a kurzusoldal ugyanazt a logikát
- * használja, mint a poszt- és az oldal-útvonal.
+ * megjelenített név a `displayTitle` → `sku` lánc (courseTitle), a bevezető a
+ * `shortDescription`, a képtartalék a `coverImage`. Az adapter csak ÁTNEVEZ — a
+ * fallback-lánc maga a közös `buildDocMetadata`-ban fut, hogy a kurzusoldal
+ * ugyanazt a logikát használja, mint a poszt- és az oldal-útvonal.
  */
 export function productSeoDoc(
   product: Pick<
     Product,
-    'id' | 'sku' | 'shortDescription' | 'seoTitle' | 'seoDescription' | 'ogImage' | 'coverImage'
+    | 'id'
+    | 'sku'
+    | 'displayTitle'
+    | 'shortDescription'
+    | 'seoTitle'
+    | 'seoDescription'
+    | 'ogImage'
+    | 'coverImage'
   >,
 ): SeoDoc {
   const name = courseTitle(product)
@@ -255,7 +262,7 @@ export function breadcrumbJsonLd(
  * schema.org által megengedett többszörös `@type`-ot használjuk.
  *
  * A LÁTHATÓ tartalommal való egyezés kötelező (különben a Google elveti):
- * - `name`      ← a H1 szövege (courseTitle → `sku`),
+ * - `name`      ← a H1 szövege (courseTitle → `displayTitle` → `sku`),
  * - `description` ← a hero lead bekezdése (`shortDescription`) — SZÁNDÉKOSAN nem
  *   a `seoDescription`, mert az csak a meta-tagben látszik, az oldalon nem,
  * - `image`     ← a buyboxban megjelenített borítókép,

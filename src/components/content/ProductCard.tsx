@@ -1,5 +1,7 @@
 import Link from 'next/link'
 
+import { courseHref } from '../../lib/course-url'
+import { courseTitle } from '../../lib/courses'
 import type { Product } from '../../payload-types'
 import { Card } from '../ui/Card'
 import { PriceTag } from '../ui/PriceTag'
@@ -10,10 +12,11 @@ import '../../app/(frontend)/styles/blocks/course-cards.css'
 /**
  * ProductCard — kurzus-kiemelés kártyája (cover / cím / ár).
  *
- * A kártya a /kurzusok/<id> útvonalra mutat (a menü URL-konvencióval egyezően,
- * lásd src/lib/menu-tree.ts); a kurzus-oldal a következő hullám (5C) feladata.
- * Csak published termék kerülhet a kártyára — a szűrés a lekérdezésben
- * (src/lib/cms.ts PUBLISHED_WHERE) történik, itt védőhálóként újra ellenőrizzük.
+ * A kártya a kurzus KANONIKUS címére mutat (courseHref: slug, ennek hiányában
+ * a régi id-s út — ugyanaz a konvenció, mint a menüben, lásd
+ * src/lib/menu-tree.ts). Csak published termék kerülhet a kártyára — a szűrés a
+ * lekérdezésben (src/lib/cms.ts PUBLISHED_WHERE) történik, itt védőhálóként
+ * újra ellenőrizzük.
  *
  * Megjelenés: a landing kártya-nyelve (hajszálvonalas keret, serif cím, a
  * lábban hajszálvonal fölött az ár). A stílust maga a kártya importálja, mert
@@ -21,11 +24,19 @@ import '../../app/(frontend)/styles/blocks/course-cards.css'
  * styles/blocks/course-cards.css.
  */
 export interface ProductCardProps {
-  // A plugin products collectionében NINCS title mező — a megjelenített név az sku
-  // (a collection useAsTitle-ja is az, lásd src/plugins/ecommerce.ts).
+  // A megjelenített név a displayTitle → sku lánc (courseTitle), az URL pedig a
+  // slug → id lánc (courseHref) — lásd src/plugins/ecommerce.ts.
   product: Pick<
     Product,
-    'id' | 'sku' | 'shortDescription' | 'coverImage' | 'priceInHUF' | 'priceInHUFEnabled' | 'status'
+    | 'id'
+    | 'slug'
+    | 'sku'
+    | 'displayTitle'
+    | 'shortDescription'
+    | 'coverImage'
+    | 'priceInHUF'
+    | 'priceInHUFEnabled'
+    | 'status'
   >
 }
 
@@ -39,14 +50,14 @@ export function ProductCard({ product }: ProductCardProps) {
     return null
   }
 
-  const title = product.sku?.trim() || 'Kurzus'
+  const title = courseTitle(product)
   const showPrice = product.priceInHUFEnabled === true && typeof product.priceInHUF === 'number'
   const coverMedia =
     product.coverImage && typeof product.coverImage === 'object' ? product.coverImage : null
 
   return (
     <Card as="article" className="kc-product-card" interactive padded={false}>
-      <Link className="kc-product-card__link" href={`/kurzusok/${product.id}`}>
+      <Link className="kc-product-card__link" href={courseHref(product)}>
         {coverMedia ? (
           <span className="kc-product-card__cover">
             <MediaImage media={coverMedia} preferredSize="sm" sizes="(max-width: 720px) 100vw, 352px" />

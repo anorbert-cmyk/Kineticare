@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { courseHref } from '../lib/course-url'
 import { courseCover, coursePriceHuf, coursePriceLabel, courseTitle } from '../lib/courses'
 import { formatPriceHuf } from '../lib/format-price'
 import {
@@ -173,7 +174,9 @@ function jsonLdFor(doc: Product): Record<string, unknown> {
   return courseJsonLd({
     product: doc,
     name: courseTitle(doc),
-    path: `/kurzusok/${doc.id}`,
+    // A kurzusoldal a KANONIKUS címet adja át (courseHref) — a strukturált adat
+    // URL-je és a canonical meta így nem tud kettéválni.
+    path: courseHref(doc),
     priceHuf: coursePriceHuf(doc),
     ...(cover ? { imageUrl: absoluteUrl(cover.url) } : {}),
   })
@@ -262,5 +265,38 @@ describe('a kurzus JSON-LD a LÁTHATÓ tartalommal egyezik', () => {
     const metadata = buildProductMetadata(doc, COURSE_PATH)
     expect(metadata.title).toBe('Csak a meta-tagben látszó SEO-cím')
     expect(metadata.description).toBe('Csak a meta-tagben látszó SEO-leírás')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Slugos kurzus-URL (C3)
+// ---------------------------------------------------------------------------
+
+describe('slugos kurzus-URL a SEO-rétegben', () => {
+  const doc = product({ slug: 'kez-rehab-alapprogram', displayTitle: 'Kéz-rehab alapprogram' })
+
+  it('a canonical és a JSON-LD is a slugos címet használja', () => {
+    const path = courseHref(doc)
+    expect(path).toBe('/kurzusok/kez-rehab-alapprogram')
+
+    const metadata = buildProductMetadata(doc, path)
+    expect(metadata.alternates?.canonical).toBe(path)
+    expect(metadata.openGraph?.url).toBe(absoluteUrl(path))
+
+    const jsonLd = jsonLdFor(doc)
+    expect(jsonLd.url).toBe(absoluteUrl(path))
+    expect((jsonLd.offers as Record<string, unknown>).url).toBe(absoluteUrl(path))
+  })
+
+  it('a megjelenő név a kurzuscím, a sku viszont marad azonosító', () => {
+    const named = product({
+      slug: 'kez-rehab-alapprogram',
+      sku: 'KURZUS-001',
+      displayTitle: 'Kéztorna otthon — 8 hetes program',
+    })
+    const jsonLd = jsonLdFor(named)
+    expect(jsonLd.name).toBe('Kéztorna otthon — 8 hetes program')
+    expect(jsonLd.sku).toBe('KURZUS-001')
+    expect(resolveSeoTitle(productSeoDoc(named))).toBe('Kéztorna otthon — 8 hetes program')
   })
 })

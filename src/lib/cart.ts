@@ -11,6 +11,13 @@ import { formatPriceHuf } from './format-price'
 export interface CartItem {
   productId: number
   sku: string
+  /**
+   * A kurzus webcíme a kosárban lévő tétel linkjéhez. OPCIONÁLIS: a mező
+   * bevezetése ELŐTT eltárolt (localStorage-ban élő) kosarakban nincs benne —
+   * ilyenkor a link a régi, id-alapú címre megy, amit a kurzus-route
+   * átirányít a kanonikus címre.
+   */
+  slug?: string | null
   shortDescription: string | null
   priceHuf: number | null
   /** priceInHUFEnabled === false esetén ingyenes. */

@@ -23,14 +23,14 @@
  * archív tartalommal frissíti.
  *
  * FIGYELEM — az `sku` ebben a repóban a VEVŐNEK MEGJELENŐ TERMÉKNÉV, nem gépi
- * cikkszám. A products collectionben nincs külön title mező: a plugin
- * `useAsTitle: 'sku'` beállítással fut (src/plugins/ecommerce.ts), a kurzuskártya
- * és a kurzusoldal címe az sku (src/components/content/ProductCard.tsx,
- * src/lib/courses.ts `courseTitle`), és az orders items `titleSnapshot` mezője is
- * az sku-t rögzíti — vagyis a megrendelésre és a számlára is ez kerül. Ezért a
- * termékek sku-ja ember-olvasható név („Otthoni KézRehab Program", „SOS Kézrelax
- * villámkurzus"); gépi azonosító (pl. „KEZREHAB-ONLINE-001") a kurzuskártyán, a
- * kurzusoldalon ÉS a vevő számláján is így jelenne meg. Az sku egyben az
+ * cikkszám. A plugin `useAsTitle: 'sku'` beállítással fut
+ * (src/plugins/ecommerce.ts); a kurzuskártya és a kurzusoldal címe a
+ * `displayTitle` → `sku` lánc (src/lib/courses.ts `courseTitle`), tehát üres
+ * kurzuscím mellett az sku a megjelenő név, és az orders items `titleSnapshot`
+ * mezője MINDIG az sku-t rögzíti — vagyis a megrendelésre és a számlára is ez
+ * kerül. Ezért a termékek sku-ja ember-olvasható név („Otthoni KézRehab
+ * Program", „SOS Kézrelax villámkurzus"); gépi azonosító (pl.
+ * „KEZREHAB-ONLINE-001") a vevő számláján is így jelenne meg. Az sku egyben az
  * idempotencia-kulcs is (keresés + upsert), ezért a script mindenhol pontosan
  * ugyanezt az értéket használja.
  *
