@@ -1,0 +1,197 @@
+import type { Payload } from 'payload'
+import { describe, expect, it, vi } from 'vitest'
+
+import { grantPurchase } from '../lib/grant-purchase'
+import type { Logger } from '../lib/logger'
+
+/**
+ * Manuális kurzus-hozzáférés (grant) — a közös szolgáltatás egységtesztjei.
+ *
+ * A Payload local API mockolva (a refund.test.ts / barion-callback.test.ts
+ * mintája). A teszt a NÉGY kimeneti ágat és az idempotenciát fedi: a
+ * szolgáltatás csak hiányzó terméknél ír, és a második, azonos hívás már nem.
+ */
+
+const EMAIL = 'vevo@example.test'
+const SKU = 'DEMO-KEZREHAB-001'
+
+/** Csendes logger — a tesztfutás kimenete ne teljen meg naplósorokkal. */
+function silentLogger(): Logger {
+  const log: Logger = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    child: () => log,
+  }
+  return log
+}
+
+interface MockOptions {
+  /** Létezik-e a felhasználó. */
+  userExists?: boolean
+  /** Létezik-e a termék. */
+  productExists?: boolean
+  /** A felhasználó kezdeti purchases-listája. */
+  purchases?: number[]
+}
+
+function createMockPayload(options: MockOptions = {}) {
+  const user = {
+    id: 7,
+    email: EMAIL,
+    purchases: options.purchases ?? [],
+  }
+  const product = { id: 42, sku: SKU }
+  const updates: Array<{ collection: string; id: number | string; data: Record<string, unknown> }> =
+    []
+
+  const payload = {
+    find: vi.fn(async ({ collection }: { collection: string }) => {
+      if (collection === 'users') {
+        return (options.userExists ?? true) ? { docs: [user], totalDocs: 1 } : { docs: [], totalDocs: 0 }
+      }
+      if (collection === 'products') {
+        return (options.productExists ?? true)
+          ? { docs: [product], totalDocs: 1 }
+          : { docs: [], totalDocs: 0 }
+      }
+      return { docs: [], totalDocs: 0 }
+    }),
+    update: vi.fn(
+      async (args: { collection: string; id: number | string; data: Record<string, unknown> }) => {
+        updates.push(args)
+        if (args.collection === 'users') {
+          Object.assign(user, args.data)
+        }
+        return args.data
+      },
+    ),
+  }
+
+  return { payload: payload as unknown as Payload, updates, user, product }
+}
+
+describe('grantPurchase — kimeneti ágak', () => {
+  it('granted: a hiányzó terméket hozzáfűzi a purchases-listához', async () => {
+    const { payload, updates } = createMockPayload({ purchases: [11] })
+
+    const result = await grantPurchase({
+      payload,
+      email: EMAIL,
+      productIdOrSku: SKU,
+      reason: 'elhibázott fizetés jóváírása',
+      grantedBy: { id: 1, email: 'owner@example.test' },
+      logger: silentLogger(),
+    })
+
+    expect(result.status).toBe('granted')
+    expect(result.userId).toBe(7)
+    expect(result.productId).toBe(42)
+    expect(result.productLabel).toBe(SKU)
+    expect(result.productRefKind).toBe('sku')
+    expect(updates).toHaveLength(1)
+    expect(updates[0]).toMatchObject({
+      collection: 'users',
+      id: 7,
+      data: { purchases: [11, 42] },
+    })
+  })
+
+  it('already-had: meglévő hozzáférésnél nem ír (no-op, nem hiba)', async () => {
+    const { payload, updates } = createMockPayload({ purchases: [42] })
+
+    const result = await grantPurchase({
+      payload,
+      email: EMAIL,
+      productIdOrSku: SKU,
+      logger: silentLogger(),
+    })
+
+    expect(result.status).toBe('already-had')
+    expect(result.productId).toBe(42)
+    expect(updates).toHaveLength(0)
+  })
+
+  it('user-not-found: ismeretlen e-mail-cím', async () => {
+    const { payload, updates } = createMockPayload({ userExists: false })
+
+    const result = await grantPurchase({
+      payload,
+      email: 'nincs-ilyen@example.test',
+      productIdOrSku: SKU,
+      logger: silentLogger(),
+    })
+
+    expect(result.status).toBe('user-not-found')
+    expect(result.userId).toBeUndefined()
+    expect(updates).toHaveLength(0)
+  })
+
+  it('product-not-found: ismeretlen sku', async () => {
+    const { payload, updates } = createMockPayload({ productExists: false })
+
+    const result = await grantPurchase({
+      payload,
+      email: EMAIL,
+      productIdOrSku: 'NINCS-ILYEN-SKU',
+      logger: silentLogger(),
+    })
+
+    expect(result.status).toBe('product-not-found')
+    expect(result.productRefKind).toBe('sku')
+    expect(result.userId).toBe(7)
+    expect(updates).toHaveLength(0)
+  })
+
+  it('numerikus hivatkozás id-ként oldódik fel (id-kind a hívó üzenetéhez)', async () => {
+    const { payload } = createMockPayload({ productExists: false })
+
+    const result = await grantPurchase({
+      payload,
+      email: EMAIL,
+      productIdOrSku: '9999',
+      logger: silentLogger(),
+    })
+
+    expect(result.status).toBe('product-not-found')
+    expect(result.productRefKind).toBe('id')
+  })
+})
+
+describe('grantPurchase — idempotencia', () => {
+  it('kétszer hívva egyszer ír: a második hívás already-had', async () => {
+    const { payload, updates } = createMockPayload({ purchases: [] })
+
+    const first = await grantPurchase({
+      payload,
+      email: EMAIL,
+      productIdOrSku: SKU,
+      logger: silentLogger(),
+    })
+    const second = await grantPurchase({
+      payload,
+      email: EMAIL,
+      productIdOrSku: SKU,
+      logger: silentLogger(),
+    })
+
+    expect(first.status).toBe('granted')
+    expect(second.status).toBe('already-had')
+    expect(updates).toHaveLength(1)
+    expect(updates[0].data).toEqual({ purchases: [42] })
+  })
+
+  it('meglévő jogosultságot sosem vesz el (csak hozzáfűz)', async () => {
+    const { payload, updates } = createMockPayload({ purchases: [11, 12] })
+
+    await grantPurchase({
+      payload,
+      email: EMAIL,
+      productIdOrSku: SKU,
+      logger: silentLogger(),
+    })
+
+    expect(updates[0].data).toEqual({ purchases: [11, 12, 42] })
+  })
+})
