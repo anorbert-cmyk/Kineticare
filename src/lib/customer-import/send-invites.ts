@@ -250,7 +250,10 @@ export async function sendInviteEmails(
         text: template.text,
       })
       const failure = sendFailureReason(result)
-      outcome = failure === null ? { email: link.email, ok: true } : { email: link.email, ok: false, error: failure }
+      outcome =
+        failure === null
+          ? { email: link.email, ok: true }
+          : { email: link.email, ok: false, error: failure }
     } catch (error) {
       outcome = {
         email: link.email,
