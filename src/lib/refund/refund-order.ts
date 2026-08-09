@@ -4,7 +4,16 @@ import type { Order, User } from '../../payload-types'
 import { auditLogStore, writeAuditLog } from '../audit'
 import { BarionApiError, fetchPaymentState, refundPayment } from '../barion'
 import { logger, type Logger } from '../logger'
-import { issueStornoForOrder, type IssueStornoForOrderDeps } from '../szamlazz'
+import {
+  isRetryableCorrectiveError,
+  isRetryableStornoError,
+  issueCorrectiveInvoiceForOrder,
+  issueStornoForOrder,
+  queueCorrectiveInvoiceJob,
+  queueStornoIssueJob,
+  type IssueCorrectiveInvoiceDeps,
+  type IssueStornoForOrderDeps,
+} from '../szamlazz'
 
 /**
  * Owner-only rendelés-visszatérítés (refund) szolgáltatás.
@@ -38,6 +47,10 @@ import { issueStornoForOrder, type IssueStornoForOrderDeps } from '../szamlazz'
  *  8. purchases-levétel IDEMPOTENSEN, kizárólag teljes refundnál; részrefundnál
  *     a vevő hozzáférése megmarad,
  *  9. audit-logs bejegyzés (a collection létezik, best-effort writeAuditLog).
+ * 10. számlázási bizonylat a visszatérítéshez (best-effort, a refund
+ *     eredményét nem befolyásolja): TELJES refundnál STORNÓ (C4), RÉSZLEGESNÉL
+ *     HELYESBÍTŐ (módosító) számla az eredeti számlára hivatkozva (C5).
+ *     Újrapróbálható Számlázz.hu-hibánál a megfelelő job kerül sorba.
  *
  * Hibaág-szabály: BarionApiError (kind szerint naplózva requestId-vel) esetén
  * a rendelés NEM változik — a DB-írás kizárólag a sikeres Barion-refund UTÁN
@@ -93,6 +106,14 @@ export interface RefundOrderOptions {
     order: Order,
     deps: IssueStornoForOrderDeps,
   ) => ReturnType<typeof issueStornoForOrder>
+  /**
+   * Injektálható helyesbítő-hívó (teszteléshez); alapból a valódi
+   * issueCorrectiveInvoiceForOrder. Szintén best-effort.
+   */
+  issueCorrective?: (
+    order: Order,
+    deps: IssueCorrectiveInvoiceDeps,
+  ) => ReturnType<typeof issueCorrectiveInvoiceForOrder>
 }
 
 export interface RefundOrderResult {
@@ -222,6 +243,101 @@ async function revokePurchases(
     keptForOtherPaidOrders: [...protectedIds],
   })
   return { revoked }
+}
+
+/**
+ * STORNÓ teljes visszatérítéshez — best-effort (C4).
+ *
+ * A kiállítás állapota a rendelésre kerül (stornoStatus/stornoNumber/…), így a
+ * kimaradt bizonylat lekérdezhető. Újrapróbálható hibánál a storno-issue job
+ * kerül sorba; a kimenetel a refund HTTP-válaszát SOSEM befolyásolja.
+ */
+async function issueStornoBestEffort(params: {
+  options: RefundOrderOptions
+  order: Order
+  log: Logger
+  reason: string | null
+}): Promise<void> {
+  const { options, order, log, reason } = params
+  try {
+    const issueStorno = options.issueStorno ?? issueStornoForOrder
+    const result = await issueStorno(order, {
+      payload: options.payload,
+      logger: log,
+      ...(reason ? { reason } : {}),
+    })
+    if (result.outcome === 'failed') {
+      log.warn(
+        'refund: a stornó-számla kiállítása sikertelen — a refund ettől függetlenül sikeres (emberi pótlás szükséges)',
+        { reason: result.reason ?? null },
+      )
+    } else {
+      log.info('refund: stornó-számla feldolgozva', {
+        outcome: result.outcome,
+        stornoNumber: result.stornoNumber ?? null,
+      })
+    }
+  } catch (error) {
+    const retryable = isRetryableStornoError(error)
+    log.error(
+      'refund: a stornó-számla kiállítása hibával állt le (best-effort) — a refund eredménye ettől változatlan',
+      { retryable, error: error instanceof Error ? error.message : String(error) },
+    )
+    if (retryable) {
+      // Újrapróbálható provider-hiba: a bizonylat nem veszhet el — a job
+      // viszi tovább (a szamlaKulsoAzon-horgony véd a duplikáció ellen).
+      await queueStornoIssueJob(options.payload, order.id, log)
+    }
+  }
+}
+
+/**
+ * HELYESBÍTŐ (módosító) számla részleges visszatérítéshez — best-effort (C5).
+ *
+ * A refundSeq a refunds-nyom 1-alapú sorszáma: ez köti a bizonylatot a
+ * konkrét visszatérítéshez (idempotencia-kulcs), és ezzel áll sorba a
+ * corrective-invoice-issue job is újrapróbálható hiba esetén.
+ */
+async function issueCorrectiveBestEffort(params: {
+  options: RefundOrderOptions
+  order: Order
+  log: Logger
+  reason: string | null
+  refundSeq: number
+  amountHuf: number
+}): Promise<void> {
+  const { options, order, log, reason, refundSeq, amountHuf } = params
+  try {
+    const issueCorrective = options.issueCorrective ?? issueCorrectiveInvoiceForOrder
+    const result = await issueCorrective(order, {
+      payload: options.payload,
+      logger: log,
+      refundSeq,
+      amountHuf,
+      ...(reason ? { reason } : {}),
+    })
+    if (result.outcome === 'failed') {
+      log.warn(
+        'refund: a helyesbítő számla kiállítása sikertelen — a részleges refund ettől függetlenül sikeres (emberi pótlás szükséges)',
+        { reason: result.reason ?? null },
+      )
+    } else {
+      log.info('refund: helyesbítő számla feldolgozva', {
+        outcome: result.outcome,
+        correctiveInvoiceNumber: result.correctiveInvoiceNumber ?? null,
+        refundSeq,
+      })
+    }
+  } catch (error) {
+    const retryable = isRetryableCorrectiveError(error)
+    log.error(
+      'refund: a helyesbítő számla kiállítása hibával állt le (best-effort) — a refund eredménye ettől változatlan',
+      { retryable, refundSeq, error: error instanceof Error ? error.message : String(error) },
+    )
+    if (retryable) {
+      await queueCorrectiveInvoiceJob(options.payload, order.id, refundSeq, log)
+    }
+  }
 }
 
 /**
@@ -458,41 +574,32 @@ export async function refundOrder(options: RefundOrderOptions): Promise<RefundOr
     refundedTransactionStatus,
   })
 
-  // 10. Stornó-számla BEST-EFFORT — kizárólag TELJES refundnál (a stornó az
-  // eredeti számla teljes érvénytelenítése; részrefundhoz helyesbítő számla
-  // kellene, az külön fejlesztés). A stornó hibája (beleértve a retryable
-  // Számlázz.hu-hibákat is) NEM billentheti ki a már sikeres refundot:
-  // minden ág el van kapva és strukturáltan naplózva. A refund-folyamat
-  // szinkron route-handler (nem job-alapú), ezért a stornó itt, inline,
-  // best-effort módon fut; a duplikáció ellen a Számlázz.hu-oldali
-  // szamlaKulsoAzon-horgony (`${orderNumber}-STORNO`) véd.
+  // 10. Számlázási bizonylat a visszatérítéshez — BEST-EFFORT.
+  //
+  // A bizonylat típusát a refund ÖSSZEGE dönti el:
+  //  - TELJES refund → STORNÓ: az eredeti számla teljes érvénytelenítése (C4);
+  //  - RÉSZLEGES refund → HELYESBÍTŐ (módosító) számla: az eredetire hivatkozó
+  //    bizonylat, amely csak a visszatérített összeget hordozza negatív
+  //    korrekciós tételként (C5). Stornó itt NEM készülhet, mert az a teljes
+  //    számlát érvénytelenítené, miközben a vásárlás nagyobb része érvényben
+  //    marad (a vevő hozzáférése is megmarad).
+  //
+  // A bizonylat hibája (a retryable Számlázz.hu-hibákat is beleértve) NEM
+  // billentheti ki a már sikeres refundot: minden ág elkapva és strukturáltan
+  // naplózva. A refund szinkron route-handler, ezért a kiállítás itt, inline
+  // fut; ÚJRAPRÓBÁLHATÓ hibánál a megfelelő job kerül sorba (storno-issue /
+  // corrective-invoice-issue), így a bizonylat nem veszhet el.
   if (type === 'full') {
-    try {
-      const issueStorno = options.issueStorno ?? issueStornoForOrder
-      const stornoResult = await issueStorno(order, {
-        logger: orderLog,
-        ...(reason ? { reason } : {}),
-      })
-      if (stornoResult.outcome === 'failed') {
-        orderLog.warn(
-          'refund: a stornó-számla kiállítása sikertelen — a refund ettől függetlenül sikeres (emberi pótlás szükséges)',
-          { reason: stornoResult.reason ?? null },
-        )
-      } else {
-        orderLog.info('refund: stornó-számla feldolgozva', {
-          outcome: stornoResult.outcome,
-          stornoNumber: stornoResult.stornoNumber ?? null,
-        })
-      }
-    } catch (error) {
-      orderLog.error(
-        'refund: a stornó-számla kiállítása hibával állt le (best-effort) — a refund eredménye ettől változatlan',
-        {
-          retryable: error instanceof Error && 'retryable' in error ? error.retryable : null,
-          error: error instanceof Error ? error.message : String(error),
-        },
-      )
-    }
+    await issueStornoBestEffort({ options, order, log: orderLog, reason })
+  } else {
+    await issueCorrectiveBestEffort({
+      options,
+      order,
+      log: orderLog,
+      reason,
+      refundSeq: refunds.length,
+      amountHuf,
+    })
   }
 
   return {

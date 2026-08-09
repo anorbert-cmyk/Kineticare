@@ -20,6 +20,8 @@ export {
   itemsFromOrder,
   VAT_RATE_PERCENT,
   type BuildInvoiceXmlInput,
+  type ComputeLineAmountsOptions,
+  type CorrectiveInvoiceRef,
   type InvoiceBuyerInput,
   type InvoiceItemInput,
   type InvoiceLineAmounts,
@@ -27,14 +29,29 @@ export {
 } from './invoice'
 export {
   buildStornoXml,
+  isRetryableStornoError,
   issueStornoForOrder,
+  MAX_STORNO_ATTEMPTS,
   postStornoXml,
   STORNO_KULSO_AZON_SUFFIX,
   type BuildStornoXmlInput,
   type IssueStornoForOrderDeps,
 } from './storno'
 export {
+  buildCorrectiveInvoiceXml,
+  CORRECTIVE_KULSO_AZON_INFIX,
+  correctiveKulsoAzon,
+  isRetryableCorrectiveError,
+  issueCorrectiveInvoiceForOrder,
+  type BuildCorrectiveInvoiceXmlInput,
+  type IssueCorrectiveInvoiceDeps,
+} from './corrective'
+export { queueCorrectiveInvoiceJob, queueStornoIssueJob } from './queue'
+export { writeOrderInvoicingState } from './order-state'
+export {
   SzamlazzApiError,
+  type IssueCorrectiveInvoiceResult,
+  type IssueCorrectiveOutcome,
   type IssueInvoiceOutcome,
   type IssueInvoiceResult,
   type IssueStornoOutcome,

@@ -1,3 +1,5 @@
+import type { Payload } from 'payload'
+
 import type { Order } from '../../payload-types'
 import { logger as rootLogger, type Logger } from '../logger'
 import {
@@ -6,6 +8,7 @@ import {
   type SzamlazzParsedSuccess,
 } from './client'
 import { escapeXml } from './invoice'
+import { writeOrderInvoicingState, writeOrderInvoicingStateBestEffort } from './order-state'
 import {
   SzamlazzApiError,
   type IssueStornoResult,
@@ -32,14 +35,22 @@ import {
  * - valaszVerzio=2: a válasz ugyanaz az xmlszamlavalasz, mint a számlakiállításnál
  *   (parseAgentResponse újrahasznosítható).
  *
- * Stornó-állapot a rendelésen: az orders sémában JELENLEG NINCS storno mező
- * (stornoStatus/stornoNumber). A sémát ez a változás NEM módosítja — a
- * stornó ténye strukturált naplósorokban jelenik meg, a dupla stornó ellen
- * a szamlaKulsoAzon-horgony véd. Ha a séma később stornoNumber/stornoStatus
- * mezőkkel bővül, az issueStornoForOrder azokat felismeri ('already-storned').
+ * Stornó-állapot a rendelésen (C4): az orders collection a stornoStatus
+ * (none|pending|storned|failed), stornoNumber, stornoAttempts és
+ * stornoLastError mezőket hordozza — a számla-státusz (invoiceStatus /
+ * invoiceNumber) mintájára. Az issueStornoForOrder Payload-példány mellett
+ * ezeket írja is; a retryable hibák újrapróbálását a storno-issue job végzi
+ * (src/jobs/tasks/storno-issue.ts, az invoice-issue mintájára).
  */
 
 export const STORNO_KULSO_AZON_SUFFIX = '-STORNO'
+
+/**
+ * Egy rendelés maximális stornó-kísérletei (első + újrapróbálások). A job-retry
+ * és az esetleges újrasorbaállítás együtt sem futhat végtelenszer: a limit
+ * felett a stornó 'failed' marad, és error-szintű owner-jelzés kerül a naplóba.
+ */
+export const MAX_STORNO_ATTEMPTS = 5
 
 export interface BuildStornoXmlInput {
   agentKey: string
@@ -173,6 +184,13 @@ export async function postStornoXml(
 // ---------------------------------------------------------------------------
 
 export interface IssueStornoForOrderDeps {
+  /**
+   * Payload-példány: megadva a stornó állapota a RENDELÉSRE is felkerül
+   * (stornoStatus/stornoNumber/stornoAttempts/stornoLastError). Elhagyva a
+   * szolgáltatás csak a hálózati műveletet végzi és naplóz — a dupla stornó
+   * ellen ilyenkor is a szamlaKulsoAzon-horgony véd.
+   */
+  payload?: Payload
   config?: SzamlazzClientConfig
   logger?: Logger
   /** Injektálható HTTP-hívó (teszteléshez); alapból a valódi postStornoXml. */
@@ -184,13 +202,12 @@ export interface IssueStornoForOrderDeps {
 }
 
 /**
- * Toleráns mezőolvasó a jövőbeli storno séma-mezőkhöz (stornoNumber /
- * stornoStatus). Ma az Order típus nem tartalmazza őket — ha a séma később
- * bővül, az idempotencia-ág migráció nélkül is működik.
+ * Újrapróbálandó-e a stornó a kapott hiba alapján. Ez a retry-döntés egyetlen
+ * forrása: a hívó (refund-bekötés) ez alapján állítja sorba a storno-issue
+ * jobot, a job pedig a dobott hibától kap Payload-szintű újrapróbálást.
  */
-function softString(order: Order, key: string): string | undefined {
-  const value = (order as unknown as Record<string, unknown>)[key]
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
+export function isRetryableStornoError(error: unknown): boolean {
+  return error instanceof SzamlazzApiError && error.retryable
 }
 
 /** A vevő e-mail-címe a customerSnapshot-ból, fallback a customerEmail. */
@@ -207,18 +224,19 @@ function buyerEmailFromOrder(order: Order): string {
 
 /**
  * Stornó-számla kiállítása egy rendeléshez — idempotens:
- * - a rendelésen már rögzítve van stornó (stornoNumber/stornoStatus mező,
- *   ha a séma bővül) → 'already-storned' (no-op);
+ * - a rendelésen már rögzítve van stornó (stornoNumber vagy
+ *   stornoStatus='storned') → 'already-storned' (no-op);
  * - Számlázz.hu kikapcsolva (nincs agent-kulcs) → 'disabled' (no-op, NEM hiba);
- * - hiányzó eredeti számlaszám / rendelésszám → 'failed' (NEM dob — emberi
- *   beavatkozás kell, az újrapróbálás nem segít);
- * - retryable provider/timeout-hiba → THROW (a job/folyamat újrapróbálhatja;
- *   a szamlaKulsoAzon-horgony miatt a duplikáció Számlázz.hu-oldalon sem
- *   jöhet létre).
+ * - hiányzó eredeti számlaszám / rendelésszám → 'failed' + stornoStatus
+ *   'failed' (NEM dob — emberi beavatkozás kell, az újrapróbálás nem segít);
+ * - kimerült kísérletszám (MAX_STORNO_ATTEMPTS) → 'failed' hálózati hívás
+ *   NÉLKÜL, error-szintű owner-jelzéssel;
+ * - retryable provider/timeout-hiba → stornoStatus 'failed' + THROW (a
+ *   storno-issue job újrapróbálja; a szamlaKulsoAzon-horgony miatt a
+ *   duplikáció Számlázz.hu-oldalon sem jöhet létre).
  *
- * Megjegyzés: a stornó ténye jelenleg csak strukturált naplóban jelenik meg
- * (séma-mező híján) — a stornoNumber/stornoStatus orders-mezők bevezetése
- * javasolt (lásd docs/szamlazz-storno.md).
+ * A `deps.payload` megadásakor minden állapotátmenet a rendelésre is felkerül
+ * (pending → storned | failed, attempts-számlálóval és utolsó hibaüzenettel).
  */
 export async function issueStornoForOrder(
   order: Order,
@@ -230,16 +248,26 @@ export async function issueStornoForOrder(
     orderNumber: order.orderNumber ?? null,
   })
   const config = deps.config ?? getSzamlazzConfig()
+  const payload = deps.payload
+  const saveState = async (data: Record<string, unknown>): Promise<void> => {
+    if (payload) {
+      await writeOrderInvoicingState(payload, order.id, data)
+    }
+  }
+  const saveStateBestEffort = async (data: Record<string, unknown>): Promise<void> => {
+    if (payload) {
+      await writeOrderInvoicingStateBestEffort(payload, order.id, data, log)
+    }
+  }
 
   if (!config.enabled) {
     log.debug('számlázás kikapcsolva (SZAMLAZZ_AGENT_KEY nincs beállítva) — stornó kihagyva')
     return { outcome: 'disabled' }
   }
 
-  // Idempotencia: a jövőbeli storno séma-mezőket toleránsan olvassuk.
-  const recordedStornoNumber = softString(order, 'stornoNumber')
-  const recordedStornoStatus = softString(order, 'stornoStatus')
-  if (recordedStornoNumber || recordedStornoStatus === 'storned') {
+  // Idempotencia (alkalmazás-oldal): a rendelésen rögzített stornó.
+  const recordedStornoNumber = order.stornoNumber?.trim()
+  if (recordedStornoNumber || order.stornoStatus === 'storned') {
     log.info('a rendeléshez már rögzítve van stornó-számla — idempotens no-op', {
       stornoNumber: recordedStornoNumber ?? null,
     })
@@ -251,57 +279,87 @@ export async function issueStornoForOrder(
 
   if (!order.orderNumber) {
     log.error('RIASZTÁS: a rendelés rendelésszám nélkül fut — stornó nem állítható ki')
+    await saveStateBestEffort({ stornoStatus: 'failed', stornoLastError: 'hiányzó rendelésszám' })
     return { outcome: 'failed', reason: 'hiányzó rendelésszám' }
   }
 
   const originalInvoiceNumber = order.invoiceNumber?.trim()
   if (!originalInvoiceNumber) {
     // Nem retryable: számla nélkül nincs mit stornózni — emberi pótlás kell.
+    const reason = 'hiányzó eredeti számlaszám (invoiceNumber)'
     log.warn(
       'a rendeléshez nem tartozik kiállított számla (invoiceNumber) — stornó NEM állítható ki',
     )
-    return { outcome: 'failed', reason: 'hiányzó eredeti számlaszám (invoiceNumber)' }
+    await saveStateBestEffort({ stornoStatus: 'failed', stornoLastError: reason })
+    return { outcome: 'failed', reason }
   }
 
+  const previousAttempts = order.stornoAttempts ?? 0
+  if (previousAttempts >= MAX_STORNO_ATTEMPTS) {
+    const reason = `a stornó-kísérletek száma kimerült (${previousAttempts}/${MAX_STORNO_ATTEMPTS})`
+    log.error('RIASZTÁS: a stornó-kiállítás újrapróbálásai kimerültek — emberi beavatkozás kell', {
+      attempts: previousAttempts,
+      lastError: order.stornoLastError ?? null,
+    })
+    await saveStateBestEffort({ stornoStatus: 'failed', stornoLastError: reason })
+    return { outcome: 'failed', reason }
+  }
+  const attempts = previousAttempts + 1
+
   const issueDate = deps.issueDate ?? new Date().toISOString().slice(0, 10)
+  const buyerEmail = buyerEmailFromOrder(order)
   const xml = buildStornoXml({
     agentKey: config.agentKey as string,
     originalInvoiceNumber,
     orderNumber: order.orderNumber,
     issueDate,
     ...(deps.reason ? { reason: deps.reason } : {}),
-    ...(buyerEmailFromOrder(order) ? { buyerEmail: buyerEmailFromOrder(order) } : {}),
+    ...(buyerEmail ? { buyerEmail } : {}),
   })
+
+  await saveState({ stornoStatus: 'pending', stornoAttempts: attempts })
 
   try {
     const postXml = deps.postXml ?? postStornoXml
     const result = await postXml(xml, config)
-    // Séma-mező híján a stornó ténye itt, strukturált naplóban rögzül —
-    // a dupla stornó ellen a szamlaKulsoAzon-horgony véd.
-    log.info('stornó-számla kiállítva (a rendelésen séma-mező híján csak naplózva)', {
+    await saveState({
+      stornoStatus: 'storned',
+      stornoNumber: result.szamlaszam,
+      stornoAttempts: attempts,
+      stornoLastError: null,
+    })
+    log.info('stornó-számla kiállítva', {
       stornoNumber: result.szamlaszam,
       originalInvoiceNumber,
+      attempts,
       szamlaKulsoAzon: `${order.orderNumber}${STORNO_KULSO_AZON_SUFFIX}`,
+      persisted: payload !== undefined,
     })
     return { outcome: 'storned', stornoNumber: result.szamlaszam }
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await saveStateBestEffort({
+      stornoStatus: 'failed',
+      stornoAttempts: attempts,
+      stornoLastError: message,
+    })
     if (error instanceof SzamlazzApiError) {
       log.warn('stornó-számla kiállítás sikertelen', {
         kind: error.kind,
         retryable: error.retryable,
+        attempts,
         agentErrorCodes: error.agentErrors.map((entry) => entry.code),
         error: error.message,
       })
       if (error.retryable) {
-        // A hívó (job/best-effort bekötés) dönthet az újrapróbálásról —
+        // A hívó (refund-bekötés) a storno-issue jobot állítja sorba, a job
+        // pedig a dobott hibától kap Payload-szintű újrapróbálást —
         // a szamlaKulsoAzon véd a duplikáció ellen.
         throw error
       }
       return { outcome: 'failed', reason: error.message }
     }
-    log.error('stornó-számla kiállítás váratlan hibával állt le', {
-      error: error instanceof Error ? error.message : String(error),
-    })
+    log.error('stornó-számla kiállítás váratlan hibával állt le', { attempts, error: message })
     throw error
   }
 }

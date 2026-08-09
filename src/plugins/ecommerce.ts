@@ -577,6 +577,98 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       },
     },
     {
+      // Stornó-számla állapota (C4). Az invoiceStatus mintáját követi: a
+      // rendszer (refund-folyamat + storno-issue job) állítja, kézzel nem
+      // írandó. A 'storned' a végállapot — az issueStornoForOrder ezt (vagy a
+      // stornoNumber meglétét) látva idempotens no-opot ad.
+      name: 'stornoStatus',
+      type: 'select',
+      defaultValue: 'none',
+      label: 'Stornó-számla állapota',
+      options: [
+        { label: 'Nincs', value: 'none' },
+        { label: 'Függőben', value: 'pending' },
+        { label: 'Stornózva', value: 'storned' },
+        { label: 'Sikertelen', value: 'failed' },
+      ],
+      admin: {
+        description: 'A stornó-számla állapota. A rendszer állítja — ne írd át.',
+      },
+    },
+    {
+      // A kiállított stornó-számla száma — az invoiceNumber mezővel azonos
+      // mezőszintű olvasás-védelemmel (pénzügyi bizonylatazonosító).
+      name: 'stornoNumber',
+      type: 'text',
+      label: 'Stornó-számla sorszáma',
+      access: {
+        read: isOwnerFieldAccess,
+      },
+    },
+    {
+      name: 'stornoAttempts',
+      type: 'number',
+      defaultValue: 0,
+      label: 'Stornó-kísérletek száma',
+      admin: {
+        readOnly: true,
+        description:
+          'A stornó-kiállítási kísérletek száma (a retry-job számlálója). A rendszer állítja.',
+      },
+    },
+    {
+      name: 'stornoLastError',
+      type: 'text',
+      label: 'Stornó utolsó hibája',
+      admin: {
+        readOnly: true,
+        description: 'Az utolsó sikertelen stornó-kísérlet hibaüzenete — hibakereséshez.',
+      },
+    },
+    {
+      // Helyesbítő (módosító) számla állapota RÉSZLEGES visszatérítéshez (C5).
+      // Teljes refundnál stornó készül, részlegesnél helyesbítő számla — a
+      // döntést a refund összege hozza meg (src/lib/refund/refund-order.ts).
+      name: 'correctiveInvoiceStatus',
+      type: 'select',
+      defaultValue: 'none',
+      label: 'Helyesbítő számla állapota',
+      options: [
+        { label: 'Nincs', value: 'none' },
+        { label: 'Függőben', value: 'pending' },
+        { label: 'Kiállítva', value: 'issued' },
+        { label: 'Sikertelen', value: 'failed' },
+      ],
+      admin: {
+        description: 'A helyesbítő (módosító) számla állapota. A rendszer állítja — ne írd át.',
+      },
+    },
+    {
+      // A LEGUTÓBB kiállított helyesbítő számla száma (több részrefund esetén
+      // a korábbiak a naplóban és a Számlázz.hu-fiókban követhetők).
+      name: 'correctiveInvoiceNumber',
+      type: 'text',
+      label: 'Helyesbítő számla sorszáma',
+      access: {
+        read: isOwnerFieldAccess,
+      },
+    },
+    {
+      // Idempotencia-horgony a helyesbítőhöz: a refunds-nyom hányadik (1-alapú)
+      // bejegyzéséhez tartozik a legutóbbi helyesbítő számla. Ismételt futás
+      // (job-retry) ezt látva no-opot ad; a provider-oldali horgony a
+      // szamlaKulsoAzon = `${orderNumber}-HELYESBITO-<sorszám>`.
+      name: 'correctiveInvoiceSeq',
+      type: 'number',
+      defaultValue: 0,
+      label: 'Helyesbített visszatérítés sorszáma',
+      admin: {
+        readOnly: true,
+        description:
+          'A refunds-nyom hányadik bejegyzéséhez tartozik a legutóbbi helyesbítő számla (idempotencia). A rendszer állítja.',
+      },
+    },
+    {
       name: 'customerSnapshot',
       type: 'json',
       label: 'Vásárlói adatok a megrendeléskor',

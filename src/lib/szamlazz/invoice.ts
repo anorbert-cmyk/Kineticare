@@ -3,6 +3,7 @@ import type { Payload } from 'payload'
 import type { Order } from '../../payload-types'
 import { logger as rootLogger, type Logger } from '../logger'
 import { getSzamlazzConfig, postInvoiceXml, type SzamlazzParsedSuccess } from './client'
+import { writeOrderInvoicingState } from './order-state'
 import {
   SzamlazzApiError,
   type IssueInvoiceResult,
@@ -29,6 +30,11 @@ import {
  * - A <vevo><azonosito> mezőt SOHA nem küldjük (a Számlázz.hu-dokumentáció
  *   figyelmeztet: más vevőhöz rögzített azonosító adatfrissítést/biztonsági
  *   problémát okozna).
+ * - HELYESBÍTŐ (módosító) számla: ugyanez a művelet, `corrective` megadásával —
+ *   ilyenkor <helyesbitoszamla>true</helyesbitoszamla>, a
+ *   <helyesbitettSzamlaszam> az eredeti számla száma, a tételek negatív
+ *   korrekciót hordoznak, a horgony pedig a helyesbítő saját kulsoAzon-ja
+ *   (lásd corrective.ts — részleges visszatérítés bizonylata).
  */
 
 export const VAT_RATE_PERCENT = 27
@@ -50,6 +56,24 @@ export interface InvoiceItemInput {
   bruttoEgysegar: number
 }
 
+/**
+ * Helyesbítő (módosító) számla hivatkozása — a részleges visszatérítés
+ * bizonylata (C5). A Számla Agent ugyanazt az xmlszamla-műveletet használja,
+ * két különbséggel: <helyesbitoszamla>true</helyesbitoszamla> és
+ * <helyesbitettSzamlaszam> = az EREDETI számla száma. A tételek a korrekciót
+ * (negatív bruttó értéket) hordozzák.
+ */
+export interface CorrectiveInvoiceRef {
+  /** Az eredeti (helyesbítendő) számla száma — <helyesbitettSzamlaszam>. */
+  originalInvoiceNumber: string
+  /**
+   * A helyesbítő saját idempotencia-horgonya (<szamlaKulsoAzon>). KÖTELEZŐEN
+   * eltér az eredeti számla horgonyától (ami az orderNumber), különben a
+   * Számlázz.hu a meglévő számlát adná vissza új bizonylat helyett.
+   */
+  kulsoAzon: string
+}
+
 export interface BuildInvoiceXmlInput {
   agentKey: string
   orderNumber: string
@@ -58,6 +82,10 @@ export interface BuildInvoiceXmlInput {
   issueDate: string
   buyer: InvoiceBuyerInput
   items: InvoiceItemInput[]
+  /** Helyesbítő számla esetén az eredeti számla hivatkozása + saját horgony. */
+  corrective?: CorrectiveInvoiceRef
+  /** A fejléc-megjegyzés felülírása (alapból a rendelésre utaló szöveg). */
+  megjegyzes?: string
 }
 
 /** XML-escape a dinamikus értékekhez. */
@@ -77,11 +105,24 @@ export interface InvoiceLineAmounts {
   bruttoErtek: number
 }
 
+export interface ComputeLineAmountsOptions {
+  /**
+   * Negatív bruttó egységár engedélyezése — kizárólag helyesbítő (módosító)
+   * számla korrekciós tételéhez. A számítás ilyenkor az abszolút értéken fut,
+   * és a négy összeg előjelet vált; így a korrekciós tétel kerekítése PONTOSAN
+   * tükrözi az eredeti számla tételét (teljes összegű helyesbítés nullázódik).
+   */
+  allowNegative?: boolean
+}
+
 /**
  * Tételösszegek 27% ÁFA-val, bruttóból visszaszámolva. A nettoEgysegar
  * stringként tér vissza (legfeljebb 2 tizedes, tizedesjel: pont).
  */
-export function computeLineAmounts(item: InvoiceItemInput): InvoiceLineAmounts {
+export function computeLineAmounts(
+  item: InvoiceItemInput,
+  options: ComputeLineAmountsOptions = {},
+): InvoiceLineAmounts {
   if (!Number.isInteger(item.mennyiseg) || item.mennyiseg < 1) {
     throw new SzamlazzApiError({
       message: `Érvénytelen mennyiség a számlatételben (${item.mennyiseg}).`,
@@ -89,30 +130,42 @@ export function computeLineAmounts(item: InvoiceItemInput): InvoiceLineAmounts {
       retryable: false,
     })
   }
-  if (!Number.isFinite(item.bruttoEgysegar) || item.bruttoEgysegar < 0) {
+  const negativeAllowed = options.allowNegative === true
+  if (
+    !Number.isFinite(item.bruttoEgysegar) ||
+    (!negativeAllowed && item.bruttoEgysegar < 0)
+  ) {
     throw new SzamlazzApiError({
       message: `Érvénytelen bruttó egységár a számlatételben (${item.bruttoEgysegar}).`,
       kind: 'invalid_data',
       retryable: false,
     })
   }
-  const bruttoErtek = Math.round(item.bruttoEgysegar * item.mennyiseg)
+  const negative = item.bruttoEgysegar < 0
+  const bruttoErtek = Math.round(Math.abs(item.bruttoEgysegar) * item.mennyiseg)
   const nettoErtek = Math.round(bruttoErtek / VAT_DIVISOR)
   const afaErtek = bruttoErtek - nettoErtek
   const nettoEgysegarNumber = nettoErtek / item.mennyiseg
-  const nettoEgysegar =
+  const nettoEgysegarAbs =
     Math.round(nettoEgysegarNumber * 100) % 100 === 0
       ? String(Math.round(nettoEgysegarNumber))
       : (Math.round(nettoEgysegarNumber * 100) / 100).toFixed(2)
-  return { nettoEgysegar, nettoErtek, afaErtek, bruttoErtek }
+  const sign = negative ? -1 : 1
+  return {
+    nettoEgysegar: negative ? `-${nettoEgysegarAbs}` : nettoEgysegarAbs,
+    nettoErtek: sign * nettoErtek,
+    afaErtek: sign * afaErtek,
+    bruttoErtek: sign * bruttoErtek,
+  }
 }
 
 /** A teljes számla-XML (xmlszamla) a hivatalos tag-sorrendben. */
 export function buildInvoiceXml(input: BuildInvoiceXmlInput): string {
   const esc = escapeXml
+  const corrective = input.corrective
   const itemsXml = input.items
     .map((item) => {
-      const amounts = computeLineAmounts(item)
+      const amounts = computeLineAmounts(item, { allowNegative: corrective !== undefined })
       return [
         '    <tetel>',
         `      <megnevezes>${esc(item.megnevezes)}</megnevezes>`,
@@ -130,7 +183,10 @@ export function buildInvoiceXml(input: BuildInvoiceXmlInput): string {
     .join('\n')
 
   const sendEmail = input.buyer.email.trim().length > 0
-  const megjegyzes = `Kineticare online kurzus — rendelés: ${input.orderNumber} (Barion, bankkártya)`
+  const megjegyzes =
+    input.megjegyzes ??
+    `Kineticare online kurzus — rendelés: ${input.orderNumber} (Barion, bankkártya)`
+  const kulsoAzon = corrective ? corrective.kulsoAzon : input.orderNumber
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <xmlszamla xmlns="http://www.szamlazz.hu/xmlszamla" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamla https://www.szamlazz.hu/szamla/docs/xsds/agent/xmlszamla.xsd">
@@ -139,7 +195,7 @@ export function buildInvoiceXml(input: BuildInvoiceXmlInput): string {
     <eszamla>true</eszamla>
     <szamlaLetoltes>false</szamlaLetoltes>
     <valaszVerzio>2</valaszVerzio>
-    <szamlaKulsoAzon>${esc(input.orderNumber)}</szamlaKulsoAzon>
+    <szamlaKulsoAzon>${esc(kulsoAzon)}</szamlaKulsoAzon>
   </beallitasok>
   <fejlec>
     <keltDatum>${input.issueDate}</keltDatum>
@@ -155,8 +211,8 @@ export function buildInvoiceXml(input: BuildInvoiceXmlInput): string {
     <dijbekeroSzamlaszam></dijbekeroSzamlaszam>
     <elolegszamla>false</elolegszamla>
     <vegszamla>false</vegszamla>
-    <helyesbitoszamla>false</helyesbitoszamla>
-    <helyesbitettSzamlaszam></helyesbitettSzamlaszam>
+    <helyesbitoszamla>${corrective ? 'true' : 'false'}</helyesbitoszamla>
+    <helyesbitettSzamlaszam>${corrective ? esc(corrective.originalInvoiceNumber) : ''}</helyesbitettSzamlaszam>
     <dijbekero>false</dijbekero>
     <szamlaszamElotag>${esc(input.invoicePrefix)}</szamlaszamElotag>
   </fejlec>
@@ -263,19 +319,6 @@ export interface IssueInvoiceForOrderDeps {
   issueDate?: string
 }
 
-async function setInvoiceStatus(
-  payload: Payload,
-  orderId: number,
-  data: Record<string, unknown>,
-): Promise<void> {
-  await payload.update({
-    collection: 'orders',
-    id: orderId,
-    data,
-    overrideAccess: true,
-  })
-}
-
 /**
  * Számla kiállítása egy paid rendeléshez — idempotens:
  * - issued/invoiceNumber már megvan → 'already-issued' (no-op);
@@ -318,7 +361,7 @@ export async function issueInvoiceForOrder(
 
   if (!order.orderNumber) {
     orderLog.error('RIASZTÁS: a rendelés rendelésszám nélkül fut — számla nem állítható ki')
-    await setInvoiceStatus(deps.payload, deps.orderId, { invoiceStatus: 'failed' })
+    await writeOrderInvoicingState(deps.payload, deps.orderId, { invoiceStatus: 'failed' })
     return { outcome: 'failed', reason: 'hiányzó rendelésszám' }
   }
 
@@ -327,14 +370,14 @@ export async function issueInvoiceForOrder(
     orderLog.warn(
       'hiányos vevő-számlázási adatok (név/irsz/település/cím) — számla NEM állítható ki, emberi pótlás szükséges',
     )
-    await setInvoiceStatus(deps.payload, deps.orderId, { invoiceStatus: 'failed' })
+    await writeOrderInvoicingState(deps.payload, deps.orderId, { invoiceStatus: 'failed' })
     return { outcome: 'failed', reason: 'hiányos vevő-számlázási adatok' }
   }
 
   const items = itemsFromOrder(order)
   if (!items) {
     orderLog.error('RIASZTÁS: a rendelés-tételekből hiányzik az ár-snapshot — számla nem állítható ki')
-    await setInvoiceStatus(deps.payload, deps.orderId, { invoiceStatus: 'failed' })
+    await writeOrderInvoicingState(deps.payload, deps.orderId, { invoiceStatus: 'failed' })
     return { outcome: 'failed', reason: 'hiányzó tétel ár-snapshot' }
   }
 
@@ -348,12 +391,12 @@ export async function issueInvoiceForOrder(
     items,
   })
 
-  await setInvoiceStatus(deps.payload, deps.orderId, { invoiceStatus: 'pending' })
+  await writeOrderInvoicingState(deps.payload, deps.orderId, { invoiceStatus: 'pending' })
 
   try {
     const postXml = deps.postXml ?? postInvoiceXml
     const result = await postXml(xml, config)
-    await setInvoiceStatus(deps.payload, deps.orderId, {
+    await writeOrderInvoicingState(deps.payload, deps.orderId, {
       invoiceStatus: 'issued',
       invoiceNumber: result.szamlaszam,
       ...(result.vevoifiokUrl ? { invoicePdfUrl: result.vevoifiokUrl } : {}),
@@ -361,7 +404,7 @@ export async function issueInvoiceForOrder(
     orderLog.info('számla kiállítva', { invoiceNumber: result.szamlaszam })
     return { outcome: 'issued', invoiceNumber: result.szamlaszam }
   } catch (error) {
-    await setInvoiceStatus(deps.payload, deps.orderId, { invoiceStatus: 'failed' }).catch(() => undefined)
+    await writeOrderInvoicingState(deps.payload, deps.orderId, { invoiceStatus: 'failed' }).catch(() => undefined)
     if (error instanceof SzamlazzApiError) {
       orderLog.warn('számlakiállítás sikertelen', {
         kind: error.kind,
