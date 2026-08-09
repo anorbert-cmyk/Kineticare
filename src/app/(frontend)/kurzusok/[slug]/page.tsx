@@ -18,7 +18,13 @@ import { PriceTag } from '@/components/ui/PriceTag'
 import { Section } from '@/components/ui/Section'
 import { resolveSingleCourseAccess } from '@/lib/course-access-lookup'
 import { AUDIENCE_LABELS, normalizeAudience } from '@/lib/course-audience'
-import { canonicalCourseRedirect, courseHref, parseCourseRouteParam } from '@/lib/course-url'
+import {
+  canonicalCourseRedirect,
+  courseHref,
+  parseCourseRouteParam,
+  withSearchParams,
+  type CourseSearchParams,
+} from '@/lib/course-url'
 import { courseCover, coursePriceHuf, courseTitle, hasUserPurchased } from '@/lib/courses'
 import { logger } from '@/lib/logger'
 import { absoluteUrl, breadcrumbJsonLd, buildProductMetadata, courseJsonLd } from '@/lib/seo'
@@ -49,6 +55,7 @@ import config from '../../../../payload.config'
 
 interface CoursePageProps {
   params: Promise<{ slug: string }>
+  searchParams?: Promise<CourseSearchParams>
 }
 
 /**
@@ -149,7 +156,7 @@ export async function generateMetadata({ params }: CoursePageProps): Promise<Met
   return buildProductMetadata(product, courseHref(product))
 }
 
-export default async function CoursePage({ params }: CoursePageProps) {
+export default async function CoursePage({ params, searchParams }: CoursePageProps) {
   const { slug } = await params
   const product = await getCourseByRouteParam(slug)
   // Draft (és minden nem published/archived) termék nyilvánosan nem érhető el.
@@ -166,9 +173,11 @@ export default async function CoursePage({ params }: CoursePageProps) {
   // 308 a 301-gyel ellentétben a metódust sem írja át — DB-vezérelt cél mellett
   // ez az egyetlen elérhető tartós átirányítás (a next.config redirects() csak
   // statikus szabályt tud).
+  // A bejövő query string (pl. UTM-paraméterek) változatlanul továbbmegy a
+  // kanonikus címre — a kampány-attribúció nem veszhet el az átirányításon.
   const canonicalPath = canonicalCourseRedirect(slug, product)
   if (canonicalPath !== null) {
-    permanentRedirect(canonicalPath)
+    permanentRedirect(withSearchParams(canonicalPath, (await searchParams) ?? {}))
   }
 
   const user = await getCurrentUser()

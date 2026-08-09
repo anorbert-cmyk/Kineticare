@@ -10,6 +10,7 @@ import {
   isNumberedVariantOf,
   nextFreeCourseSlug,
   parseCourseRouteParam,
+  withSearchParams,
 } from '../lib/course-url'
 
 /**
@@ -183,5 +184,32 @@ describe('301-es átirányítás a kanonikus címre (körmentesség)', () => {
     const slug = buildCourseSlug('2026')
     expect(slug).not.toMatch(/^\d+$/)
     expect(parseCourseRouteParam(slug ?? '')).toEqual({ kind: 'slug', slug })
+  })
+})
+
+describe('withSearchParams — a query string túléli az átirányítást', () => {
+  it('a bejövő UTM-paraméterek változatlanul a kanonikus címre kerülnek', () => {
+    expect(
+      withSearchParams('/kurzusok/kez-torna', {
+        utm_source: 'newsletter',
+        utm_campaign: 'osz',
+      }),
+    ).toBe('/kurzusok/kez-torna?utm_source=newsletter&utm_campaign=osz')
+  })
+
+  it('query nélkül a cél változatlan (nincs felesleges kérdőjel)', () => {
+    expect(withSearchParams('/kurzusok/kez-torna', {})).toBe('/kurzusok/kez-torna')
+  })
+
+  it('ismétlődő kulcs (tömb-érték) minden előfordulása megmarad', () => {
+    expect(withSearchParams('/kurzusok/kez-torna', { tag: ['a', 'b'] })).toBe(
+      '/kurzusok/kez-torna?tag=a&tag=b',
+    )
+  })
+
+  it('a hiányzó (undefined) érték kimarad, a különleges karakterek escape-elődnek', () => {
+    expect(
+      withSearchParams('/kurzusok/kez-torna', { ures: undefined, q: 'kéz & torna' }),
+    ).toBe('/kurzusok/kez-torna?q=k%C3%A9z+%26+torna')
   })
 })

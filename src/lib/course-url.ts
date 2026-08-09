@@ -131,3 +131,29 @@ export function canonicalCourseRedirect(rawParam: string, product: CourseUrlDoc)
   const canonical = courseHref(product)
   return canonical === `${COURSE_BASE_PATH}/${rawParam}` ? null : canonical
 }
+
+/** A Next App Router `searchParams` alakja (page-propként, feloldás után). */
+export type CourseSearchParams = Record<string, string | string[] | undefined>
+
+/**
+ * A bejövő query string VÁLTOZATLAN továbbfűzése az átirányítási célra.
+ *
+ * A régi (id-s vagy nem kanonikus) kurzus-URL-ek 308-as átirányítása enélkül
+ * eldobná a query-t — a kint élő, UTM-paraméteres linkek (hírlevél, hirdetés)
+ * kampány-attribúciója veszne el a kanonikus oldalon (PostHog/GA4). Az
+ * ismétlődő kulcsok (tömb-érték) sorrendhelyesen megmaradnak.
+ */
+export function withSearchParams(path: string, searchParams: CourseSearchParams): string {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (typeof value === 'string') {
+      query.append(key, value)
+    } else if (Array.isArray(value)) {
+      for (const entry of value) {
+        query.append(key, entry)
+      }
+    }
+  }
+  const qs = query.toString()
+  return qs.length > 0 ? `${path}?${qs}` : path
+}
