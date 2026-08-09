@@ -24,6 +24,7 @@
  * asszertálható — lásd a fájl végén az indítás-kaput.
  */
 
+import { randomBytes } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 
 import { getPayload, type Payload } from 'payload'
@@ -37,9 +38,36 @@ import {
   type HomeMediaIds,
 } from '../lib/home-seed'
 import { ensureMediaFiles } from '../lib/media-restore'
+import { validatePasswordStrength } from '../lib/security/password-policy'
 import config from '../payload.config'
 
 const OWNER_EMAIL = process.env.SEED_OWNER_EMAIL ?? 'owner@kineticare.local'
+
+/**
+ * Kriptográfiailag véletlen induló jelszó (`node:crypto`).
+ *
+ * A korábbi `Math.random()` NEM kriptográfiai generátor: kimenete a belső
+ * állapotból kikövetkeztethető, és az entrópiája a jelszó hosszától
+ * függetlenül alacsony — egy seedelt telepítés owner-fiókjának jelszavához ez
+ * kevés. A `randomBytes` az OS entrópiaforrásából dolgozik.
+ *
+ * A base64url ábécé nem garantálja mindhárom karakterosztályt, a
+ * jelszó-politika (kis- és nagybetű + szám, min. 12 karakter) viszont a 2.
+ * felhasználótól kezdve minden create-re lefut — ezért addig húzunk új
+ * véletlent, amíg a jelöltet a politika elfogadja. (Az első felhasználónál a
+ * hook átengedi, de a seed nem feltételezheti, hogy üres az adatbázis.)
+ */
+function generateOwnerPassword(): string {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const candidate = randomBytes(12).toString('base64url')
+    if (validatePasswordStrength({ password: candidate, email: OWNER_EMAIL }).length === 0) {
+      return candidate
+    }
+  }
+  // Elvi ág: 16 próbálkozás után is politikasértő jelszó gyakorlatilag
+  // lehetetlen — csendben gyenge jelszót viszont SOSEM adunk vissza.
+  throw new Error('Nem sikerült a jelszó-politikának megfelelő owner-jelszót generálni.')
+}
 
 // A kezdőlap-alapállapot logikája a src/lib/home-seed.ts-ben él (az onInit is
 // azt futtatja); a tesztek kedvéért a buildHomeLayout innen is elérhető marad.
@@ -98,7 +126,7 @@ async function seed(): Promise<void> {
     ownerId = existingOwner.docs[0].id
     payload.logger.info(`Seed: owner-felhasználó már létezik (${OWNER_EMAIL}), kihagyva.`)
   } else {
-    const password = process.env.SEED_OWNER_PASSWORD ?? Math.random().toString(36).slice(2, 18)
+    const password = process.env.SEED_OWNER_PASSWORD ?? generateOwnerPassword()
 
     const owner = await payload.create({
       collection: 'users',
