@@ -283,6 +283,56 @@ describe('POST /api/barion/callback — bemenet-ellenőrzés', () => {
     const response = await POST(makeRequest('ez nem json {'))
     expect(response.status).toBe(400)
   })
+
+  /**
+   * A végpont szándékosan kimarad a kérés-korlát alól (a fizetési értesítés
+   * elvesztése pénzt jelent), tehát bárki korlátlanul hívhatja. Alak-ellenőrzés
+   * nélkül minden hívás EGY webhook-events sort írna és EGY kimenő Barion
+   * GetState-hívást indítana — ezért a nem GUID-alakú PaymentId már a
+   * dedup-írás ELŐTT elakad.
+   */
+  it('szemét (nem GUID) PaymentId → 400, DB-írás és ütemezés NÉLKÜL', async () => {
+    const { POST, docs, capture } = setup()
+
+    for (const garbage of [
+      'nem-egy-guid',
+      '../../etc/passwd',
+      '11111111-2222-3333-4444-55555555555',
+      '11111111-2222-3333-4444-5555555555555',
+      '11111111222233334444555555555555',
+      '11111111-2222-3333-4444-55555555555g',
+      '<script>alert(1)</script>',
+    ]) {
+      const response = await POST(makeRequest({ PaymentId: garbage }))
+      expect(response.status, garbage).toBe(400)
+    }
+
+    expect(docs).toHaveLength(0)
+    expect(capture.tasks).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('a hossz-plafon a mintaillesztés előtt fog (nagy törzs sem jut a DB-ig)', async () => {
+    const { POST, docs } = setup()
+
+    const response = await POST(makeRequest({ PaymentId: 'a'.repeat(100_000) }))
+
+    expect(response.status).toBe(400)
+    expect(docs).toHaveLength(0)
+  })
+
+  it('érvényes GUID átmegy (kis- és nagybetűs hex is)', async () => {
+    for (const validId of [PAYMENT_ID, '0A1B2C3D-4E5F-6789-ABCD-EF0123456789']) {
+      const { POST, docs } = setup()
+
+      const response = await POST(makeRequest({ PaymentId: validId }))
+
+      expect(response.status, validId).toBe(200)
+      expect(await response.json()).toEqual({ ok: true, status: 'accepted' })
+      expect(docs).toHaveLength(1)
+      expect(docs[0]?.externalId).toBe(validId)
+    }
+  })
 })
 
 describe('(h) aszinkron viselkedés — a 200 NEM vár a GetState-re', () => {
