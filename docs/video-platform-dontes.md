@@ -368,24 +368,31 @@ számoljuk a jegy lejáratát.
 
 ### 4.9 Lépések sorrendje és becsült órák
 
-| # | Lépés | Ki | Óra |
-|---|---|---|---|
-| 0 | Bunny-oldali előkészítés: két library, token-hitelesítés bekapcsolása a védetten, kulcsok/id-k kiadása | üzemeltetés + Katák | 0,5–1 |
-| 1 | `.env.example` bővítése (érték nélküli kulcsokkal) + Railway-változók beállítása | fejlesztő + maintainer | 0,5 |
-| 2 | `src/lib/stream/token.ts` → SHA256-hash + `expires`; egységteszt ismert vektorral | fejlesztő | 1,5–2,5 |
-| 3 | `contract.ts` → `streamIframeSrc` Bunny-alak + `expiresAtEpochSec` bemenet; contract- és round-trip-teszt | fejlesztő | 1–2 |
-| 4 | `issue-stream-token.ts` 5. lépésének bekötése (új ENV-név, `expires` továbbadása) | fejlesztő | 0,5–1 |
-| 5 | `CoursePlayer.tsx`, `PreviewVideo.tsx`, `hero-video.ts` + `HeroVideo.tsx` embed-csere | fejlesztő | 1–2 |
-| 6 | `csp.ts` domain-csere + a `vz-*` csapda tesztje | fejlesztő | 1–1,5 |
-| 7 | `ecommerce.ts` admin-leírások (mezőnév marad → **nincs migráció**) | fejlesztő | 0,5 |
-| 8 | Dokumentáció-átvezetés: `video-stream-keszenlet.md`, `hero-video-feltoltes.md`, `README.md`, `CLAUDE.md` | fejlesztő | 1–2 |
-| 9 | Staging-E2E: próbavásárlás → lejátszás → epizódváltás → token-frissítés → nem-vevő 403 → token nélküli URL nem megy | fejlesztő + 1 Kata | 1,5–3 |
-| 10 | A GUID-ok bevitele az adminba, kurzusonként | Katák | 0,5–2 |
+| # | Lépés | Ki | Óra | Állapot |
+|---|---|---|---|---|
+| 0 | Bunny-oldali előkészítés: két library, token-hitelesítés bekapcsolása a védetten, kulcsok/id-k kiadása | üzemeltetés + Katák | 0,5–1 | ⬜ nyitva |
+| 1 | `.env.example` bővítése (érték nélküli kulcsokkal) + Railway-változók beállítása | fejlesztő + maintainer | 0,5 | ✅ `.env.example` + `src/env.ts` kész; a Railway-változók beállítása maintainer-feladat |
+| 2 | `src/lib/stream/token.ts` → SHA256-hash + `expires`; egységteszt ismert vektorral | fejlesztő | 1,5–2,5 | ✅ kész (ismert vektor DUMMY kulccsal, `sha256sum`-mal előállítva; a fűzési sorrendre negatív vektor is) |
+| 3 | `contract.ts` → `streamIframeSrc` Bunny-alak + `expiresAtEpochSec` bemenet; contract- és round-trip-teszt | fejlesztő | 1–2 | ✅ kész (a round-trip a VALÓDI láncon a hash-egyezéssel is bizonyított) |
+| 4 | `issue-stream-token.ts` 5. lépésének bekötése (új ENV-név, `expires` továbbadása) | fejlesztő | 0,5–1 | ✅ kész (`BUNNY_STREAM_TOKEN_AUTH_KEY`, változatlan 503-as magyar hibaút) |
+| 5 | `CoursePlayer.tsx`, `PreviewVideo.tsx`, `hero-video.ts` + `HeroVideo.tsx` embed-csere | fejlesztő | 1–2 | ✅ kész — a hero MA nem fut Streamről (`HERO_VIDEO_STREAM_ID = null`, a kezdőlapi filmsáv lokális), a modul mégis át lett kötve, hogy ne maradjon a CSP által tiltott CF-URL a kódban |
+| 6 | `csp.ts` domain-csere + a `vz-*` csapda tesztje | fejlesztő | 1–1,5 | ✅ kész |
+| 7 | `ecommerce.ts` admin-leírások (mezőnév marad → **nincs migráció**) | fejlesztő | 0,5 | ✅ kész |
+| 8 | Dokumentáció-átvezetés: `video-stream-keszenlet.md`, `hero-video-feltoltes.md`, `README.md`, `CLAUDE.md` | fejlesztő | 1–2 | ✅ kész (+ `e2e-staging-runbook.md`, `deploy-railway.md`, `feladatlista.md`) |
+| 9 | Staging-E2E: próbavásárlás → lejátszás → epizódváltás → token-frissítés → nem-vevő 403 → token nélküli URL nem megy | fejlesztő + 1 Kata | 1,5–3 | ⬜ nyitva (a 0. lépés blokkolja) |
+| 10 | A GUID-ok bevitele az adminba, kurzusonként | Katák | 0,5–2 | ⬜ nyitva |
 
 **Összesen: fejlesztő 8–14 óra, emberi (Katák / üzemeltetés) 1,5–4 óra.**
 
 A 2–7. lépés egyetlen, fókuszált PR-ban is elfér; a 0. lépés blokkolja a
 9-est, de a 2–8. fejleszthető előtte, dummy env-értékekkel.
+
+> **A 2–8. lépés elkészült, kulcsok nélkül.** A kód úgy épült, hogy a hiányzó
+> env-értékek mellett minden gracefully degradálódik (a token-végpont 503 +
+> magyar üzenet, az embed-URL `null` → magyar „nem érhető el", a CSP a
+> szabályos `*.b-cdn.net` jokerre esik vissza), a kulcsok megérkezésekor pedig
+> **kódváltozás nélkül, csak Railway-env-beállítással + újrabuilddel** élesedik.
+> Ami hátra van: a 0., 9. és 10. lépés.
 
 ---
 
