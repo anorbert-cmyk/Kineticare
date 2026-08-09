@@ -44,6 +44,26 @@ export const optionalBunnyStreamEnvVars = [
 ] as const
 
 /**
+ * Analitika (PostHog + Google Analytics 4) — mind OPCIONÁLIS, szándékosan NEM
+ * induláskori kötelező kulcs: hiányukban a mérés teljes egészében no-op, az
+ * app és a felület változatlanul működik.
+ *
+ * Ezek `NEXT_PUBLIC_` kulcsok, tehát a BUILD pillanatában égnek bele az
+ * oldalba — beállításuk után ÚJRA KELL BUILDELNI (a CSP-fejléc is build-időben
+ * dől el, lásd src/lib/security/csp.ts).
+ *
+ * - `NEXT_PUBLIC_POSTHOG_KEY` — a PostHog nyilvános projekt-kulcsa (docs/posthog.md).
+ * - `NEXT_PUBLIC_POSTHOG_HOST` — felülírható PostHog-host (alap: EU-cloud).
+ * - `NEXT_PUBLIC_GA_MEASUREMENT_ID` — GA4 mérési azonosító (`G-…`, docs/ga4.md).
+ *   Egyik sem titok: mindhárom nyilvános, kliensoldali azonosító.
+ */
+export const optionalAnalyticsEnvVars = [
+  'NEXT_PUBLIC_POSTHOG_KEY',
+  'NEXT_PUBLIC_POSTHOG_HOST',
+  'NEXT_PUBLIC_GA_MEASUREMENT_ID',
+] as const
+
+/**
  * A Barion POSKey környezetfüggő: BARION_ENVIRONMENT=prod esetén az éles
  * kulcs (BARION_POSKEY_PROD), egyébként (alapértelmezett test) a tesztkulcs
  * (BARION_POSKEY_TEST) kötelező — így stagingen nem kell éles kulcs, élesben

@@ -12,8 +12,24 @@
  * „a SUCCESS deploy nem jelenti, hogy az új kód fut").
  */
 
+import { GA_TAG_MANAGER_ORIGIN, normalizeGaMeasurementId } from '../analytics/ga4'
+
 /** A Bunny Stream lejátszó (iframe-embed) hostja — fix, nem env-függő. */
 export const BUNNY_STREAM_IFRAME_SOURCE = 'https://iframe.mediadelivery.net'
+
+/**
+ * A GA4 (gtag.js) mérési végpontjai.
+ *
+ * A joker itt KÖTELEZŐ, mert a GA4 régió-specifikus gyűjtőhostokra küld
+ * (`region1.google-analytics.com`, `analytics.google.com` aldomainek) —
+ * pontos hostot nem lehet előre felsorolni. A joker szabályos: a legbaloldalibb,
+ * TELJES címke helyén áll — vö. a `BUNNY_PULL_ZONE_WILDCARD_SOURCE` alatti
+ * magyarázat a `vz-*` alakú, ÉRVÉNYTELEN jokerről.
+ */
+export const GA_COLLECT_SOURCES = [
+  'https://*.google-analytics.com',
+  'https://*.analytics.google.com',
+] as const
 
 /**
  * A Bunny pull-zone hostjának szabályos, egy címkés jokere.
@@ -60,9 +76,25 @@ export function bunnyPullZoneSource(rawHost: string | undefined): string {
  * A teljes Content-Security-Policy fejléc-érték összeállítása.
  *
  * @param bunnyPullZoneHost a Bunny pull-zone hosztneve (env), ha ismert.
+ * @param googleAnalyticsMeasurementId a GA4 mérési azonosító (env), ha be van
+ *   állítva. A Google hostjai KIZÁRÓLAG ekkor kerülnek a fejlécbe: GA nélkül
+ *   (és formailag hibás azonosító esetén) a politika marad a lehető
+ *   legszűkebb. Ugyanaz a szigorítás, mint a pull-zone hosztnál.
  */
-export function buildContentSecurityPolicy(bunnyPullZoneHost?: string): string {
+export function buildContentSecurityPolicy(
+  bunnyPullZoneHost?: string,
+  googleAnalyticsMeasurementId?: string,
+): string {
   const pullZone = bunnyPullZoneSource(bunnyPullZoneHost)
+
+  // A GA4 csak érvényes mérési azonosítóval tölt be (src/lib/analytics/ga4.ts),
+  // ezért a CSP-t is pontosan ugyanaz az ellenőrzés nyitja.
+  const gaEnabled = normalizeGaMeasurementId(googleAnalyticsMeasurementId).length > 0
+  const gaScriptSource = gaEnabled ? ` ${GA_TAG_MANAGER_ORIGIN}` : ''
+  const gaImgSources = gaEnabled ? ` ${GA_COLLECT_SOURCES[0]} ${GA_TAG_MANAGER_ORIGIN}` : ''
+  const gaConnectSources = gaEnabled
+    ? ` ${GA_COLLECT_SOURCES.join(' ')} ${GA_TAG_MANAGER_ORIGIN}`
+    : ''
 
   return [
     // Alapértelmezés: minden erőforrás csak saját originről. A külön nem
@@ -82,8 +114,10 @@ export function buildContentSecurityPolicy(bunnyPullZoneHost?: string): string {
     // IFRAME-ként van beágyazva, az iframe-en belüli scriptekre a beágyazott
     // dokumentum saját CSP-je vonatkozik. Innen tehát fölösleges (és
     // félrevezető) engedély lenne. A Turnstile viszont valódi <script src> a
-    // challenges.cloudflare.com-ról (next/script), az marad.
-    "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+    // challenges.cloudflare.com-ról (next/script), az marad. A gtag.js
+    // (www.googletagmanager.com) valódi <script src>, ezért ide kell — de
+    // CSAK beállított GA4-azonosító mellett.
+    `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${gaScriptSource}`,
 
     // Beágyazott keretek:
     //  - iframe.mediadelivery.net → a Bunny Stream lejátszó: publikus
@@ -97,8 +131,10 @@ export function buildContentSecurityPolicy(bunnyPullZoneHost?: string): string {
     `frame-src 'self' ${BUNNY_STREAM_IFRAME_SOURCE} https://www.youtube-nocookie.com https://player.vimeo.com https://challenges.cloudflare.com`,
 
     // data: a beágyazott SVG-/base64-ikonokhoz. A videó-poszterképek a Bunny
-    // pull-zone hosztjáról jönnek (vz-….b-cdn.net).
-    `img-src 'self' data: ${pullZone}`,
+    // pull-zone hosztjáról jönnek (vz-….b-cdn.net). A GA4 tartalék-útja
+    // képpont-kérés (a sendBeacon/fetch helyett), ezért a gyűjtőhostok a
+    // Google dokumentációja szerint az img-src-be is kellenek.
+    `img-src 'self' data: ${pullZone}${gaImgSources}`,
 
     // blob: KÖTELEZŐ — a kezdőlap filmsávja (ScrollScrub/FilmHero) a LOKÁLIS
     // klipet (public/media/film) fetch-csel tölti le, majd
@@ -114,7 +150,10 @@ export function buildContentSecurityPolicy(bunnyPullZoneHost?: string): string {
     // A Barion NEM kell ide: a fizetőoldalra teljes oldalas átirányítás visz
     // (window.location a CheckoutForm-ban), amit a CSP nem korlátoz; a Barion
     // API-t pedig kizárólag a szerver hívja.
-    "connect-src 'self'",
+    // A GA4 viszont NEM megy elsőfél-proxyn: a gtag.js közvetlenül a Google
+    // (régió-specifikus) gyűjtőhostjaira küld — ezek csak beállított
+    // GA4-azonosító mellett nyílnak meg.
+    `connect-src 'self'${gaConnectSources}`,
 
     // 'unsafe-inline' KÉNYSZER: a React inline `style={{…}}` attribútumai
     // (HeroVideo, ScrollScrub) és a Payload admin injektált <style> blokkjai

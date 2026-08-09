@@ -26,9 +26,11 @@ Railway stagingen ugyanígy (Variables). Üres kulcs = az analitika kikapcsolt
   Next (next.config.ts rewrites) továbbítja a PostHog EU-cloud felé —
   ad-blocker-ellenállóbb, first-party süti-működés.
 - **CONSENT-FIRST:** a PostHog csak a látogató hozzájárulása után indul
-  (`kc_analytics_consent=granted` localStorage). A jövőbeli consent-banner ezt
-  a kulcsot írja és `kc:analytics-consent` eseményt szór — a provider erre
-  bekapcsol, oldalfrissítés nélkül. Addig is: semmi nem mérődik.
+  (`kc_analytics_consent=granted` localStorage). A consent-banner ezt a kulcsot
+  írja és `kc:analytics-consent` eseményt szór — a provider erre bekapcsol,
+  oldalfrissítés nélkül. Addig is: semmi nem mérődik. Ugyanerre az
+  állapotgépre (`src/lib/analytics/consent.ts`) van kötve a Google Analytics 4
+  is — lásd `docs/ga4.md`.
 - **person_profiles: identified_only** — anonim forgalomból nem készül
   person-profil (költség- és adatminimalizálás).
 

@@ -48,6 +48,7 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: buildContentSecurityPolicy(
               process.env.NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST,
+              process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
             ),
           },
         ],
