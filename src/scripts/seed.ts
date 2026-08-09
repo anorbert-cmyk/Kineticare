@@ -26,7 +26,7 @@
 
 import { pathToFileURL } from 'node:url'
 
-import { getPayload } from 'payload'
+import { getPayload, type Payload } from 'payload'
 
 import {
   buildHomeLayout,
@@ -36,6 +36,7 @@ import {
   minimalRichText,
   type HomeMediaIds,
 } from '../lib/home-seed'
+import { ensureMediaFiles } from '../lib/media-restore'
 import config from '../payload.config'
 
 const OWNER_EMAIL = process.env.SEED_OWNER_EMAIL ?? 'owner@kineticare.local'
@@ -43,6 +44,27 @@ const OWNER_EMAIL = process.env.SEED_OWNER_EMAIL ?? 'owner@kineticare.local'
 // A kezdőlap-alapállapot logikája a src/lib/home-seed.ts-ben él (az onInit is
 // azt futtatja); a tesztek kedvéért a buildHomeLayout innen is elérhető marad.
 export { buildHomeLayout, type HomeMediaIds }
+
+/**
+ * A deploykor elveszett képfájlok visszatöltése (src/lib/media-restore.ts).
+ *
+ * A kép-helyreállításnak a layout-betöltés ELŐTT kell futnia: az
+ * `ensureHomeImages` fájlnév-deduppal dolgozik, tehát a meglévő DB-rekordokat
+ * látva kihagyná a hiányzó fájlok pótlását. Best-effort — az onInit
+ * `ensureHomeBaseline` mintájára —, mert a seed többi lépését nem akaszthatja
+ * meg egy fájlrendszer-hiba.
+ */
+async function restoreMediaFilesBestEffort(payload: Payload): Promise<void> {
+  try {
+    await ensureMediaFiles(payload)
+  } catch (error) {
+    payload.logger.warn(
+      `Seed: a képfájlok helyreállítása sikertelen (best-effort): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    )
+  }
+}
 
 async function seed(): Promise<void> {
   const payload = await getPayload({ config })
@@ -54,6 +76,7 @@ async function seed(): Promise<void> {
   // létre — azok a fejlesztői/üres-adatbázisos teljes seed részei maradnak.
   // Mindkét lépés idempotens, és meglévő szekciósort sosem ír felül.
   if (process.env.SEED_SCOPE === 'kezdolap') {
+    await restoreMediaFilesBestEffort(payload)
     const homeMediaIds = await ensureHomeImages(payload)
     await ensureHomeLayout(payload, homeMediaIds)
     await ensureHomeTestimonials(payload)
@@ -319,6 +342,7 @@ async function seed(): Promise<void> {
   }
 
   // --- Kezdőlapi képek + alap-szekciósor -------------------------------------
+  await restoreMediaFilesBestEffort(payload)
   const homeMediaIds = await ensureHomeImages(payload)
   await ensureHomeLayout(payload, homeMediaIds)
   await ensureHomeTestimonials(payload)

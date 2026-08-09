@@ -1,5 +1,10 @@
 import type { CollectionConfig } from 'payload'
 
+import { resolveMediaStaticDir } from '../lib/media-dir'
+
+/** A feltöltési célkönyvtár a `PAYLOAD_MEDIA_DIR`-ből (env nélkül `undefined`). */
+const mediaStaticDir = resolveMediaStaticDir()
+
 /**
  * Médiafeltöltés (T-019):
  *  - imageSizes: 320/640/1280/1920 px szélességű webméretek — a height szabad,
@@ -17,9 +22,23 @@ import type { CollectionConfig } from 'payload'
  *    beállítása szükséges hozzá — TODO a payload.config.ts-ben (jelen ticket
  *    file-scope-ján kívül), addig itt dokumentált elvárás.
  *  - A focal point/crop szerkesztői felület és a kötelező alt megmarad.
- *  - TODO (emberi döntés kell): távoli tárhely (R2/S3-adapter) — a payload.config
- *    plugins-listájába kerül majd a storage-adapter (pl. s3Storage), amely az
- *    `upload` objektumhoz kapcsolódik (disableLocalStorage: true mellett).
+ *
+ * TÁROLÁS — a mai állapot (a korábbi „nyitott döntés" lezárva):
+ *  - A fájlok a Payload local-storage adapterén mennek, a célkönyvtár a
+ *    `PAYLOAD_MEDIA_DIR` környezeti változóból állítható (src/lib/media-dir.ts).
+ *    Élesben ez a Railway-hez CSATOLT VOLUME mountpontja (`/app/media`), ami
+ *    túléli a deployt. A változó nélkül minden marad a régiben: a Payload
+ *    alapértelmezése (a collection slugja, azaz `<cwd>/media`).
+ *  - Enélkül a konténer efemer lemezére írnánk, amit minden deploy üresen ad
+ *    vissza: a DB-rekord megmarad, a fájl eltűnik, a `/api/media/file/...`
+ *    HTTP 500-at ad — élesben pontosan ez történt.
+ *  - Öv és nadrágtartó: az induláskori önjavítás (src/lib/media-restore.ts
+ *    `ensureMediaFiles`) fájl-szinten ellenőriz, és a repóban meglévő
+ *    forrásokból visszatölti a hiányzó képeket, a rekord id-jének megőrzésével.
+ *  - KÉSŐBB (Cloudflare R2): a váltás egy storage-adapterrel történik — a
+ *    `@payloadcms/storage-s3` (R2 S3-kompatibilis végponttal) a payload.config
+ *    plugins-listájába kerül, `disableLocalStorage: true` mellett; ekkor a
+ *    `staticDir` és az önjavítás okafogyottá válik.
  */
 export const Media: CollectionConfig = {
   slug: 'media',
@@ -49,6 +68,10 @@ export const Media: CollectionConfig = {
     },
   ],
   upload: {
+    // A kulcs CSAK akkor kerül be, ha van env-érték: enélkül a Payload
+    // szanitálása állítja be az alapértelmezést (a collection slugja), tehát a
+    // mai fejlesztői viselkedés bitre azonos marad.
+    ...(mediaStaticDir === undefined ? {} : { staticDir: mediaStaticDir }),
     formatOptions: {
       format: 'webp',
       options: { quality: 80 },

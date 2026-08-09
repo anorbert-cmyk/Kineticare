@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 
 import { AuditLogs } from './collections/AuditLogs'
 import { ensureHomeImages, ensureHomeLayout, ensureHomeTestimonials } from './lib/home-seed'
+import { ensureMediaFiles } from './lib/media-restore'
 import { Categories } from './collections/Categories'
 import { Media } from './collections/Media'
 import { Menus } from './collections/Menus'
@@ -193,14 +194,21 @@ function registerPoolErrorHandler(payload: Payload): void {
 }
 
 /**
- * Kezdőlap-alapállapot indulásnál: a landing tartalmi képei + a `kezdolap`
- * alap-szekciósora (src/lib/home-seed.ts). Az ensureContactForm mintája:
- * telepítési előfeltétel, ezért minden bootnál lefut — idempotens, meglévő
- * képet és kitöltött szekciósort SOHA nem ír felül, így beállt rendszeren
- * néhány olcsó olvasás az ára. Best-effort: hibája nem állíthatja meg az appot.
+ * Kezdőlap-alapállapot indulásnál: a hiányzó képFÁJLOK visszatöltése, majd a
+ * landing tartalmi képei + a `kezdolap` alap-szekciósora (src/lib/home-seed.ts).
+ * Az ensureContactForm mintája: telepítési előfeltétel, ezért minden bootnál
+ * lefut — idempotens, meglévő képet és kitöltött szekciósort SOHA nem ír felül,
+ * így beállt rendszeren néhány olcsó olvasás az ára. Best-effort: hibája nem
+ * állíthatja meg az appot.
+ *
+ * A SORREND KÖTÖTT: az `ensureMediaFiles` FÁJL-szinten ellenőriz és javít, az
+ * `ensureHomeImages` viszont csak a DB-rekord létét nézi (fájlnév-dedup) — ha
+ * utóbbi futna előbb, a meglévő rekordok miatt „minden rendben"-t jelentene,
+ * miközben a fájlok hiányoznak. Lásd src/lib/media-restore.ts.
  */
 async function ensureHomeBaseline(payload: Payload): Promise<void> {
   try {
+    await ensureMediaFiles(payload)
     const mediaIds = await ensureHomeImages(payload)
     await ensureHomeLayout(payload, mediaIds)
     await ensureHomeTestimonials(payload)

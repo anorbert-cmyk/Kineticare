@@ -3,6 +3,7 @@ import type { Payload } from 'payload'
 
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
+import { STREAM_TOKEN_PRODUCT_PARAM, STREAM_TOKEN_VIDEO_PARAM } from './contract'
 import { issueStreamToken, StreamTokenError } from './issue-stream-token'
 
 /**
@@ -39,13 +40,15 @@ export function createStreamTokenHandler(
         )
       }
 
+      // A query-paraméterek nevei a közös szerződés-modulból jönnek — a kliens
+      // ugyanezekkel építi a kérést, így nem térhetnek el egymástól.
       const { searchParams } = new URL(request.url)
-      const videoIdParam = searchParams.get('videoId')
+      const videoIdParam = searchParams.get(STREAM_TOKEN_VIDEO_PARAM)
 
       const result = await issueStreamToken({
         payload,
         user,
-        productId: searchParams.get('productId'),
+        productId: searchParams.get(STREAM_TOKEN_PRODUCT_PARAM),
         videoId: videoIdParam === null ? undefined : videoIdParam,
         logger: log,
       })

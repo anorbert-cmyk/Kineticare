@@ -276,6 +276,37 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
         },
       ],
     },
+    // SEO-mezők — a Pages/Posts collectionök mintájára, azonos mezőnevekkel,
+    // label-ekkel és pozícióval (a borítókép UTÁN), hogy a szerkesztő minden
+    // tartalomtípusnál ugyanazt lássa ugyanott. A kurzusoldal fallback-lánca
+    // ezekre épül (src/lib/seo.ts: seoTitle → név, seoDescription → rövid
+    // leírás, ogImage → borítókép).
+    {
+      name: 'seoTitle',
+      type: 'text',
+      label: 'SEO-cím',
+      admin: {
+        description: 'Ha üresen hagyod, a Google a kurzus nevét használja.',
+      },
+    },
+    {
+      name: 'seoDescription',
+      type: 'text',
+      label: 'SEO-leírás',
+      admin: {
+        description: 'A Google találati listáján megjelenő rövid leírás (kb. 150 karakter).',
+      },
+    },
+    {
+      name: 'ogImage',
+      type: 'upload',
+      relationTo: 'media',
+      label: 'Megosztási kép',
+      admin: {
+        description:
+          'Ez a kép jelenik meg, ha valaki Facebookon vagy Messengeren megosztja a kurzust.',
+      },
+    },
     {
       name: 'category',
       type: 'relationship',

@@ -68,10 +68,10 @@
  */
 
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import { getPayload, type Payload } from 'payload'
 
+import { LEGACY_IMAGES, LEGACY_IMAGES_DIR, type LegacyImage } from '../lib/legacy-images'
 import config from '../payload.config'
 import type { Page, Product } from '../payload-types'
 
@@ -232,62 +232,11 @@ const richText = (children: BlockNode[]): RichTextContent => ({
 
 // ---------------------------------------------------------------------------
 // Média — az archívumból kiválasztott, tartalomhoz kötődő képek.
-// A fájlok a script melletti legacy-content/kepek/ mappában élnek.
+// A fájlok a script melletti legacy-content/kepek/ mappában élnek; a lista
+// maga a src/lib/legacy-images.ts-ben, mert az induláskori önjavítás
+// (src/lib/media-restore.ts) ugyanezekből a forrásokból tölti vissza a
+// deploykor elveszett képfájlokat.
 // ---------------------------------------------------------------------------
-
-interface LegacyImage {
-  file: string
-  alt: string
-}
-
-const LEGACY_IMAGES: readonly LegacyImage[] = [
-  { file: '6790f4bfde577_kckeklogog.png', alt: 'Kineticare logó' },
-  {
-    file: '67b4bc17e0c78_katak-paravan.jpg',
-    alt: 'Kiss Kata és Kocsis Kata gyógytornászok, a Kineticare alapítói',
-  },
-  {
-    file: '67c07b094d012_SYL_9113.jpeg',
-    alt: 'Gyógytornász kezelés a Kineticare rendelőben',
-  },
-  {
-    file: '678fa5f84cd52_Katakeleganslaptoppal.jpeg',
-    alt: 'A Kineticare gyógytornásza laptop előtt – online program',
-  },
-  { file: '67b3c6e9e315f_KocsisKatakozeli.png', alt: 'Kocsis Kata gyógytornász portré' },
-  { file: '67c07def59ac2_KissKataelegans.png', alt: 'Kiss Kata gyógytornász portré' },
-  { file: '682a121babe80_IMG_7573.jpeg', alt: 'Kiss Kata és Kocsis Kata munka közben' },
-  { file: '6883e93d26513_GaramiGabor.png', alt: 'Garami Gábor zenész, műsorvezető – vélemény' },
-  { file: '682c8a154f5ba_IMG_0039.jpeg', alt: 'Páciens-vélemény portréfotó' },
-  {
-    file: '688b93e6ab76f_Programpackshot.png',
-    alt: 'Otthoni KézRehab Program csomagkép',
-  },
-  { file: '678fcfac079a8_Gyakorlat.JPG', alt: 'Kézrehabilitációs gyakorlat bemutatása' },
-  {
-    file: '680a69d078306_Katakfeherbenhattal.png',
-    alt: 'Kiss Kata és Kocsis Kata, a Kineticare alapítói',
-  },
-  {
-    file: '688b873ad2a80_belepotermekpackshot1.png',
-    alt: 'SOS Kézrelax villámkurzus csomagkép',
-  },
-  {
-    file: '6884161138c15_puska.png',
-    alt: 'Letölthető gyakorlat-összefoglaló (puska) a villámkurzushoz',
-  },
-  { file: '67b3bd06f3936_Rendelo.png', alt: 'Kineticare rendelő – személyes kezelések' },
-  {
-    file: '67b2668feae66_Kezeleskek.png',
-    alt: 'Rendelői kezelések – gyógytorna és manuálterápia',
-  },
-]
-
-const imageDir = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  'legacy-content',
-  'kepek',
-)
 
 /**
  * Média idempotens biztosítása: fájlnév-alapú dedup (webp-konverzió miatt
@@ -314,7 +263,7 @@ const ensureMedia = async (payload: Payload, image: LegacyImage): Promise<number
   const created = await payload.create({
     collection: 'media',
     data: { alt: image.alt },
-    filePath: path.join(imageDir, image.file),
+    filePath: path.join(LEGACY_IMAGES_DIR, image.file),
     overrideAccess: true,
   })
   naploLetrehozas(payload, `média: ${image.file}`)

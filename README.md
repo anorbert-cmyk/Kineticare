@@ -108,3 +108,22 @@ build + gitleaks + npm audit) a `.github/workflows/` alatt élnek.
 > a fájlt. Ha itt módosítasz valamit, ellenőrizd a service-beállításban is
 > (`build.builder`, `buildCommand`, `healthcheckPath`), különben a fájl csak
 > dokumentáció marad.
+
+### Feltöltött képek (Volume — kötelező élesben)
+
+A Payload a képeket a konténer lemezére írja, amit a Railway **minden deploynál
+üresen ad vissza** — kötet nélkül az összes feltöltött kép elveszik (a DB-rekord
+marad, a fájl eltűnik, a `/api/media/file/...` HTTP 500-at ad). Ezért élesben
+kötelező egy **Railway Volume**, `/app/media` mountponttal, és a
+`PAYLOAD_MEDIA_DIR=/app/media` környezeti változó, ami a Payload feltöltési
+könyvtárát oda irányítja. A változó nélkül a mai (fejlesztői) alapértelmezés
+marad: `<munkakönyvtár>/media`.
+
+Öv és nadrágtartó: induláskor (onInit és `SEED_SCOPE=kezdolap npm run seed`) az
+`ensureMediaFiles` (`src/lib/media-restore.ts`) **fájl-szinten** ellenőrzi minden
+média-rekord fájljait, és a hiányzókat a repóban élő forrásokból (landing-tükör +
+legacy archívum) visszatölti — a rekord **id-jének megőrzésével**, hogy a rá
+mutató relációk (kezdőlap-szekciók, oldalak, termékek) ne szakadjanak el. Amihez
+nincs repó-forrás (a lányok saját feltöltése), azt nem lehet pótolni: a modul
+ezeket megszámolja és figyelmeztetésként naplózza. Későbbi lépés a Cloudflare R2
+storage-adapterre váltás (`src/collections/Media.ts` fejkommentje).

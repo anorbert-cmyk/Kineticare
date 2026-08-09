@@ -25,7 +25,7 @@ import {
   parseCourseIdParam,
 } from '@/lib/courses'
 import { logger } from '@/lib/logger'
-import { absoluteUrl, breadcrumbJsonLd, courseJsonLd } from '@/lib/seo'
+import { absoluteUrl, breadcrumbJsonLd, buildProductMetadata, courseJsonLd } from '@/lib/seo'
 import type { Product, User } from '@/payload-types'
 
 import config from '../../../../payload.config'
@@ -126,21 +126,10 @@ export async function generateMetadata({ params }: CoursePageProps): Promise<Met
   if (!product || (product.status !== 'published' && product.status !== 'archived')) {
     return { title: 'A kurzus nem található' }
   }
-  const title = courseTitle(product)
-  const description =
-    typeof product.shortDescription === 'string' && product.shortDescription.trim().length > 0
-      ? product.shortDescription
-      : `${title} — online kézrehabilitációs kurzus a Kineticare kínálatából.`
-  const cover = courseCover(product)
-  return {
-    title,
-    description,
-    openGraph: {
-      title,
-      description,
-      ...(cover ? { images: [{ url: cover.url, alt: cover.alt }] } : {}),
-    },
-  }
+  // Ugyanaz a fallback-lánc és canonical, mint a poszt- és az oldal-útvonalon
+  // (src/lib/seo.ts): seoTitle → kurzusnév, seoDescription → rövid leírás,
+  // ogImage → borítókép. Párhuzamos meta-logika itt nincs.
+  return buildProductMetadata(product, `/kurzusok/${product.id}`)
 }
 
 export default async function CoursePage({ params }: CoursePageProps) {
@@ -172,8 +161,11 @@ export default async function CoursePage({ params }: CoursePageProps) {
     <>
       {/* PostHog funnel-lépés: a kurzus-oldal megnyitása (no-op consent nélkül). */}
       <TrackEvent event="course_viewed" properties={{ courseId: product.id, courseSku: product.sku ?? undefined }} />
-      {/* Strukturált adat: a Course-séma ára a priceInHUF-ból jön, tehát
-          árváltozásnál automatikusan követi — nem tud elavulni. */}
+      {/* Strukturált adat: Course + Product (egy entitás, kettős @type) és a
+          hozzá tartozó Offer. Minden mezője a LÁTHATÓ tartalomból jön — a név a
+          H1, a leírás a hero lead, a kép a buybox borítóképe, az ár pedig a
+          kiírt PriceTag forrása (priceInHUF), tehát árváltozásnál automatikusan
+          követi és nem tud elavulni. */}
       <JsonLd
         data={courseJsonLd({
           product,
