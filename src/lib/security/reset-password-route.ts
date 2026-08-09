@@ -22,7 +22,11 @@
  * mintánál, ezért `/api/users/reset-password`-re MINDEN kérés ide érkezik —
  * beleértve az admin felület saját reset-űrlapját és a végpont közvetlen,
  * kliens megkerülésével indított hívását is. Nincs olyan út, amelyik a
- * politika mellett elmenne.
+ * politika mellett elmenne: a GraphQL API (amelynek beépített
+ * `resetPasswordUser` mutációja szintén a `resetPasswordOperation`-t hívná,
+ * a politika ÉS a REST-oldali rate-limit megkerülésével) a configban
+ * teljesen le van tiltva — `graphQL.disable`, src/payload.config.ts. Ha a
+ * GraphQL valaha visszakapcsolásra kerül, ELŐBB ide is őrt kell építeni.
  *
  * A tényleges jelszócserét NEM írjuk újra: sikeres politika-ellenőrzés után a
  * kérést változatlanul továbbadjuk a Payload beépített végpontjának

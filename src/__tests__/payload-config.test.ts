@@ -44,6 +44,19 @@ describe('payload.config', () => {
   })
 
   /**
+   * C1/A2 biztonsági zárás: a GraphQL API-nak KIKAPCSOLVA kell maradnia. A
+   * beépített resetPasswordUser/forgotPasswordUser mutációk a
+   * resetPasswordOperation-ön át megkerülnék a szerveroldali jelszó-politikát
+   * (src/lib/security/reset-password-route.ts) és az IP-alapú kérés-korlátot.
+   * Visszakapcsolás előtt ezekre őrt kell építeni.
+   */
+  it('a GraphQL API le van tiltva (jelszó-politika + rate-limit megkerülhetetlensége)', async () => {
+    const config = await configPromise
+
+    expect(config.graphQL?.disable).toBe(true)
+  })
+
+  /**
    * Magyar admin felület: a staff („a lányok") nem szakember, ezért az admin
    * alapnyelve magyar. A fallbackLanguage a döntő beállítás — a nem szerkesztett
    * kulcsok is ezen a nyelven jelennek meg —, az `en` pedig választható marad.

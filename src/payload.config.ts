@@ -307,6 +307,19 @@ export default buildConfig({
   email: kineticareEmailAdapter,
   // T-014: a webhook-retry task és az ENABLE_JOB_WORKERS env mögötti autoRun.
   jobs: jobsConfig,
+  // A GraphQL API teljesen kikapcsolva (C1/A2 biztonsági zárás). A frontend
+  // és az admin kizárólag a REST API-t és a local API-t használja — a /graphql
+  // végpont viszont hitelesítés nélkül kiszolgálta volna a Payload beépített
+  // resetPasswordUser/forgotPasswordUser mutációit, amelyek a
+  // resetPasswordOperation-ön át MEGKERÜLIK a Users beforeChange
+  // jelszó-politikát (lásd src/lib/security/reset-password-route.ts) és az
+  // IP-alapú kérés-korlátot is (a withPayloadRestRateLimit csak a REST
+  // catch-allon fut). Használatlan felület + megkerülő út = letiltás; a
+  // /graphql route-fájl is törölve. Ha valaha GraphQL kell, előbb a
+  // politika- és rate-limit-őrt kell rá felhúzni.
+  graphQL: {
+    disable: true,
+  },
   // A titok kötelező — az induláskori ENV-assert (src/env.ts + src/instrumentation.ts)
   // gondoskodik róla, hogy hiányában az app ne induljon el.
   secret: process.env.PAYLOAD_SECRET || '',
