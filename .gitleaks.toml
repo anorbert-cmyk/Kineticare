@@ -1,0 +1,40 @@
+# ============================================================================
+# Kineticare — gitleaks-konfiguráció
+# ----------------------------------------------------------------------------
+# A CLAUDE.md 1. tilos zónájának automatikus kapuja a beépített (default)
+# szabálykészlettel fut — ezt a fájl NEM gyengíti: az `useDefault = true`
+# minden gyári szabályt megtart.
+#
+# MIÉRT KELL MÉGIS? A `generic-api-key` szabály heurisztikus: minden
+# `password: '<hosszabb string>'` alakú literált gyanúsnak lát, akkor is, ha az
+# egy unit-teszt kitalált bemenete. A jelszó-politika (src/lib/security/
+# password-policy.ts) tesztjei értelemszerűen tartalmaznak ilyet: azt kell
+# igazolniuk, hogy a politika elfogadja az erős jelszót (≥12 karakter, kis- és
+# nagybetű, szám). Ezek memóriában futó tesztek bemenetei — soha nem voltak élő
+# rendszer hitelesítő adatai.
+#
+# A MEGENGEDÉS SZŰK: nem fájlokat vagy mappákat engedünk el (az vakfolt lenne,
+# amiben egy valódi titok is elbújhatna), hanem PONTOSAN a három ismert,
+# kitalált mintát. Bármi más — beleértve az ugyanezekben a fájlokban megjelenő
+# új értéket — ugyanúgy fennakad a kapun.
+#
+# ÚJ BEJEGYZÉST csak akkor vegyél fel ide, ha a találatot emberi/ügynöki
+# vizsgálat tévesnek minősítette, és az indoklás is idekerül. Valódi titkot
+# elnémítani TILOS — azt rotálni kell.
+# ============================================================================
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Jelszó-politika teszt-fixtúrák — kitalált (DUMMY) jelszavak, nem valódi hitelesítő adatok"
+regexes = [
+  # A jelenlegi, kifejezetten DUMMY-nak jelölt fixtúra (src/__tests__/security/).
+  '''DUMMY-Eros-Teszt-Jelszo-42''',
+  # Ékezetes erős-jelszó minta: azt igazolja, hogy a Unicode betűosztályokkal
+  # dolgozó szabály a magyar ékezeteket is elfogadja.
+  '''ÁrvíztűrőTükör42''',
+  # A korábbi fixtúra-érték. A munkafában már nem szerepel (DUMMY-ra cseréltük),
+  # de a git-történetben benne maradt, a kapu pedig a teljes historyt vizsgálja.
+  '''Kecskemeti42Futo''',
+]
