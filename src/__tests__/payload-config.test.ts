@@ -67,6 +67,30 @@ describe('payload.config', () => {
   })
 
   /**
+   * Az e-mail-adapter E-MAIL-KULCS NÉLKÜL is inicializálható.
+   *
+   * Ez a teszt maga a bizonyíték: a tesztkörnyezetben nincs RESEND_API_KEY és
+   * nincs SMTP_HOST sem, mégis betöltődik a config és felépül az adapter. A
+   * provider ilyenkor `noop`-ra esik (egyszeri figyelmeztetéssel), tehát a
+   * boot, a tesztek és a CI e-mail-konfiguráció nélkül is működik.
+   */
+  it('az e-mail-adapter e-mail-kulcs nélkül is felépül (a boot nem bukik el)', async () => {
+    const config = await configPromise
+
+    expect(process.env.RESEND_API_KEY).toBeUndefined()
+    expect(typeof config.email).toBe('function')
+
+    const adapter = (
+      config.email as unknown as (args: { payload: unknown }) => {
+        name: string
+        sendEmail: unknown
+      }
+    )({ payload: {} })
+    expect(adapter.name).toBe('kineticare-provider')
+    expect(typeof adapter.sendEmail).toBe('function')
+  })
+
+  /**
    * A Railway privát hálózata elvágja a tétlen TCP-kapcsolatokat. Keepalive és
    * idle-timeout nélkül a `pg` a halott socketet használja újra, és a kérés a
    * TCP retransmission-timeoutig (~45 mp) áll, majd „Connection terminated

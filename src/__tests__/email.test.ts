@@ -1,5 +1,5 @@
 import type { Config } from 'payload'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { maskEmail, parseFromAddress } from '../lib/email/mask'
 import { resolveEmailProvider, sendMail } from '../lib/email/provider'
@@ -46,6 +46,41 @@ describe('sendMail noop-providerrel', () => {
   it('üres címzettlista esetén ok:false, retryable:false, szintén hiba nélkül', async () => {
     const result = await sendMail({ to: [], subject: 'T', html: '', text: '' })
     expect(result).toMatchObject({ ok: false, retryable: false })
+  })
+})
+
+/**
+ * Kulcs nélküli indulás: a noop-figyelmeztetés EGYSZER szólal meg.
+ *
+ * A provider-modul memoizálja a feloldást, ezért a naplósor a folyamat
+ * élettartama alatt egyszer megy ki — több száz levélnél nem szemeteli tele a
+ * naplót. A teszt friss modulpéldányt tölt be (`resetModules`), hogy a többi
+ * teszt már bemelegített cache-e ne zavarjon bele.
+ */
+describe('e-mail provider figyelmeztetése kulcs nélkül', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it('a noop-figyelmeztetés csak EGYSZER kerül a naplóba', async () => {
+    vi.resetModules()
+    const lines: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((line: unknown) => {
+      lines.push(String(line))
+    })
+
+    const { sendMail: freshSendMail } = await import('../lib/email/provider')
+    const message = { subject: 'T', html: '<p>x</p>', text: 'x' }
+    await freshSendMail({ to: 'egy@example.com', ...message })
+    await freshSendMail({ to: 'ketto@example.com', ...message })
+    await freshSendMail({ to: 'harom@example.com', ...message })
+
+    const warnings = lines.filter((line) => line.includes('e-mail provider nincs beállítva'))
+    expect(warnings).toHaveLength(1)
+    // A figyelmeztetés magyar, és megmondja, mi hiányzik.
+    expect(warnings[0]).toContain('RESEND_API_KEY')
+    expect(warnings[0]).toContain('"level":"warn"')
   })
 })
 
