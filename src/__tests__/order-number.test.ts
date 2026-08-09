@@ -101,7 +101,10 @@ describe.skipIf(!hasDb)('orderNumber generálás (DB)', () => {
     const updated = await payload.update({
       collection: 'orders',
       id: order.id,
-      data: { status: 'completed' } as Record<string, unknown>,
+      // A saját Barion-állapotgép enumjának érvényes értéke (a plugin gyári
+      // 'completed' státusza nálunk nem létezik — az order-status modul enumja
+      // a forrás-igazság).
+      data: { status: 'paid' } as Record<string, unknown>,
       overrideAccess: true,
     })
 
