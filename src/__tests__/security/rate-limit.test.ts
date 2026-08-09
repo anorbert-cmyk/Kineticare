@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  checkForgotPasswordEmailRateLimit,
+  checkUserRateLimit,
   classifyRateLimitedRoute,
   checkRequestRateLimit,
   payloadRestRateLimitResponse,
@@ -461,6 +463,286 @@ describe('withPayloadRestRateLimit — Payload REST POST beburkolása', () => {
       )
       expect(response.status).toBe(200)
     }
+  })
+
+  it('a jelszó-emlékeztetőn a CÍM-keret is fog: más IP, azonos cím → 429, e-mail sem megy ki', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const emailRules = {
+      ...RATE_LIMIT_RULES,
+      'password-forgot-email': { limit: 1, windowMs: TEN_MINUTES },
+    }
+    let calls = 0
+    const inner: PayloadRestHandler = async () => {
+      calls += 1
+      return Response.json({ message: 'Success' }, { status: 200 })
+    }
+    const handler = withPayloadRestRateLimit(inner, { limiter, rules: emailRules })
+    const send = (ip: string) =>
+      handler(
+        new Request('https://kineticare.test/api/users/forgot-password', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
+          body: JSON.stringify({ email: 'aldozat@example.test' }),
+        }),
+        { params: Promise.resolve({ slug: ['users', 'forgot-password'] }) },
+      )
+
+    expect((await send('203.0.113.30')).status).toBe(200)
+
+    const throttled = await send('198.51.100.30')
+    expect(throttled.status).toBe(429)
+    // A Payload-handler EL SEM INDUL — tehát levél sem megy ki.
+    expect(calls).toBe(1)
+    expect(Number(throttled.headers.get('Retry-After'))).toBeGreaterThan(0)
+    const body = (await throttled.json()) as { errors: Array<{ message: string }> }
+    expect(body.errors[0]?.message).toBe(RATE_LIMIT_MESSAGE)
+  })
+
+  it('a becsomagolt handler a törzset VÁLTOZATLANUL megkapja (a keret csak klónt olvas)', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const seen: string[] = []
+    const inner: PayloadRestHandler = async (request) => {
+      seen.push(await request.text())
+      return Response.json({ message: 'Success' }, { status: 200 })
+    }
+    const handler = withPayloadRestRateLimit(inner, { limiter, rules })
+
+    const response = await handler(
+      new Request('https://kineticare.test/api/users/forgot-password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.31' },
+        body: JSON.stringify({ email: 'vevo@example.test' }),
+      }),
+      { params: Promise.resolve({ slug: ['users', 'forgot-password'] }) },
+    )
+
+    expect(response.status).toBe(200)
+    expect(seen).toEqual([JSON.stringify({ email: 'vevo@example.test' })])
+  })
+})
+
+/**
+ * A jelszó-emlékeztető MÁSODIK, e-mail-címre kulcsolt kerete.
+ *
+ * Az IP-keret önmagában megkerülhető IP-rotációval (a fejléc-lánc eleje
+ * hamisítható) — a cím-keret ezt fogja: EGY postaláda 10 percen belül
+ * legfeljebb a keretnyi emlékeztetőt kaphat, bárhonnan is kérték.
+ */
+describe('checkForgotPasswordEmailRateLimit — per-cím keret', () => {
+  /** A cím-keretet 1-re szűkítjük, hogy a MÁSODIK kérés már ütközzön. */
+  const rules = {
+    ...RATE_LIMIT_RULES,
+    'password-forgot-email': { limit: 1, windowMs: TEN_MINUTES },
+  }
+
+  const forgotRequest = (email: unknown, ip: string): Request =>
+    new Request('https://kineticare.test/api/users/forgot-password', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
+      body: JSON.stringify({ email }),
+    })
+
+  it('KÉT KÜLÖNBÖZŐ IP, AZONOS cím → a második kérés limitálódik', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const cim = 'aldozat@example.test'
+
+    // Mindkét kérés más IP-ről jön, tehát az IP-keret egyiket sem fogja.
+    expect(checkRequestRateLimit(forgotRequest(cim, '203.0.113.20'), { limiter, rules })).toBeNull()
+    expect(
+      await checkForgotPasswordEmailRateLimit(forgotRequest(cim, '203.0.113.20'), {
+        limiter,
+        rules,
+      }),
+    ).toBeNull()
+
+    expect(checkRequestRateLimit(forgotRequest(cim, '198.51.100.20'), { limiter, rules })).toBeNull()
+    const rejection = await checkForgotPasswordEmailRateLimit(
+      forgotRequest(cim, '198.51.100.20'),
+      { limiter, rules },
+    )
+
+    expect(rejection).not.toBeNull()
+    expect(rejection?.routeClass).toBe('password-forgot-email')
+    expect(rejection?.message).toBe(RATE_LIMIT_MESSAGE)
+    expect(rejection?.retryAfterSeconds).toBeGreaterThan(0)
+  })
+
+  it('ugyanarról az IP-ről MÁS cím szabadon kérhető (a keret a címhez tartozik)', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const ip = '203.0.113.21'
+
+    expect(
+      await checkForgotPasswordEmailRateLimit(forgotRequest('egyik@example.test', ip), {
+        limiter,
+        rules,
+      }),
+    ).toBeNull()
+    expect(
+      await checkForgotPasswordEmailRateLimit(forgotRequest('masik@example.test', ip), {
+        limiter,
+        rules,
+      }),
+    ).toBeNull()
+  })
+
+  it('a cím normalizált: kisbetűsítés és whitespace nem kerülő út', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+
+    expect(
+      await checkForgotPasswordEmailRateLimit(forgotRequest('Aldozat@Example.Test', '203.0.113.22'), {
+        limiter,
+        rules,
+      }),
+    ).toBeNull()
+    expect(
+      await checkForgotPasswordEmailRateLimit(
+        forgotRequest('  aldozat@example.test  ', '198.51.100.22'),
+        { limiter, rules },
+      ),
+    ).not.toBeNull()
+  })
+
+  it('a nyers e-mail-cím SOSEM kerül a keret-elutasítás naplójába', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const cim = 'aldozat@example.test'
+    const logLines: string[] = []
+    const originalLog = console.log
+    console.log = (...args: unknown[]) => {
+      logLines.push(args.map((arg) => String(arg)).join(' '))
+    }
+    try {
+      await checkForgotPasswordEmailRateLimit(forgotRequest(cim, '203.0.113.23'), {
+        limiter,
+        rules,
+      })
+      await checkForgotPasswordEmailRateLimit(forgotRequest(cim, '198.51.100.23'), {
+        limiter,
+        rules,
+      })
+    } finally {
+      console.log = originalLog
+    }
+
+    const output = logLines.join('\n')
+    expect(output).toContain('rate-limit')
+    expect(output).not.toContain(cim)
+    // Maszkolt alak: az első betű és a domain marad meg.
+    expect(output).toContain('a***@example.test')
+  })
+
+  it('a Payload ADMIN multipart űrlapját (_payload) is érti', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const cim = 'admin-uton@example.test'
+    const multipart = (ip: string): Request => {
+      const form = new FormData()
+      form.set('_payload', JSON.stringify({ email: cim }))
+      return new Request('https://kineticare.test/api/users/forgot-password', {
+        method: 'POST',
+        headers: { 'x-forwarded-for': ip },
+        body: form,
+      })
+    }
+
+    expect(await checkForgotPasswordEmailRateLimit(multipart('203.0.113.24'), { limiter, rules }))
+      .toBeNull()
+    expect(
+      await checkForgotPasswordEmailRateLimit(multipart('198.51.100.24'), { limiter, rules }),
+    ).not.toBeNull()
+  })
+
+  it('cím nélküli / értelmezhetetlen törzs → nincs cím-keret (nem dob, nem is fogyaszt)', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const raw = (body: string, contentType = 'application/json'): Request =>
+      new Request('https://kineticare.test/api/users/forgot-password', {
+        method: 'POST',
+        headers: { 'content-type': contentType, 'x-forwarded-for': '203.0.113.25' },
+        body,
+      })
+
+    expect(await checkForgotPasswordEmailRateLimit(raw('ez nem json {'), { limiter, rules })).toBeNull()
+    expect(await checkForgotPasswordEmailRateLimit(raw('{}'), { limiter, rules })).toBeNull()
+    expect(
+      await checkForgotPasswordEmailRateLimit(raw(JSON.stringify({ email: 42 })), { limiter, rules }),
+    ).toBeNull()
+    expect(
+      await checkForgotPasswordEmailRateLimit(raw('valami', 'text/plain'), { limiter, rules }),
+    ).toBeNull()
+    expect(limiter.trackedKeyCount).toBe(0)
+  })
+
+  it('más útvonalon nem fut (csak a jelszó-emlékeztető POST-ján)', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const request = new Request('https://kineticare.test/api/users', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'aldozat@example.test' }),
+    })
+
+    expect(await checkForgotPasswordEmailRateLimit(request, { limiter, rules })).toBeNull()
+    expect(limiter.trackedKeyCount).toBe(0)
+  })
+
+  it('a hamisított x-forwarded-for NEM eshet egybe a cím-vödörrel (osztály + névtér)', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const cim = 'aldozat@example.test'
+
+    // A támadó IP-nek magát a cím-kulcsot adja meg — az IP-vödör névtere más.
+    checkRequestRateLimit(forgotRequest('sajat@example.test', `email:${cim}`), { limiter, rules })
+
+    expect(
+      await checkForgotPasswordEmailRateLimit(forgotRequest(cim, '203.0.113.26'), {
+        limiter,
+        rules,
+      }),
+    ).toBeNull()
+  })
+})
+
+/**
+ * Per-user keret a hitelesített végpontokra (GET /api/stream-token). Az IP itt
+ * nem alkalmas kulcs: egy user IP-t vált, több user oszthat egy NAT-IP-t.
+ */
+describe('checkUserRateLimit — per-user keret', () => {
+  const rules = { ...RATE_LIMIT_RULES, 'stream-token': { limit: 2, windowMs: MINUTE } }
+  const streamRequest = (): Request =>
+    new Request('https://kineticare.test/api/stream-token?productId=42', { method: 'GET' })
+
+  it('a keretig enged, felette 429-döntést ad', () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const check = () =>
+      checkUserRateLimit({
+        request: streamRequest(),
+        routeClass: 'stream-token',
+        userId: 7,
+        options: { limiter, rules },
+      })
+
+    expect(check()).toBeNull()
+    expect(check()).toBeNull()
+    const rejection = check()
+    expect(rejection?.routeClass).toBe('stream-token')
+    expect(rejection?.message).toBe(RATE_LIMIT_MESSAGE)
+    expect(rejection?.retryAfterSeconds).toBeGreaterThan(0)
+  })
+
+  it('a userek nem fogyasztják egymás keretét (közös IP mögül sem)', () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const check = (userId: number | string) =>
+      checkUserRateLimit({
+        request: streamRequest(),
+        routeClass: 'stream-token',
+        userId,
+        options: { limiter, rules },
+      })
+
+    expect(check(7)).toBeNull()
+    expect(check(7)).toBeNull()
+    expect(check(7)).not.toBeNull()
+    expect(check(8)).toBeNull()
+  })
+
+  it('a valós keret percenkénti (a lejátszó token-frissítését bőven elbírja)', () => {
+    expect(RATE_LIMIT_RULES['stream-token']).toEqual({ limit: 60, windowMs: MINUTE })
   })
 })
 

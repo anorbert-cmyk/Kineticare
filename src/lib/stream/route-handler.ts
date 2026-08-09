@@ -3,6 +3,11 @@ import type { Payload } from 'payload'
 
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
+import {
+  checkUserRateLimit,
+  rateLimitHeaders,
+  type CheckRequestRateLimitOptions,
+} from '../security/rate-limit'
 import { STREAM_TOKEN_PRODUCT_PARAM, STREAM_TOKEN_VIDEO_PARAM } from './contract'
 import { issueStreamToken, StreamTokenError } from './issue-stream-token'
 
@@ -13,12 +18,21 @@ import { issueStreamToken, StreamTokenError } from './issue-stream-token'
  * egységtesztelhető; a tényleges route az
  * src/app/(frontend)/api/stream-token/route.ts köti be a valódi configgal.
  *
- * Folyamat: auth (payload.auth) → query-validáció + paywall + token-kiállítás
- * (issueStreamToken) → { token, expiresAt }. Hibaágak: magyar felhasználói
- * üzenet + technikai részlet csak a naplóba, requestId-vel.
+ * Folyamat: auth (payload.auth) → PER-USER kérés-korlát → query-validáció +
+ * paywall + token-kiállítás (issueStreamToken) → { token, expiresAt }.
+ * Hibaágak: magyar felhasználói üzenet + technikai részlet csak a naplóba,
+ * requestId-vel.
+ *
+ * A kérés-korlát alanya a BEJELENTKEZETT FELHASZNÁLÓ, nem az IP: a végpont
+ * hitelesített (egy user IP-t vált, több user oszthat egy NAT-IP-t), és minden
+ * hívása Bunny-lejátszási jegyet állít ki — korlát nélkül egy belépett fiók
+ * korlátlanul farmolhatna jegyet. Ezért fut a korlát az AUTH UTÁN, de a
+ * termék-lekérdezés és a jegy-kiállítás ELŐTT.
  */
 export interface StreamTokenHandlerDeps {
   getPayload: () => Promise<Payload>
+  /** Kérés-korlátozó felülírása (teszthez); alapból a közös, folyamaton belüli számláló. */
+  rateLimit?: CheckRequestRateLimitOptions
 }
 
 export function createStreamTokenHandler(
@@ -37,6 +51,22 @@ export function createStreamTokenHandler(
         return NextResponse.json(
           { error: 'A videó lejátszásához bejelentkezés szükséges.' },
           { status: 401 },
+        )
+      }
+
+      // Per-user keret: a jegy-kiállítás (és a mögötte lévő DB-lekérdezések)
+      // ELŐTT. A végpont dokumentált hibaformátuma { error }, ezért a 429-et
+      // itt építjük.
+      const rejection = checkUserRateLimit({
+        request,
+        routeClass: 'stream-token',
+        userId: user.id,
+        ...(deps.rateLimit ? { options: deps.rateLimit } : {}),
+      })
+      if (rejection) {
+        return NextResponse.json(
+          { error: rejection.message },
+          { status: 429, headers: rateLimitHeaders(rejection) },
         )
       }
 
