@@ -139,7 +139,7 @@ describe('issueStornoForOrder', () => {
   })
 
   it('idempotens: rögzített stornoNumber mellett already-storned (nincs új hívás)', async () => {
-    const order = createOrder({ stornoNumber: 'KIN-2026-8', stornoStatus: 'storned' })
+    const order = createOrder({ stornoNumber: 'KIN-2026-8', stornoStatus: 'issued' })
     let calls = 0
     const result = await issueStornoForOrder(order, {
       config: ENABLED_CONFIG,
@@ -149,6 +149,20 @@ describe('issueStornoForOrder', () => {
       },
     })
     expect(result).toEqual({ outcome: 'already-storned', stornoNumber: 'KIN-2026-8' })
+    expect(calls).toBe(0)
+  })
+
+  it('idempotens: stornoStatus=issued is already-storned (stornoNumber nélkül is)', async () => {
+    const order = createOrder({ stornoStatus: 'issued' })
+    let calls = 0
+    const result = await issueStornoForOrder(order, {
+      config: ENABLED_CONFIG,
+      postXml: async () => {
+        calls += 1
+        return { szamlaszam: 'X' }
+      },
+    })
+    expect(result.outcome).toBe('already-storned')
     expect(calls).toBe(0)
   })
 
@@ -199,5 +213,131 @@ describe('issueStornoForOrder', () => {
     })
     expect(result.outcome).toBe('failed')
     expect(result.reason).toContain('stornózva')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// stornoStatus/stornoNumber DB-átmenetek — payload-dep átadásával
+// ---------------------------------------------------------------------------
+
+function createMockPayload(order: Order) {
+  const updates: Array<Record<string, unknown>> = []
+  const payload = {
+    update: async ({ data }: { data: Record<string, unknown> }) => {
+      updates.push(data)
+      Object.assign(order, data)
+      return order
+    },
+  }
+  return { payload: payload as never, updates }
+}
+
+describe('issueStornoForOrder — stornoStatus DB-átmenetek (payload-dep)', () => {
+  it('boldog út: pending → issued + stornoNumber, sorrendben a rendelésre írva', async () => {
+    const order = createOrder()
+    const { payload, updates } = createMockPayload(order)
+    const result = await issueStornoForOrder(order, {
+      config: ENABLED_CONFIG,
+      payload,
+      issueDate: '2026-08-04',
+      postXml: async () => ({ szamlaszam: 'KIN-2026-8' }),
+    })
+
+    expect(result).toEqual({ outcome: 'storned', stornoNumber: 'KIN-2026-8' })
+    expect(updates).toEqual([
+      { stornoStatus: 'pending' },
+      { stornoStatus: 'issued', stornoNumber: 'KIN-2026-8' },
+    ])
+    expect(order.stornoStatus).toBe('issued')
+    expect(order.stornoNumber).toBe('KIN-2026-8')
+  })
+
+  it('agent-elutasításnál (nem retryable): pending → failed, az outcome failed (nem dob)', async () => {
+    const order = createOrder()
+    const { payload, updates } = createMockPayload(order)
+    const result = await issueStornoForOrder(order, {
+      config: ENABLED_CONFIG,
+      payload,
+      postXml: async () => {
+        throw new SzamlazzApiError({ message: 'már stornózva', kind: 'agent', retryable: false })
+      },
+    })
+
+    expect(result.outcome).toBe('failed')
+    expect(updates).toEqual([{ stornoStatus: 'pending' }, { stornoStatus: 'failed' }])
+    expect(order.stornoStatus).toBe('failed')
+  })
+
+  it('retryable provider-hibánál: pending → failed + THROW (a hívó újrapróbálhatja)', async () => {
+    const order = createOrder()
+    const { payload, updates } = createMockPayload(order)
+    await expect(
+      issueStornoForOrder(order, {
+        config: ENABLED_CONFIG,
+        payload,
+        postXml: async () => {
+          throw new SzamlazzApiError({ message: 'timeout', kind: 'timeout', retryable: true })
+        },
+      }),
+    ).rejects.toThrow('timeout')
+    expect(updates).toEqual([{ stornoStatus: 'pending' }, { stornoStatus: 'failed' }])
+  })
+
+  it('hiányzó eredeti számlaszámnál: stornoStatus=failed írás, provider-hívás nélkül', async () => {
+    const order = createOrder({ invoiceNumber: null, invoiceStatus: 'failed' })
+    const { payload, updates } = createMockPayload(order)
+    let calls = 0
+    const result = await issueStornoForOrder(order, {
+      config: ENABLED_CONFIG,
+      payload,
+      postXml: async () => {
+        calls += 1
+        return { szamlaszam: 'X' }
+      },
+    })
+
+    expect(result.outcome).toBe('failed')
+    expect(updates).toEqual([{ stornoStatus: 'failed' }])
+    expect(calls).toBe(0)
+  })
+
+  it('failed státusz NEM zárja ki az újrapróbálást (csak a stornoNumber/issued teszi idempotenssé)', async () => {
+    const order = createOrder({ stornoStatus: 'failed' })
+    const { payload, updates } = createMockPayload(order)
+    const result = await issueStornoForOrder(order, {
+      config: ENABLED_CONFIG,
+      payload,
+      issueDate: '2026-08-04',
+      postXml: async () => ({ szamlaszam: 'KIN-2026-9' }),
+    })
+
+    expect(result).toEqual({ outcome: 'storned', stornoNumber: 'KIN-2026-9' })
+    expect(updates[updates.length - 1]).toEqual({ stornoStatus: 'issued', stornoNumber: 'KIN-2026-9' })
+  })
+
+  it('payload-dep nélkül változatlan a viselkedés: nincs DB-írás (visszafelé kompatibilis)', async () => {
+    const order = createOrder()
+    const result = await issueStornoForOrder(order, {
+      config: ENABLED_CONFIG,
+      issueDate: '2026-08-04',
+      postXml: async () => ({ szamlaszam: 'KIN-2026-8' }),
+    })
+
+    expect(result).toEqual({ outcome: 'storned', stornoNumber: 'KIN-2026-8' })
+    expect(order.stornoStatus).toBeUndefined()
+    expect(order.stornoNumber).toBeUndefined()
+  })
+
+  it('already-storned rendelésnél payload mellett sincs írás (no-op)', async () => {
+    const order = createOrder({ stornoNumber: 'KIN-2026-8', stornoStatus: 'issued' })
+    const { payload, updates } = createMockPayload(order)
+    const result = await issueStornoForOrder(order, {
+      config: ENABLED_CONFIG,
+      payload,
+      postXml: async () => expect.unreachable('nem hívható'),
+    })
+
+    expect(result.outcome).toBe('already-storned')
+    expect(updates).toHaveLength(0)
   })
 })

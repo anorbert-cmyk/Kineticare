@@ -41,14 +41,17 @@ számlából generálja a negatív bizonylatot.
 3. **Teljes refundnál** a folyamat végén `issueStornoForOrder(order, deps)`
    hívódik **best-effort** módon (`src/lib/szamlazz/storno.ts`):
    - kikapcsolt integráció (nincs `SZAMLAZZ_AGENT_KEY`) → `disabled` no-op;
-   - a rendelésen már rögzített stornó (jövőbeli `stornoNumber`/`stornoStatus`
-     mező) → `already-storned` no-op;
+   - a rendelésen már rögzített stornó (`stornoNumber` mező, vagy
+     `stornoStatus: 'issued'`) → `already-storned` no-op;
    - hiányzó eredeti számlaszám (`invoiceNumber`) → `failed` (nem dob:
      emberi pótlás kell, az újrapróbálás nem segít);
    - siker → `storned` + a stornó-számla száma, strukturált naplózás;
    - retryable provider-hiba (timeout/hálózat/5xx/szlahu_down) → **dob**,
      hogy a hívó (jövőbeli job) újrapróbálhassa; a refund-bekötés ezt is
      elkapja és naplózza.
+   A folyamat a rendelés `stornoStatus`/`stornoNumber` mezőit is írja
+   (`pending` → `issued` + sorszám, illetve `failed`) — a `failed` állapot
+   NEM zárja ki a későbbi újrapróbálást.
 4. A stornó hibája **soha nem befolyásolja** a már sikeres refundot:
    a bekötés minden ágat try/catch-ben tart, strukturált loggal
    (`src/lib/logger.ts`).
@@ -58,16 +61,13 @@ számlából generálja a negatív bizonylatot.
 - **Provider-oldali horgony:** `szamlaKulsoAzon = ${orderNumber}-STORNO`.
   Ismételt beküldésre a Számlázz.hu nem állít ki újabb stornót ugyanazzal a
   külső azonosítóval — a dupla stornó technikailag kizárt.
-- **Alkalmazás-oldali no-op:** az `issueStornoForOrder` toleránsan olvassa a
-  rendelés `stornoNumber`/`stornoStatus` mezőit — ha a séma később bővül
-  velük, az `already-storned` ág migráció nélkül életbe lép.
-- **Ismert korlát (séma-mező szükséges):** az `orders` collection JELENLEG
-  nem tartalmaz storno mezőt, ezért a stornó ténye csak a strukturált
-  naplóban rögzül. Javasolt séma-bővítés (külön feladat, migrációval):
-  `stornoStatus` (`none|pending|storned|failed`), `stornoNumber`,
-  `stornoAt`. Enélkül az alkalmazás-oldali újrafuttatás mindig újra
-  beküldi az XML-t (a kulsoAzon-horgony miatt ez biztonságos, de felesleges
-  hálózati hívás).
+- **Alkalmazás-oldali no-op:** az `issueStornoForOrder` a rendelés
+  `stornoNumber`/`stornoStatus` mezőit olvassa — rögzített stornó esetén
+  `already-storned` no-op lép életbe.
+- **DB-nyilvántartás:** az `orders` collection `stornoStatus`
+  (`none|pending|issued|failed`) és `stornoNumber` mezői a folyamatot követik.
+  A mezők a sémában már léteznek — a hozzájuk tartozó migrációt merge után
+  `payload migrate:create`-vel kell legenerálni (élő DB kell hozzá).
 
 ## Hibakezelés
 
@@ -92,9 +92,11 @@ utazik, a napló titokmentes.
 2. Opcionális: `SZAMLAZZ_API_URL`, `SZAMLAZZ_INVOICE_PREFIX`,
    `SZAMLAZZ_TIMEOUT_MS` (a számlakiállítással közös konfig-felület,
    `getSzamlazzConfig`).
-3. Javasolt (nem blokkoló): `stornoStatus`/`stornoNumber`/`stornoAt` mezők az
-   `orders` collectionbe + migráció, hogy a stornó-állapot lekérdezhető és
-   az admin-felületen látható legyen.
+3. **Migráció (blokkoló az éles DB-hez):** a `stornoStatus`/`stornoNumber`
+   mezők a sémában már benne vannak — merge után `payload migrate:create`
+   futtatandó, hogy az oszlopok létrejöjjenek. Migráció nélkül a
+   storno-írás SQL-hibát dobna (a refund ettől best-effort marad, de a
+   stornó-állapot nem rögzülne).
 4. Javasolt (nem blokkoló): a retryable stornó-hibák újrapróbálására dedikált
    job (az `invoice-issue` task mintájára, `order-maintenance` queue) —
    jelenleg a best-effort inline hívás egyszer fut, a kimaradt stornót a

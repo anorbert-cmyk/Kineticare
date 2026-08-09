@@ -111,20 +111,13 @@ function isTruthyHeader(value: string | null): boolean {
   return value !== null && value !== '' && value !== '0' && value.toLowerCase() !== 'false'
 }
 
-export interface SzamlazzParsedSuccess {
-  szamlaszam: string
-  /** Vevői fiók URL (ha a Számlázz.hu adja) — a rendelés invoicePdfUrl mezőjéhez. */
-  vevoifiokUrl?: string
-}
-
 /**
- * A Számla Agent válasz értelmezése. Siker esetén a számlaszám (és a vevői
- * fiók URL, ha adott); minden hibaág strukturált SzamlazzApiError.
- *
- * Sorrend: szlahu_down (karbantartás, retryable) → szlahu_error fejléc →
- * XML <sikeres>false</sikeres> → <sikeres>true</sikeres> → egyéb: invalid_response.
+ * A szlahu_* hibafejlécek ellenőrzése — szlahu_down (karbantartás, retryable),
+ * majd szlahu_error (+ szlahu_error_code). Hiba esetén dob, egyébként no-op.
+ * A parseAgentResponse és a bináris (PDF) választ feldolgozó hívások is ezt
+ * használják — a fejléc-szemantika egy helyen él.
  */
-export function parseAgentResponse(body: string, headers: Headers): SzamlazzParsedSuccess {
+export function throwIfSzlahuErrorHeaders(headers: Headers): void {
   if (isTruthyHeader(headers.get('szlahu_down'))) {
     throw new SzamlazzApiError({
       message: 'A Számlázz.hu karbantartás miatt átmenetileg nem elérhető (szlahu_down).',
@@ -143,6 +136,23 @@ export function parseAgentResponse(body: string, headers: Headers): SzamlazzPars
       retryable: false,
     })
   }
+}
+
+export interface SzamlazzParsedSuccess {
+  szamlaszam: string
+  /** Vevői fiók URL (ha a Számlázz.hu adja) — a rendelés invoicePdfUrl mezőjéhez. */
+  vevoifiokUrl?: string
+}
+
+/**
+ * A Számla Agent válasz értelmezése. Siker esetén a számlaszám (és a vevői
+ * fiók URL, ha adott); minden hibaág strukturált SzamlazzApiError.
+ *
+ * Sorrend: szlahu_down (karbantartás, retryable) → szlahu_error fejléc →
+ * XML <sikeres>false</sikeres> → <sikeres>true</sikeres> → egyéb: invalid_response.
+ */
+export function parseAgentResponse(body: string, headers: Headers): SzamlazzParsedSuccess {
+  throwIfSzlahuErrorHeaders(headers)
 
   const sikeres = tagValue(body, 'sikeres')
   if (sikeres === 'true') {
@@ -183,6 +193,78 @@ function isAbortError(error: unknown): boolean {
       error.name === 'TimeoutError' ||
       error.message.toLowerCase().includes('aborted'))
   )
+}
+
+/**
+ * Közös multipart POST a Számla Agent bármely action-mezőjéhez (PDF-lekérés,
+ * díjbekérő-törlés): enabled-ellenőrzés, timeoutos fetch, és a timeout /
+ * hálózati / HTTP-hibák egységes SzamlazzApiError-leképezése. A NYERS
+ * Response-t adja vissza — a válasz értelmezése (XML vs bináris PDF) a hívóé.
+ * Az agent-kulcs az XML-ben (bodyban) utazik, a napló titokmentes.
+ */
+export async function postAgentForm(args: {
+  config: SzamlazzClientConfig
+  /** A multipart-mező neve (pl. 'action-szamla_agent_pdf'). */
+  formField: string
+  /** A feltöltött XML fájlneve a multipart-ben. */
+  fileName: string
+  xml: string
+  /** Naplózott végpont-leírás (pl. 'POST /szamla (action-szamla_agent_pdf)'). */
+  endpoint: string
+}): Promise<Response> {
+  const { config, formField, fileName, xml, endpoint } = args
+  if (!config.enabled || !config.agentKey) {
+    throw new SzamlazzApiError({
+      message: 'A Számlázz.hu-integráció nincs beállítva (SZAMLAZZ_AGENT_KEY hiányzik).',
+      kind: 'invalid_data',
+      retryable: false,
+    })
+  }
+
+  const form = new FormData()
+  form.append(formField, new Blob([xml], { type: 'text/xml' }), fileName)
+
+  const startedAt = Date.now()
+  let response: Response
+  try {
+    response = await fetch(config.apiUrl, {
+      method: 'POST',
+      body: form,
+      signal: AbortSignal.timeout(config.timeoutMs),
+    })
+  } catch (error) {
+    const durationMs = Date.now() - startedAt
+    if (isAbortError(error)) {
+      logger.error('Számlázz.hu hívás timeout', { endpoint, timeoutMs: config.timeoutMs, durationMs })
+      throw new SzamlazzApiError({
+        message: `A Számlázz.hu nem válaszolt ${config.timeoutMs} ms-en belül.`,
+        kind: 'timeout',
+        retryable: true,
+      })
+    }
+    logger.error('Számlázz.hu hálózati hiba', {
+      endpoint,
+      durationMs,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    })
+    throw new SzamlazzApiError({
+      message: `A Számlázz.hu elérhetetlen: ${error instanceof Error ? error.message : String(error)}`,
+      kind: 'network',
+      retryable: true,
+    })
+  }
+
+  const durationMs = Date.now() - startedAt
+  if (!response.ok) {
+    logger.error('Számlázz.hu HTTP-hiba', { endpoint, httpStatus: response.status, durationMs })
+    throw new SzamlazzApiError({
+      message: `Számlázz.hu HTTP-hiba (${response.status}).`,
+      kind: 'http',
+      httpStatus: response.status,
+      retryable: response.status >= 500,
+    })
+  }
+  return response
 }
 
 /**

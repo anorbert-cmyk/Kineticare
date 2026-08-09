@@ -10,8 +10,14 @@ import type { CollectionConfig } from 'payload'
  *    nagyítunk (withoutEnlargement), ilyenkor a frontend az eredeti képet használja.
  *  - formatOptions: a tárolt fájl webp (quality 80) — a sharp a feltöltéskor
  *    átkonvertálja; az imageSizes-ek a konvertált fájlból készülnek.
- *  - mimeTypes: csak raszterképek (jpeg/png/webp/avif/gif). SVG kizárva: nem
- *    méretezhető sharp-pal és script-injekciós kockázatot hordoz.
+ *  - mimeTypes: raszterképek (jpeg/png/webp/avif/gif) + application/pdf.
+ *    SVG továbbra is kizárva: nem méretezhető sharp-pal és script-injekciós
+ *    kockázatot hordoz. A PDF kizárólag a számla-archiváláshoz kell
+ *    (src/lib/szamlazz/pdf.ts): a Payload a PDF-et NEM dolgozza fel sharp-pal
+ *    (a canResizeImage/imageSizes/formatOptions csak kép-mime-ekre fut), így a
+ *    bináris érintetlenül tárolódik; az imageSizes-váz ezzel változatlan.
+ *    Szerkesztői feltöltésre továbbra is a képek a szándékoltak — a PDF a
+ *    rendszer által generált számlákat szolgálja.
  *  - Méretlimit: 10 MB. A limit a HTTP-rétegben él, ezért a payload.config
  *    `upload: { limits: { fileSize: 10 * 1024 * 1024 }, abortOnLimit: true }`
  *    beállítása szükséges hozzá — TODO a payload.config.ts-ben (jelen ticket
@@ -67,6 +73,6 @@ export const Media: CollectionConfig = {
         withoutEnlargement: true,
       },
     ],
-    mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif'],
+    mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif', 'application/pdf'],
   },
 }

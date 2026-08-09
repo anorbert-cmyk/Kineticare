@@ -1582,6 +1582,11 @@ export interface Order {
    * A számlázás állapota. A rendszer állítja — ne írd át.
    */
   invoiceStatus?: ('none' | 'pending' | 'issued' | 'failed') | null;
+  stornoNumber?: string | null;
+  /**
+   * A stornó-számla állapota (teljes refundnál). A rendszer állítja — ne írd át.
+   */
+  stornoStatus?: ('none' | 'pending' | 'issued' | 'failed') | null;
   /**
    * A számlázási adatok mentett másolata a rendelés idejéből.
    */
@@ -2808,6 +2813,8 @@ export interface OrdersSelect<T extends boolean = true> {
   invoiceNumber?: T;
   invoicePdfUrl?: T;
   invoiceStatus?: T;
+  stornoNumber?: T;
+  stornoStatus?: T;
   customerSnapshot?: T;
   consentWithdrawalWaiver?: T;
   consentWithdrawalWaiverAt?: T;

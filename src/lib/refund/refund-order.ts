@@ -465,12 +465,14 @@ export async function refundOrder(options: RefundOrderOptions): Promise<RefundOr
   // minden ág el van kapva és strukturáltan naplózva. A refund-folyamat
   // szinkron route-handler (nem job-alapú), ezért a stornó itt, inline,
   // best-effort módon fut; a duplikáció ellen a Számlázz.hu-oldali
-  // szamlaKulsoAzon-horgony (`${orderNumber}-STORNO`) véd.
+  // szamlaKulsoAzon-horgony (`${orderNumber}-STORNO`) és a rendelésen
+  // rögzített stornoNumber/stornoStatus mezők (a payload-deps átadásával) védenek.
   if (type === 'full') {
     try {
       const issueStorno = options.issueStorno ?? issueStornoForOrder
       const stornoResult = await issueStorno(order, {
         logger: orderLog,
+        payload,
         ...(reason ? { reason } : {}),
       })
       if (stornoResult.outcome === 'failed') {

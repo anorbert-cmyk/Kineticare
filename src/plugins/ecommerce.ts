@@ -404,8 +404,8 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
  *
  * T-011 mezőszintű védelem:
  * - a pénzügyi/személyes mezők (customerSnapshot, ipAddress, invoiceNumber,
- *   barionPaymentId) read-access-e owner-only — a staff ugyan olvashatja a
- *   rendelést (collection-szint), de ezeket a mezőket nem;
+ *   stornoNumber, stornoStatus, barionPaymentId) read-access-e owner-only — a
+ *   staff ugyan olvashatja a rendelést (collection-szint), de ezeket a mezőket nem;
  * - refundedAt/refundReason update owner-only (a refund-folyamat későbbi ticket).
  *
  * T-017 rendelés-integritás:
@@ -504,6 +504,32 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       ],
       admin: {
         description: 'A számlázás állapota. A rendszer állítja — ne írd át.',
+      },
+    },
+    {
+      name: 'stornoNumber',
+      type: 'text',
+      label: 'Stornó-számla sorszáma',
+      access: {
+        read: isOwnerFieldAccess,
+      },
+    },
+    {
+      name: 'stornoStatus',
+      type: 'select',
+      defaultValue: 'none',
+      label: 'Stornó állapota',
+      options: [
+        { label: 'Nincs', value: 'none' },
+        { label: 'Függőben', value: 'pending' },
+        { label: 'Kiállítva', value: 'issued' },
+        { label: 'Sikertelen', value: 'failed' },
+      ],
+      access: {
+        read: isOwnerFieldAccess,
+      },
+      admin: {
+        description: 'A stornó-számla állapota (teljes refundnál). A rendszer állítja — ne írd át.',
       },
     },
     {

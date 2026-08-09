@@ -4,13 +4,20 @@
 export {
   getSzamlazzConfig,
   parseAgentResponse,
+  postAgentForm,
   postInvoiceXml,
   SZAMLAZZ_DEFAULT_API_URL,
   SZAMLAZZ_DEFAULT_INVOICE_PREFIX,
   SZAMLAZZ_DEFAULT_TIMEOUT_MS,
+  throwIfSzlahuErrorHeaders,
   type SzamlazzEnv,
   type SzamlazzParsedSuccess,
 } from './client'
+export {
+  buildDijbekeroDeleteXml,
+  deleteDijbekero,
+  type BuildDijbekeroDeleteXmlInput,
+} from './dijbekero'
 export {
   buildInvoiceXml,
   buyerFromOrder,
@@ -25,6 +32,13 @@ export {
   type InvoiceLineAmounts,
   type IssueInvoiceForOrderDeps,
 } from './invoice'
+export {
+  archiveInvoicePdf,
+  buildInvoicePdfQueryXml,
+  fetchInvoicePdf,
+  type ArchiveInvoicePdfInput,
+  type BuildInvoicePdfQueryXmlInput,
+} from './pdf'
 export {
   buildStornoXml,
   issueStornoForOrder,

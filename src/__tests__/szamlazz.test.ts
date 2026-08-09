@@ -302,6 +302,12 @@ describe('issueInvoiceForOrder', () => {
         sentXml.push(xml)
         return { szamlaszam: 'KIN-2026-7', vevoifiokUrl: 'https://www.szamlazz.hu/vevoifiok/abc' }
       },
+      // A PDF-archiválás best-effort ágát itt szándékosan hibára futtatjuk:
+      // az invoicePdfUrl ilyenkor a vevői fiók URL marad (a media-útvonal
+      // részletes tesztjei a szamlazz/pdf.test.ts-ben vannak).
+      fetchPdf: async () => {
+        throw new SzamlazzApiError({ message: 'PDF-letöltés nincs mockolva', kind: 'network', retryable: true })
+      },
     })
 
     expect(result).toEqual({ outcome: 'issued', invoiceNumber: 'KIN-2026-7' })

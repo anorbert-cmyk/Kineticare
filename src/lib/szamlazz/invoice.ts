@@ -3,11 +3,17 @@ import type { Payload } from 'payload'
 import type { Order } from '../../payload-types'
 import { logger as rootLogger, type Logger } from '../logger'
 import { getSzamlazzConfig, postInvoiceXml, type SzamlazzParsedSuccess } from './client'
+import { archiveInvoicePdf, fetchInvoicePdf } from './pdf'
 import {
   SzamlazzApiError,
   type IssueInvoiceResult,
   type SzamlazzClientConfig,
 } from './types'
+import { escapeXml } from './xml'
+
+// Visszafelé-kompatibilis re-export: a meglévő importok (storno.ts, tesztek,
+// index.ts) továbbra is az invoice modulból érik el az escapeXml-t.
+export { escapeXml } from './xml'
 
 /**
  * Számla-XML építés és számlakiállítás a paid rendeléshez (T-024/W4-01).
@@ -58,16 +64,13 @@ export interface BuildInvoiceXmlInput {
   issueDate: string
   buyer: InvoiceBuyerInput
   items: InvoiceItemInput[]
-}
-
-/** XML-escape a dinamikus értékekhez. */
-export function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
+  /**
+   * Díjbekérő-kiállítás (proforma): true esetén a <fejlec><dijbekero>true</dijbekero>
+   * tag kerül beküldésre (a kötött tag-sorrenden belül, a helyesbitettSzamlaszam
+   * után). Alapértelmezés: false (normál számla). A díjbekérő NEM számla —
+   * NAV-adata szolgáltatás nem kapcsolódik hozzá; törlésére lásd deleteDijbekero.
+   */
+  dijbekero?: boolean
 }
 
 export interface InvoiceLineAmounts {
@@ -157,7 +160,7 @@ export function buildInvoiceXml(input: BuildInvoiceXmlInput): string {
     <vegszamla>false</vegszamla>
     <helyesbitoszamla>false</helyesbitoszamla>
     <helyesbitettSzamlaszam></helyesbitettSzamlaszam>
-    <dijbekero>false</dijbekero>
+    <dijbekero>${input.dijbekero === true}</dijbekero>
     <szamlaszamElotag>${esc(input.invoicePrefix)}</szamlaszamElotag>
   </fejlec>
   <elado>
@@ -259,6 +262,12 @@ export interface IssueInvoiceForOrderDeps {
   logger?: Logger
   /** Injektálható HTTP-hívó (teszteléshez); alapból a valódi postInvoiceXml. */
   postXml?: (xml: string, config: SzamlazzClientConfig) => Promise<SzamlazzParsedSuccess>
+  /**
+   * Injektálható PDF-letöltő (teszteléshez); alapból a valódi fetchInvoicePdf
+   * (action-szamla_agent_pdf). A letöltött PDF a media collectionbe archiválódik
+   * best-effort módon — a hiba a számla issued állapotát SOHA nem bontja vissza.
+   */
+  fetchPdf?: (szamlaszam: string, config: SzamlazzClientConfig) => Promise<Uint8Array>
   /** A kelt-dátum felülírása (teszteléshez); alapból a mai dátum. */
   issueDate?: string
 }
@@ -353,10 +362,33 @@ export async function issueInvoiceForOrder(
   try {
     const postXml = deps.postXml ?? postInvoiceXml
     const result = await postXml(xml, config)
+
+    // Számla-PDF archiválás a media collectionbe — BEST-EFFORT: a letöltés/
+    // mentés hibája nem bontja vissza az issued állapotot, ilyenkor az
+    // invoicePdfUrl a Számlázz.hu-s vevői fiók URL marad (ha azt sem adta a
+    // provider, a mező üresen marad). A PDF bináris sosem kerül a naplóba.
+    let invoicePdfUrl = result.vevoifiokUrl
+    try {
+      const fetchPdf = deps.fetchPdf ?? fetchInvoicePdf
+      const pdfBytes = await fetchPdf(result.szamlaszam, config)
+      const archivedUrl = await archiveInvoicePdf(deps.payload, {
+        szamlaszam: result.szamlaszam,
+        pdfBytes,
+      })
+      if (archivedUrl) {
+        invoicePdfUrl = archivedUrl
+      }
+    } catch (pdfError) {
+      orderLog.warn(
+        'a számla-PDF letöltése/archiválása sikertelen (best-effort) — a számla kiállítva marad, a PDF-link a vevői fiók URL marad',
+        { error: pdfError instanceof Error ? pdfError.message : String(pdfError) },
+      )
+    }
+
     await setInvoiceStatus(deps.payload, deps.orderId, {
       invoiceStatus: 'issued',
       invoiceNumber: result.szamlaszam,
-      ...(result.vevoifiokUrl ? { invoicePdfUrl: result.vevoifiokUrl } : {}),
+      ...(invoicePdfUrl ? { invoicePdfUrl } : {}),
     })
     orderLog.info('számla kiállítva', { invoiceNumber: result.szamlaszam })
     return { outcome: 'issued', invoiceNumber: result.szamlaszam }

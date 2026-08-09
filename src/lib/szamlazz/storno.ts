@@ -1,3 +1,5 @@
+import type { Payload } from 'payload'
+
 import type { Order } from '../../payload-types'
 import { logger as rootLogger, type Logger } from '../logger'
 import {
@@ -32,11 +34,10 @@ import {
  * - valaszVerzio=2: a válasz ugyanaz az xmlszamlavalasz, mint a számlakiállításnál
  *   (parseAgentResponse újrahasznosítható).
  *
- * Stornó-állapot a rendelésen: az orders sémában JELENLEG NINCS storno mező
- * (stornoStatus/stornoNumber). A sémát ez a változás NEM módosítja — a
- * stornó ténye strukturált naplósorokban jelenik meg, a dupla stornó ellen
- * a szamlaKulsoAzon-horgony véd. Ha a séma később stornoNumber/stornoStatus
- * mezőkkel bővül, az issueStornoForOrder azokat felismeri ('already-storned').
+ * Stornó-állapot a rendelésen: az orders collection stornoNumber/stornoStatus
+ * mezői rögzítik a folyamat állását (pending → issued/failed) — az írás akkor
+ * történik, ha a hívó payload-példányt ad a deps-ben (a refund-folyamat ad).
+ * A dupla stornó ellen emellett a szamlaKulsoAzon-horgony véd.
  */
 
 export const STORNO_KULSO_AZON_SUFFIX = '-STORNO'
@@ -181,16 +182,32 @@ export interface IssueStornoForOrderDeps {
   issueDate?: string
   /** A stornó indoka (pl. a refund reason) — a <megjegyzes> mezőbe kerül. */
   reason?: string | null
+  /**
+   * Ha adott, a folyamat a rendelés stornoStatus/stornoNumber mezőit is írja
+   * (pending → issued/failed). Nélküle a stornó csak naplóban jelenik meg
+   * (visszafelé-kompatibilis, tesztbarát mód).
+   */
+  payload?: Payload
 }
 
 /**
- * Toleráns mezőolvasó a jövőbeli storno séma-mezőkhöz (stornoNumber /
- * stornoStatus). Ma az Order típus nem tartalmazza őket — ha a séma később
- * bővül, az idempotencia-ág migráció nélkül is működik.
+ * A stornoStatus/stornoNumber írása a rendelésen (overrideAccess-szel — a
+ * mezők read-access-e owner-only). Csak akkor fut, ha a hívó payloadot adott.
  */
-function softString(order: Order, key: string): string | undefined {
-  const value = (order as unknown as Record<string, unknown>)[key]
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
+async function setStornoFields(
+  payload: Payload | undefined,
+  orderId: number,
+  data: Record<string, unknown>,
+): Promise<void> {
+  if (!payload) {
+    return
+  }
+  await payload.update({
+    collection: 'orders',
+    id: orderId,
+    data,
+    overrideAccess: true,
+  })
 }
 
 /** A vevő e-mail-címe a customerSnapshot-ból, fallback a customerEmail. */
@@ -208,7 +225,9 @@ function buyerEmailFromOrder(order: Order): string {
 /**
  * Stornó-számla kiállítása egy rendeléshez — idempotens:
  * - a rendelésen már rögzítve van stornó (stornoNumber/stornoStatus mező,
- *   ha a séma bővül) → 'already-storned' (no-op);
+ * Stornó-számla kiállítása egy rendeléshez — idempotens:
+ * - a rendelésen már rögzítve van stornó (stornoNumber mező, vagy
+ *   stornoStatus 'issued') → 'already-storned' (no-op);
  * - Számlázz.hu kikapcsolva (nincs agent-kulcs) → 'disabled' (no-op, NEM hiba);
  * - hiányzó eredeti számlaszám / rendelésszám → 'failed' (NEM dob — emberi
  *   beavatkozás kell, az újrapróbálás nem segít);
@@ -216,9 +235,10 @@ function buyerEmailFromOrder(order: Order): string {
  *   a szamlaKulsoAzon-horgony miatt a duplikáció Számlázz.hu-oldalon sem
  *   jöhet létre).
  *
- * Megjegyzés: a stornó ténye jelenleg csak strukturált naplóban jelenik meg
- * (séma-mező híján) — a stornoNumber/stornoStatus orders-mezők bevezetése
- * javasolt (lásd docs/szamlazz-storno.md).
+ * DB-nyilvántartás: ha a deps payloadot ad, a rendelés stornoStatus mezője a
+ * folyamatot követi (pending → issued + stornoNumber, illetve failed). A
+ * 'failed' NEM zárja ki az újrapróbálást — csak a rögzített stornoNumber /
+ * 'issued' állapot teszi idempotenssé (lásd docs/szamlazz-storno.md).
  */
 export async function issueStornoForOrder(
   order: Order,
@@ -236,10 +256,9 @@ export async function issueStornoForOrder(
     return { outcome: 'disabled' }
   }
 
-  // Idempotencia: a jövőbeli storno séma-mezőket toleránsan olvassuk.
-  const recordedStornoNumber = softString(order, 'stornoNumber')
-  const recordedStornoStatus = softString(order, 'stornoStatus')
-  if (recordedStornoNumber || recordedStornoStatus === 'storned') {
+  // Idempotencia: a rendelésen rögzített stornó-mezők alapján no-op.
+  const recordedStornoNumber = order.stornoNumber?.trim() || undefined
+  if (recordedStornoNumber || order.stornoStatus === 'issued') {
     log.info('a rendeléshez már rögzítve van stornó-számla — idempotens no-op', {
       stornoNumber: recordedStornoNumber ?? null,
     })
@@ -251,6 +270,7 @@ export async function issueStornoForOrder(
 
   if (!order.orderNumber) {
     log.error('RIASZTÁS: a rendelés rendelésszám nélkül fut — stornó nem állítható ki')
+    await setStornoFields(deps.payload, order.id, { stornoStatus: 'failed' })
     return { outcome: 'failed', reason: 'hiányzó rendelésszám' }
   }
 
@@ -260,6 +280,7 @@ export async function issueStornoForOrder(
     log.warn(
       'a rendeléshez nem tartozik kiállított számla (invoiceNumber) — stornó NEM állítható ki',
     )
+    await setStornoFields(deps.payload, order.id, { stornoStatus: 'failed' })
     return { outcome: 'failed', reason: 'hiányzó eredeti számlaszám (invoiceNumber)' }
   }
 
@@ -273,18 +294,23 @@ export async function issueStornoForOrder(
     ...(buyerEmailFromOrder(order) ? { buyerEmail: buyerEmailFromOrder(order) } : {}),
   })
 
+  await setStornoFields(deps.payload, order.id, { stornoStatus: 'pending' })
+
   try {
     const postXml = deps.postXml ?? postStornoXml
     const result = await postXml(xml, config)
-    // Séma-mező híján a stornó ténye itt, strukturált naplóban rögzül —
-    // a dupla stornó ellen a szamlaKulsoAzon-horgony véd.
-    log.info('stornó-számla kiállítva (a rendelésen séma-mező híján csak naplózva)', {
+    await setStornoFields(deps.payload, order.id, {
+      stornoStatus: 'issued',
+      stornoNumber: result.szamlaszam,
+    })
+    log.info('stornó-számla kiállítva', {
       stornoNumber: result.szamlaszam,
       originalInvoiceNumber,
       szamlaKulsoAzon: `${order.orderNumber}${STORNO_KULSO_AZON_SUFFIX}`,
     })
     return { outcome: 'storned', stornoNumber: result.szamlaszam }
   } catch (error) {
+    await setStornoFields(deps.payload, order.id, { stornoStatus: 'failed' }).catch(() => undefined)
     if (error instanceof SzamlazzApiError) {
       log.warn('stornó-számla kiállítás sikertelen', {
         kind: error.kind,
