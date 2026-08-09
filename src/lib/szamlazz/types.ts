@@ -88,3 +88,22 @@ export interface IssueStornoResult {
   /** failed kimenetelnél az ok (emberi olvasásra). */
   reason?: string
 }
+
+/**
+ * A helyesbítő (módosító) számla kiállítás kimenetele (C5 — RÉSZLEGES
+ * visszatérítés bizonylata; a teljes visszatérítésé a stornó).
+ * - 'issued': a helyesbítő számla kiállításra került;
+ * - 'already-issued': ehhez a refund-bejegyzéshez már készült helyesbítő (no-op);
+ * - 'disabled': a Számlázz.hu-integráció kikapcsolva (nincs agent-kulcs) — NEM hiba;
+ * - 'failed': nem újrapróbálható okból nem készült el (pl. nincs eredeti
+ *   számlaszám, hiányos vevőadat, érvénytelen összeg).
+ */
+export type IssueCorrectiveOutcome = 'issued' | 'already-issued' | 'disabled' | 'failed'
+
+export interface IssueCorrectiveInvoiceResult {
+  outcome: IssueCorrectiveOutcome
+  /** A kiállított helyesbítő számla száma (issued/already-issued kimenetelnél). */
+  correctiveInvoiceNumber?: string
+  /** failed kimenetelnél az ok (emberi olvasásra). */
+  reason?: string
+}

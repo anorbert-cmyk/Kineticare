@@ -154,10 +154,13 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
       continue
     }
 
+    // A NYERS state a maggal utazik: a paid-átmenet előtt a Total/Currency
+    // mezőt a rendelés szerver-oldali snapshotjához méri (S2 összeg-assert).
     const transition = await applyBarionStateTransition({
       payload: deps.payload,
       order,
       mapped,
+      state,
       log: orderLog,
     })
 

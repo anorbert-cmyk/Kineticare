@@ -1,9 +1,12 @@
+import type { Payload } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import { getSzamlazzConfig } from '../../lib/szamlazz/client'
 import {
   buildStornoXml,
+  isRetryableStornoError,
   issueStornoForOrder,
+  MAX_STORNO_ATTEMPTS,
   STORNO_KULSO_AZON_SUFFIX,
 } from '../../lib/szamlazz/storno'
 import { SzamlazzApiError } from '../../lib/szamlazz/types'
@@ -47,6 +50,18 @@ function createOrder(overrides: Record<string, unknown> = {}): Order {
     },
     ...overrides,
   } as unknown as Order
+}
+
+function createMockPayload(order: Order) {
+  const updates: Array<Record<string, unknown>> = []
+  const payload = {
+    update: async ({ data }: { data: Record<string, unknown> }) => {
+      updates.push(data)
+      Object.assign(order, data)
+      return order
+    },
+  }
+  return { payload: payload as unknown as Payload, updates, order }
 }
 
 describe('buildStornoXml — hivatalos Számla Agent sztornó séma (xmlszamlast)', () => {
@@ -199,5 +214,117 @@ describe('issueStornoForOrder', () => {
     })
     expect(result.outcome).toBe('failed')
     expect(result.reason).toContain('stornózva')
+  })
+})
+
+/**
+ * C4 — a stornó ÁLLAPOTA a rendelésen (stornoStatus/stornoNumber/
+ * stornoAttempts/stornoLastError) és a retry-döntés.
+ */
+describe('issueStornoForOrder — állapot a rendelésen (C4)', () => {
+  it('boldog út: pending → storned, a stornó száma és a kísérletszám rögzül', async () => {
+    const { payload, order, updates } = createMockPayload(createOrder())
+    const result = await issueStornoForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      issueDate: '2026-08-09',
+      postXml: async () => ({ szamlaszam: 'KIN-2026-8' }),
+    })
+
+    expect(result).toEqual({ outcome: 'storned', stornoNumber: 'KIN-2026-8' })
+    expect(updates[0]).toEqual({ stornoStatus: 'pending', stornoAttempts: 1 })
+    expect(updates[1]).toEqual({
+      stornoStatus: 'storned',
+      stornoNumber: 'KIN-2026-8',
+      stornoAttempts: 1,
+      stornoLastError: null,
+    })
+    expect(order.stornoStatus).toBe('storned')
+    expect(order.stornoNumber).toBe('KIN-2026-8')
+  })
+
+  it('retryable hibánál failed állapot + hibaüzenet, és a hiba DOBÓDIK (job-retry)', async () => {
+    const { payload, order } = createMockPayload(createOrder({ stornoAttempts: 1 }))
+    const error = new SzamlazzApiError({
+      message: 'A Számlázz.hu nem válaszolt 15000 ms-en belül.',
+      kind: 'timeout',
+      retryable: true,
+    })
+    await expect(
+      issueStornoForOrder(order, {
+        payload,
+        config: ENABLED_CONFIG,
+        postXml: async () => {
+          throw error
+        },
+      }),
+    ).rejects.toThrow('nem válaszolt')
+
+    expect(order.stornoStatus).toBe('failed')
+    expect(order.stornoAttempts).toBe(2)
+    expect(order.stornoLastError).toContain('nem válaszolt')
+    expect(isRetryableStornoError(error)).toBe(true)
+  })
+
+  it('nem retryable hibánál failed állapot, de NEM dob (nincs job-retry)', async () => {
+    const { payload, order } = createMockPayload(createOrder())
+    const error = new SzamlazzApiError({
+      message: 'Számla Agent elutasította: a számla már stornózva van',
+      kind: 'agent',
+      retryable: false,
+    })
+    const result = await issueStornoForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      postXml: async () => {
+        throw error
+      },
+    })
+    expect(result.outcome).toBe('failed')
+    expect(order.stornoStatus).toBe('failed')
+    expect(isRetryableStornoError(error)).toBe(false)
+  })
+
+  it('a kísérletszám kimerülése után failed, hálózati hívás NÉLKÜL', async () => {
+    const { payload, order } = createMockPayload(
+      createOrder({ stornoStatus: 'failed', stornoAttempts: MAX_STORNO_ATTEMPTS }),
+    )
+    let calls = 0
+    const result = await issueStornoForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      postXml: async () => {
+        calls += 1
+        return { szamlaszam: 'X' }
+      },
+    })
+    expect(result.outcome).toBe('failed')
+    expect(result.reason).toContain('kimerült')
+    expect(calls).toBe(0)
+  })
+
+  it('hiányzó eredeti számlaszámnál a failed állapot a rendelésre kerül', async () => {
+    const { payload, order } = createMockPayload(createOrder({ invoiceNumber: null }))
+    const result = await issueStornoForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      postXml: async () => expect.unreachable('nem hívható'),
+    })
+    expect(result.outcome).toBe('failed')
+    expect(order.stornoStatus).toBe('failed')
+    expect(order.stornoLastError).toContain('számlaszám')
+  })
+
+  it('a már stornózott rendelésnél egyetlen DB-írás sincs (idempotens no-op)', async () => {
+    const { payload, order, updates } = createMockPayload(
+      createOrder({ stornoStatus: 'storned', stornoNumber: 'KIN-2026-8' }),
+    )
+    const result = await issueStornoForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      postXml: async () => expect.unreachable('nem hívható'),
+    })
+    expect(result.outcome).toBe('already-storned')
+    expect(updates).toHaveLength(0)
   })
 })

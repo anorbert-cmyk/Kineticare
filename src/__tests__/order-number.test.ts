@@ -8,6 +8,7 @@ import {
   parseOrderNumberSequence,
 } from '../lib/order-number'
 import configPromise from '../payload.config'
+import { isDatabaseAvailable } from './helpers/db-available'
 
 /**
  * T-017: rendelésszám-generátor tesztek.
@@ -40,7 +41,9 @@ describe('orderNumber formátum (egység)', () => {
   })
 })
 
-const hasDb = Boolean(process.env.DATABASE_URI && process.env.PAYLOAD_SECRET)
+// A DB-kapcsoló tényleges TCP-elérhetőséget néz — a CI álértékű DATABASE_URI-ja
+// mellett az env-alapú feltétel hamis pozitívot adna (helpers/db-available.ts).
+const hasDb = await isDatabaseAvailable()
 
 describe.skipIf(!hasDb)('orderNumber generálás (DB)', () => {
   let payload: Payload

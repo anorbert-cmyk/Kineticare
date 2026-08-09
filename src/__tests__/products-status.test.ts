@@ -2,16 +2,19 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { getPayload, type Payload } from 'payload'
 
 import configPromise from '../payload.config'
+import { isDatabaseAvailable } from './helpers/db-available'
 
 /**
  * Regressziós teszt a products `status` enum-ütközésre: a custom `status`
  * mező (draft/published/archived) és a drafts `_status` mező korábban ugyanazt
  * az adatbázis-enumot kapta, így az 'archived' érték Postgres-enumhibára futott.
  *
- * DB-függő: csak akkor fut, ha DATABASE_URI és PAYLOAD_SECRET be van állítva
- * (helyi validáció / jövőbeli CI adatbázissal). Egyébként kihagyva.
+ * DB-függő: csak akkor fut, ha a DATABASE_URI-n TÉNYLEGESEN elérhető Postgres
+ * fut (helyi validáció / jövőbeli CI adatbázissal). Egyébként kihagyva — az
+ * env-alapú kapcsoló a CI álértékű DATABASE_URI-jánál hamis pozitívot adna
+ * (lásd src/__tests__/helpers/db-available.ts).
  */
-const hasDb = Boolean(process.env.DATABASE_URI && process.env.PAYLOAD_SECRET)
+const hasDb = await isDatabaseAvailable()
 
 describe.skipIf(!hasDb)('products status: archived (DB)', () => {
   let payload: Payload

@@ -1,4 +1,5 @@
 import { HOME_PAGE_SLUG } from '../content-slugs'
+import { hasControlCharacter } from '../return-url'
 
 /**
  * Piszkozat-előnézet (draft preview) — útvonal- és URL-számítás.
@@ -20,22 +21,6 @@ export const EXIT_PREVIEW_PATH = '/next/exit-preview'
 
 export const isPreviewCollection = (value: unknown): value is PreviewCollection =>
   typeof value === 'string' && (PREVIEW_COLLECTIONS as readonly string[]).includes(value)
-
-/**
- * Vezérlőkarakter (pl. soremelés) az útvonalban a Location fejlécben
- * fejléc-injekciót jelentene, ezért az ilyen érték sehol nem engedhető át.
- * Regex helyett kódpont-vizsgálat: a vezérlőkaraktert tartalmazó regex az
- * ESLint no-control-regex szabályába ütközne.
- */
-export function hasControlCharacter(value: string): boolean {
-  for (const character of value) {
-    const code = character.codePointAt(0) ?? 0
-    if (code < 0x20 || code === 0x7f) {
-      return true
-    }
-  }
-  return false
-}
 
 /**
  * A dokumentum NYILVÁNOS útvonala:

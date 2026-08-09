@@ -5,6 +5,7 @@ import {
   BUNNY_PULL_ZONE_WILDCARD_SOURCE,
   BUNNY_STREAM_IFRAME_SOURCE,
   bunnyPullZoneSource,
+  GA_COLLECT_SOURCES,
 } from '../../lib/security/csp'
 
 /**
@@ -152,11 +153,63 @@ describe('buildContentSecurityPolicy — direktívák', () => {
     expect(directive(csp, 'font-src')).toEqual(["'self'"])
   })
 
+  it('GA4 nélkül EGYETLEN Google-host sincs a fejlécben (legszűkebb politika)', () => {
+    for (const withoutGa of [
+      buildContentSecurityPolicy(),
+      buildContentSecurityPolicy('vz-abc123.b-cdn.net'),
+      // Formailag hibás azonosító nem nyithatja meg a hostokat.
+      buildContentSecurityPolicy(undefined, 'UA-12345-1'),
+      buildContentSecurityPolicy(undefined, '   '),
+    ]) {
+      expect(withoutGa).not.toContain('googletagmanager.com')
+      expect(withoutGa).not.toContain('google-analytics.com')
+      expect(withoutGa).not.toContain('analytics.google.com')
+    }
+  })
+
+  it('beállított GA4-azonosítóval a gtag.js hostja a script-src-be kerül', () => {
+    const withGa = buildContentSecurityPolicy(undefined, 'G-TESTONLY00')
+    expect(directive(withGa, 'script-src')).toContain('https://www.googletagmanager.com')
+    // A Turnstile forrása nem tűnhet el mellőle.
+    expect(directive(withGa, 'script-src')).toContain('https://challenges.cloudflare.com')
+  })
+
+  it('beállított GA4-azonosítóval a gyűjtőhostok a connect-src-ben (régió-jokerrel)', () => {
+    const sources = directive(buildContentSecurityPolicy(undefined, 'G-TESTONLY00'), 'connect-src')
+    expect(sources).toContain("'self'")
+    for (const collect of GA_COLLECT_SOURCES) {
+      expect(sources, collect).toContain(collect)
+    }
+    expect(GA_COLLECT_SOURCES).toContain('https://*.google-analytics.com')
+  })
+
+  it('beállított GA4-azonosítóval a képpont-tartalék az img-src-ben van', () => {
+    const sources = directive(buildContentSecurityPolicy(undefined, 'G-TESTONLY00'), 'img-src')
+    expect(sources).toContain('https://*.google-analytics.com')
+    expect(sources).toContain('https://www.googletagmanager.com')
+    // A Bunny pull-zone forrása nem eshet ki a GA hostjai mellől.
+    expect(sources).toContain(BUNNY_PULL_ZONE_WILDCARD_SOURCE)
+  })
+
+  it('a GA4 hostjai NEM lazítanak fel más direktívát (frame-src, default-src)', () => {
+    const withGa = buildContentSecurityPolicy(undefined, 'G-TESTONLY00')
+    expect(directive(withGa, 'default-src')).toEqual(["'self'"])
+    expect(directive(withGa, 'frame-src').some((source) => source.includes('google'))).toBe(false)
+    expect(withGa).not.toContain("'unsafe-eval'")
+    // A GA jokerei is szabályosak: teljes címke helyén állnak.
+    expect(withGa).not.toMatch(/[a-z0-9-]\*/)
+  })
+
   it('a fejléc szintaktikailag ép: nincs üres vagy duplikált direktíva', () => {
-    const names = csp.split('; ').map((entry) => entry.split(' ')[0])
-    expect(names.every((name) => name.length > 0)).toBe(true)
-    expect(new Set(names).size).toBe(names.length)
-    expect(csp).not.toContain(';;')
-    expect(csp.endsWith(';')).toBe(false)
+    // A GA-forrásokkal bővített változat is: dupla szóköz vagy üres forrás
+    // csendben elrontaná a fejlécet.
+    for (const value of [csp, buildContentSecurityPolicy('vz-a.b-cdn.net', 'G-TESTONLY00')]) {
+      const names = value.split('; ').map((entry) => entry.split(' ')[0])
+      expect(names.every((name) => name.length > 0)).toBe(true)
+      expect(new Set(names).size).toBe(names.length)
+      expect(value).not.toContain(';;')
+      expect(value).not.toContain('  ')
+      expect(value.endsWith(';')).toBe(false)
+    }
   })
 })

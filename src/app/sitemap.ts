@@ -7,6 +7,7 @@ import {
   getPosts,
   getPublishedProducts,
 } from '@/lib/cms'
+import { courseHref } from '@/lib/course-url'
 import { absoluteUrl } from '@/lib/seo'
 
 /**
@@ -84,11 +85,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })
   }
 
-  // A kurzus-URL jelenleg numerikus id (a slug-mező a backlogban: C3).
-  // Amint a slug megvan, itt csak ez a sor változik.
+  // A kurzus KANONIKUS címe a slug (C3); slug nélküli, régi terméknél marad az
+  // id-alapú út — a sitemapbe így sosem kerül átirányított (301-es) URL.
   for (const product of products) {
     entries.push({
-      url: absoluteUrl(`/kurzusok/${product.id}`),
+      url: absoluteUrl(courseHref(product)),
       lastModified: lastModified(product.updatedAt),
       changeFrequency: 'weekly',
       priority: 0.9,

@@ -18,6 +18,11 @@ import {
   STREAM_TOKEN_GRACE_SECONDS,
   STREAM_TOKEN_MAX_TTL_SECONDS,
 } from '../lib/stream/token'
+import {
+  RATE_LIMIT_MESSAGE,
+  RATE_LIMIT_RULES,
+  SlidingWindowRateLimiter,
+} from '../lib/security/rate-limit'
 
 /**
  * /api/stream-token egységtesztek — mockolt Payload local API-val, az
@@ -632,5 +637,71 @@ describe('GET /api/stream-token route-handler', () => {
     const body = (await response.json()) as { error: string }
     expect(body.error).toContain('Váratlan hiba')
     expect(body.error).not.toContain('DB-kapcsolat')
+  })
+
+  /**
+   * Per-user kérés-korlát: a végpont hitelesített, és minden hívása
+   * Bunny-lejátszási jegyet állít ki — fék nélkül egy belépett fiók
+   * korlátlanul farmolhatna jegyet. A keret alanya ezért a FELHASZNÁLÓ, nem
+   * az IP (egy user IP-t vált, több user oszthat NAT-IP-t).
+   */
+  describe('per-user kérés-korlát (A2 kiterjesztés)', () => {
+    const rules = { ...RATE_LIMIT_RULES, 'stream-token': { limit: 2, windowMs: 60_000 } }
+
+    it('a keret felett 429, magyar üzenettel és Retry-After fejléccel', async () => {
+      const limiter = new SlidingWindowRateLimiter()
+      const { payload } = createMockPayload()
+      const GET = createStreamTokenHandler({
+        getPayload: async () => payload,
+        rateLimit: { limiter, rules },
+      })
+
+      expect((await GET(makeRequest('?productId=42'))).status).toBe(200)
+      expect((await GET(makeRequest('?productId=42'))).status).toBe(200)
+
+      const throttled = await GET(makeRequest('?productId=42'))
+      expect(throttled.status).toBe(429)
+      expect(Number(throttled.headers.get('Retry-After'))).toBeGreaterThan(0)
+      const body = (await throttled.json()) as { error: string }
+      expect(body.error).toBe(RATE_LIMIT_MESSAGE)
+      expect(Object.keys(body)).toEqual(['error'])
+    })
+
+    it('a keret a BEJELENTKEZETT userhez tartozik, nem a kéréshez/IP-hez', async () => {
+      const limiter = new SlidingWindowRateLimiter()
+      const masikVevo = { ...buyerUser, id: 99 } as unknown as User
+      const { payload } = createMockPayload()
+      const { payload: masikPayload } = createMockPayload({ authUser: masikVevo })
+
+      const GET = createStreamTokenHandler({
+        getPayload: async () => payload,
+        rateLimit: { limiter, rules },
+      })
+      const MASIK_GET = createStreamTokenHandler({
+        getPayload: async () => masikPayload,
+        rateLimit: { limiter, rules },
+      })
+
+      await GET(makeRequest('?productId=42'))
+      await GET(makeRequest('?productId=42'))
+      expect((await GET(makeRequest('?productId=42'))).status).toBe(429)
+
+      // A másik vevő kerete érintetlen (ugyanaz a kérés, más session).
+      expect((await MASIK_GET(makeRequest('?productId=42'))).status).toBe(200)
+    })
+
+    it('bejelentkezés nélkül a keret nem fogy (a 401 az AUTH-on dől el)', async () => {
+      const limiter = new SlidingWindowRateLimiter()
+      const { payload } = createMockPayload({ authUser: null })
+      const GET = createStreamTokenHandler({
+        getPayload: async () => payload,
+        rateLimit: { limiter, rules },
+      })
+
+      for (let index = 0; index < 10; index += 1) {
+        expect((await GET(makeRequest('?productId=42'))).status).toBe(401)
+      }
+      expect(limiter.trackedKeyCount).toBe(0)
+    })
   })
 })

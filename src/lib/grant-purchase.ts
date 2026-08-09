@@ -1,6 +1,7 @@
 import type { Payload } from 'payload'
 
 import type { User } from '../payload-types'
+import { maskEmail } from './email/mask'
 import { logger, type Logger } from './logger'
 
 /**
@@ -85,14 +86,22 @@ export async function grantPurchase(options: GrantPurchaseOptions): Promise<Gran
   const log = options.logger ?? logger
   const productRefKind = resolveProductRefKind(productIdOrSku)
 
-  // Audit-alap: KI (grantedBy id + email), KINEK (email), MIT (productRef),
-  // MIÉRT (reason) — az eredmény minden ágon rákerül.
+  // Audit-alap: KI (grantedBy id + maszkolt cím), KINEK (maszkolt cím), MIT
+  // (productRef), MIÉRT (reason) — az eredmény minden ágon rákerül.
+  //
+  // A címek MASZKOLVA (`maskEmail`) és `cimzett` néven kerülnek a naplóba: a
+  // teljes e-mail-cím személyes adat, a logger `email` kulcsú mezőt eleve
+  // redaktál (src/lib/logger.ts). A maszkolt alak a sor beazonosításához elég,
+  // a rendszer belső azonosítója (userId) pedig a naplóban külön is szerepel.
   const audit = {
-    email,
+    cimzett: maskEmail(email),
     productRef: productIdOrSku,
     productRefKind,
     grantedBy: options.grantedBy
-      ? { id: options.grantedBy.id, email: options.grantedBy.email ?? null }
+      ? {
+          id: options.grantedBy.id,
+          cimzett: options.grantedBy.email ? maskEmail(options.grantedBy.email) : null,
+        }
       : null,
     ...(options.reason !== undefined ? { reason: options.reason } : {}),
   }

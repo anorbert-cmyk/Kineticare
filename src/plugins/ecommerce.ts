@@ -11,6 +11,7 @@ import {
   isDocumentOwner,
   isOwnerFieldAccess,
 } from '../access'
+import { courseSlugField } from '../fields/course-slug'
 import { orderIntegrityBeforeChange } from '../lib/order-integrity'
 import { withoutPluginPaymentEndpoints } from '../lib/payments/barion-adapter'
 
@@ -111,7 +112,7 @@ const orderItemSnapshotFields: Field[] = [
     admin: {
       readOnly: true,
       description:
-        'A termék neve (sku) a megrendeléskor — a products collectionben nincs külön title mező, a sku a display-név.',
+        'A termék azonosító-neve (sku) a megrendeléskor. SZÁNDÉKOSAN a sku, nem a kurzuscím (displayTitle): a rendelés- és számlasoron a stabil azonosító a hasznos, a marketingcím változhat.',
     },
   },
   {
@@ -216,6 +217,10 @@ const WEBSHOP_GROUP = 'Webshop'
 /**
  * Products override: a plugin gyári mezői (inventory, priceInHUF…) megmaradnak,
  * a kurzus-specifikus mezők mögéjük kerülnek.
+ *
+ * `useAsTitle: 'sku'` marad a `displayTitle` bevezetése után is: a displayTitle
+ * a régi sorokon üres, és a useAsTitle-t rá állítva az admin listája ezeknél
+ * csak az azonosítót mutatná.
  */
 const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) => ({
   ...defaultCollection,
@@ -231,6 +236,20 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
   },
   fields: [
     ...mapFieldsDeep(defaultCollection.fields, withOwnerOnlyPriceAccess),
+    {
+      // C3: a látogatónak szóló kurzuscím. A `sku` egyszerre volt eddig
+      // azonosító és megjelenő név; a displayTitle ezt szétválasztja, és ez a
+      // slug ELSŐDLEGES forrása is (src/lib/course-url.ts). Nem kötelező: ha
+      // üres, a megjelenő név a `sku` marad (src/lib/courses.ts courseTitle).
+      name: 'displayTitle',
+      type: 'text',
+      label: 'Kurzus címe',
+      admin: {
+        description:
+          'A kurzus címe, ahogy a látogató látja (pl. „Kéztorna otthon — 8 hetes program"). Ebből készül a webcím is. Ha üresen hagyod, a lenti „Kurzus neve (azonosító)" jelenik meg.',
+      },
+    },
+    courseSlugField,
     {
       name: 'shortDescription',
       type: 'textarea',
@@ -433,7 +452,7 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       label: 'Kurzus neve (azonosító)',
       admin: {
         description:
-          'Ez a kurzus megjelenő neve és egyben egyedi azonosítója — két kurzusnak nem lehet ugyanaz.',
+          'A kurzus egyedi azonosítója — két kurzusnak nem lehet ugyanaz. Ez jelenik meg a rendeléseken és a számlán. Ha a fenti „Kurzus címe" üres, a látogató is ezt látja.',
       },
     },
     {
@@ -555,6 +574,98 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       ],
       admin: {
         description: 'A számlázás állapota. A rendszer állítja — ne írd át.',
+      },
+    },
+    {
+      // Stornó-számla állapota (C4). Az invoiceStatus mintáját követi: a
+      // rendszer (refund-folyamat + storno-issue job) állítja, kézzel nem
+      // írandó. A 'storned' a végállapot — az issueStornoForOrder ezt (vagy a
+      // stornoNumber meglétét) látva idempotens no-opot ad.
+      name: 'stornoStatus',
+      type: 'select',
+      defaultValue: 'none',
+      label: 'Stornó-számla állapota',
+      options: [
+        { label: 'Nincs', value: 'none' },
+        { label: 'Függőben', value: 'pending' },
+        { label: 'Stornózva', value: 'storned' },
+        { label: 'Sikertelen', value: 'failed' },
+      ],
+      admin: {
+        description: 'A stornó-számla állapota. A rendszer állítja — ne írd át.',
+      },
+    },
+    {
+      // A kiállított stornó-számla száma — az invoiceNumber mezővel azonos
+      // mezőszintű olvasás-védelemmel (pénzügyi bizonylatazonosító).
+      name: 'stornoNumber',
+      type: 'text',
+      label: 'Stornó-számla sorszáma',
+      access: {
+        read: isOwnerFieldAccess,
+      },
+    },
+    {
+      name: 'stornoAttempts',
+      type: 'number',
+      defaultValue: 0,
+      label: 'Stornó-kísérletek száma',
+      admin: {
+        readOnly: true,
+        description:
+          'A stornó-kiállítási kísérletek száma (a retry-job számlálója). A rendszer állítja.',
+      },
+    },
+    {
+      name: 'stornoLastError',
+      type: 'text',
+      label: 'Stornó utolsó hibája',
+      admin: {
+        readOnly: true,
+        description: 'Az utolsó sikertelen stornó-kísérlet hibaüzenete — hibakereséshez.',
+      },
+    },
+    {
+      // Helyesbítő (módosító) számla állapota RÉSZLEGES visszatérítéshez (C5).
+      // Teljes refundnál stornó készül, részlegesnél helyesbítő számla — a
+      // döntést a refund összege hozza meg (src/lib/refund/refund-order.ts).
+      name: 'correctiveInvoiceStatus',
+      type: 'select',
+      defaultValue: 'none',
+      label: 'Helyesbítő számla állapota',
+      options: [
+        { label: 'Nincs', value: 'none' },
+        { label: 'Függőben', value: 'pending' },
+        { label: 'Kiállítva', value: 'issued' },
+        { label: 'Sikertelen', value: 'failed' },
+      ],
+      admin: {
+        description: 'A helyesbítő (módosító) számla állapota. A rendszer állítja — ne írd át.',
+      },
+    },
+    {
+      // A LEGUTÓBB kiállított helyesbítő számla száma (több részrefund esetén
+      // a korábbiak a naplóban és a Számlázz.hu-fiókban követhetők).
+      name: 'correctiveInvoiceNumber',
+      type: 'text',
+      label: 'Helyesbítő számla sorszáma',
+      access: {
+        read: isOwnerFieldAccess,
+      },
+    },
+    {
+      // Idempotencia-horgony a helyesbítőhöz: a refunds-nyom hányadik (1-alapú)
+      // bejegyzéséhez tartozik a legutóbbi helyesbítő számla. Ismételt futás
+      // (job-retry) ezt látva no-opot ad; a provider-oldali horgony a
+      // szamlaKulsoAzon = `${orderNumber}-HELYESBITO-<sorszám>`.
+      name: 'correctiveInvoiceSeq',
+      type: 'number',
+      defaultValue: 0,
+      label: 'Helyesbített visszatérítés sorszáma',
+      admin: {
+        readOnly: true,
+        description:
+          'A refunds-nyom hányadik bejegyzéséhez tartozik a legutóbbi helyesbítő számla (idempotencia). A rendszer állítja.',
       },
     },
     {

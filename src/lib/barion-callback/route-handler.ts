@@ -34,9 +34,18 @@ import { createBarionCallbackProcessor } from './process-callback'
  *
  * Biztonsági elv: a callback-payload önmagában NEM bizonyíték — a jóváhagyás
  * kizárólag a szerver-szerver fetchPaymentState (v4) verifikációval történik
- * (lásd process-callback.ts). Ezért a HAMIS/ismeretlen PaymentId is 200-at
- * kap: az esemény a webhook-events-ben rögzül, a feldolgozó riasztást naplóz,
- * a Barion retry-ja pedig nem pörög feleslegesen egy sosem sikerülő híváson.
+ * (lásd process-callback.ts). Ezért a HAMIS/ismeretlen (de ALAKILAG ÉRVÉNYES)
+ * PaymentId is 200-at kap: az esemény a webhook-events-ben rögzül, a feldolgozó
+ * riasztást naplóz, a Barion retry-ja pedig nem pörög feleslegesen egy sosem
+ * sikerülő híváson.
+ *
+ * ALAK-ELLENŐRZÉS a DB-írás ELŐTT: a végpont szándékosan kimarad a kérés-korlát
+ * alól (`classifyRateLimitedRoute` — a fizetési értesítés elvesztése pénzt
+ * jelent), tehát bárki korlátlanul hívhatja. Fék nélkül minden hívás EGY új
+ * webhook-events sort írna (a tábla korlátlanul nőne) és EGY kimenő Barion
+ * GetState-hívást indítana. Ezért a PaymentId-nek GUID-alakúnak kell lennie:
+ * ami nem az, az bizonyosan nem a Bariontól jön → 400, még a dedup-írás előtt.
+ * Az alakilag helyes, de ismeretlen azonosító útja változatlan (200 + riasztás).
  *
  * A nyers callback-bodyt szándékosan NEM tároljuk/naplózzuk — a Barion
  * callback-payloadja a PaymentId-n kívül nem hordoz releváns adatot; a
@@ -54,7 +63,22 @@ export interface BarionCallbackHandlerDeps {
   store?: WebhookEventStore
 }
 
-/** A PaymentId kinyerése — hiányzó/üres esetén null (a hívó 400-zal válaszol). */
+/**
+ * A Barion PaymentId GUID (UUID) alakú — a Barion API-dokumentáció és a
+ * gyakorlatban kapott értékek szerint is `8-4-4-4-12` hexadecimális csoport.
+ * Kis- és nagybetűs hexet is elfogadunk (a Barion kisbetűset küld, de a
+ * GUID-alak önmagában nem kis-nagybetű-érzékeny).
+ */
+const PAYMENT_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Egy GUID pontosan ennyi karakter — a mintaillesztés előtti olcsó kapu. */
+export const MAX_PAYMENT_ID_LENGTH = 36
+
+/**
+ * A PaymentId kinyerése és ALAK-ellenőrzése — hiányzó, üres, túl hosszú vagy
+ * nem GUID-alakú érték esetén null (a hívó 400-zal válaszol, DB-írás nélkül).
+ */
 function extractPaymentId(body: unknown): string | null {
   if (typeof body !== 'object' || body === null) {
     return null
@@ -65,8 +89,12 @@ function extractPaymentId(body: unknown): string | null {
   if (typeof raw !== 'string') {
     return null
   }
+  // Hosszkapu ELŐSZÖR: egy több megabájtos mezőre nem futtatunk mintaillesztést.
   const trimmed = raw.trim()
-  return trimmed.length > 0 ? trimmed : null
+  if (trimmed.length === 0 || trimmed.length > MAX_PAYMENT_ID_LENGTH) {
+    return null
+  }
+  return PAYMENT_ID_PATTERN.test(trimmed) ? trimmed : null
 }
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
@@ -90,8 +118,9 @@ export function createBarionCallbackHandler(deps: BarionCallbackHandlerDeps) {
 
     const paymentId = extractPaymentId(body)
     if (!paymentId) {
-      log.warn('barion-callback: hiányzó vagy üres PaymentId — 400')
-      return jsonResponse({ ok: false, error: 'Hiányzó vagy üres PaymentId.' }, 400)
+      // A nyers értéket NEM naplózzuk (tetszőleges, kívülről jött szöveg).
+      log.warn('barion-callback: hiányzó vagy nem GUID-alakú PaymentId — 400')
+      return jsonResponse({ ok: false, error: 'Hiányzó vagy érvénytelen PaymentId.' }, 400)
     }
     const eventLog = log.child({ paymentId })
 

@@ -44,6 +44,19 @@ describe('payload.config', () => {
   })
 
   /**
+   * C1/A2 biztonsági zárás: a GraphQL API-nak KIKAPCSOLVA kell maradnia. A
+   * beépített resetPasswordUser/forgotPasswordUser mutációk a
+   * resetPasswordOperation-ön át megkerülnék a szerveroldali jelszó-politikát
+   * (src/lib/security/reset-password-route.ts) és az IP-alapú kérés-korlátot.
+   * Visszakapcsolás előtt ezekre őrt kell építeni.
+   */
+  it('a GraphQL API le van tiltva (jelszó-politika + rate-limit megkerülhetetlensége)', async () => {
+    const config = await configPromise
+
+    expect(config.graphQL?.disable).toBe(true)
+  })
+
+  /**
    * Magyar admin felület: a staff („a lányok") nem szakember, ezért az admin
    * alapnyelve magyar. A fallbackLanguage a döntő beállítás — a nem szerkesztett
    * kulcsok is ezen a nyelven jelennek meg —, az `en` pedig választható marad.
@@ -111,6 +124,31 @@ describe('payload.config', () => {
     expect(poolOptions.connectionTimeoutMillis).toBe(10_000)
     expect(poolOptions.statement_timeout).toBe(30_000)
     expect(poolOptions.query_timeout).toBe(30_000)
+  })
+
+  /**
+   * C13 — a 2026-08-06-i sorzár-incidens: egy nyitva maradt, TÉTLEN tranzakció
+   * zárolta a `users` sort, és minden írás/bejelentkezés befagyott (olvasás
+   * közben gyors maradt). A statement_timeout ezen nem segít, mert az a futó
+   * lekérdezést öli meg — itt viszont éppen nem futott lekérdezés. Az
+   * `idle_in_transaction_session_timeout` a kapcsolat startup-paramétereként
+   * megy át a Postgresnek, így DB-oldali ALTER SYSTEM nélkül is minden
+   * pool-kapcsolatra érvényes. Ez a teszt őrzi, hogy ne essen ki a configból.
+   */
+  it('a pool kapcsolat-szinten kikényszeríti az idle_in_transaction_session_timeout-ot', async () => {
+    const config = await configPromise
+
+    const adapter = (
+      config.db as unknown as { init: (args: { payload: unknown }) => { poolOptions?: unknown } }
+    ).init({ payload: {} })
+    const poolOptions = adapter.poolOptions as Record<string, unknown>
+
+    expect(poolOptions.idle_in_transaction_session_timeout).toBe(60_000)
+    // A tétlen tranzakcióra szabott korlát a futó lekérdezésé fölött van, hogy
+    // a normál (aktív) hosszú műveletekbe — migráció, seed — ne szóljon bele.
+    expect(poolOptions.idle_in_transaction_session_timeout).toBeGreaterThan(
+      poolOptions.statement_timeout as number,
+    )
   })
 
   /**

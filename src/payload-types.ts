@@ -134,6 +134,8 @@ export interface Config {
       'webhook-retry': TaskWebhookRetry;
       'order-poll': TaskOrderPoll;
       'invoice-issue': TaskInvoiceIssue;
+      'storno-issue': TaskStornoIssue;
+      'corrective-invoice-issue': TaskCorrectiveInvoiceIssue;
       inline: {
         input: unknown;
         output: unknown;
@@ -1297,6 +1299,14 @@ export interface Product {
   priceInHUFEnabled?: boolean | null;
   priceInHUF?: number | null;
   /**
+   * A kurzus címe, ahogy a látogató látja (pl. „Kéztorna otthon — 8 hetes program"). Ebből készül a webcím is. Ha üresen hagyod, a lenti „Kurzus neve (azonosító)" jelenik meg.
+   */
+  displayTitle?: string | null;
+  /**
+   * A kurzus webcíme (pl. kezrehabilitacio-otthon). Magától kitöltődik a kurzus címéből, ékezetek nélkül, kötőjelekkel; ha a webcím már foglalt, sorszám kerül a végére. Csak akkor írd át, ha tudod, mit csinálsz — a régi webcím ilyenkor megszűnik működni.
+   */
+  slug?: string | null;
+  /**
    * 1–3 mondat. A kurzuskártyákon és a kezdőlapon ez látszik.
    */
   shortDescription?: string | null;
@@ -1382,7 +1392,7 @@ export interface Product {
    */
   status?: ('draft' | 'published' | 'archived') | null;
   /**
-   * Ez a kurzus megjelenő neve és egyben egyedi azonosítója — két kurzusnak nem lehet ugyanaz.
+   * A kurzus egyedi azonosítója — két kurzusnak nem lehet ugyanaz. Ez jelenik meg a rendeléseken és a számlán. Ha a fenti „Kurzus címe" üres, a látogató is ezt látja.
    */
   sku?: string | null;
   /**
@@ -1573,7 +1583,7 @@ export interface Order {
         product?: (number | null) | Product;
         quantity: number;
         /**
-         * A termék neve (sku) a megrendeléskor — a products collectionben nincs külön title mező, a sku a display-név.
+         * A termék azonosító-neve (sku) a megrendeléskor. SZÁNDÉKOSAN a sku, nem a kurzuscím (displayTitle): a rendelés- és számlasoron a stabil azonosító a hasznos, a marketingcím változhat.
          */
         titleSnapshot?: string | null;
         /**
@@ -1621,6 +1631,28 @@ export interface Order {
    * A számlázás állapota. A rendszer állítja — ne írd át.
    */
   invoiceStatus?: ('none' | 'pending' | 'issued' | 'failed') | null;
+  /**
+   * A stornó-számla állapota. A rendszer állítja — ne írd át.
+   */
+  stornoStatus?: ('none' | 'pending' | 'storned' | 'failed') | null;
+  stornoNumber?: string | null;
+  /**
+   * A stornó-kiállítási kísérletek száma (a retry-job számlálója). A rendszer állítja.
+   */
+  stornoAttempts?: number | null;
+  /**
+   * Az utolsó sikertelen stornó-kísérlet hibaüzenete — hibakereséshez.
+   */
+  stornoLastError?: string | null;
+  /**
+   * A helyesbítő (módosító) számla állapota. A rendszer állítja — ne írd át.
+   */
+  correctiveInvoiceStatus?: ('none' | 'pending' | 'issued' | 'failed') | null;
+  correctiveInvoiceNumber?: string | null;
+  /**
+   * A refunds-nyom hányadik bejegyzéséhez tartozik a legutóbbi helyesbítő számla (idempotencia). A rendszer állítja.
+   */
+  correctiveInvoiceSeq?: number | null;
   /**
    * A számlázási adatok mentett másolata a rendelés idejéből.
    */
@@ -2027,7 +2059,8 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'webhook-retry' | 'order-poll' | 'invoice-issue';
+        taskSlug:
+          'inline' | 'webhook-retry' | 'order-poll' | 'invoice-issue' | 'storno-issue' | 'corrective-invoice-issue';
         taskID: string;
         input?:
           | {
@@ -2060,7 +2093,8 @@ export interface PayloadJob {
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'webhook-retry' | 'order-poll' | 'invoice-issue') | null;
+  taskSlug?:
+    ('inline' | 'webhook-retry' | 'order-poll' | 'invoice-issue' | 'storno-issue' | 'corrective-invoice-issue') | null;
   queue?: string | null;
   waitUntil?: string | null;
   processing?: boolean | null;
@@ -2771,6 +2805,8 @@ export interface ProductsSelect<T extends boolean = true> {
   inventory?: T;
   priceInHUFEnabled?: T;
   priceInHUF?: T;
+  displayTitle?: T;
+  slug?: T;
   shortDescription?: T;
   longDescription?: T;
   coverImage?: T;
@@ -2867,6 +2903,13 @@ export interface OrdersSelect<T extends boolean = true> {
   invoiceNumber?: T;
   invoicePdfUrl?: T;
   invoiceStatus?: T;
+  stornoStatus?: T;
+  stornoNumber?: T;
+  stornoAttempts?: T;
+  stornoLastError?: T;
+  correctiveInvoiceStatus?: T;
+  correctiveInvoiceNumber?: T;
+  correctiveInvoiceSeq?: T;
   customerSnapshot?: T;
   consentWithdrawalWaiver?: T;
   consentWithdrawalWaiverAt?: T;
@@ -3253,6 +3296,35 @@ export interface TaskInvoiceIssue {
   output: {
     outcome: string;
     invoiceNumber?: string | null;
+    reason?: string | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskStorno-issue".
+ */
+export interface TaskStornoIssue {
+  input: {
+    orderId: number;
+  };
+  output: {
+    outcome: string;
+    stornoNumber?: string | null;
+    reason?: string | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskCorrective-invoice-issue".
+ */
+export interface TaskCorrectiveInvoiceIssue {
+  input: {
+    orderId: number;
+    refundSeq: number;
+  };
+  output: {
+    outcome: string;
+    correctiveInvoiceNumber?: string | null;
     reason?: string | null;
   };
 }

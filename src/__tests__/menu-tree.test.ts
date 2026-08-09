@@ -80,7 +80,7 @@ describe('resolveMenuHref', () => {
     expect(resolveMenuHref(item)).toBe('/blog/alapok')
   })
 
-  it('product típus: published termék /kurzusok/{id} útvonal', () => {
+  it('product típus: slug nélküli (régi) termék /kurzusok/{id} útvonal', () => {
     const product = { id: 7, status: 'published' } as Product
     const item = menu({
       id: 3,
@@ -89,6 +89,17 @@ describe('resolveMenuHref', () => {
       ref: { relationTo: 'products', value: product },
     })
     expect(resolveMenuHref(item)).toBe('/kurzusok/7')
+  })
+
+  it('product típus: sluggal a kanonikus /kurzusok/{slug} útvonal (C3)', () => {
+    const product = { id: 7, slug: 'kez-torna', status: 'published' } as Product
+    const item = menu({
+      id: 3,
+      label: 'Kurzus',
+      type: 'product',
+      ref: { relationTo: 'products', value: product },
+    })
+    expect(resolveMenuHref(item)).toBe('/kurzusok/kez-torna')
   })
 
   it('nem populate-olt ref esetén null (státusz nem ellenőrizhető)', () => {

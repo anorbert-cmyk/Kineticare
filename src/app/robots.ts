@@ -28,6 +28,8 @@ import { absoluteUrl } from '@/lib/seo'
 const DISALLOWED_PATHS = [
   '/admin',
   '/api/',
+  // A /graphql végpont a configban le van tiltva (graphQL.disable) és a
+  // route-fájlja is törölve — a tiltás védőhálónak marad itt.
   '/graphql',
   '/fiok',
   '/kurzusaim',

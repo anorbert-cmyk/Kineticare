@@ -1,0 +1,397 @@
+import type { Payload } from 'payload'
+import { describe, expect, it } from 'vitest'
+
+import { getSzamlazzConfig } from '../../lib/szamlazz/client'
+import {
+  buildCorrectiveInvoiceXml,
+  CORRECTIVE_KULSO_AZON_INFIX,
+  correctiveKulsoAzon,
+  isRetryableCorrectiveError,
+  issueCorrectiveInvoiceForOrder,
+} from '../../lib/szamlazz/corrective'
+import { computeLineAmounts, VAT_RATE_PERCENT } from '../../lib/szamlazz/invoice'
+import { SzamlazzApiError } from '../../lib/szamlazz/types'
+import type { Order } from '../../payload-types'
+
+/**
+ * Helyesbítő (módosító) számla egységtesztek (C5) — RÉSZLEGES visszatérítés
+ * bizonylata: ugyanaz az xmlszamla-művelet, de
+ * <helyesbitoszamla>true</helyesbitoszamla> + <helyesbitettSzamlaszam> az
+ * eredeti számlára, és negatív korrekciós tétel a visszatérített összegre.
+ *
+ * DUMMY érték, egyértelműen jelölve — NEM valódi Számla Agent kulcs.
+ */
+const DUMMY_AGENT_KEY = 'DUMMY-AGENT-KULCS-NEM-VALODI-TITOK'
+
+const ORDER_NUMBER = 'KH-2026-000123'
+const ORIGINAL_INVOICE_NUMBER = 'KIN-2026-7'
+const TOTAL_HUF = 19990
+const REFUND_HUF = 5000
+
+const ENABLED_CONFIG = getSzamlazzConfig({ SZAMLAZZ_AGENT_KEY: DUMMY_AGENT_KEY })
+
+const BUYER = {
+  nev: 'Teszt Anna',
+  irsz: '1111',
+  telepules: 'Budapest',
+  cim: 'Példa utca 1.',
+  email: 'anna@example.test',
+}
+
+function createOrder(overrides: Record<string, unknown> = {}): Order {
+  return {
+    id: 101,
+    orderNumber: ORDER_NUMBER,
+    status: 'paid',
+    invoiceStatus: 'issued',
+    invoiceNumber: ORIGINAL_INVOICE_NUMBER,
+    correctiveInvoiceStatus: 'none',
+    correctiveInvoiceSeq: 0,
+    customerEmail: BUYER.email,
+    totalHufSnapshot: TOTAL_HUF,
+    items: [
+      { product: 42, quantity: 1, titleSnapshot: 'DEMO-KEZREHAB-001', priceHufSnapshot: TOTAL_HUF },
+    ],
+    customerSnapshot: {
+      name: BUYER.nev,
+      email: BUYER.email,
+      billingName: BUYER.nev,
+      billingZip: BUYER.irsz,
+      billingCity: BUYER.telepules,
+      billingStreet: BUYER.cim,
+    },
+    ...overrides,
+  } as unknown as Order
+}
+
+function createMockPayload(order: Order | null) {
+  const updates: Array<Record<string, unknown>> = []
+  const payload = {
+    update: async ({ data }: { data: Record<string, unknown> }) => {
+      updates.push(data)
+      if (order) {
+        Object.assign(order, data)
+      }
+      return order
+    },
+  }
+  return { payload: payload as unknown as Payload, updates, order }
+}
+
+describe('buildCorrectiveInvoiceXml — helyesbítő számla séma', () => {
+  const xml = buildCorrectiveInvoiceXml({
+    agentKey: DUMMY_AGENT_KEY,
+    originalInvoiceNumber: ORIGINAL_INVOICE_NUMBER,
+    orderNumber: ORDER_NUMBER,
+    invoicePrefix: 'KIN',
+    refundSeq: 2,
+    amountHuf: REFUND_HUF,
+    issueDate: '2026-08-09',
+    buyer: BUYER,
+    reason: 'Kedvezmény utólag',
+  })
+
+  it('helyesbitoszamla=true ÉS helyesbitettSzamlaszam = az EREDETI számla száma', () => {
+    expect(xml).toContain('<helyesbitoszamla>true</helyesbitoszamla>')
+    expect(xml).toContain(
+      `<helyesbitettSzamlaszam>${ORIGINAL_INVOICE_NUMBER}</helyesbitettSzamlaszam>`,
+    )
+  })
+
+  it('a szamlaKulsoAzon a refund-sorszámmal képzett saját horgony (NEM az orderNumber)', () => {
+    expect(xml).toContain(
+      `<szamlaKulsoAzon>${ORDER_NUMBER}${CORRECTIVE_KULSO_AZON_INFIX}2</szamlaKulsoAzon>`,
+    )
+    expect(xml).not.toContain(`<szamlaKulsoAzon>${ORDER_NUMBER}</szamlaKulsoAzon>`)
+    expect(correctiveKulsoAzon(ORDER_NUMBER, 2)).toBe(`${ORDER_NUMBER}-HELYESBITO-2`)
+  })
+
+  it('EGY negatív korrekciós tétel a visszatérített összegre; netto + afa = brutto', () => {
+    const expected = computeLineAmounts(
+      { megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: REFUND_HUF },
+      {},
+    )
+    expect(xml).toContain(`<bruttoErtek>-${expected.bruttoErtek}</bruttoErtek>`)
+    expect(xml).toContain(`<nettoErtek>-${expected.nettoErtek}</nettoErtek>`)
+    expect(xml).toContain(`<afaErtek>-${expected.afaErtek}</afaErtek>`)
+    expect(xml).toContain(`<nettoEgysegar>-${expected.nettoEgysegar}</nettoEgysegar>`)
+    expect(xml).toContain(`<afakulcs>${VAT_RATE_PERCENT}</afakulcs>`)
+    // Pontosan egy tétel van a helyesbítőn.
+    expect(xml.match(/<tetel>/g)).toHaveLength(1)
+  })
+
+  it('a megjegyzés az eredeti számlára és a visszatérítés indokára hivatkozik', () => {
+    expect(xml).toContain(`Helyesbítő számla a(z) ${ORIGINAL_INVOICE_NUMBER} számú számlához`)
+    expect(xml).toContain('indok: Kedvezmény utólag')
+  })
+
+  it('a vevőblokk a rendelés számlázási adataiból épül', () => {
+    expect(xml).toContain(`<nev>${BUYER.nev}</nev>`)
+    expect(xml).toContain(`<irsz>${BUYER.irsz}</irsz>`)
+    expect(xml).toContain(`<email>${BUYER.email}</email>`)
+  })
+
+  it('a normál (nem helyesbítő) számlán a helyesbítő-tagok üresek maradnak', async () => {
+    const { buildInvoiceXml } = await import('../../lib/szamlazz/invoice')
+    const normal = buildInvoiceXml({
+      agentKey: DUMMY_AGENT_KEY,
+      orderNumber: ORDER_NUMBER,
+      invoicePrefix: 'KIN',
+      issueDate: '2026-08-09',
+      buyer: BUYER,
+      items: [{ megnevezes: 'Kurzus', mennyiseg: 1, bruttoEgysegar: TOTAL_HUF }],
+    })
+    expect(normal).toContain('<helyesbitoszamla>false</helyesbitoszamla>')
+    expect(normal).toContain('<helyesbitettSzamlaszam></helyesbitettSzamlaszam>')
+    expect(normal).toContain(`<szamlaKulsoAzon>${ORDER_NUMBER}</szamlaKulsoAzon>`)
+  })
+})
+
+describe('computeLineAmounts — negatív (korrekciós) tétel', () => {
+  it('a negatív összeg csak allowNegative mellett engedett', () => {
+    expect(() =>
+      computeLineAmounts({ megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: -100 }),
+    ).toThrow(SzamlazzApiError)
+    expect(
+      computeLineAmounts({ megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: -100 }, { allowNegative: true }),
+    ).toEqual({ nettoEgysegar: '-79', nettoErtek: -79, afaErtek: -21, bruttoErtek: -100 })
+  })
+
+  it('a kerekítés PONTOSAN az eredeti tétel tükre (teljes összegű helyesbítés nullázódik)', () => {
+    const original = computeLineAmounts({ megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: TOTAL_HUF })
+    const correction = computeLineAmounts(
+      { megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: -TOTAL_HUF },
+      { allowNegative: true },
+    )
+    expect(original.nettoErtek + correction.nettoErtek).toBe(0)
+    expect(original.afaErtek + correction.afaErtek).toBe(0)
+    expect(original.bruttoErtek + correction.bruttoErtek).toBe(0)
+    expect(correction.nettoErtek + correction.afaErtek).toBe(correction.bruttoErtek)
+  })
+})
+
+describe('issueCorrectiveInvoiceForOrder', () => {
+  it('boldog út: pending → issued, a szám és a refund-sorszám a rendelésre kerül', async () => {
+    const { payload, order, updates } = createMockPayload(createOrder())
+    const sentXml: string[] = []
+    const result = await issueCorrectiveInvoiceForOrder(order as Order, {
+      payload,
+      config: ENABLED_CONFIG,
+      issueDate: '2026-08-09',
+      refundSeq: 1,
+      amountHuf: REFUND_HUF,
+      reason: 'Kedvezmény utólag',
+      postXml: async (xml) => {
+        sentXml.push(xml)
+        return { szamlaszam: 'KIN-2026-9' }
+      },
+    })
+
+    expect(result).toEqual({ outcome: 'issued', correctiveInvoiceNumber: 'KIN-2026-9' })
+    expect(updates[0]).toEqual({ correctiveInvoiceStatus: 'pending' })
+    expect(updates[1]).toEqual({
+      correctiveInvoiceStatus: 'issued',
+      correctiveInvoiceNumber: 'KIN-2026-9',
+      correctiveInvoiceSeq: 1,
+    })
+    expect(order?.correctiveInvoiceNumber).toBe('KIN-2026-9')
+    expect(sentXml[0]).toContain(
+      `<helyesbitettSzamlaszam>${ORIGINAL_INVOICE_NUMBER}</helyesbitettSzamlaszam>`,
+    )
+    expect(sentXml[0]).toContain(`<szamlaKulsoAzon>${ORDER_NUMBER}-HELYESBITO-1</szamlaKulsoAzon>`)
+  })
+
+  it('idempotens: ugyanahhoz a refund-sorszámhoz nem készül második helyesbítő', async () => {
+    const order = createOrder({
+      correctiveInvoiceStatus: 'issued',
+      correctiveInvoiceNumber: 'KIN-2026-9',
+      correctiveInvoiceSeq: 1,
+    })
+    const { payload, updates } = createMockPayload(order)
+    let calls = 0
+    const result = await issueCorrectiveInvoiceForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      refundSeq: 1,
+      amountHuf: REFUND_HUF,
+      postXml: async () => {
+        calls += 1
+        return { szamlaszam: 'MASIK' }
+      },
+    })
+    expect(result).toEqual({ outcome: 'already-issued', correctiveInvoiceNumber: 'KIN-2026-9' })
+    expect(calls).toBe(0)
+    expect(updates).toHaveLength(0)
+  })
+
+  it('a KÖVETKEZŐ részrefundhoz (nagyobb sorszám) viszont új helyesbítő készül', async () => {
+    const order = createOrder({
+      correctiveInvoiceStatus: 'issued',
+      correctiveInvoiceNumber: 'KIN-2026-9',
+      correctiveInvoiceSeq: 1,
+    })
+    const { payload } = createMockPayload(order)
+    const sentXml: string[] = []
+    const result = await issueCorrectiveInvoiceForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      refundSeq: 2,
+      amountHuf: 2000,
+      postXml: async (xml) => {
+        sentXml.push(xml)
+        return { szamlaszam: 'KIN-2026-10' }
+      },
+    })
+    expect(result).toEqual({ outcome: 'issued', correctiveInvoiceNumber: 'KIN-2026-10' })
+    expect(sentXml[0]).toContain(`<szamlaKulsoAzon>${ORDER_NUMBER}-HELYESBITO-2</szamlaKulsoAzon>`)
+    expect(order.correctiveInvoiceSeq).toBe(2)
+  })
+
+  it('a KÉSŐBBI seq már kiállt, a KORÁBBI retry mégis továbbmegy a providerhez', async () => {
+    // Sorrendtörés: a seq=1 kiállítása timeoutolt és jobba került, közben a
+    // seq=2 inline sikerült (correctiveInvoiceSeq=2). A seq=1 retry-ja NEM
+    // lehet no-op — a korábbi részrefund bizonylata még nem készült el; a
+    // duplikáció ellen a provider-oldali kulsoAzon-horgony véd.
+    const order = createOrder({
+      correctiveInvoiceStatus: 'issued',
+      correctiveInvoiceNumber: 'KIN-2026-10',
+      correctiveInvoiceSeq: 2,
+    })
+    const { payload } = createMockPayload(order)
+    const sentXml: string[] = []
+    const result = await issueCorrectiveInvoiceForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      refundSeq: 1,
+      amountHuf: REFUND_HUF,
+      postXml: async (xml) => {
+        sentXml.push(xml)
+        return { szamlaszam: 'KIN-2026-9' }
+      },
+    })
+    expect(result).toEqual({ outcome: 'issued', correctiveInvoiceNumber: 'KIN-2026-9' })
+    expect(sentXml[0]).toContain(`<szamlaKulsoAzon>${ORDER_NUMBER}-HELYESBITO-1</szamlaKulsoAzon>`)
+    // A rendelésen rögzített LEGUTÓBBI szám/sorszám nem íródik vissza régebbire.
+    expect(order.correctiveInvoiceSeq).toBe(2)
+    expect(order.correctiveInvoiceNumber).toBe('KIN-2026-10')
+    expect(order.correctiveInvoiceStatus).toBe('issued')
+  })
+
+  it('kikapcsolt integrációnál disabled (a rendeléshez sem nyúl)', async () => {
+    const { payload, order, updates } = createMockPayload(createOrder())
+    const result = await issueCorrectiveInvoiceForOrder(order as Order, {
+      payload,
+      config: getSzamlazzConfig({}),
+      refundSeq: 1,
+      amountHuf: REFUND_HUF,
+      postXml: async () => expect.unreachable('nem hívható'),
+    })
+    expect(result.outcome).toBe('disabled')
+    expect(updates).toHaveLength(0)
+  })
+
+  it('hiányzó eredeti számlaszámnál failed, NEM dob (emberi pótlás kell)', async () => {
+    const order = createOrder({ invoiceNumber: null, invoiceStatus: 'failed' })
+    const { payload } = createMockPayload(order)
+    let calls = 0
+    const result = await issueCorrectiveInvoiceForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      refundSeq: 1,
+      amountHuf: REFUND_HUF,
+      postXml: async () => {
+        calls += 1
+        return { szamlaszam: 'X' }
+      },
+    })
+    expect(result.outcome).toBe('failed')
+    expect(result.reason).toContain('számlaszám')
+    expect(calls).toBe(0)
+    expect(order.correctiveInvoiceStatus).toBe('failed')
+  })
+
+  it('hiányos vevőadatnál failed (nem retryable)', async () => {
+    const order = createOrder({ customerSnapshot: { name: 'Teszt Anna', email: BUYER.email } })
+    const { payload } = createMockPayload(order)
+    const result = await issueCorrectiveInvoiceForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      refundSeq: 1,
+      amountHuf: REFUND_HUF,
+      postXml: async () => expect.unreachable('nem hívható'),
+    })
+    expect(result.outcome).toBe('failed')
+    expect(result.reason).toContain('vevő')
+  })
+
+  it('érvénytelen összeg / sorszám → failed, hálózati hívás nélkül', async () => {
+    const { payload, order } = createMockPayload(createOrder())
+    const invalidAmount = await issueCorrectiveInvoiceForOrder(order as Order, {
+      payload,
+      config: ENABLED_CONFIG,
+      refundSeq: 1,
+      amountHuf: 0,
+      postXml: async () => expect.unreachable('nem hívható'),
+    })
+    expect(invalidAmount.outcome).toBe('failed')
+    const invalidSeq = await issueCorrectiveInvoiceForOrder(order as Order, {
+      payload,
+      config: ENABLED_CONFIG,
+      refundSeq: 0,
+      amountHuf: REFUND_HUF,
+      postXml: async () => expect.unreachable('nem hívható'),
+    })
+    expect(invalidSeq.outcome).toBe('failed')
+  })
+
+  it('retryable provider-hibánál THROW + failed állapot (a job újrapróbálja)', async () => {
+    const { payload, order } = createMockPayload(createOrder())
+    const error = new SzamlazzApiError({ message: 'timeout', kind: 'timeout', retryable: true })
+    await expect(
+      issueCorrectiveInvoiceForOrder(order as Order, {
+        payload,
+        config: ENABLED_CONFIG,
+        refundSeq: 1,
+        amountHuf: REFUND_HUF,
+        postXml: async () => {
+          throw error
+        },
+      }),
+    ).rejects.toThrow('timeout')
+    expect(order?.correctiveInvoiceStatus).toBe('failed')
+    expect(isRetryableCorrectiveError(error)).toBe(true)
+  })
+
+  it('agent-elutasításnál (nem retryable) failed kimenet, nem dob', async () => {
+    const { payload, order } = createMockPayload(createOrder())
+    const error = new SzamlazzApiError({
+      message: 'Számla Agent elutasította a számlakiállítást: 259 — tételhiba',
+      kind: 'agent',
+      retryable: false,
+    })
+    const result = await issueCorrectiveInvoiceForOrder(order as Order, {
+      payload,
+      config: ENABLED_CONFIG,
+      refundSeq: 1,
+      amountHuf: REFUND_HUF,
+      postXml: async () => {
+        throw error
+      },
+    })
+    expect(result.outcome).toBe('failed')
+    expect(isRetryableCorrectiveError(error)).toBe(false)
+    expect(order?.correctiveInvoiceStatus).toBe('failed')
+  })
+
+  it('payload nélkül is működik (csak naplóz, DB-írás nincs)', async () => {
+    const order = createOrder()
+    const result = await issueCorrectiveInvoiceForOrder(order, {
+      config: ENABLED_CONFIG,
+      refundSeq: 1,
+      amountHuf: REFUND_HUF,
+      postXml: async () => ({ szamlaszam: 'KIN-2026-9' }),
+    })
+    expect(result).toEqual({ outcome: 'issued', correctiveInvoiceNumber: 'KIN-2026-9' })
+    expect(order.correctiveInvoiceNumber).toBeUndefined()
+  })
+})

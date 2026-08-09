@@ -1,6 +1,6 @@
 # Kineticare — teljes feladatlista
 
-**Utolsó frissítés:** 2026-08-06, a Railway build-kihagyás javítása után.
+**Utolsó frissítés:** 2026-08-09, a C-backlog nagy köre (C1, C3, C4, C5, C7, C12, C13) után.
 
 ## Állapot most
 
@@ -48,7 +48,7 @@ A lista 4 blokkra bomlik: **(A) azonnali, rajtad múló**, **(B) integrációk
 | B6 | **E-mail (SMTP)** rendszer-levelekhez | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | SMTP-szolgáltató | A `src/lib/email/smtp.ts` STARTTLS-t kér (OWASP-fix). Az order-confirmation és a reset-password e-mail csak ezzel él. |
 | B7 | **Claude GitHub App + `ANTHROPIC_API_KEY`** | GitHub repo secret | github.com/apps/claude + anthropic.com | A `@claude` megemlítés issue/PR-kommentben. A `ci.yml` és `gitleaks.yml` enélkül is fut. |
 | B8 | **Google Search Console** bekötés | — (DNS TXT vagy HTML-meta) | search.google.com/search-console | Domain-tulajdon igazolás, **sitemap beküldés** (`/sitemap.xml` már él), indexelés-figyelés. |
-| B9 | **Google Analytics (GA4)** bekötés | `NEXT_PUBLIC_GA_MEASUREMENT_ID` (új kulcs) | analytics.google.com | **Csak consent után tölthet be** — a meglévő consent-állapotgépre kell kötni, ugyanúgy, mint a PostHogot. A kód még nem tartalmaz GA-integrációt, ez fejlesztést igényel (lásd C12). |
+| B9 | **Google Analytics (GA4)** bekötés | `NEXT_PUBLIC_GA_MEASUREMENT_ID` | analytics.google.com | **A kódoldali fele KÉSZ** (C12, 2026-08-09): a GA a consent-állapotgépre kötve, csak `granted` után tölt be. Már csak a mérési azonosító beszerzése és Railway-beállítása kell — NEXT_PUBLIC, tehát beállítás után **újrabuild kötelező** (a CSP is ekkor nyílik meg). Részletek: `docs/ga4.md`. |
 | B10 | **Linear** bekötés | — | linear.app | Feladat- és hibakövetés. Eldöntendő: mennyire kösd a repóhoz (branch-név-konvenció `feat/<ticket-id>-…` már illeszkedik a Linear ticket-ID-khez), és kell-e GitHub↔Linear szinkron. |
 
 > **Titkok:** egyetlen kulcs sem kerülhet a repóba — sem kódba, sem konfigba, sem
@@ -62,24 +62,24 @@ A lista 4 blokkra bomlik: **(A) azonnali, rajtad múló**, **(B) integrációk
 
 | # | Feladat | Prioritás | Megjegyzés |
 |---|---|---|---|
-| C1 | **Reset-password szerveroldali jelszópolitika** | HIGH | A Payload 3.86 `resetPassword`-je maga hash-el, a `beforeChange` nem fut → custom végpont kell. `POST /api/users/reset-password` + `validatePasswordStrength` + integrációs teszt. |
+| ~~C1~~ | ~~Reset-password szerveroldali jelszópolitika~~ | — | **KÉSZ** (2026-08-09): saját route-handler árnyékolja a `POST /api/users/reset-password` útvonalat (rate-limit + `validatePasswordStrength` + delegálás a Payloadnak), a politika REST-hívással sem kerülhető meg. Részletek: `docs/jelszo-politika.md`. |
 | C2 | **`@payloadcms/*` kormányzott bump** | Közepes | A peer-range `next <15.5.0`, ezért kell a `--legacy-peer-deps`; 20 tranzitív sebezhetőség (14 moderate + 6 high). Külön, kormányzott PR (CLAUDE.md 5.). A CI audit-kapu ezért `critical`-szintű. |
-| C3 | **products `displayTitle` + `slug` mező** (SEO) | Közepes | A kurzus-URL most numerikus id: `/kurzusok/{id}` → `/kurzusok/{slug}`. A `ProductCard` és a `FreeSos` href-je is frissül. Összefügg a B8-cal. |
-| C4 | **stornó-státusz mezők + retry-job** | Közepes | A stornó `szamlaKulsoAzon`-nal idempotens, de a státusz nem a DB-ben él. `stornoStatus`/`stornoNumber` a rendelésen + retry a retryable hibákra. |
-| C5 | **Helyesbítő számla részrefundhoz** | Közepes | A stornó csak TELJES refundnál fut. `xmlszamla` + `helyesbitettSzamlaszam`. |
+| ~~C3~~ | ~~products `displayTitle` + `slug` mező~~ (SEO) | — | **KÉSZ** (2026-08-09): `displayTitle` + egyedi `slug` mező, kanonikus `/kurzusok/{slug}` URL tartós átirányítással a régi id-s címről; minden hivatkozás a közös `courseHref()`-re állt át. Üzemeltetés: a meglévő kurzusok slugja az adminban mentéskor áll elő (addig az id-s URL él). |
+| ~~C4~~ | ~~stornó-státusz mezők + retry-job~~ | — | **KÉSZ** (2026-08-09): `stornoStatus`/`stornoNumber`/`stornoAttempts`/`stornoLastError` a rendelésen, `storno-issue` retry-job az order-maintenance queue-n, MAX 5 kísérlet. Részletek: `docs/szamlazz-storno.md`. |
+| ~~C5~~ | ~~Helyesbítő számla részrefundhoz~~ | — | **KÉSZ** (2026-08-09): részrefundnál helyesbítő számla (`helyesbitoszamla` + `helyesbitettSzamlaszam`, negatív korrekciós tétel), `correctiveInvoiceStatus/Number/Seq` mezők + `corrective-invoice-issue` job, kétrétegű idempotenciával. Élesítés előtt egy sandbox-os végigfuttatás ajánlott. |
 | C6 | **Consent-flow E2E** | Alacsony | A `consent.test.ts` 14/14 zöld, de valódi böngészős E2E kell a stagingen. |
-| C7 | **PostHogProvider init→enable finomítás** | Alacsony | Granted esetén `enableAnalyticsCapture()` hívása `initPostHog()` helyett (opt-out perzisztencia miatt). |
+| ~~C7~~ | ~~PostHogProvider init→enable finomítás~~ | — | **KÉSZ** (2026-08-09, ellenőrzéssel zárva): a `PostHogProvider` már `enableAnalyticsCapture()`-t hív granted consentre, az pedig inicializált kliensnél `opt_in_capturing()`-ot — az opt-out perzisztencia rendben, kódváltozás nem kellett. |
 | C8 | **Meglévő-vevő migráció (T-061)** | Közepes | A `grant:purchase` script kész — a tömeges importhoz CSV/JSON-olvasó kell. |
 | C9 | **Newsletter** (footer-feliratkozás) | Alacsony | A `plugin-form-builder` kész, a bekötés a CMS-ben. |
 | C10 | **Dependabot-kör figyelése** | Alacsony | A korábbi vitest security-update failure a placeholder-lockfile miatt volt; a következő Dependabot-PR megmutatja, rendbe jött-e. |
 | ~~C11~~ | ~~`sitemap.xml` + `robots.txt`~~ | — | **KÉSZ** (2026-08-06): `src/app/robots.ts` + `src/app/sitemap.ts`. A robots az AI-crawlereket kifejezetten engedi. Részletek: `docs/seo-geo-llm.md`. |
-| C12 | **GA4 bekötése a consent-állapotgépre** | Közepes | A B9 kódoldali fele. **A repóban jelenleg nincs GA-integráció** (ellenőrizve: nincs `gtag` / `googletagmanager` hivatkozás). GA csak `granted` consent után tölthet be, a PostHog-integráció mintájára. |
+| ~~C12~~ | ~~GA4 bekötése a consent-állapotgépre~~ | — | **KÉSZ** (2026-08-09): a gtag.js kizárólag `granted` consent után töltődik be (Consent Mode: default denied → update granted), revoke a `ga-disable-<ID>` kapcsolóval; a CSP csak érvényes azonosító mellett nyitja meg a Google-hostokat. Már csak a B9 (mérési azonosító beszerzése + újrabuild) van hátra. Részletek: `docs/ga4.md`. |
 
 ### Üzemeltetési tételek (2026-08-06-i hibakeresésből)
 
 | # | Feladat | Prioritás | Megjegyzés |
 |---|---|---|---|
-| C13 | **`idle_in_transaction_session_timeout` a Postgresen** | Közepes | Ma egy beragadt, nyitva maradt tranzakció zárolta a `users` sort, és minden bejelentkezés befagyott. A DB-oldali timeout ezt magától feloldaná. |
+| ~~C13~~ | ~~`idle_in_transaction_session_timeout` a Postgresen~~ | — | **KÉSZ** (2026-08-09, app-oldalon): a pg pool minden kapcsolata 60 mp-es `idle_in_transaction_session_timeout` startup-paramétert kap (`src/payload.config.ts`) — az app, a migrate és a seed fedve. Maradék rés: külső session (kézi `psql`, Railway-konzol) zárját ez nem oldja; teljes lefedettséghez DB-oldali beállítás kellene (infra-döntés). |
 | C14 | **Adatbázis-mentés** | HIGH (élesítés előtt) | Jelenleg nincs mentés. Ma a Postgres-szolgáltatás újraindításakor `initdb` futott és a kötet üresen jött vissza — tartalom még nem volt benne, de éles adatnál ez adatvesztés lenne. |
 
 ### SEO / GEO / LLM-optimalizálás

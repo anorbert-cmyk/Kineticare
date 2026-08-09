@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
+import { DEFAULT_AUTH_RETURN_URL, sanitizeReturnUrl } from '@/lib/return-url'
 import { loginUser } from '../../lib/auth-client'
 
 /**
@@ -13,6 +14,7 @@ import { loginUser } from '../../lib/auth-client'
  * útvonal — open-redirect ellen védve). Magyar hibaüzenetek.
  */
 export interface LoginFormProps {
+  /** Gyökér-relatív útvonal; a hívó oldal `sanitizeReturnUrl`-lel szűri. */
   returnUrl: string
 }
 
@@ -33,7 +35,11 @@ export function LoginForm({ returnUrl }: LoginFormProps) {
     const result = await loginUser({ email: email.trim(), password })
     setSubmitting(false)
     if (result.ok) {
-      window.location.href = returnUrl
+      // A tényleges átirányítás itt történik, ezért a szűrés a sinknél is
+      // megismétlődik: a prop a szerver oldalon már ellenőrzött, de így egy
+      // jövőbeli, figyelmetlen hívási hely sem vihet idegen oldalra
+      // (belépés utáni adathalászat).
+      window.location.href = sanitizeReturnUrl(returnUrl, DEFAULT_AUTH_RETURN_URL)
       return
     }
     setError(result.message ?? null)

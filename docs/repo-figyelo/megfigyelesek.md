@@ -146,7 +146,15 @@ Ellenőrizendő, hogy a Payload postgres-adapter ad-e erre közvetlen eszközt.
 
 ## M-07 — A `payment_failed` rendelés-státusz egyetlen kódúton sem érhető el
 
-**Státusz:** nyitott, **auditban megerősítve** · **Felvéve:** 2026-07-31 · **Súly:** közepes
+**Státusz:** lezárva (2026-08-09) · **Felvéve:** 2026-07-31 · **Súly:** közepes
+
+> **Lezárás:** a biztonsági kör 2 (PR #52) a `mapBarionPaymentStatus`-t a
+> teljes Barion-státuszkészletre explicit ágakra bontotta — csendes default
+> nincs. A `Failed` a meglévő készlet `cancelled` végállapotára képződik, így
+> a véglegesen meghiúsult fizetés végre lezárul (eddig örökre `payment_pending`
+> maradt és a poll-job pollozta). A `payment_failed` mint negyedik kimenetel
+> bekötése a webhook-events `result` selectjének enum-migrációját igényelné —
+> külön ticket, ha a finomabb megkülönböztetés kell.
 
 > A 2026-07-31-i mélyaudit független dimenzióban is megtalálta, és az
 > adversarial ellenőrzés sem tudta megcáfolni. Kiegészítés: a `payment_failed`
@@ -279,8 +287,17 @@ minta-hiba, mint M-06 — ott a `purchases`, itt a `refunds`.
 
 ## M-11 — A Barion tranzakció-szintű refund-státusz ellenőrizetlen
 
-**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Státusz:** lezárva (2026-08-09) · **Felvéve:** 2026-07-31 · **Súly:** magas
 **Hely:** `src/lib/refund/refund-order.ts:374`
+
+> **Lezárás:** a biztonsági kör 2 (PR #52) bevezette a
+> `classifyRefundedTransactionStatus` besorolást: `RefundFailed` esetén hibaág
+> fut (semmilyen refund-bejegyzés nem íródik, stornó/helyesbítő számla nem
+> indul, magyar admin-hibaüzenet); ismeretlen/hiányzó státusznál a nyom
+> konzervatívan rögzül (a maradvány ne látsszon újra visszatéríthetőnek),
+> bizonylat automatikusan nem készül, error-riasztás kéri az emberi
+> ellenőrzést. A refund-folyamat emellé rendelésenkénti advisory-zárat kapott
+> (friss újraolvasás a záron belül) a dupla refund ellen.
 
 A kód a `RefundedTransactions[0].Status` értékét **eltárolja, de sosem ágazik el
 rá**. Bármilyen státusz mellett — beleértve a `RefundFailed`-et, amelyet a repó
@@ -311,6 +328,11 @@ explicit ellenőrzése; ismeretlen vagy sikertelen státusznál a rendelés mara
 **Státusz:** emberi döntésre vár · **Felvéve:** 2026-07-31 · **Súly:** magas
 **Hely:** `src/collections/Users.ts:23`
 
+> **2026-08-09:** változatlanul külön, emberi jóváhagyású PR-re vár (a Users
+> access-szabályai és auth-hookjai a CLAUDE.md 4. tilos zónája) — a
+> biztonsági kör 1–2 szándékosan nem nyúlt hozzájuk. A napló-oldali
+> kitettséget időközben csökkenti, hogy az `email` kulcs redact alá került.
+
 A `users` collection `update` access-e (`isSelfOrAdmin`) a **staff** szerepkörnek
 where-szűkítés nélkül írásjogot ad **minden** felhasználói rekordra, a Payload
 auth által hozzáadott `password` és `email` mezőkön pedig **nincs mezőszintű
@@ -336,8 +358,12 @@ access-control módosítás — emberi jóváhagyás nélkül nem nyúlunk hozz�
 
 ## M-13 — Az `accessDurationDays` (lejáró hozzáférés) sehol nincs kikényszerítve
 
-**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** közepes
+**Státusz:** lezárva (2026-08-09) · **Felvéve:** 2026-07-31 · **Súly:** közepes
 **Hely:** `src/lib/stream/issue-stream-token.ts:131`
+
+> **Lezárás:** a #48 kör (A1 tétel) bevezette a lejárat kikényszerítését: a
+> jogosultság-ellenőrzés a purchase `accessDurationDays`-ből számolt lejáratát
+> is nézi, lejárt hozzáférésre videó-token nem állítható ki.
 
 A paywall kizárólag **statikus** feltételeket néz: a `users.purchases` tagságot
 és a termék `published`/`archived` státuszát. Időbeli feltétel egyik sem.
@@ -390,8 +416,14 @@ vagy `attempts` szűrő), és a kimerülés írjon státuszt, ne csak logot.
 
 ## M-15 — A retry-job feldolgozója csak a callback-route betöltése után létezik
 
-**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Státusz:** lezárva (2026-08-09) · **Felvéve:** 2026-07-31 · **Súly:** magas
 **Hely:** `src/app/(frontend)/api/barion/callback/route.ts:20`
+
+> **Lezárás:** a biztonsági kör 2 (PR #52) a `registerBarionWebhookProcessor`
+> hívást determinisztikus horgonyra tette a `payload.config` `onInit`-jében
+> (`registerWebhookProcessors()`), így a feldolgozó az order-poll/webhook-retry
+> útvonalon is garantáltan létezik — nem a callback-route lusta betöltésének
+> mellékhatása. A route-beli hívás idempotens fallbackként megmaradt.
 
 A `'barion'` webhook-processzor regisztrációja **kizárólag a route-modul
 import-mellékhatása**, és egy in-process `Map`-be kerül

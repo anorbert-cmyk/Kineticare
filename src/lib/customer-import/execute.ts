@@ -26,6 +26,7 @@ import { randomInt } from 'node:crypto'
 
 import type { Payload } from 'payload'
 
+import { maskEmail } from '../email/mask'
 import { validatePasswordStrength } from '../security/password-policy'
 import type { Logger } from '../logger'
 import { purchaseIdsOf, type ImportPlan, type PlanEntry } from './plan'
@@ -169,7 +170,9 @@ async function executeEntry(
       overrideAccess: true,
     })
     log?.info('vásárló-import: felhasználó létrehozva', {
-      email: entry.email,
+      // Maszkolt cím: a teljes e-mail-cím nem kerülhet naplóba (a logger
+      // `email` kulcsú mezőt eleve redaktál) — a sor a userId-vel azonosítható.
+      cimzett: maskEmail(entry.email),
       userId: created.id,
       grantedProductIds: entry.missingProducts.map((product) => product.id),
     })
@@ -210,7 +213,7 @@ async function appendPurchases(
     overrideAccess: true,
   })
   log?.info('vásárló-import: kurzus-hozzáférés hozzáfűzve', {
-    email: entry.email,
+    cimzett: maskEmail(entry.email),
     userId,
     grantedProductIds: missing.map((product) => product.id),
   })
@@ -254,7 +257,7 @@ export async function executeImportPlan(
       const message = error instanceof Error ? error.message : String(error)
       outcome = { email: entry.email, action: 'failed', grantedSkus: [], error: message }
       options.log?.error('vásárló-import: a sor feldolgozása sikertelen', {
-        email: entry.email,
+        cimzett: maskEmail(entry.email),
         error: message,
       })
     }

@@ -68,7 +68,14 @@ function readServerError(body: unknown): string | null {
   return typeof error === 'string' && error.trim().length > 0 ? error : null
 }
 
-/** A sikeres válasz olvasása ({ type, transactionId, amountHuf }). */
+/**
+ * A sikeres válasz olvasása ({ type, transactionId, amountHuf, refundStatusOutcome }).
+ *
+ * M-11: a `refundStatusOutcome: 'unknown'` azt jelenti, hogy a Barion nem
+ * igazolta vissza a tranzakció sikerét — a visszatérítés rögzült (a maradvány
+ * másodszor nem téríthető vissza), de bizonylat NEM készült. Ezt ki KELL írni az
+ * ügyintézőnek, különben a rutinszerű „megtörtént" üzenet elfedné a teendőt.
+ */
 function readSuccessMessage(body: unknown): string {
   if (typeof body !== 'object' || body === null) {
     return 'A visszatérítés megtörtént.'
@@ -78,7 +85,11 @@ function readSuccessMessage(body: unknown): string {
   const amount = typeof record.amountHuf === 'number' ? formatPriceHuf(record.amountHuf) : null
   const transactionId =
     typeof record.transactionId === 'string' ? record.transactionId : 'ismeretlen'
-  return `${type} visszatérítés megtörtént${amount ? ` (${amount})` : ''}. Tranzakció-azonosító: ${transactionId}`
+  const base = `${type} visszatérítés megtörtént${amount ? ` (${amount})` : ''}. Tranzakció-azonosító: ${transactionId}`
+  if (record.refundStatusOutcome === 'unknown') {
+    return `${base} FIGYELEM: a Barion nem igazolta vissza a visszatérítés státuszát, ezért számlázási bizonylat nem készült. Ellenőrizd a Barion felületén, és a bizonylatot állítsd ki kézzel.`
+  }
+  return base
 }
 
 const panelStyle: CSSProperties = {

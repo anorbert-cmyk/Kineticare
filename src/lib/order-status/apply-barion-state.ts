@@ -1,7 +1,7 @@
 import type { Payload } from 'payload'
 
 import type { Order, User } from '../../payload-types'
-import type { OrderPaymentState } from '../barion'
+import type { BarionPaymentStateResponse, OrderPaymentState } from '../barion'
 import type { Logger } from '../logger'
 
 /**
@@ -17,6 +17,7 @@ import type { Logger } from '../logger'
  * - paid: order payment_pending/created → paid (már paid → no-op, NEM hiba),
  *   purchases-beírás a users-re (már megvan → no-op). Más kiinduló státuszból
  *   (cancelled/refunded/payment_failed) TILOS — 'rejected' + naplózott riasztás.
+ *   ELŐFELTÉTEL: az ÖSSZEG-ASSERT (lásd lentebb) is teljesül.
  * - cancelled: payment_pending → cancelled; paid felé TILOS visszaállítani
  *   (állapotgép-védelem, riasztás); más kiindulóból figyelmeztetés, marad.
  * - payment_pending: státusz marad (a poll-job ütemezzi az újrapollolást).
@@ -31,6 +32,12 @@ export interface BarionTransitionInput {
   order: Order
   /** A v4 GetState-ból leképezett rendelés-oldali állapot. */
   mapped: OrderPaymentState
+  /**
+   * A v4 GetState NYERS válasza — a paid-átmenet ÖSSZEG-ASSERTJÉNEK forrása.
+   * Szándékosan kötelező: a leképezett státusz önmagában nem elég bizonyíték,
+   * a kifizetett összeget és devizát is a rendeléshez kell mérni.
+   */
+  state: BarionPaymentStateResponse
   log: Logger
 }
 
@@ -38,13 +45,99 @@ export type BarionTransitionAction = 'paid' | 'cancelled' | 'pending' | 'rejecte
 
 export interface BarionTransitionResult {
   action: BarionTransitionAction
-  /** rejected akciónál az ok (paid-cancel-rejected / cancel-not-allowed / paid-not-allowed). */
+  /**
+   * rejected akciónál az ok (paid-cancel-rejected / cancel-not-allowed /
+   * paid-not-allowed / total-mismatch).
+   */
   reason?: string
   /** true, ha a rendelés már a célállapotban volt (no-op átmenet). */
   duplicate?: boolean
   /** true KIZÁRÓLAG friss paid-átmenetnél — az onOrderPaid mellékhatás triggere. */
   transitionedToPaid?: boolean
   purchasesGranted?: number
+}
+
+/** A rendelés végösszege a szerver-oldali snapshotból (más forrás nem elfogadható). */
+function orderExpectedTotal(order: Order): number | null {
+  return typeof order.totalHufSnapshot === 'number' && Number.isFinite(order.totalHufSnapshot)
+    ? order.totalHufSnapshot
+    : null
+}
+
+/** A rendelés devizája; hiányzó érték esetén null (= assert-bukás). */
+function orderExpectedCurrency(order: Order): string | null {
+  return typeof order.currency === 'string' && order.currency.trim().length > 0
+    ? order.currency.trim().toUpperCase()
+    : null
+}
+
+export interface PaymentAmountAssertResult {
+  ok: boolean
+  /** Bukásnál a gépileg feldolgozható ok — a naplóba és a hívó felé is ez megy. */
+  detail?:
+    | 'order-total-missing'
+    | 'order-currency-missing'
+    | 'state-total-missing'
+    | 'state-currency-missing'
+    | 'total-differs'
+    | 'currency-differs'
+  expectedTotal?: number | null
+  actualTotal?: number | null
+  expectedCurrency?: string | null
+  actualCurrency?: string | null
+}
+
+/**
+ * ÖSSZEG-ASSERT: a Barion GetState-válasz Total/Currency mezője megegyezik-e a
+ * rendelés SZERVER-OLDALI snapshotjával (totalHufSnapshot + currency).
+ *
+ * MIÉRT KELL: a leképezett `Succeeded` státusz csak azt mondja meg, hogy
+ * „valamilyen fizetés sikerült" — azt nem, hogy MENNYI. A PaymentId-t a vevő
+ * ismeri (a redirect URL-jében is ott van), a callback-payload pedig önmagában
+ * nem bizonyíték: egy másik, kisebb összegű saját fizetés azonosítójával a
+ * rendelést jóvá lehetne hagyatni. A Total/Currency összevetése köti a fizetést
+ * a konkrét rendeléshez.
+ *
+ * KONZERVATÍV: minden hiányzó vagy nem értelmezhető érték BUKÁS. Inkább maradjon
+ * függőben egy rendelés (riasztással, kézzel rendezhetően), mint hogy fedezet
+ * nélkül aktiváljon hozzáférést.
+ */
+export function assertPaymentAmountMatches(
+  order: Order,
+  state: BarionPaymentStateResponse,
+): PaymentAmountAssertResult {
+  const expectedTotal = orderExpectedTotal(order)
+  const expectedCurrency = orderExpectedCurrency(order)
+  const actualTotal =
+    typeof state.Total === 'number' && Number.isFinite(state.Total) ? state.Total : null
+  const actualCurrency =
+    typeof state.Currency === 'string' && state.Currency.trim().length > 0
+      ? state.Currency.trim().toUpperCase()
+      : null
+
+  const base = { expectedTotal, actualTotal, expectedCurrency, actualCurrency }
+
+  if (expectedTotal === null) {
+    return { ok: false, detail: 'order-total-missing', ...base }
+  }
+  if (expectedCurrency === null) {
+    return { ok: false, detail: 'order-currency-missing', ...base }
+  }
+  if (actualTotal === null) {
+    return { ok: false, detail: 'state-total-missing', ...base }
+  }
+  if (actualCurrency === null) {
+    return { ok: false, detail: 'state-currency-missing', ...base }
+  }
+  if (actualCurrency !== expectedCurrency) {
+    return { ok: false, detail: 'currency-differs', ...base }
+  }
+  // A HUF deviza decimals: 0 (src/plugins/ecommerce.ts), tehát egész értékek —
+  // a pontos egyezés a helyes és egyben a legszigorúbb szabály.
+  if (actualTotal !== expectedTotal) {
+    return { ok: false, detail: 'total-differs', ...base }
+  }
+  return { ok: true, ...base }
 }
 
 function orderProductIds(order: Order): number[] {
@@ -116,7 +209,7 @@ export async function grantPurchases(
 export async function applyBarionStateTransition(
   input: BarionTransitionInput,
 ): Promise<BarionTransitionResult> {
-  const { payload, order, mapped, log } = input
+  const { payload, order, mapped, state, log } = input
 
   if (mapped === 'payment_pending') {
     if (order.status !== 'payment_pending' && order.status !== 'created') {
@@ -166,6 +259,26 @@ export async function applyBarionStateTransition(
       { orderStatus: order.status },
     )
     return { action: 'rejected', reason: 'paid-not-allowed' }
+  }
+
+  // ÖSSZEG-ASSERT: a paid-átmenet (és a már paid rendelésen a jogosultság-
+  // ellenőrzés) KIZÁRÓLAG akkor futhat, ha a Barion által visszaadott
+  // Total/Currency egyezik a rendelés szerver-oldali snapshotjával.
+  const amountCheck = assertPaymentAmountMatches(order, state)
+  if (!amountCheck.ok) {
+    log.error(
+      'RIASZTÁS: a Barion-fizetés összege/devizája NEM egyezik a rendelés snapshotjával — paid-átmenet elutasítva, manuális ellenőrzés szükséges',
+      {
+        detail: amountCheck.detail,
+        expectedTotal: amountCheck.expectedTotal ?? null,
+        actualTotal: amountCheck.actualTotal ?? null,
+        expectedCurrency: amountCheck.expectedCurrency ?? null,
+        actualCurrency: amountCheck.actualCurrency ?? null,
+        barionStatus: state.Status,
+        orderStatus: order.status,
+      },
+    )
+    return { action: 'rejected', reason: 'total-mismatch' }
   }
 
   const alreadyPaid = order.status === 'paid'

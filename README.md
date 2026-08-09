@@ -1,6 +1,6 @@
 # Kineticare — kézrehabilitációs online kurzusplatform
 
-Next.js 15 (App Router, server-component-first) + Payload CMS 3 (PostgreSQL) +
+Next.js 16 (App Router, server-component-first) + Payload CMS 3 (PostgreSQL) +
 Barion Smart Gateway (kártyás fizetés) + Számlázz.hu Számla Agent (számlázás) +
 Bunny Stream (kurzusvideók, tokenes embed) + PostHog (termék-analitika).
 

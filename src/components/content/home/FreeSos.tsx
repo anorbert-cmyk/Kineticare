@@ -1,3 +1,4 @@
+import { courseHref } from '../../../lib/course-url'
 import type { Product } from '../../../payload-types'
 import { Badge } from '../../ui/Badge'
 import { Button } from '../../ui/Button'
@@ -58,14 +59,17 @@ export function FreeSos({
   id = 'ingyenes',
   variant = 'tint',
 }: FreeSosProps) {
-  const heading = title?.trim() || freeProduct?.sku?.trim() || 'SOS Kézrelax — ingyenes villámkurzus'
+  // A termék neve a displayTitle → sku lánc; ha MINDKETTŐ üres, a márkás
+  // alapszöveg marad (a courseTitle „Kurzus #id" fallbackja itt félrevinne).
+  const productHeading = freeProduct?.displayTitle?.trim() || freeProduct?.sku?.trim() || ''
+  const heading = title?.trim() || productHeading || 'SOS Kézrelax — ingyenes villámkurzus'
   const text =
     body?.trim() ||
     freeProduct?.shortDescription?.trim() ||
     'Ha előbb kipróbálnád a módszert: rövid, azonnal használható gyakorlatok hirtelen jelentkező kézfájdalomra.'
   const button: FreeSosCta = cta ?? {
     label: 'Elindítom az ingyenes kurzust',
-    href: freeProduct ? `/kurzusok/${freeProduct.id}` : '/kurzusok',
+    href: freeProduct ? courseHref(freeProduct) : '/kurzusok',
   }
 
   return (

@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import type { CourseAccessView } from '../../lib/course-access'
 import type { CourseProgressSummary } from '../../lib/course-progress/progress'
+import { courseHref } from '../../lib/course-url'
 import { courseCover, courseTitle } from '../../lib/courses'
 import type { Product } from '../../payload-types'
 
@@ -48,7 +49,9 @@ export function CourseList({
         const access = accessByProductId?.[product.id]
         const expired = access?.hasAccess === false
         const progress = progressByProductId?.[product.id]
-        const target = expired ? `/kurzusok/${product.id}` : `/kurzusaim/${product.id}`
+        // Lejárt hozzáférés → a nyilvános (slugos) kurzusoldal; egyébként a
+        // védett lejátszó, amely azonosító alapján dolgozik.
+        const target = expired ? courseHref(product) : `/kurzusaim/${product.id}`
         return (
           <li key={product.id}>
             <Card as="article" className="kc-course-card" interactive padded={false}>

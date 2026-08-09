@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Suspense, type ReactNode } from 'react'
 
 import { ConsentBanner } from '@/components/analytics/ConsentBanner'
+import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics'
 import { PostHogPageView } from '@/components/analytics/PostHogPageView'
 import { PostHogProvider } from '@/components/analytics/PostHogProvider'
 import { Footer } from '@/components/layout/Footer'
@@ -77,6 +78,8 @@ export default function FrontendLayout({ children }: { children: ReactNode }) {
           <Suspense fallback={null}>
             <PostHogPageView />
           </Suspense>
+          {/* GA4 consent-kapu: mérési azonosító nélkül és hozzájárulás előtt no-op. */}
+          <GoogleAnalytics />
           <Header />
           <main id="tartalom">{children}</main>
           <Footer />

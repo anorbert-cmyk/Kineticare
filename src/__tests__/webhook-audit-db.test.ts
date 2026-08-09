@@ -3,15 +3,19 @@ import { getPayload, type Payload } from 'payload'
 
 import configPromise from '../payload.config'
 import { processWebhook, webhookEventStore } from '../lib/idempotency'
+import { isDatabaseAvailable } from './helpers/db-available'
 
 /**
  * DB-s integrációs tesztek (T-014/T-015).
  *
- * Feltétel: DATABASE_URI + PAYLOAD_SECRET beállítva ÉS a webhook_events /
- * audit_logs táblák léteznek (a konszolidáló migrációs loop hozza létre őket
- * — addig a tesztek szépészedve kihagyódnak, lásd a probe-logikát).
+ * Feltétel: a DATABASE_URI-n TÉNYLEGESEN elérhető Postgres (TCP-próba —
+ * a CI álértékű DATABASE_URI-jánál az env-alapú kapcsoló hamis pozitívot
+ * adna, és a getPayload-kísérlet kezeletlen rejectiont hagyna a pg poolból)
+ * ÉS a webhook_events / audit_logs táblák léteznek (a konszolidáló migrációs
+ * loop hozza létre őket — addig a tesztek szépészedve kihagyódnak, lásd a
+ * probe-logikát).
  */
-const hasDb = Boolean(process.env.DATABASE_URI && process.env.PAYLOAD_SECRET)
+const hasDb = await isDatabaseAvailable()
 
 describe.skipIf(!hasDb)('webhook + audit (DB)', () => {
   let payload: Payload

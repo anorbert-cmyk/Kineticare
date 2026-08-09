@@ -81,17 +81,32 @@ describe('logFailedLogin — a naplózott IP', () => {
 })
 
 describe('logFailedLogin — változatlan hook-viselkedés', () => {
-  it('hibás jelszónál naplóz, az e-maillel és az indokkal', () => {
+  it('hibás jelszónál naplóz, az indokkal — az e-mail REDAKTÁLVA', () => {
     logFailedLogin({
       error: new AuthenticationError(),
       req: loginRequest({ 'x-forwarded-for': '203.0.113.7' }),
     })
 
     expect(loggedContext()).toMatchObject({
-      email: 'valaki@kineticare.test',
       ip: '203.0.113.7',
       reason: 'hibás jelszó',
     })
+  })
+
+  /**
+   * A hook ugyanúgy átadja az `email` mezőt a loggernek, mint eddig — a
+   * kimenetből viszont a logger redact-listája (src/lib/logger.ts) veszi ki:
+   * az e-mail-cím személyes adat, naplóaggregátorba és mentésekbe nem
+   * kerülhet. A hook maga (auth-hook, CLAUDE.md 4. tilos zóna) ÉRINTETLEN.
+   */
+  it('a teljes e-mail-cím sosem kerül a naplóba (a logger redaktálja)', () => {
+    logFailedLogin({
+      error: new AuthenticationError(),
+      req: loginRequest({ 'x-forwarded-for': '203.0.113.7' }),
+    })
+
+    expect(loggedContext()?.email).toBe('[REDACTED]')
+    expect(JSON.stringify(logSpy.mock.calls)).not.toContain('valaki@kineticare.test')
   })
 
   it('zárolt fióknál a „zárolt fiók" indokot naplózza', () => {

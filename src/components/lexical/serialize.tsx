@@ -2,6 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { createElement, Fragment, type ReactNode } from 'react'
 
+import { courseHref } from '../../lib/course-url'
 import { mediaAlt, mediaDimensions, pickMediaUrl, type MediaLike } from '../content/media-url'
 import { TEXT_FORMAT, type LexicalContent, type LexicalNode, type VideoEmbed } from './types'
 
@@ -88,7 +89,9 @@ function resolveInternalHref(doc: unknown): string | null {
     case 'posts':
       return slug ? `/blog/${slug}` : null
     case 'products':
-      return typeof value.id === 'number' ? `/kurzusok/${value.id}` : null
+      // A kurzus kanonikus címe a slug; slug nélküli (régi) terméknél az
+      // id-alapú út marad, amit a kurzus-route átirányít.
+      return typeof value.id === 'number' ? courseHref({ id: value.id, slug }) : null
     default:
       return null
   }

@@ -211,7 +211,7 @@
       - run: npm audit --audit-level=critical
   ```
   Három eltérés a fenti eredeti javaslathoz képest, mindegyik szándékos:
-  1. `--legacy-peer-deps` **kötelező**: a `@payloadcms/*` 3.86.0 peer-tartománya kizárja a biztonsági javítás miatt pinelt `next@15.5.22`-t. Enélkül a telepítés elhasal.
+  1. `--legacy-peer-deps` **kötelező** — de NEM peer-ütközés miatt (az megszűnt: a repó ma `next@16.3.0`-n áll, ami beleesik a `@payloadcms/*` 3.86.0 peer-tartományába). A repóban élő `package-lock.json` legacy-peer-deps módban készült, ezért nem tartalmazza a szigorú feloldás peer-csomagjait — flag nélkül az `npm ci` „not in sync" EUSAGE-hibával elhasal. A flag elhagyásához a lockfile-t újra kellene generálni: külön, emberi döntésű PR (a lockfile-hoz és a pinned `@payloadcms/*`-hoz nem nyúlunk, CLAUDE.md 5.).
   2. `--audit-level=critical` a `moderate` helyett: a `moderate` szint a tranzitív fejlesztői függőségek zajától folyamatosan piros lenne, ami a kaput használhatatlanná teszi. A szint emelése külön döntés.
   3. `checkout@v7` / `setup-node@v7`: a `@v4` runtime-ja `node20`, amit a GitHub 2026-09-16-án eltávolít a hosztolt runnerekről.
 

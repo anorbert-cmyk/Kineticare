@@ -1,7 +1,9 @@
 import type { JobsConfig } from 'payload'
 
+import { correctiveInvoiceIssueTask } from './tasks/corrective-invoice-issue'
 import { invoiceIssueTask } from './tasks/invoice-issue'
 import { orderPollTask } from './tasks/order-poll'
+import { stornoIssueTask } from './tasks/storno-issue'
 import { webhookRetryTask } from './tasks/webhook-retry'
 import { ORDER_MAINTENANCE_QUEUE, WEBHOOK_RETRY_QUEUE } from './queues'
 
@@ -15,6 +17,10 @@ import { ORDER_MAINTENANCE_QUEUE, WEBHOOK_RETRY_QUEUE } from './queues'
  *   utánpollolása a Barion v4-gyel + számla-resweep (W4-02).
  * - invoice-issue (order-maintenance queue): Számlázz.hu számlakiállítás egy
  *   rendeléshez, saját retry-val (T-024/W4-01).
+ * - storno-issue (order-maintenance queue): stornó-számla kiállítása teljes
+ *   visszatérítéshez, saját retry-val (C4).
+ * - corrective-invoice-issue (order-maintenance queue): helyesbítő számla
+ *   kiállítása részleges visszatérítéshez, saját retry-val (C5).
  *
  * A workerek az ENABLE_JOB_WORKERS env ("true") mögött indulnak: dev-ben
  * alapértelmezés szerint KI vannak kapcsolva (nincs autoRun cron), staging/prod
@@ -28,7 +34,13 @@ function jobWorkersEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 export const jobsConfig: JobsConfig = {
-  tasks: [webhookRetryTask, orderPollTask, invoiceIssueTask],
+  tasks: [
+    webhookRetryTask,
+    orderPollTask,
+    invoiceIssueTask,
+    stornoIssueTask,
+    correctiveInvoiceIssueTask,
+  ],
   ...(jobWorkersEnabled()
     ? {
         autoRun: [
@@ -51,3 +63,5 @@ export { ORDER_MAINTENANCE_QUEUE, WEBHOOK_RETRY_QUEUE } from './queues'
 export { webhookRetryTask } from './tasks/webhook-retry'
 export { orderPollTask } from './tasks/order-poll'
 export { invoiceIssueTask } from './tasks/invoice-issue'
+export { stornoIssueTask } from './tasks/storno-issue'
+export { correctiveInvoiceIssueTask } from './tasks/corrective-invoice-issue'

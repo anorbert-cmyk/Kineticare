@@ -17,6 +17,39 @@ Feldolgozott tartomány: <régi sha>..<új sha> (N commit)
 
 ---
 
+## 2026-08-09 — Biztonsági kör 2: az élő triázs-találatok beépültek
+
+A lezárt #39–#47 PR-ek triázsából élőnek bizonyult találatok javítása egy
+körben, a `claude/higgsfield-mcp-integration-za6671` branchen (PR #52):
+
+- **M-07 lezárva:** a `mapBarionPaymentStatus` a teljes Barion-státuszkészletre
+  explicit ágakat kapott; a `Failed` a meglévő készlet `cancelled`
+  végállapotára képződik (a `payment_failed` bekötése enum-migrációt
+  igényelne — külön ticket), a rezervációs/ismeretlen ágak `warn`-t adnak.
+- **M-11 lezárva:** refund advisory-zár (friss újraolvasással) +
+  `RefundFailed` hibaág — sikertelen refundnál semmi sem íródik és számla sem
+  indul; ismeretlen státusznál a nyom rögzül, bizonylat nem készül, riasztás.
+- **M-13 lezárva:** a hozzáférés-lejárat kikényszerítését a #48 kör hozta.
+- **M-15 lezárva:** a webhook-processzor regisztrációja determinisztikus
+  (payload.config `onInit`), nem a callback-route betöltésének mellékhatása.
+- **M-12 változatlanul emberi döntésre vár** (access-control — CLAUDE.md 4.
+  zóna; a biztonsági körök szándékosan nem nyúltak hozzá).
+
+Ugyanebben a körben: returnUrl-sanitizálás (open-redirect zárva),
+Total/Currency-assert minden paid-átmenetnél, checkout advisory-lock +
+orderNumber-retry, Barion-callback GUID-kapu, Turnstile kulcspár-assert,
+per-email/per-user kérés-keretek, `email` a napló-redact-listán,
+invoicePdfUrl-allowlist, kriptografikus seed-jelszó, CI/docs tényjavítások
+(a `--legacy-peer-deps` valós oka a lockfile, nem peer-ütközés).
+
+### Tiltott zóna érintve?
+
+Nem. Séma-, migráció- és access-control-változás nincs ebben a körben;
+`confirmOrder` sehol (dedikált guard-teszt őrzi); a pinned `@payloadcms/*`
+és a lockfile érintetlen; titok nem került a repóba.
+
+---
+
 ## 2026-07-31 — Mélyaudit: a főlánc kerek, de három ponton szivárog
 
 Feldolgozott tartomány: nincs új commit — ez egy **kódaudit**, nem

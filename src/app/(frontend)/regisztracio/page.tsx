@@ -7,6 +7,7 @@ import { headers } from 'next/headers'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { RegisterForm } from '@/components/auth/RegisterForm'
+import { DEFAULT_AUTH_RETURN_URL, sanitizeReturnUrl } from '@/lib/return-url'
 import type { User } from '@/payload-types'
 
 import config from '../../../payload.config'
@@ -30,16 +31,22 @@ async function getCurrentUser(): Promise<User | null> {
   }
 }
 
+/**
+ * /regisztracio — a fiók létrehozásának oldala.
+ *
+ * A returnUrl-paraméter a belépéssel azonos módon, a közös `sanitizeReturnUrl`
+ * szűrővel megy át (open-redirect védelem), EGYSZER, még a redirect-ág előtt —
+ * a redirect és a form (`window.location.href`) így ugyanazt az ellenőrzött
+ * értéket kapja.
+ */
 export default async function RegisztracioPage({ searchParams }: RegisztracioPageProps) {
   const params = await searchParams
   const user = await getCurrentUser()
+  const returnUrl = sanitizeReturnUrl(params.returnUrl, DEFAULT_AUTH_RETURN_URL)
 
   if (user !== null) {
-    const returnUrl = typeof params.returnUrl === 'string' && params.returnUrl.startsWith('/') ? params.returnUrl : '/kurzusaim'
     redirect(returnUrl)
   }
-
-  const returnUrl = typeof params.returnUrl === 'string' && params.returnUrl.startsWith('/') ? params.returnUrl : '/kurzusaim'
 
   return (
     <Section>
@@ -50,7 +57,8 @@ export default async function RegisztracioPage({ searchParams }: RegisztracioPag
         </p>
         <RegisterForm returnUrl={returnUrl} />
         <p className="kc-auth-alt">
-          Már van fiókod? <Link href={`/belepes?returnUrl=${encodeURIComponent(returnUrl)}`}>Lépj be</Link>
+          Már van fiókod?{' '}
+          <Link href={`/belepes?returnUrl=${encodeURIComponent(returnUrl)}`}>Lépj be</Link>
         </p>
       </Container>
     </Section>

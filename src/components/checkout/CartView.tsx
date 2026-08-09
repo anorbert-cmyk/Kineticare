@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { PriceTag } from '@/components/ui/PriceTag'
 import { useCart, type CartItem } from '../../lib/cart'
+import { courseHref } from '../../lib/course-url'
 
 /**
  * CartView — a kosár kliens-oldali megjelenítése (tételek, törlés, végösszeg,
@@ -50,7 +51,10 @@ export function CartView({ initialItem, isLoggedIn }: CartViewProps) {
             <Card padded>
               <div className="kc-cart__row">
                 <div className="kc-cart__info">
-                  <Link className="kc-cart__title" href={`/kurzusok/${item.productId}`}>
+                  <Link
+                    className="kc-cart__title"
+                    href={courseHref({ id: item.productId, slug: item.slug })}
+                  >
                     {item.sku}
                   </Link>
                   {item.shortDescription ? (

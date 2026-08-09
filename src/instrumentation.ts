@@ -27,6 +27,6 @@ export async function register(): Promise<void> {
     })
 
     const { assertRequiredEnv } = await import('./env')
-    assertRequiredEnv()
+    assertRequiredEnv((message, context) => logger.warn(message, context))
   }
 }

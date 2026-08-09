@@ -21,6 +21,7 @@ import { Testimonials } from './collections/Testimonials'
 import { Users } from './collections/Users'
 import { WebhookEvents } from './collections/WebhookEvents'
 import { jobsConfig } from './jobs'
+import { registerBarionWebhookProcessor } from './lib/barion-callback/process-callback'
 import { contactStaffEmail, kineticareEmailAdapter, sendMail, usersAuthEmails } from './lib/email'
 import { logger } from './lib/logger'
 import { adminGroups } from './plugins/admin-groups'
@@ -41,7 +42,14 @@ const isAdmin: Access = ({ req }) => req.user?.role === 'owner' || req.user?.rol
  * Turnstile-előkészítés: a form-submissions rekord opcionális turnstileToken
  * mezőjét a TURNSTILE_SECRET_KEY jelenléte kapcsolja be — env nélkül a
  * spam-ellenőrzés KI van kapcsolva, a beküldés akadálytalan. (A kliensoldali
- * widget a TURNSTILE_SITE_KEY-val kerül a frontendre egy későbbi sprintben.)
+ * widget a TURNSTILE_SITE_KEY-val kerül a frontendre.)
+ *
+ * Ez a „nincs kulcs → nincs ellenőrzés" ág addig él, amíg a Turnstile nincs
+ * élesítve. Production-ben az induláskori assert (`turnstileEnvPair`,
+ * src/env.ts) a kulcsPÁR konzisztenciáját követeli meg: fél-lábas
+ * konfigurációval (csak site key VAGY csak secret) az app el sem indul,
+ * teljes hiánynál pedig induláskori warn jelzi, hogy a védelem kikapcsolt —
+ * csendben fél-védett állapot tehát élesben nem létezhet.
  */
 const verifyTurnstile = async (data: unknown): Promise<unknown> => {
   const secret = process.env.TURNSTILE_SECRET_KEY
@@ -195,6 +203,36 @@ function registerPoolErrorHandler(payload: Payload): void {
 }
 
 /**
+ * A Barion webhook-feldolgozó DETERMINISZTIKUS regisztrációja (M-15).
+ *
+ * A `registerWebhookProcessor` egy folyamaton belüli Map — a webhook-retry job
+ * (src/jobs/tasks/webhook-retry.ts) csak REGISZTRÁLT feldolgozójú eseményeket
+ * futtat újra, a többit `skipped`-ként átugorja. A regisztráció eddig kizárólag
+ * a callback-route MODUL-BETÖLTÉSÉNEK mellékhatásaként futott le
+ * (src/app/(frontend)/api/barion/callback/route.ts). A Next.js route-modulokat
+ * viszont lustán, az első kéréskor tölti be: ha egy példány elindul, és a
+ * webhook-retry cron előbb fut le, mint ahogy bármilyen Barion-callback
+ * megérkezne arra a példányra, a feldolgozó nincs regisztrálva — az elhasalt
+ * események némán kimaradnak a retryból. Ugyanez a rés az order-poll/retry
+ * útvonalon: azok NEM töltik be a callback-route-ot.
+ *
+ * Az `onInit` viszont a Payload minden inicializálásakor lefut — ugyanabban a
+ * folyamatban, amelyben a jobs autoRun (jobsConfig) is elindul —, ezért ez a
+ * regisztráció determinisztikus horgonya. A `registerWebhookProcessor` egy
+ * Map.set, tehát idempotens: a route-ban maradó hívás (ott a callback saját
+ * útvonala szempontjából dokumentálja a bekötést) ártalmatlanul felülírja
+ * ugyanezzel az értékkel.
+ *
+ * Tisztán memóriabeli művelet: nem hívhat adatbázist és nem dobhat, ezért — a
+ * pool-error handlerhez hasonlóan — a seedelő lépések ELŐTT, azoktól függetlenül
+ * fut le.
+ */
+function registerWebhookProcessors(payload: Payload): void {
+  registerBarionWebhookProcessor(async () => payload)
+  logger.debug('Barion webhook-feldolgozó regisztrálva (onInit)')
+}
+
+/**
  * Kezdőlap-alapállapot indulásnál: a hiányzó képFÁJLOK visszatöltése, majd a
  * landing tartalmi képei + a `kezdolap` alap-szekciósora (src/lib/home-seed.ts).
  * Az ensureContactForm mintája: telepítési előfeltétel, ezért minden bootnál
@@ -257,11 +295,17 @@ async function ensureContactForm(payload: Payload): Promise<void> {
  * üzemeltetési tanulságában leírt éles hiba: a Railway privát hálóján elvágott
  * tétlen kapcsolat kezeletlen `error` eseménye `uncaughtException`-ként viszi
  * el a Next.js szerverfolyamatot. A három lépésnek nincs köze egymáshoz, ezért
- * itt látszik is, hogy külön dolog: pool-handler, kezdőlap-alapállapot
- * (képek, szekciósor, kiemelt vélemények), majd a „Kapcsolat" űrlap.
+ * itt látszik is, hogy külön dolog: pool-handler, webhook-feldolgozók,
+ * kezdőlap-alapállapot (képek, szekciósor, kiemelt vélemények), majd a
+ * „Kapcsolat" űrlap.
+ *
+ * A két memóriabeli regisztráció (pool-handler, webhook-feldolgozók) MEGELŐZI a
+ * DB-t érintő, best-effort seedelést: azok hibája (pl. migráció előtti adatbázis)
+ * így nem viheti magával a regisztrációkat.
  */
 async function onInit(payload: Payload): Promise<void> {
   registerPoolErrorHandler(payload)
+  registerWebhookProcessors(payload)
   await ensureHomeBaseline(payload)
   await ensureContactForm(payload)
 }
@@ -307,6 +351,19 @@ export default buildConfig({
   email: kineticareEmailAdapter,
   // T-014: a webhook-retry task és az ENABLE_JOB_WORKERS env mögötti autoRun.
   jobs: jobsConfig,
+  // A GraphQL API teljesen kikapcsolva (C1/A2 biztonsági zárás). A frontend
+  // és az admin kizárólag a REST API-t és a local API-t használja — a /graphql
+  // végpont viszont hitelesítés nélkül kiszolgálta volna a Payload beépített
+  // resetPasswordUser/forgotPasswordUser mutációit, amelyek a
+  // resetPasswordOperation-ön át MEGKERÜLIK a Users beforeChange
+  // jelszó-politikát (lásd src/lib/security/reset-password-route.ts) és az
+  // IP-alapú kérés-korlátot is (a withPayloadRestRateLimit csak a REST
+  // catch-allon fut). Használatlan felület + megkerülő út = letiltás; a
+  // /graphql route-fájl is törölve. Ha valaha GraphQL kell, előbb a
+  // politika- és rate-limit-őrt kell rá felhúzni.
+  graphQL: {
+    disable: true,
+  },
   // A titok kötelező — az induláskori ENV-assert (src/env.ts + src/instrumentation.ts)
   // gondoskodik róla, hogy hiányában az app ne induljon el.
   secret: process.env.PAYLOAD_SECRET || '',
@@ -332,6 +389,22 @@ export default buildConfig({
       // Egyetlen kérés se álljon percekig egy beragadt lekérdezésen.
       statement_timeout: 30_000,
       query_timeout: 30_000,
+      // C13 — a 2026-08-06-i sorzár-incidens ellenszere. Akkor egy nyitva
+      // maradt, TÉTLEN tranzakció („idle in transaction", a kliens EOF-ja után
+      // is nyitva ragadva) zárolta a `users` sort, és minden írás/bejelentkezés
+      // befagyott, miközben az olvasás gyors maradt. A statement_timeout ezen
+      // nem segít: az a futó LEKÉRDEZÉST öli meg, itt viszont éppen nem futott
+      // lekérdezés. A Postgres ezt a beállítást a kapcsolat startup-paramétereként
+      // kapja meg (a `pg` a pool-configból továbbadja), így nem kell DB-oldali
+      // ALTER SYSTEM: minden pool-kapcsolat magával viszi.
+      //
+      // A migrate/seed útvonalat nem töri el: a Postgres csak azt a session-t
+      // bontja, amelyik nyitott tranzakcióval TÉTLEN — a folyamatosan utasítást
+      // futtató (tehát `active` állapotú) hosszú migráció vagy seed nem esik
+      // bele, a mérce a két utasítás közti szünet, nem a tranzakció hossza.
+      // 60 mp bőven a statement_timeout fölött van, így normál működés közben
+      // nem tud beütni.
+      idle_in_transaction_session_timeout: 60_000,
     },
   }),
   sharp,

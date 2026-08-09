@@ -1,6 +1,7 @@
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
-import { EXIT_PREVIEW_PATH, hasControlCharacter } from './preview-target'
+import { sanitizeReturnUrl } from '../return-url'
+import { EXIT_PREVIEW_PATH } from './preview-target'
 
 /**
  * Piszkozat-előnézetből való KILÉPÉS (`/next/exit-preview`).
@@ -22,7 +23,8 @@ export const RETURN_PATH_PARAM = 'vissza'
 const DEFAULT_RETURN_PATH = '/'
 
 /**
- * A visszatérési útvonal ellenőrzése.
+ * A visszatérési útvonal ellenőrzése — az előnézetből kilépő route nevesített
+ * változata a közös `sanitizeReturnUrl` szűrőnek (`src/lib/return-url.ts`).
  *
  * CSAK azonos eredetű, gyökérből induló relatív útvonal engedélyezett: a
  * `//host` és a `/\host` alak a böngészőben külső címre mutatna (open redirect),
@@ -30,17 +32,7 @@ const DEFAULT_RETURN_PATH = '/'
  * esünk vissza — a kilépés így sosem visz ki idegen oldalra.
  */
 export function sanitizeReturnPath(value: unknown): string {
-  if (typeof value !== 'string') {
-    return DEFAULT_RETURN_PATH
-  }
-  const trimmed = value.trim()
-  if (trimmed.length === 0 || hasControlCharacter(trimmed)) {
-    return DEFAULT_RETURN_PATH
-  }
-  if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.startsWith('/\\')) {
-    return DEFAULT_RETURN_PATH
-  }
-  return trimmed
+  return sanitizeReturnUrl(value, DEFAULT_RETURN_PATH)
 }
 
 /** Az előnézet-sáv „Kilépés az előnézetből" linkjének href-je. */
