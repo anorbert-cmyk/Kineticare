@@ -124,7 +124,7 @@ describe('a users-darabszám megosztása a két beforeChange hook közt', () => 
 
     const data = await runBothHooks(req, {
       email: 'masodik@kineticare.test',
-      password: 'Kecskemeti42Futo',
+      password: 'DUMMY-Eros-Teszt-Jelszo-42',
     })
 
     expect(data.role).toBeUndefined()
