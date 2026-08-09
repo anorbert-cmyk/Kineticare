@@ -17,6 +17,7 @@ import { Container } from '@/components/ui/Container'
 import { PriceTag } from '@/components/ui/PriceTag'
 import { Section } from '@/components/ui/Section'
 import { resolveSingleCourseAccess } from '@/lib/course-access-lookup'
+import { AUDIENCE_LABELS, normalizeAudience } from '@/lib/course-audience'
 import {
   courseCover,
   coursePriceHuf,
@@ -155,6 +156,9 @@ export default async function CoursePage({ params }: CoursePageProps) {
   const cover = courseCover(product)
   const price = coursePriceHuf(product)
   const category = categoryTitle(product)
+  // Kétirányú kurzusstruktúra: visszafogott jelzés arról, melyik ághoz tartozik
+  // a kurzus (audience nélküli, régi soroknál a laikus fallback látszik).
+  const audienceLabel = AUDIENCE_LABELS[normalizeAudience(product.audience)]
   const showPreview = hasPreviewVideo(product.previewVideoStreamId)
 
   return (
@@ -194,11 +198,10 @@ export default async function CoursePage({ params }: CoursePageProps) {
 
           <div className="kc-course-hero">
             <div className="kc-course-hero__main">
-              {category ? (
-                <p className="kc-course-hero__category">
-                  <Badge tone="info">{category}</Badge>
-                </p>
-              ) : null}
+              <p className="kc-course-hero__category">
+                {category ? <Badge tone="info">{category}</Badge> : null}
+                <Badge tone="neutral">{audienceLabel}</Badge>
+              </p>
               <h1>{title}</h1>
               {product.shortDescription ? (
                 <p className="kc-course-hero__lead">{product.shortDescription}</p>

@@ -2,9 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getPayload } from 'payload'
 
-import { CourseCard } from '@/components/courses/CourseCard'
+import { CourseAudienceBand } from '@/components/courses/CourseAudienceBand'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
+import { AUDIENCE_BANDS, groupProductsByAudience } from '@/lib/course-audience'
 import {
   CATEGORY_QUERY_PARAM,
   collectCourseCategories,
@@ -25,6 +26,11 @@ import config from '../../../payload.config'
  * - Kategória-szűrés: ?kategoria=<slug> — a szűrő-chipek a listában
  *   ténylegesen előforduló kategóriák (üres szűrő nem kínálható fel);
  *   ismeretlen slug esetén a lista szűretlen marad (resolveCategoryFilter).
+ * - Kétirányú kurzusstruktúra: a szűrt lista két sávra bomlik („Otthoni
+ *   gyakorlóknak" elöl, „Szakembereknek" utána). A besorolást KIZÁRÓLAG a
+ *   src/lib/course-audience.ts adja (audience nélküli termék → laikus sáv);
+ *   üres sáv egyáltalán nem renderelődik, és ha MINDKETTŐ üres, a lenti
+ *   üres-állapot marad.
  * - A szűrés/logika a src/lib/courses.ts tesztelt függvényeiben él.
  *
  * Hibatűrés: DB-hiba esetén (pl. build-időben nincs adatbázis) az oldal az
@@ -72,6 +78,7 @@ export default async function KurzusokPage({ searchParams }: KurzusokPageProps) 
   const categories = collectCourseCategories(products)
   const activeSlug = resolveCategoryFilter(params[CATEGORY_QUERY_PARAM], categories)
   const visible = filterCoursesByCategory(products, activeSlug)
+  const byAudience = groupProductsByAudience(visible)
 
   return (
     <Section>
@@ -112,13 +119,13 @@ export default async function KurzusokPage({ searchParams }: KurzusokPageProps) 
         ) : null}
 
         {visible.length > 0 ? (
-          <ul className="kc-course-grid" role="list">
-            {visible.map((product) => (
-              <li key={product.id}>
-                <CourseCard product={product} />
-              </li>
-            ))}
-          </ul>
+          AUDIENCE_BANDS.map((band) => (
+            <CourseAudienceBand
+              band={band}
+              key={band.audience}
+              products={byAudience[band.audience]}
+            />
+          ))
         ) : (
           <div className="kc-course-empty" role="status">
             <h2>Jelenleg nincs megjeleníthető kurzus</h2>
