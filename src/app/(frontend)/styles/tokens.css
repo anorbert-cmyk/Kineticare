@@ -138,9 +138,53 @@
   --kc-text-3xl: clamp(1.9rem, 1.62rem + 1.25vw, 2.55rem);
   --kc-text-4xl: clamp(2.25rem, 1.8rem + 2vw, 3.3rem);
 
+  /* ---- Tábla-lépcsők (board scale) ----------------------------------------
+     A kezdőlap TÁBLA-szekciói (Welcome, Usps, States, Services, Rólunk,
+     Vélemények) a higgsfield-tükör 1440 × 810-es board-mesterét reprodukálják.
+     A tükör betűméretei a TÁBLA ARÁNYAIHOZ vannak hangolva — a cím a tábla
+     magasságának adott hányadát tölti ki —, ezért a törzs-skála (--kc-text-*)
+     1,2-es modulusa itt nem elég: az a folyószöveghez való, és a --kc-text-4xl
+     3,3rem-nél megáll, míg a tükör tábla-címei 4–5,6rem-ig mennek.
+
+     Ezek a lépcsők ezért a tükör PONTOS clamp-jei (forrás soronként lent),
+     hogy a szekció ugyanúgy fessen, mint a landingen. Mind clamp-alapú és
+     viewport-arányos (UX-skill 4. pont); a felső korlát 2K felett is tart,
+     mert a clamp maximuma fix rem.
+
+     HASZNÁLATI KORLÁT: kizárólag `.kc-board` tábla-szekcióban. A film-hero H1
+     felső korlátja VÁLTOZATLANUL a --kc-text-4xl (UX-skill 4. pont) — az a
+     szabály a hero címsorára szól, nem a szekciócímekre.
+
+     Mobilon (900px alatt) a tábla-viselkedés kikapcsol, és a lépcsők a saját
+     clamp-minimumukon állnak; a tükör külön mobil-nagyításait (12–20vw)
+     szándékosan NEM vesszük át, hogy ne kelljen második, viewporttól függő
+     token-készletet vezetni.
+
+     Forrás: higgsfield-site/app/src/kineticare.css */
+  --kc-text-board-2xs: clamp(0.64rem, 0.79vw, 0.74rem); /* kc-stat dt · kc-attribution */
+  --kc-text-board-xs: clamp(0.78rem, 0.92vw, 0.88rem); /* kc-about-p */
+  --kc-text-board-sm: clamp(0.92rem, 1.12vw, 1.03rem); /* kc-service-p · kc-quote-small p */
+  --kc-text-board-md: clamp(1.3rem, 1.75vw, 1.6rem); /* kc-checklist li · kc-state-title */
+  --kc-text-board-lg: clamp(1.75rem, 2.5vw, 2.3rem); /* kc-usp-title · kc-usp-num */
+  --kc-text-board-xl: clamp(2.05rem, 2.65vw, 2.55rem); /* kc-stat dd · kc-service-h */
+  --kc-text-board-2xl: clamp(2.3rem, 3.1vw, 3rem); /* kc-quote-big */
+  --kc-text-board-3xl: clamp(2.7rem, 3.35vw, 3.1rem); /* kc-quotes-title */
+  /* A 4xl mobil-minimuma (3,2rem) magasabb az 5xl-énél (2,9rem): a szűk hasábú
+     Rólunk-cím rövidebb sorokból áll, ezért bírja a nagyobb alsó lépcsőt. */
+  --kc-text-board-4xl: clamp(3.2rem, 4.45vw, 4rem); /* kc-about-copy .kc-about-title */
+  --kc-text-board-5xl: clamp(2.9rem, 4.9vw, 4.5rem); /* kc-welcome-title · kc-about-title */
+  --kc-text-board-6xl: clamp(4rem, 6.2vw, 5.6rem); /* kc-services-title */
+  /* Dekoratív idézőjel-glifák (a markupban aria-hidden) — méretük tipográfiai,
+     ezért ezek is a skáláról jönnek. */
+  --kc-text-board-mark: clamp(7rem, 10vw, 9rem); /* kc-quote-mark */
+  --kc-text-board-mark-sm: clamp(2.4rem, 3.3vw, 3rem); /* kc-quote-mini-mark */
+
   --kc-leading-tight: 1.15;
   --kc-leading-heading: 1.2; /* legacy headline 108/100 ≈ 1.08, olvashatóságra kerekítve */
   --kc-leading-body: 1.67;   /* legacy 30/18 */
+  /* Tábla-címsorok sortávja (UX-skill 4. pont: display 1,05–1,15 között). */
+  --kc-leading-board: 1.06; /* tükör: kc-welcome-title / kc-about-title / kc-quotes-title */
+  --kc-leading-board-tight: 0.98; /* tükör: kc-services-title 0,97 · kc-about-copy cím 0,98 */
 
   --kc-font-weight-normal: 400;
   --kc-font-weight-medium: 600; /* landing eyebrow / inline-link súlya */
@@ -179,6 +223,33 @@
   --kc-container-wide: 1120px;  /* legacy "wide" tartalom-szélesség */
   --kc-container-narrow: 720px; /* legacy "small" tartalom-szélesség */
   --kc-container-gutter: var(--kc-space-5); /* mobil oldal-margó */
+
+  /* ---- Tábla-geometria (board) --------------------------------------------
+     A kezdőlap tábla-szekciói a higgsfield-tükör board-mesterét reprodukálják
+     (higgsfield-site/app/src/kineticare.css 48–63. és 222–227. sor). A tábla
+     TELJES SZÉLESSÉGŰ: rá a --kc-container-wide (1120px) NEM vonatkozik.
+
+       --kc-board-x / --kc-board-y ..... szűk tábla-szegély (Services, Rólunk,
+         Vélemények, sajtósáv) — a tükör --kc-board-x/y-ja,
+       --kc-section-x / --kc-section-y . ritkább szekció-szegély (Welcome,
+         Usps, States) — a tükör --kc-section-x/y-ja,
+       --kc-board-min-h ................ a tábla magassága 2K-ig (tükör: .kc-vh),
+       --kc-board-max .................. a tartalom felső szélessége 2K FELETT,
+       --kc-board-ratio ................ 810 / 1440 = 0,5625 — a board-mester
+         aránya.
+
+     2K FELETT a tartalom --kc-board-max (80vw) szélességre mérséklődik és
+     középre zár; a tábla magassága ebből az arányból skálázódik:
+     0,8 × 0,5625 = 0,45 → min(100dvh, 45vw). Így az ultraszéles kijelzőn a
+     tábla nem nyúlik szét, hanem megtartja a 16:9-es board-arányt.
+     (Ellenőrző szám 2560px-en: tartalom 2048px, magasság 1152px.) */
+  --kc-board-x: clamp(2rem, 4.45vw, 4rem);
+  --kc-board-y: clamp(3.25rem, 8.4vh, 4.25rem);
+  --kc-section-x: clamp(1.5rem, 6.5vw, 6rem);
+  --kc-section-y: clamp(4.5rem, 9vh, 7rem);
+  --kc-board-min-h: max(45rem, 100dvh);
+  --kc-board-max: 80vw;
+  --kc-board-ratio: 0.5625;
 
   /* ---- Töréspont (dokumentációs jelleggel, JS-beli egyeztetéshez) -------- */
   /* Mobil < 900px (a legacy 800px-es váltását a mai készülékekhez igazítva);

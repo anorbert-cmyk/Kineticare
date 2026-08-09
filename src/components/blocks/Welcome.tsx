@@ -1,5 +1,4 @@
 import type { BlockWelcome } from '../../payload-types'
-import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
 
 import '../../app/(frontend)/styles/blocks/welcome.css'
@@ -18,6 +17,11 @@ import '../../app/(frontend)/styles/blocks/welcome.css'
  *  - `sectionSettings.hatter` → a Section háttér-variánsa
  *    (`feher` → default, `tint` → tint, `sotet` → dark),
  *  - hiányzó KÖTELEZŐ tartalomnál (itt: cím) a szekció kimarad.
+ *
+ * TÁBLA (board): a szekció a landing teljes képernyős tábláját viseli, ezért
+ * `kc-container` helyett `kc-board__inner` a belső burkoló — a tartalmat 2K-ig
+ * semmi nem szorítja konténer-szélességbe, 2K felett a board-rendszer zárja
+ * 80vw-re (lásd `.kc-board`, styles/ui.css).
  */
 export interface WelcomeProps {
   block: BlockWelcome
@@ -44,8 +48,13 @@ export function Welcome({ block }: WelcomeProps) {
   )
 
   return (
-    <Section aria-labelledby={headingId} className="kc-welcome" id={anchorId} variant={variant}>
-      <Container>
+    <Section
+      aria-labelledby={headingId}
+      className="kc-welcome kc-board"
+      id={anchorId}
+      variant={variant}
+    >
+      <div className="kc-board__inner">
         <div className="kc-welcome__head">
           <h2 className="kc-welcome__title" id={headingId}>
             {title}
@@ -77,7 +86,7 @@ export function Welcome({ block }: WelcomeProps) {
             ) : null}
           </div>
         ) : null}
-      </Container>
+      </div>
     </Section>
   )
 }

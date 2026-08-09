@@ -1,9 +1,13 @@
 /**
- * „Erre számíthatsz" kártyák (Usps) — szekció-stílus.
+ * „Erre számíthatsz" kártyák (Usps) — TÁBLA-szekció stílusa.
  *
- * Forrás: a landing `kc-usps` blokkja, a terv 3.1 pontja szerint portolva
- * (ink → navy-900, muted → text-muted, hairline → border, inline clamp() →
- * `--kc-text-*` skála). A `kc-rise` animáció nem jött át (terv 3.5).
+ * Forrás: a landing `kc-usps` táblája (higgsfield-site/app/src/kineticare.css
+ * 332–371., mobil 997–998.). A tükör teljes képernyős, függőlegesen középre
+ * zárt `kc-vh` táblája MOST MÁR ÁTJÖTT (a korábbi port konténer-szélességbe
+ * szorította); a tábla-viselkedést a közös `.kc-board` adja (styles/ui.css).
+ * A `kc-rise` animáció nem jött át (terv 3.5).
+ *
+ * A cím a tükörben a `kc-about-title` lépcsőjét viszi (--kc-text-board-5xl).
  *
  * AKCENT-KORLÁT (terv 3.1): a sorszám-korong SZÖVEGE `accent-deep`
  * (tint-cool háttéren 4,72:1, fehéren 5,45:1 — AA felett); a nyers `accent`
@@ -13,32 +17,33 @@
  */
 
 .kc-usps {
-  --kc-usps-ink: var(--kc-color-navy-900);
+  --kc-usps-ink: var(--kc-color-text);
   --kc-usps-muted: var(--kc-color-text-muted);
   --kc-usps-rule: var(--kc-color-border);
-  --kc-usps-accent-text: var(--kc-color-accent-deep, var(--kc-color-navy-700));
-  --kc-usps-badge: var(--kc-color-tint-cool, var(--kc-color-blue-100));
+  --kc-usps-accent-text: var(--kc-color-primary);
+  --kc-usps-badge: var(--kc-color-surface-tint);
 }
 
 .kc-section--tint.kc-usps {
-  --kc-usps-badge: var(--kc-color-white);
+  --kc-usps-badge: var(--kc-color-surface-raised);
 }
 
-/* Sötétkék sáv: fehér 15,7:1, blue-200 12,5:1 a navy-900 háttéren. */
+/* Sötét sáv: fehér 15,63:1, halvány akcent 8,49:1 az inken. */
 .kc-section--dark.kc-usps {
-  --kc-usps-ink: var(--kc-color-white);
-  --kc-usps-muted: var(--kc-color-blue-200);
-  --kc-usps-rule: rgb(255 255 255 / 0.35);
-  --kc-usps-accent-text: var(--kc-color-blue-200);
-  --kc-usps-badge: rgb(255 255 255 / 0.14);
+  --kc-usps-ink: var(--kc-color-on-dark);
+  --kc-usps-muted: var(--kc-color-on-dark-muted);
+  --kc-usps-rule: color-mix(in srgb, var(--kc-color-on-dark) 35%, transparent);
+  --kc-usps-accent-text: var(--kc-color-on-dark-muted);
+  --kc-usps-badge: color-mix(in srgb, var(--kc-color-on-dark) 14%, transparent);
 }
 
 .kc-usps__title {
   margin: 0;
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-3xl);
+  font-size: var(--kc-text-board-5xl);
   font-weight: var(--kc-font-weight-normal);
-  line-height: var(--kc-leading-heading);
+  letter-spacing: 0.004em;
+  line-height: var(--kc-leading-board);
   color: var(--kc-usps-ink);
   text-wrap: balance;
 }
@@ -62,10 +67,14 @@
 }
 
 @media (min-width: 900px) {
+  .kc-usps__list {
+    margin-top: clamp(2rem, 4vw, 3.2rem);
+  }
+
   .kc-usps__item {
-    grid-template-columns: 4.125rem minmax(0, 1fr);
-    gap: var(--kc-space-6);
-    padding: var(--kc-space-6) 0;
+    grid-template-columns: 4.1rem minmax(0, 1fr);
+    gap: clamp(1.4rem, 3vw, 2.5rem);
+    padding: 1.7rem 0;
   }
 }
 
@@ -87,27 +96,28 @@
 
 @media (min-width: 900px) {
   .kc-usps__num {
-    width: 4.125rem;
-    height: 4.125rem;
-    font-size: var(--kc-text-2xl);
+    width: 4.1rem;
+    height: 4.1rem;
+    font-size: var(--kc-text-board-lg);
   }
 }
 
 .kc-usps__card-title {
   margin: 0 0 var(--kc-space-2);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-text-board-lg);
   font-weight: var(--kc-font-weight-normal);
-  line-height: var(--kc-leading-heading);
+  letter-spacing: 0.005em;
+  line-height: 1.14;
   color: var(--kc-usps-ink);
   text-wrap: balance;
 }
 
 .kc-usps__text {
-  margin: 0 0 var(--kc-space-3);
+  margin: 0 0 var(--kc-space-2);
   max-width: 68ch;
   font-size: var(--kc-text-base);
-  line-height: var(--kc-leading-body);
+  line-height: 1.65;
   color: var(--kc-usps-muted);
   /* A mezők textarea-k: a szerkesztő sortörései maradjanak meg. */
   white-space: pre-line;

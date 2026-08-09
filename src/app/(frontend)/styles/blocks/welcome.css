@@ -1,12 +1,16 @@
 /**
- * Üdvözlő / probléma-blokk (Welcome) — szekció-stílus.
+ * Üdvözlő / probléma-blokk (Welcome) — TÁBLA-szekció stílusa.
  *
- * Forrás: a landing `kc-welcome` blokkja (higgsfield-site/app/src/kineticare.css),
- * a szekció-rendszer terv 3.1 pontja szerint a fő site tokenjeire portolva:
- *  - a landing `ink` (#10243e) → `--kc-color-navy-900` (egységesített márka-sötét),
- *  - `muted` → `--kc-color-text-muted`, `hairline` → `--kc-color-border`,
- *  - a landing inline `clamp()` fontméretei → a `--kc-text-*` skála lépcsői
- *    (értékesítési UX-skill 4. pont: fontméret KIZÁRÓLAG tokenről),
+ * Forrás: a landing `kc-welcome` táblája (higgsfield-site/app/src/kineticare.css
+ * 249–330., mobil 983–995.). A tükör teljes képernyős, függőlegesen középre
+ * zárt `kc-vh` táblája MOST MÁR ÁTJÖTT (a korábbi port konténer-szélességbe
+ * szorította); a tábla-viselkedést a közös `.kc-board` adja (styles/ui.css).
+ *
+ * Portolási szabályok:
+ *  - `ink` → `--kc-color-text`, `muted` → `--kc-color-text-muted`,
+ *    `hairline` → `--kc-color-border`,
+ *  - a tükör inline `clamp()` fontméretei → a `--kc-text-*` / `--kc-text-board-*`
+ *    lépcsők (értékesítési UX-skill 4. pont: fontméret KIZÁRÓLAG tokenről),
  *  - a `kc-rise` betöltés-animáció NEM jött át (terv 3.5).
  *
  * AKCENT-KORLÁT (terv 3.1, számolt kontrasztok):
@@ -22,42 +26,46 @@
  */
 
 .kc-welcome {
-  --kc-welcome-ink: var(--kc-color-navy-900);
+  --kc-welcome-ink: var(--kc-color-text);
   --kc-welcome-muted: var(--kc-color-text-muted);
   --kc-welcome-rule: var(--kc-color-border);
   /* Csak dekoráció (függőleges elválasztó vonal) — lásd az akcent-korlátot. */
-  --kc-welcome-accent: var(--kc-color-accent, var(--kc-color-blue-200));
+  --kc-welcome-accent: var(--kc-color-accent);
   /* Szöveg-akcent: a felvezető sor és a pipa-jel. */
-  --kc-welcome-accent-text: var(--kc-color-accent-deep, var(--kc-color-navy-700));
-  --kc-welcome-badge: var(--kc-color-tint-cool, var(--kc-color-blue-100));
+  --kc-welcome-accent-text: var(--kc-color-primary);
+  --kc-welcome-badge: var(--kc-color-surface-tint);
 }
 
 /* Tint sávon a hűvös tint-korong beleolvadna a háttérbe — ott fehér a korong. */
 .kc-section--tint.kc-welcome {
-  --kc-welcome-badge: var(--kc-color-white);
+  --kc-welcome-badge: var(--kc-color-surface-raised);
 }
 
-/* Sötétkék sáv (hatter: 'sotet'). Kontraszt a navy-900 (#0b243f) háttéren:
-   fehér 15,7:1, blue-200 (#d2e9fa) 12,5:1 — mindkettő AA/AAA felett. */
+/* Sötét sáv (hatter: 'sotet'). Kontraszt az inken (#10243e): fehér 15,63:1,
+   halvány akcent (#9ec4df) 8,49:1 — mindkettő AA/AAA felett. */
 .kc-section--dark.kc-welcome {
-  --kc-welcome-ink: var(--kc-color-white);
-  --kc-welcome-muted: var(--kc-color-blue-200);
-  --kc-welcome-rule: rgb(255 255 255 / 0.35);
-  --kc-welcome-accent: rgb(255 255 255 / 0.55);
-  --kc-welcome-accent-text: var(--kc-color-blue-200);
-  --kc-welcome-badge: rgb(255 255 255 / 0.14);
+  --kc-welcome-ink: var(--kc-color-on-dark);
+  --kc-welcome-muted: var(--kc-color-on-dark-muted);
+  --kc-welcome-rule: color-mix(in srgb, var(--kc-color-on-dark) 35%, transparent);
+  --kc-welcome-accent: color-mix(in srgb, var(--kc-color-on-dark) 55%, transparent);
+  --kc-welcome-accent-text: var(--kc-color-on-dark-muted);
+  --kc-welcome-badge: color-mix(in srgb, var(--kc-color-on-dark) 14%, transparent);
 }
 
-.kc-welcome__head {
-  max-width: 30ch;
-}
-
+/* ELTÉRÉS A TÜKÖRTŐL — tudatos javítás: ott a `max-width: 27ch` a fejléc-BURKOLÓN
+   ül (kineticare.css 250.), ahol a `ch` a törzs-betűre (16px Nunito Sans) mérődik,
+   nem a 70px-es serif címre — a burkoló így 259px lesz, és a tábla-cím
+   szó-per-sor tördeléssel 10 sorra esik szét. A tükör MINDEN MÁS tábla-címe a
+   saját elemén hordozza a `ch`-mértéket (kc-about-title 7,4ch, kc-services-title
+   7,2ch, kc-quote-big 17ch) — itt is így, ezért a mérték a címre került. */
 .kc-welcome__title {
   margin: 0;
+  max-width: 18ch;
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-3xl);
+  font-size: var(--kc-text-board-5xl);
   font-weight: var(--kc-font-weight-normal);
-  line-height: var(--kc-leading-heading);
+  letter-spacing: 0.004em;
+  line-height: var(--kc-leading-board);
   color: var(--kc-welcome-ink);
   text-wrap: balance;
 }
@@ -65,7 +73,7 @@
 .kc-welcome__lead {
   margin: var(--kc-space-4) 0 0;
   font-size: var(--kc-text-base);
-  font-weight: var(--kc-font-weight-bold);
+  font-weight: var(--kc-font-weight-medium);
   line-height: var(--kc-leading-heading);
   color: var(--kc-welcome-accent-text);
 }
@@ -77,14 +85,18 @@
   margin-top: var(--kc-space-6);
 }
 
-/* `auto-fit`: két hasáb, ha a felsorolás ÉS az oldalsó szöveg is ki van töltve;
-   ha a szerkesztő csak az egyiket használja, az üres sáv összeomlik, és a
-   meglévő oszlop a teljes szélességet kapja. */
+/* A tükör tábla-aránya: a felsorolás 6, az összefoglaló 5 egység (kineticare.css
+   270–276.). Ha a szerkesztő csak az egyiket tölti ki, a meglévő oszlop a
+   teljes szélességet kapja — ezért a hasábok minmax(0, Nfr) alakúak. */
 @media (min-width: 900px) {
   .kc-welcome__grid {
-    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-    gap: var(--kc-space-7);
-    margin-top: var(--kc-space-7);
+    grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
+    gap: clamp(2.25rem, 5vw, 4.5rem);
+    margin-top: clamp(2rem, 4vw, 3.25rem);
+  }
+
+  .kc-welcome__grid:has(> :only-child) {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -96,11 +108,11 @@
 
 .kc-welcome__checklist-item {
   position: relative;
-  padding: var(--kc-space-4) 0 var(--kc-space-4) var(--kc-space-7);
+  padding: 1.1rem 0 1.1rem var(--kc-space-7);
   border-top: 1px solid var(--kc-welcome-rule);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-xl);
-  line-height: var(--kc-leading-heading);
+  font-size: var(--kc-text-board-md);
+  line-height: 1.3;
   color: var(--kc-welcome-ink);
   /* A mező textarea: a szerkesztő sortörései maradjanak meg. */
   white-space: pre-line;
@@ -110,7 +122,7 @@
 .kc-welcome__checklist-item::before {
   content: '\2713';
   position: absolute;
-  top: var(--kc-space-4);
+  top: 1.05rem;
   left: 0;
   display: inline-flex;
   width: 2rem;
@@ -134,17 +146,17 @@
 @media (min-width: 900px) {
   .kc-welcome__side {
     padding-top: 0;
-    padding-left: var(--kc-space-6);
+    padding-left: clamp(1.5rem, 2.5vw, 2.4rem);
     border-top: 0;
     border-left: 1px solid var(--kc-welcome-accent);
   }
 }
 
 .kc-welcome__side-text {
-  margin: 0 0 var(--kc-space-4);
+  margin: 0 0 1.1rem;
   max-width: 68ch;
   font-size: var(--kc-text-base);
-  line-height: var(--kc-leading-body);
+  line-height: 1.65;
   color: var(--kc-welcome-muted);
   white-space: pre-line;
 }
@@ -154,6 +166,6 @@
 }
 
 .kc-welcome__side-text strong {
-  font-weight: var(--kc-font-weight-bold);
+  font-weight: var(--kc-font-weight-medium);
   color: var(--kc-welcome-ink);
 }
