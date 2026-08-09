@@ -1,4 +1,4 @@
-# Videó-lejátszás készenléti állapota (Cloudflare Stream)
+# Videó-lejátszás készenléti állapota (Bunny Stream)
 
 > **Miről szól ez a dokumentum?** Arról, hogy a kurzusvideók lejátszásából mi
 > van már kész a rendszerben, mi hiányzik még az élesítéshez, és pontosan
@@ -6,8 +6,14 @@
 > videót fel kell tenni az oldalra. Nem kell hozzá programozói tudás — a
 > technikai részleteket a végén, külön szakaszban gyűjtjük.
 >
+> **2026-08-09 — a videó-platform a Bunny.net (Bunny Stream).** A korábbi,
+> Cloudflare Streamre épült bekötés soha nem lett élesítve (nem volt fiók, nem
+> volt kulcs, nem volt ott videó), a kód pedig azóta át van kötve a Bunnyra. A
+> döntés indoklása és a részletes átállási terv:
+> [videó-platform: döntés és Bunny-átállási terv](video-platform-dontes.md).
+>
 > Kapcsolódó: [hero-videó feltöltése](hero-video-feltoltes.md) (a kezdőlapi
-> háttérvideó — az MÁS folyamat, és az már működik).
+> háttérvideó — az MÁS folyamat).
 
 ---
 
@@ -16,48 +22,59 @@
 | Terület | Állapot |
 |---|---|
 | Jogosultság-ellenőrzés (ki nézheti a videót) | ✅ Kész, tesztelt |
-| Aláírt lejátszási token kiállítása | ✅ Kész, tesztelt |
+| Lejátszási jegy (token) kiállítása — Bunny-séma | ✅ Kész, tesztelt |
 | Lejátszó felület (kezdőlap, előzetes, kurzus) | ✅ Kész |
-| Biztonsági fejléc (CSP) a Stream-hez | ✅ **Ezzel a változással javítva** |
-| Cloudflare-fiók + kulcsok beállítása | ❌ Hiányzik |
+| Biztonsági fejléc (CSP) a Bunnyhoz | ✅ Kész |
+| A lejátszási lánc korábbi két kódhibája | ✅ Javítva (4.3) |
+| Bunny-kulcsok és library-azonosítók beállítása | ❌ Hiányzik (ez az utolsó lépés) |
 | Videó feltöltése a rendszeren keresztül | ❌ Nincs — kézi másolás az adminba |
-| Két kódhiba a lejátszási láncban | ❌ **Élesítés előtt javítandó** (lásd 4.3) |
 
-Magyarul: a **nehéz része kész** (ki férhet hozzá, hogyan lesz belőle biztonságos,
-lejáró link), a **bekötés** viszont még nincs meg — és a bekötés előtt két,
-alább pontosan leírt hibát ki kell javítani, különben a vevő hibaüzenetet lát.
+Magyarul: a **nehéz része kész** (ki férhet hozzá, hogyan lesz belőle
+biztonságos, lejáró link, mit lát a vevő hiba esetén), és a kód a Bunnyra van
+kötve. Ami hiányzik: a Bunny-oldali előkészítés (két library) és a négy
+környezeti változó beállítása a Railway-en. **Kódváltozás nem kell hozzá.**
 
 ---
 
 ## 2. Hogyan működik ez az egész (laikus magyarázat)
 
-A kurzusvideók **nem a mi szerverünkön** vannak, hanem a Cloudflare Stream nevű
+A kurzusvideók **nem a mi szerverünkön** vannak, hanem a Bunny Stream nevű
 videó-szolgáltatónál. Ez azért jó, mert a videó így mindenkinél gyorsan és a
 sávszélességéhez igazodó minőségben indul el, telefonon is.
 
-A videó ott egy **azonosítót** kap (egy hosszú betű-szám sorozat, pl.
-`ea95132c15732412d22c1476fa83f0`). Az oldal ezt az azonosítót tárolja — nem
-magát a videófájlt.
+A videó ott egy **azonosítót** kap (egy GUID: hosszú betű-szám sorozat, pl.
+`e8c1f0a2-4b17-4e7a-9f2c-0d3b5a6c7e8f`). Az oldal ezt az azonosítót tárolja —
+nem magát a videófájlt.
 
 Amikor egy vásárló megnyitja a kurzust:
 
 1. az oldal megkérdezi a saját szerverünket: „ez az ember megvette ezt a kurzust?";
 2. ha igen, a szerver kiállít egy **időkorlátos belépőjegyet** (ez a „token"),
    ami csak arra az egy videóra és csak korlátozott ideig érvényes;
-3. a lejátszó ezzel a jeggyel kéri le a videót a Cloudflare-től.
+3. a lejátszó ezzel a jeggyel kéri le a videót a Bunnytól.
 
 Így a videó linkje nem osztható meg: a jegy lejár, és máshoz nem jó.
+
+**Két videó-tár (library).** A Bunnynál a jegy-kötelezettség nem videónként,
+hanem **library-szinten** kapcsolható be. Ezért a videók két tárban élnek:
+
+| Tár | Mi van benne | Kell-e jegy |
+|---|---|---|
+| **Védett** | a megvásárolható kurzus-epizódok | igen |
+| **Publikus** | kezdőlapi hero-videó, kurzus-előzetesek | nem |
 
 ---
 
 ## 3. Mi van már kész
 
-### 3.1 Jogosultság-ellenőrzés és token-kiadás
+### 3.1 Jogosultság-ellenőrzés és jegy-kiadás
 
 - Végpont: `src/app/(frontend)/api/stream-token/route.ts`
 - Üzleti szabályok: `src/lib/stream/issue-stream-token.ts`
-- A jegy (JWT) előállítása: `src/lib/stream/token.ts`
-- Tesztek: `src/__tests__/stream-token.test.ts`, `src/__tests__/stream-token-client.test.ts`
+- A jegy előállítása: `src/lib/stream/token.ts`
+- Tesztek: `src/__tests__/stream-token.test.ts`,
+  `src/__tests__/stream-token-contract.test.ts`,
+  `src/__tests__/stream-token-client.test.ts`
 
 A szabályok, amiket már betart:
 
@@ -69,8 +86,13 @@ A szabályok, amiket már betart:
 - **Státusz-szabály**: közzétett kurzus → mehet; archivált → a régi vevő tovább
   nézheti; piszkozat → senki.
 - **A jegy élettartama**: a videó hossza + 10 perc türelem, de legfeljebb 24 óra.
-- **Hiányzó aláírókulcs esetén** nem omlik össze az app: 503 + magyar üzenet
+- **Hiányzó token-kulcs esetén** nem omlik össze az app: 503 + magyar üzenet
   („A videólejátszás ideiglenesen nem érhető el…") és naplóbejegyzés.
+
+A jegy a Bunny sémája szerint készül:
+`SHA256_HEX(token_auth_key + videó-GUID + expires)`, ahol az `expires` a lejárat
+Unix-másodpercben — ez a szám az embed-URL-be is bekerül, és pontosan
+egyeznie kell a hashelt értékkel.
 
 ### 3.2 Lejátszó felületek
 
@@ -83,40 +105,55 @@ A szabályok, amiket már betart:
 A `CoursePlayer` epizódlistát is ad, és a jegy lejárta előtt 5 perccel magától
 új jegyet kér, hogy a lejátszás ne szakadjon meg hosszú videó közben.
 
+> A **kezdőlapi nyitó filmsáv** (ScrollScrub / `FilmHero`) NEM tartozik ide: az
+> a `public/media/film` alatti **lokális** klipeket tölti le, és `blob:`
+> URL-lel adja a videóelemnek. Ezért marad a `blob:` a CSP `media-src`
+> direktívájában akkor is, ha a Bunny-videó nincs bekapcsolva.
+
 ### 3.3 Admin-mezők (ide kerül az azonosító)
 
 A kurzus (termék) szerkesztőjében:
 
 | Mező az adminban | Mire való |
 |---|---|
-| **Bemutató videó azonosítója** | az ingyenes előzetes Stream-azonosítója |
-| **Videók → Videó azonosítója** | a megvásárolt kurzus egy epizódjának azonosítója |
+| **Bemutató videó azonosítója** | az ingyenes előzetes GUID-ja a **publikus** libraryből |
+| **Videók → Videó azonosítója** | egy megvásárolható epizód GUID-ja a **védett** libraryből |
 | **Videók → Hossz (másodperc)** | a jegy lejáratának számításához **kötelező** |
-| **Videók → Videó állapota** | csak a **Kész** állapotú videó játszható le |
+| **Videók → Videó állapota** | csak a **Kész** állapotú videó játszható le (kézzel állítandó) |
 
 ### 3.4 Biztonsági fejléc (CSP)
 
 A böngészőnek szóló „honnan tölthet be az oldal bármit" szabály
-(`src/lib/security/csp.ts`) mostantól helyesen engedi a Cloudflare Stream
-hostját. A javítás előtti minta érvénytelen volt — részletek a 6. pontban.
+(`src/lib/security/csp.ts`) a Bunny hostjait engedi: a lejátszót az
+`iframe.mediadelivery.net`-ről (`frame-src`), a poszterképeket és a
+médiafájlokat a videó-library pull-zone hosztjáról (`img-src`, `media-src`).
+A joker-csapdáról — ami itt már egyszer valódi hibát okozott — a 6. pont szól.
 
 ---
 
 ## 4. Mi hiányzik az élesítéshez
 
-### 4.1 Cloudflare-fiók és kulcsok
+### 4.1 Bunny-oldali előkészítés és a kulcsok
 
-Kell egy Cloudflare-fiók, benne bekapcsolt **Stream** (fizetős: tárolás +
-lejátszás alapon). Utána a következő környezeti változókat kell beállítani
-(Railway → a szolgáltatás **Variables** fülén, lokálisan a `.env` fájlban):
+A Bunny-előfizetés megvan, a videók egy része már ott van. Ami kell:
 
-| Változó | Mire kell | `.env.example`-ben |
+1. **Két videó-library** (4.4 a döntési dokumentumban): egy **védett**
+   (token-hitelesítés BE) és egy **publikus** (token-hitelesítés KI).
+2. A védett libraryn a **token-hitelesítés bekapcsolása** — enélkül a fizetőfal
+   megkerülhető: a videó a jegy nélkül is nézhető.
+3. A következő környezeti változók beállítása (Railway → a szolgáltatás
+   **Variables** fülén, lokálisan a `.env` fájlban):
+
+| Változó | Mire kell | Titok? |
 |---|---|---|
-| `CF_STREAM_ACCOUNT_ID` | a Cloudflare-fiók azonosítója (feltöltés API-ból) | ✅ már benne volt |
-| `CF_STREAM_API_TOKEN` | Stream-jogú API-token — **titok**, sosem a böngészőbe | ✅ már benne volt |
-| `CF_STREAM_SIGNING_KEY` | ezzel írjuk alá a belépőjegyet — **titok** | ✅ már benne volt |
-| `CF_STREAM_SIGNING_KEY_ID` | kulcs-azonosító (`kid`), ha több kulcsot forgatunk | ✅ már benne volt (opcionális) |
-| `NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE` | a lejátszó aldomainje (`customer-<kód>…`) | ⚠️ **hiányzott — ezzel a változással felvéve, érték nélkül** |
+| `BUNNY_STREAM_TOKEN_AUTH_KEY` | a védett library token-kulcsa — ezzel készül a jegy | **IGEN** |
+| `NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID` | a védett library numerikus id-ja (embed-URL) | nem |
+| `NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID` | a publikus library id-ja (hero, előzetes) | nem |
+| `NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST` | `vz-….b-cdn.net` — CSP + poszterképek | nem |
+
+Mind a négy **opcionális** a kód szempontjából: hiányukban az app elindul és
+működik, csak a videó nem játszható (magyar üzenettel, nem fekete lejátszóval).
+A `.env.example` mind a négyet felsorolja, érték nélkül.
 
 > **Figyelem — ez sokakat megtréfál:** a `NEXT_PUBLIC_` kezdetű változók a
 > **build** pillanatában égnek bele az oldalba. Ha utólag állítod be őket,
@@ -125,58 +162,50 @@ lejátszás alapon). Utána a következő környezeti változókat kell beállí
 > (`.next/routes-manifest.json`). Vö. CLAUDE.md — „a SUCCESS deploy nem
 > jelenti, hogy az új kód fut".
 
-A Cloudflare oldalán ezen felül be kell kapcsolni a videókra a **„Require
-signed URLs"** beállítást — enélkül a videó a jegy nélkül is nézhető marad,
-tehát a fizetőfal megkerülhető.
+> **A token-kulcs titok.** Ne menjen e-mailben, chatben, képernyőképen — a
+> Railway Variables felületén kell bevinni. Ha mégis kikerülne, a Bunny
+> felületén azonnal újragenerálandó; a régi jegyek ilyenkor érvénytelenek, egy
+> futó lejátszás megszakadhat (a lejátszó magyar üzenetet és „Újrapróbálom"
+> gombot ad, nem fagy le).
 
 ### 4.2 Feltöltési automatizmus — nincs, és egyelőre nem is kell
 
-Ma nincs olyan gomb az adminban, ami feltöltené a videót a Cloudflare-be. A
-videó feltöltése a Cloudflare felületén történik, az azonosítót pedig kézzel
-kell bemásolni az adminba (lásd 5. pont). Ez kis darabszámnál teljesen
-rendben van; a `CF_STREAM_ACCOUNT_ID` és a `CF_STREAM_API_TOKEN` már azért
-szerepel a listában, hogy a későbbi automata feltöltés bekötése ne igényeljen
-új titkokat.
+Ma nincs olyan gomb az adminban, ami feltöltené a videót a Bunnyba. A videó
+feltöltése a Bunny felületén történik, a GUID-ot pedig kézzel kell bemásolni az
+adminba (lásd 5. pont). Ez kis darabszámnál teljesen rendben van.
 
 Ebből következik, hogy a **Videó állapota** mezőt (Kész / Feldolgozás alatt)
-egyelőre kézzel kell **Kész**-re állítani, miután a Cloudflare végzett a
-feldolgozással — a mező súgója szerint „a rendszer állítja", de a feltöltő
-automatizmus hiányában erre ma nincs, aki állítsa.
+kézzel kell **Kész**-re állítani, miután a Bunny végzett a feldolgozással.
 
-### 4.3 Két kódhiba a lejátszási láncban — élesítés előtt javítandó
+Ha valaha automata feltöltést építünk, ahhoz egy Bunny **API-kulcs** kell
+(`BUNNY_STREAM_API_KEY`) — ma nincs a rendszerben, és nincs is rá szükség.
 
-Ezek ma nem látszanak (nincs élő videó), de a bekapcsolás első percében
-előjönnének. **Szándékosan nem javítottuk itt**, mert ez a feladat a
-felmérésről és a CSP-ről szólt — de mindkettő pontosan be van mérve:
+### 4.3 A lejátszási lánc két korábbi kódhibája — JAVÍTVA
 
-**(a) A lejárati idő formátuma nem egyezik a két oldal között.**
+Ezt a két hibát ez a dokumentum mérte be még a Cloudflare-es időszakban;
+mindkettő javítva van, és regressziós teszt őrzi őket. Azért marad itt, mert a
+tanulság a Bunnynál is ugyanaz:
 
-- A szerver ISO-8601 **szöveget** ad vissza:
-  `src/lib/stream/issue-stream-token.ts:214` → `expiresAt: "2026-08-09T12:34:56.000Z"`
-- A kliens **számot** (Unix-másodperc) vár:
-  `src/lib/stream-token-client.ts:42` → `typeof body.expiresAt !== 'number'`
+**(a) A lejárati idő formátuma nem egyezett a két oldal között.** A szerver
+ISO-8601 szöveget adott vissza, a kliens számot várt — a fizető vevő is
+hibaüzenetet kapott. A tesztek nem fogták meg, mert **mindkét oldal a SAJÁT
+feltevését mockolta**.
 
-Következmény: a kliens minden sikeres válaszra is hibára fut, és a vevő a
-„A videó lejátszási joga most nem ellenőrizhető." üzenetet kapja — pedig
-mindent megvett és minden rendben van. A meglévő tesztek ezt nem fogják meg,
-mert a kliens-teszt számot ad vissza a mock-válaszban, a szerver-teszt pedig
-szöveget vár — külön-külön mindkettő zöld.
+**(b) Az epizód-választás nem jutott el a szerverig.** A kliens `videoIndex`
+néven küldte, a szerver `videoId` néven olvasta, ezért mindig az első videóra
+állított ki jegyet.
 
-**(b) Az epizód-választás nem jut el a szerverig.**
+A javítás **egyetlen közös szerződés-modul** (`src/lib/stream/contract.ts`): a
+kérés-paraméterek nevei, a válasz alakja, a lejárat egyszeri
+epoch-másodpercre alakítása és az embed-URL építése is itt lakik, és a
+`src/__tests__/stream-token-contract.test.ts` a VALÓDI klienst a VALÓDI
+szerverrel futtatja.
 
-- A kliens `videoIndex` néven küldi: `src/lib/stream-token-client.ts:25`
-- A szerver `videoId` néven olvassa: `src/lib/stream/route-handler.ts:43`
-
-Következmény: bármelyik részre kattint a vevő, a szerver mindig az **első**
-Kész videóra állítja ki a jegyet, a lejátszó viszont a kattintott rész
-azonosítójával kéri le a videót — a Cloudflare ezt (helyesen) elutasítja.
-Egyetlen epizódnál még véletlenül működne; a második résznél már nem.
-
-Ehhez tartozik egy harmadik, kisebb eltérés is: a `CoursePlayer` a **szűrt**
-(csak Kész állapotú) listában indexel, a szerver `selectVideo` függvénye
-viszont a teljes listában — ha a javítás index-alapú marad, ezt is egyeztetni
-kell. A legtisztább megoldás, ha a kliens is a `videoId`-t (azaz a
-`streamAssetId`-t) küldi, mert azt a szerver már ma is kezeli.
+> **A Bunnynál ez a kockázat NAGYOBB, nem kisebb.** A jegy hash-e a lejáratot
+> is köti: ha az `expiresAt` oda-vissza alakítása akár egy másodpercet
+> csúszna, **minden** lejátszás elhalna, és a hibaüzenet nem utalna az okra.
+> Ezért a contract-teszt a kliens által visszaalakított másodperccel
+> újraszámolja a hasht, és a szerver jegyével veti össze.
 
 ---
 
@@ -186,27 +215,29 @@ kell. A legtisztább megoldás, ha a kliens is a `videoId`-t (azaz a
 
 ### 5.1 Ingyenes előzetes videó feltevése egy kurzushoz
 
-1. Jelentkezz be a **Cloudflare** felületére → bal oldalt **Stream** → **Videos**.
-2. **Upload video** → válaszd ki a fájlt → várd meg, amíg a státusz **Ready**
-   lesz (pár perc; hosszabb videónál több).
-3. Kattints a videóra, és másold ki a **UID** mezőt (hosszú betű-szám sorozat).
+1. Jelentkezz be a **Bunny** felületére → **Stream** → a **PUBLIKUS** library.
+2. **Upload video** → válaszd ki a fájlt → várd meg, amíg a feldolgozás
+   befejeződik (pár perc; hosszabb videónál több).
+3. Kattints a videóra, és másold ki a **GUID**-ot (a videó adatlapján).
 4. Menj a Kineticare **adminba** → **Kurzusok** → a kurzus megnyitása.
-5. A **Bemutató videó azonosítója** mezőbe illeszd be a UID-ot → **Mentés**.
+5. A **Bemutató videó azonosítója** mezőbe illeszd be a GUID-ot → **Mentés**.
 6. Nézd meg a kurzus nyilvános oldalát: az előzetes megjelenik.
    - Ha nem jelenik meg: az előzetes csak akkor látszik, ha a
-     `NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE` be van állítva (4.1) — ez fejlesztői
-     lépés, szólj a fejlesztőnek.
+     `NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID` be van állítva (4.1) — ez
+     fejlesztői lépés, szólj a fejlesztőnek.
 
 ### 5.2 Megvásárolható kurzusvideó (epizód) feltevése
 
-1. Töltsd fel a videót a Cloudflare-be (mint fent), és várd meg a **Ready**-t.
-2. **Fontos:** a videó beállításainál kapcsold be a **Require signed URLs**-t —
-   ez teszi fizetősen védetté. Enélkül a link bárkinek működne.
-3. Másold ki a **UID**-ot és jegyezd fel a videó **hosszát másodpercben**
-   (a Cloudflare kiírja; pl. 12:30 → 750).
+1. Töltsd fel a videót a **VÉDETT** libraryba (mint fent), és várd meg a
+   feldolgozás végét.
+2. **Fontos:** a védett libraryn a **token-hitelesítésnek bekapcsolva kell
+   lennie** (ez library-szintű beállítás, nem videónkénti). Enélkül a link
+   bárkinek működne.
+3. Másold ki a **GUID**-ot és jegyezd fel a videó **hosszát másodpercben**
+   (pl. 12:30 → 750).
 4. Adminban a kurzusnál: **Videók** → **Add Videó**:
    - **Videó címe**: amit a vevő lát az epizódlistában (pl. „1. rész — Bemelegítés")
-   - **Videó azonosítója**: a UID
+   - **Videó azonosítója**: a GUID
    - **Hossz (másodperc)**: a kiszámolt szám — **enélkül nem indul a lejátszás**
    - **Videó állapota**: **Kész**
 5. Mentés. A sorrend az epizódlistában a mezők sorrendje — húzással átrendezhető.
@@ -218,71 +249,74 @@ kell. A legtisztább megoldás, ha a kliens is a `videoId`-t (azaz a
 - **Ne írd át** a Videó azonosítóját meglévő, már vásárolt kurzusnál — a régi
   vevők lejátszása áll meg tőle.
 - **Ne hagyd üresen** a hosszt: a jegy lejáratát abból számoljuk.
-- **Ne tedd** a kurzusvideót publikusra (signed URL nélkül) — azzal a fizetőfal
+- **Ne tedd** a kurzusvideót a publikus libraryba — azzal a fizetőfal
   megkerülhetővé válik.
 
 ---
 
-## 6. A CSP-javítás és a bizonyítéka
+## 6. A CSP-joker csapdája és a bizonyítéka
 
-### 6.1 Mi volt a hiba
+### 6.1 Mi a szabály
 
-A Content-Security-Policy fejlécben ez a minta szerepelt három helyen
-(`frame-src`, `img-src`, `media-src`):
+A Content-Security-Policy host-forrásában a joker (`*`) **kizárólag a
+legbaloldalibb, TELJES címke helyén** állhat:
 
 ```
-https://customer-*.cloudflarestream.com
+https://*.b-cdn.net     ✅ szabályos
+https://vz-*.b-cdn.net  ❌ ÉRVÉNYTELEN — a böngésző NÉMÁN eldobja
 ```
 
-Ez **érvénytelen CSP-forrás**. A szabvány szerint a joker (`*`) csak a
-legbaloldalibb, **teljes** címke helyén állhat: a `https://*.cloudflarestream.com`
-jó, a `customer-*` viszont nem. A böngésző az ilyen forrást **némán eldobja** —
-tehát a Stream hostja egyáltalán nem került a listára. Ez ma nem tűnt fel, mert
-a Stream még nincs élesítve; bekapcsoláskor viszont azonnal fekete lejátszót
-adott volna, konzolhibával.
+A hibás alak nem ad hibaüzenetet: a forrás egyszerűen nem kerül fel a listára,
+és a lejátszó fekete marad, csak a böngésző-konzolban látszó CSP-hibával.
 
-### 6.2 Mi lett belőle
+Ez a repóban **valódi hiba volt**: a fejlécben korábban a
+`https://customer-*.cloudflarestream.com` minta szerepelt három direktívában. A
+Bunny hosztneve (`vz-….b-cdn.net`) pontosan ugyanebbe a csapdába hívna.
 
-- Ha a `NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE` be van állítva, a fejléc a
-  **pontos** hostot engedi (`https://customer-<kód>.cloudflarestream.com`) —
-  ez a lehető legszűkebb szabály.
+### 6.2 Mi lett belőle (a mai szabály)
+
+- Ha a `NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST` be van állítva, a fejléc a
+  **pontos** hostot engedi (`https://vz-….b-cdn.net`) — ez a lehető
+  legszűkebb szabály.
 - Ha nincs beállítva, a szabályos, egy címkés jokerre esik vissza
-  (`https://*.cloudflarestream.com`), hogy az élesítés ne törjön el.
-- A fiókkód csak alfanumerikus lehet; bármi más a jokeres ágra esik vissza —
-  így egy elgépelt env-érték nem tud új direktívát csempészni a fejlécbe.
-
-Emellett a `media-src` megkapta a `blob:` forrást is: enélkül a **kezdőlap
-nyitó filmsávja** (ScrollScrub) nem indul el, mert az a klipet letölti, majd
-`URL.createObjectURL()`-lel adja a videóelemnek. Ez nem a Stream-hez tartozik,
-de ugyanaz a fejléc blokkolta.
+  (`https://*.b-cdn.net`), hogy az élesítés ne törjön el.
+- A hosztnév csak `^[a-z0-9-]+\.b-cdn\.net$` alakú lehet; bármi más (szóköz,
+  pontosvessző, útvonal, saját joker) a jokeres ágra esik vissza — így egy
+  elgépelt env-érték nem tud új direktívát csempészni a fejlécbe.
+- A `media-src` `blob:` forrása **marad**: enélkül a **kezdőlap nyitó
+  filmsávja** (ScrollScrub) nem indul el, mert az a lokális klipet letölti,
+  majd `URL.createObjectURL()`-lel adja a videóelemnek.
 
 ### 6.3 A bizonyíték (valódi böngésző)
 
 A viselkedést valódi Chromiumban, valódi `Content-Security-Policy`
-válaszfejléccel kiszolgált oldalon mértük. A böngésző `securitypolicyviolation`
-eseménye a döntő jel: ha a forrás nem került a listára, az esemény elsül.
+válaszfejléccel kiszolgált oldalon mértük (a mérés a Cloudflare-hostokkal
+készült, de a vizsgált szabály maga a joker-elhelyezés, ami hosztnév-független).
+A böngésző `securitypolicyviolation` eseménye a döntő jel: ha a forrás nem
+került a listára, az esemény elsül.
 
-| Eset | CSP a `*.cloudflarestream.com`-ra | Eredmény |
-|---|---|---|
-| A) régi minta (`customer-*`) | `frame-src` / `img-src` / `media-src` | **mindhárom megsértve**, egyetlen kérés sem indult el |
-| B) új minta (`*.`) + `media-src blob:` | ugyanaz | **nulla megsértés**, mindhárom erőforrás betöltött |
-| C) pontos host (`customer-abc123.…`) | ugyanaz | **nulla megsértés**, mindhárom erőforrás betöltött |
-| D) új minta, de `blob:` nélkül | ugyanaz | a Stream átmegy, de a **filmsáv blob-videója blokkolva** |
+| Eset | Eredmény |
+|---|---|
+| A) címke-belseji joker (`customer-*` / `vz-*`) | **mindhárom direktíva megsértve**, egyetlen kérés sem indult el |
+| B) szabályos, egy címkés joker (`*.`) + `media-src blob:` | **nulla megsértés**, mindhárom erőforrás betöltött |
+| C) pontos host | **nulla megsértés**, mindhárom erőforrás betöltött |
+| D) szabályos joker, de `blob:` nélkül | a videó átmegy, de a **filmsáv blob-videója blokkolva** |
 
-A regressziót a `src/__tests__/security/csp.test.ts` őrzi a CI-ban: külön
-teszt tiltja a `customer-*` alak visszatérését, és ellenőrzi a `blob:`,
+A regressziót a `src/__tests__/security/csp.test.ts` őrzi a CI-ban: külön teszt
+tiltja a címke-belseji joker (`vz-*`, `customer-*`) visszatérését, ellenőrzi,
+hogy a Cloudflare-hostok már nincsenek a fejlécben, és őrzi a `blob:`,
 `worker-src`, `connect-src`, `object-src`, `base-uri`, `form-action`,
 `frame-ancestors` direktívákat.
 
-### 6.4 A teljes, javított fejléc (fiókkód nélküli, alapértelmezett eset)
+### 6.4 A teljes fejléc (pull-zone hoszt nélküli, alapértelmezett eset)
 
 ```
 default-src 'self';
 script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com;
-frame-src 'self' https://iframe.cloudflarestream.com https://*.cloudflarestream.com
+frame-src 'self' https://iframe.mediadelivery.net
           https://www.youtube-nocookie.com https://player.vimeo.com https://challenges.cloudflare.com;
-img-src 'self' data: https://videodelivery.net https://*.cloudflarestream.com;
-media-src 'self' blob: https://videodelivery.net https://*.cloudflarestream.com;
+img-src 'self' data: https://*.b-cdn.net;
+media-src 'self' blob: https://*.b-cdn.net;
 connect-src 'self';
 style-src 'self' 'unsafe-inline';
 font-src 'self';
@@ -304,60 +338,69 @@ Miért van benne `'unsafe-inline'` (és miért nincs `'unsafe-eval'`):
 - **`style-src 'unsafe-inline'` — kényszer.** A React `style={{…}}` attribútumai
   (HeroVideo, ScrollScrub) és a Payload admin `<style>` blokkjai. Később
   szűkíthető `style-src-elem` + `style-src-attr` bontással.
-- **`'unsafe-eval'` nincs, és nem is kell** — sem a Turnstile, sem a Stream
-  beágyazás nem használ `eval`-t. (Megjegyzés: `npm run dev` alatt a HMR
+- **`'unsafe-eval'` nincs, és nem is kell** — sem a Turnstile, sem a
+  videó-beágyazás nem használ `eval`-t. (Megjegyzés: `npm run dev` alatt a HMR
   igényelhet `eval`-t; a fejlesztői élményt ez érintheti, az éles működést nem.)
-- **`connect-src 'self'` elég:** a PostHog a saját domainünk `/ingest`
+- **`connect-src 'self'` elég:** iframe-es lejátszásnál a videó-kérések az
+  iframe dokumentumából mennek, arra a beágyazott oldal saját CSP-je vonatkozik.
+  (Ha valaha saját `<video>` + `hls.js` lejátszóra váltanánk, a pull-zone
+  hosztot ide is fel kellene venni.) A PostHog a saját domainünk `/ingest`
   proxyján megy (`next.config.ts` rewrites), a Barion pedig **nem** hálózati
   hívás a böngészőből, hanem teljes oldalas átirányítás — azt a CSP nem
-  korlátozza. A Barion API-t kizárólag a szerver hívja. **A fizetés tehát nem
-  törik el.**
-- Kikerült a `script-src`-ből a `cloudflarestream.com`: a Stream kizárólag
+  korlátozza. **A fizetés tehát nem törik el.**
+- A videó-szolgáltató hostja **nincs** a `script-src`-ben: a lejátszó kizárólag
   iframe-ként van beágyazva, az iframe-en belüli scriptekre a beágyazott
   dokumentum saját szabálya vonatkozik.
 
 ---
 
-## 7. Ha később saját (nem Stream) videóra váltanánk
+## 7. Ha később saját (nem szolgáltatói) videóra váltanánk
 
-Reális alternatíva, ha a Stream költsége vagy a szolgáltatófüggés zavaró. Amit
-tudni érdemes, mielőtt bárki belevág:
+Reális alternatíva, ha a költség vagy a szolgáltatófüggés zavaró. Amit tudni
+érdemes, mielőtt bárki belevág:
 
 **Mi maradna változatlan**
 
 - A fizetőfal logikája: „megvette-e" ellenőrzés, a 403-as
   információ-minimalizálás, a státusz-szabályok
   (`src/lib/stream/issue-stream-token.ts`) — ez szolgáltató-független.
+- A `GET /api/stream-token` → `200 { token, expiresAt }` wire-formátum és a
+  lejátszó állapotgépe (`src/lib/stream/contract.ts`, `CoursePlayer`).
 - Az admin-mezők szerkezete (azonosító, hossz, állapot) — csak az azonosító
-  jelentése változna (Stream-UID helyett pl. fájlnév vagy objektumkulcs).
+  jelentése változna.
 
 **Mit kellene újraírni**
 
 | Terület | Teendő |
 |---|---|
-| Jegy-kiállítás | A `src/lib/stream/token.ts` Cloudflare-specifikus JWT-t gyárt (`sub` = videó-UID). Saját tárolónál jellemzően aláírt URL-t vagy rövid életű süti-jegyet adnánk. |
+| Jegy-kiállítás | A `src/lib/stream/token.ts` a Bunny hash-sémáját gyártja. Saját tárolónál jellemzően aláírt URL-t vagy rövid életű süti-jegyet adnánk. |
 | Lejátszó | Az iframe-beágyazás helyett saját `<video>` elem kellene HLS-sel (pl. `hls.js`) — plusz függőség, plusz karbantartás. |
-| Átkódolás | A Stream ma automatikusan több minőségben kódol. Saját megoldásnál ezt nekünk kellene futtatni (ffmpeg), különben mobilon akadna a lejátszás. |
-| Kiszolgálás | CDN nélkül a videó a saját szerverünk sávszélességét eszi. Railway-en ez gyorsan drága és lassú lesz — reálisan objektumtároló (pl. R2/S3) + CDN kell. |
-| CSP | A `frame-src`/`img-src`/`media-src` Stream-hostjai helyére az új tároló hoszt kerülne (`src/lib/security/csp.ts`). A `media-src blob:` maradna, mert a filmsávnak amúgy is kell. |
-| Meglévő videók | A már feltöltött Stream-videókat le kell tölteni és átköltöztetni; a régi UID-ok az adminban érvénytelenné válnak. |
+| Átkódolás | A szolgáltató ma automatikusan több minőségben kódol. Saját megoldásnál ezt nekünk kellene futtatni (ffmpeg), különben mobilon akadna a lejátszás. |
+| Kiszolgálás | CDN nélkül a videó a saját szerverünk sávszélességét eszi. Railway-en ez gyorsan drága és lassú lesz — reálisan objektumtároló + CDN kell. |
+| CSP | A `frame-src`/`img-src`/`media-src` hostjai helyére az új tároló hoszt kerülne (`src/lib/security/csp.ts`). A `media-src blob:` maradna, mert a filmsávnak amúgy is kell. |
+| Meglévő videók | A már feltöltött videókat le kell tölteni és átköltöztetni; a régi GUID-ok az adminban érvénytelenné válnak. |
 
-**Rövid ajánlás:** amíg a kurzusok száma kicsi és a nézettség kiszámítható, a
-Stream olcsóbb és lényegesen kevesebb üzemeltetést igényel. A váltásnak akkor
-van értelme, ha a havi Stream-számla tartósan meghaladja egy tároló + CDN +
-fejlesztői karbantartás együttes költségét — ezt előbb mérjük, ne becsüljük.
+**Rövid ajánlás:** a költség-összevetés a
+[döntési dokumentum](video-platform-dontes.md) 3. pontjában él — a Bunny a
+teljes éves plafon 3–11%-a. A váltásnak akkor van értelme, ha a havi számla
+tartósan meghaladja egy tároló + CDN + fejlesztői karbantartás együttes
+költségét — ezt előbb mérjük, ne becsüljük.
 
 ---
 
 ## 8. Ellenőrzőlista élesítés előtt
 
-- [ ] Cloudflare-fiók, Stream bekapcsolva, számlázás rendben.
-- [ ] `CF_STREAM_ACCOUNT_ID`, `CF_STREAM_API_TOKEN`, `CF_STREAM_SIGNING_KEY`
-      beállítva (Railway Variables), `CF_STREAM_SIGNING_KEY_ID` ha kell.
-- [ ] `NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE` beállítva **és utána újrabuildelve**.
-- [ ] A 4.3 pont két hibája javítva, teszttel lefedve.
-- [ ] A kurzusvideókon a Cloudflare **Require signed URLs** bekapcsolva.
-- [ ] Próbavásárlás a staging-en: vétel → „Kurzusaim" → a videó elindul.
+- [ ] Bunny: **két library** (védett + publikus), a védetten a
+      **token-hitelesítés bekapcsolva**.
+- [ ] `BUNNY_STREAM_TOKEN_AUTH_KEY` beállítva (Railway Variables, titok).
+- [ ] `NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID`,
+      `NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID`,
+      `NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST` beállítva **és utána
+      újrabuildelve**.
+- [ ] Staging: egy tetszőleges videóra generált jegy tényleg lejátszható-e
+      (ez igazolja az `expires` sztringgé alakításának alakját is).
+- [ ] Próbavásárlás a staging-en: vétel → „Kurzusaim" → a videó elindul →
+      epizódváltás → token-frissítés.
 - [ ] Ellenőrzés, hogy **nem** vevőként a lejátszó 403-at ad, és a videó URL-je
       önmagában (jegy nélkül) nem játszható le.
 - [ ] Böngésző-konzol: nincs CSP-hiba a kurzus- és a kezdőlapon.

@@ -31,8 +31,9 @@
 
 ## E2E-03 — Paywall: illetéktelen hozzáférés 403
 
-> Feltétel: a kurzushoz tartozik Stream-videó (`CF_STREAM_*` változók beállítva,
-> demó-epizód feltöltve). Ha még nincs videó, ez a teszt SKIP — jelöld így is.
+> Feltétel: a kurzushoz tartozik Bunny-videó (`BUNNY_STREAM_TOKEN_AUTH_KEY` +
+> `NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID` beállítva, demó-epizód feltöltve).
+> Ha még nincs videó, ez a teszt SKIP — jelöld így is.
 
 1. Lépj ki / használj inkognitóablakot.
 2. Kérd le bejelentkezett, NEM vásárló felhasználóként a videó-token endpointot

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import type { Config } from 'payload'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { maskEmail, parseFromAddress } from '../lib/email/mask'
 import { resolveEmailProvider, sendMail } from '../lib/email/provider'
@@ -9,6 +10,8 @@ import {
   welcomeEmail,
 } from '../lib/email/templates/auth'
 import { escapeHtml, renderLayout } from '../lib/email/templates/layout'
+import { usersAuthEmails } from '../lib/email/users-auth'
+import { PASSWORD_RESET_PATH, buildPasswordResetUrl } from '../lib/password-reset-url'
 
 describe('resolveEmailProvider', () => {
   it('RESEND_API_KEY elsőbbséget élvez', () => {
@@ -43,6 +46,41 @@ describe('sendMail noop-providerrel', () => {
   it('üres címzettlista esetén ok:false, retryable:false, szintén hiba nélkül', async () => {
     const result = await sendMail({ to: [], subject: 'T', html: '', text: '' })
     expect(result).toMatchObject({ ok: false, retryable: false })
+  })
+})
+
+/**
+ * Kulcs nélküli indulás: a noop-figyelmeztetés EGYSZER szólal meg.
+ *
+ * A provider-modul memoizálja a feloldást, ezért a naplósor a folyamat
+ * élettartama alatt egyszer megy ki — több száz levélnél nem szemeteli tele a
+ * naplót. A teszt friss modulpéldányt tölt be (`resetModules`), hogy a többi
+ * teszt már bemelegített cache-e ne zavarjon bele.
+ */
+describe('e-mail provider figyelmeztetése kulcs nélkül', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it('a noop-figyelmeztetés csak EGYSZER kerül a naplóba', async () => {
+    vi.resetModules()
+    const lines: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((line: unknown) => {
+      lines.push(String(line))
+    })
+
+    const { sendMail: freshSendMail } = await import('../lib/email/provider')
+    const message = { subject: 'T', html: '<p>x</p>', text: 'x' }
+    await freshSendMail({ to: 'egy@example.com', ...message })
+    await freshSendMail({ to: 'ketto@example.com', ...message })
+    await freshSendMail({ to: 'harom@example.com', ...message })
+
+    const warnings = lines.filter((line) => line.includes('e-mail provider nincs beállítva'))
+    expect(warnings).toHaveLength(1)
+    // A figyelmeztetés magyar, és megmondja, mi hiányzik.
+    expect(warnings[0]).toContain('RESEND_API_KEY')
+    expect(warnings[0]).toContain('"level":"warn"')
   })
 })
 
@@ -113,5 +151,93 @@ describe('e-mail sablonok (magyar, HTML + plain-text)', () => {
     const layout = renderLayout({ heading: 'Cím', paragraphsHtml: ['x'], paragraphsText: ['x'] })
     expect(layout.text).toContain('automatikus üzenet')
     expect(escapeHtml('<b>"i"</b>')).toBe('&lt;b&gt;&quot;i&quot;&lt;/b&gt;')
+  })
+})
+
+describe('jelszó-beállító link', () => {
+  it('a nyilvános oldalra mutat, URL-kódolt tokennel', () => {
+    expect(buildPasswordResetUrl('https://kineticare.example.com', 'abc+def')).toBe(
+      `https://kineticare.example.com${PASSWORD_RESET_PATH}?token=abc%2Bdef`,
+    )
+  })
+
+  it('a záró perjel nem duplázza az útvonalat', () => {
+    expect(buildPasswordResetUrl('https://kineticare.example.com//', 'abc')).toBe(
+      `https://kineticare.example.com${PASSWORD_RESET_PATH}?token=abc`,
+    )
+  })
+})
+
+/**
+ * A users auth e-mail-sablonok config-injekciója.
+ *
+ * A `usersAuthEmails` plugin a Users.ts collection-fájlhoz NEM nyúl — a
+ * teszt is a config-transzformációt ellenőrzi, nem a collection forrását.
+ */
+describe('usersAuthEmails plugin', () => {
+  const baseConfig = (): Config =>
+    ({
+      collections: [
+        { slug: 'users', auth: {}, fields: [] },
+        { slug: 'media', fields: [] },
+      ],
+    }) as unknown as Config
+
+  /** A beinjektált forgot-password sablon kiszedése típusszűkítéssel (`any` nélkül). */
+  const forgotPasswordHtml = async (
+    config: Config,
+    args: { token?: string; user?: unknown },
+  ): Promise<string> => {
+    const users = (config.collections ?? []).find((collection) => collection.slug === 'users')
+    const auth = typeof users?.auth === 'object' ? users.auth : undefined
+    const forgotPassword =
+      typeof auth?.forgotPassword === 'object' ? auth.forgotPassword : undefined
+    const generate = forgotPassword?.generateEmailHTML
+    if (typeof generate !== 'function') {
+      throw new Error('Nincs beinjektálva forgot-password HTML-sablon.')
+    }
+    return String(await generate(args))
+  }
+
+  const withServerUrl = async <T,>(url: string, run: () => Promise<T>): Promise<T> => {
+    const previous = process.env.NEXT_PUBLIC_SERVER_URL
+    process.env.NEXT_PUBLIC_SERVER_URL = url
+    try {
+      return await run()
+    } finally {
+      if (previous === undefined) {
+        delete process.env.NEXT_PUBLIC_SERVER_URL
+      } else {
+        process.env.NEXT_PUBLIC_SERVER_URL = previous
+      }
+    }
+  }
+
+  it('a reset-link a NYILVÁNOS oldalra mutat, nem az adminra', async () => {
+    await withServerUrl('https://kineticare.example.com', async () => {
+      const config = (await usersAuthEmails(baseConfig())) as Config
+      const html = await forgotPasswordHtml(config, { token: 'tok123', user: { name: 'Kiss Anna' } })
+      expect(html).toContain(
+        `https://kineticare.example.com${PASSWORD_RESET_PATH}?token=tok123`,
+      )
+      expect(html).not.toContain('/admin/reset/')
+      expect(html).toContain('Kedves Kiss Anna!')
+    })
+  })
+
+  it('név nélküli felhasználónál is helyes a megszólítás', async () => {
+    await withServerUrl('https://kineticare.example.com/', async () => {
+      const config = (await usersAuthEmails(baseConfig())) as Config
+      const html = await forgotPasswordHtml(config, { token: 'tok123' })
+      expect(html).toContain('Szia!')
+      // A záró perjel nem duplázhatja az útvonalat.
+      expect(html).not.toContain('com//jelszo-visszaallitas')
+    })
+  })
+
+  it('a users-en kívüli collectionöket érintetlenül hagyja', async () => {
+    const config = (await usersAuthEmails(baseConfig())) as Config
+    const media = (config.collections ?? []).find((collection) => collection.slug === 'media')
+    expect(media?.auth).toBeUndefined()
   })
 })

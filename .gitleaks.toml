@@ -27,7 +27,7 @@
 useDefault = true
 
 [allowlist]
-description = "Jelszó-politika teszt-fixtúrák — kitalált (DUMMY) jelszavak, nem valódi hitelesítő adatok"
+description = "Teszt-fixtúrák — kitalált (DUMMY) jelszavak és tesztvektorok, nem valódi hitelesítő adatok"
 regexes = [
   # A jelenlegi, kifejezetten DUMMY-nak jelölt fixtúra (src/__tests__/security/).
   '''DUMMY-Eros-Teszt-Jelszo-42''',
@@ -37,4 +37,13 @@ regexes = [
   # A korábbi fixtúra-érték. A munkafában már nem szerepel (DUMMY-ra cseréltük),
   # de a git-történetben benne maradt, a kapu pedig a teljes historyt vizsgálja.
   '''Kecskemeti42Futo''',
+  # A Bunny-jegy aláírásának ISMERT TESZTVEKTORAI (src/__tests__/stream-token.test.ts):
+  # a kifejezetten DUMMY-nak jelölt kulcsból (DUMMY-BUNNY-TOKEN-AUTH-KEY-NEM-VALODI-TITOK)
+  # számolt SHA256-kimenetek. Egy hash-kimenet nem titok — a bemenete pedig a
+  # tesztben dokumentáltan kitalált. A helyes és a felcserélt-sorrendű vektor:
+  '''d40de210bdaf1f1d96bc40eb63fb9801b9e654361f2f2e13ba7b5b5b98a83ae2''',
+  '''b77168b08e9edf17def57f68753be1dfe14ac748b0b49423f652b0c5cac40b60''',
+  # Szintetikus, növekvő hex-minta az embed-URL alak-tesztjében
+  # (src/__tests__/stream-token-contract.test.ts) — nyilvánvalóan nem credential.
+  '''abcdef0123456789''',
 ]

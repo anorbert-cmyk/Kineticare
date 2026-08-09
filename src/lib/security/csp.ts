@@ -12,48 +12,57 @@
  * „a SUCCESS deploy nem jelenti, hogy az új kód fut").
  */
 
-/**
- * A Cloudflare Stream hostjának szabályos, egy címkés jokere.
- *
- * MIÉRT NEM `https://customer-*.cloudflarestream.com`: a CSP host-forrásában
- * a joker (`*`) KIZÁRÓLAG a legbaloldalibb, TELJES címke helyén állhat. A
- * `customer-*` alak ezért ÉRVÉNYTELEN forrás — a böngésző némán eldobja, és
- * a Stream hostja egyáltalán nem kerül fel a listára. Ez ma nem látszik (a
- * Stream még nincs élesítve), bekapcsoláskor viszont azonnal fekete lejátszó
- * lenne belőle.
- */
-export const CLOUDFLARE_STREAM_WILDCARD_SOURCE = 'https://*.cloudflarestream.com'
-
-/** A Cloudflare Stream fiókkód megengedett alakja (csak alfanumerikus). */
-const CUSTOMER_CODE_PATTERN = /^[a-zA-Z0-9]+$/
+/** A Bunny Stream lejátszó (iframe-embed) hostja — fix, nem env-függő. */
+export const BUNNY_STREAM_IFRAME_SOURCE = 'https://iframe.mediadelivery.net'
 
 /**
- * A Cloudflare Stream „customer" aldomainjének CSP-forrása.
+ * A Bunny pull-zone hostjának szabályos, egy címkés jokere.
  *
- * - Ismert fiókkód (`NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE`) esetén a PONTOS
- *   hostot adja vissza (`https://customer-<kód>.cloudflarestream.com`), joker
- *   nélkül — ez a lehető legszűkebb, tehát a legbiztonságosabb szabály.
- * - Hiányzó vagy formailag gyanús kód esetén a szabályos jokerre esik vissza,
- *   hogy a Stream bekapcsolása egy elgépelt env miatt se törjön el.
- *
- * A szigorú alfanumerikus szűrés egyben fejléc-injekció elleni védelem is:
- * szóközt/pontosvesszőt tartalmazó env-érték nem tud új direktívát becsempészni.
+ * MIÉRT NEM `https://vz-*.b-cdn.net`: a CSP host-forrásában a joker (`*`)
+ * KIZÁRÓLAG a legbaloldalibb, TELJES címke helyén állhat. A `vz-*` alak ezért
+ * ÉRVÉNYTELEN forrás — a böngésző némán eldobja, és a pull-zone hostja
+ * egyáltalán nem kerül fel a listára. Pontosan ez a hiba élt korábban a
+ * `customer-*.cloudflarestream.com` mintában (valódi böngészőben bizonyítva:
+ * docs/video-stream-keszenlet.md), és a Bunny hosztneve ugyanebbe a csapdába
+ * hívna: fekete lejátszó, csak a konzolban látszó hibával.
  */
-export function cloudflareStreamCustomerSource(rawCode: string | undefined): string {
-  const code = typeof rawCode === 'string' ? rawCode.trim() : ''
-  if (code.length === 0 || !CUSTOMER_CODE_PATTERN.test(code)) {
-    return CLOUDFLARE_STREAM_WILDCARD_SOURCE
+export const BUNNY_PULL_ZONE_WILDCARD_SOURCE = 'https://*.b-cdn.net'
+
+/**
+ * A pull-zone hosztnév megengedett alakja: EGY címke + `.b-cdn.net`
+ * (pl. `vz-1a2b3c4d-5e6.b-cdn.net`).
+ */
+const PULL_ZONE_HOST_PATTERN = /^[a-z0-9-]+\.b-cdn\.net$/
+
+/**
+ * A Bunny pull-zone CSP-forrása (poszterképek, médiaforrás).
+ *
+ * - Ismert hosztnév (`NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST`) esetén a
+ *   PONTOS hostot adja vissza (`https://vz-….b-cdn.net`), joker nélkül — ez a
+ *   lehető legszűkebb, tehát a legbiztonságosabb szabály.
+ * - Hiányzó vagy formailag gyanús érték esetén a SZABÁLYOS jokerre esik
+ *   vissza, hogy a videó bekapcsolása egy elgépelt env miatt se törjön el.
+ *
+ * A hosztnév kisbetűsítve vizsgálódik (a DNS-név amúgy sem kis-nagybetű-érzékeny),
+ * a szigorú minta pedig fejléc-injekció elleni védelem is: szóközt,
+ * pontosvesszőt vagy jokert tartalmazó env-érték nem tud új direktívát
+ * becsempészni a fejlécbe.
+ */
+export function bunnyPullZoneSource(rawHost: string | undefined): string {
+  const host = typeof rawHost === 'string' ? rawHost.trim().toLowerCase() : ''
+  if (host.length === 0 || !PULL_ZONE_HOST_PATTERN.test(host)) {
+    return BUNNY_PULL_ZONE_WILDCARD_SOURCE
   }
-  return `https://customer-${code}.cloudflarestream.com`
+  return `https://${host}`
 }
 
 /**
  * A teljes Content-Security-Policy fejléc-érték összeállítása.
  *
- * @param cfStreamCustomerCode a Cloudflare Stream fiókkód (env), ha ismert.
+ * @param bunnyPullZoneHost a Bunny pull-zone hosztneve (env), ha ismert.
  */
-export function buildContentSecurityPolicy(cfStreamCustomerCode?: string): string {
-  const streamCustomer = cloudflareStreamCustomerSource(cfStreamCustomerCode)
+export function buildContentSecurityPolicy(bunnyPullZoneHost?: string): string {
+  const pullZone = bunnyPullZoneSource(bunnyPullZoneHost)
 
   return [
     // Alapértelmezés: minden erőforrás csak saját originről. A külön nem
@@ -67,33 +76,37 @@ export function buildContentSecurityPolicy(cfStreamCustomerCode?: string): strin
     // Kiváltani csak kérésenkénti nonce + 'strict-dynamic' párossal lehet,
     // amit a middleware-nek kellene generálnia ÉS a Payload adminnak is át
     // kellene vennie — külön, mért lépés (docs/video-stream-keszenlet.md).
-    // 'unsafe-eval' NINCS, és nem is kell: sem a Turnstile, sem a Stream
+    // 'unsafe-eval' NINCS, és nem is kell: sem a Turnstile, sem a videó-
     // beágyazás nem használ eval-t — ezt szándékosan nem lazítjuk fel.
-    // A cloudflarestream.com KIKERÜLT innen: a Stream kizárólag IFRAME-ként
-    // van beágyazva, az iframe-en belüli scriptekre a beágyazott dokumentum
-    // saját CSP-je vonatkozik. Innen tehát fölösleges (és félrevezető)
-    // engedély volt. A Turnstile viszont valódi <script src> a
+    // A videó-szolgáltató hostja KIMARAD innen: a lejátszó kizárólag
+    // IFRAME-ként van beágyazva, az iframe-en belüli scriptekre a beágyazott
+    // dokumentum saját CSP-je vonatkozik. Innen tehát fölösleges (és
+    // félrevezető) engedély lenne. A Turnstile viszont valódi <script src> a
     // challenges.cloudflare.com-ról (next/script), az marad.
     "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
 
     // Beágyazott keretek:
-    //  - iframe.cloudflarestream.com → publikus hero-videó (src/lib/hero-video.ts),
-    //  - customer-<kód>.cloudflarestream.com → előzetes + védett kurzuslejátszó,
+    //  - iframe.mediadelivery.net → a Bunny Stream lejátszó: publikus
+    //    hero-videó és előzetes (src/lib/hero-video.ts,
+    //    src/components/courses/PreviewVideo.tsx) ÉS a védett, jegyes
+    //    kurzuslejátszó (src/lib/stream/contract.ts) — mindkettő ugyanerről a
+    //    hostról jön, csak a library-id és a token/expires más,
     //  - youtube-nocookie / player.vimeo → a szerkesztő által beilleszthető
     //    publikus videó-előzetes (src/components/lexical/serialize.tsx),
     //  - challenges.cloudflare.com → Turnstile-widget.
-    `frame-src 'self' https://iframe.cloudflarestream.com ${streamCustomer} https://www.youtube-nocookie.com https://player.vimeo.com https://challenges.cloudflare.com`,
+    `frame-src 'self' ${BUNNY_STREAM_IFRAME_SOURCE} https://www.youtube-nocookie.com https://player.vimeo.com https://challenges.cloudflare.com`,
 
-    // data: a beágyazott SVG-/base64-ikonokhoz. A Stream poszterképei a
-    // videodelivery.net-ről (hero) és a customer-aldomainről (kurzus) jönnek.
-    `img-src 'self' data: https://videodelivery.net ${streamCustomer}`,
+    // data: a beágyazott SVG-/base64-ikonokhoz. A videó-poszterképek a Bunny
+    // pull-zone hosztjáról jönnek (vz-….b-cdn.net).
+    `img-src 'self' data: ${pullZone}`,
 
-    // blob: KÖTELEZŐ — a kezdőlap filmsávja (ScrollScrub) a klipet fetch-csel
-    // tölti le, majd URL.createObjectURL()-lel adja a <video> elemnek.
-    // Nélküle a nyitó filmsáv NÉMÁN elhal (csak a poszterkép marad). A blob:
-    // nem külső engedély: a saját oldal által létrehozott, azonos originű
-    // objektumot jelenti.
-    `media-src 'self' blob: https://videodelivery.net ${streamCustomer}`,
+    // blob: KÖTELEZŐ — a kezdőlap filmsávja (ScrollScrub/FilmHero) a LOKÁLIS
+    // klipet (public/media/film) fetch-csel tölti le, majd
+    // URL.createObjectURL()-lel adja a <video> elemnek. Nélküle a nyitó
+    // filmsáv NÉMÁN elhal (csak a poszterkép marad). A blob: nem külső
+    // engedély: a saját oldal által létrehozott, azonos originű objektumot
+    // jelenti. A pull-zone hoszt a Bunny médiafájljaihoz kell.
+    `media-src 'self' blob: ${pullZone}`,
 
     // Minden XHR/fetch/sendBeacon a saját originre megy: a PostHog a /ingest
     // elsőfél-proxyn (next.config.ts rewrites), a filmsáv klipjei a /media/film

@@ -1,23 +1,33 @@
-import { createHmac } from 'node:crypto'
+import { createHash } from 'node:crypto'
 
 /**
- * Cloudflare Stream signed playback token (JWT) — tiszta, nulla extra
+ * Bunny Stream „Embed view token authentication" jegy — tiszta, nulla extra
  * függőségű implementáció.
  *
- * Aláírási mód (a Cloudflare Stream dokumentációja szerint): a signed
- * playback token egy HS256 (HMAC-SHA256) aláírású JWT, amelynek titka a
- * Stream signing key (CF_STREAM_SIGNING_KEY). A header opcionálisan `kid`
- * mezőt is hordozhat (a signing key azonosítója, ha több kulcs él a
- * fiókban — CF_STREAM_SIGNING_KEY_ID). Ha a későbbiekben RSA (pem/jwk)
- * kulcspárra váltanánk, az alg RS256 lesz, és a HMAC helyett
- * `createSign('RSA-SHA256')` kell — a claim-szerkezet változatlan.
+ * Aláírási mód (a Bunny Stream dokumentációja szerint):
  *
- * Claim-szabályok (kötött):
- * - sub = a videó azonosítója (products.videos[].streamAssetId)
- * - nbf = a kiállítás másodperce (Unix epoch)
- * - exp = nbf + videóhossz (durationSec) + 10 perc türelem, de legfeljebb
- *   nbf + 24 óra (a Cloudflare signed tokenek élettartama amúgy is max.
- *   24 óra lehet).
+ *     token = SHA256_HEX( token_auth_key + video_guid + expires )
+ *
+ * - `token_auth_key` — a védett videó-library token-hitelesítési kulcsa
+ *   (titok, kizárólag szerver-oldalon: BUNNY_STREAM_TOKEN_AUTH_KEY).
+ * - `video_guid` — a Bunny videó GUID-ja (products.videos[].streamAssetId).
+ * - `expires` — Unix epoch MÁSODPERC, sztringként fűzve a hashelendő szöveghez.
+ *
+ * A Cloudflare-hez képest a lényegi különbség: ott aláírt JWT volt, amelyben a
+ * lejárat a tokenen BELÜL utazott; a Bunnynál a hash mellé az `expires`-t
+ * KÜLÖN query-paraméterként is oda kell adni az embed-URL-nek, és a kettőnek
+ * pontosan egyeznie kell (docs/video-platform-dontes.md 4.2). Ezért adja vissza
+ * ez a függvény az `expires` értéket is — a hívó ugyanazt teszi az URL-be,
+ * amivel a hash készült.
+ *
+ * A hash HEXADECIMÁLIS, KISBETŰS alak. Nincs `kid`, nincs header, nincs
+ * base64url.
+ *
+ * Élettartam-szabály (VÁLTOZATLAN, szolgáltatótól független):
+ * - expires = kiállítás + videóhossz (durationSec) + 10 perc türelem,
+ *   de legfeljebb kiállítás + 24 óra. A 24 órás plafon eredetileg a Cloudflare
+ *   korlátja volt; a MI szabályunkként megtartjuk (rövid életű jegy = kevésbé
+ *   megosztható link).
  */
 
 /** A videó végéhez adott türelemidő (másodperc): 10 perc. */
@@ -27,33 +37,34 @@ export const STREAM_TOKEN_GRACE_SECONDS = 600
 export const STREAM_TOKEN_MAX_TTL_SECONDS = 24 * 60 * 60
 
 export interface StreamPlaybackTokenInput {
-  /** A Cloudflare Stream asset azonosító (a JWT `sub` claimje). */
+  /** A Bunny Stream videó GUID-ja (a hashelendő szöveg 2. tagja). */
   videoId: string
   /** A videó hossza másodpercben (a products.videos[].durationSec mezőből). */
   durationSec: number
-  /** A Stream signing key (HMAC-titok) — csak szerver-oldalon, ENV-ből. */
+  /**
+   * A library token-hitelesítési kulcsa — csak szerver-oldalon, ENV-ből
+   * (BUNNY_STREAM_TOKEN_AUTH_KEY).
+   */
   signingKey: string
-  /** Opcionális signing key azonosító (JWT `kid` header) több kulcs esetén. */
-  keyId?: string | undefined
   /** Injektálható "most" a tesztelhetőségért; alapértelmezés: Date.now(). */
   now?: Date
 }
 
 export interface StreamPlaybackTokenResult {
-  /** Az aláírt JWT (header.payload.signature, base64url). */
+  /** A jegy: SHA256 hex (kisbetűs) — az embed-URL `token` paramétere. */
   token: string
-  /** A `nbf` claim értéke (Unix epoch másodperc). */
-  nbf: number
-  /** Az `exp` claim értéke (Unix epoch másodperc). */
-  exp: number
+  /** A kiállítás pillanata (Unix epoch másodperc) — az élettartam alapja. */
+  issuedAt: number
+  /**
+   * A lejárat Unix epoch MÁSODPERCBEN. Ez megy az embed-URL `expires`
+   * paraméterébe, és PONTOSAN ez az érték szerepel a hashelt szövegben is.
+   */
+  expires: number
 }
 
-const base64urlJson = (value: unknown): string =>
-  Buffer.from(JSON.stringify(value), 'utf8').toString('base64url')
-
 /**
- * Aláírt lejátszási token kiállítása. Szándékosan szinkron és tiszta:
- * az üzleti szabályok (ki nézheti, melyik videót) a hívó felelőssége.
+ * Lejátszási jegy kiállítása. Szándékosan szinkron és tiszta: az üzleti
+ * szabályok (ki nézheti, melyik videót) a hívó felelőssége.
  *
  * @throws Error ha a bemenet formailag hibás (programozási hiba — a
  *   felhasználói hibaágakat a service-réteg kezeli).
@@ -72,26 +83,26 @@ export function createStreamPlaybackToken(
   ) {
     throw new Error('createStreamPlaybackToken: a durationSec nem negatív szám kell legyen.')
   }
-  if (typeof input.signingKey !== 'string' || input.signingKey.trim().length === 0) {
+  // A kulcs körüli whitespace levágása szándékos: a Railway Variables felületén
+  // beillesztett érték végén könnyen marad újsor/szóköz, amitől MINDEN hash
+  // elromlana — némán, a Bunny „invalid token" válaszával, ami a felületen
+  // csak fekete lejátszóként látszana.
+  const signingKey = typeof input.signingKey === 'string' ? input.signingKey.trim() : ''
+  if (signingKey.length === 0) {
     throw new Error('createStreamPlaybackToken: a signingKey nem lehet üres.')
   }
 
   const nowMs = input.now instanceof Date ? input.now.getTime() : Date.now()
-  const nbf = Math.floor(nowMs / 1000)
+  const issuedAt = Math.floor(nowMs / 1000)
   const ttl = Math.min(
     Math.floor(input.durationSec) + STREAM_TOKEN_GRACE_SECONDS,
     STREAM_TOKEN_MAX_TTL_SECONDS,
   )
-  const exp = nbf + ttl
+  const expires = issuedAt + ttl
 
-  const header: Record<string, string> = { alg: 'HS256', typ: 'JWT' }
-  if (typeof input.keyId === 'string' && input.keyId.trim().length > 0) {
-    header.kid = input.keyId.trim()
-  }
-  const claims = { sub: videoId, nbf, exp }
+  const token = createHash('sha256')
+    .update(`${signingKey}${videoId}${expires}`, 'utf8')
+    .digest('hex')
 
-  const signingInput = `${base64urlJson(header)}.${base64urlJson(claims)}`
-  const signature = createHmac('sha256', input.signingKey).update(signingInput).digest('base64url')
-
-  return { token: `${signingInput}.${signature}`, nbf, exp }
+  return { token, issuedAt, expires }
 }

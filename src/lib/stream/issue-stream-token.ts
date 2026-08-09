@@ -24,7 +24,7 @@ import { createStreamPlaybackToken } from './token'
  *   lekérdezése ELŐTT történik, így a 403 nem árulja el a létezést. A lejárt
  *   hozzáférés eltérő üzenete csak a bizonyítottan vásárló vevőhöz jut el.
  *
- * A CF_STREAM_SIGNING_KEY környezeti változó NEM induláskori kötelező ENV
+ * A BUNNY_STREAM_TOKEN_AUTH_KEY környezeti változó NEM induláskori kötelező ENV
  * (az app annélkül is elindul) — itt, kérés-idejű lazy ellenőrzéssel
  * hiányzik: 503 + naplózás.
  */
@@ -61,7 +61,7 @@ export type StreamTokenServiceResult = StreamTokenResponseBody
 /** Egységes 403-as üzenet — nem árulja el, hogy létezik-e a termék/videó. */
 const FORBIDDEN_MESSAGE = 'A videó megtekintéséhez a kurzus megvásárlása szükséges.'
 
-/** Egységes 503-as üzenet — a CF_STREAM_* konfiguráció/adat hibáira. */
+/** Egységes 503-as üzenet — a BUNNY_STREAM_* konfiguráció/adat hibáira. */
 const UNAVAILABLE_MESSAGE =
   'A videólejátszás ideiglenesen nem érhető el. Kérjük, próbáld újra később.'
 
@@ -122,10 +122,12 @@ function selectVideo(product: Product, videoId: string | undefined): ProductVide
 }
 
 /** Kérés-idejű (lazy) ENV-ellenőrzés — NEM induláskori assert (lásd src/env.ts megjegyzés). */
-function requireSigningKey(log: Logger): string {
-  const key = process.env.CF_STREAM_SIGNING_KEY
+function requireTokenAuthKey(log: Logger): string {
+  const key = process.env.BUNNY_STREAM_TOKEN_AUTH_KEY
   if (typeof key !== 'string' || key.trim().length === 0) {
-    log.error('stream-token: hiányzik a CF_STREAM_SIGNING_KEY — a videólejátszás nem elérhető')
+    log.error(
+      'stream-token: hiányzik a BUNNY_STREAM_TOKEN_AUTH_KEY — a videólejátszás nem elérhető',
+    )
     throw new StreamTokenError(503, UNAVAILABLE_MESSAGE)
   }
   return key
@@ -223,24 +225,26 @@ export async function issueStreamToken(
     throw new StreamTokenError(503, UNAVAILABLE_MESSAGE)
   }
 
-  // 5) Token kiállítása — a signing key kérés-idejű lazy ellenőrzéssel.
-  const signingKey = requireSigningKey(log)
-  const keyId = process.env.CF_STREAM_SIGNING_KEY_ID
+  // 5) Token kiállítása — a library token-kulcsa kérés-idejű lazy ellenőrzéssel.
+  //    A Bunny-jegy hash-e az `expires` értéket is tartalmazza, ezért ugyanaz a
+  //    másodperc megy a válaszba (ISO-8601), amivel a hash készült: a kliens
+  //    ebből építi vissza az embed-URL `expires` paraméterét.
+  const signingKey = requireTokenAuthKey(log)
   const issued = createStreamPlaybackToken({
     videoId: streamAssetId,
     durationSec: video.durationSec,
     signingKey,
-    keyId: typeof keyId === 'string' && keyId.trim().length > 0 ? keyId : undefined,
   })
+  const expiresAt = new Date(issued.expires * 1000).toISOString()
 
   log.info('stream-token: lejátszási token kiállítva', {
     userId: input.user.id,
     productId,
-    expiresAt: new Date(issued.exp * 1000).toISOString(),
+    expiresAt,
   })
 
   return {
     token: issued.token,
-    expiresAt: new Date(issued.exp * 1000).toISOString(),
+    expiresAt,
   }
 }

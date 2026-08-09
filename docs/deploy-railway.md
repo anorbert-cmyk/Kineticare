@@ -50,8 +50,11 @@
 | `SEED_OWNER_EMAIL` | csak az első seed futtatásához (4. pont), utána törölhető |
 | `SEED_OWNER_PASSWORD` | csak az első seed futtatásához, utána törölhető |
 
-Később (amikor a funkció aktuális lesz): `CF_STREAM_ACCOUNT_ID`,
-`CF_STREAM_API_TOKEN`, `CF_STREAM_SIGNING_KEY`, `EMAIL_FROM` + SMTP/Resend,
+Később (amikor a funkció aktuális lesz): `BUNNY_STREAM_TOKEN_AUTH_KEY`,
+`NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID`,
+`NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID`,
+`NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST` (a `NEXT_PUBLIC_` kulcsok után
+ÚJRABUILD kell!), `EMAIL_FROM` + SMTP/Resend,
 `TURNSTILE_*`, `SZAMLAZZ_AGENT_KEY`, `SZAMLAZZ_INVOICE_PREFIX`.
 
 > ⛔ **Tilos stagingen:** `BARION_POSKEY_PROD`, éles Számlázz.hu-kulcs,

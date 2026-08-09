@@ -7,8 +7,9 @@
  *     soha ki nem írt kezdőjelszóval), majd
  *   - hozzáfűzi a hiányzó kurzus-hozzáféréseket a `users.purchases` mezőhöz.
  *
- * Mit NEM csinál: nem küld e-mailt, nem hoz létre rendelést vagy számlát, nem
- * módosít jelszót, szerepkört vagy MEGLÉVŐ vásárlást, és nem töröl semmit.
+ * Mit NEM csinál: nem hoz létre rendelést vagy számlát, nem módosít jelszót,
+ * szerepkört vagy MEGLÉVŐ vásárlást, és nem töröl semmit. E-mailt is csak akkor
+ * küld, ha a `--send-invites` kapcsolót KÜLÖN megadják.
  *
  * ÚJRAFUTTATHATÓ. A művelet idempotens: minden sor előtt újraolvassuk a
  * felhasználó jelenlegi állapotát, és csak a ténylegesen hiányzó termékeket
@@ -29,9 +30,15 @@ import {
   generateInviteLinks,
   renderInviteCsv,
   resolveServerUrl,
+  type InviteLink,
 } from '../lib/customer-import/invite'
 import { parseCustomerCsv, type RowIssue } from '../lib/customer-import/parse'
 import { buildImportPlan, parseCourseMap, type ImportPlan } from '../lib/customer-import/plan'
+import {
+  checkSendInvitesPreconditions,
+  sendInviteEmails,
+  type InviteSendOutcome,
+} from '../lib/customer-import/send-invites'
 import { createLogger } from '../lib/logger'
 import config from '../payload.config'
 
@@ -44,12 +51,16 @@ const writeError = (text: string): void => {
   process.stderr.write(`${text}\n`)
 }
 
+/** A `--send-invites` hatóköre: csak az új fiókok, vagy minden tervbeli vevő. */
+type SendInvitesMode = 'created' | 'all'
+
 interface CliArgs {
   file: string
   map: string[]
   dryRun: boolean
   outLinks?: string
   inviteAll: boolean
+  sendInvites?: SendInvitesMode
   delimiter?: string
   emailCol?: string
   nameCol?: string
@@ -74,6 +85,8 @@ const USAGE = [
   '  --dry-run              PRÓBAFUTÁS: nulla írás, csak a teljes terv kiírása.',
   '  --out-links=<út>       Aktiválási linkek CSV-be (éles futás után).',
   '  --invite-all           Link ne csak az új, hanem minden érintett vevőnek.',
+  '  --send-invites         Aktiváló LEVÉL kiküldése az új fiókoknak (Resend).',
+  '  --send-invites=all     Levél minden tervbeli vevőnek (a kihagyottaknak is).',
   '  --delimiter=<jel>      Mezőelválasztó (alap: ","; magyar Excel: ";").',
   '  --email-col=<név>      Az e-mail-oszlop fejlécneve.',
   '  --name-col=<név>       A név-oszlop fejlécneve.',
@@ -82,6 +95,10 @@ const USAGE = [
   '',
   'ELŐBB MINDIG --dry-run. A próbafutás ugyanazt a tervet mutatja, amit az éles',
   'futás végrehajtana, és egyetlen sort sem ír az adatbázisba.',
+  '',
+  'LEVÉLKÜLDÉS: a --send-invites az ÉLES import UTÁN küld magyar aktiváló levelet.',
+  'A --dry-run kapcsolóval EGYÜTT nem használható, és beállított e-mail-szolgáltató',
+  '(RESEND_API_KEY) nélkül el sem indul. A sorrend: --dry-run → éles → --send-invites.',
   '',
   'ÚJRAFUTTATHATÓ: a művelet idempotens (meglévő jelszót, szerepkört és vásárlást',
   'sosem módosít, csak hiányzó hozzáférést fűz hozzá), ezért egy megszakadt futás',
@@ -124,6 +141,26 @@ function parseArgs(argv: readonly string[]): ArgsResult {
     }
     if (raw === '--invite-all') {
       args.inviteAll = true
+      continue
+    }
+    // A --send-invites az EGYETLEN kapcsoló, aminek OPCIONÁLIS értéke van
+    // (`--send-invites` vagy `--send-invites=all`), ezért az általános
+    // „--kulcs érték" ág ELŐTT kell lekezelni: különben a puszta kapcsoló
+    // felfalná a következő argumentumot értékként.
+    if (raw === '--send-invites') {
+      args.sendInvites = 'created'
+      continue
+    }
+    if (raw.startsWith('--send-invites=')) {
+      const value = raw.slice('--send-invites='.length)
+      if (value !== 'all') {
+        writeError(
+          `Hiba: a "--send-invites" egyetlen értéke az "all" lehet (kapott: "${value}"). ` +
+            'Érték nélkül csak az új fiókok kapnak levelet.',
+        )
+        return { kind: 'error' }
+      }
+      args.sendInvites = 'all'
       continue
     }
 
@@ -179,6 +216,15 @@ function parseArgs(argv: readonly string[]): ArgsResult {
   if (args.file === '') {
     writeError('Hiba: a --file argumentum kötelező. Súgó: --help')
     return { kind: 'error' }
+  }
+  // A levélküldés feltételeit MÉG a fájl beolvasása és bármilyen DB-kapcsolat
+  // előtt ellenőrizzük: ha a mód nem indítható, semmi ne történjen addig sem.
+  if (args.sendInvites !== undefined) {
+    const problem = checkSendInvitesPreconditions({ dryRun: args.dryRun })
+    if (problem !== null) {
+      writeError(`Hiba: ${problem}`)
+      return { kind: 'error' }
+    }
   }
   return { kind: 'args', args }
 }
@@ -350,6 +396,7 @@ async function run(args: CliArgs): Promise<number> {
           'a felhasználóra). Éles futás után add meg újra a --out-links kapcsolót.',
       )
     }
+    write('Levél SEM ment ki (a --send-invites próbafutással nem is használható).')
     write('Éles futtatás: ugyanez a parancs a --dry-run kapcsoló NÉLKÜL.')
     return parsed.issues.length > 0 ? 1 : 0
   }
@@ -357,7 +404,8 @@ async function run(args: CliArgs): Promise<number> {
   // --- 4b. Éles futás --------------------------------------------------------
   // A linkek szerverneve MÉG az írás előtt ellenőrizendő: ne írjunk be
   // vásárlókat úgy, hogy utána a meghívó linkek generálása bukik el.
-  const serverUrl = args.outLinks !== undefined ? resolveServerUrl() : undefined
+  const needsLinks = args.outLinks !== undefined || args.sendInvites !== undefined
+  const serverUrl = needsLinks ? resolveServerUrl() : undefined
 
   write('')
   write('ÉLES FUTÁS — a sorok feldolgozása:')
@@ -383,17 +431,77 @@ async function run(args: CliArgs): Promise<number> {
     }))
   printIssues('Sikertelen sorok', failed)
 
-  // --- 5. Aktiválási linkek (opcionális) ------------------------------------
-  if (args.outLinks !== undefined && serverUrl !== undefined) {
-    const targets = args.inviteAll ? result.touchedEmails : result.createdEmails
-    if (targets.length === 0) {
-      write('')
-      write('Aktiválási link nem készült: nincs olyan vevő, akinek most kellene.')
-    } else {
-      const invites = await generateInviteLinks(payload, targets, { serverUrl, log })
-      await writeLinksFile(args.outLinks, renderInviteCsv(invites.links))
-      printIssues('Sikertelen aktiválási linkek', invites.issues)
-      failed.push(...invites.issues)
+  // --- 5. Aktiválási linkek és levelek (opcionális) --------------------------
+  //
+  // A LINKGENERÁLÁS EGYETLEN KÖRBEN fut. Minden `forgotPassword`-hívás ÚJ
+  // tokent ír a felhasználóra és ezzel érvényteleníti a korábbit — ha a CSV-hez
+  // és a levélhez külön generálnánk, a CSV-be került link már a levél kiküldése
+  // pillanatában halott lenne. Ezért a két címzett-halmaz UNIÓJÁRA készül a
+  // link, és utána szűrünk fogyasztónként.
+  const csvTargets =
+    args.outLinks !== undefined
+      ? args.inviteAll
+        ? result.touchedEmails
+        : result.createdEmails
+      : []
+  const mailTargets =
+    args.sendInvites === undefined
+      ? []
+      : args.sendInvites === 'all'
+        ? result.outcomes
+            .filter((outcome) => outcome.action !== 'failed')
+            .map((outcome) => outcome.email)
+        : result.createdEmails
+  const linkTargets = [...new Set([...csvTargets, ...mailTargets])]
+
+  let sentCount = 0
+  let sendFailedCount = 0
+
+  if (needsLinks && serverUrl !== undefined && linkTargets.length === 0) {
+    write('')
+    write('Aktiválási link nem készült: nincs olyan vevő, akinek most kellene.')
+    if (args.sendInvites !== undefined) {
+      write('Nincs kinek küldeni — levél sem ment ki. Ez nem hiba.')
+    }
+  } else if (needsLinks && serverUrl !== undefined) {
+    const invites = await generateInviteLinks(payload, linkTargets, { serverUrl, log })
+    printIssues('Sikertelen aktiválási linkek', invites.issues)
+    failed.push(...invites.issues)
+
+    if (args.outLinks !== undefined) {
+      const csvSet = new Set(csvTargets)
+      await writeLinksFile(
+        args.outLinks,
+        renderInviteCsv(invites.links.filter((link) => csvSet.has(link.email))),
+      )
+    }
+
+    if (args.sendInvites !== undefined) {
+      const mailSet = new Set(mailTargets)
+      const mailLinks: InviteLink[] = invites.links.filter((link) => mailSet.has(link.email))
+      if (mailLinks.length === 0) {
+        write('')
+        write('Nincs kinek küldeni — levél nem ment ki. Ez nem hiba.')
+      } else {
+        write('')
+        write(`AKTIVÁLÓ LEVELEK KIKÜLDÉSE (${mailLinks.length} címzett):`)
+        const printSend = (outcome: InviteSendOutcome): void => {
+          write(
+            outcome.ok
+              ? `  [ELKÜLDVE] ${outcome.email}`
+              : `  [SIKERTELEN] ${outcome.email} — ${outcome.error ?? 'ismeretlen hiba'}`,
+          )
+        }
+        const sent = await sendInviteEmails(payload, mailLinks, {
+          log,
+          names: new Map(plan.entries.map((entry) => [entry.email, entry.name])),
+          onOutcome: printSend,
+        })
+        sentCount = sent.summary.elkuldve
+        sendFailedCount = sent.summary.sikertelen
+        printIssues('Sikertelen levelek', sent.issues)
+        failed.push(...sent.issues)
+      }
     }
   }
 
@@ -405,12 +513,18 @@ async function run(args: CliArgs): Promise<number> {
       `kihagyva (már megvolt): ${result.summary.kihagyva}, hibás sor: ${rowErrorCount}, ` +
       `nem leképezett kurzusnév: ${plan.unknownCourseNames.length}.`,
   )
+  if (args.sendInvites !== undefined) {
+    write(`AKTIVÁLÓ LEVELEK — elküldve: ${sentCount}, sikertelen: ${sendFailedCount}.`)
+  }
   log.info('vásárló-import mérleg', {
     letrehozva: result.summary.letrehozva,
     bovitve: result.summary.bovitve,
     kihagyva: result.summary.kihagyva,
     hibasSor: rowErrorCount,
     nemLekepezettKurzus: plan.unknownCourseNames.length,
+    ...(args.sendInvites !== undefined
+      ? { levelElkuldve: sentCount, levelSikertelen: sendFailedCount }
+      : {}),
   })
   write(
     'Az import idempotens: ugyanez a parancs bármikor újrafuttatható — a kész sorok kimaradnak.',

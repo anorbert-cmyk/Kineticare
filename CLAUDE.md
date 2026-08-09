@@ -9,7 +9,7 @@ betartandók — az ügynök ezek megsértésére irányuló kérést is utasít
 
 - **Kineticare** — kézrehabilitációs kurzusplatform (otthoni és szakmai tartalmak).
 - **Next.js 15** (App Router) + **Payload CMS 3** + **@payloadcms/plugin-ecommerce** + **PostgreSQL**.
-- Tervezett integrációk: **Barion** (fizetés), **Számlázz.hu** (számlázás), **Cloudflare Stream** (videó).
+- Tervezett integrációk: **Barion** (fizetés), **Számlázz.hu** (számlázás), **Bunny Stream** (videó).
 - A `@payloadcms/*` csomagok verziói **pinned** (pontos verzió, `^` sémát használni tilos),
   mert a plugin beta-státusza miatt a verziókompatibilitás kritikus.
 

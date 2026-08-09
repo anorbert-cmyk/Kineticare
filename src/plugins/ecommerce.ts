@@ -341,7 +341,7 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       label: 'Bemutató videó azonosítója',
       admin: {
         description:
-          'A Cloudflare Stream videó azonosítója az ingyenes előzeteshez. Ha nem tudod, hagyd üresen.',
+          'Az ingyenes előzetes Bunny videó GUID-ja — a PUBLIKUS (jegy nélküli) libraryből, a Bunny felületén a videó adatlapján található. Ha nem tudod, hagyd üresen.',
       },
     },
     {
@@ -366,7 +366,8 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
           type: 'text',
           label: 'Videó azonosítója',
           admin: {
-            description: 'A Cloudflare Stream azonosítója. Feltöltéskor a rendszer tölti ki.',
+            description:
+              'A Bunny Stream videó GUID-ja — a VÉDETT libraryből, a Bunny felületén a videó adatlapján található. Kézzel másolandó be.',
           },
         },
         {
@@ -385,7 +386,8 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
             { label: 'Hiba', value: 'error' },
           ],
           admin: {
-            description: 'A videó feldolgozottsága — a rendszer állítja, ne írd át.',
+            description:
+              'A videó feldolgozottsága. Nincs feltöltő-automatizmus, ezért KÉZZEL kell „Kész"-re állítani, miután a Bunny végzett a feldolgozással — csak a Kész állapotú videó játszható le.',
           },
         },
       ],

@@ -26,10 +26,18 @@
 import type { Payload } from 'payload'
 
 import type { Logger } from '../logger'
+import { buildPasswordResetUrl, PASSWORD_RESET_PATH } from '../password-reset-url'
 import { UTF8_BOM, type RowIssue } from './parse'
 
-/** A vásárlói (nem admin) jelszó-beállító oldal útvonala. */
-export const INVITE_RESET_PATH = '/jelszo-visszaallitas'
+/**
+ * A vásárlói (nem admin) jelszó-beállító oldal útvonala és link-építője.
+ *
+ * A forrás a közös `src/lib/password-reset-url.ts` — ugyanaz az oldal fogadja
+ * az „Elfelejtett jelszó" levél linkjét is, és a kettőnek nem szabad
+ * szétcsúsznia. A helyi nevek megmaradnak, mert a migrációs kontextusban ez
+ * „aktiválási link".
+ */
+export { PASSWORD_RESET_PATH as INVITE_RESET_PATH, buildPasswordResetUrl as buildInviteUrl }
 
 /**
  * Az aktiválási token élettartama ezredmásodpercben (30 nap).
@@ -68,12 +76,6 @@ export function resolveServerUrl(
     )
   }
   return raw.trim().replace(/\/+$/, '')
-}
-
-/** Abszolút aktiválási (jelszó-beállító) link a tokenből. */
-export function buildInviteUrl(serverUrl: string, token: string): string {
-  const base = serverUrl.replace(/\/+$/, '')
-  return `${base}${INVITE_RESET_PATH}?token=${encodeURIComponent(token)}`
 }
 
 /** RFC 4180 szerinti mező-idézés a kimeneti CSV-hez. */
@@ -136,7 +138,7 @@ export async function generateInviteLinks(
         })
         continue
       }
-      links.push({ email, url: buildInviteUrl(options.serverUrl, token) })
+      links.push({ email, url: buildPasswordResetUrl(options.serverUrl, token) })
     } catch (error) {
       issues.push({
         line: 0,

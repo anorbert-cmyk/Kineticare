@@ -20,6 +20,30 @@ export const requiredEnvVars = [
 export type RequiredEnvVar = (typeof requiredEnvVars)[number]
 
 /**
+ * Bunny Stream (videó-kiszolgálás) — mind OPCIONÁLIS, szándékosan NEM
+ * induláskori kötelező kulcs: a hiányuk nem dönti el az appot, hanem
+ * kérés-időben, lazy módon derül ki (503 + magyar üzenet a token-végponton,
+ * `null` embed-URL → magyar „nem érhető el" a lejátszóban). Így a rendszer a
+ * kulcsok megérkezése ELŐTT is elindul és használható; a videó élesítése
+ * kizárólag Railway-env-beállítás + újrabuild (a NEXT_PUBLIC_ kulcsok a build
+ * pillanatában égnek bele az oldalba).
+ *
+ * - `BUNNY_STREAM_TOKEN_AUTH_KEY` — TITOK, a védett library token-kulcsa
+ *   (src/lib/stream/issue-stream-token.ts).
+ * - `NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID` — a védett library id-ja (embed-URL).
+ * - `NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID` — a publikus library id-ja
+ *   (hero-videó, kurzus-előzetes — token nélkül).
+ * - `NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST` — `vz-….b-cdn.net`, a CSP
+ *   img-src/media-src forrása és a poszterképek hosztja.
+ */
+export const optionalBunnyStreamEnvVars = [
+  'BUNNY_STREAM_TOKEN_AUTH_KEY',
+  'NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID',
+  'NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID',
+  'NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST',
+] as const
+
+/**
  * A Barion POSKey környezetfüggő: BARION_ENVIRONMENT=prod esetén az éles
  * kulcs (BARION_POSKEY_PROD), egyébként (alapértelmezett test) a tesztkulcs
  * (BARION_POSKEY_TEST) kötelező — így stagingen nem kell éles kulcs, élesben

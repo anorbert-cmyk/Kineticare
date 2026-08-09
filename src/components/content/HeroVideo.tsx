@@ -6,13 +6,15 @@ import { buildHeroStreamEmbedUrl, buildHeroStreamPosterUrl } from '@/lib/hero-vi
 
 /**
  * HeroVideo — a kezdőlap fejlécének animált, reszponzív háttérvideója
- * (Cloudflare Stream, PUBLIKUS marketing-tartalom).
+ * (Bunny Stream publikus library, PUBLIKUS marketing-tartalom).
  *
  * Viselkedés:
- * - A poszterkép azonnal megjelenik (a Stream thumbnails-végpontja), az
+ * - A poszterkép azonnal megjelenik (a Bunny pull-zone thumbnailje), az
  *   iframe csak utána mountolódik — így nincs fehér vaku az oldalletöltéskor.
- * - autoplay + muted + loop + playsInline (a mobil autoplay-szabályoknak
- *   megfelelően), controls=false — tiszta háttérvideó, nem lejátszó.
+ * - autoplay + muted + loop (a mobil autoplay-szabályoknak megfelelően:
+ *   autoplay csak muted mellett indul). A vezérlők elrejtése a Bunnynál
+ *   library-szintű Player-beállítás, nem URL-paraméter — lásd
+ *   docs/hero-video-feltoltes.md.
  * - prefers-reduced-motion: a videó NEM töltődik le egyáltalán (az iframe
  *   nem mountol), csak a poszterkép — akadálymentesítés + sávsáv-takarékosság.
  * - Dekoratív elem: aria-hidden, nem fókuszolható; a hero szövege hordozza
@@ -20,7 +22,7 @@ import { buildHeroStreamEmbedUrl, buildHeroStreamPosterUrl } from '@/lib/hero-vi
  */
 export interface HeroVideoProps {
   streamId: string
-  /** Egyedi poszter-URL felülírás (alapból a Stream 0. másodperces thumbnailje). */
+  /** Egyedi poszter-URL felülírás (alapból a Bunny automatikus thumbnailje). */
   posterUrl?: string
   className?: string
 }
@@ -28,7 +30,12 @@ export interface HeroVideoProps {
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
 export function HeroVideo({ streamId, posterUrl, className }: HeroVideoProps) {
+  // Hiányzó Bunny-konfiguráció (publikus library-id / pull-zone hoszt) esetén
+  // az URL-építők null-t adnak: ilyenkor a hiányzó elem egyszerűen kimarad, és
+  // a hero a saját hátterével jelenik meg — nem lesz fekete doboz vagy törött
+  // képikon belőle.
   const poster = posterUrl ?? buildHeroStreamPosterUrl(streamId)
+  const embedUrl = buildHeroStreamEmbedUrl(streamId)
   const [showVideo, setShowVideo] = useState(false)
 
   useEffect(() => {
@@ -52,23 +59,25 @@ export function HeroVideo({ streamId, posterUrl, className }: HeroVideoProps) {
         backgroundColor: 'var(--kc-tint, #ebf7ff)',
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- a Stream-poszterkép külső CDN-URL, a next/image konfigurációja nincs rá felkészítve */}
-      <img
-        alt=""
-        src={poster}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-        }}
-      />
-      {showVideo ? (
+      {poster === null ? null : (
+        /* eslint-disable-next-line @next/next/no-img-element -- a poszterkép külső CDN-URL, a next/image konfigurációja nincs rá felkészítve */
+        <img
+          alt=""
+          src={poster}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          }}
+        />
+      )}
+      {showVideo && embedUrl !== null ? (
         <iframe
           allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
           allowFullScreen={false}
-          src={buildHeroStreamEmbedUrl(streamId)}
+          src={embedUrl}
           style={{
             position: 'absolute',
             inset: 0,

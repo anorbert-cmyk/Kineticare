@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto'
+import { createHash } from 'node:crypto'
 
 import { NextRequest } from 'next/server'
 import type { Payload } from 'payload'
@@ -6,7 +6,12 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import type { Order, Product, User } from '../payload-types'
 import { ACCESS_EXPIRED_TITLE } from '../lib/course-access'
-import { issueStreamToken, StreamTokenError } from '../lib/stream/issue-stream-token'
+import { optionalBunnyStreamEnvVars, requiredEnvVars } from '../env'
+import {
+  issueStreamToken,
+  StreamTokenError,
+  type StreamTokenServiceResult,
+} from '../lib/stream/issue-stream-token'
 import { createStreamTokenHandler } from '../lib/stream/route-handler'
 import {
   createStreamPlaybackToken,
@@ -17,39 +22,57 @@ import {
 /**
  * /api/stream-token egységtesztek — mockolt Payload local API-val, az
  * src/__tests__/checkout-start.test.ts mintáját követve.
+ *
+ * A jegy a Bunny Stream sémája szerint SHA256_HEX(kulcs + guid + expires);
+ * a hash egyszerre köti a videót ÉS a lejáratot, ezért az „erre a videóra,
+ * eddig" állítás egyetlen független újraszámítással ellenőrizhető.
  */
 
-// DUMMY érték, egyértelműen jelölve — NEM valódi Cloudflare Stream signing key.
-const DUMMY_SIGNING_KEY = 'DUMMY-CF-STREAM-SIGNING-KEY-NEM-VALODI-TITOK'
-const DUMMY_ASSET_ID = 'cf-stream-asset-abc123'
+// DUMMY érték, egyértelműen jelölve — NEM valódi Bunny token-hitelesítési kulcs.
+const DUMMY_TOKEN_KEY = 'DUMMY-BUNNY-TOKEN-AUTH-KEY-NEM-VALODI-TITOK'
+const DUMMY_ASSET_ID = 'bunny-video-guid-abc123'
 
-interface DecodedJwt {
-  header: Record<string, unknown>
-  claims: Record<string, unknown>
-  signature: string
-  signingInput: string
+/**
+ * ISMERT VEKTOR — a hash-séma rögzítése.
+ *
+ * A várt értéket FÜGGETLEN implementációval állítottuk elő, nem ezzel a
+ * kóddal (a repóban futtatva):
+ *
+ *   printf '%s' 'DUMMY-BUNNY-TOKEN-AUTH-KEY-NEM-VALODI-TITOK00000000-1111-2222-3333-4444444444441785600000' | sha256sum
+ *
+ * A kulcs DUMMY, a GUID és a lejárat szintetikus — sem éles, sem a
+ * szolgáltató dokumentációjából másolt érték nincs a repóban (CLAUDE.md #1).
+ */
+const KNOWN_VECTOR = {
+  key: DUMMY_TOKEN_KEY,
+  guid: '00000000-1111-2222-3333-444444444444',
+  expires: 1785600000,
+  token: 'd40de210bdaf1f1d96bc40eb63fb9801b9e654361f2f2e13ba7b5b5b98a83ae2',
+  /** Ugyanez FELCSERÉLT sorrenddel (guid + kulcs + expires) — ezt NEM adhatja. */
+  tokenIfOrderSwapped: 'b77168b08e9edf17def57f68753be1dfe14ac748b0b49423f652b0c5cac40b60',
+} as const
+
+/** A jegy független újraszámítása a DUMMY kulccsal. */
+function expectedToken(videoId: string, expires: number): string {
+  return createHash('sha256').update(`${DUMMY_TOKEN_KEY}${videoId}${expires}`).digest('hex')
 }
 
-function decodeJwt(token: string): DecodedJwt {
-  const parts = token.split('.')
-  expect(parts).toHaveLength(3)
-  const [headerPart, claimsPart, signature] = parts as [string, string, string]
-  return {
-    header: JSON.parse(Buffer.from(headerPart, 'base64url').toString('utf8')) as Record<
-      string,
-      unknown
-    >,
-    claims: JSON.parse(Buffer.from(claimsPart, 'base64url').toString('utf8')) as Record<
-      string,
-      unknown
-    >,
-    signature,
-    signingInput: `${headerPart}.${claimsPart}`,
-  }
-}
-
-function expectedSignature(signingInput: string): string {
-  return createHmac('sha256', DUMMY_SIGNING_KEY).update(signingInput).digest('base64url')
+/**
+ * A kiállított jegy ellenőrzése: a hash újraszámítása bizonyítja, MELYIK
+ * videóra és MELYIK lejáratra szól, a TTL pedig a videóhossz + 10 perc
+ * türelem (max. 24 óra) szabályt.
+ */
+function expectTokenFor(
+  result: StreamTokenServiceResult,
+  videoId: string,
+  durationSec: number,
+): void {
+  const expires = Math.floor(Date.parse(result.expiresAt) / 1000)
+  expect(result.token).toBe(expectedToken(videoId, expires))
+  const ttl = Math.min(durationSec + STREAM_TOKEN_GRACE_SECONDS, STREAM_TOKEN_MAX_TTL_SECONDS)
+  const remaining = expires - Math.floor(Date.now() / 1000)
+  expect(remaining).toBeLessThanOrEqual(ttl)
+  expect(remaining).toBeGreaterThan(ttl - 5)
 }
 
 const buyerUser = {
@@ -131,11 +154,8 @@ function createMockPayload(options: MockPayloadOptions = {}) {
 const savedEnv: Record<string, string | undefined> = {}
 
 beforeAll(() => {
-  for (const key of ['CF_STREAM_SIGNING_KEY', 'CF_STREAM_SIGNING_KEY_ID']) {
-    savedEnv[key] = process.env[key]
-  }
-  process.env.CF_STREAM_SIGNING_KEY = DUMMY_SIGNING_KEY
-  delete process.env.CF_STREAM_SIGNING_KEY_ID
+  savedEnv.BUNNY_STREAM_TOKEN_AUTH_KEY = process.env.BUNNY_STREAM_TOKEN_AUTH_KEY
+  process.env.BUNNY_STREAM_TOKEN_AUTH_KEY = DUMMY_TOKEN_KEY
 })
 
 afterAll(() => {
@@ -148,41 +168,62 @@ afterAll(() => {
   }
 })
 
-describe('createStreamPlaybackToken — JWT-szerkezet és élettartam', () => {
-  it('HS256 JWT: sub = videoId, nbf = most, exp = nbf + videóhossz + 10 perc', () => {
+describe('Bunny-ENV — a videó-kulcsok egyike sem induláskori kötelező', () => {
+  it('a kulcsok hiánya NEM dönti el az appot (nincsenek a requiredEnvVars között)', () => {
+    for (const key of optionalBunnyStreamEnvVars) {
+      expect(requiredEnvVars as readonly string[]).not.toContain(key)
+    }
+  })
+
+  it('a titok NEM NEXT_PUBLIC_ (sosem kerülhet a böngészőbe)', () => {
+    expect(optionalBunnyStreamEnvVars).toContain('BUNNY_STREAM_TOKEN_AUTH_KEY')
+    expect('BUNNY_STREAM_TOKEN_AUTH_KEY'.startsWith('NEXT_PUBLIC_')).toBe(false)
+  })
+})
+
+describe('createStreamPlaybackToken — Bunny hash-séma és élettartam', () => {
+  it('ISMERT VEKTOR: token = SHA256_HEX(kulcs + guid + expires), kisbetűs hex', () => {
+    // A lejáratot úgy állítjuk be, hogy a TTL-szabály pontosan a vektor
+    // `expires` értékét adja: kiállítás + 0 mp videóhossz + 600 mp türelem.
+    const now = new Date((KNOWN_VECTOR.expires - STREAM_TOKEN_GRACE_SECONDS) * 1000)
+    const result = createStreamPlaybackToken({
+      videoId: KNOWN_VECTOR.guid,
+      durationSec: 0,
+      signingKey: KNOWN_VECTOR.key,
+      now,
+    })
+
+    expect(result.expires).toBe(KNOWN_VECTOR.expires)
+    expect(result.token).toBe(KNOWN_VECTOR.token)
+    expect(result.token).toMatch(/^[0-9a-f]{64}$/)
+    // A fűzési SORREND kötött: a felcserélt sorrend hash-ét sosem adhatja.
+    expect(result.token).not.toBe(KNOWN_VECTOR.tokenIfOrderSwapped)
+  })
+
+  it('expires = most + videóhossz + 10 perc; a hash ezt az expires-t köti', () => {
     const now = new Date('2026-08-01T12:00:00.000Z')
     const result = createStreamPlaybackToken({
       videoId: DUMMY_ASSET_ID,
       durationSec: 1800,
-      signingKey: DUMMY_SIGNING_KEY,
+      signingKey: DUMMY_TOKEN_KEY,
       now,
     })
 
-    const decoded = decodeJwt(result.token)
-    expect(decoded.header).toMatchObject({ alg: 'HS256', typ: 'JWT' })
-    expect(decoded.claims.sub).toBe(DUMMY_ASSET_ID)
-
-    const nbf = decoded.claims.nbf as number
-    const exp = decoded.claims.exp as number
-    expect(nbf).toBe(Math.floor(now.getTime() / 1000))
-    expect(result.nbf).toBe(nbf)
-    expect(result.exp).toBe(exp)
-    expect(exp - nbf).toBe(1800 + STREAM_TOKEN_GRACE_SECONDS)
+    expect(result.issuedAt).toBe(Math.floor(now.getTime() / 1000))
+    expect(result.expires - result.issuedAt).toBe(1800 + STREAM_TOKEN_GRACE_SECONDS)
     expect(STREAM_TOKEN_GRACE_SECONDS).toBe(600)
-
-    // Az aláírás HMAC-SHA256, a DUMMY kulccsal újraszámolva egyeznie kell.
-    expect(decoded.signature).toBe(expectedSignature(decoded.signingInput))
+    expect(result.token).toBe(expectedToken(DUMMY_ASSET_ID, result.expires))
   })
 
   it('24 órás clamp: nagyon hosszú videó esetén az élettartam max. 24 óra', () => {
     const result = createStreamPlaybackToken({
       videoId: DUMMY_ASSET_ID,
       durationSec: 48 * 60 * 60,
-      signingKey: DUMMY_SIGNING_KEY,
+      signingKey: DUMMY_TOKEN_KEY,
       now: new Date('2026-08-01T12:00:00.000Z'),
     })
 
-    expect(result.exp - result.nbf).toBe(STREAM_TOKEN_MAX_TTL_SECONDS)
+    expect(result.expires - result.issuedAt).toBe(STREAM_TOKEN_MAX_TTL_SECONDS)
     expect(STREAM_TOKEN_MAX_TTL_SECONDS).toBe(24 * 60 * 60)
   })
 
@@ -190,38 +231,59 @@ describe('createStreamPlaybackToken — JWT-szerkezet és élettartam', () => {
     const result = createStreamPlaybackToken({
       videoId: DUMMY_ASSET_ID,
       durationSec: 0,
-      signingKey: DUMMY_SIGNING_KEY,
+      signingKey: DUMMY_TOKEN_KEY,
       now: new Date('2026-08-01T12:00:00.000Z'),
     })
-    expect(result.exp - result.nbf).toBe(STREAM_TOKEN_GRACE_SECONDS)
+    expect(result.expires - result.issuedAt).toBe(STREAM_TOKEN_GRACE_SECONDS)
   })
 
-  it('keyId megadásakor a JWT header kid mezőt kap', () => {
-    const withKid = createStreamPlaybackToken({
-      videoId: DUMMY_ASSET_ID,
-      durationSec: 60,
-      signingKey: DUMMY_SIGNING_KEY,
-      keyId: 'dummy-key-id',
+  it('más videó vagy más lejárat → más jegy (a hash mindkettőt köti)', () => {
+    const base = {
+      durationSec: 600,
+      signingKey: DUMMY_TOKEN_KEY,
+      now: new Date('2026-08-01T12:00:00.000Z'),
+    }
+    const first = createStreamPlaybackToken({ ...base, videoId: 'elso-guid' })
+    const second = createStreamPlaybackToken({ ...base, videoId: 'masodik-guid' })
+    const later = createStreamPlaybackToken({
+      ...base,
+      videoId: 'elso-guid',
+      now: new Date('2026-08-01T12:00:01.000Z'),
     })
-    expect(decodeJwt(withKid.token).header.kid).toBe('dummy-key-id')
 
-    const withoutKid = createStreamPlaybackToken({
+    expect(first.token).not.toBe(second.token)
+    expect(first.token).not.toBe(later.token)
+  })
+
+  it('a kulcs körüli whitespace nem változtatja meg a jegyet (Railway-beillesztés)', () => {
+    const now = new Date('2026-08-01T12:00:00.000Z')
+    const clean = createStreamPlaybackToken({
       videoId: DUMMY_ASSET_ID,
       durationSec: 60,
-      signingKey: DUMMY_SIGNING_KEY,
+      signingKey: DUMMY_TOKEN_KEY,
+      now,
     })
-    expect(decodeJwt(withoutKid.token).header).not.toHaveProperty('kid')
+    const padded = createStreamPlaybackToken({
+      videoId: `  ${DUMMY_ASSET_ID}  `,
+      durationSec: 60,
+      signingKey: `  ${DUMMY_TOKEN_KEY}\n`,
+      now,
+    })
+    expect(padded.token).toBe(clean.token)
   })
 
   it('hibás bemenetre (üres videoId / negatív hossz / üres kulcs) hibát dob', () => {
     expect(() =>
-      createStreamPlaybackToken({ videoId: '', durationSec: 60, signingKey: DUMMY_SIGNING_KEY }),
+      createStreamPlaybackToken({ videoId: '', durationSec: 60, signingKey: DUMMY_TOKEN_KEY }),
+    ).toThrowError(/videoId/)
+    expect(() =>
+      createStreamPlaybackToken({ videoId: '   ', durationSec: 60, signingKey: DUMMY_TOKEN_KEY }),
     ).toThrowError(/videoId/)
     expect(() =>
       createStreamPlaybackToken({
         videoId: DUMMY_ASSET_ID,
         durationSec: -1,
-        signingKey: DUMMY_SIGNING_KEY,
+        signingKey: DUMMY_TOKEN_KEY,
       }),
     ).toThrowError(/durationSec/)
     expect(() =>
@@ -231,18 +293,12 @@ describe('createStreamPlaybackToken — JWT-szerkezet és élettartam', () => {
 })
 
 describe('issueStreamToken — paywall és token-kiállítás', () => {
-  it('vevő + published termék → érvényes JWT (sub = streamAssetId, exp−nbf = duration + 600)', async () => {
+  it('vevő + published termék → érvényes jegy (a videóra és a lejáratra kötve)', async () => {
     const { payload } = createMockPayload()
 
     const result = await issueStreamToken({ payload, user: buyerUser, productId: 42 })
 
-    const decoded = decodeJwt(result.token)
-    expect(decoded.claims.sub).toBe(DUMMY_ASSET_ID)
-    expect((decoded.claims.exp as number) - (decoded.claims.nbf as number)).toBe(
-      1800 + STREAM_TOKEN_GRACE_SECONDS,
-    )
-    expect(decoded.signature).toBe(expectedSignature(decoded.signingInput))
-    expect(result.expiresAt).toBe(new Date((decoded.claims.exp as number) * 1000).toISOString())
+    expectTokenFor(result, DUMMY_ASSET_ID, 1800)
   })
 
   it('vevő + archived termék → tovább nézheti (200-szerű token)', async () => {
@@ -250,7 +306,7 @@ describe('issueStreamToken — paywall és token-kiállítás', () => {
 
     const result = await issueStreamToken({ payload, user: buyerUser, productId: 42 })
 
-    expect(decodeJwt(result.token).claims.sub).toBe(DUMMY_ASSET_ID)
+    expectTokenFor(result, DUMMY_ASSET_ID, 1800)
   })
 
   it('vevő + draft termék → 403 (draftot senki sem nézhet)', async () => {
@@ -278,7 +334,7 @@ describe('issueStreamToken — paywall és token-kiállítás', () => {
 
     const result = await issueStreamToken({ payload, user: buyerUser, productId: 42 })
 
-    expect(decodeJwt(result.token).claims.sub).toBe(DUMMY_ASSET_ID)
+    expectTokenFor(result, DUMMY_ASSET_ID, 1800)
     expect(payload.find).toHaveBeenCalledTimes(1)
   })
 
@@ -304,7 +360,7 @@ describe('issueStreamToken — paywall és token-kiállítás', () => {
 
     const result = await issueStreamToken({ payload, user: buyerUser, productId: 42 })
 
-    expect(decodeJwt(result.token).claims.sub).toBe(DUMMY_ASSET_ID)
+    expectTokenFor(result, DUMMY_ASSET_ID, 1800)
   })
 
   it('A1 — a lejárt hozzáférés a vásárlás-ellenőrzés UTÁN dől el (nem-vevő nem kap más üzenetet)', async () => {
@@ -336,7 +392,7 @@ describe('issueStreamToken — paywall és token-kiállítás', () => {
     const { payload } = createMockPayload()
 
     const result = await issueStreamToken({ payload, user: populatedBuyer, productId: '42' })
-    expect(decodeJwt(result.token).claims.sub).toBe(DUMMY_ASSET_ID)
+    expectTokenFor(result, DUMMY_ASSET_ID, 1800)
   })
 
   it('videoId-val a terméken belüli videó célozható (streamAssetId egyezés)', async () => {
@@ -367,11 +423,7 @@ describe('issueStreamToken — paywall és token-kiállítás', () => {
       videoId: 'masodik-asset',
     })
 
-    const decoded = decodeJwt(result.token)
-    expect(decoded.claims.sub).toBe('masodik-asset')
-    expect((decoded.claims.exp as number) - (decoded.claims.nbf as number)).toBe(
-      900 + STREAM_TOKEN_GRACE_SECONDS,
-    )
+    expectTokenFor(result, 'masodik-asset', 900)
   })
 
   it('ismeretlen videoId → 404 magyar üzenettel', async () => {
@@ -404,6 +456,24 @@ describe('issueStreamToken — paywall és token-kiállítás', () => {
     await expect(promise).rejects.toThrowError(/feldolgozása még folyamatban/)
   })
 
+  it('üres/whitespace videó-GUID az adminban → 503 magyar üzenettel (nem fekete lejátszó)', async () => {
+    const product = makeProduct({
+      videos: [
+        {
+          id: 'sor-1',
+          title: '1. lecke',
+          streamAssetId: '   ',
+          durationSec: 1800,
+          status: 'ready',
+        },
+      ],
+    })
+    const { payload } = createMockPayload({ product })
+    const promise = issueStreamToken({ payload, user: buyerUser, productId: 42 })
+    await expect(promise).rejects.toMatchObject({ status: 503 })
+    await expect(promise).rejects.toThrowError(/ideiglenesen nem érhető el/)
+  })
+
   it('érvénytelen productId → 400', async () => {
     const { payload } = createMockPayload()
     const promise = issueStreamToken({ payload, user: buyerUser, productId: 'abc' })
@@ -411,16 +481,28 @@ describe('issueStreamToken — paywall és token-kiállítás', () => {
     await expect(promise).rejects.toThrowError(/termékazonosító/)
   })
 
-  it('hiányzó CF_STREAM_SIGNING_KEY → 503 magyar üzenettel (lazy ENV-ellenőrzés)', async () => {
-    const original = process.env.CF_STREAM_SIGNING_KEY
-    delete process.env.CF_STREAM_SIGNING_KEY
+  it('hiányzó BUNNY_STREAM_TOKEN_AUTH_KEY → 503 magyar üzenettel (lazy ENV-ellenőrzés)', async () => {
+    const original = process.env.BUNNY_STREAM_TOKEN_AUTH_KEY
+    delete process.env.BUNNY_STREAM_TOKEN_AUTH_KEY
     try {
       const { payload } = createMockPayload()
       const promise = issueStreamToken({ payload, user: buyerUser, productId: 42 })
       await expect(promise).rejects.toMatchObject({ status: 503 })
       await expect(promise).rejects.toThrowError(/ideiglenesen nem érhető el/)
     } finally {
-      process.env.CF_STREAM_SIGNING_KEY = original
+      process.env.BUNNY_STREAM_TOKEN_AUTH_KEY = original
+    }
+  })
+
+  it('csak whitespace-t tartalmazó token-kulcs → ugyanaz az 503-as út', async () => {
+    const original = process.env.BUNNY_STREAM_TOKEN_AUTH_KEY
+    process.env.BUNNY_STREAM_TOKEN_AUTH_KEY = '   '
+    try {
+      const { payload } = createMockPayload()
+      const promise = issueStreamToken({ payload, user: buyerUser, productId: 42 })
+      await expect(promise).rejects.toMatchObject({ status: 503 })
+    } finally {
+      process.env.BUNNY_STREAM_TOKEN_AUTH_KEY = original
     }
   })
 
@@ -451,21 +533,19 @@ describe('GET /api/stream-token route-handler', () => {
     })
   })
 
-  it('vevő + published termék → 200 { token, expiresAt }, a token dekódolható JWT', async () => {
+  it('vevő + published termék → 200 { token, expiresAt }; a wire-formátum változatlan', async () => {
     const { payload } = createMockPayload()
     const GET = createStreamTokenHandler({ getPayload: async () => payload })
 
     const response = await GET(makeRequest('?productId=42'))
 
     expect(response.status).toBe(200)
-    const body = (await response.json()) as { token: string; expiresAt: string }
-    const decoded = decodeJwt(body.token)
-    expect(decoded.claims.sub).toBe(DUMMY_ASSET_ID)
-    expect((decoded.claims.exp as number) - (decoded.claims.nbf as number)).toBe(
-      1800 + STREAM_TOKEN_GRACE_SECONDS,
-    )
-    expect(decoded.signature).toBe(expectedSignature(decoded.signingInput))
-    expect(body.expiresAt).toBe(new Date((decoded.claims.exp as number) * 1000).toISOString())
+    const body = (await response.json()) as StreamTokenServiceResult
+    // A szerződés két mezője, se többel, se kevesebbel — a kliens erre épül.
+    expect(Object.keys(body).sort()).toEqual(['expiresAt', 'token'])
+    expect(typeof body.token).toBe('string')
+    expect(typeof body.expiresAt).toBe('string')
+    expectTokenFor(body, DUMMY_ASSET_ID, 1800)
   })
 
   it('nem-vevő → 403; a válasz nem árulja el, hogy a termék létezik-e', async () => {
@@ -522,9 +602,9 @@ describe('GET /api/stream-token route-handler', () => {
     expect(body.error).toContain('termékazonosító')
   })
 
-  it('hiányzó signing key → 503 magyar üzenettel', async () => {
-    const original = process.env.CF_STREAM_SIGNING_KEY
-    delete process.env.CF_STREAM_SIGNING_KEY
+  it('hiányzó token-kulcs → 503 magyar üzenettel', async () => {
+    const original = process.env.BUNNY_STREAM_TOKEN_AUTH_KEY
+    delete process.env.BUNNY_STREAM_TOKEN_AUTH_KEY
     try {
       const { payload } = createMockPayload()
       const GET = createStreamTokenHandler({ getPayload: async () => payload })
@@ -535,7 +615,7 @@ describe('GET /api/stream-token route-handler', () => {
       const body = (await response.json()) as { error: string }
       expect(body.error).toContain('ideiglenesen nem érhető el')
     } finally {
-      process.env.CF_STREAM_SIGNING_KEY = original
+      process.env.BUNNY_STREAM_TOKEN_AUTH_KEY = original
     }
   })
 

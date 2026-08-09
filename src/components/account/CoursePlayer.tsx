@@ -10,9 +10,9 @@ import { playableStreamVideos, streamIframeSrc, streamVideoRef } from '../../lib
 import { fetchStreamToken } from '../../lib/stream-token-client'
 
 /**
- * CoursePlayer — a kurzus lejátszója (epizódlista + Cloudflare Stream
- * player, signed token a GET /api/stream-token végpontról, token-frissítés
- * exp−5 percben — a lejátszás nem szakad meg, T-068).
+ * CoursePlayer — a kurzus lejátszója (epizódlista + Bunny Stream player,
+ * tokenes embed a GET /api/stream-token végpontról, token-frissítés a lejárat
+ * előtt 5 perccel — a lejátszás nem szakad meg, T-068).
  *
  * A token-kérés a videó STABIL azonosítóját küldi (a szerződés-modul
  * `streamVideoRef`-je), nem a sorszámát: az epizódlista a feldolgozás alatti
@@ -246,12 +246,17 @@ export function CoursePlayer({
   // A lejátszott epizód: a token ehhez a videóhoz szól, az iframe is ezt tölti.
   const playingVideo = state.kind === 'playing' ? videos[state.videoIndex] : undefined
   const playingIndex = state.kind === 'playing' ? state.videoIndex : -1
+  // A Bunny embed-URL a jegy MELLETT a lejárat másodpercét is viszi
+  // (`expires`), és a kettőnek egyeznie kell a szerver által hashelt értékkel.
+  // Ez a szám nem külön kérésből jön: a `playing` állapot már ma is tárolja,
+  // ugyanabból a válaszból, amiből a token.
   const playingSrc =
     state.kind === 'playing' && playingVideo
       ? streamIframeSrc({
-          customerCode: process.env.NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE,
+          libraryId: process.env.NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID,
           streamAssetId: playingVideo.streamAssetId,
           token: state.token,
+          expiresAtEpochSec: state.expiresAtEpochSec,
         })
       : null
 
@@ -282,7 +287,7 @@ export function CoursePlayer({
               Nincs hozzáférésed ehhez a videóhoz.
             </div>
           ) : null}
-          {/* A hiányzó customer-kód (playingSrc === null) ugyanide fut be:
+          {/* A hiányzó library-id (playingSrc === null) ugyanide fut be:
               érvényes jegy mellett is némán törött iframe jönne belőle. */}
           {state.kind === 'unavailable' || (state.kind === 'playing' && playingSrc === null) ? (
             <div className="kc-player__error" role="alert">

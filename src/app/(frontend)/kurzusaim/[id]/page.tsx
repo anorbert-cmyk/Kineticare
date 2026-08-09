@@ -99,8 +99,9 @@ async function getWatchedRefs(userId: number, productId: number): Promise<string
 }
 
 /**
- * /kurzusaim/[id] — a kurzus lejátszóoldala (epizódlista + Cloudflare Stream
- * player, signed token a T-032 végpontról, token-frissítés exp−5 percben).
+ * /kurzusaim/[id] — a kurzus lejátszóoldala (epizódlista + Bunny Stream
+ * player, tokenes embed a T-032 végpontról, token-frissítés a lejárat előtt
+ * 5 perccel).
  */
 export default async function KurzusaimPlayerPage({ params }: KurzusaimPlayerPageProps) {
   const { id } = await params

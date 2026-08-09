@@ -3,25 +3,31 @@
  * (previewVideoStreamId). Ha a termékhez nincs előzetes rendelve, a
  * szekció rejtve marad (a komponens null-t ad).
  *
- * A lejátszó a Cloudflare Stream publikus iframe-embedje — ez a platform
- * videó-szolgáltatója (a védett, tokenes lejátszás a W3-hullám feladata,
- * ez a komponens NEM hív stream-token végpontot). A beágyazott videó a
- * szolgáltató domainjéről töltődik; statikus asset-hotlink (kép/font/CSS)
- * továbbra is tilos.
+ * A lejátszó a Bunny Stream publikus iframe-embedje — ez a platform
+ * videó-szolgáltatója. A Bunnynál a token-hitelesítés LIBRARY-szintű, ezért az
+ * előzetes (és a hero-videó) a PUBLIKUS libraryben él: itt nincs jegy, a
+ * komponens NEM hív stream-token végpontot. A védett kurzusvideók külön,
+ * tokenes libraryből jönnek (src/components/account/CoursePlayer.tsx).
+ * A beágyazott videó a szolgáltató domainjéről töltődik; statikus
+ * asset-hotlink (kép/font/CSS) továbbra is tilos.
  *
- * A Stream customer-subdomain a NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE
- * környezeti változóból jön (lazy, nem induláskori kötelező ENV): hiányában
- * az előzetes-szekció rejtve marad, az oldal ettől még teljes értékű.
- * TODO(W3): a védett lejátszóval közös, végleges stream-embed komponensre
- * cserélni, amint a W3 player-felület kész.
+ * A publikus library azonosítója a NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID
+ * környezeti változóból jön (lazy, nem induláskori kötelező ENV): hiányában az
+ * előzetes-szekció rejtve marad, az oldal ettől még teljes értékű.
  */
+
+/** A trimmelt publikus library-azonosító, vagy üres string, ha nincs beállítva. */
+function publicLibraryId(): string {
+  return process.env.NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID?.trim() ?? ''
+}
+
 /**
- * Van-e megjeleníthető előzetes: a streamId ÉS a customer-code ENV együtt
- * kell hozzá — a kurzus-oldal ezzel rejti el az egész szekciót.
+ * Van-e megjeleníthető előzetes: a videó GUID-ja ÉS a publikus library-id ENV
+ * együtt kell hozzá — a kurzus-oldal ezzel rejti el az egész szekciót.
  */
 export function hasPreviewVideo(streamId: string | null | undefined): boolean {
   const id = typeof streamId === 'string' ? streamId.trim() : ''
-  return id.length > 0 && Boolean(process.env.NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE?.trim())
+  return id.length > 0 && publicLibraryId().length > 0
 }
 
 export interface PreviewVideoProps {
@@ -31,12 +37,12 @@ export interface PreviewVideoProps {
 }
 
 export function PreviewVideo({ streamId, title }: PreviewVideoProps) {
-  if (!hasPreviewVideo(streamId)) {
+  const id = typeof streamId === 'string' ? streamId.trim() : ''
+  const libraryId = publicLibraryId()
+  if (id.length === 0 || libraryId.length === 0) {
     return null
   }
-  const id = (streamId as string).trim()
-  const customerCode = process.env.NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE!.trim()
-  const src = `https://customer-${customerCode}.cloudflarestream.com/${encodeURIComponent(id)}/iframe`
+  const src = `https://iframe.mediadelivery.net/embed/${encodeURIComponent(libraryId)}/${encodeURIComponent(id)}`
 
   return (
     <div className="kc-course-preview">
