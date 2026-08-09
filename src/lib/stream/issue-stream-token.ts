@@ -4,6 +4,7 @@ import { accessExpiredMessage } from '../course-access'
 import { resolveSingleCourseAccess } from '../course-access-lookup'
 import type { Product, User } from '../../payload-types'
 import { logger as rootLogger, type Logger } from '../logger'
+import { playableStreamVideos, type StreamTokenResponseBody } from './contract'
 import { createStreamPlaybackToken } from './token'
 
 /**
@@ -50,12 +51,12 @@ export interface StreamTokenServiceInput {
   logger?: Logger
 }
 
-export interface StreamTokenServiceResult {
-  /** Az aláírt Cloudflare Stream lejátszási JWT. */
-  token: string
-  /** A token lejárata (ISO 8601) — a kliens UX-höz. */
-  expiresAt: string
-}
+/**
+ * A szolgáltatás eredménye AZONOS a végpont válasz-törzsével — a típus a
+ * közös szerződés-modulból jön, így a kliens és a szerver nem tudnak
+ * észrevétlenül eltérni egymástól (`expiresAt` ISO-8601, nem szám).
+ */
+export type StreamTokenServiceResult = StreamTokenResponseBody
 
 /** Egységes 403-as üzenet — nem árulja el, hogy létezik-e a termék/videó. */
 const FORBIDDEN_MESSAGE = 'A videó megtekintéséhez a kurzus megvásárlása szükséges.'
@@ -96,9 +97,13 @@ function hasPurchased(user: User, productId: number): boolean {
 type ProductVideo = NonNullable<Product['videos']>[number]
 
 /**
- * Videó kiválasztása a termékből. videoId nélkül az első lejátszásra kész
- * (ready) videó, egyébként az első elem; videoId-val streamAssetId VAGY a
- * sor `id` mezője szerinti egyezés.
+ * Videó kiválasztása a termékből. videoId-val a STABIL azonosító szerinti
+ * egyezés (a sor `id` mezője VAGY a streamAssetId) — sorszám szándékosan nem
+ * fogadható el, mert a lejátszható videók számozása a feldolgozási állapottól
+ * függően elcsúszik. videoId nélkül az első lejátszható videó (a lejátszóval
+ * KÖZÖS `playableStreamVideos` szűrés szerint), végső soron az első elem —
+ * hogy a csak feldolgozás alatti videót tartalmazó kurzus a beszédesebb 409-et
+ * kapja a 404 helyett.
  */
 function selectVideo(product: Product, videoId: string | undefined): ProductVideo {
   const videos = Array.isArray(product.videos) ? product.videos : []
@@ -109,7 +114,7 @@ function selectVideo(product: Product, videoId: string | undefined): ProductVide
     }
     return match
   }
-  const first = videos.find((video) => video.status === 'ready') ?? videos[0]
+  const first = playableStreamVideos(videos)[0] ?? videos[0]
   if (!first) {
     throw new StreamTokenError(404, 'A kurzushoz nem tartozik lejátszható videó.')
   }

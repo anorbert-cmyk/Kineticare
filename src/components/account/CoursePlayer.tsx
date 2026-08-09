@@ -1,15 +1,21 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { playableStreamVideos, streamIframeSrc, streamVideoRef } from '../../lib/stream/contract'
 import { fetchStreamToken } from '../../lib/stream-token-client'
 
 /**
  * CoursePlayer — a kurzus lejátszója (epizódlista + Cloudflare Stream
  * player, signed token a GET /api/stream-token végpontról, token-frissítés
  * exp−5 percben — a lejátszás nem szakad meg, T-068).
+ *
+ * A token-kérés a videó STABIL azonosítóját küldi (a szerződés-modul
+ * `streamVideoRef`-je), nem a sorszámát: az epizódlista a feldolgozás alatti
+ * videókat kiszűri, így a sorszám a szerver teljes listájához képest
+ * elcsúszna, és a vevő idegen (vagy hibás) videóra kapna jegyet.
  */
 export interface CourseVideo {
   id?: string
@@ -40,7 +46,7 @@ const TOKEN_REFRESH_BEFORE_EXPIRY_SEC = 300 // 5 perc
 type PlayerState =
   | { kind: 'idle' }
   | { kind: 'loading'; videoIndex: number }
-  | { kind: 'playing'; videoIndex: number; token: string; expiresAt: number }
+  | { kind: 'playing'; videoIndex: number; token: string; expiresAtEpochSec: number }
   | { kind: 'forbidden' }
   | { kind: 'unavailable' }
   | { kind: 'error'; message: string }
@@ -61,7 +67,12 @@ export function CoursePlayer({ expiredMessage = null, product, hasAccess }: Cour
    */
   const loadVideoRef = useRef<LoadVideo | null>(null)
 
-  const videos = product.videos.filter((video) => video.status === 'ready' && video.streamAssetId)
+  /**
+   * Az epizódlista szűrése a szerverrel KÖZÖS segédfüggvénnyel — így a
+   * lejátszó és a token-kiállítás nem tudja máshogy értelmezni, mi számít
+   * lejátszható videónak.
+   */
+  const videos = useMemo(() => playableStreamVideos(product.videos), [product.videos])
 
   const clearRefreshTimer = useCallback(() => {
     if (refreshTimerRef.current !== null) {
@@ -77,7 +88,8 @@ export function CoursePlayer({ expiredMessage = null, product, hasAccess }: Cour
         return
       }
       const video = videos[index]
-      if (!video || !video.streamAssetId) {
+      const videoId = video ? streamVideoRef(video) : null
+      if (!video || videoId === null) {
         setState({ kind: 'error', message: 'A videó jelenleg nem érhető el.' })
         return
       }
@@ -89,7 +101,7 @@ export function CoursePlayer({ expiredMessage = null, product, hasAccess }: Cour
 
       const result = await fetchStreamToken({
         productId: product.id,
-        videoIndex: index,
+        videoId,
       })
 
       if (result.kind === 'forbidden') {
@@ -106,15 +118,18 @@ export function CoursePlayer({ expiredMessage = null, product, hasAccess }: Cour
       }
 
       clearRefreshTimer()
-      const expiresAt = result.expiresAt
+      const expiresAtEpochSec = result.expiresAtEpochSec
       const nowSec = Math.floor(Date.now() / 1000)
-      const refreshInSec = Math.max(30, expiresAt - nowSec - TOKEN_REFRESH_BEFORE_EXPIRY_SEC)
+      const refreshInSec = Math.max(
+        30,
+        expiresAtEpochSec - nowSec - TOKEN_REFRESH_BEFORE_EXPIRY_SEC,
+      )
 
       refreshTimerRef.current = window.setTimeout(() => {
         void loadVideoRef.current?.(index, true)
       }, refreshInSec * 1000)
 
-      setState({ kind: 'playing', videoIndex: index, token: result.token, expiresAt })
+      setState({ kind: 'playing', videoIndex: index, token: result.token, expiresAtEpochSec })
     },
     [hasAccess, product.id, videos, clearRefreshTimer],
   )
@@ -157,6 +172,18 @@ export function CoursePlayer({ expiredMessage = null, product, hasAccess }: Cour
     )
   }
 
+  // A lejátszott epizód: a token ehhez a videóhoz szól, az iframe is ezt tölti.
+  const playingVideo = state.kind === 'playing' ? videos[state.videoIndex] : undefined
+  const playingIndex = state.kind === 'playing' ? state.videoIndex : -1
+  const playingSrc =
+    state.kind === 'playing' && playingVideo
+      ? streamIframeSrc({
+          customerCode: process.env.NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE,
+          streamAssetId: playingVideo.streamAssetId,
+          token: state.token,
+        })
+      : null
+
   return (
     <div className="kc-player">
       <h1>{product.title}</h1>
@@ -166,14 +193,14 @@ export function CoursePlayer({ expiredMessage = null, product, hasAccess }: Cour
           {state.kind === 'loading' ? (
             <div className="kc-player__loading" role="status">A videó betöltése…</div>
           ) : null}
-          {state.kind === 'playing' ? (
+          {playingSrc !== null && playingVideo ? (
             <iframe
-              key={state.token}
+              key={playingSrc}
               allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
               allowFullScreen
               className="kc-player__frame"
-              src={`https://customer-${process.env.NEXT_PUBLIC_CF_STREAM_CUSTOMER_CODE ?? ''}.cloudflarestream.com/${videos[state.videoIndex].streamAssetId}/iframe?token=${state.token}`}
-              title={`${product.title} — ${videos[state.videoIndex].title ?? `Rész ${state.videoIndex + 1}`}`}
+              src={playingSrc}
+              title={`${product.title} — ${playingVideo.title ?? `Rész ${playingIndex + 1}`}`}
             />
           ) : null}
           {state.kind === 'forbidden' ? (
@@ -181,7 +208,9 @@ export function CoursePlayer({ expiredMessage = null, product, hasAccess }: Cour
               Nincs hozzáférésed ehhez a videóhoz.
             </div>
           ) : null}
-          {state.kind === 'unavailable' ? (
+          {/* A hiányzó customer-kód (playingSrc === null) ugyanide fut be:
+              érvényes jegy mellett is némán törött iframe jönne belőle. */}
+          {state.kind === 'unavailable' || (state.kind === 'playing' && playingSrc === null) ? (
             <div className="kc-player__error" role="alert">
               A videólejátszás ideiglenesen nem érhető el. Próbáld később.
             </div>

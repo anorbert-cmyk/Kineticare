@@ -1,13 +1,19 @@
 /**
  * Stream-token kliens — a GET /api/stream-token végpont hívása a lejátszóhoz.
  *
- * API-szerződés (T-032): GET /api/stream-token?productId={id}&videoIndex={n}
- * - 200 { token, expiresAt } — a signed playback token és a lejárat (unix mp);
- * - 401 (nincs bejelentkezés), 403 (nem vevő/draft), 404, 503 (hiányzó CF-kulcs), 500.
+ * A kérés- és válasz-alak EGYETLEN forrása az src/lib/stream/contract.ts (ezt
+ * használja a szerver oldala is): a kliens nem épít saját query-paramétert és
+ * nem értelmezi maga a választörzset. Korábban ezek külön voltak leírva a két
+ * oldalon, és el is tértek — a fizető vevő sem tudott lejátszani.
+ *
+ * Státuszok: 200 { token, expiresAt } | 401/403 (nincs belépés / nem vevő /
+ * lejárt hozzáférés) | 404, 409 | 503 (hiányzó CF-kulcs) | 500.
  */
 
+import { buildStreamTokenRequestUrl, parseStreamTokenResponseBody } from './stream/contract'
+
 export type StreamTokenResult =
-  | { kind: 'token'; token: string; expiresAt: number }
+  | { kind: 'token'; token: string; expiresAtEpochSec: number }
   | { kind: 'forbidden' }
   | { kind: 'unavailable' }
   | { kind: 'error'; message: string }
@@ -16,15 +22,11 @@ export const GENERIC_STREAM_ERROR =
   'A videó lejátszási joga most nem ellenőrizhető. Próbáld újra néhány perc múlva.'
 
 export async function fetchStreamToken(
-  input: { productId: number; videoIndex?: number },
+  input: { productId: number; videoId?: string | null },
   fetchImpl: typeof fetch = fetch,
 ): Promise<StreamTokenResult> {
   try {
-    const params = new URLSearchParams({ productId: String(input.productId) })
-    if (typeof input.videoIndex === 'number') {
-      params.set('videoIndex', String(input.videoIndex))
-    }
-    const response = await fetchImpl(`/api/stream-token?${params.toString()}`, {
+    const response = await fetchImpl(buildStreamTokenRequestUrl(input), {
       credentials: 'include',
     })
 
@@ -38,11 +40,11 @@ export async function fetchStreamToken(
       return { kind: 'error', message: GENERIC_STREAM_ERROR }
     }
 
-    const body = (await response.json()) as { token?: string; expiresAt?: number }
-    if (typeof body.token !== 'string' || typeof body.expiresAt !== 'number') {
+    const parsed = parseStreamTokenResponseBody(await response.json())
+    if (parsed === null) {
       return { kind: 'error', message: GENERIC_STREAM_ERROR }
     }
-    return { kind: 'token', token: body.token, expiresAt: body.expiresAt }
+    return { kind: 'token', token: parsed.token, expiresAtEpochSec: parsed.expiresAtEpochSec }
   } catch {
     return { kind: 'error', message: GENERIC_STREAM_ERROR }
   }
