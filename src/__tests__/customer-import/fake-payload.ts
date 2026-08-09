@@ -3,9 +3,9 @@
  *
  * Csak azt a néhány műveletet valósítja meg, amit a `src/lib/customer-import/`
  * modulok használnak (find / findByID / create / update / count /
- * forgotPassword), de ÁLLAPOTOT tart: az írások látszanak a következő
- * olvasáson. Enélkül az idempotencia (kétszer futtatva a második kör csupa
- * kihagyás) nem lenne bizonyítható.
+ * forgotPassword / sendEmail), de ÁLLAPOTOT tart: az írások látszanak a
+ * következő olvasáson. Enélkül az idempotencia (kétszer futtatva a második kör
+ * csupa kihagyás) nem lenne bizonyítható.
  *
  * A repó bevett tesztmintáját követi: a szűk objektum `as unknown as Payload`
  * castolással megy be a lib-be (`any` sehol).
@@ -34,6 +34,14 @@ export interface FakeProduct {
   sku: string
 }
 
+/** Egy elküldött levél a fake postaládában (a tesztek ebből olvasnak). */
+export interface FakeSentEmail {
+  to: string
+  subject: string
+  html: string
+  text: string
+}
+
 export interface FakeDb {
   users: FakeUser[]
   products: FakeProduct[]
@@ -41,12 +49,18 @@ export interface FakeDb {
   failWritesFor?: string[]
   /** Ezekre az e-mailekre a forgotPassword `null`-t ad (ismeretlen felhasználó). */
   unknownForgotPassword?: string[]
+  /** Ezekre a címekre a sendEmail KIVÉTELT dob (hálózati hiba szimulálása). */
+  throwEmailFor?: string[]
+  /** Ezekre a címekre a sendEmail `{ ok: false }` SendResultot ad (a saját adapter viselkedése). */
+  rejectEmailFor?: string[]
   nextId: number
   calls: {
     create: number
     update: number
     forgotPassword: string[]
   }
+  /** A kiküldött levelek — a küldés-tesztek ezt vizsgálják. */
+  sentEmails: FakeSentEmail[]
 }
 
 export function createFakeDb(overrides: Partial<FakeDb> = {}): FakeDb {
@@ -55,6 +69,7 @@ export function createFakeDb(overrides: Partial<FakeDb> = {}): FakeDb {
     products: [],
     nextId: 100,
     calls: { create: 0, update: 0, forgotPassword: [] },
+    sentEmails: [],
     ...overrides,
   }
 }
@@ -102,6 +117,13 @@ interface UpdateArgs {
 
 interface ForgotPasswordArgs {
   data: { email: string }
+}
+
+interface SendEmailArgs {
+  to?: unknown
+  subject?: unknown
+  html?: unknown
+  text?: unknown
 }
 
 function asString(value: unknown, fallback = ''): string {
@@ -171,6 +193,27 @@ export function createFakePayload(db: FakeDb): Payload {
       const token = `token-${user.id}-${db.calls.forgotPassword.length}`
       user.resetPasswordToken = token
       return token
+    },
+    /**
+     * A Payload `sendEmail`-je: a visszatérési értéket az adapter dönti el.
+     * A projekt saját adaptere SOSEM dob, hanem `{ ok: false }` SendResultot ad
+     * — a fake mindkét hibaágat tudja szimulálni (dobás és `ok: false`).
+     */
+    sendEmail: async (args: SendEmailArgs) => {
+      const to = asString(args.to)
+      if (db.throwEmailFor?.includes(to)) {
+        throw new Error('levelező-szolgáltató elérhetetlen (teszt)')
+      }
+      if (db.rejectEmailFor?.includes(to)) {
+        return { ok: false, provider: 'resend', retryable: true, error: 'HTTP 422 (teszt)' }
+      }
+      db.sentEmails.push({
+        to,
+        subject: asString(args.subject),
+        html: asString(args.html),
+        text: asString(args.text),
+      })
+      return { ok: true, provider: 'resend', id: `msg-${db.sentEmails.length}` }
     },
   }
 
