@@ -21,6 +21,7 @@ import { Testimonials } from './collections/Testimonials'
 import { Users } from './collections/Users'
 import { WebhookEvents } from './collections/WebhookEvents'
 import { jobsConfig } from './jobs'
+import { registerBarionWebhookProcessor } from './lib/barion-callback/process-callback'
 import { contactStaffEmail, kineticareEmailAdapter, sendMail, usersAuthEmails } from './lib/email'
 import { logger } from './lib/logger'
 import { adminGroups } from './plugins/admin-groups'
@@ -195,6 +196,36 @@ function registerPoolErrorHandler(payload: Payload): void {
 }
 
 /**
+ * A Barion webhook-feldolgozó DETERMINISZTIKUS regisztrációja (M-15).
+ *
+ * A `registerWebhookProcessor` egy folyamaton belüli Map — a webhook-retry job
+ * (src/jobs/tasks/webhook-retry.ts) csak REGISZTRÁLT feldolgozójú eseményeket
+ * futtat újra, a többit `skipped`-ként átugorja. A regisztráció eddig kizárólag
+ * a callback-route MODUL-BETÖLTÉSÉNEK mellékhatásaként futott le
+ * (src/app/(frontend)/api/barion/callback/route.ts). A Next.js route-modulokat
+ * viszont lustán, az első kéréskor tölti be: ha egy példány elindul, és a
+ * webhook-retry cron előbb fut le, mint ahogy bármilyen Barion-callback
+ * megérkezne arra a példányra, a feldolgozó nincs regisztrálva — az elhasalt
+ * események némán kimaradnak a retryból. Ugyanez a rés az order-poll/retry
+ * útvonalon: azok NEM töltik be a callback-route-ot.
+ *
+ * Az `onInit` viszont a Payload minden inicializálásakor lefut — ugyanabban a
+ * folyamatban, amelyben a jobs autoRun (jobsConfig) is elindul —, ezért ez a
+ * regisztráció determinisztikus horgonya. A `registerWebhookProcessor` egy
+ * Map.set, tehát idempotens: a route-ban maradó hívás (ott a callback saját
+ * útvonala szempontjából dokumentálja a bekötést) ártalmatlanul felülírja
+ * ugyanezzel az értékkel.
+ *
+ * Tisztán memóriabeli művelet: nem hívhat adatbázist és nem dobhat, ezért — a
+ * pool-error handlerhez hasonlóan — a seedelő lépések ELŐTT, azoktól függetlenül
+ * fut le.
+ */
+function registerWebhookProcessors(payload: Payload): void {
+  registerBarionWebhookProcessor(async () => payload)
+  logger.debug('Barion webhook-feldolgozó regisztrálva (onInit)')
+}
+
+/**
  * Kezdőlap-alapállapot indulásnál: a hiányzó képFÁJLOK visszatöltése, majd a
  * landing tartalmi képei + a `kezdolap` alap-szekciósora (src/lib/home-seed.ts).
  * Az ensureContactForm mintája: telepítési előfeltétel, ezért minden bootnál
@@ -257,11 +288,17 @@ async function ensureContactForm(payload: Payload): Promise<void> {
  * üzemeltetési tanulságában leírt éles hiba: a Railway privát hálóján elvágott
  * tétlen kapcsolat kezeletlen `error` eseménye `uncaughtException`-ként viszi
  * el a Next.js szerverfolyamatot. A három lépésnek nincs köze egymáshoz, ezért
- * itt látszik is, hogy külön dolog: pool-handler, kezdőlap-alapállapot
- * (képek, szekciósor, kiemelt vélemények), majd a „Kapcsolat" űrlap.
+ * itt látszik is, hogy külön dolog: pool-handler, webhook-feldolgozók,
+ * kezdőlap-alapállapot (képek, szekciósor, kiemelt vélemények), majd a
+ * „Kapcsolat" űrlap.
+ *
+ * A két memóriabeli regisztráció (pool-handler, webhook-feldolgozók) MEGELŐZI a
+ * DB-t érintő, best-effort seedelést: azok hibája (pl. migráció előtti adatbázis)
+ * így nem viheti magával a regisztrációkat.
  */
 async function onInit(payload: Payload): Promise<void> {
   registerPoolErrorHandler(payload)
+  registerWebhookProcessors(payload)
   await ensureHomeBaseline(payload)
   await ensureContactForm(payload)
 }
