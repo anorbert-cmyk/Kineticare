@@ -132,6 +132,14 @@
   ```
   Megjegyzés: a CSP első stagingen Report-Only-ként is érdemes (`Content-Security-Policy-Report-Only`), a karcolás-mentes bevezetéshez.
 
+  > ⚠️ **A fenti kódrészlet TÖRTÉNETI — ne másold vissza.** A benne szereplő
+  > `https://customer-*.cloudflarestream.com` **érvénytelen CSP-forrás** (a joker
+  > csak a legbaloldalibb, TELJES címke helyén állhat), a böngésző némán eldobja;
+  > a `media-src`-ből pedig hiányzik a `blob:`, ami nélkül a kezdőlap filmsávja
+  > nem indul el. A hatályos, javított és egységtesztelt politika:
+  > **`src/lib/security/csp.ts`** — indoklás és böngészős bizonyíték:
+  > [`docs/video-stream-keszenlet.md`](video-stream-keszenlet.md) 6. pont.
+
 ### 🟡 YELLOW A07 — A jelszó-minimumhossz csak a kliensben van állítva
 - **Hely:** `src/lib/auth-client.ts:76` („…min. 12 karakter" üzenet) vs. `src/collections/Users.ts` (nincs szerveroldali szabály)
 - **Leírás:** a regisztrációs hibaüzenet 12 karakteres minimumot ígér, de a Users collectionben nincs szerveroldali `passwordMinLength` — a kliens-üzenet és a tényleges szabály eltérhet. (A RED#2 javítókódja ezt egyben megoldja.)
