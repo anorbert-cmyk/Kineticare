@@ -1348,6 +1348,10 @@ export interface Product {
    */
   category: number | Category;
   /**
+   * Ez dönti el, hogy a Kurzusok oldalon melyik sávban jelenik meg: „Otthoni gyakorlóknak" vagy „Szakembereknek". Ha üresen marad, az otthoni sávba kerül.
+   */
+  audience?: ('laikus' | 'szakember') | null;
+  /**
    * A Cloudflare Stream videó azonosítója az ingyenes előzeteshez. Ha nem tudod, hagyd üresen.
    */
   previewVideoStreamId?: string | null;
@@ -2780,6 +2784,7 @@ export interface ProductsSelect<T extends boolean = true> {
   seoDescription?: T;
   ogImage?: T;
   category?: T;
+  audience?: T;
   previewVideoStreamId?: T;
   videos?:
     | T

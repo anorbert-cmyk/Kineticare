@@ -318,6 +318,24 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       },
     },
     {
+      // Kétirányú kurzusstruktúra: a kínálat két ága. NEM kötelező, mert a mező
+      // bevezetése előtti sorokban NULL marad — a felület minden nem-'szakember'
+      // értéket a laikus ágba sorol (src/lib/course-audience.ts).
+      name: 'audience',
+      type: 'select',
+      label: 'Kinek szól',
+      defaultValue: 'laikus',
+      options: [
+        { label: 'Otthoni gyakorlóknak', value: 'laikus' },
+        { label: 'Szakembereknek', value: 'szakember' },
+      ],
+      admin: {
+        position: 'sidebar',
+        description:
+          'Ez dönti el, hogy a Kurzusok oldalon melyik sávban jelenik meg: „Otthoni gyakorlóknak" vagy „Szakembereknek". Ha üresen marad, az otthoni sávba kerül.',
+      },
+    },
+    {
       name: 'previewVideoStreamId',
       type: 'text',
       label: 'Bemutató videó azonosítója',
