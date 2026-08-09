@@ -1,6 +1,7 @@
 import type { Payload } from 'payload'
 
 import type { Order, Product, User } from '../../payload-types'
+import { withAdvisoryLock } from '../advisory-lock'
 import { BARION_DEFAULT_PAYMENT_WINDOW, BarionApiError, startPayment } from '../barion'
 import { logger, type Logger } from '../logger'
 
@@ -12,12 +13,16 @@ import { logger, type Logger } from '../logger'
  * A pénzügyi főlánc első láncszeme:
  *  1. input-validáció (productId, quantity, opcionális kliens-ár, waiver),
  *  2. termék- és státuszellenőrzés (archived/draft nem megvásárolható),
- *  3. duplavásárlás-blokk (paid vagy aktív payment_pending → 409),
- *  4. rendelés létrehozása `payment_pending` státusszal — az árakat KIZÁRÓLAG
+ *  3. ADVISORY-ZÁR alatt (S2): duplavásárlás-blokk (paid vagy aktív
+ *     payment_pending → 409) ÉS a rendelés létrehozása — a kettő együtt egy
+ *     „check-then-act" pár, zár nélkül két párhuzamos kérés MINDKETTŐ
+ *     ellenőrzése átmegy, és két aktív rendelés jön létre ugyanarra a kurzusra,
+ *  4. a rendelés `payment_pending` státusszal jön létre — az árakat KIZÁRÓLAG
  *     szerver-oldalon olvassuk és az orders beforeChange-hookja SNAPSHOTOLJA
  *     (orderIntegrityBeforeChange); a kliens által küldött ár sosem forrás,
  *  5. Barion Payment/Start a tesztelt src/lib/barion klienssel
- *     (PaymentRequestId = orderNumber → Barion-oldali idempotencia),
+ *     (PaymentRequestId = orderNumber → Barion-oldali idempotencia) — ez a
+ *     hálózati hívás SZÁNDÉKOSAN a záron KÍVÜL fut,
  *  6. barionPaymentId + barionPaymentRequestId mentése a rendelésre.
  *
  * A rendelés `paid`-re állítása NEM itt történik: az kizárólag a
@@ -181,6 +186,50 @@ async function assertNoDuplicatePurchase(
   }
 }
 
+/**
+ * Rendelésszám-ütközés (23505) felismerése.
+ *
+ * A rendelésszámot az orders beforeChange-hookja a „legnagyobb meglévő + 1"
+ * mintával képzi (src/lib/order-number.ts), ami két egyidejű create esetén
+ * ugyanazt az értéket adhatja. A végső garancia az orderNumber UNIQUE indexe:
+ * a vesztes ág 23505-tel bukik. Ez NEM technikai hiba (500), hanem egy
+ * újrapróbálható ütközés.
+ *
+ * ELSŐDLEGES jel a `pg` hibaobjektum strukturált `constraint` mezője (ez
+ * pontosan megmondja, MELYIK kényszer sérült); FALLBACK a 23505-ös kód +
+ * a hibaszövegben szereplő oszlopnév — így egy másik unique-ütközést (pl.
+ * barionPaymentId) nem próbálunk vaktában újra.
+ */
+const ORDER_NUMBER_CONFLICT_MAX_ATTEMPTS = 4
+
+function isOrderNumberConflict(error: unknown): boolean {
+  let current: unknown = error
+  const seen = new Set<unknown>()
+  while (typeof current === 'object' && current !== null && !seen.has(current)) {
+    seen.add(current)
+    const candidate = current as {
+      code?: unknown
+      constraint?: unknown
+      detail?: unknown
+      message?: unknown
+      cause?: unknown
+    }
+    if (typeof candidate.constraint === 'string' && candidate.constraint.includes('order_number')) {
+      return true
+    }
+    if (candidate.code === '23505') {
+      const text = [candidate.detail, candidate.message]
+        .filter((part): part is string => typeof part === 'string')
+        .join(' ')
+      if (text.includes('order_number') || text.includes('orderNumber')) {
+        return true
+      }
+    }
+    current = candidate.cause
+  }
+  return false
+}
+
 /** Vevő-snapshot a rendelésre (számlázási/audit célokra, szerver-oldali adatokból). */
 function buildCustomerSnapshot(user: User): Record<string, unknown> {
   return {
@@ -221,28 +270,71 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
   }
   assertPurchasable(product, priceHuf)
 
-  await assertNoDuplicatePurchase(payload, user.id, productId)
-
   // Rendelés létrehozása: az árakat és a rendelésszámot az orders
   // beforeChange-hookja tölti szerver-oldali (DB) forrásból — a kliens
   // sem árat, sem snapshotot nem adhat meg (a mezők access-e is zárt).
   const nowIso = new Date().toISOString()
-  const order = (await payload.create({
-    collection: 'orders',
-    data: {
-      customer: user.id,
-      customerEmail: user.email ?? null,
-      status: 'payment_pending',
-      currency: 'HUF',
-      items: [{ product: productId, quantity }],
-      consentWithdrawalWaiver: true,
-      consentWithdrawalWaiverAt: nowIso,
-      customerSnapshot: buildCustomerSnapshot(user),
-      ...(options.ipAddress ? { ipAddress: options.ipAddress } : {}),
+  const createOrderOnce = async (): Promise<Order> =>
+    (await payload.create({
+      collection: 'orders',
+      data: {
+        customer: user.id,
+        customerEmail: user.email ?? null,
+        status: 'payment_pending',
+        currency: 'HUF',
+        items: [{ product: productId, quantity }],
+        consentWithdrawalWaiver: true,
+        consentWithdrawalWaiverAt: nowIso,
+        customerSnapshot: buildCustomerSnapshot(user),
+        ...(options.ipAddress ? { ipAddress: options.ipAddress } : {}),
+      },
+      overrideAccess: true,
+      depth: 0,
+    })) as Order
+
+  /**
+   * A KRITIKUS SZAKASZ: duplavásárlás-ellenőrzés + rendelés-létrehozás egyben,
+   * felhasználó–termék páronkénti advisory-zár alatt (processzek között is
+   * soros). A zár a legszűkebb hatókörre szól, hogy a párhuzamos, MÁS terméket
+   * vagy MÁS vevőt érintő checkout ne várakozzon.
+   */
+  const order = await withAdvisoryLock(
+    payload,
+    `checkout:${user.id}:${productId}`,
+    async () => {
+      await assertNoDuplicatePurchase(payload, user.id, productId)
+
+      let lastConflict: unknown
+      for (let attempt = 1; attempt <= ORDER_NUMBER_CONFLICT_MAX_ATTEMPTS; attempt += 1) {
+        try {
+          return await createOrderOnce()
+        } catch (error) {
+          if (!isOrderNumberConflict(error)) {
+            throw error
+          }
+          lastConflict = error
+          log.warn('checkout-start: rendelésszám-ütközés (23505) — újrapróbálás', {
+            attempt,
+            maxAttempts: ORDER_NUMBER_CONFLICT_MAX_ATTEMPTS,
+            userId: user.id,
+            productId,
+          })
+        }
+      }
+
+      log.error('checkout-start: a rendelésszám-ütközés újrapróbálásai kimerültek', {
+        attempts: ORDER_NUMBER_CONFLICT_MAX_ATTEMPTS,
+        userId: user.id,
+        productId,
+        error: lastConflict instanceof Error ? lastConflict.message : String(lastConflict),
+      })
+      throw new CheckoutError(
+        503,
+        'A rendelés létrehozása most nem sikerült a nagy terhelés miatt. Kérjük, próbáld újra néhány másodperc múlva.',
+      )
     },
-    overrideAccess: true,
-    depth: 0,
-  })) as Order
+    log,
+  )
 
   const orderNumber = order.orderNumber
   if (!orderNumber) {

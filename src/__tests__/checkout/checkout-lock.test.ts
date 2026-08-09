@@ -1,0 +1,333 @@
+import type { Payload } from 'payload'
+import { afterEach, beforeAll, afterAll, describe, expect, it, vi } from 'vitest'
+
+import { CheckoutError, startCheckout } from '../../lib/checkout/start-checkout'
+import type { Order, Product, User } from '../../payload-types'
+
+/**
+ * S2 — checkout-zár (TOCTOU) + rendelésszám-újrapróbálás.
+ *
+ * (1) ZÁR: az `assertNoDuplicatePurchase` + `payload.create` pár klasszikus
+ *     check-then-act. Zár nélkül két párhuzamos kérés MINDKETTŐ ellenőrzése
+ *     átmegy (a másik rendelése még nem létezik), és két aktív payment_pending
+ *     rendelés jön létre ugyanarra a kurzusra. A teszt a valódi advisory-zár
+ *     helyére egy kulcsonkénti, in-memory mutexet tesz, és azt igazolja, hogy
+ *     a védett szakaszok NEM lapolódnak át — így a második kérés már látja az
+ *     elsőt, és 409-cel elhasal.
+ *
+ * (2) A Barion Payment/Start a záron KÍVÜL fut: a hálózati hívás nem tarthatja
+ *     a zárat (a pool idle_in_transaction_session_timeout-ja 60 mp).
+ *
+ * (3) RETRY: a rendelésszám „max + 1" mintája egyidejű create-eknél 23505-öt
+ *     adhat; ez újrapróbálandó ütközés, nem 500-as technikai hiba.
+ */
+
+// DUMMY érték, egyértelműen jelölve — NEM valódi Barion POSKey.
+const DUMMY_POS_KEY = 'DUMMY-POSKEY-NEM-VALODI-TITOK'
+const DUMMY_PAYMENT_ID = '11111111-2222-3333-4444-555555555555'
+const ORDER_NUMBER = 'KH-2026-000123'
+const GATEWAY_URL = `https://secure.test.barion.com/Pay?id=${DUMMY_PAYMENT_ID}`
+
+/**
+ * A valódi advisory-zár helyére kulcsonkénti in-memory mutex kerül. Így a
+ * sorosítás determinisztikusan megfigyelhető, valódi Postgres nélkül.
+ */
+const lockState = {
+  /** A védett szakaszok belépés/kilépés naplója (kulccsal). */
+  events: [] as string[],
+  /** Az egyidejűleg futó védett szakaszok maximuma — soros zárnál mindig 1. */
+  maxConcurrent: 0,
+  current: 0,
+  chains: new Map<string, Promise<unknown>>(),
+  reset(): void {
+    this.events = []
+    this.maxConcurrent = 0
+    this.current = 0
+    this.chains = new Map()
+  },
+}
+
+vi.mock('../../lib/advisory-lock', () => ({
+  withAdvisoryLock: async <T>(
+    _payload: unknown,
+    lockKey: string,
+    fn: () => Promise<T>,
+  ): Promise<T> => {
+    const previous = lockState.chains.get(lockKey) ?? Promise.resolve()
+    const run = previous.then(async () => {
+      lockState.events.push(`enter:${lockKey}`)
+      lockState.current += 1
+      lockState.maxConcurrent = Math.max(lockState.maxConcurrent, lockState.current)
+      try {
+        return await fn()
+      } finally {
+        lockState.current -= 1
+        lockState.events.push(`exit:${lockKey}`)
+      }
+    })
+    // A láncot a HIBÁS ág se törje meg: a következő várakozó akkor is induljon.
+    lockState.chains.set(
+      lockKey,
+      run.then(
+        () => undefined,
+        () => undefined,
+      ),
+    )
+    return run as Promise<T>
+  },
+}))
+
+const mockUser = {
+  id: 7,
+  email: 'vevo@example.test',
+  name: 'Minta Mari',
+  role: 'customer',
+} as unknown as User
+
+const publishedProduct = {
+  id: 42,
+  sku: 'KURZUS-ALAP',
+  status: 'published',
+  priceInHUF: 5000,
+  priceInHUFEnabled: true,
+  shortDescription: 'Alap kurzus',
+} as unknown as Product
+
+const fetchMock = vi.fn()
+vi.stubGlobal('fetch', fetchMock)
+
+function barionStartSuccess(): Response {
+  return new Response(
+    JSON.stringify({
+      PaymentId: DUMMY_PAYMENT_ID,
+      PaymentRequestId: ORDER_NUMBER,
+      Status: 'Prepared',
+      GatewayUrl: GATEWAY_URL,
+      Transactions: [{ TransactionId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }],
+      Errors: [],
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  )
+}
+
+/** Postgres unique-violation a `pg` hibaobjektum alakjában (constraint mezővel). */
+function orderNumberConflict(withConstraint = true): Error {
+  return Object.assign(new Error('duplicate key value violates unique constraint'), {
+    code: '23505',
+    ...(withConstraint
+      ? { constraint: 'orders_order_number_idx' }
+      : { detail: 'Key (order_number)=(KH-2026-000123) already exists.' }),
+  })
+}
+
+interface StoredOrder {
+  id: number
+  status: string
+  customer: number
+  productId: number
+  createdAt: string
+}
+
+/**
+ * ÁLLAPOTTARTÓ Payload-mock: a létrehozott rendeléseket megőrzi, és a
+ * duplikáció-ellenőrző find MÁR LÁTJA őket. Enélkül a sorosítás hatása nem
+ * lenne megfigyelhető.
+ */
+function createStatefulPayload(options: { createFailures?: Error[] } = {}) {
+  const orders: StoredOrder[] = []
+  const failures = [...(options.createFailures ?? [])]
+  let nextId = 100
+  const calls = { create: 0, find: 0 }
+
+  const payload = {
+    findByID: vi.fn(async () => publishedProduct),
+    find: vi.fn(async ({ where }: { where?: unknown }) => {
+      calls.find += 1
+      const json = JSON.stringify(where ?? {})
+      const wantedStatus = json.includes('payment_pending') ? 'payment_pending' : 'paid'
+      const matched = orders.filter((order) => order.status === wantedStatus)
+      return { docs: matched, totalDocs: matched.length }
+    }),
+    create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+      calls.create += 1
+      const failure = failures.shift()
+      if (failure) {
+        throw failure
+      }
+      const items = data.items as Array<{ product: number; quantity: number }>
+      const stored: StoredOrder = {
+        id: (nextId += 1),
+        status: String(data.status),
+        customer: Number(data.customer),
+        productId: items[0]?.product ?? 0,
+        createdAt: new Date().toISOString(),
+      }
+      orders.push(stored)
+      return {
+        ...data,
+        id: stored.id,
+        orderNumber: ORDER_NUMBER,
+        totalHufSnapshot: 5000,
+        items: [
+          { product: stored.productId, quantity: 1, titleSnapshot: 'KURZUS-ALAP', priceHufSnapshot: 5000 },
+        ],
+      } as unknown as Order
+    }),
+    update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => data),
+  }
+
+  return { payload: payload as unknown as Payload, orders, calls }
+}
+
+const savedEnv: Record<string, string | undefined> = {}
+
+beforeAll(() => {
+  for (const key of [
+    'BARION_API_URL',
+    'BARION_PAYEE_EMAIL',
+    'BARION_POSKEY_TEST',
+    'NEXT_PUBLIC_SERVER_URL',
+  ]) {
+    savedEnv[key] = process.env[key]
+  }
+  process.env.BARION_API_URL = 'https://api.test.barion.com'
+  process.env.BARION_PAYEE_EMAIL = 'payee@example.test'
+  process.env.BARION_POSKEY_TEST = DUMMY_POS_KEY
+  process.env.NEXT_PUBLIC_SERVER_URL = 'https://shop.example.test'
+})
+
+afterAll(() => {
+  for (const [key, value] of Object.entries(savedEnv)) {
+    if (value === undefined) {
+      delete process.env[key]
+    } else {
+      process.env[key] = value
+    }
+  }
+})
+
+afterEach(() => {
+  fetchMock.mockReset()
+  lockState.reset()
+})
+
+const happyInput = { productId: 42, consentWithdrawalWaiver: true }
+
+describe('checkout-zár — sorosítás (TOCTOU)', () => {
+  it('két párhuzamos kérés: a védett szakaszok NEM lapolódnak át, csak EGY rendelés jön létre', async () => {
+    fetchMock.mockResolvedValue(barionStartSuccess())
+    const { payload, orders, calls } = createStatefulPayload()
+
+    const results = await Promise.allSettled([
+      startCheckout({ payload, user: mockUser, input: happyInput }),
+      startCheckout({ payload, user: mockUser, input: happyInput }),
+    ])
+
+    // A zár soros: egyszerre legfeljebb egy védett szakasz futott.
+    expect(lockState.maxConcurrent).toBe(1)
+    expect(lockState.events).toEqual([
+      'enter:checkout:7:42',
+      'exit:checkout:7:42',
+      'enter:checkout:7:42',
+      'exit:checkout:7:42',
+    ])
+
+    // Pontosan EGY rendelés jött létre; a második kérés 409-cel elhasalt.
+    expect(calls.create).toBe(1)
+    expect(orders).toHaveLength(1)
+    const fulfilled = results.filter((result) => result.status === 'fulfilled')
+    const rejected = results.filter((result) => result.status === 'rejected')
+    expect(fulfilled).toHaveLength(1)
+    expect(rejected).toHaveLength(1)
+    const reason = (rejected[0] as PromiseRejectedResult).reason as CheckoutError
+    expect(reason).toBeInstanceOf(CheckoutError)
+    expect(reason.status).toBe(409)
+    expect(reason.message).toContain('folyamatban van egy fizetés')
+  })
+
+  it('a zár kulcsa felhasználó–termék páronkénti (más termék nem várakozik)', async () => {
+    fetchMock.mockResolvedValue(barionStartSuccess())
+    const { payload } = createStatefulPayload()
+
+    await startCheckout({ payload, user: mockUser, input: happyInput })
+
+    expect(lockState.events[0]).toBe('enter:checkout:7:42')
+  })
+
+  it('a Barion Payment/Start a záron KÍVÜL fut (a zár nem tart hálózati hívás alatt)', async () => {
+    let fetchDuringLock = false
+    fetchMock.mockImplementation(async () => {
+      fetchDuringLock = lockState.current > 0
+      return barionStartSuccess()
+    })
+    const { payload } = createStatefulPayload()
+
+    await startCheckout({ payload, user: mockUser, input: happyInput })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchDuringLock).toBe(false)
+    // A védett szakasz már lezárult, mire a Barion-hívás elindult.
+    expect(lockState.events).toEqual(['enter:checkout:7:42', 'exit:checkout:7:42'])
+  })
+})
+
+describe('checkout — rendelésszám-ütközés (23505) újrapróbálása', () => {
+  it('egyetlen ütközés után a második kísérlet sikerül (a hívó nem lát hibát)', async () => {
+    fetchMock.mockResolvedValue(barionStartSuccess())
+    const { payload, calls, orders } = createStatefulPayload({
+      createFailures: [orderNumberConflict()],
+    })
+
+    const result = await startCheckout({ payload, user: mockUser, input: happyInput })
+
+    expect(result).toEqual({ orderNumber: ORDER_NUMBER, gatewayUrl: GATEWAY_URL })
+    expect(calls.create).toBe(2)
+    expect(orders).toHaveLength(1)
+  })
+
+  it('constraint mező nélkül is felismeri (fallback: 23505 + „order_number" a szövegben)', async () => {
+    fetchMock.mockResolvedValue(barionStartSuccess())
+    const { payload, calls } = createStatefulPayload({
+      createFailures: [orderNumberConflict(false)],
+    })
+
+    const result = await startCheckout({ payload, user: mockUser, input: happyInput })
+
+    expect(result.orderNumber).toBe(ORDER_NUMBER)
+    expect(calls.create).toBe(2)
+  })
+
+  it('kimerülés (4 kísérlet) → magyar hibaüzenet, a Barion NEM hívódik', async () => {
+    const { payload, calls } = createStatefulPayload({
+      createFailures: [
+        orderNumberConflict(),
+        orderNumberConflict(),
+        orderNumberConflict(),
+        orderNumberConflict(),
+        orderNumberConflict(),
+      ],
+    })
+
+    const promise = startCheckout({ payload, user: mockUser, input: happyInput })
+
+    await expect(promise).rejects.toBeInstanceOf(CheckoutError)
+    await expect(promise).rejects.toMatchObject({ status: 503 })
+    await expect(promise).rejects.toThrowError(/próbáld újra néhány másodperc múlva/)
+    expect(calls.create).toBe(4)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('MÁS unique-ütközés (nem a rendelésszámé) NEM próbálkozik újra — azonnal felszínre kerül', async () => {
+    const foreignConflict = Object.assign(new Error('duplicate key value violates unique constraint'), {
+      code: '23505',
+      constraint: 'orders_barion_payment_id_idx',
+    })
+    const { payload, calls } = createStatefulPayload({ createFailures: [foreignConflict] })
+
+    await expect(
+      startCheckout({ payload, user: mockUser, input: happyInput }),
+    ).rejects.toThrowError(/duplicate key/)
+    expect(calls.create).toBe(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
