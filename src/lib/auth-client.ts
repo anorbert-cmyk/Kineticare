@@ -7,6 +7,10 @@
  * - POST /api/users { email, password, name, billingName?, ... } → { doc } (regisztráció);
  * - POST /api/users/forgot-password { email } → 200 (mindig 200, ne szivárogjon);
  * - POST /api/users/reset-password { token, password } → { user };
+ *   ezt az útvonalat a saját, jelszó-politikát kikényszerítő handler szolgálja
+ *   ki (src/lib/security/reset-password-route.ts), amely a politika átmenetele
+ *   után a Payload beépített végpontjára delegál — a kérés és a sikeres válasz
+ *   alakja ezért változatlan;
  * - GET /api/users/me → { user } (a session-ből).
  *
  * A kliens a fetch injektálhatóságával tesztelhető (lásd a teszteket).
@@ -120,6 +124,10 @@ export async function forgotPassword(
   }
 }
 
+/** Lejárt vagy érvénytelen visszaállító token — magyar üzenet a Payload angol szövege helyett. */
+export const RESET_LINK_INVALID_MESSAGE =
+  'A jelszó-visszaállító link lejárt vagy érvénytelen. Kérj újat.'
+
 export async function resetPassword(
   input: { token: string; password: string },
   fetchImpl: typeof fetch = fetch,
@@ -132,10 +140,16 @@ export async function resetPassword(
       credentials: 'include',
     })
     if (!response.ok) {
-      const message = response.status === 400
-        ? 'A jelszó-visszaállító link lejárt vagy érvénytelen. Kérj újat.'
-        : await parseErrorMessage(response, GENERIC_AUTH_ERROR)
-      return { ok: false, message }
+      // A lejárt/érvénytelen tokent a Payload 403-mal és ANGOL szöveggel
+      // utasítja el — azt itt fordítjuk magyarra.
+      if (response.status === 403) {
+        return { ok: false, message: RESET_LINK_INVALID_MESSAGE }
+      }
+      // A 400 a saját végpont (src/lib/security/reset-password-route.ts)
+      // jelszó-politika-hibája, MAGYAR üzenettel: azt kell megmutatni, nem
+      // felülírni. A tartalék szöveg csak akkor kell, ha a törzs olvashatatlan.
+      const fallback = response.status === 400 ? RESET_LINK_INVALID_MESSAGE : GENERIC_AUTH_ERROR
+      return { ok: false, message: await parseErrorMessage(response, fallback) }
     }
     return { ok: true }
   } catch {

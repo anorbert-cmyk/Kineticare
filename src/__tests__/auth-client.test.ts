@@ -6,6 +6,7 @@ import {
   forgotPassword,
   resetPassword,
   GENERIC_AUTH_ERROR,
+  RESET_LINK_INVALID_MESSAGE,
 } from '../lib/auth-client'
 
 describe('loginUser', () => {
@@ -77,5 +78,43 @@ describe('resetPassword', () => {
     const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
     const result = await resetPassword({ token: 'valid', password: 'x'.repeat(12) }, mockFetch as never)
     expect(result.ok).toBe(true)
+  })
+
+  it('C1 — a 400-as jelszó-politika üzenetet a SZERVERTŐL veszi át, nem írja felül', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          errors: [{ message: 'A jelszónak tartalmaznia kell legalább egy nagybetűt.' }],
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    const result = await resetPassword({ token: 'valid', password: 'x'.repeat(12) }, mockFetch as never)
+    expect(result.ok).toBe(false)
+    expect(result.message).toBe('A jelszónak tartalmaznia kell legalább egy nagybetűt.')
+  })
+
+  it('C1 — a Payload 403-as (angol) „érvénytelen token" hibája magyarul jelenik meg', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ errors: [{ message: 'Token is either invalid or has expired.' }] }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    const result = await resetPassword({ token: 'lejart', password: 'x'.repeat(12) }, mockFetch as never)
+    expect(result.ok).toBe(false)
+    expect(result.message).toBe(RESET_LINK_INVALID_MESSAGE)
+  })
+
+  it('C1 — a 429 (IP-alapú korlát) üzenete átjön', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ errors: [{ message: 'Túl sok próbálkozás. Kérjük, próbáld újra pár perc múlva.' }] }),
+        { status: 429, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    const result = await resetPassword({ token: 'valid', password: 'x'.repeat(12) }, mockFetch as never)
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('Túl sok próbálkozás')
   })
 })

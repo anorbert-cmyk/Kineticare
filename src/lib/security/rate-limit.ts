@@ -38,8 +38,8 @@
  * ## Miért a route-rétegben, és nem a middleware-ben
  *
  * A limiter a route-handlerekbe van bekötve (Payload REST catch-all + a
- * checkout-start handler), a `src/middleware.ts` változatlanul csak request
- * ID-t ad. Indoklás:
+ * checkout-start és a reset-password handler), a `src/middleware.ts`
+ * változatlanul csak request ID-t ad. Indoklás:
  *
  *  - A Next middleware alapértelmezésben az edge-runtime homokozójában fut; a
  *    modul-szintű `Map` élettartamára és megosztására ott nincs garancia —
@@ -138,10 +138,12 @@ const ROUTE_CLASS_BY_PATH = new Map<string, RateLimitedRouteClass>([
   // Payload REST (a `(payload)/api/[...slug]` catch-all szolgálja ki):
   ['/api/users', 'registration'],
   ['/api/users/forgot-password', 'password-forgot'],
-  ['/api/users/reset-password', 'password-reset'],
   ['/api/form-submissions', 'form-submission'],
-  // Saját route-handler:
+  // Saját route-handlerek (maguk hívják a `checkRequestRateLimit`-et):
   ['/api/checkout/start', 'checkout-start'],
+  // A jelszó-visszaállítást a Payload REST helyett a saját, jelszó-politikát
+  // kikényszerítő végpont szolgálja ki (src/lib/security/reset-password-route.ts).
+  ['/api/users/reset-password', 'password-reset'],
 ])
 
 /**

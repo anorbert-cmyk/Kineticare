@@ -6,9 +6,19 @@ import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
 import { resetPassword } from '../../lib/auth-client'
+import {
+  formatPasswordPolicyErrors,
+  validatePasswordStrength,
+} from '../../lib/security/password-policy'
 
 /**
  * ResetPasswordForm — új jelszó beállítása a visszaállító tokennel.
+ *
+ * A kliensoldali ellenőrzés UGYANAZT a `validatePasswordStrength` függvényt
+ * hívja, amit a végpont is (src/lib/security/reset-password-route.ts), így a
+ * felhasználó pontosan azt a magyar üzenetet látja, amit a szerver adna — csak
+ * hálózati kör nélkül. Az e-mail-szabályt a kliens nem tudja ellenőrizni (a
+ * visszaállító oldalon csak a token van meg, a cím nem), azt a szerver fogja meg.
  */
 export interface ResetPasswordFormProps {
   token: string
@@ -24,8 +34,9 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
-    if (password.length < 12) {
-      setError('A jelszónak legalább 12 karakter hosszúnak kell lennie.')
+    const violations = validatePasswordStrength({ password })
+    if (violations.length > 0) {
+      setError(formatPasswordPolicyErrors(violations))
       return
     }
     if (password !== passwordConfirm) {
@@ -56,7 +67,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
     <form className="kc-auth-form" noValidate onSubmit={handleSubmit}>
       <Field
         autoComplete="new-password"
-        hint="Legalább 12 karakter."
+        hint="Legalább 12 karakter, kisbetűvel, nagybetűvel és számmal."
         label="Új jelszó"
         name="password"
         onChange={(event) => setPassword(event.target.value)}
