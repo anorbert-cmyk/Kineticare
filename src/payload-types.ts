@@ -78,6 +78,7 @@ export interface Config {
     categories: Category;
     testimonials: Testimonial;
     menus: Menu;
+    'course-progress': CourseProgress;
     products: Product;
     carts: Cart;
     orders: Order;
@@ -101,6 +102,7 @@ export interface Config {
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     testimonials: TestimonialsSelect<false> | TestimonialsSelect<true>;
     menus: MenusSelect<false> | MenusSelect<true>;
+    'course-progress': CourseProgressSelect<false> | CourseProgressSelect<true>;
     products: ProductsSelect<false> | ProductsSelect<true>;
     carts: CartsSelect<false> | CartsSelect<true>;
     orders: OrdersSelect<false> | OrdersSelect<true>;
@@ -1510,6 +1512,27 @@ export interface Menu {
   createdAt: string;
 }
 /**
+ * Ki melyik kurzus melyik videóját nézte meg. A rendszer tölti a lejátszóból — kézzel nem szerkeszthető, hibás sor törölhető.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "course-progress".
+ */
+export interface CourseProgress {
+  id: number;
+  user: number | User;
+  product: number | Product;
+  /**
+   * A videó STABIL azonosítója (a CMS-sor id-ja, ennek hiányában a Cloudflare Stream azonosító). Sorszám sosem kerül ide.
+   */
+  videoRef: string;
+  /**
+   * A megjelölés időpontja — kizárólag a szerver állítja.
+   */
+  watchedAt: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * A vásárlók félbehagyott kosarai. Automatikusan keletkezik — ne szerkeszd.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2070,6 +2093,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'menus';
         value: number | Menu;
+      } | null)
+    | ({
+        relationTo: 'course-progress';
+        value: number | CourseProgress;
       } | null)
     | ({
         relationTo: 'products';
@@ -2717,6 +2744,18 @@ export interface MenusSelect<T extends boolean = true> {
   order?: T;
   visible?: T;
   openInNewTab?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "course-progress_select".
+ */
+export interface CourseProgressSelect<T extends boolean = true> {
+  user?: T;
+  product?: T;
+  videoRef?: T;
+  watchedAt?: T;
   updatedAt?: T;
   createdAt?: T;
 }
