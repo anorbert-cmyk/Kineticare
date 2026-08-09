@@ -41,9 +41,17 @@ const REDACTED_VALUE = '[REDACTED]'
 /**
  * Kulcsnevek (kis-nagybetű érzéketlen egyezés), amelyek értéke sosem naplózható.
  * Barion/Számlázz.hu/kártyás integrációk miatt a lista szándékosan bőv.
+ *
+ * Az `email` személyes adat (GDPR), ezért szintén a listán van: a napló
+ * aggregátorba és mentésekbe kerül, a címzett-lista pedig egy kiszivárgott
+ * naplóból közvetlenül támadható (célzott adathalászat, fiók-létezés
+ * megerősítése). Ahol a cím az üzemeltetéshez tényleg kell, ott MASZKOLVA és
+ * MÁS kulcsnéven megy (`maskEmail` → pl. `cimzett`, `identifier`) — így a
+ * naplóban a domain és az első betű látszik, a teljes cím nem.
  */
 const REDACTED_KEYS: ReadonlySet<string> = new Set(
   [
+    'email',
     'password',
     'jelszo',
     'passphrase',
