@@ -308,6 +308,47 @@ export function itemsFromOrder(order: Order): InvoiceItemInput[] | null {
   return mapped
 }
 
+/**
+ * A számla-PDF/vevői fiók URL megbízható hosztjai. A Számlázz.hu a
+ * `<vevoifiokurl>` mezőt szabad szövegként adja vissza — az érték a rendelés
+ * `invoicePdfUrl` mezőjébe kerül, amit a fiók-oldal KATTINTHATÓ linkként jelenít
+ * meg (src/components/account/AccountView.tsx). Ellenőrzés nélkül egy hibás
+ * vagy manipulált válasz tetszőleges címre (akár `javascript:`-re) vinné a
+ * vásárlót a saját rendelés-oldaláról.
+ */
+const TRUSTED_INVOICE_URL_HOST = 'szamlazz.hu'
+
+/** Naplóbarát hoszt-részlet: a teljes URL sosem kerül naplóba. */
+function safeUrlHost(value: string): string {
+  try {
+    return new URL(value).host || 'ismeretlen'
+  } catch {
+    return 'értelmezhetetlen-url'
+  }
+}
+
+/**
+ * Megbízható-e a számlához kapott URL: KIZÁRÓLAG `https` séma, és a hoszt a
+ * `szamlazz.hu` vagy annak aldomainje.
+ *
+ * A hoszt-egyezés nem puszta végződés-vizsgálat, hanem pontos illeszkedés vagy
+ * `.`-tal elválasztott aldomain — különben a `szamlazz.hu.tamado.example` is
+ * átmenne.
+ */
+export function isTrustedInvoicePdfUrl(value: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'https:') {
+    return false
+  }
+  const host = parsed.hostname.toLowerCase()
+  return host === TRUSTED_INVOICE_URL_HOST || host.endsWith(`.${TRUSTED_INVOICE_URL_HOST}`)
+}
+
 export interface IssueInvoiceForOrderDeps {
   payload: Payload
   orderId: number
@@ -396,10 +437,24 @@ export async function issueInvoiceForOrder(
   try {
     const postXml = deps.postXml ?? postInvoiceXml
     const result = await postXml(xml, config)
+    // A vevői fiók URL-jét CSAK allowlist után mentjük — a link a vásárló
+    // fiók-oldalán kattintható. Nem megfelelő URL: nem mentjük (a számla maga
+    // ettől még kiállt), és riasztunk, mert ilyet a Számlázz.hu nem küldhet.
+    const trustedPdfUrl =
+      result.vevoifiokUrl && isTrustedInvoicePdfUrl(result.vevoifiokUrl)
+        ? result.vevoifiokUrl
+        : undefined
+    if (result.vevoifiokUrl && !trustedPdfUrl) {
+      orderLog.warn(
+        'a Számlázz.hu nem megbízható vevői fiók URL-t adott vissza — a link NEM kerül mentésre',
+        // A teljes URL-t szándékosan nem naplózzuk (query-string tokent hordozhat).
+        { urlHost: safeUrlHost(result.vevoifiokUrl) },
+      )
+    }
     await writeOrderInvoicingState(deps.payload, deps.orderId, {
       invoiceStatus: 'issued',
       invoiceNumber: result.szamlaszam,
-      ...(result.vevoifiokUrl ? { invoicePdfUrl: result.vevoifiokUrl } : {}),
+      ...(trustedPdfUrl ? { invoicePdfUrl: trustedPdfUrl } : {}),
     })
     orderLog.info('számla kiállítva', { invoiceNumber: result.szamlaszam })
     return { outcome: 'issued', invoiceNumber: result.szamlaszam }

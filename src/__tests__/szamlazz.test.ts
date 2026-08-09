@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { getSzamlazzConfig, parseAgentResponse } from '../lib/szamlazz/client'
 import {
@@ -6,6 +6,7 @@ import {
   buyerFromOrder,
   computeLineAmounts,
   escapeXml,
+  isTrustedInvoicePdfUrl,
   issueInvoiceForOrder,
   itemsFromOrder,
 } from '../lib/szamlazz/invoice'
@@ -289,6 +290,44 @@ describe('buyerFromOrder / itemsFromOrder', () => {
   })
 })
 
+/**
+ * A `<vevoifiokurl>` a Számlázz.hu válaszából jön (szabad szöveg), és a
+ * rendelés `invoicePdfUrl` mezőjébe kerül, amit a fiók-oldal KATTINTHATÓ
+ * linkként jelenít meg. Ellenőrzés nélkül egy hibás vagy manipulált válasz a
+ * vásárlót a saját rendelés-oldaláról tetszőleges címre vinné.
+ */
+describe('isTrustedInvoicePdfUrl — a számlalink allowlistje', () => {
+  it('elfogadja a szamlazz.hu-t és aldomainjeit, https-sel', () => {
+    for (const url of [
+      'https://szamlazz.hu/vevoifiok/abc',
+      'https://www.szamlazz.hu/vevoifiok/abc',
+      'https://SZAMLAZZ.HU/vevoifiok/abc',
+      'https://barmi.aldomain.szamlazz.hu/x?y=1',
+    ]) {
+      expect(isTrustedInvoicePdfUrl(url), url).toBe(true)
+    }
+  })
+
+  it('elutasít mindent, ami nem https + szamlazz.hu', () => {
+    for (const url of [
+      // Nem https — a link a vásárlónak megy, sima http nem elég.
+      'http://www.szamlazz.hu/vevoifiok/abc',
+      // Végződés-trükk: a hoszt NEM a szamlazz.hu aldomainje.
+      'https://szamlazz.hu.tamado.example/vevoifiok/abc',
+      'https://nemszamlazz.hu/vevoifiok/abc',
+      // Idegen hoszt, illetve nem-URL alakok.
+      'https://tamado.example/szamlazz.hu/abc',
+      'javascript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      '//www.szamlazz.hu/vevoifiok/abc',
+      'vevoifiok/abc',
+      '',
+    ]) {
+      expect(isTrustedInvoicePdfUrl(url), url).toBe(false)
+    }
+  })
+})
+
 describe('issueInvoiceForOrder', () => {
   it('boldog út: pending → issued + invoiceNumber + invoicePdfUrl, a küldött XML szamlaKulsoAzon-ja az orderNumber', async () => {
     const { payload, order } = createMockPayload(createOrder())
@@ -310,6 +349,37 @@ describe('issueInvoiceForOrder', () => {
     expect(order?.invoicePdfUrl).toBe('https://www.szamlazz.hu/vevoifiok/abc')
     expect(sentXml).toHaveLength(1)
     expect(sentXml[0]).toContain(`<szamlaKulsoAzon>${ORDER_NUMBER}</szamlaKulsoAzon>`)
+  })
+
+  it('nem megbízható vevői fiók URL: a számla kiáll, de a LINK nem mentődik + figyelmeztetés', async () => {
+    const { payload, order } = createMockPayload(createOrder())
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const result = await issueInvoiceForOrder({
+        payload,
+        orderId: 101,
+        config: ENABLED_CONFIG,
+        issueDate: '2026-08-04',
+        postXml: async () => ({
+          szamlaszam: 'KIN-2026-8',
+          vevoifiokUrl: 'https://szamlazz.hu.tamado.example/vevoifiok/abc',
+        }),
+      })
+
+      expect(result).toEqual({ outcome: 'issued', invoiceNumber: 'KIN-2026-8' })
+      expect(order?.invoiceStatus).toBe('issued')
+      expect(order?.invoiceNumber).toBe('KIN-2026-8')
+      // A hamis link SEHOL nem kerül a rendelésre.
+      expect(order?.invoicePdfUrl).toBeUndefined()
+
+      const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
+      expect(output).toContain('nem megbízható vevői fiók URL')
+      // A teljes URL nem kerül naplóba (query-string tokent hordozhat) — csak a hoszt.
+      expect(output).toContain('szamlazz.hu.tamado.example')
+      expect(output).not.toContain('/vevoifiok/abc')
+    } finally {
+      logSpy.mockRestore()
+    }
   })
 
   it('idempotens: már issued rendelésnél no-op (nincs új hívás)', async () => {
