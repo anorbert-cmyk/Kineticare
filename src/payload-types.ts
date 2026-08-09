@@ -1649,7 +1649,7 @@ export interface Order {
   stornoStatus?: ('none' | 'pending' | 'storned' | 'failed') | null;
   stornoNumber?: string | null;
   /**
-   * A stornó-kiállítási kísérletek száma (a retry-job számlálója). A rendszer állítja.
+   * A stornó-kiállítási kísérletek száma (legfeljebb 5, utána emberi beavatkozás kell). A rendszer állítja.
    */
   stornoAttempts?: number | null;
   /**
@@ -1673,6 +1673,10 @@ export interface Order {
    * Az utolsó sikertelen helyesbítő-kísérlet hibaüzenete — hibakereséshez.
    */
   correctiveInvoiceLastError?: string | null;
+  /**
+   * Melyik refund-sorszámú helyesbítőhöz tartozik a kísérletszámláló. A rendszer állítja.
+   */
+  correctiveInvoiceAttemptsSeq?: number | null;
   /**
    * A számlázási adatok mentett másolata a rendelés idejéből.
    */
@@ -2935,6 +2939,7 @@ export interface OrdersSelect<T extends boolean = true> {
   correctiveInvoiceSeq?: T;
   correctiveInvoiceAttempts?: T;
   correctiveInvoiceLastError?: T;
+  correctiveInvoiceAttemptsSeq?: T;
   customerSnapshot?: T;
   consentWithdrawalWaiver?: T;
   consentWithdrawalWaiverAt?: T;

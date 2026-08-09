@@ -7,6 +7,7 @@ import * as migration_20260809_123608_kurzus_seo_mezok from './20260809_123608_k
 import * as migration_20260809_140731_kurzus_haladas_es_celkozonseg from './20260809_140731_kurzus_haladas_es_celkozonseg';
 import * as migration_20260809_180031_storno_statusz_es_kurzus_slug from './20260809_180031_storno_statusz_es_kurzus_slug';
 import * as migration_20260809_223906_szamlazz_megfeleles from './20260809_223906_szamlazz_megfeleles';
+import * as migration_20260809_232121_szamlazz_attempts_seq from './20260809_232121_szamlazz_attempts_seq';
 
 export const migrations = [
   {
@@ -52,6 +53,11 @@ export const migrations = [
   {
     up: migration_20260809_223906_szamlazz_megfeleles.up,
     down: migration_20260809_223906_szamlazz_megfeleles.down,
-    name: '20260809_223906_szamlazz_megfeleles'
+    name: '20260809_223906_szamlazz_megfeleles',
+  },
+  {
+    up: migration_20260809_232121_szamlazz_attempts_seq.up,
+    down: migration_20260809_232121_szamlazz_attempts_seq.down,
+    name: '20260809_232121_szamlazz_attempts_seq'
   },
 ];

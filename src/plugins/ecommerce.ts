@@ -727,6 +727,21 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       },
     },
     {
+      // A helyesbítő-számláló BIZONYLAT-szintű kulcsa: melyik refund-sorszámhoz
+      // tartozik a correctiveInvoiceAttempts. Eltérő sorszámú új bizonylatnál a
+      // számláló nulláról indul — a hivatalos „ugyanaz a kérés max. 5×" szabály
+      // kérésenként (bizonylatonként) értendő, nem rendelésenként.
+      name: 'correctiveInvoiceAttemptsSeq',
+      type: 'number',
+      defaultValue: 0,
+      label: 'Helyesbítő-kísérletek refund-sorszáma',
+      admin: {
+        readOnly: true,
+        description:
+          'Melyik refund-sorszámú helyesbítőhöz tartozik a kísérletszámláló. A rendszer állítja.',
+      },
+    },
+    {
       name: 'customerSnapshot',
       type: 'json',
       label: 'Vásárlói adatok a megrendeléskor',
