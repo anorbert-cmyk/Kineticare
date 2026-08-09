@@ -650,7 +650,7 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       admin: {
         readOnly: true,
         description:
-          'A stornó-kiállítási kísérletek száma (a retry-job számlálója). A rendszer állítja.',
+          'A stornó-kiállítási kísérletek száma (legfeljebb 5, utána emberi beavatkozás kell). A rendszer állítja.',
       },
     },
     {
