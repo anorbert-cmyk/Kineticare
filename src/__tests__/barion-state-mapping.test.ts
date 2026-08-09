@@ -1,7 +1,7 @@
 import type { Payload } from 'payload'
 import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
-import type { BarionPaymentStatus } from '../lib/barion/types'
+import type { BarionPaymentStateResponse, BarionPaymentStatus } from '../lib/barion/types'
 import { mapBarionPaymentStatus, type OrderPaymentState } from '../lib/barion/state'
 import { applyBarionStateTransition } from '../lib/order-status/apply-barion-state'
 import { createLogger } from '../lib/logger'
@@ -116,6 +116,21 @@ describe('állapotgép-invariánsok a javított leképezéssel', () => {
     } as unknown as Order
   }
 
+  /**
+   * Nyers GetState-válasz az átmenet-hívásokhoz. A vizsgált ágak nem
+   * paid-átmenetek, így az összeg-assert nem fut — a Total/Currency csak a
+   * kötelező alakot adja (a rendelés-fixtúrával konzisztens értékekkel).
+   */
+  function createState(status: BarionPaymentStatus): BarionPaymentStateResponse {
+    return {
+      PaymentId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeffff0000',
+      Status: status,
+      Total: 19900,
+      Currency: 'HUF',
+      Transactions: [],
+    }
+  }
+
   function mockPayload() {
     const updates: Array<{ collection: string; data: Record<string, unknown> }> = []
     const payload = {
@@ -136,6 +151,7 @@ describe('állapotgép-invariánsok a javított leképezéssel', () => {
       payload,
       order: createOrder('payment_pending'),
       mapped: mapBarionPaymentStatus('Failed'),
+      state: createState('Failed'),
       log,
     })
 
@@ -152,6 +168,7 @@ describe('állapotgép-invariánsok a javított leképezéssel', () => {
       payload,
       order: createOrder('paid'),
       mapped: mapBarionPaymentStatus('Failed'),
+      state: createState('Failed'),
       log,
     })
 
@@ -168,6 +185,7 @@ describe('állapotgép-invariánsok a javított leképezéssel', () => {
       payload,
       order: createOrder('payment_pending'),
       mapped: mapBarionPaymentStatus('PartiallySucceeded'),
+      state: createState('PartiallySucceeded'),
       log,
     })
 
