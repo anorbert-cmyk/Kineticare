@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
+import { sanitizeCmsUrl } from '@/lib/safe-url'
+
 /**
  * Button — a storefront elsődleges akcióeleme.
  *
@@ -61,12 +63,16 @@ export function Button({
     .filter(Boolean)
     .join(' ')
 
-  if (href && !disabled) {
-    if (/^https?:\/\//i.test(href)) {
+  // A CMS-ből jövő href allowlist-szűrése (sec-review): a javascript: és
+  // hasonló sémák helyett letiltott állapot renderelődik (href nélkül).
+  const safeHref = sanitizeCmsUrl(href)
+
+  if (safeHref && !disabled) {
+    if (/^https?:\/\//i.test(safeHref)) {
       return (
         <a
           className={classes}
-          href={href}
+          href={safeHref}
           {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         >
           {children}
@@ -76,7 +82,7 @@ export function Button({
     return (
       <Link
         className={classes}
-        href={href}
+        href={safeHref}
         {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       >
         {children}
@@ -84,7 +90,7 @@ export function Button({
     )
   }
 
-  if (href && disabled) {
+  if (href && (disabled || !safeHref)) {
     return (
       <span className={classes} aria-disabled="true">
         {children}

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import type { BlockPressLogos } from '../../payload-types'
+import { sanitizeCmsUrl } from '../../lib/safe-url'
 import { MediaImage } from '../content/MediaImage'
 import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
@@ -67,7 +68,9 @@ export function PressLogos({ block }: PressLogosProps) {
                 sizes="160px"
               />
             )
-            const url = logo.url?.trim() ?? ''
+            // CMS-URL allowlist (sec-review): tiltott séma (pl. javascript:)
+            // esetén a logó link NÉLKÜL renderelődik.
+            const url = sanitizeCmsUrl(logo.url) ?? ''
             const isExternal = /^https?:\/\//i.test(url)
             return (
               <li className="kc-press__item" key={logo.id ?? `logo-${index}`}>

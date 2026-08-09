@@ -34,6 +34,25 @@ import {
 export const VAT_RATE_PERCENT = 27
 const VAT_DIVISOR = 1 + VAT_RATE_PERCENT / 100
 
+/**
+ * A Számlázz.hu válaszából érkező vevői-fiók (PDF) URL allowlist-ellenőrzése
+ * (sec-review): csak https + szamlazz.hu host fogadható el. A válasz XML egy
+ * külső szolgáltatástól jön — kompromittált vagy hibás integráció esetén
+ * adathalász URL-t is hordozhatna, ezért mentés előtt validáljuk.
+ */
+export function isTrustedInvoicePdfUrl(value: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'https:') {
+    return false
+  }
+  return parsed.hostname === 'szamlazz.hu' || parsed.hostname.endsWith('.szamlazz.hu')
+}
+
 export interface InvoiceBuyerInput {
   nev: string
   irsz: string
@@ -353,10 +372,22 @@ export async function issueInvoiceForOrder(
   try {
     const postXml = deps.postXml ?? postInvoiceXml
     const result = await postXml(xml, config)
+    // A vevői-fiók URL csak allowlist-ellenőrzés után mentődik — eltérésnél a
+    // számla attól még issued, az URL-t viszont nem tároljuk (warning-napló).
+    let invoicePdfUrl: string | undefined
+    if (result.vevoifiokUrl) {
+      if (isTrustedInvoicePdfUrl(result.vevoifiokUrl)) {
+        invoicePdfUrl = result.vevoifiokUrl
+      } else {
+        orderLog.warn('a Számlázz.hu által visszaadott PDF-URL nem megbízható — nem mentjük', {
+          invoiceNumber: result.szamlaszam,
+        })
+      }
+    }
     await setInvoiceStatus(deps.payload, deps.orderId, {
       invoiceStatus: 'issued',
       invoiceNumber: result.szamlaszam,
-      ...(result.vevoifiokUrl ? { invoicePdfUrl: result.vevoifiokUrl } : {}),
+      ...(invoicePdfUrl ? { invoicePdfUrl } : {}),
     })
     orderLog.info('számla kiállítva', { invoiceNumber: result.szamlaszam })
     return { outcome: 'issued', invoiceNumber: result.szamlaszam }

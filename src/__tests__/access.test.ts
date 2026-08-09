@@ -12,6 +12,7 @@ import {
   isStaffOrOwner,
   isStaffOrOwnerFieldAccess,
   publishedOrAdmin,
+  streamAssetReadAccess,
 } from '../access'
 import { visibleMenusOrAdmin } from '../access/menus-visibility'
 import { visibleTestimonialsOrAdmin } from '../access/testimonials-visibility'
@@ -72,6 +73,56 @@ describe('isStaffOrOwner / isStaffOrOwnerFieldAccess', () => {
   it('látogatónak false', () => {
     expect(isStaffOrOwner(accessArgs(null))).toBe(false)
     expect(isStaffOrOwnerFieldAccess(fieldAccessArgs(null))).toBe(false)
+  })
+})
+
+/**
+ * Sec-review: a products videos[].streamAssetId csak staff/owner-nek és a
+ * terméket megvásárló customernek olvasható — anonim és nem-vevő customer
+ * felé a mező rejtve marad.
+ */
+describe('streamAssetReadAccess (videos[].streamAssetId read)', () => {
+  const productDoc = { id: 42 }
+
+  const streamFieldArgs = (
+    user: ({ id: number; role: Role; purchases?: unknown[] } | null),
+    doc: unknown = productDoc,
+  ): Parameters<FieldAccess>[0] =>
+    ({ req: { user }, doc }) as unknown as Parameters<FieldAccess>[0]
+
+  it.each([
+    ['owner', { ...owner, purchases: [] }],
+    ['staff', { ...staff, purchases: [] }],
+  ])('%s szerepkör vásárlás nélkül is olvassa', (_label, user) => {
+    expect(streamAssetReadAccess(streamFieldArgs(user))).toBe(true)
+  })
+
+  it('a vevő customer olvassa (purchases id-listaként)', () => {
+    expect(
+      streamAssetReadAccess(streamFieldArgs({ ...customer, purchases: [7, 42] })),
+    ).toBe(true)
+  })
+
+  it('a vevő customer olvassa (purchases populate-olt objektumként)', () => {
+    expect(
+      streamAssetReadAccess(streamFieldArgs({ ...customer, purchases: [{ id: 42 }] })),
+    ).toBe(true)
+  })
+
+  it('a nem-vevő customer NEM olvassa', () => {
+    expect(streamAssetReadAccess(streamFieldArgs({ ...customer, purchases: [7] }))).toBe(false)
+    expect(streamAssetReadAccess(streamFieldArgs({ ...customer, purchases: [] }))).toBe(false)
+    expect(streamAssetReadAccess(streamFieldArgs(customer))).toBe(false)
+  })
+
+  it('anonim látogató NEM olvassa', () => {
+    expect(streamAssetReadAccess(streamFieldArgs(null))).toBe(false)
+  })
+
+  it('hiányzó szülő-dokumentum esetén customer nem olvassa (fail-closed)', () => {
+    expect(
+      streamAssetReadAccess(streamFieldArgs({ ...customer, purchases: [42] }, null)),
+    ).toBe(false)
   })
 })
 
@@ -319,6 +370,28 @@ describe('collection access bekötés a végleges configban', () => {
     expect(statusField).toBeDefined()
     expect(statusField?.access?.create).toBe(isOwnerFieldAccess)
     expect(statusField?.access?.update).toBe(isOwnerFieldAccess)
+  })
+
+  it('products: a videos[].streamAssetId read-access staff/owner + vevő-only', async () => {
+    const config = await configPromise
+    const products = (config.collections ?? []).find((c) => c.slug === 'products') as
+      | CollectionConfig
+      | undefined
+    expect(products).toBeDefined()
+
+    const field = findField(products as CollectionConfig, 'streamAssetId')
+    expect(field).toBeDefined()
+    expect(field?.access?.read).toBe(streamAssetReadAccess)
+
+    // A videos többi almezője (cím, hossz, állapot) nyilvános marad — a
+    // kurzusoldal-epizódlista miatt nincs rajtuk read-access.
+    for (const name of ['title', 'durationSec', 'status']) {
+      const subField = findField(products as CollectionConfig, name)
+      expect(subField, name).toBeDefined()
+    }
+    const preview = findField(products as CollectionConfig, 'previewVideoStreamId')
+    expect(preview).toBeDefined()
+    expect(preview?.access?.read).toBeUndefined()
   })
 
   it('orders: pénzügyi/személyes mezők read owner-only, refund update owner-only', async () => {

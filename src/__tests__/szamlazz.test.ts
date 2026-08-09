@@ -6,6 +6,7 @@ import {
   buyerFromOrder,
   computeLineAmounts,
   escapeXml,
+  isTrustedInvoicePdfUrl,
   issueInvoiceForOrder,
   itemsFromOrder,
 } from '../lib/szamlazz/invoice'
@@ -151,6 +152,23 @@ describe('buildInvoiceXml — hivatalos Számla Agent séma', () => {
 describe('escapeXml', () => {
   it('mind az 5 XML-entitást cseréli', () => {
     expect(escapeXml(`<&>"'`)).toBe('&lt;&amp;&gt;&quot;&apos;')
+  })
+})
+
+describe('isTrustedInvoicePdfUrl (sec-review: allowlist)', () => {
+  it('https + szamlazz.hu host elfogadott', () => {
+    expect(isTrustedInvoicePdfUrl('https://www.szamlazz.hu/vevoifiok/abc')).toBe(true)
+    expect(isTrustedInvoicePdfUrl('https://szamlazz.hu/x')).toBe(true)
+  })
+
+  it.each([
+    ['http séma', 'http://www.szamlazz.hu/vevoifiok/abc'],
+    ['külső host', 'https://adathalász.example/vevoifiok/abc'],
+    ['host-suffix trükk', 'https://szamlazz.hu.evil.example/x'],
+    ['javascript séma', 'javascript:alert(1)'],
+    ['hibás URL', 'nem-url'],
+  ])('elutasítva: %s', (_label, value) => {
+    expect(isTrustedInvoicePdfUrl(value)).toBe(false)
   })
 })
 
@@ -310,6 +328,28 @@ describe('issueInvoiceForOrder', () => {
     expect(order?.invoicePdfUrl).toBe('https://www.szamlazz.hu/vevoifiok/abc')
     expect(sentXml).toHaveLength(1)
     expect(sentXml[0]).toContain(`<szamlaKulsoAzon>${ORDER_NUMBER}</szamlaKulsoAzon>`)
+  })
+
+  it('nem megbízható PDF-URL nem mentődik — a számla attól még issued', async () => {
+    const { payload, order, updates } = createMockPayload(createOrder())
+    const result = await issueInvoiceForOrder({
+      payload,
+      orderId: 101,
+      config: ENABLED_CONFIG,
+      issueDate: '2026-08-04',
+      postXml: async () => ({
+        szamlaszam: 'KIN-2026-8',
+        vevoifiokUrl: 'https://adathalász.example/vevoifiok/abc',
+      }),
+    })
+
+    expect(result).toEqual({ outcome: 'issued', invoiceNumber: 'KIN-2026-8' })
+    expect(order?.invoiceStatus).toBe('issued')
+    expect(order?.invoiceNumber).toBe('KIN-2026-8')
+    expect(order?.invoicePdfUrl).toBeUndefined()
+    const issuedUpdate = updates.find((data) => data.invoiceStatus === 'issued')
+    expect(issuedUpdate).toBeDefined()
+    expect(issuedUpdate && 'invoicePdfUrl' in issuedUpdate).toBe(false)
   })
 
   it('idempotens: már issued rendelésnél no-op (nincs új hívás)', async () => {

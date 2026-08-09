@@ -33,7 +33,8 @@ Node **20+**, PostgreSQL **16**, npm (lockfile commitolva). Hosting: Railway
 ## Modultérkép (`src/`)
 
 ```
-app/(payload)/        Payload admin + REST/GraphQL route-ok
+app/(payload)/        Payload admin + REST route-ok (a GraphQL ki van kapcsolva:
+                      graphQL.disable a payload.configban, route-fájl nincs)
 app/(frontend)/       Nyilvános felület — jelenleg csak API-route-ok:
   api/checkout/start/           POST — vásárlás indítása (T-021)
   api/barion/callback/          POST — Barion-callback (T-022)

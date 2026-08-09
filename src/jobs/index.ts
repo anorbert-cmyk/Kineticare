@@ -1,5 +1,6 @@
 import type { JobsConfig } from 'payload'
 
+import { isStaffOrOwner } from '../access'
 import { invoiceIssueTask } from './tasks/invoice-issue'
 import { orderPollTask } from './tasks/order-poll'
 import { webhookRetryTask } from './tasks/webhook-retry'
@@ -21,6 +22,10 @@ import { ORDER_MAINTENANCE_QUEUE, WEBHOOK_RETRY_QUEUE } from './queues'
  * környezetben "true" értékkel a webhook-retry percenként, az order-poll
  * 5 percenként lefut. A taskok konfigja ettől függetlenül be van kötve, így
  * manuálisan (admin UI / local API) bármikor lehet jobot sorba állítani.
+ *
+ * Access (sec-review): a Payload-default szerint a /api/payload-jobs/run és a
+ * queue/cancel végpontokat MINDEN bejelentkezett felhasználó (a customer is)
+ * hívhatná — ezért a run/queue/cancel kifejezetten staff/owner-re szűkítve.
  */
 
 function jobWorkersEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -28,6 +33,11 @@ function jobWorkersEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 export const jobsConfig: JobsConfig = {
+  access: {
+    run: isStaffOrOwner,
+    queue: isStaffOrOwner,
+    cancel: isStaffOrOwner,
+  },
   tasks: [webhookRetryTask, orderPollTask, invoiceIssueTask],
   ...(jobWorkersEnabled()
     ? {

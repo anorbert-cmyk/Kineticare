@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createElement, Fragment, type ReactNode } from 'react'
 
 import { mediaAlt, mediaDimensions, pickMediaUrl, type MediaLike } from '../content/media-url'
+import { sanitizeCmsUrl } from '../../lib/safe-url'
 import { TEXT_FORMAT, type LexicalContent, type LexicalNode, type VideoEmbed } from './types'
 
 /**
@@ -98,7 +99,12 @@ function linkFields(node: LexicalNode): LinkFields | null {
   const fields = isRecord(node.fields) ? node.fields : null
   if (!fields) return null
   const linkType = fields.linkType
-  const url = typeof fields.url === 'string' ? fields.url.trim() : ''
+  // A külső (szerkesztő által gépelhető) URL allowlist-szűrése: javascript:
+  // és társai → null, ilyenkor a link href nélkül, sima szövegként renderel
+  // (a hiányos-cél graceful mintája). A belső link rendszer-generált, az
+  // resolveInternalHref fix előtagjai miatt sémát nem vihet be.
+  const rawUrl = typeof fields.url === 'string' ? fields.url.trim() : ''
+  const url = rawUrl.length > 0 ? (sanitizeCmsUrl(rawUrl) ?? '') : ''
   const internalHref = linkType === 'internal' ? resolveInternalHref(fields.doc) : null
   if (!url && !internalHref) return null
   return {

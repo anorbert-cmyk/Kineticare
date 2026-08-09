@@ -43,6 +43,30 @@ describe('payload.config', () => {
   })
 
   /**
+   * Sec-review guard: explicit serverURL + cors/csrf allowlist. Tesztkörnyezetben
+   * a NEXT_PUBLIC_SERVER_URL nincs beállítva → a dev-fallback (localhost) él.
+   */
+  it('explicit serverURL, a cors/csrf ugyanarra az originre állítva', async () => {
+    const config = await configPromise
+
+    expect(config.serverURL).toBe('http://localhost:3000')
+    expect(config.cors).toEqual([config.serverURL])
+    // A sanitize lépés a serverURL-t a csrf-listához is fűzi — a lényeg, hogy
+    // kizárólag a deploy-origin szerepeljen benne.
+    expect(new Set(config.csrf)).toEqual(new Set([config.serverURL]))
+  })
+
+  /**
+   * Sec-review guard: a frontend nem használ GraphQL-t — a végpont ki van
+   * kapcsolva (támadási felület-csökkentés), a route-fájl törölve.
+   */
+  it('a GraphQL végpont le van tiltva', async () => {
+    const config = await configPromise
+
+    expect(config.graphQL?.disable).toBe(true)
+  })
+
+  /**
    * Magyar admin felület: a staff („a lányok") nem szakember, ezért az admin
    * alapnyelve magyar. A fallbackLanguage a döntő beállítás — a nem szerkesztett
    * kulcsok is ezen a nyelven jelennek meg —, az `en` pedig választható marad.

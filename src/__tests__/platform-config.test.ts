@@ -63,6 +63,28 @@ describe('payload.config — T-014/T-015/T-016/T-018', () => {
     expect(config.jobs?.autoRun).toBeUndefined()
   })
 
+  /**
+   * Sec-review guard: a Payload-default szerint a /api/payload-jobs/run (és a
+   * queue/cancel) minden bejelentkezett usert kiszolgálna — a customer is
+   * jobot futtathatna. A teszt őrzi, hogy a run/queue/cancel staff/owner-re
+   * van szűkítve.
+   */
+  it('jobs: run/queue/cancel access staff/owner-only', async () => {
+    const config = await configPromise
+    const access = config.jobs?.access
+    expect(access?.run).toBeDefined()
+    expect(access?.queue).toBeDefined()
+    expect(access?.cancel).toBeDefined()
+
+    const reqAs = (role?: string) => ({ req: { user: role ? { role } : null } as never })
+    for (const check of [access?.run, access?.queue, access?.cancel]) {
+      expect(check?.(reqAs('owner'))).toBe(true)
+      expect(check?.(reqAs('staff'))).toBe(true)
+      expect(check?.(reqAs('customer'))).toBe(false)
+      expect(check?.(reqAs())).toBe(false)
+    }
+  })
+
   it('e-mail adapter bekötve (auth e-mailek is a provider-rétegen mennek)', async () => {
     const config = await configPromise
     expect(typeof config.email).toBe('function')

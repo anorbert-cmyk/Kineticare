@@ -10,6 +10,7 @@ import {
   isAdminFieldAccess,
   isDocumentOwner,
   isOwnerFieldAccess,
+  streamAssetReadAccess,
 } from '../access'
 import { orderIntegrityBeforeChange } from '../lib/order-integrity'
 import { withoutPluginPaymentEndpoints } from '../lib/payments/barion-adapter'
@@ -316,6 +317,11 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
           name: 'streamAssetId',
           type: 'text',
           label: 'Videó azonosítója',
+          access: {
+            // Sec-review: a Stream-azonosító a fizetős tartalom kulcsa — anonim
+            // és nem-vevő customer felé rejtve (staff/owner + vevő olvassa).
+            read: streamAssetReadAccess,
+          },
           admin: {
             description: 'A Cloudflare Stream azonosítója. Feltöltéskor a rendszer tölti ki.',
           },

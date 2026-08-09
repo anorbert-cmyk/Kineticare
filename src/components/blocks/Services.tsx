@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import type { BlockServices } from '../../payload-types'
+import { sanitizeCmsUrl } from '../../lib/safe-url'
 import { MediaImage } from '../content/MediaImage'
 import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
@@ -73,7 +74,9 @@ export function Services({ block }: ServicesProps) {
               const number = row.number?.trim() || String(index + 1).padStart(2, '0')
               const rowTitle = row.title.trim()
               const body = row.body?.trim() ?? ''
-              const url = row.url?.trim() ?? ''
+              // CMS-URL allowlist (sec-review): tiltott séma (pl. javascript:)
+              // esetén a sor link NÉLKÜL renderelődik.
+              const url = sanitizeCmsUrl(row.url) ?? ''
               const label = row.felirat?.trim() ?? ''
               const hasLink = url.length > 0 && label.length > 0
               const isExternal = /^https?:\/\//i.test(url)

@@ -128,9 +128,20 @@ export async function writeAuditLog(args: WriteAuditLogArgs): Promise<boolean> {
   }
 }
 
-/** Kliens-IP kinyerése proxyzott környezetből (Cloudflare → x-forwarded-for). */
+/**
+ * Kliens-IP kinyerése proxyzott környezetből (Cloudflare → cf-connecting-ip /
+ * x-forwarded-for).
+ *
+ * Sec-review: a proxy-fejlécek kliens-oldalról hamisíthatók, ezért CSAK akkor
+ * bízunk bennük, ha a telepítés kifejezetten megbízható proxy mögött fut —
+ * ezt a TRUST_PROXY_HEADERS=true env jelzi. A flag nélkül a fejléceket
+ * figyelmen kívül hagyjuk, és az IP ismeretlen (undefined) marad.
+ */
 export function resolveClientIp(headers: Headers | undefined): string | undefined {
   if (!headers) {
+    return undefined
+  }
+  if (process.env.TRUST_PROXY_HEADERS !== 'true') {
     return undefined
   }
   const cfIp = headers.get('cf-connecting-ip')

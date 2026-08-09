@@ -1,7 +1,47 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, afterEach } from 'vitest'
 
-import { stripSensitiveFields, writeAuditLog, type AuditLogStore } from '../lib/audit'
+import { resolveClientIp, stripSensitiveFields, writeAuditLog, type AuditLogStore } from '../lib/audit'
 import { auditActionsForChange, auditAfterChange } from '../plugins/audit'
+
+/**
+ * Sec-review: a proxy-fejlécek (cf-connecting-ip, x-forwarded-for) kliensről
+ * hamisíthatók — a resolveClientIp csak TRUST_PROXY_HEADERS=true mellett
+ * használja őket, egyébként az IP ismeretlen marad.
+ */
+describe('resolveClientIp (TRUST_PROXY_HEADERS-kapu)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('flag nélkül a proxy-fejléceket figyelmen kívül hagyja', () => {
+    const headers = new Headers({
+      'cf-connecting-ip': '203.0.113.9',
+      'x-forwarded-for': '198.51.100.7, 10.0.0.1',
+    })
+    expect(resolveClientIp(headers)).toBeUndefined()
+  })
+
+  it('flaggel a cf-connecting-ip az elsődleges forrás', () => {
+    vi.stubEnv('TRUST_PROXY_HEADERS', 'true')
+    const headers = new Headers({
+      'cf-connecting-ip': '203.0.113.9',
+      'x-forwarded-for': '198.51.100.7',
+    })
+    expect(resolveClientIp(headers)).toBe('203.0.113.9')
+  })
+
+  it('flaggel az x-forwarded-for első elemét használja cf-fejléc nélkül', () => {
+    vi.stubEnv('TRUST_PROXY_HEADERS', 'true')
+    const headers = new Headers({ 'x-forwarded-for': '198.51.100.7, 10.0.0.1' })
+    expect(resolveClientIp(headers)).toBe('198.51.100.7')
+  })
+
+  it('flaggel, fejléc nélkül undefined', () => {
+    vi.stubEnv('TRUST_PROXY_HEADERS', 'true')
+    expect(resolveClientIp(new Headers())).toBeUndefined()
+    expect(resolveClientIp(undefined)).toBeUndefined()
+  })
+})
 
 describe('writeAuditLog', () => {
   it('sikeres íráskor továbbadja az adatot (requestId a req fejlécéből)', async () => {

@@ -25,6 +25,7 @@
  */
 
 import { pathToFileURL } from 'node:url'
+import { randomBytes } from 'node:crypto'
 
 import { getPayload } from 'payload'
 
@@ -73,7 +74,8 @@ async function seed(): Promise<void> {
     ownerId = existingOwner.docs[0].id
     payload.logger.info(`Seed: owner-felhasználó már létezik (${OWNER_EMAIL}), kihagyva.`)
   } else {
-    const password = process.env.SEED_OWNER_PASSWORD ?? Math.random().toString(36).slice(2, 18)
+    // Kriptográfiailag erős véletlen jelszó (a Math.random nem erre való).
+    const password = process.env.SEED_OWNER_PASSWORD ?? randomBytes(12).toString('base64url')
 
     const owner = await payload.create({
       collection: 'users',

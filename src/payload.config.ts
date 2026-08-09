@@ -28,6 +28,13 @@ import { ecommerce } from './plugins/ecommerce'
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
+/**
+ * A publikus szerver-URL explicit bekötése (sec-review): a serverURL és a
+ * cors/csrf allowlist ugyanarra a deploy-URL-re áll. Üres env esetén a
+ * localhost a dev-fallback (a seo.ts / (frontend)/layout.tsx konvenciója).
+ */
+const serverURL = process.env.NEXT_PUBLIC_SERVER_URL ?? 'http://localhost:3000'
+
 /** Admin-szerepkör (owner/staff) — a form-submissions olvasásához. */
 const isAdmin: Access = ({ req }) => req.user?.role === 'owner' || req.user?.role === 'staff'
 
@@ -282,6 +289,17 @@ export default buildConfig({
   // A titok kötelező — az induláskori ENV-assert (src/env.ts + src/instrumentation.ts)
   // gondoskodik róla, hogy hiányában az app ne induljon el.
   secret: process.env.PAYLOAD_SECRET || '',
+  // Explicit serverURL + cors/csrf allowlist (sec-review): alapértelmezés nélkül
+  // a Payload a kérés hostjához igazodna — így a CORS/CSRF a deploy-URL-hez kötött.
+  serverURL,
+  cors: [serverURL],
+  csrf: [serverURL],
+  // Sec-review: a GraphQL API-t a frontend NEM használja (a storefront REST-et
+  // és szerver-oldali local API-t használ, a Payload admin is REST-alapú) —
+  // a végpont kikapcsolva, a /graphql route-fájl törölve.
+  graphQL: {
+    disable: true,
+  },
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },

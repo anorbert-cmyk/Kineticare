@@ -131,10 +131,12 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
 
 ### Auth és első indulás
 
-8. **Az első user owner szerepkört kap** (`promoteFirstUserToOwner` hook).
+8. **Az első user owner szerepkört kap — de csak telepítési flaggel**
+   (`promoteFirstUserToOwner` hook + `ALLOW_FIRST_USER_OWNER=true` env).
    Enélkül a rendszer telepítés után zárva marad: a `role` mező owner-only,
    tehát az első user `customer` lenne, aki nem jut be az adminba, nem
    törölhető (`access.delete: isOwner`) és a szerepköre sem írható át.
+   A flag nélküli promóció-kihagyásról a hook warning-naplót ír.
 9. **A 2. usertől a `role` alapértelmezése `customer`.** Admin-hozzáféréshez az
    adminban kézzel `staff`-ra kell állítani — ezen bukott el több teszt-user.
 

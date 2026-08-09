@@ -5,6 +5,7 @@ import {
   formatPasswordPolicyErrors,
   validatePasswordStrength,
 } from '../lib/security/password-policy'
+import { maskEmail } from '../lib/email/mask'
 import { createLogger } from '../lib/logger'
 import {
   APIError,
@@ -63,7 +64,7 @@ const enforcePasswordPolicy: CollectionBeforeChangeHook = async ({
   return data
 }
 
-// Az ELSŐ felhasználó owner-szerepkört kap.
+// Az ELSŐ felhasználó owner-szerepkört kap — de CSAK telepítési flaggel.
 //
 // Enélkül a rendszer telepítés után zárva marad: a `role` mező field-access-e
 // owner-only (`isOwnerFieldAccess`), owner viszont még nincs, ezért a
@@ -72,9 +73,15 @@ const enforcePasswordPolicy: CollectionBeforeChangeHook = async ({
 // `access.admin` viszont `isStaffOrOwner` — vagyis az első user NEM jut be az
 // adminba, törölni sem lehet (`access.delete: isOwner`), és a szerepkörét sem
 // írhatja át senki. A hook ezt a patthelyzetet oldja fel: ha a DB-ben még
-// nincs user, a létrejövő rekord owner lesz. A 2. usertől a hook nem nyúl a
-// role-hoz, tehát a jogemelés elleni védelem (owner-only field access)
-// változatlanul él.
+// nincs user, a létrejövő rekord owner lesz.
+//
+// Sec-review: a promóció automatikus volta azt jelentette, hogy aki először
+// regisztrál egy friss (vagy üresre törölt users-táblájú) környezetre, az
+// feltétel nélkül owner lesz. Ezért a promóció csak az
+// ALLOW_FIRST_USER_OWNER=true telepítési flaggel fut; flag nélkül az első
+// user is customer marad, és a hook warning-naplót ír a hiányzó flagről.
+// A 2. usertől a hook nem nyúl a role-hoz, tehát a jogemelés elleni védelem
+// (owner-only field access) változatlanul él.
 const promoteFirstUserToOwner: CollectionBeforeChangeHook = async ({ data, req, operation }) => {
   if (operation !== 'create') {
     return data
@@ -83,7 +90,13 @@ const promoteFirstUserToOwner: CollectionBeforeChangeHook = async ({ data, req, 
   if (count.totalDocs > 0) {
     return data
   }
-  logger.info('Az első felhasználó owner szerepkörrel jön létre')
+  if (process.env.ALLOW_FIRST_USER_OWNER !== 'true') {
+    logger.warn(
+      'Az első felhasználó owner-promóciója kihagyva — az ALLOW_FIRST_USER_OWNER=true telepítési flag nincs beállítva, a user customer szerepkörrel jön létre',
+    )
+    return data
+  }
+  logger.info('Az első felhasználó owner szerepkörrel jön létre (ALLOW_FIRST_USER_OWNER=true)')
   return { ...data, role: 'owner' }
 }
 
@@ -101,7 +114,8 @@ const logFailedLogin: CollectionAfterErrorHook = ({ error, req }) => {
   const ip =
     req.headers?.get?.('x-forwarded-for') ?? req.headers?.get?.('x-real-ip') ?? 'ismeretlen'
   logger.warn('Sikertelen bejelentkezés', {
-    email,
+    // A teljes e-mail-cím nem kerülhet a naplóba (PII) — maszkolva naplózunk.
+    email: email ? maskEmail(email) : undefined,
     ip,
     reason: error instanceof LockedAuth ? 'zárolt fiók' : 'hibás jelszó',
   })
