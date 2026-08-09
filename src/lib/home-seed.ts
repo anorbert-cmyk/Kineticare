@@ -141,8 +141,13 @@ export type SeedImageFile = (typeof HOME_IMAGES)[number]['file']
  */
 export type HomeMediaIds = Partial<Record<SeedImageFile, number>>
 
-/** A landing képeinek gyökere a tükörben (repógyökér/higgsfield-site/app/public/assets). */
-const LANDING_ASSETS_DIR = path.join(
+/**
+ * A landing képeinek gyökere a tükörben (repógyökér/higgsfield-site/app/public/assets).
+ *
+ * Exportált, mert az induláskori önjavítás (src/lib/media-restore.ts) is
+ * innen tölti vissza a deploykor elveszett képfájlokat.
+ */
+export const LANDING_ASSETS_DIR = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
   '..',
