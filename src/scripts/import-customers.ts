@@ -251,7 +251,7 @@ async function writeLinksFile(target: string, contents: string): Promise<void> {
   if (!path.relative(process.cwd(), absolute).startsWith('..')) {
     write(
       'FIGYELEM: a fájl a projekt könyvtárán BELÜL jött létre — a véletlen commit elkerüléséhez ' +
-        'inkább a projekten kívülre írasd (pl. --out-links=~/kineticare-linkek.csv).',
+        'inkább a projekten kívülre írasd (pl. --out-links="$HOME/kineticare-linkek.csv").',
     )
   }
 }
