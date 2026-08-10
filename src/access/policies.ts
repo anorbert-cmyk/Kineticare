@@ -41,7 +41,8 @@ const staffOrOwnerWrite: Pick<
 /**
  * A VERZIÓ-VÉGPONTOK zárása a drafts-os collectionökön (S2/d kiterjesztés).
  *
- * A `GET /api/<slug>/versions` és `GET /api/<slug>/:id/versions/:vid` NEM az
+ * A `GET /api/<slug>/versions` és `GET /api/<slug>/versions/:id` (ahol a `:id`
+ * a VERZIÓ azonosítója, nem a szülő dokumentumé) NEM az
  * `access.read`-en múlik, hanem az `access.readVersions`-ön
  * (payload/dist/collections/operations/findVersions.js, findVersionByID.js).
  * Hiányzó szabálynál a Payload `executeAccess`-e minden BEJELENTKEZETT
@@ -50,7 +51,11 @@ const staffOrOwnerWrite: Pick<
  * megkerülhető volt: egy regisztrált vevő a verzió-végponton kiolvashatta a még
  * NEM PUBLIKÁLT oldalak és bejegyzések teljes tartalmát.
  *
- * Csak a drafts-os collectionökre kell (pages, posts); a többinek nincs
+ * A kritérium a VERZIÓZÁS, nem a drafts: a Payload `versions: true` esetén is
+ * verzió-táblát tart fenn és kiadja a fenti végpontokat (a szanitizálás a
+ * `versions: true`-t `{ drafts: false, maxPerDoc: 100 }`-ra bontja,
+ * node_modules/payload/dist/collections/config/sanitize.js). Ma minden
+ * verziózott collectionünk drafts-os is (pages, posts); a többinek nincs
  * verzió-végpontja. A products ugyanezt a zárat a plugin-override-ban kapja meg
  * (src/plugins/ecommerce.ts, productsCollectionOverride).
  *

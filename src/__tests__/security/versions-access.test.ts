@@ -9,7 +9,7 @@ import configPromise from '../../payload.config'
  * ═══ MIT VÉD ═══
  * A drafts-szal működő collectionök két külön REST-végpontot kapnak:
  *   GET /api/<slug>/versions           (findVersions)
- *   GET /api/<slug>/:id/versions/:vid  (findVersionByID)
+ *   GET /api/<slug>/versions/:id       (findVersionByID; a :id a VERZIÓ azonosítója)
  * Ezek NEM az `access.read`-en, hanem az `access.readVersions`-ön múlnak
  * (payload/dist/collections/operations/findVersions.js:35 és
  * findVersionByID.js:35). Ha a szabály HIÁNYZIK, a Payload `executeAccess`-e
@@ -65,7 +65,7 @@ beforeAll(async () => {
  * elbukik, nem hallgat.
  */
 const draftCollections = (): SanitizedConfig['collections'] =>
-  (config.collections ?? []).filter((collection) => Boolean(collection.versions?.drafts))
+  (config.collections ?? []).filter((collection) => Boolean(collection.versions))
 
 describe('NEGATÍV KONTROLL — a Payload saját executeAccess-e hiányzó szabálynál', () => {
   it('hiányzó access-függvénnyel a BEJELENTKEZETT customer bejut', async () => {

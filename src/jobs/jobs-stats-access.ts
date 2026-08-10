@@ -68,8 +68,14 @@ import { isStaffOrOwner } from '../access/isStaffOrOwner'
  * feltételes ágban be is tolta a globalt — a kettő nem válhat szét ép
  * Payloadban. Ha mégis szétválik, az csak a slug megváltozását jelentheti egy
  * verzióemelésnél; ilyenkor a zár némán hatástalan lenne, és a lyuk
- * észrevétlenül visszanyílna. Ezért hangosan, indulás-/build-időben dobunk:
- * a hiba LÁTHATÓ (a deploy healthcheckje elbukik), nem néma.
+ * észrevétlenül visszanyílna. Ezért hangosan, indulás-/build-időben dobunk.
+ *
+ * Mi történik pontosan: a dobás a `buildConfig(...).then(...)` MODUL-SZINTŰ
+ * láncában keletkezik (src/payload.config.ts), tehát kezeletlen
+ * ígéret-elutasítás lesz belőle — a Node ilyenkor a hibaüzenettel LEÁLLÍTJA a
+ * folyamatot. Az app tehát el sem indul (a deploy nem áll fel, healthcheckig
+ * el sem jut), és az ok ott van a naplóban. Ez a kívánt viselkedés: egy némán
+ * visszanyíló jogosultság rosszabb, mint egy meg nem induló deploy.
  */
 export const JOB_STATS_GLOBAL_SLUG = 'payload-jobs-stats'
 

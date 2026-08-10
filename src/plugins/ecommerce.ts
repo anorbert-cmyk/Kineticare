@@ -241,7 +241,7 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
    *   if (req.user) { return true }
    * vagyis BÁRMELY bejelentkezett felhasználó — a `customer` szerepkör is —
    * lekérdezhette a `GET /api/products/versions` és
-   * `GET /api/products/:id/versions/:vid` végpontot
+   * `GET /api/products/versions/:id` végpontot (a `:id` a VERZIÓ azonosítója)
    * (payload/dist/collections/operations/findVersions.js és findVersionByID.js:
    * `collectionConfig.access.readVersions`).
    *
