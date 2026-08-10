@@ -1,33 +1,30 @@
 # Átadás-dokumentum: Számlázz.hu-megfelelőségi kör (#53) — állapot, döntések, hátralévő munka
 
-> **Kinek szól:** a következő agent-session (vagy emberi fejlesztő), aki ezt a kört
-> lezárja. **Készült:** 2026-08-09 ~23:30 UTC · **Frissítve: 2026-08-10 ~07:20 UTC
-> (a javító-kör után).** **Önálló dokumentum** — a session mulandó állapotára
-> (scratchpad, futó folyamatok) nem támaszkodik; ami kell, az a repóban van.
+> **Kinek szól:** a következő agent-session (vagy emberi fejlesztő), aki a
+> Számlázz.hu-integráció élesítését folytatja. **Készült:** 2026-08-09 ~23:30 UTC
+> · **Frissítve: 2026-08-10 ~08:05 UTC (élesítés után).** **Önálló dokumentum** —
+> a session mulandó állapotára (scratchpad, futó folyamatok) nem támaszkodik;
+> ami kell, az a repóban van.
 
 ---
 
 ## 1. Pillanatkép — hol tartunk
 
-- **main:** `5d6f5da` — a #52 PR (C-backlog + biztonsági kör 2) squash-merge-elve,
-  **élesben kint és igazolva** (Railway build-logban tényleges `npm run build`,
-  runtime `server_start` `commitSha=5d6f5da`, `turnstile_kikapcsolva` warn él).
-- **Munkabranch:** `claude/higgsfield-mcp-integration-za6671` — a mainről újraalapozva,
-  rajta **ez a kör + a javító-kör** (lásd 3. szakasz). HEAD: `157d110`.
-- **PR:** **#56** (draft) — https://github.com/anorbert-cmyk/Kineticare/pull/56.
-  A leírás a kör teljes összefoglalója.
-- **Kapu-állapot (2026-08-10, `157d110`):** TELJES kapu zölden — typecheck ✔ ·
-  vitest **1335 passed / 0 failed** (83 fájl, 11 skipped) ✔ · lint 0 error
-  (1 örökölt, dokumentált warning) ✔ · build ✔. **A GitHub CI is zöld: 5/5 check**
-  (typecheck+vitest+lint, next build, npm audit, 2× gitleaks).
+- **✅ A KÖR ÉLESBEN VAN.** main: **`b013f15`** — a #56 PR squash-merge-elve,
+  a Railway-deploy SUCCESS, **mindkét migráció lefutott**, az app válaszol.
+  A teljes bizonyíték-tábla a 4. szakasz végén („ÉLESÍTÉS MEGTÖRTÉNT").
+- **Előzmény a mainen:** `5d6f5da` (#52 — C-backlog + biztonsági kör 2).
+- **PR #56:** merged — https://github.com/anorbert-cmyk/Kineticare/pull/56.
+- **Kapu-állapot a merge előtt:** typecheck ✔ · vitest **1335 passed / 0 failed**
+  ✔ · lint 0 error (1 örökölt, dokumentált warning) ✔ · build ✔; GitHub CI 5/5.
 - **✅ A REVIEW MIND A 21 FINDINGJA LEZÁRVA** (F1–F17; F17 tudatosan elfogadott
   korlátként dokumentálva). A javító-kört 4 Opus-ügynök végezte, a döntések a
-  4. szakaszban maradtak meg — most már **teljesítés-naplóként**, hogy a merge
-  utáni vitákban (és a teszt-fiókos validálásnál) visszakereshető legyen, mit
-  miért így oldottunk meg.
-- **A merge kapuja most már csak emberi döntés kérdése.** A kör access-controlt
-  NEM érint; a `docs/szamlazz-megfeleles.md` és a PR-leírás minden fennmaradó
-  kockázatot néven nevez.
+  4. szakaszban maradtak meg — **teljesítés-naplóként**, hogy a teszt-fiókos
+  validálásnál visszakereshető legyen, mit miért így oldottunk meg.
+- **⚠️ FONTOS: a számlázás élesben MÉG KIKAPCSOLT.** A `SZAMLAZZ_AGENT_KEY`
+  Railway-változó nincs beállítva, ezért a kód `enabled=false` ágon fut (szándékos
+  no-op) — a Számlázz.hu felé egyetlen hívás sem megy ki. A bekapcsolás
+  előfeltételei a 4. szakasz végén („AMI MÉG HÁTRAVAN").
 
 ## 2. Kontextus — mi zárult le ma (előzmények)
 
@@ -272,29 +269,48 @@ A hivatkozott sorszámok a `01b5726` állapotra értendők — a friss kódot ol
 3. ✅ Fókuszált commitok magyar üzenettel (3.b tábla).
 4. ✅ Push + a **PR #56 leírása** a végállapotra frissítve.
 
-### ⬅️ AMI MÉG HÁTRAVAN (a következő agentnek)
+### ✅ ÉLESÍTÉS MEGTÖRTÉNT (2026-08-10 07:56 UTC)
 
-1. **Merge-döntés és merge.** A PR draft — `ready for review`-ra állítás után
-   squash-merge a main-konvenció szerinti címmel: `<PR-cím> (#56)`. A kör
-   access-controlt NEM érint, a CI zöld, a kockázatok néven nevezve.
-2. **Railway deploy-ellenőrzés** a merge után: a build-logban TÉNYLEGES
-   `npm run build` fusson (a „SUCCESS" önmagában nem elég — CLAUDE.md
-   üzemeltetési 1.), és a runtime `server_start` sorban az ÚJ commit-SHA legyen.
-3. **Migráció élesen — AUTOMATIKUS, de ellenőrizendő.** A branch **két generált
-   migrációt** hoz (`20260809_223906_szamlazz_megfeleles` = 5 oszlop,
-   `20260809_232121_szamlazz_attempts_seq` = 1 oszlop). A deploy start-parancsa
-   **`npx payload migrate && npm start`** — ezt a `railway.json` ÉS a
-   service-beállítás is így tartalmazza (2026-08-10-én ellenőrizve; a
-   service-szintű érték felülírná a fájlt, ezért mindkettőt nézd). A migráció
-   tehát a konténer indulásakor lefut; a deploy-logban **keresd meg a
-   `Migrating: …` / `Migrated: …` sorokat**, és csak azután tekintsd késznek.
-   Ha a migráció elhasal, a `&&` miatt az app el sem indul → healthcheck-bukás,
-   azaz a hiba látható lesz, nem néma.
-4. **Teszt-fiókos validálás** (11 forgatókönyv a megfelelőségi doksiban) — az
-   élesítés előfeltétele; kiemelten: stornó-`szamlaKulsoAzon` visszakereshetőség
-   (T10 — ha igazolt, a stornó-lookup visszahozható), stornó-dátum öröklése
-   (T11), qty>1 tizedes egységár elfogadása (T9).
-5. **Maintainer-teendő** (agent nem nyúlhat `.env*`-hez): `SZAMLAZZ_AFAKULCS`
+A **PR #56 mergelve**, a kör **élesben fut**. Bizonyítékok (a CLAUDE.md
+üzemeltetési 1. pontja szerinti teljes ellenőrzés):
+
+| Ellenőrzés | Eredmény |
+| --- | --- |
+| main | `b013f15` (squash-merge) |
+| Build-log | TÉNYLEGES `npm run build` → `next build` → `✓ Compiled successfully in 9.2s` |
+| **Migráció** | `Migrated: 20260809_223906_szamlazz_megfeleles (5ms)` **és** `Migrated: 20260809_232121_szamlazz_attempts_seq (2ms)` — mindkettő lefutott |
+| Runtime | `server_start` `commitSha=b013f15…`, Node v24.18.0 |
+| Elérhetőség | `/admin` és `/` → HTTP 200 |
+| Deploy-státusz | SUCCESS |
+
+> **Két tanulság a deployról** (a következő körre):
+> 1. A Railway MCP `list-deployments` **elavult státuszt mutathat**: a deploy
+>    25+ percig „WAITING"-nek látszott, miközben a `getDeploymentInfo`
+>    lépés-eseményei szerint már 07:56:25-kor minden fázis (SNAPSHOT_CODE →
+>    CONFIGURE_NETWORK) COMPLETED volt. **Ha WAITING-et látsz snapshot és
+>    build-log nélkül, előbb a `railway-agent`-tel kérdezz rá** — ne indíts
+>    új deployt vaktában.
+> 2. **A `create-deployment` MCP-hívás ÚJ SERVICE-T hoz létre**, nem a
+>    `serviceId`-vel megadott meglévőt deployolja (ez a körben egy fölösleges
+>    „just-heart" service-t eredményezett, amit törölni kellett). Meglévő
+>    service újraindításához a `redeploy` (snapshot kell hozzá) vagy a
+>    `railway-agent` `restartServiceTool`-ja a helyes út.
+
+### ⬅️ AMI MÉG HÁTRAVAN (a következő agentnek / az üzemeltetőnek)
+
+1. **Teszt-fiókos validálás** (11 forgatókönyv a megfelelőségi doksiban) — az
+   éles SZÁMLÁZÁS bekapcsolásának előfeltétele; kiemelten: stornó-
+   `szamlaKulsoAzon` visszakereshetőség (T10 — ha igazolt, a stornó-lookup
+   visszahozható), stornó-dátum öröklése (T11), qty>1 tizedes egységár
+   elfogadása (T9).
+2. **Fiók-oldali checklist** (8 pont, `docs/szamlazz-megfeleles.md`) —
+   kiemelten a **rendelésszám-ismétlés tiltásának bekapcsolása** (erre épül a
+   hivatalos idempotencia) és a `SZAMLAZZ_AFAKULCS` értéke (könyvelővel!).
+3. **A számlázás élesítése**: a `SZAMLAZZ_AGENT_KEY` Railway-változó
+   beállítása. **Amíg nincs beállítva, a számlázás kikapcsolt** (`enabled=false`,
+   szándékos no-op) — a most élesített kód tehát fut, de nem hív ki a
+   Számlázz.hu-ra. A sorrend: 1. és 2. pont → utána a kulcs.
+4. **Maintainer-teendő** (agent nem nyúlhat `.env*`-hez): `SZAMLAZZ_AFAKULCS`
    kulcsnév az `.env.example`-be (érték nélkül) + a `SZAMLAZZ_API_URL` melletti
    elavult komment frissítése (a default mostantól záró perjeles).
 
