@@ -19,9 +19,28 @@ import { hasStaffOrOwnerRole } from './roles'
  * ═══ A SZABÁLY ═══
  * - staff/owner: MINDIG olvassa (admin-szerkesztés, videó-feltöltés folyamata);
  * - bejelentkezett customer: csak ha a `purchases` listája tartalmazza a
- *   szülő-terméket — ugyanaz a szemantika, mint a stream-token paywallé
- *   (`hasUserPurchased`, src/lib/courses.ts);
+ *   szülő-terméket (`hasUserPurchased`, src/lib/courses.ts);
  * - anonim látogató: SOHA.
+ *
+ * ═══ AMIT EZ A SZABÁLY SZÁNDÉKOSAN NEM NÉZ: A LEJÁRATOT ═══
+ * A field-access CSAK a vásárlás TÉNYÉT ellenőrzi — ez SZŰKEBB feltétel, mint
+ * a jegykiadásé. A stream-token szolgáltatás (src/lib/stream/issue-stream-token.ts)
+ * a vásárlás után egy MÁSODIK, időbeli kaput is nyit (3/b lépés): a termék
+ * `accessDurationDays` mezőjéből számolt `expiresAt` alapján a lejárt
+ * hozzáférésű vevőt 403-mal, az `accessExpiredMessage` magyar szövegével
+ * utasítja el.
+ *
+ * KÖVETKEZMÉNY, amivel tisztában kell lenni: a LEJÁRT hozzáférésű vevő a
+ * nyilvános REST-en (`GET /api/products`) MÉG LÁTJA a GUID-ot, LEJÁTSZANI
+ * viszont NEM TUDJA — aláírt jegy nélkül a védett Bunny-library elutasítja, és
+ * jegyet a lejárat miatt nem kap.
+ *
+ * MIÉRT NEM KERÜL IDE A LEJÁRAT-ELLENŐRZÉS. A lejárat kiszámítása
+ * ADATBÁZIS-KÖRT igényel (`resolveSingleCourseAccess` a rendeléseket kérdezi
+ * le), a field-access viszont a válasz MINDEN termékének MINDEN videó-sorára
+ * lefut: egy `GET /api/products` listalekérdezésen ez N×M extra lekérdezés
+ * (N+1-probléma) — a szinkron, DB-mentes szabály ezért marad. A lejárat
+ * kikényszerítése a JEGYKIADÁSÉ, ott egyszer, a termékenként egy kérésben fut.
  *
  * ═══ MIÉRT NEM TÖRI EL A LEJÁTSZÁST ═══
  * A field-access csak akkor fut, ha `overrideAccess !== true`
