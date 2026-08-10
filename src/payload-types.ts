@@ -1632,12 +1632,24 @@ export interface Order {
    */
   invoiceStatus?: ('none' | 'pending' | 'issued' | 'failed') | null;
   /**
+   * A számlakiállítási kísérletek száma (legfeljebb 5, utána emberi beavatkozás kell). A rendszer állítja.
+   */
+  invoiceAttempts?: number | null;
+  /**
+   * Az utolsó sikertelen számlakiállítási kísérlet hibaüzenete — hibakereséshez.
+   */
+  invoiceLastError?: string | null;
+  /**
+   * Az eredeti számla teljesítési dátuma (ÉÉÉÉ-HH-NN) — a helyesbítő számla ezt ismétli meg. A rendszer állítja.
+   */
+  invoiceCompletionDate?: string | null;
+  /**
    * A stornó-számla állapota. A rendszer állítja — ne írd át.
    */
   stornoStatus?: ('none' | 'pending' | 'storned' | 'failed') | null;
   stornoNumber?: string | null;
   /**
-   * A stornó-kiállítási kísérletek száma (a retry-job számlálója). A rendszer állítja.
+   * A stornó-kiállítási kísérletek száma (legfeljebb 5, utána emberi beavatkozás kell). A rendszer állítja.
    */
   stornoAttempts?: number | null;
   /**
@@ -1653,6 +1665,18 @@ export interface Order {
    * A refunds-nyom hányadik bejegyzéséhez tartozik a legutóbbi helyesbítő számla (idempotencia). A rendszer állítja.
    */
   correctiveInvoiceSeq?: number | null;
+  /**
+   * A helyesbítő-kiállítási kísérletek száma (legfeljebb 5, utána emberi beavatkozás kell). A rendszer állítja.
+   */
+  correctiveInvoiceAttempts?: number | null;
+  /**
+   * Az utolsó sikertelen helyesbítő-kísérlet hibaüzenete — hibakereséshez.
+   */
+  correctiveInvoiceLastError?: string | null;
+  /**
+   * Melyik refund-sorszámú helyesbítőhöz tartozik a kísérletszámláló. A rendszer állítja.
+   */
+  correctiveInvoiceAttemptsSeq?: number | null;
   /**
    * A számlázási adatok mentett másolata a rendelés idejéből.
    */
@@ -2903,6 +2927,9 @@ export interface OrdersSelect<T extends boolean = true> {
   invoiceNumber?: T;
   invoicePdfUrl?: T;
   invoiceStatus?: T;
+  invoiceAttempts?: T;
+  invoiceLastError?: T;
+  invoiceCompletionDate?: T;
   stornoStatus?: T;
   stornoNumber?: T;
   stornoAttempts?: T;
@@ -2910,6 +2937,9 @@ export interface OrdersSelect<T extends boolean = true> {
   correctiveInvoiceStatus?: T;
   correctiveInvoiceNumber?: T;
   correctiveInvoiceSeq?: T;
+  correctiveInvoiceAttempts?: T;
+  correctiveInvoiceLastError?: T;
+  correctiveInvoiceAttemptsSeq?: T;
   customerSnapshot?: T;
   consentWithdrawalWaiver?: T;
   consentWithdrawalWaiverAt?: T;
