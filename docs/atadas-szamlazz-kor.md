@@ -280,15 +280,16 @@ A hivatkozott sorszámok a `01b5726` állapotra értendők — a friss kódot ol
 2. **Railway deploy-ellenőrzés** a merge után: a build-logban TÉNYLEGES
    `npm run build` fusson (a „SUCCESS" önmagában nem elég — CLAUDE.md
    üzemeltetési 1.), és a runtime `server_start` sorban az ÚJ commit-SHA legyen.
-3. **⚠️ MIGRÁCIÓ ÉLESEN — ez a kör kritikus lépése.** A branch **két generált
+3. **Migráció élesen — AUTOMATIKUS, de ellenőrizendő.** A branch **két generált
    migrációt** hoz (`20260809_223906_szamlazz_megfeleles` = 5 oszlop,
-   `20260809_232121_szamlazz_attempts_seq` = 1 oszlop). A Railway indulás NEM
-   futtat automatikusan `payload migrate`-et — ellenőrizd a start-parancsot
-   (`railway.json` + a service-beállítás, mert az utóbbi felülírja a fájlt), és
-   ha nincs benne, futtasd a migrációt az éles DB-n a bevett módon. **Amíg a
-   migráció nem futott le, az új mezőkre író kód hibára fut** — a kód viszont
-   csak akkor aktív, ha a `SZAMLAZZ_AGENT_KEY` be van állítva (ma nincs), tehát
-   éles hiba nem keletkezik, de a sorrend így is: migráció → kulcs.
+   `20260809_232121_szamlazz_attempts_seq` = 1 oszlop). A deploy start-parancsa
+   **`npx payload migrate && npm start`** — ezt a `railway.json` ÉS a
+   service-beállítás is így tartalmazza (2026-08-10-én ellenőrizve; a
+   service-szintű érték felülírná a fájlt, ezért mindkettőt nézd). A migráció
+   tehát a konténer indulásakor lefut; a deploy-logban **keresd meg a
+   `Migrating: …` / `Migrated: …` sorokat**, és csak azután tekintsd késznek.
+   Ha a migráció elhasal, a `&&` miatt az app el sem indul → healthcheck-bukás,
+   azaz a hiba látható lesz, nem néma.
 4. **Teszt-fiókos validálás** (11 forgatókönyv a megfelelőségi doksiban) — az
    élesítés előfeltétele; kiemelten: stornó-`szamlaKulsoAzon` visszakereshetőség
    (T10 — ha igazolt, a stornó-lookup visszahozható), stornó-dátum öröklése
