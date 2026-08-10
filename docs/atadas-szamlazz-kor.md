@@ -27,8 +27,12 @@ rendelés létre sem jöhetett. Ezt két Payload-generált migráció javította
 séma-drift, az admin listák, és a két kritikus pénzútvonal-hiba (a soha nem
 futó jobok és a díszlet-számlázási űrlap). Az 1. szakasz a bizonyítékokkal.
 
-**A következő feladatod a 2. szakaszban van** — kiemelten a **#41 PR**, amit
-**tilos merge-elni** (170 000 sort törölne), de a tartalmára szükség van.
+**A #41 PR ügye LEZÁRVA.** A tartalma — amit merge-elni tilos volt, mert
+170 000 sort törölt volna — friss branchen újraimplementálva élesbe ment
+(#64, #65), sőt kibővítve három olyan réssel, amit a régi PR nem fedett. A
+részletek az 1. és a 12. szakaszban.
+
+**A következő feladatod a 2. szakaszban van.**
 
 ⚠️ **A legfontosabb tanulság, ami rád is vonatkozik:** a ma feltárt hibák MIND
 némák voltak. Nem dobtak kivételt, nem írtak logot, a CI zöld volt, a Railway
@@ -47,9 +51,18 @@ javasolt CI-őr, ami gépivé tenné.
 | #61 | `82940ef` | Rendelések/Kosarak/Űrlapbeküldések listák + keresés-őr + doksi | `server_start` a SHA-val; migrációt nem igényelt |
 | #62 | `aaec794` | A soha nem futó jobok + a díszlet-számlázási űrlap | `Migrated: …job_utemezes_stats (8ms)`; `server_start` a SHA-val; a jobok azóta **tisztán futnak** (lásd lent) |
 | #53–#55 | `c514464` | Dependabot: `@types/react`, `posthog-js`, `tsx` | CI 5/5 zöld mindháromra, friss mainre ráállítva |
+| #64 | `babee08` | CMS-URL engedélylista + CORS/CSRF-eredetlista (a #41 nem access-control fele) | CI 4/4 zöld; fő fában 1587 teszt + `next build` exit 0 |
+| #65 | `7e21fbb` | jobs-jogosultság, `payload-jobs-stats` global, `streamAssetId`, `readVersions` (access-control) | CI zöld a VALÓDI S1+S2 kombináción; fő fában 1642 teszt + build exit 0; deploy a doksi írásakor sorban állt — **ellenőrizendő**: build-log + `server_start` |
 
 `/` · `/admin` · `/kurzusok` → HTTP 200. Railway: projekt `pretty-spontaneity`,
 service `Kineticare`, domain `kineticare-production.up.railway.app`.
+
+A #64 deploy tételesen igazolva (a CLAUDE.md üzemeltetési 1. pontja szerint —
+a „SUCCESS" önmagában NEM elég): a build-logban ott a tényleges `npm run build`
+→ `✓ Compiled successfully in 8.4s` (nem `Build · skipped`), mind a hat fázis
+`completed`, healthcheck `[1/1] succeeded`, `server_start` megvan, és a jobok
+azóta is tisztán futnak (percenként `webhook-retry`, 5 percenként `order-poll`,
+tickenként pontosan egy job, nulla hiba).
 
 **Amit ez megjavított:**
 
@@ -92,36 +105,30 @@ nem futott. Lásd a 11. szakaszt.
 > tartalmazza a bizonyítékokat. Ez a szakasz mostantól azt mondja meg, mi a
 > legközelebbi teendő.
 
-### 2.1 🔴 A #41 PR — NE MERGE-ELD, de a tartalma kell
+### 2.1 ✅ A #41 PR — LEZÁRVA, a tartalma élesben van
 
-A `fix/security-config-access` branchen álló **#41** PR (2026-08-09) valódi,
-**még mindig hiányzó** biztonsági szigorításokat tartalmaz — de **merge-elni
-tilos**: egy augusztus 9-i mainre épül, és a merge **170 000 sort törölne**,
-köztük a ma hozzáadott ÖSSZES migrációt (`szamlazz_megfeleles`,
-`szamlazz_attempts_seq`, `szamlazz_refunds_oszlop`,
-`sema_drift_allapotgep_es_jobok`, `job_utemezes_stats`), valamint visszaírná a
-`payload.config.ts`-t, a `plugins/ecommerce.ts`-t és a `payload-types.ts`-t a
-mai munka előtti állapotra.
+A `fix/security-config-access` branchen álló #41 PR (2026-08-09) valódi
+biztonsági szigorításokat tartalmazott, de merge-elni tilos volt: egy
+augusztus 9-i mainre épült, és a merge **170 000 sort törölt volna**, köztük az
+összes azóta keletkezett migrációt.
 
-**Ellenőrizve, mi hiányzik ma is a mainről:**
+**A helyes eljárás lefutott:** a hiányzó elemeket friss branchen, a mai main
+tetején implementáltuk újra (a #41 diffjét referenciaként, NEM másolatként
+használva — a bekötési pontokat a MAI kódból derítettük fel, mert a fájlok
+azóta átalakultak). Két külön PR lett belőle, és a kör **három olyan rést is
+lezárt, amit a #41 nem fedett** (`payload-jobs` collection CRUD, a
+`payload-jobs-stats` global, és a `readVersions`).
 
-| Tétel | Állapot a mainen |
+| Tétel a #41-ből | Hol landolt |
 | --- | --- |
-| `cors: [serverURL]` és `csrf: [serverURL]` a `payload.config.ts`-ben | **NINCS** — a Payload alapértelmezésben a kérés hostjához igazodik |
-| URL-allowlist | **NINCS** |
-| jobs-access | **NINCS** |
-| `streamAssetId` field-access | a mező megvan, `access` blokk NÉLKÜL |
-| `promoteFirstUserToOwner` (első-user flag) | **MEGVAN** (`src/collections/Users.ts`) |
+| `cors` / `csrf` engedélylista | #64 |
+| URL-allowlist (`sanitizeCmsUrl`) | #64 |
+| jobs-access | #65 |
+| `streamAssetId` field-access | #65 |
+| `promoteFirstUserToOwner` | már korábban a mainen volt |
+| `graphQL: { disable: true }` | már korábban a mainen volt |
 
-**A helyes eljárás:** a hiányzó elemeket **friss branchen, újra kell
-implementálni** a mai main tetején (a #41 diffjét referenciaként használva),
-NEM a régi branch merge-elésével. A #41-et utána le kell zárni „meghaladott"
-magyarázattal — ahogy a #40-nel is történt.
-
-⚠️ **CLAUDE.md 4. TILOS ZÓNA:** a jobs-access és a `streamAssetId`
-field-access **access-control-változás**, tehát PR nyitható rá, de **merge
-előtt emberi jóváhagyás kötelező**. A `cors`/`csrf` és az URL-allowlist nem
-access-szabály, azok külön, kockázatmentesebb körben mehetnek.
+A #41 ezután „meghaladott" magyarázattal lezárva — ahogy a #40-nel is történt.
 
 ### 2.2 A soron következő kód-feladatok
 
@@ -157,6 +164,14 @@ A teljes, priorizált lista a 3. szakaszban van. A három legfontosabb:
    blokkja ma nem tartalmaz `<orszag>` taget, tehát a rendszer csak belföldi
    számlát tud kiállítani. Ha a határon túli magyar vevő fontos szegmens, ez
    önálló kör: országmező a pénztárban + `<orszag>` a számla-XML-ben.
+3. **Levélből vagy keresőből érkezve a bejelentkezett látogató kijelentkezettnek
+   látszik az ELSŐ oldalletöltésen** (#64, a `csrf`-lista ára). A tulajdonos ezt
+   tudatosan vállalta. A VÁSÁRLÁSI ÚT NEM érintett — a köszönőoldalt külön
+   javítottuk, lásd 12.2. Részletes mérés: 12.1.
+4. **A szerkesztő nem tud elmenteni tiltott alakú webcímet** (#64). A blokk-linkek
+   és a „Külső link" menüpontok `url` mezője Payload `validate`-et kapott,
+   magyar hibaüzenettel, ami a jó alakot is megmondja. Üres érték továbbra is
+   érvényes ott, ahol a mező nem kötelező. **A lányoknak szólni kell róla.**
 
 ## 3. Nyitott, IGAZOLT tételek — prioritással
 
@@ -849,3 +864,133 @@ tisztázandók:
    HÁTRAVAN".
 4. **Adatbázis-mentés (C14)** — nincs. Éles Postgres-újraindítás mentés nélkül
    tilos (CLAUDE.md üzemeltetési 3.).
+
+---
+
+## 12. Biztonsági kör 3 — a #41 átmentése (#64, #65)
+
+Ez a szakasz azokat a megállapításokat rögzíti, amelyek **órákat spórolnak meg
+a következő ügynöknek**, mert mindegyik ellentmond a józan észnek, és
+mindegyiket MÉRÉS döntötte el, nem érvelés.
+
+### 12.1 A `csrf`-lista ára — valódi böngészővel kimérve
+
+A `csrf` bekapcsolása nem csak az admin-bejelentkezést érinti. A Payload
+`extractJWT` cookie-ága (`node_modules/payload/dist/auth/extractJWT.js`) így
+dönt: ha van `Origin` fejléc, annak szerepelnie kell a listán; ha NINCS
+`Origin`, a `Sec-Fetch-Site` dönt — `same-origin` / `same-site` / `none`
+elfogadva, **`cross-site` ÉS a fejléc hiánya elutasítva**.
+
+Chromiummal lemérve (a mérőszkript mintája: két helyi szerver, egy „idegen"
+originnel, plusz egy szerver-oldali 302):
+
+```
+külső oldalról kattintás →  /vedett     Sec-Fetch-Site: cross-site   Origin: —   Cookie: ELKÜLDVE
+szerver 302 után        →  /belepes    Sec-Fetch-Site: cross-site   Origin: —   Cookie: ELKÜLDVE
+belső navigáció         →  /favicon    Sec-Fetch-Site: same-origin
+```
+
+**A döntő tanulság: a `cross-site` jelölés a szerver-átirányítás UTÁN IS
+megmarad.** Vagyis a „dobjuk át `/belepes`-re" trükk NEM menti meg a
+munkamenetet — a böngésző a SameSite=Lax sütit elküldi, csak a Payload nem
+használja fel.
+
+Kontextus a mérlegeléshez: a Payload süti-alapértelmezése `sameSite: 'Lax'`
+(`collections/config/defaults.js`), és az **`up.railway.app` RAJTA VAN a Public
+Suffix Listen** — tehát a testvér Railway-alkalmazások ma külön site-nak
+számítanak, a Lax már blokkolja a sütis kereszt-oldali POST-ot. A `csrf` extra
+védelme ezért ma szűk; **saját doménre (`kineticare.hu`) váltva viszont az
+al-doménok azonos site-nak számítanak, és ott a `csrf` lesz az egyetlen
+védelem.** Ekkor a `NEXT_PUBLIC_SERVER_URL`-t is át kell állítani, különben
+minden sütis POST 401-et ad.
+
+### 12.2 A vásárlási út — miért nem szabad ott szerveren hitelesíteni
+
+A `/fizetes/koszonom` a Barion `redirectUrl`-je
+(`src/lib/checkout/start-checkout.ts`), tehát **minden fizetés kereszt-oldali,
+top-level GET-navigációval** érkezik a `secure.barion.com`-ról. A 12.1 szerint
+ilyenkor a szerver nem látja a süti-tokent. Ha az oldal szerveren hitelesítene,
+a frissen fizető vásárló **100%-ban** a „jelentkezz be" nézetet kapná a
+„Köszönjük a vásárlást!" helyett.
+
+A megoldás: az oldal csak a rendelésszámot adja át, a hitelesítést a
+kliens-oldali poll végzi — az azonos eredetű `fetch`, ami **küld** `Origin`
+fejlécet, tehát átmegy a csrf-szűrőn; a 401-ből `unauthorized` nézet lesz.
+Regresszió-őr: `src/__tests__/koszonom-oldal.test.ts`.
+
+**Általánosítva:** ha a jövőben bármelyik oldal külső rendszerből kap
+visszairányítást (fizetés, OAuth, e-mail-megerősítés), ott a hitelesítés NEM
+mehet szerver-oldali `payload.auth`-tal.
+
+### 12.3 A `serverURL` csapdája — miért NINCS beállítva
+
+Kézenfekvőnek tűnik a Payload `serverURL`-jét beállítani a `cors`/`csrf` mellé.
+**Ne tedd.** A media-mezők `afterRead` hookja (`uploads/getBaseFields.js`)
+`relative: false` + `serverURL` párossal hívja a `generateFilePathOrURL`-t, a
+`formatAdminURL` pedig pontosan ezen a feltételen dönt:
+
+```js
+if (relative || !serverURL) { return pathname }              // gyökér-relatív
+return new URL(pathnameWithBase, serverURLObj.origin).toString()   // ABSZOLÚT
+```
+
+A `next.config.ts`-ben nincs `images.remotePatterns`, a `MediaImage.tsx` pedig
+egyenesen a `next/image`-nek adja a `src`-t — **élesben minden CMS-kép
+`/_next/image` 400-at kapna.** A tesztsor ezt elvi okból nem fogja meg: a
+`next/image` hoszt-ellenőrzése `NODE_ENV=test` alatt kimarad.
+
+A védelem a `serverURL` nélkül is teljes: az `extractJWT` kizárólag
+`config.csrf`-et, a `headersWithCors` kizárólag `config.cors`-t olvassa.
+Regressziós teszt őrzi, hogy a media-URL gyökér-relatív marad.
+
+### 12.4 Amit a `sanitizeCmsUrl` valójában véd (a fenyegetési modell)
+
+**NEM `javascript:`-XSS.** Azt a React 19.2.8 már ma blokkolja, és nem csak
+fejlesztésben — a produkciós bundle-ben is
+(`react-dom-server.node.production.js`, `isJavaScriptProtocol` → `sanitizeURL`).
+A valódi érték: open redirect / adathalászat idegen hosztra, a protokoll-relatív
+`//idegen.example`, az egyéb sémák (`data:`, `blob:`, `file:`, `tel:`,
+`intent:`), és a determinisztikus, tesztelhető viselkedés.
+
+Két nem nyilvánvaló rés, amit zárni kellett: **vezérlőkarakter bárhol** a
+címben (a böngésző URL-értelmezője a szó belsejéből is kidobja őket, így a
+`/<TAB>/idegen.host` a mi szemünkben gyökér-relatív, a böngészőben
+protokoll-relatív), és a backslash (`/\idegen.host`).
+
+A szűrő az abszolút ágon **normalizált** alakot ad vissza (`parsed.href`), mert
+a hívók `/^https?:\/\//i` mintával döntik el, hogy külső link-e — a nyers
+`https:evil.example` erre nem illeszkedne, és külső cím belsőként renderelődne.
+Mellékhatás: a renderelt `href` percent-kódolt/punycode alakban jelenik meg
+ékezetes címeknél. A látogató ebből semmit nem lát (a felirat külön mező), de
+egy pontos href-egyezésre néző snapshot elbukna rajta.
+
+### 12.5 A jobs-felület három rétege — a `jobs.access` önmagában kevés
+
+| Réteg | Mit véd | Default a Payloadban |
+| --- | --- | --- |
+| `jobs.access` | `GET /api/payload-jobs/run` és `/handle-schedules` | bármely bejelentkezett user |
+| `payload-jobs` collection `access` | a szokásos CRUD REST-felület | bármely bejelentkezett user |
+| `payload-jobs-stats` global `access` | az ütemezés állapota | bármely bejelentkezett user |
+
+A **második** a súlyosabb: `POST /api/payload-jobs`-szal bárki jobot hozhatott
+létre tetszőleges `input`-tal, amit az autoRun-cron rendszer-jogosultsággal
+lefuttat. A **harmadik** pedig csendes DoS: a `handleSchedules` a global
+`lastScheduledRun` értékéből számol `nextRun`-t, tehát egy jövőbe állított
+értékkel az összes ütemezett job tartósan leállítható — és a saját
+`schedule-guard` sem oldja fel, mert az a `processing: true`-t várja.
+
+A globalt a Payload a **szanitizálás közben** tolja be, tehát előre nem
+konfigurálható: a zár a `buildConfig` EREDMÉNYÉRE kerül
+(`.then(restrictJobStatsGlobalAccess)`, `src/jobs/jobs-stats-access.ts`).
+
+Egyik szigorítás sem töri a saját működést: a `runJobs`, a `handleSchedules` és
+a `payload.jobs.queue` mind a `payload.db.*` rétegen megy, a local API
+`overrideAccess` alapértelmezése pedig `true` — az access-ágba be sem lép.
+
+### 12.6 Amit a `streamAssetId` szabály SZÁNDÉKOSAN nem néz
+
+Csak a vásárlás tényét nézi (szinkron, DB-mentes). A **lejáratot** a jegykiadás
+kényszeríti ki (`issue-stream-token.ts` 3/b, `accessDurationDays` →
+`expiresAt`). Következmény: a lejárt hozzáférésű vevő a REST-en még látja a
+GUID-ot, **lejátszani nem tudja**. A lejárat ide húzása aszinkron DB-kört
+jelentene minden termék minden videó-sorára egy listalekérdezésnél (N+1).
