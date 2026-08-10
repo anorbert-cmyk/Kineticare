@@ -1,9 +1,9 @@
 # Átadás-dokumentum: Számlázz.hu-megfelelőségi kör (#53) — állapot, döntések, hátralévő munka
 
 > **Kinek szól:** a következő agent-session (vagy emberi fejlesztő), aki ezt a kört
-> befejezi. **Készült:** 2026-08-09 ~23:30 UTC. **Önálló dokumentum** — a session
-> mulandó állapotára (scratchpad, futó folyamatok) nem támaszkodik; ami kell, az
-> a repóban van.
+> lezárja. **Készült:** 2026-08-09 ~23:30 UTC · **Frissítve: 2026-08-10 ~07:20 UTC
+> (a javító-kör után).** **Önálló dokumentum** — a session mulandó állapotára
+> (scratchpad, futó folyamatok) nem támaszkodik; ami kell, az a repóban van.
 
 ---
 
@@ -13,17 +13,21 @@
   **élesben kint és igazolva** (Railway build-logban tényleges `npm run build`,
   runtime `server_start` `commitSha=5d6f5da`, `turnstile_kikapcsolva` warn él).
 - **Munkabranch:** `claude/higgsfield-mcp-integration-za6671` — a mainről újraalapozva,
-  rajta **ez a kör** (lásd 3. szakasz commitjai). A branch pusholva, draft PR nyitva
-  (számát lásd a GitHubon a branchhez — a PR-leírás ennek a doksinak a kivonata).
-- **Kapu-állapot:** a `6c9a03f` commitnál TELJES kapu zölden futott
-  (typecheck ✔, vitest **1295 teszt / 0 bukó** ✔, lint 0 error ✔, build ✔).
-  Az azutáni commitok (admin-leírás, 2 generált migráció + séma, doksik) után
-  typecheck + a számlázós tesztek (113) újra zölden futottak; teljes kapu a
-  javító-kör után újra kötelező.
-- **A kör NEM mergelhető még:** a 3-lencsés adverszariális Opus-review **21
-  findingot** adott (7 egyedi súlyos + duplikátumok), a javításuk MÉG NEM történt
-  meg. A triázs és minden döntés a 4. szakaszban — a javítás ebből egy az egyben
-  implementálható.
+  rajta **ez a kör + a javító-kör** (lásd 3. szakasz). HEAD: `157d110`.
+- **PR:** **#56** (draft) — https://github.com/anorbert-cmyk/Kineticare/pull/56.
+  A leírás a kör teljes összefoglalója.
+- **Kapu-állapot (2026-08-10, `157d110`):** TELJES kapu zölden — typecheck ✔ ·
+  vitest **1335 passed / 0 failed** (83 fájl, 11 skipped) ✔ · lint 0 error
+  (1 örökölt, dokumentált warning) ✔ · build ✔. **A GitHub CI is zöld: 5/5 check**
+  (typecheck+vitest+lint, next build, npm audit, 2× gitleaks).
+- **✅ A REVIEW MIND A 21 FINDINGJA LEZÁRVA** (F1–F17; F17 tudatosan elfogadott
+  korlátként dokumentálva). A javító-kört 4 Opus-ügynök végezte, a döntések a
+  4. szakaszban maradtak meg — most már **teljesítés-naplóként**, hogy a merge
+  utáni vitákban (és a teszt-fiókos validálásnál) visszakereshető legyen, mit
+  miért így oldottunk meg.
+- **A merge kapuja most már csak emberi döntés kérdése.** A kör access-controlt
+  NEM érint; a `docs/szamlazz-megfeleles.md` és a PR-leírás minden fennmaradó
+  kockázatot néven nevez.
 
 ## 2. Kontextus — mi zárult le ma (előzmények)
 
@@ -49,11 +53,33 @@
 | `f6c977b` | **+31 teszt** (Opus T1-ügynök): lookup.test.ts (stubolt fetch), osztályozás, qty>1 egyenletek, AAM, dátum-öröklés, duplikátum/retry/plafon-ágak — mutációs ellenőrzéssel |
 | `6c9a03f` | **docs/szamlazz-megfeleles.md** (Opus T2-ügynök): 45 soros követelmény-tábla státuszokkal, 8 teszt-fiókos forgatókönyv (T1–T8), 8 pontos fiók-oldali checklist, üzemeltetési jegyzet + a szamlazz-storno.md tényjavításai |
 | (kicsi) | stornoAttempts admin-leírás konzisztencia |
-| `01b5726` | `correctiveInvoiceAttemptsSeq` oszlop + generált migráció (a 4. szakasz F1-döntésének előkészítése — **a mező már létezik és típusgenerálva van**, a KÓD még nem használja!) |
+| `01b5726` | `correctiveInvoiceAttemptsSeq` oszlop + generált migráció (az F1 előkészítése) |
 | `0a466fb` | A hivatalos követelmény-szintézis a repóba |
-| (ez) | Ez az átadás-doksi |
+| `395f0a5` | Ez az átadás-doksi (első kiadás) |
 
-## 4. A REVIEW 21 FINDINGJA ÉS A DÖNTÉSEK — a javító-kör specifikációja
+### 3.b A JAVÍTÓ-KÖR commitjai (2026-08-10, 4 Opus-ügynök + kézi összefésülés)
+
+| Commit | Tartalom |
+| --- | --- |
+| `436d847` | **F2, F5, F7, F9** — hibrid tételszámítás (tétel-szintű nettó-kerekítés, 2 tizedes egységár), bizonylat-egyedi `rendelesSzam` a helyesbítőn, `YYYY-MM-DD` dátum-kapu + escape, Europe/Budapest kiállítási dátum (`xml.ts`: `budapestDateString`, `isIsoDateString`) |
+| `109279a` | **F1, F3, F4, F10, F11** — seq-kulcsolt helyesbítő-plafon, a stornó-`szamlaKulsoAzon` és a rá épült lookup kivezetése + eszkaláció, retryable→`pending` a számla-ágon, lookup nem fogyaszt keretet, duplikátum-tény megőrzése a hibaüzenetben |
+| `456939f` | **F6, F12, F13, F16** — közös `bodyReadError` (törzs-olvasás osztályozása mindhárom kliensben), URL-query megőrzése + credential-tiltás, `szlahu_error` dekódolás, `SZAMLAZZ_AFAKULCS` induláskori assert |
+| `f5622b0` | Tesztek minden ágra (a suite 1295 → **1335** zöld) |
+| `157d110` | A két doksi átvezetése a javított állapotra (C6 → TISZTÁZANDÓ, új T-tételek, A9/A12/A14 igazítás, F17-szakasz) |
+
+> **Összefésülési jegyzet:** az `invoice.ts`-t két ügynök is szerkesztette (A: builder
+> + számítás + docblock; B: `issueInvoiceForOrder` folyamat). A 4 konfliktus
+> kommentekre és egy importra szorítkozott, kézzel oldva fel; a `storno.ts`
+> duplikált `isAbortError`-ját a C által bevezetett közös helperre cseréltem.
+> A B által előre jelzett 2 teszt-igazítás (F4/F10) és az F8 új állítása a
+> `szamlazz.test.ts`-ben elvégezve.
+
+## 4. A REVIEW 21 FINDINGJA — DÖNTÉSEK ÉS TELJESÍTÉS ✅
+
+> **STÁTUSZ (2026-08-10): mind a 17 tétel (F1–F17) LEZÁRVA.** Ez a szakasz már
+> nem feladatlista, hanem **teljesítés-napló**: megőrzi, mit miért így oldottunk
+> meg — a teszt-fiókos validálásnál és a későbbi vitákban ez a hivatkozási pont.
+> Az F17 tudatosan elfogadott korlátként, dokumentálva zárult.
 
 A 3 lencse (helyesség / szabályzat / protokoll-biztonság) findingjai
 duplikátum-összevonás után, **döntésekkel**. Jelölés: 🔴 = súlyos, 🟡 = kisebb.
@@ -236,21 +262,40 @@ A hivatkozott sorszámok a `01b5726` állapotra értendők — a friss kódot ol
   a teljes kiállítási szakasz `withAdvisoryLock('szamla:order:<id>')` alá tehető
   — a Barion-refund már így fut.)
 
-### A javító-kör kötelező zárása
-1. `npm run generate:types` NEM kell újra (a séma kész), de a **teljes kapu igen**:
-   typecheck + teljes vitest + lint + build (CI-mintájú álértékekkel).
-2. A `docs/szamlazz-megfeleles.md` érintett sorai (A9, A12, C3, C5, C6, plafon-tábla)
-   és a T-lista bővítése (qty>1, stornó-kulsoAzon, stornó-dátum) — a doksi NE
-   állítson többet, mint a kód.
-3. Fókuszált commitok, magyar üzenettel, a szokásos footerrel.
-4. Push után a draft PR leírását frissíteni (findingok → javítva státusz),
-   CI zöldre, majd — MIVEL A KÖR ACCESS-CONTROLT NEM ÉRINT — mehet a merge +
-   Railway deploy-ellenőrzés (build-logban TÉNYLEGES `npm run build` +
-   `server_start` az új SHA-val!). Merge után: `payload migrate` élesben a deploy
-   részeként fut? — NEM: a migrációkat a Railway indulás NEM futtatja automatikusan;
-   ellenőrizd a start-parancsot (`railway.json` / service-beállítás), és ha kell,
-   futtasd a `payload migrate`-et az éles DB-n a bevett módon (ahogy a
-   `20260809_180031` került fel — lásd repo-történet / deploy-doksi).
+### A javító-kör zárása — ✅ ELVÉGEZVE (2026-08-10)
+
+1. ✅ **Teljes kapu zölden** (`157d110`): typecheck · vitest **1335/0** · lint
+   0 error · build. **GitHub CI 5/5 zöld.**
+2. ✅ A `docs/szamlazz-megfeleles.md` és a `szamlazz-storno.md` átvezetve
+   (A9 hibrid képlet, A12/C3/C5 a stornó-lookup kivezetéséhez, C6 → TISZTÁZANDÓ,
+   A14 bizonylat-szintű számlálóval, F17-szakasz; T-lista **8 → 11 tétel**).
+3. ✅ Fókuszált commitok magyar üzenettel (3.b tábla).
+4. ✅ Push + a **PR #56 leírása** a végállapotra frissítve.
+
+### ⬅️ AMI MÉG HÁTRAVAN (a következő agentnek)
+
+1. **Merge-döntés és merge.** A PR draft — `ready for review`-ra állítás után
+   squash-merge a main-konvenció szerinti címmel: `<PR-cím> (#56)`. A kör
+   access-controlt NEM érint, a CI zöld, a kockázatok néven nevezve.
+2. **Railway deploy-ellenőrzés** a merge után: a build-logban TÉNYLEGES
+   `npm run build` fusson (a „SUCCESS" önmagában nem elég — CLAUDE.md
+   üzemeltetési 1.), és a runtime `server_start` sorban az ÚJ commit-SHA legyen.
+3. **⚠️ MIGRÁCIÓ ÉLESEN — ez a kör kritikus lépése.** A branch **két generált
+   migrációt** hoz (`20260809_223906_szamlazz_megfeleles` = 5 oszlop,
+   `20260809_232121_szamlazz_attempts_seq` = 1 oszlop). A Railway indulás NEM
+   futtat automatikusan `payload migrate`-et — ellenőrizd a start-parancsot
+   (`railway.json` + a service-beállítás, mert az utóbbi felülírja a fájlt), és
+   ha nincs benne, futtasd a migrációt az éles DB-n a bevett módon. **Amíg a
+   migráció nem futott le, az új mezőkre író kód hibára fut** — a kód viszont
+   csak akkor aktív, ha a `SZAMLAZZ_AGENT_KEY` be van állítva (ma nincs), tehát
+   éles hiba nem keletkezik, de a sorrend így is: migráció → kulcs.
+4. **Teszt-fiókos validálás** (11 forgatókönyv a megfelelőségi doksiban) — az
+   élesítés előfeltétele; kiemelten: stornó-`szamlaKulsoAzon` visszakereshetőség
+   (T10 — ha igazolt, a stornó-lookup visszahozható), stornó-dátum öröklése
+   (T11), qty>1 tizedes egységár elfogadása (T9).
+5. **Maintainer-teendő** (agent nem nyúlhat `.env*`-hez): `SZAMLAZZ_AFAKULCS`
+   kulcsnév az `.env.example`-be (érték nélkül) + a `SZAMLAZZ_API_URL` melletti
+   elavult komment frissítése (a default mostantól záró perjeles).
 
 ## 5. Környezet, fogások, azonosítók
 
@@ -278,11 +323,19 @@ A hivatkozott sorszámok a `01b5726` állapotra értendők — a friss kódot ol
   fő fát nem írnak; harvest a fő szálban `git diff HEAD` patch-ekkel).
   **Tesztből valódi hálózati hívás TILOS** — minden folyamat-teszt injektálja a
   `postXml` ÉS `queryByKulsoAzon` mockot (volt már kicsúszó éles hívás!).
-- **Ismert infra-hiba (múltbeli):** „permission handler returned updatedInput" —
-  workflow-ügynökök Bash-hívásait törte szórványosan; session-újraindulás óta nem
-  jelentkezett. Ha újra előjön: a munkát a fő szálban kell befejezni, a worktree-k
-  és a workflow-journal (`~/.claude/projects/.../subagents/workflows/<runId>/journal.jsonl`)
-  alapján minden visszanyerhető.
+- **Ismert infra-hiba:** „permission handler returned updatedInput" — workflow-
+  ügynökök Bash-hívásait töri SZÓRVÁNYOSAN. A javító-körben egyszer előfordult
+  (1 hívás, B ügynök), az ügynök utána zavartalanul folytatta — **nem blokkoló,
+  nem kell miatta workflow-t újraindítani.** Ha sorozatosan jelentkezne: a munkát
+  a fő szálban kell befejezni, a worktree-k és a workflow-journal
+  (`~/.claude/projects/.../subagents/workflows/<runId>/journal.jsonl`) alapján
+  minden visszanyerhető.
+- **Párhuzamossági korlát:** a workflow egyszerre ~2 ügynököt futtat (CPU-alapú
+  cap), a többi sorban áll — egy 4 ügynökös kör ~35–40 perc. Tervezz ezzel.
+- **Fájl-tulajdonlás fan-outnál:** a javító-kör tanulsága, hogy ha két ügynök
+  ugyanazt a fájlt kapja (más régióban), a harvest kézi összefésülést igényel.
+  Vagy add egy ügynöknek a teljes fájlt, vagy számíts a konfliktus-feloldásra
+  (a `git add -A` után `git apply --3way` a második patch-re jól működik).
 - **Review-findingok nyers anyaga:** e doksi 4. szakasza teljes körű; az eredeti
   21 finding a session-scratchpad `tasks/wn4vg8orx.output` fájljában volt (mulandó).
 
@@ -303,8 +356,10 @@ A hivatkozott sorszámok a `01b5726` állapotra értendők — a friss kódot ol
    checklistje — teszt-fiók, kisbetűs Agent-kulcs, **rendelésszám-ismétlés
    tiltásának bekapcsolása**, KIN előtag, e-számla/csomag, NAV technikai
    felhasználó, vevői fiók döntés, `SZAMLAZZ_AFAKULCS` könyvelővel.
-2. **Teszt-fiókos validálási lista** (T1–T8 + a javító-kör új T-tételei) —
-   éles bekötés ELŐTT futtatandó.
+2. **Teszt-fiókos validálási lista** (T1–T11 — a javító-kör 8-ról 11-re bővítette) —
+   éles bekötés ELŐTT futtatandó. A három új tétel a kör tudatos bizonytalanságait
+   fedi: T9 qty>1 tizedes egységár, T10 stornó-`szamlaKulsoAzon` visszakereshetőség,
+   T11 stornó teljesítési dátumának öröklése.
 3. **Turnstile élesítés**: `TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` PÁRBAN
    (env-assert őrzi; újrabuild nem kell).
 4. **Adatbázis-mentés (C14)** — továbbra sincs; éles Postgres-újraindítás tilos
