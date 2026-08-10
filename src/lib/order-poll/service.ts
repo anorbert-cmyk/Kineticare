@@ -1,10 +1,16 @@
 import type { Payload } from 'payload'
 
 import type { Order } from '../../payload-types'
-import { fetchPaymentState, mapBarionPaymentStatus, type BarionPaymentStateResponse } from '../barion'
+import {
+  BarionApiError,
+  fetchPaymentState,
+  mapBarionPaymentStatus,
+  type BarionPaymentStateResponse,
+} from '../barion'
 import { logger as rootLogger, type Logger } from '../logger'
 import { onOrderPaid, queueInvoiceIssueJob } from '../order-paid'
 import { applyBarionStateTransition } from '../order-status/apply-barion-state'
+import { getSzamlazzConfig } from '../szamlazz'
 
 /**
  * order-poll szolgáltatás (W4-02) — a payment_pending-ben ragadt rendelések
@@ -28,6 +34,11 @@ export interface OrderPollSummary {
   transitionedPaid: number
   cancelled: number
   stillPending: number
+  /**
+   * Érdemi vizsgálat nélkül kihagyott rendelések: (1) még türelmi időn belüli
+   * árva rendelés, (2) rendszerszintű Barion-hiba miatt megszakított futásban a
+   * sorra már nem került maradék (lásd isSystemicBarionFailure).
+   */
   skipped: number
   failed: number
   orphaned: number
@@ -43,10 +54,83 @@ export interface OrderPollDeps {
   onPaid?: (order: Order) => Promise<void>
   /** Injektálható (teszteléshez); alapból a valódi queueInvoiceIssueJob-hívás. */
   queueInvoice?: (orderId: number) => Promise<boolean>
+  /**
+   * Be van-e kapcsolva a Számlázz.hu-integráció? Injektálható (teszteléshez);
+   * alapból a `getSzamlazzConfig().enabled` (azaz: van-e SZAMLAZZ_AGENT_KEY).
+   */
+  invoicingEnabled?: () => boolean
   now?: number
 }
 
+/**
+ * RENDSZERSZINTŰ-e a Barion-hiba, azaz értelmetlen-e ugyanabban a futásban a
+ * többi rendelést is lekérdezni?
+ *
+ * Miért kell ez: a poll futásonként max. 25 függő rendelést pörget végig, és
+ * mindegyikre külön GetState-et hív. Ha a hiba oka NEM az adott fizetés
+ * (hanem hibás POSKey, elérhetetlen vagy leállt Barion API), akkor a maradék
+ * 24 hívás garantáltan ugyanúgy elhasal — csak fölösleges terhelés a
+ * szolgáltatón, és 24 további error-sor a naplóban. Ilyenkor a futás egyetlen
+ * aggregált riasztással megáll, és 5 perc múlva a következő futás újrapróbálja.
+ *
+ * ÉLES KOCKÁZAT, ami ezt kikényszerítette: ha a BARION_POSKEY_* ál-értékre van
+ * állítva, az induláskori ENV-assert (src/env.ts) ÁTENGEDI (csak a kulcs
+ * MEGLÉTÉT nézi, a helyességét nem) — a hiba először itt, a percenkénti/5
+ * percenkénti utánpollolásban jelentkezne, futásonként 25 hibás hívással.
+ *
+ * A hibafajtákat a strukturált BarionApiError hordozza (src/lib/barion/types.ts):
+ * - `timeout` / `network`: az API nem érhető el — mindenkire ugyanaz.
+ * - HTTP 401/403: hitelesítési hiba, tehát rossz POSKey — mindenkire ugyanaz.
+ * - HTTP 5xx: szolgáltatói kimaradás — mindenkire ugyanaz.
+ * - provider-hiba `Auth…` hibakóddal: a Barion HTTP 200-zal is jelezhet
+ *   hitelesítési hibát (Errors tömb), ezért a hibakódra is szűrünk.
+ * NEM rendszerszintű pl. a 404 (ez a fizetés nem található) — ott a többi
+ * rendelést tovább kell pollolni.
+ */
+export function isSystemicBarionFailure(error: unknown): boolean {
+  if (!(error instanceof BarionApiError)) {
+    return false
+  }
+  if (error.kind === 'timeout' || error.kind === 'network') {
+    return true
+  }
+  if (error.httpStatus === 401 || error.httpStatus === 403 || (error.httpStatus ?? 0) >= 500) {
+    return true
+  }
+  return error.providerErrors.some((providerError) => /auth/i.test(providerError.ErrorCode))
+}
+
+/**
+ * A Számlázz.hu-integráció állapota a poll szempontjából. A konfigfeloldás
+ * DOBHAT (pl. elgépelt SZAMLAZZ_API_URL) — ezt itt elnyeljük: a poll fő
+ * feladata a fizetések lezárása, azt egy számlázási konfighiba nem viheti el.
+ * Hibás konfig esetén a számlázás úgysem működne, ezért a resweep kimarad.
+ */
+function resolveInvoicingEnabled(deps: OrderPollDeps, log: Logger): boolean {
+  if (deps.invoicingEnabled) {
+    return deps.invoicingEnabled()
+  }
+  try {
+    return getSzamlazzConfig().enabled
+  } catch (error) {
+    log.warn('order-poll: a Számlázz.hu-konfiguráció hibás — a számla-resweep kimarad', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return false
+  }
+}
+
 async function resweepInvoices(deps: OrderPollDeps, log: Logger, summary: OrderPollSummary): Promise<void> {
+  if (!resolveInvoicingEnabled(deps, log)) {
+    // Kikapcsolt integrációnál (nincs SZAMLAZZ_AGENT_KEY) az invoice-issue task
+    // garantáltan 'disabled' kimenettel no-opol, az invoiceStatus tehát 'none'
+    // marad — a resweep így MINDEN futásban újra sorba állítaná UGYANAZT a 10
+    // rendelést. Élesben ez 5 percenként 10 fölösleges job-sor a payload_jobs
+    // táblában (napi ~2900) és ugyanennyi félrevezető info-log. A kulcs
+    // megérkezése után a resweep automatikusan behozza a lemaradást.
+    log.debug('order-poll: a Számlázz.hu-integráció kikapcsolva — a számla-resweep kimarad')
+    return
+  }
   const now = deps.now ?? Date.now()
   const candidates = await deps.payload.find({
     collection: 'orders',
@@ -103,9 +187,11 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
     overrideAccess: true,
   } as unknown as Parameters<Payload['find']>[0])
 
-  summary.scanned = pending.docs.length
+  const pendingOrders = pending.docs as Order[]
+  summary.scanned = pendingOrders.length
 
-  for (const order of pending.docs as Order[]) {
+  for (let index = 0; index < pendingOrders.length; index += 1) {
+    const order = pendingOrders[index]
     const orderLog = log.child({ orderId: order.id, orderNumber: order.orderNumber ?? null })
 
     if (!order.barionPaymentId) {
@@ -138,6 +224,21 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
       orderLog.warn('order-poll: GetState-hiba (a következő futás újrapollolja)', {
         error: error instanceof Error ? error.message : String(error),
       })
+      if (isSystemicBarionFailure(error)) {
+        const remaining = pendingOrders.length - (index + 1)
+        summary.skipped += remaining
+        log.error(
+          'RIASZTÁS: rendszerszintű Barion-hiba (hitelesítés vagy elérhetetlen API) — a futás megszakadt, ' +
+            'a maradék függő rendelés érintetlen. Ellenőrizd a Barion-környezetet és a POSKey-t; ' +
+            'a következő ütemezett futás újrapróbálja.',
+          {
+            barionErrorKind: error instanceof BarionApiError ? error.kind : 'unknown',
+            httpStatus: error instanceof BarionApiError ? (error.httpStatus ?? null) : null,
+            skippedOrders: remaining,
+          },
+        )
+        break
+      }
       continue
     }
 

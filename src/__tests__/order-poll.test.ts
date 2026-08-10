@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import type { BarionPaymentStateResponse } from '../lib/barion'
+import { BarionApiError, type BarionPaymentStateResponse } from '../lib/barion'
 import {
   INVOICE_PENDING_STALE_MS,
+  isSystemicBarionFailure,
   ORPHAN_ORDER_GRACE_MS,
   pollPendingOrders,
   STUCK_ORDER_WARN_MS,
@@ -123,12 +124,19 @@ function setup(options: SetupOptions = {}) {
     queuedInvoices.push(orderId)
     return true
   }
+  /**
+   * Bekapcsolt Számlázz.hu-integráció. INJEKTÁLVA, nem envből: a resweep-ág
+   * előfeltétele a `SZAMLAZZ_AGENT_KEY` megléte, a teszt viszont sosem függhet
+   * valódi (vagy ál-) agent-kulcstól. A kikapcsolt ágnak külön tesztje van.
+   */
+  const invoicingEnabled = (): boolean => true
 
   return {
     payload: payload as never,
     fetchState,
     onPaid,
     queueInvoice,
+    invoicingEnabled,
     user,
     orderUpdates,
     queuedInvoices,
@@ -257,12 +265,19 @@ describe('order-poll — árva rendelés (barionPaymentId nélkül)', () => {
 describe('order-poll — számla-resweep', () => {
   it("paid + invoiceStatus 'none' → újra sorba állítja az invoice-issue jobot", async () => {
     const paidOrder = createPendingOrder({ id: 202, status: 'paid', invoiceStatus: 'none' })
-    const { payload, fetchState, onPaid, queueInvoice, queuedInvoices } = setup({
+    const { payload, fetchState, onPaid, queueInvoice, invoicingEnabled, queuedInvoices } = setup({
       pending: [],
       paidResweep: [paidOrder],
     })
 
-    const summary = await pollPendingOrders({ payload, fetchState, onPaid, queueInvoice, now: NOW })
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      invoicingEnabled,
+      now: NOW,
+    })
 
     expect(queuedInvoices).toEqual([202])
     expect(summary.invoiceRequeued).toBe(1)
@@ -275,12 +290,19 @@ describe('order-poll — számla-resweep', () => {
       invoiceStatus: 'pending',
       updatedAt: new Date(NOW - 60_000).toISOString(),
     })
-    const { payload, fetchState, onPaid, queueInvoice, queuedInvoices } = setup({
+    const { payload, fetchState, onPaid, queueInvoice, invoicingEnabled, queuedInvoices } = setup({
       pending: [],
       paidResweep: [paidOrder],
     })
 
-    const summary = await pollPendingOrders({ payload, fetchState, onPaid, queueInvoice, now: NOW })
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      invoicingEnabled,
+      now: NOW,
+    })
 
     expect(queuedInvoices).toHaveLength(0)
     expect(summary.invoiceRequeued).toBe(0)
@@ -293,13 +315,177 @@ describe('order-poll — számla-resweep', () => {
       invoiceStatus: 'pending',
       updatedAt: new Date(NOW - INVOICE_PENDING_STALE_MS - 60_000).toISOString(),
     })
+    const { payload, fetchState, onPaid, queueInvoice, invoicingEnabled, queuedInvoices } = setup({
+      pending: [],
+      paidResweep: [paidOrder],
+    })
+
+    await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      invoicingEnabled,
+      now: NOW,
+    })
+
+    expect(queuedInvoices).toEqual([202])
+  })
+
+  /**
+   * Kikapcsolt Számlázz.hu-integráció (nincs SZAMLAZZ_AGENT_KEY — élesben ez a
+   * jelenlegi állapot). Az invoice-issue task ilyenkor garantáltan 'disabled'
+   * kimenettel no-opol, az invoiceStatus tehát 'none' marad: resweep-gát nélkül
+   * MINDEN ütemezett futás újra sorba állítaná ugyanazt a 10 rendelést, azaz
+   * élesben 5 percenként 10 fölösleges job-sor + félrevezető info-log.
+   */
+  it('kikapcsolt Számlázz.hu-integráció → NINCS resweep (nem termel fölösleges jobokat)', async () => {
+    const paidOrder = createPendingOrder({ id: 202, status: 'paid', invoiceStatus: 'none' })
     const { payload, fetchState, onPaid, queueInvoice, queuedInvoices } = setup({
       pending: [],
       paidResweep: [paidOrder],
     })
 
-    await pollPendingOrders({ payload, fetchState, onPaid, queueInvoice, now: NOW })
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      invoicingEnabled: () => false,
+      now: NOW,
+    })
 
-    expect(queuedInvoices).toEqual([202])
+    expect(queuedInvoices).toHaveLength(0)
+    expect(summary.invoiceRequeued).toBe(0)
+  })
+})
+
+/**
+ * Rendszerszintű Barion-hiba: megszakító (circuit-breaker) ág.
+ *
+ * Élesben ez a valós kockázat: ha a BARION_POSKEY_* ál-értékre van állítva, az
+ * induláskori ENV-assert ÁTENGEDI (csak a kulcs meglétét nézi), és a hiba
+ * először itt jelentkezik — gát nélkül futásonként 25 hibás Barion-hívással és
+ * 25 error-sorral. A megszakítás nem kapcsolja ki a funkciót: a következő
+ * ütemezett futás újrapróbálja, és a kulcs javítása után azonnal működik.
+ */
+describe('order-poll — rendszerszintű Barion-hiba megszakítja a futást', () => {
+  function pendingBatch(count: number): Order[] {
+    return Array.from({ length: count }, (_, index) =>
+      createPendingOrder({ id: 300 + index, orderNumber: `KH-2026-00${300 + index}` }),
+    )
+  }
+
+  it('hitelesítési hiba (HTTP 401) → az ELSŐ rendelés után megáll, a többi skipped', async () => {
+    const orders = pendingBatch(4)
+    const { payload, onPaid, queueInvoice } = setup({ pending: orders })
+    let calls = 0
+    const fetchState = async (): Promise<BarionPaymentStateResponse> => {
+      calls += 1
+      throw new BarionApiError({
+        message: 'Barion API hiba (HTTP 401, GET /v4/Payment/…/PaymentState).',
+        kind: 'http',
+        endpoint: 'GET /v4/Payment/{PaymentId}/PaymentState',
+        httpStatus: 401,
+      })
+    }
+
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      invoicingEnabled: () => false,
+      now: NOW,
+    })
+
+    expect(calls).toBe(1)
+    expect(summary.scanned).toBe(4)
+    expect(summary.failed).toBe(1)
+    expect(summary.skipped).toBe(3)
+  })
+
+  it.each([
+    ['timeout', new BarionApiError({ message: 'timeout', kind: 'timeout', endpoint: 'GET x' })],
+    ['network', new BarionApiError({ message: 'network', kind: 'network', endpoint: 'GET x' })],
+    [
+      'HTTP 503',
+      new BarionApiError({ message: '503', kind: 'http', endpoint: 'GET x', httpStatus: 503 }),
+    ],
+    [
+      'provider AuthenticationFailed',
+      new BarionApiError({
+        message: 'auth',
+        kind: 'provider',
+        endpoint: 'GET x',
+        httpStatus: 200,
+        providerErrors: [
+          { ErrorCode: 'AuthenticationFailed', Title: 'Hitelesítés', Description: '' },
+        ],
+      }),
+    ],
+  ])('%s → rendszerszintű, megszakít', async (_label, error) => {
+    const orders = pendingBatch(3)
+    const { payload, onPaid, queueInvoice } = setup({ pending: orders })
+    let calls = 0
+    const fetchState = async (): Promise<BarionPaymentStateResponse> => {
+      calls += 1
+      throw error
+    }
+
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      invoicingEnabled: () => false,
+      now: NOW,
+    })
+
+    expect(calls).toBe(1)
+    expect(summary.skipped).toBe(2)
+  })
+
+  /**
+   * A 404 EGY fizetésre vonatkozik (nincs ilyen PaymentId), nem az egész
+   * integrációra — a többi rendelést tovább KELL pollolni, különben egyetlen
+   * hibás rekord befagyasztaná az egész mentőhálót.
+   */
+  it('HTTP 404 (egy fizetés nem található) → NEM szakít meg, a többi rendelés lefut', async () => {
+    const orders = pendingBatch(3)
+    const { payload, onPaid, queueInvoice } = setup({ pending: orders })
+    let calls = 0
+    const fetchState = async (): Promise<BarionPaymentStateResponse> => {
+      calls += 1
+      throw new BarionApiError({
+        message: '404',
+        kind: 'http',
+        endpoint: 'GET x',
+        httpStatus: 404,
+      })
+    }
+
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      invoicingEnabled: () => false,
+      now: NOW,
+    })
+
+    expect(calls).toBe(3)
+    expect(summary.failed).toBe(3)
+    expect(summary.skipped).toBe(0)
+  })
+
+  it('a hibafajta-osztályozó nem BarionApiError-t nem minősít rendszerszintűnek', () => {
+    expect(isSystemicBarionFailure(new Error('fetch failed'))).toBe(false)
+    expect(isSystemicBarionFailure(undefined)).toBe(false)
+    expect(
+      isSystemicBarionFailure(
+        new BarionApiError({ message: '404', kind: 'http', endpoint: 'GET x', httpStatus: 404 }),
+      ),
+    ).toBe(false)
   })
 })
