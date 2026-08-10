@@ -201,9 +201,11 @@ describe('issueCorrectiveInvoiceForOrder', () => {
     })
 
     expect(result).toEqual({ outcome: 'issued', correctiveInvoiceNumber: 'KIN-2026-9' })
+    // F1: a kísérlet-számláló a refund-sorszámhoz kulcsolva íródik.
     expect(updates[0]).toEqual({
       correctiveInvoiceStatus: 'pending',
       correctiveInvoiceAttempts: 1,
+      correctiveInvoiceAttemptsSeq: 1,
     })
     expect(updates[1]).toEqual({
       correctiveInvoiceStatus: 'issued',
@@ -540,8 +542,43 @@ describe('issueCorrectiveInvoiceForOrder — idempotencia-feloldás és kísérl
     expect(order.correctiveInvoiceLastError).toContain('kézi egyeztetés')
   })
 
+  it('duplikátum-jelzés + HIBÁZÓ lekérdezés: a 71/152-tény a hibaüzenetben marad (F11)', async () => {
+    // A duplikátum-tény a legfontosabb információ az ügyintézőnek: a bizonylat
+    // a szolgáltatónál MÁR LÉTEZIK. Ha a lekérdezés hibája felülírná, kézzel
+    // kiállítanának egy másodikat (dupla NAV-adatszolgáltatás).
+    const order = createOrder()
+    const { payload } = createMockPayload(order)
+    await expect(
+      issueCorrectiveInvoiceForOrder(order, {
+        payload,
+        config: ENABLED_CONFIG,
+        queryByKulsoAzon: async () => {
+          throw new SzamlazzApiError({
+            message: 'A Számlázz.hu nem válaszolt 15000 ms-en belül (bizonylat-lekérdezés).',
+            kind: 'timeout',
+            retryable: true,
+          })
+        },
+        refundSeq: 1,
+        amountHuf: REFUND_HUF,
+        postXml: async () => {
+          throw duplicateError('71')
+        },
+      }),
+    ).rejects.toThrow('a bizonylat a Számlázz.hu szerint már létezik')
+
+    expect(order.correctiveInvoiceLastError).toContain('71/152')
+    expect(order.correctiveInvoiceLastError).toContain('már létezik')
+    // Az eredeti lekérdezés-hiba részlete sem veszik el.
+    expect(order.correctiveInvoiceLastError).toContain('nem válaszolt')
+    expect(order.correctiveInvoiceStatus).toBe('failed')
+  })
+
   it('retry ELŐTTI lekérdezés: találatnál a beküldés elmarad, a talált szám kerül a rendelésre', async () => {
-    const order = createOrder({ correctiveInvoiceAttempts: 1 })
+    const order = createOrder({
+      correctiveInvoiceAttempts: 1,
+      correctiveInvoiceAttemptsSeq: 1,
+    })
     const { payload } = createMockPayload(order)
     const lookups: string[] = []
     let posts = 0
@@ -565,13 +602,48 @@ describe('issueCorrectiveInvoiceForOrder — idempotencia-feloldás és kísérl
     expect(posts).toBe(0)
     expect(order.correctiveInvoiceNumber).toBe('KIN-2026-9')
     expect(order.correctiveInvoiceSeq).toBe(1)
-    expect(order.correctiveInvoiceAttempts).toBe(2)
+    // F10: a lekérdezés NEM fogyaszt beküldési kísérletet.
+    expect(order.correctiveInvoiceAttempts).toBe(1)
+  })
+
+  it('F10 — a lekérdezés HIBÁJA sem fogyaszt kísérletet (csak a tényleges POST)', async () => {
+    const order = createOrder({
+      correctiveInvoiceAttempts: 1,
+      correctiveInvoiceAttemptsSeq: 1,
+    })
+    const { payload, updates } = createMockPayload(order)
+    let posts = 0
+    await expect(
+      issueCorrectiveInvoiceForOrder(order, {
+        payload,
+        config: ENABLED_CONFIG,
+        queryByKulsoAzon: async () => {
+          throw new SzamlazzApiError({
+            message: 'A Számlázz.hu elérhetetlen (bizonylat-lekérdezés).',
+            kind: 'network',
+            retryable: true,
+          })
+        },
+        refundSeq: 1,
+        amountHuf: REFUND_HUF,
+        postXml: async () => {
+          posts += 1
+          return { szamlaszam: 'X' }
+        },
+      }),
+    ).rejects.toThrow('elérhetetlen')
+
+    expect(posts).toBe(0)
+    expect(order.correctiveInvoiceAttempts).toBe(1)
+    // Pending-írás sem történt: az egyetlen írás a hibaállapot rögzítése.
+    expect(updates.some((data) => data.correctiveInvoiceStatus === 'pending')).toBe(false)
   })
 
   it('kísérlet-plafon (5): failed, SE lekérdezés SE beküldés nem fut', async () => {
     const order = createOrder({
       correctiveInvoiceStatus: 'failed',
       correctiveInvoiceAttempts: MAX_CORRECTIVE_ATTEMPTS,
+      correctiveInvoiceAttemptsSeq: 1,
     })
     const { payload } = createMockPayload(order)
     let lookups = 0
@@ -597,5 +669,87 @@ describe('issueCorrectiveInvoiceForOrder — idempotencia-feloldás és kísérl
     expect(posts).toBe(0)
     expect(order.correctiveInvoiceStatus).toBe('failed')
     expect(order.correctiveInvoiceLastError).toContain('kimerült')
+  })
+})
+
+/**
+ * F1 — a kísérlet-plafon BIZONYLAT-szintű: a correctiveInvoiceAttempts csak a
+ * correctiveInvoiceAttemptsSeq-ben rögzített refund-sorszámhoz tartozik.
+ * Rendelés-szintű számlálóval a KÉSŐBBI részrefund bizonylata jogtalanul
+ * „kimerült"-re futna, és értelmetlen retry-lookup indulna egy még nem létező
+ * kulcsra.
+ */
+describe('issueCorrectiveInvoiceForOrder — seq-kulcsolt kísérlet-plafon (F1)', () => {
+  it('a kimerült seq=1 NEM blokkolja a seq=2-t: friss számlálóval indul', async () => {
+    const order = createOrder({
+      correctiveInvoiceStatus: 'failed',
+      correctiveInvoiceAttempts: MAX_CORRECTIVE_ATTEMPTS,
+      correctiveInvoiceAttemptsSeq: 1,
+    })
+    const { payload, updates } = createMockPayload(order)
+    const sentXml: string[] = []
+    const result = await issueCorrectiveInvoiceForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      // Új seq: retry-előtti lekérdezésnek NEM szabad futnia (a kulcs még nem
+      // létezhet a Számlázz.hu-nál).
+      queryByKulsoAzon: noLookup,
+      refundSeq: 2,
+      amountHuf: 2000,
+      postXml: async (xml) => {
+        sentXml.push(xml)
+        return { szamlaszam: 'KIN-2026-10' }
+      },
+    })
+
+    expect(result).toEqual({ outcome: 'issued', correctiveInvoiceNumber: 'KIN-2026-10' })
+    expect(sentXml).toHaveLength(1)
+    expect(updates[0]).toEqual({
+      correctiveInvoiceStatus: 'pending',
+      correctiveInvoiceAttempts: 1,
+      correctiveInvoiceAttemptsSeq: 2,
+    })
+    expect(order.correctiveInvoiceAttempts).toBe(1)
+    expect(order.correctiveInvoiceAttemptsSeq).toBe(2)
+  })
+
+  it('AZONOS seq újrapróbálása tovább számol (a plafon bizonylat-szinten fog)', async () => {
+    const order = createOrder({
+      correctiveInvoiceAttempts: 2,
+      correctiveInvoiceAttemptsSeq: 3,
+    })
+    const { payload } = createMockPayload(order)
+    const result = await issueCorrectiveInvoiceForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      queryByKulsoAzon: async () => null,
+      refundSeq: 3,
+      amountHuf: REFUND_HUF,
+      postXml: async () => ({ szamlaszam: 'KIN-2026-12' }),
+    })
+
+    expect(result.outcome).toBe('issued')
+    expect(order.correctiveInvoiceAttempts).toBe(3)
+    expect(order.correctiveInvoiceAttemptsSeq).toBe(3)
+  })
+
+  it('a plafon-ág is a kért sorszámra állítja a számláló-kulcsot', async () => {
+    const order = createOrder({
+      correctiveInvoiceAttempts: MAX_CORRECTIVE_ATTEMPTS,
+      correctiveInvoiceAttemptsSeq: 2,
+    })
+    const { payload } = createMockPayload(order)
+    const result = await issueCorrectiveInvoiceForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      queryByKulsoAzon: noLookup,
+      refundSeq: 2,
+      amountHuf: REFUND_HUF,
+      postXml: async () => expect.unreachable('nem hívható'),
+    })
+
+    expect(result.outcome).toBe('failed')
+    expect(order.correctiveInvoiceAttemptsSeq).toBe(2)
+    expect(order.correctiveInvoiceStatus).toBe('failed')
   })
 })

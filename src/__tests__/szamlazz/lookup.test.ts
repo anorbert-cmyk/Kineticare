@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getSzamlazzConfig } from '../../lib/szamlazz/client'
+import { getSzamlazzConfig, parseAgentResponse, postInvoiceXml } from '../../lib/szamlazz/client'
 import {
   buildInvoiceLookupXml,
   queryInvoiceByKulsoAzon,
@@ -55,6 +55,35 @@ function agentResponse(body: string, init: ResponseInit = {}): Response {
   return new Response(body, { status: 200, ...init })
 }
 
+/**
+ * Olyan válasz, amelynek a FEJLÉCEI megérkeztek (status 200), de a TÖRZSE
+ * olvasás közben szakad meg. Ez a valóságban két módon áll elő: az
+ * AbortSignal.timeout a fejlécek UTÁN sül el, vagy a Railway privát hálózata
+ * vágja el a TCP-kapcsolatot félúton. A `response.text()` ilyenkor NYERS
+ * hibával utasít el — a kliensnek ezt kell retryable SzamlazzApiError-rá
+ * osztályoznia, különben a hívó nem állítja sorba az újrapróbáló jobot.
+ */
+function bodyFailingResponse(error: Error): Response {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.error(error)
+    },
+  })
+  return new Response(stream, { status: 200 })
+}
+
+/** Törzs-olvasás közben elsülő időtúllépés (AbortSignal.timeout). */
+function streamTimeoutError(): Error {
+  const error = new Error('The operation was aborted due to timeout')
+  error.name = 'TimeoutError'
+  return error
+}
+
+/** Félbeszakadt stream (TCP-vágás) — a fetch nyers TypeError-t ad. */
+function streamCutError(): Error {
+  return new TypeError('terminated')
+}
+
 const SUCCESS_BODY =
   '<?xml version="1.0" encoding="UTF-8"?><xmlszamlavalasz>' +
   `<sikeres>true</sikeres><szamlaszam>${FOUND_INVOICE_NUMBER}</szamlaszam>` +
@@ -93,6 +122,7 @@ async function apiErrorOf(promise: Promise<unknown>): Promise<SzamlazzApiError> 
 afterEach(() => {
   calls.length = 0
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('buildInvoiceLookupXml — xmlszamlapdf lekérdező séma', () => {
@@ -224,5 +254,160 @@ describe('queryInvoiceByKulsoAzon — bizonylat-lekérdezés (mockolt fetch)', (
     expect(error.kind).toBe('invalid_data')
     expect(error.retryable).toBe(false)
     expect(calls).toHaveLength(0)
+  })
+})
+
+/**
+ * F6 — a válasz-TÖRZS olvasása közben keletkező hiba osztályozása.
+ *
+ * A fejlécek megérkezése után a stream még elszakadhat (timeout a törzs
+ * olvasása közben, TCP-vágás félúton). Osztályozás nélkül ez nyers
+ * TypeError-ként lépne ki: elveszne a `retryable` jelzés, a refund-folyamat nem
+ * állítaná sorba az újrapróbáló jobot, és a bizonylat NÉMÁN elveszne.
+ */
+describe('törzs-olvasási hiba osztályozása (F6)', () => {
+  it('lekérdezés: időtúllépés a törzs olvasása közben → retryable timeout-hiba', async () => {
+    stubFetch(() => bodyFailingResponse(streamTimeoutError()))
+
+    const error = await apiErrorOf(queryInvoiceByKulsoAzon(ORDER_NUMBER, ENABLED_CONFIG))
+    expect(error.kind).toBe('timeout')
+    expect(error.retryable).toBe(true)
+    // Magyar üzenet, a hívó ágának megnevezésével.
+    expect(error.message).toContain('bizonylat-lekérdezés')
+  })
+
+  it('lekérdezés: félbeszakadt stream (nyers TypeError) → retryable network-hiba', async () => {
+    stubFetch(() => bodyFailingResponse(streamCutError()))
+
+    const error = await apiErrorOf(queryInvoiceByKulsoAzon(ORDER_NUMBER, ENABLED_CONFIG))
+    expect(error.kind).toBe('network')
+    expect(error.retryable).toBe(true)
+    expect(error.message).toContain('terminated')
+  })
+
+  it('lekérdezés: a strukturált agent-hiba VÁLTOZATLAN marad (nem lesz belőle network)', async () => {
+    // A 71-es (duplikátum) besorolásnak túl kell élnie a törzs-védelmet:
+    // újracsomagolva a hívó idempotencia-feloldása állna le.
+    stubFetch(() => agentResponse(errorBody('71', 'Már létező rendelésszám.')))
+
+    const error = await apiErrorOf(queryInvoiceByKulsoAzon(ORDER_NUMBER, ENABLED_CONFIG))
+    expect(error.kind).toBe('duplicate')
+    expect(error.agentErrors[0]?.code).toBe('71')
+  })
+
+  it('számla-beküldés: időtúllépés a törzs olvasása közben → retryable timeout-hiba', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    stubFetch(() => bodyFailingResponse(streamTimeoutError()))
+
+    const error = await apiErrorOf(postInvoiceXml('<xmlszamla/>', ENABLED_CONFIG))
+    expect(error.kind).toBe('timeout')
+    expect(error.retryable).toBe(true)
+  })
+
+  it('számla-beküldés: félbeszakadt stream → retryable network-hiba', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    stubFetch(() => bodyFailingResponse(streamCutError()))
+
+    const error = await apiErrorOf(postInvoiceXml('<xmlszamla/>', ENABLED_CONFIG))
+    expect(error.kind).toBe('network')
+    expect(error.retryable).toBe(true)
+  })
+
+  it('számla-beküldés: a duplikátum-besorolás VÁLTOZATLAN marad', async () => {
+    stubFetch(() => agentResponse(errorBody('152', 'Már létező rendelésszám.')))
+
+    const error = await apiErrorOf(postInvoiceXml('<xmlszamla/>', ENABLED_CONFIG))
+    expect(error.kind).toBe('duplicate')
+    expect(error.retryable).toBe(false)
+  })
+})
+
+/**
+ * F12 — a végpont-normalizálás nem dobhatja el a query stringet: egy
+ * '…/agent?env=test' proxy-végpontból elhagyott paraméterrel ÉLES bizonylat
+ * keletkezne teszt-szándék mellett (miközben az elgépelt URL-re szándékosan
+ * hangos hiba van).
+ */
+describe('getSzamlazzConfig — URL-normalizálás (F12)', () => {
+  it('a query string megmarad a záró perjel mellett', () => {
+    const config = getSzamlazzConfig({ SZAMLAZZ_API_URL: 'https://proxy.example/agent?env=test' })
+    expect(config.apiUrl).toBe('https://proxy.example/agent/?env=test')
+  })
+
+  it('több paraméter és meglévő záró perjel esetén is változatlan a query', () => {
+    const config = getSzamlazzConfig({
+      SZAMLAZZ_API_URL: 'https://proxy.example/agent/?env=test&mod=1',
+    })
+    expect(config.apiUrl).toBe('https://proxy.example/agent/?env=test&mod=1')
+  })
+
+  it('query nélkül nem kerül üres kérdőjel az URL végére', () => {
+    expect(getSzamlazzConfig({}).apiUrl).toBe('https://www.szamlazz.hu/szamla/')
+  })
+
+  it('beágyazott felhasználónév/jelszó: hangos konfigurációs hiba, a jelszó kiírása nélkül', () => {
+    // DUMMY értékek, egyértelműen jelölve — NEM valódi hitelesítő adatok.
+    const withCredentials = 'https://DUMMY-FELHASZNALO:DUMMY-JELSZO-NEM-VALODI@proxy.example/agent'
+
+    expect(() => getSzamlazzConfig({ SZAMLAZZ_API_URL: withCredentials })).toThrowError(
+      /felhasználónevet vagy jelszót/,
+    )
+    // A hibaüzenet naplóba is kerülhet: a beágyazott jelszó nem szerepelhet benne.
+    let message = ''
+    try {
+      getSzamlazzConfig({ SZAMLAZZ_API_URL: withCredentials })
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error)
+    }
+    expect(message).not.toContain('DUMMY-JELSZO-NEM-VALODI')
+  })
+
+  it('csak felhasználónév (jelszó nélkül) esetén is dob', () => {
+    expect(() =>
+      getSzamlazzConfig({ SZAMLAZZ_API_URL: 'https://DUMMY-FELHASZNALO@proxy.example/agent' }),
+    ).toThrowError(/SZAMLAZZ_API_URL/)
+  })
+})
+
+/**
+ * F13 — a `szlahu_error` fejléc értéke URL-kódolt (hivatalos A6). Dekódolás
+ * nélkül a rendelés *LastError mezőjében az ügyintéző
+ * 'Sikertelen+bejelentkez%C3%A9s'-t látna.
+ */
+describe('parseAgentResponse — szlahu_error fejléc URL-dekódolása (F13)', () => {
+  it('a kódolt fejléc olvasható magyar mondatként kerül a hibába', () => {
+    let captured: unknown
+    try {
+      parseAgentResponse(
+        '',
+        new Headers({
+          szlahu_error: 'Sikertelen+bejelentkez%C3%A9s',
+          szlahu_error_code: '3',
+        }),
+      )
+    } catch (error) {
+      captured = error
+    }
+    expect(captured).toBeInstanceOf(SzamlazzApiError)
+    if (!(captured instanceof SzamlazzApiError)) {
+      throw new Error('TESZT-HIBA: a fejléc-hiba nem SzamlazzApiError')
+    }
+    expect(captured.agentErrors[0]).toEqual({ code: '3', message: 'Sikertelen bejelentkezés' })
+    expect(captured.message).toContain('Sikertelen bejelentkezés')
+    expect(captured.message).not.toContain('%C3%A9')
+  })
+
+  it('hibás kódolásnál a nyers érték marad (a hibaüzenet nem veszhet el)', () => {
+    let captured: unknown
+    try {
+      parseAgentResponse('', new Headers({ szlahu_error: 'Hib%GG+kodolas' }))
+    } catch (error) {
+      captured = error
+    }
+    expect(captured).toBeInstanceOf(SzamlazzApiError)
+    if (!(captured instanceof SzamlazzApiError)) {
+      throw new Error('TESZT-HIBA: a fejléc-hiba nem SzamlazzApiError')
+    }
+    expect(captured.agentErrors[0]?.message).toBe('Hib%GG+kodolas')
   })
 })

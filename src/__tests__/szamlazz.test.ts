@@ -10,9 +10,12 @@ import {
   issueInvoiceForOrder,
   itemsFromOrder,
   MAX_INVOICE_ATTEMPTS,
+  VAT_RATE_PERCENT,
+  type InvoiceLineAmounts,
 } from '../lib/szamlazz/invoice'
 import type { InvoiceLookupResult } from '../lib/szamlazz/pdf'
 import { SzamlazzApiError } from '../lib/szamlazz/types'
+import { budapestDateString, isIsoDateString } from '../lib/szamlazz/xml'
 import type { Order } from '../payload-types'
 
 /**
@@ -95,51 +98,100 @@ describe('computeLineAmounts — 27% ÁFA, bruttóból', () => {
 })
 
 /**
- * A Számlázz.hu NEM számol, hanem tételenként VALIDÁLJA az egyenleteket
+ * A Számlázz.hu NEM számol, hanem tételenként VALIDÁLJA a három egyenletet
  * (259–264 hibakódok):
- *   nettoEgysegar × mennyiseg = nettoErtek   és   nettoErtek + afaErtek = bruttoErtek
- * Ezért a számítás EGYSÉGÁR-alapú (előbb az egy darabra eső összeg kerekedik),
- * és a tételösszegek ennek pontos többszörösei.
+ *   (1) nettoEgysegar × mennyiseg = nettoErtek
+ *   (2) nettoErtek × afakulcs / 100 = afaErtek
+ *   (3) nettoErtek + afaErtek = bruttoErtek
+ * Egész forintos összegekkel mindhárom EGYSZERRE nem tartható — a HIBRID
+ * számítás (bruttó tétel-érték + legfeljebb 2 tizedes nettó egységár) az
+ * eltérést oda tolja, ahol a legkisebb: (3) pontos, (2) ≤ ~0,64 Ft
+ * MENNYISÉGTŐL FÜGGETLENÜL, (1) ≤ 0,005 × mennyiseg (99 db-nál is ≤ 0,5 Ft).
+ * A korábbi, egységár-szintű kerekítés a (2) hibáját a mennyiséggel szorozta
+ * (7 db → 1,4 Ft; 99 db → ~20 Ft) — az a 260/263 hibakód kockázata volt.
  */
 describe('computeLineAmounts — tétel-egyenletek mennyiség > 1 esetén', () => {
-  it('nettoEgysegar × mennyiseg = nettoErtek PONTOSAN (a tétel-szintű kerekítés elcsúszna)', () => {
-    for (const [bruttoEgysegar, mennyiseg] of [
-      [9999, 3],
-      [19990, 7],
-    ] as const) {
-      const amounts = computeLineAmounts({ megnevezes: 'Kurzus', mennyiseg, bruttoEgysegar })
-      const label = `${bruttoEgysegar} × ${mennyiseg}`
-      // Az EGYENLET, amit a Számla Agent ellenőriz — fillérre teljesülnie kell.
-      expect(Number(amounts.nettoEgysegar) * mennyiseg, label).toBe(amounts.nettoErtek)
-      expect(amounts.nettoErtek + amounts.afaErtek, label).toBe(amounts.bruttoErtek)
-      expect(amounts.bruttoErtek, label).toBe(bruttoEgysegar * mennyiseg)
+  /** A checkout 1–99 db-ot enged — a széleket és néhány közbenső értéket nézzük. */
+  const QUANTITIES = [1, 3, 7, 10, 99] as const
+  const PRICES = [9999, 19990, 1] as const
+
+  /** A három hivatalos egyenlet a dokumentált tűréssel. */
+  function expectLineEquations(
+    amounts: InvoiceLineAmounts,
+    mennyiseg: number,
+    vatRate: number,
+    label: string,
+  ): void {
+    expect(
+      Math.abs(Number(amounts.nettoEgysegar) * mennyiseg - amounts.nettoErtek),
+      `(1) egységár × mennyiség — ${label}`,
+    ).toBeLessThanOrEqual(0.5)
+    expect(
+      Math.abs(amounts.nettoErtek * vatRate - amounts.afaErtek),
+      `(2) nettó × áfakulcs — ${label}`,
+    ).toBeLessThanOrEqual(1)
+    expect(amounts.nettoErtek + amounts.afaErtek, `(3) nettó + áfa — ${label}`).toBe(
+      amounts.bruttoErtek,
+    )
+  }
+
+  it('27%: mindhárom egyenlet a tűrésen belül, a bruttó tétel-érték PONTOS', () => {
+    for (const bruttoEgysegar of PRICES) {
+      for (const mennyiseg of QUANTITIES) {
+        const amounts = computeLineAmounts({ megnevezes: 'Kurzus', mennyiseg, bruttoEgysegar })
+        const label = `${bruttoEgysegar} × ${mennyiseg}`
+        expectLineEquations(amounts, mennyiseg, VAT_RATE_PERCENT / 100, label)
+        expect(amounts.bruttoErtek, label).toBe(bruttoEgysegar * mennyiseg)
+        // A nettó egységár alakja: pont tizedesjel, legfeljebb 2 tizedes.
+        expect(amounts.nettoEgysegar, label).toMatch(/^\d+(\.\d{1,2})?$/)
+      }
     }
   })
 
-  it('AAM (alanyi adómentes): nettoErtek = bruttoErtek, afaErtek = 0', () => {
-    const amounts = computeLineAmounts(
-      { megnevezes: 'Kurzus', mennyiseg: 4, bruttoEgysegar: 19990 },
-      { vatMode: 'AAM' },
-    )
-    expect(amounts.bruttoErtek).toBe(79960)
-    expect(amounts.nettoErtek).toBe(amounts.bruttoErtek)
-    expect(amounts.afaErtek).toBe(0)
-    expect(Number(amounts.nettoEgysegar) * 4).toBe(amounts.nettoErtek)
+  it('mennyiseg=1: az egységár PONTOSAN a nettoErtek (visszafelé kompatibilis, tizedesek nélkül)', () => {
+    const amounts = computeLineAmounts({ megnevezes: 'Kurzus', mennyiseg: 1, bruttoEgysegar: 19990 })
+    expect(amounts.nettoEgysegar).toBe(String(amounts.nettoErtek))
+    expect(Number(amounts.nettoEgysegar) * 1).toBe(amounts.nettoErtek)
+  })
+
+  it('az áfa-egyenlet hibája NEM nő a mennyiséggel (a regresszió, amit a hibrid megszüntetett)', () => {
+    const eltereses = QUANTITIES.map((mennyiseg) => {
+      const amounts = computeLineAmounts({ megnevezes: 'Kurzus', mennyiseg, bruttoEgysegar: 19990 })
+      return Math.abs(amounts.nettoErtek * (VAT_RATE_PERCENT / 100) - amounts.afaErtek)
+    })
+    // Az egységár-alapú kerekítés qty=99-nél ~20 Ft-ot adott volna itt.
+    expect(Math.max(...eltereses)).toBeLessThanOrEqual(0.64)
+  })
+
+  it('AAM (alanyi adómentes): nettoErtek = bruttoErtek, afaErtek = 0 minden mennyiségre', () => {
+    for (const mennyiseg of QUANTITIES) {
+      const amounts = computeLineAmounts(
+        { megnevezes: 'Kurzus', mennyiseg, bruttoEgysegar: 19990 },
+        { vatMode: 'AAM' },
+      )
+      const label = `AAM × ${mennyiseg}`
+      expect(amounts.bruttoErtek, label).toBe(19990 * mennyiseg)
+      expect(amounts.nettoErtek, label).toBe(amounts.bruttoErtek)
+      expect(amounts.afaErtek, label).toBe(0)
+      expectLineEquations(amounts, mennyiseg, 0, label)
+    }
   })
 
   it('negatív (korrekciós) tétel: mind a négy érték előjelet vált, az egyenletek állnak', () => {
-    const positive = computeLineAmounts({ megnevezes: 'x', mennyiseg: 3, bruttoEgysegar: 9999 })
-    const negative = computeLineAmounts(
-      { megnevezes: 'x', mennyiseg: 3, bruttoEgysegar: -9999 },
-      { allowNegative: true },
-    )
-    expect(negative.nettoEgysegar).toBe(`-${positive.nettoEgysegar}`)
-    expect(negative.nettoErtek).toBe(-positive.nettoErtek)
-    expect(negative.afaErtek).toBe(-positive.afaErtek)
-    expect(negative.bruttoErtek).toBe(-positive.bruttoErtek)
-    // Az egyenletek negatív tételen is teljesülnek (a helyesbítő így nullázza az eredetit).
-    expect(Number(negative.nettoEgysegar) * 3).toBe(negative.nettoErtek)
-    expect(negative.nettoErtek + negative.afaErtek).toBe(negative.bruttoErtek)
+    for (const mennyiseg of QUANTITIES) {
+      const positive = computeLineAmounts({ megnevezes: 'x', mennyiseg, bruttoEgysegar: 9999 })
+      const negative = computeLineAmounts(
+        { megnevezes: 'x', mennyiseg, bruttoEgysegar: -9999 },
+        { allowNegative: true },
+      )
+      const label = `helyesbítő × ${mennyiseg}`
+      expect(negative.nettoEgysegar, label).toBe(`-${positive.nettoEgysegar}`)
+      expect(negative.nettoErtek, label).toBe(-positive.nettoErtek)
+      expect(negative.afaErtek, label).toBe(-positive.afaErtek)
+      expect(negative.bruttoErtek, label).toBe(-positive.bruttoErtek)
+      // Az egyenletek negatív tételen is teljesülnek (a helyesbítő így nullázza az eredetit).
+      expectLineEquations(negative, mennyiseg, VAT_RATE_PERCENT / 100, label)
+    }
   })
 })
 
@@ -253,6 +305,118 @@ describe('buildInvoiceXml — áfakulcs és teljesítési dátum', () => {
   it('teljesitesDatum nélkül a teljesítés a kiállítás napja', () => {
     const xml = buildInvoiceXml(BASE)
     expect(xml).toContain('<teljesitesDatum>2026-08-04</teljesitesDatum>')
+  })
+
+  /**
+   * A <rendelesSzam> a provider-oldali duplikátum-védelem kulcsa (a fiókban
+   * bekapcsolt rendelésszám-ismétlés-tiltás ezt figyeli). A helyesbítő önálló
+   * bizonylat: az eredeti számla rendelésszámával minden helyesbítő azonnal
+   * 71/152-be futna, és a feloldó lekérdezés sem találna semmit.
+   */
+  describe('rendelesSzam — a helyesbítő saját, bizonylat-egyedi kulcsot küld', () => {
+    const CORRECTIVE_KULSO_AZON = `${ORDER_NUMBER}-HELYESBITO-2`
+    const corrective = buildInvoiceXml({
+      ...BASE,
+      corrective: {
+        originalInvoiceNumber: 'KIN-2026-7',
+        kulsoAzon: CORRECTIVE_KULSO_AZON,
+      },
+    })
+
+    it('helyesbítőn a rendelesSzam a saját kulsoAzon (NEM az eredeti rendelésszám)', () => {
+      expect(corrective).toContain(`<rendelesSzam>${CORRECTIVE_KULSO_AZON}</rendelesSzam>`)
+      expect(corrective).not.toContain(`<rendelesSzam>${ORDER_NUMBER}</rendelesSzam>`)
+      // A visszakeresési kulcs ugyanez — a 71/152 feloldása így a HELYES
+      // bizonylatot találja meg.
+      expect(corrective).toContain(`<szamlaKulsoAzon>${CORRECTIVE_KULSO_AZON}</szamlaKulsoAzon>`)
+      expect(corrective).toContain('<helyesbitoszamla>true</helyesbitoszamla>')
+    })
+
+    it('normál számlán a rendelesSzam változatlanul az orderNumber', () => {
+      const normal = buildInvoiceXml(BASE)
+      expect(normal).toContain(`<rendelesSzam>${ORDER_NUMBER}</rendelesSzam>`)
+      expect(normal).toContain(`<szamlaKulsoAzon>${ORDER_NUMBER}</szamlaKulsoAzon>`)
+    })
+  })
+
+  /**
+   * A teljesítési dátum forrása egy szabad szöveges DB-mező
+   * (orders.invoiceCompletionDate) — az admin readOnly jelölés NEM API-védelem.
+   * Kapu nélkül staff-jogosultsággal tetszőleges XML-részlet becsempészhető
+   * lenne a bizonylatba.
+   */
+  describe('dátum-kapu — csak YYYY-MM-DD mehet ki', () => {
+    /** A kapun elakadó érték: VÉGLEGES hiba (az újraküldés ugyanezt adná). */
+    function expectDateRejected(input: Parameters<typeof buildInvoiceXml>[0], mezo: string): void {
+      let thrown: unknown
+      try {
+        buildInvoiceXml(input)
+      } catch (error) {
+        thrown = error
+      }
+      expect(thrown, mezo).toBeInstanceOf(SzamlazzApiError)
+      const error = thrown as SzamlazzApiError
+      expect(error.kind, mezo).toBe('invalid_data')
+      expect(error.retryable, mezo).toBe(false)
+      expect(error.message, mezo).toContain(mezo)
+      expect(error.message, mezo).toContain('YYYY-MM-DD')
+    }
+
+    it('XML-injektálás a teljesitesDatum-on keresztül: dobás, nem escape-elt kimenet', () => {
+      expectDateRejected(
+        {
+          ...BASE,
+          teljesitesDatum: '2026-01-31</teljesitesDatum><elonezetpdf>true</elonezetpdf>',
+        },
+        'teljesitesDatum',
+      )
+    })
+
+    it('üres és rossz alakú dátumok elutasítva (teljesítés és kelt egyaránt)', () => {
+      for (const rossz of ['', '   ', '2026-1-31', '2026.01.31', '31/01/2026', '2026-01-31T00:00:00Z']) {
+        expectDateRejected({ ...BASE, teljesitesDatum: rossz }, 'teljesitesDatum')
+        expectDateRejected({ ...BASE, issueDate: rossz }, 'keltDatum')
+      }
+    })
+
+    it('helyes alakú dátum változatlanul kerül a kimenetre', () => {
+      const xml = buildInvoiceXml({ ...BASE, issueDate: '2026-08-04', teljesitesDatum: '2026-07-15' })
+      expect(xml).toContain('<keltDatum>2026-08-04</keltDatum>')
+      expect(xml).toContain('<teljesitesDatum>2026-07-15</teljesitesDatum>')
+      expect(xml).toContain('<fizetesiHataridoDatum>2026-08-04</fizetesiHataridoDatum>')
+    })
+  })
+})
+
+/**
+ * A bizonylat kelt-dátuma a SZÉKHELY szerinti naptári nap. UTC-ből képezve
+ * magyar idő szerint 00:00–02:00 között az ELŐZŐ napra állna ki a számla —
+ * hó elején ez már másik áfa-időszak.
+ */
+describe('budapestDateString / isIsoDateString', () => {
+  it('00:30 CEST (nyári időszámítás): a magyar nap, nem az UTC-s előző nap', () => {
+    // 2026-09-01T00:30 magyar idő = 2026-08-31T22:30Z
+    const hajnal = new Date('2026-08-31T22:30:00Z')
+    expect(budapestDateString(hajnal)).toBe('2026-09-01')
+    // A régi (hibás) képzés bizonyítéka — ez adta volna az előző hónapot.
+    expect(hajnal.toISOString().slice(0, 10)).toBe('2026-08-31')
+  })
+
+  it('00:30 CET (téli időszámítás) is a magyar napot adja', () => {
+    // 2026-02-01T00:30 magyar idő = 2026-01-31T23:30Z
+    expect(budapestDateString(new Date('2026-01-31T23:30:00Z'))).toBe('2026-02-01')
+  })
+
+  it('nappal a magyar és az UTC-nap egybeesik', () => {
+    expect(budapestDateString(new Date('2026-08-10T09:00:00Z'))).toBe('2026-08-10')
+  })
+
+  it('isIsoDateString: kizárólag a YYYY-MM-DD alak megy át', () => {
+    expect(isIsoDateString('2026-08-04')).toBe(true)
+    expect(isIsoDateString(budapestDateString(new Date('2026-08-31T22:30:00Z')))).toBe(true)
+    for (const rossz of ['', '2026-8-4', '2026/08/04', '2026-08-04T10:00:00Z', ' 2026-08-04', '2026-08-04</x>']) {
+      expect(isIsoDateString(rossz), rossz).toBe(false)
+    }
   })
 })
 
@@ -500,7 +664,7 @@ describe('isTrustedInvoicePdfUrl — a számlalink allowlistje', () => {
 
 describe('issueInvoiceForOrder', () => {
   it('boldog út: pending → issued + invoiceNumber + invoicePdfUrl, a küldött XML szamlaKulsoAzon-ja az orderNumber', async () => {
-    const { payload, order } = createMockPayload(createOrder())
+    const { payload, order, updates } = createMockPayload(createOrder())
     const sentXml: string[] = []
     const result = await issueInvoiceForOrder({
       payload,
@@ -521,6 +685,13 @@ describe('issueInvoiceForOrder', () => {
     // B4: a kiállításkor küldött teljesítési dátum RÖGZÜL — ezt ismétli később a helyesbítő.
     expect(order?.invoiceCompletionDate).toBe('2026-08-04')
     expect(order?.invoiceLastError).toBeNull()
+    // F8: a dátum már a BEKÜLDÉS ELŐTTI (pending) írásban rögzül, hogy elveszett
+    // válasz esetén se maradjon üresen — a helyesbítő B4-szabálya ezen múlik.
+    expect(updates[0]).toEqual({
+      invoiceStatus: 'pending',
+      invoiceAttempts: 1,
+      invoiceCompletionDate: '2026-08-04',
+    })
     expect(sentXml).toHaveLength(1)
     expect(sentXml[0]).toContain(`<szamlaKulsoAzon>${ORDER_NUMBER}</szamlaKulsoAzon>`)
   })
@@ -627,7 +798,10 @@ describe('issueInvoiceForOrder', () => {
     expect(order?.invoiceStatus).toBe('failed')
   })
 
-  it('retryable provider-hibánál invoiceStatus=failed + THROW (a job újrapróbálja)', async () => {
+  it('F4 — retryable hibánál a státusz MARAD pending + THROW (így veszi fel újra a resweep)', async () => {
+    // A hibát az invoiceLastError hordozza. A 'pending' kötelező: az order-poll
+    // resweep csak a ['none','pending'] rendeléseket veszi fel újra, 'failed'
+    // esetén a job-retryk kimerülése után a számla ÖRÖKRE elveszne.
     const { payload, order } = createMockPayload(createOrder())
     await expect(
       issueInvoiceForOrder({
@@ -640,6 +814,26 @@ describe('issueInvoiceForOrder', () => {
         },
       }),
     ).rejects.toThrow('timeout')
+    expect(order?.invoiceStatus).toBe('pending')
+    expect(order?.invoiceLastError).toContain('timeout')
+  })
+
+  it('F4 — VÉGLEGES (nem retryable) hibánál viszont failed lesz', async () => {
+    const { payload, order } = createMockPayload(createOrder())
+    const result = await issueInvoiceForOrder({
+      payload,
+      orderId: 101,
+      config: ENABLED_CONFIG,
+      queryByKulsoAzon: noLookup,
+      postXml: async () => {
+        throw new SzamlazzApiError({
+          message: 'Számla Agent elutasította: hibás tétel',
+          kind: 'agent',
+          retryable: false,
+        })
+      },
+    })
+    expect(result.outcome).toBe('failed')
     expect(order?.invoiceStatus).toBe('failed')
   })
 })
@@ -737,7 +931,9 @@ describe('issueInvoiceForOrder — idempotencia-feloldás és kísérlet-plafon'
     expect(lookups).toEqual([ORDER_NUMBER])
     expect(posts).toBe(0)
     expect(order?.invoiceNumber).toBe('KIN-2026-7')
-    expect(order?.invoiceAttempts).toBe(2)
+    // F10: a LEKÉRDEZÉS nem fogyaszt beküldési kísérletet — a hivatalos 5-ös
+    // plafon a kérés ismételt BEKÜLDÉSÉRE vonatkozik, nem a visszakeresésre.
+    expect(order?.invoiceAttempts).toBe(1)
   })
 
   it('kísérlet-plafon (5): failed, SE lekérdezés SE beküldés nem fut', async () => {
@@ -787,5 +983,33 @@ describe('issueInvoiceForOrder — idempotencia-feloldás és kísérlet-plafon'
       invoiceCompletionDate: '2026-07-15',
       invoiceLastError: null,
     })
+  })
+
+  it('issueDate nélkül a kelt-dátum a MAGYAR naptári nap (hajnali 00:30 CEST)', async () => {
+    // 2026-09-01T00:30 magyar idő = 2026-08-31T22:30Z — UTC-ből képezve a
+    // számla az előző hónapra (más áfa-időszakra) állt volna ki.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-31T22:30:00Z'))
+    try {
+      const { payload, order } = createMockPayload(createOrder())
+      const sentXml: string[] = []
+      const result = await issueInvoiceForOrder({
+        payload,
+        orderId: 101,
+        config: ENABLED_CONFIG,
+        queryByKulsoAzon: noLookup,
+        postXml: async (xml) => {
+          sentXml.push(xml)
+          return { szamlaszam: 'KIN-2026-9' }
+        },
+      })
+
+      expect(result).toEqual({ outcome: 'issued', invoiceNumber: 'KIN-2026-9' })
+      expect(sentXml[0]).toContain('<keltDatum>2026-09-01</keltDatum>')
+      expect(sentXml[0]).toContain('<teljesitesDatum>2026-09-01</teljesitesDatum>')
+      expect(order?.invoiceCompletionDate).toBe('2026-09-01')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
