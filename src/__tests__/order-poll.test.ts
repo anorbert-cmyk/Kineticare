@@ -5,6 +5,7 @@ import {
   classifyBarionFailure,
   INVOICE_PENDING_STALE_MS,
   MAX_CONSECUTIVE_TRANSPORT_FAILURES,
+  MAX_LEADING_FAILURES,
   ORPHAN_ORDER_GRACE_MS,
   pollPendingOrders,
   STUCK_ORDER_WARN_MS,
@@ -633,6 +634,88 @@ describe('order-poll — megszakítás és sorfej-blokkolás', () => {
 
     expect(calls).toBe(5)
     expect(summary.failed).toBe(5)
+    expect(summary.skipped).toBe(0)
+  })
+})
+
+describe('order-poll — a futás eleji mennyezet (MAX_LEADING_FAILURES)', () => {
+  /**
+   * A keresztreview mutatott rá: a BARION_AUTH_ERROR_CODES listán NEM szereplő
+   * hitelesítési hibakód `order`-osztályba esik (provider-hiba HTTP 200-zal),
+   * tehát a 3 egymást követő SZÁLLÍTÁSI hibára figyelő megszakítás nem kapja
+   * el — a futás végigmenne az összes függő rendelésen. Erre való a mennyezet.
+   */
+  const ismeretlenAuthHiba = (): BarionApiError =>
+    new BarionApiError({
+      message: 'ismeretlen szolgáltatói hiba',
+      kind: 'provider',
+      endpoint: 'GET x',
+      httpStatus: 200,
+      providerErrors: [
+        { ErrorCode: 'SomeUnlistedAuthProblem', Title: 'x', Description: 'x' },
+      ],
+    })
+
+  const naplo = () => {
+    const errors: string[] = []
+    const nulla = (): void => undefined
+    const log = {
+      child: () => log,
+      debug: nulla,
+      info: nulla,
+      warn: nulla,
+      error: (message: string) => errors.push(message),
+    }
+    return { log, errors }
+  }
+
+  it('csupa `order`-osztályú hibánál az első MAX_LEADING_FAILURES után megszakít', async () => {
+    const pending = Array.from({ length: 12 }, () => createPendingOrder())
+    const { payload, onPaid, queueInvoice } = setup({ pending })
+    const { log, errors } = naplo()
+    const fetchState = vi.fn(async (): Promise<BarionPaymentStateResponse> => {
+      throw ismeretlenAuthHiba()
+    })
+
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      now: NOW,
+      logger: log as never,
+    })
+
+    expect(fetchState).toHaveBeenCalledTimes(MAX_LEADING_FAILURES)
+    expect(summary.failed).toBe(MAX_LEADING_FAILURES)
+    expect(summary.skipped).toBe(pending.length - MAX_LEADING_FAILURES)
+    expect(errors.some((message) => message.includes('RIASZTÁS'))).toBe(true)
+  })
+
+  it('EGY sikeres válasz kikapcsolja a mennyezetet — nincs sorfej-blokkolás', async () => {
+    const pending = Array.from({ length: 12 }, () => createPendingOrder())
+    const { payload, onPaid, queueInvoice } = setup({ pending })
+    const { log } = naplo()
+    let hivas = 0
+    const fetchState = vi.fn(async (): Promise<BarionPaymentStateResponse> => {
+      hivas += 1
+      // Az ELSŐ hívás sikeres (a fizetés még folyamatban), a többi hibás.
+      if (hivas === 1) {
+        return getStateResponse('Prepared')
+      }
+      throw ismeretlenAuthHiba()
+    })
+
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      now: NOW,
+      logger: log as never,
+    })
+
+    expect(fetchState).toHaveBeenCalledTimes(pending.length)
     expect(summary.skipped).toBe(0)
   })
 })

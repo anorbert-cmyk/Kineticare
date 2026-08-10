@@ -11,7 +11,7 @@ import {
   BILLING_INPUT_NAME,
   WAIVER_LOSS_INPUT_ID,
   WAIVER_START_INPUT_ID,
-  planCheckoutSubmission,
+  createCheckoutSubmitHandler,
   prefillBillingForm,
   withBillingValue,
   withoutBillingError,
@@ -54,6 +54,15 @@ export interface CheckoutFormProps {
   alreadyPurchased: boolean
 }
 
+/**
+ * Navigálás a fizetési átjáróra. MODUL-szinten van, nem a komponensben: a
+ * `window.location` írása a render-scope-ból a React-fordító
+ * immutability-szabályába ütközik (a beküldés-kezelőt a render állítja össze).
+ */
+const redirectToGateway = (gatewayUrl: string): void => {
+  window.location.href = gatewayUrl
+}
+
 export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormProps) {
   const [waiverStart, setWaiverStart] = useState(false)
   const [waiverLoss, setWaiverLoss] = useState(false)
@@ -82,41 +91,33 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
     document.getElementById(elementId)?.focus()
   }
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setError(null)
-
-    const plan = planCheckoutSubmission({
+  /**
+   * A beküldés MELLÉKHATÁS-lánca a `form-submission.ts` gyárában él, hogy a
+   * mag és a komponens KÖZTI huzalozás is tesztelhető legyen — a review
+   * mutációval megmutatta, hogy korábban ezt a pontot át lehetett írni úgy,
+   * hogy az eredeti hiba visszatérjen, miközben a teljes suite zöld marad.
+   * Itt már csak az aktuális állapot olvasása és a React-hookok bekötése van.
+   */
+  const runSubmit = createCheckoutSubmitHandler({
+    readContext: () => ({
       productId: product.id,
       alreadyPurchased,
       waiverRequired: requiresWaiver,
       waiverStartAccepted: waiverStart,
       waiverLossAccepted: waiverLoss,
       billing,
-    })
+    }),
+    setError,
+    setBillingErrors,
+    setSubmitting,
+    focusElement,
+    submit: submitCheckout,
+    redirect: redirectToGateway,
+  })
 
-    if (plan.kind === 'blocked') {
-      setError(plan.message)
-      focusElement(plan.focusElementId)
-      return
-    }
-    if (plan.kind === 'invalid') {
-      setBillingErrors(plan.fieldErrors)
-      setError(plan.message)
-      focusElement(plan.focusElementId)
-      return
-    }
-    setBillingErrors({})
-
-    setSubmitting(true)
-    const result = await submitCheckout(plan.body)
-    setSubmitting(false)
-
-    if (result.ok) {
-      window.location.href = result.gatewayUrl
-      return
-    }
-    setError(result.message)
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    await runSubmit()
   }
 
   return (
@@ -126,12 +127,15 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
         UTÁN, a lap alján jelent meg, tehát mobilon a beküldés után a
         felhasználó semmit nem látott. A fókusz emellett az első hibás mezőre
         ugrik, így a hiba akkor is előkerül, ha a doboz a képernyőn kívül esne.
+
+        Az élő régió MINDIG renderelődik (üresen is), nem csak hibakor: a
+        dinamikusan BESZÚRT aria-live régiót több képernyőolvasó
+        megbízhatatlanul jelenti be, a már meglévő régió tartalomváltozását
+        viszont igen.
       */}
-      {error ? (
-        <div aria-live="assertive" className="kc-checkout-form__error" role="alert">
-          {error}
-        </div>
-      ) : null}
+      <div aria-live="assertive" className="kc-checkout-form__error" role="alert">
+        {error}
+      </div>
 
       <Card className="kc-checkout-summary">
         <div className="kc-checkout-summary__row">

@@ -129,11 +129,11 @@ const TEXT_RULES: readonly TextRule[] = [
 export const BILLING_ZIP_ERROR =
   'Adj meg érvényes irányítószámot (magyar cím esetén négyjegyű szám, például 1011).'
 export const BILLING_TAX_NUMBER_ERROR =
-  'Az adószám 11 számjegyből áll (például 12345678-1-42). Magánszemélyként hagyd üresen.'
+  'Az adószám 11 számjegyből áll (például 12345676-1-42). Magánszemélyként hagyd üresen.'
 export const BILLING_TAX_NUMBER_STRUCTURE_ERROR =
   'Ez az adószám nem érvényes — ellenőrizd a számjegyeket. Magánszemélyként hagyd üresen.'
 export const BILLING_TAX_NUMBER_EU_ERROR =
-  'A közösségi adószám (HU + 8 számjegy) helyett a teljes, 11 jegyű magyar adószámot add meg (például 12345678-1-42).'
+  'A közösségi adószám (HU + 8 számjegy) helyett a teljes, 11 jegyű magyar adószámot add meg (például 12345676-1-42).'
 
 /** Összefoglaló üzenetek — a `billingSummaryMessage` a hibahalmazból választ. */
 export const BILLING_SUMMARY_MISSING =

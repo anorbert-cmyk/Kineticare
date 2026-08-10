@@ -28,6 +28,22 @@ export const ORDER_POLL_BATCH_SIZE = 25
  * egy valódi szolgáltatói kimaradás viszont 3 kísérlet után megáll.
  */
 export const MAX_CONSECUTIVE_TRANSPORT_FAILURES = 3
+
+/**
+ * A futás ELEJÉN megengedett, csupa hibás hívás száma.
+ *
+ * MIÉRT KELL: az osztályozás `order`-t ad minden olyan hibára, amit nem ismer
+ * fel hitelesítésinek vagy szállításinak — például egy hiányzó Barion
+ * auth-hibakódra (lásd BARION_AUTH_ERROR_CODES). Ilyenkor a futás végigmenne
+ * mind a 25 rendelésen, 25 hibás hívással és 25 naplósorral, holott az első
+ * néhány hívásból már látszik, hogy semmi nem működik.
+ *
+ * MIÉRT PONT AZ ELEJÉN: így a „rossz kulcs / teljes kimaradás" eset elkapódik,
+ * a „egy mérgezett rendelés a sor elején" viszont NEM tud sorfejként blokkolni,
+ * mert ott a többi hívás sikeres — az első sikeres válasz kikapcsolja a
+ * mennyezetet.
+ */
+export const MAX_LEADING_FAILURES = 5
 // Az árva-rendelés lejárata 24 óra: a Barion PaymentWindow (30 perc) és a
 // banki késleltetések mellett a 2 órás türelem túl szűk volt — a 2 óra UTÁN
 // befejeződő fizetés a 'paid-not-allowed' állapotgép-védelembe ütközött
@@ -96,11 +112,18 @@ export interface OrderPollDeps {
  * ismeretlen kódra azonnali megszakítást csinálna, azaz épp a sorfej-blokkolást
  * (poison pill) hozná vissza, amit el akarunk kerülni.
  *
- * A tévedés MINDKÉT iránya olcsó: ha egy valódi hitelesítési kód hiányzik a
- * listáról, a hiba `transport`-osztályba esik, és a 3 egymást követő hiba utáni
- * megszakítás úgyis elkapja — csak 3 hívással később. Ha ismeretlen kód kerülne
- * ide tévedésből, az egyetlen rendelés megállítaná az egész futást. Új kódot
- * tehát CSAK hivatkozott forrás alapján vegyél fel ide.
+ * FIGYELEM, a tévedés két iránya NEM szimmetrikus:
+ * - Ha ismeretlen kód kerülne ide tévedésből, egyetlen rendelés megállítaná az
+ *   egész futást (sorfej-blokkolás).
+ * - Ha viszont egy VALÓDI hitelesítési kód hiányzik a listáról, a hiba
+ *   `order`-osztályba esik (a listán nem szereplő provider-hiba HTTP 200-zal
+ *   vagy 4xx-szel jön, tehát a `transport`-ágon átesik) — vagyis a 3 egymást
+ *   követő szállítási hibára figyelő megszakítás NEM kapja el. Erre való a
+ *   `MAX_LEADING_FAILURES` mennyezet lentebb: ha a futás ELSŐ hívásai
+ *   mind hibára futnak, megszakítunk akkor is, ha az osztályozás `order`-t
+ *   mondott.
+ *
+ * Új kódot CSAK hivatkozott forrás alapján vegyél fel ide.
  */
 export const BARION_AUTH_ERROR_CODES: readonly string[] = ['AuthenticationFailed']
 
@@ -260,6 +283,14 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
    */
   let consecutiveTransportFailures = 0
 
+  /**
+   * Volt-e MÁR sikeres GetState ebben a futásban. Amíg nincs, a
+   * `MAX_LEADING_FAILURES` mennyezet él (lásd ott).
+   */
+  let hadSuccessfulCall = false
+  /** Hibás hívások száma az első SIKERES válaszig. */
+  let leadingFailures = 0
+
   for (let index = 0; index < pendingOrders.length; index += 1) {
     const order = pendingOrders[index]
     const orderLog = log.child({ orderId: order.id, orderNumber: order.orderNumber ?? null })
@@ -290,6 +321,7 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
     try {
       state = await fetchState(order.barionPaymentId)
       consecutiveTransportFailures = 0
+      hadSuccessfulCall = true
     } catch (error) {
       summary.failed += 1
       orderLog.warn('order-poll: GetState-hiba (a következő futás újrapollolja)', {
@@ -328,6 +360,21 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
               consecutiveTransportFailures,
               skippedOrders: remaining,
             },
+          )
+          break
+        }
+      }
+
+      if (!hadSuccessfulCall) {
+        leadingFailures += 1
+        if (leadingFailures >= MAX_LEADING_FAILURES) {
+          summary.skipped += remaining
+          log.error(
+            `RIASZTÁS: a futás első ${MAX_LEADING_FAILURES} Barion-hívása mind hibára futott ` +
+              '(egyetlen sikeres válasz sem érkezett) — a futás megszakadt, a maradék függő ' +
+              'rendelés érintetlen. Ellenőrizd a Barion-környezetet, a POSKey-t és a ' +
+              'szolgáltatás állapotát; a következő ütemezett futás újrapróbálja.',
+            { barionErrorKind, httpStatus, failureClass, leadingFailures, skippedOrders: remaining },
           )
           break
         }

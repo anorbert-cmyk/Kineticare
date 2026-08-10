@@ -1,4 +1,4 @@
-import type { CheckoutSubmitInput } from '../checkout-submit'
+import type { CheckoutSubmitInput, CheckoutSubmitResult } from '../checkout-submit'
 import {
   BILLING_FIELD_ORDER,
   billingErrorMap,
@@ -176,5 +176,69 @@ export function planCheckoutSubmission(
       consentWithdrawalWaiver: true,
       billing: toBillingPayload(result.value),
     },
+  }
+}
+
+/**
+ * A beküldés MELLÉKHATÁSAI — a tiszta terv és a React-komponens közötti
+ * huzalozás.
+ *
+ * MIÉRT KÜLÖN GYÁR: a `planCheckoutSubmission` maga kiválóan tesztelt, de a
+ * review mutációval megmutatta, hogy a MAG ÉS A KOMPONENS KÖZTI kötés
+ * továbbra is fedezetlen volt: a `handleSubmit`-et át lehetett írni úgy, hogy
+ * megkerülje a tervet (és pontosan az eredeti hibát csinálja — üres
+ * számlázási adatot küldjön), miközben a teljes suite zöld maradt. Éppen ezen
+ * a ponton élt az eredeti hiba, ezért ezt is le kell fedni.
+ *
+ * A gyár DOM nélkül, hamis függőségekkel tesztelhető; a `CheckoutForm` már
+ * csak állapotot tart és ezt a függvényt köti az `onSubmit`-re.
+ */
+export interface CheckoutSubmitHandlerDeps {
+  /** A beküldés pillanatában érvényes űrlapállapot (a React-state olvasása). */
+  readContext: () => CheckoutSubmissionContext
+  setError: (message: string | null) => void
+  setBillingErrors: (errors: BillingFieldErrors) => void
+  setSubmitting: (value: boolean) => void
+  /** `null` esetén nincs fókuszálandó elem (a hívó ilyenkor ne csináljon semmit). */
+  focusElement: (elementId: string | null) => void
+  submit: (body: CheckoutSubmitInput) => Promise<CheckoutSubmitResult>
+  /** Sikeres indítás után a fizetési átjáróra navigálás. */
+  redirect: (gatewayUrl: string) => void
+}
+
+export function createCheckoutSubmitHandler(
+  deps: CheckoutSubmitHandlerDeps,
+): () => Promise<void> {
+  return async () => {
+    deps.setError(null)
+
+    const plan = planCheckoutSubmission(deps.readContext())
+
+    if (plan.kind === 'blocked') {
+      deps.setError(plan.message)
+      deps.focusElement(plan.focusElementId)
+      return
+    }
+    if (plan.kind === 'invalid') {
+      deps.setBillingErrors(plan.fieldErrors)
+      deps.setError(plan.message)
+      deps.focusElement(plan.focusElementId)
+      return
+    }
+
+    deps.setBillingErrors({})
+    deps.setSubmitting(true)
+    // A `submit` saját hibakezelése miatt itt nem dobhat; a `finally` mégis
+    // kell, hogy egy váratlan kivétel se hagyja a gombot „Feldolgozás…"-ban.
+    try {
+      const result = await deps.submit(plan.body)
+      if (result.ok) {
+        deps.redirect(result.gatewayUrl)
+        return
+      }
+      deps.setError(result.message)
+    } finally {
+      deps.setSubmitting(false)
+    }
   }
 }
