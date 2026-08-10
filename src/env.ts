@@ -9,8 +9,11 @@
  * fut le a szerver indulásakor, így hiányzó ENV esetén az app nem indul el.
  *
  * A fájlban SOSEM szerepel érték — csak kulcsnév; a titkok a
- * futtatókörnyezetben élnek.
+ * futtatókörnyezetben élnek. (Kivétel: a `szamlazzVatModes` értékkészlete —
+ * az áfakulcs nem titok, hanem közzétett adóügyi kód.)
  */
+
+import type { SzamlazzVatMode } from './lib/szamlazz/types'
 
 // Barion-kliens: a BARION_API_URL és BARION_PAYEE_EMAIL minden környezetben
 // kötelező (a kliens részletes, környezetfüggő assertja az src/lib/barion/client.ts-ben él).
@@ -47,6 +50,32 @@ export type RequiredEnvVar = (typeof requiredEnvVars)[number]
  * a tényleges titok kizárólag a futtatókörnyezetben él.
  */
 export const turnstileEnvPair = ['TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET_KEY'] as const
+
+/**
+ * Számlázz.hu tétel-áfakulcs (`SZAMLAZZ_AFAKULCS`) — OPCIONÁLIS kulcs, de ha
+ * meg van adva, csak ezek az értékek érvényesek.
+ *
+ * Ez a tömb a `SzamlazzVatMode` (src/lib/szamlazz/types.ts) union futásidejű
+ * párja — a `satisfies` fordításkor őrzi, hogy a kettő ne csúszhasson szét. Az
+ * értékkészlet EGY helyen él: a Számlázz-kliens (src/lib/szamlazz/client.ts)
+ * innen olvassa, nem másolja.
+ *
+ * - `'27'` — általános 27%-os áfa (ez az alapértelmezés a kulcs HIÁNYÁBAN is);
+ * - `'AAM'` — alanyi adómentes eladó (belföldön kizárólag ez a kulcs jogszerű).
+ *
+ * Miért induláskori assert: a `getSzamlazzConfig` csak LUSTÁN, az első
+ * számlázási művelet közben futna le, ott pedig a hiba a jobban vagy a
+ * rendelés-visszaigazoló e-mail try/catch-ében nyelődne el — egy elgépelt
+ * áfakulcs így akár hetekig észrevétlen maradhatna, miközben egyetlen számla
+ * sem készül el. Ezért a hibás érték MÁR INDULÁSKOR megállítja az appot,
+ * minden környezetben. A kulcs hiánya változatlanul rendben van.
+ */
+export const szamlazzVatModes = ['27', 'AAM'] as const satisfies readonly SzamlazzVatMode[]
+
+/** A `SZAMLAZZ_AFAKULCS` nyers értékének beszűkítése a támogatott áfakulcsokra. */
+export function isSzamlazzVatMode(value: string): value is SzamlazzVatMode {
+  return (szamlazzVatModes as readonly string[]).includes(value)
+}
 
 /**
  * Bunny Stream (videó-kiszolgálás) — mind OPCIONÁLIS, szándékosan NEM
@@ -131,6 +160,17 @@ export function assertRequiredEnv(
     throw new Error(
       `Az alkalmazás nem indulhat el. Hiányzó kötelező környezeti változó(k): ${missing.join(', ')}. ` +
         'Állítsd be őket a környezetben (pl. helyben .env fájlban), majd indítsd újra a szervert.',
+    )
+  }
+
+  // SZAMLAZZ_AFAKULCS: opcionális, de ha meg van adva, MOST kell hangosan
+  // buknia — nem az első számlázási művelet mélyén, a job/e-mail try/catch-ében.
+  const vatMode = process.env.SZAMLAZZ_AFAKULCS?.trim()
+  if (vatMode !== undefined && vatMode !== '' && !isSzamlazzVatMode(vatMode)) {
+    throw new Error(
+      `Az alkalmazás nem indulhat el. Érvénytelen SZAMLAZZ_AFAKULCS ('${vatMode}'): csak ` +
+        `${szamlazzVatModes.map((mode) => `'${mode}'`).join(' vagy ')} lehet. Alanyi adómentes ` +
+        `eladóként az 'AAM' a jogszerű; általános esetben hagyd üresen (alapértelmezés: 27).`,
     )
   }
 

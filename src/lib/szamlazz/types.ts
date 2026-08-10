@@ -17,6 +17,13 @@ export type SzamlazzErrorKind =
   | 'network'
   | 'http'
   | 'agent'
+  /**
+   * 71/152-es hibakód: „Már létező rendelésszám". NEM valódi hiba, hanem a
+   * hivatalos idempotencia-jelzés (a fiókban bekapcsolt rendelésszám-ismétlés
+   * tiltás fogta meg az ismételt kérést) — a hívó a szamlaKulsoAzon-alapú
+   * lekérdezéssel oldja fel (a meglévő bizonylat számát veszi át).
+   */
+  | 'duplicate'
   | 'invalid_response'
   | 'invalid_data'
 
@@ -49,15 +56,32 @@ export class SzamlazzApiError extends Error {
   }
 }
 
+/**
+ * A számla tételeinek áfakulcsa. A Számlázz.hu numerikus kulcsokat ÉS
+ * speciális kódokat is fogad — a mi két esetünk:
+ * - '27': általános 27%-os áfa (alapértelmezés);
+ * - 'AAM': alanyi adómentes eladó — belföldön KIZÁRÓLAG ez a kulcs jogszerű
+ *   (a TAM és a 0% nem), afaErtek=0 és bruttoErtek=nettoErtek mellett.
+ * A kulcsot a SZAMLAZZ_AFAKULCS env-változó választja ki; a szám-only típus
+ * szándékosan kerülve (a 27 és az 'AAM' közös, szűkített unionban él).
+ */
+export type SzamlazzVatMode = '27' | 'AAM'
+
 export interface SzamlazzClientConfig {
   /** false, ha SZAMLAZZ_AGENT_KEY nincs beállítva — ilyenkor a számlázás ki van kapcsolva (nem hiba). */
   enabled: boolean
-  /** Számla Agent végpont (default: https://www.szamlazz.hu/szamla) — záró perjel nélkül. */
+  /**
+   * Számla Agent végpont (default: https://www.szamlazz.hu/szamla/) — ZÁRÓ
+   * PERJELLEL. A perjel nélküli alak átirányítást kaphat, és egy 301/302-es
+   * redirect a POST-ot GET-té alakítaná (a multipart törzs elveszne).
+   */
   apiUrl: string
   /** Számla Agent kulcs — SOHA ne naplózd! (enabled=false esetén undefined). */
   agentKey?: string
   /** Számlaszám-előtag (a Számlázz.hu felületen beállított Előtagok egyike). */
   invoicePrefix: string
+  /** A tételek áfakulcsa (SZAMLAZZ_AFAKULCS env; default '27'). */
+  vatMode: SzamlazzVatMode
   timeoutMs: number
 }
 
