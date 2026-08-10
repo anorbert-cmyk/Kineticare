@@ -26,22 +26,30 @@ import {
  * - A Számlázz.hu NEM számol: minden tételösszeg (nettoErtek, afaErtek,
  *   bruttoErtek) és a nettoEgysegar kötelezően megadott; az Agent a tétel-
  *   matematikát validálja (57, 259–264 hibakódok).
- * - Bruttó áraink vannak (fogyasztói ár, HUF, 27% ÁFA):
- *     bruttoErtek  = round(bruttó egységár × mennyiség)
- *     nettoErtek   = round(bruttoErtek / 1,27)
- *     afaErtek     = bruttoErtek − nettoErtek     (így netto+afa=brutto PONTOSAN)
- *     nettoEgysegar = nettoErtek / mennyiség (2 tizedes; mennyiség=1 esetén
- *                   pontosan nettoErtek — nincs kerekítési eltérés)
- * - szamlaKulsoAzon = orderNumber (idempotencia-horgony: ismételt beküldésre
- *   a Számlázz.hu a korábbi számlát adja vissza, nem állít ki újat).
+ * - Bruttó áraink vannak (fogyasztói ár, HUF); az áfakulcs a konfigurációból
+ *   jön: '27' (alapértelmezés) vagy 'AAM' (alanyi adómentes eladó). A
+ *   tételszámítás HIBRID (bruttó tétel-érték + 2 tizedes nettó egységár) —
+ *   a pontos képlet és a három hivatalos egyenlet toleranciája a
+ *   `computeLineAmounts` docblockjában.
+ * - Minden dátum (keltDatum / teljesitesDatum / fizetesiHataridoDatum) kötelező
+ *   YYYY-MM-DD alakú: a builder kapun vezeti át őket (`isIsoDateString`), mert
+ *   a teljesítési dátum forrása egy szabad szöveges DB-mező.
+ * - szamlaKulsoAzon: a bizonylat VISSZAKERESÉSI kulcsa (számla: orderNumber,
+ *   helyesbítő: saját, seq-kulcsolt azonosító). A hivatalos dokumentáció NEM
+ *   állítja, hogy azonos külső azonosítóval a Számlázz.hu megtagadná az újabb
+ *   kiállítást — a duplikátum-védelmet a <rendelesSzam> + a fiókban bekapcsolt
+ *   rendelésszám-ismétlés-tiltás adja (71/152 hibakód). A külső azonosító
+ *   ahhoz kell, hogy kétes esetben (elveszett válasz) a bizonylat
+ *   visszakereshető legyen — utólag már nem pótolható.
  * - A <vevo><azonosito> mezőt SOHA nem küldjük (a Számlázz.hu-dokumentáció
  *   figyelmeztet: más vevőhöz rögzített azonosító adatfrissítést/biztonsági
  *   problémát okozna).
  * - HELYESBÍTŐ (módosító) számla: ugyanez a művelet, `corrective` megadásával —
  *   ilyenkor <helyesbitoszamla>true</helyesbitoszamla>, a
  *   <helyesbitettSzamlaszam> az eredeti számla száma, a tételek negatív
- *   korrekciót hordoznak, a horgony pedig a helyesbítő saját kulsoAzon-ja
- *   (lásd corrective.ts — részleges visszatérítés bizonylata).
+ *   korrekciót hordoznak, a külső azonosító ÉS a <rendelesSzam> pedig a
+ *   helyesbítő saját kulsoAzon-ja (lásd corrective.ts — részleges
+ *   visszatérítés bizonylata).
  */
 
 export const VAT_RATE_PERCENT = 27
@@ -74,9 +82,11 @@ export interface CorrectiveInvoiceRef {
   /** Az eredeti (helyesbítendő) számla száma — <helyesbitettSzamlaszam>. */
   originalInvoiceNumber: string
   /**
-   * A helyesbítő saját idempotencia-horgonya (<szamlaKulsoAzon>). KÖTELEZŐEN
-   * eltér az eredeti számla horgonyától (ami az orderNumber), különben a
-   * Számlázz.hu a meglévő számlát adná vissza új bizonylat helyett.
+   * A helyesbítő saját, bizonylat-egyedi azonosítója. KÉT helyre kerül:
+   * <szamlaKulsoAzon> (visszakeresési kulcs) ÉS <rendelesSzam> — utóbbi azért,
+   * mert a provider-oldali duplikátum-védelem a rendelésszámra épül: az eredeti
+   * számla rendelésszámával beküldött helyesbítő a bekapcsolt
+   * rendelésszám-ismétlés-tiltásba (71/152) futna.
    */
   kulsoAzon: string
 }
@@ -97,15 +107,18 @@ export interface BuildInvoiceXmlInput {
   items: InvoiceItemInput[]
   /** Áfakulcs: '27' (alapértelmezés) vagy 'AAM' (alanyi adómentes). */
   vatMode?: SzamlazzVatMode
-  /** Helyesbítő számla esetén az eredeti számla hivatkozása + saját horgony. */
+  /**
+   * Helyesbítő számla esetén az eredeti számla hivatkozása + a helyesbítő
+   * saját, bizonylat-egyedi azonosítója (kulsoAzon + rendelesSzam).
+   */
   corrective?: CorrectiveInvoiceRef
   /** A fejléc-megjegyzés felülírása (alapból a rendelésre utaló szöveg). */
   megjegyzes?: string
 }
 
-import { escapeXml } from './xml'
+import { budapestDateString, escapeXml, isIsoDateString } from './xml'
 
-export { escapeXml }
+export { budapestDateString, escapeXml, isIsoDateString }
 
 export interface InvoiceLineAmounts {
   nettoEgysegar: string
@@ -127,16 +140,31 @@ export interface ComputeLineAmountsOptions {
 }
 
 /**
- * Tételösszegek bruttóból visszaszámolva — EGYSÉGÁR-ALAPÚ számítással.
+ * Tételösszegek bruttóból visszaszámolva — HIBRID számítással.
  *
- * A Számlázz.hu tételenként ellenőrzi az egyenleteket (259–264 hibakódok):
- *   nettoEgysegar × mennyiseg = nettoErtek
- *   nettoErtek + afaErtek = bruttoErtek
- * Ezért ELŐSZÖR az egy darabra eső összegeket kerekítjük (nettoUnit =
- * round(bruttoUnit / 1,27)), és a tétel-összegek ezek PONTOS többszörösei —
- * így az első egyenlet mennyiség > 1 esetén is fillérre teljesül. (A korábbi
- * tétel-szintű kerekítés qty=3-nál pl. 33,33 × 3 = 99,99 ≠ 100 eltérést adott
- * volna.) A nettoEgysegar így mindig egész forint, stringként.
+ * A Számlázz.hu NEM számol, hanem tételenként VALIDÁLJA a három egyenletet
+ * (259–264 hibakódok):
+ *   (1) nettoEgysegar × mennyiseg = nettoErtek
+ *   (2) nettoErtek × afakulcs / 100 = afaErtek
+ *   (3) nettoErtek + afaErtek     = bruttoErtek
+ * Mindhárom egyszerre, egész forintra kerekített összegekkel nem tartható —
+ * kerekítési tűrés kell. A hibrid képlet ezt osztja el a lehető legjobban:
+ *
+ *   bruttoUnit    = round(|bruttó egységár|)
+ *   bruttoErtek   = bruttoUnit × mennyiseg                    (pontos szorzat)
+ *   nettoErtek    = round(bruttoErtek / 1,27)                 (TÉTEL-szinten)
+ *   afaErtek      = bruttoErtek − nettoErtek
+ *   nettoEgysegar = nettoErtek / mennyiseg, legfeljebb 2 tizedesre
+ *
+ * Az eltérések:
+ * - (1) ≤ 0,005 × mennyiseg (a 2 tizedes egységár kerekítése) — a checkout
+ *   felső határán (99 db) is ≤ 0,5 Ft; mennyiseg=1 esetén NULLA, mert az
+ *   egységár ilyenkor pontosan a nettoErtek (visszafelé kompatibilis).
+ * - (2) ≤ 1,27 × 0,5 ≈ 0,64 Ft, MENNYISÉGTŐL FÜGGETLENÜL — ez a hibrid lényege.
+ *   A korábbi, egységár-szintű kerekítés ezt a hibát a mennyiséggel szorozta
+ *   (7 db → 1,4 Ft; 99 db → ~20 Ft), ami 260/263 hibakódot és VÉGLEGES
+ *   „failed" számlát okozhatott.
+ * - (3) PONTOS (a definícióból).
  *
  * AAM (alanyi adómentes) módban: nettoErtek = bruttoErtek, afaErtek = 0 —
  * belföldön AAM-eladóként kizárólag ez a kulcs jogszerű (a 0% és a TAM nem).
@@ -166,15 +194,51 @@ export function computeLineAmounts(
   const vatMode = options.vatMode ?? '27'
   const negative = item.bruttoEgysegar < 0
   const bruttoUnit = Math.round(Math.abs(item.bruttoEgysegar))
-  const nettoUnit = vatMode === 'AAM' ? bruttoUnit : Math.round(bruttoUnit / VAT_DIVISOR)
-  const afaUnit = bruttoUnit - nettoUnit
-  const sign = negative ? -1 : 1
+  const bruttoErtek = bruttoUnit * item.mennyiseg
+  const nettoErtek = vatMode === 'AAM' ? bruttoErtek : Math.round(bruttoErtek / VAT_DIVISOR)
+  const afaErtek = bruttoErtek - nettoErtek
+  // Helyesbítőnél mind a négy érték előjelet vált (a −0 kerülésével).
+  const signed = (value: number): number => (negative && value !== 0 ? -value : value)
+  const egysegar = formatNettoEgysegar(nettoErtek / item.mennyiseg)
   return {
-    nettoEgysegar: String(sign * nettoUnit),
-    nettoErtek: sign * nettoUnit * item.mennyiseg,
-    afaErtek: sign * afaUnit * item.mennyiseg,
-    bruttoErtek: sign * bruttoUnit * item.mennyiseg,
+    nettoEgysegar: negative && nettoErtek !== 0 ? `-${egysegar}` : egysegar,
+    nettoErtek: signed(nettoErtek),
+    afaErtek: signed(afaErtek),
+    bruttoErtek: signed(bruttoErtek),
   }
+}
+
+/**
+ * A nettó egységár szöveges alakja: legfeljebb 2 tizedes, PONT tizedesjellel
+ * (a Számla Agent numerikus mezőinek alakja), egész értéknél tizedesek nélkül.
+ * Így mennyiseg=1 esetén pontosan a nettoErtek megy ki, ahogy korábban.
+ */
+function formatNettoEgysegar(value: number): string {
+  const rounded = Math.round(value * 100) / 100
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0+$/, '')
+}
+
+/**
+ * Dátum-kapu a Számla Agent fejléc-mezőihez: KIZÁRÓLAG YYYY-MM-DD alak mehet
+ * ki. A teljesítési dátum forrása egy szabad szöveges DB-mező
+ * (orders.invoiceCompletionDate) — a mező admin-oldali readOnly jelölése NEM
+ * API-védelem, tehát staff-jogosultsággal tetszőleges szöveg kerülhetne bele,
+ * és onnan escape nélkül az XML-be (bizonylat-hamisításig vezető
+ * XML-injektálás). A kapun át nem menő érték VÉGLEGES hiba: az újraküldés
+ * ugyanezt adná, emberi adatjavítás kell.
+ *
+ * A visszaadott érték az escape-elt alak — a kapu után az escapeXml már nem
+ * változtat semmin, de mélységi védelemként a kimeneten is ott van.
+ */
+function isoDateForXml(value: string, mezo: string): string {
+  if (!isIsoDateString(value)) {
+    throw new SzamlazzApiError({
+      message: `Érvénytelen dátum a számla ${mezo} mezőjében — kizárólag YYYY-MM-DD alak fogadható el.`,
+      kind: 'invalid_data',
+      retryable: false,
+    })
+  }
+  return escapeXml(value)
 }
 
 /** A teljes számla-XML (xmlszamla) a hivatalos tag-sorrendben. */
@@ -182,7 +246,15 @@ export function buildInvoiceXml(input: BuildInvoiceXmlInput): string {
   const esc = escapeXml
   const corrective = input.corrective
   const vatMode = input.vatMode ?? '27'
-  const teljesitesDatum = input.teljesitesDatum ?? input.issueDate
+  const keltDatum = isoDateForXml(input.issueDate, 'keltDatum (kiállítás dátuma)')
+  const teljesitesDatum = isoDateForXml(
+    input.teljesitesDatum ?? input.issueDate,
+    'teljesitesDatum (teljesítési dátum)',
+  )
+  const fizetesiHataridoDatum = isoDateForXml(
+    input.issueDate,
+    'fizetesiHataridoDatum (fizetési határidő)',
+  )
   const itemsXml = input.items
     .map((item) => {
       const amounts = computeLineAmounts(item, {
@@ -210,6 +282,13 @@ export function buildInvoiceXml(input: BuildInvoiceXmlInput): string {
     input.megjegyzes ??
     `Kineticare online kurzus — rendelés: ${input.orderNumber} (Barion, bankkártya)`
   const kulsoAzon = corrective ? corrective.kulsoAzon : input.orderNumber
+  // A <rendelesSzam> a provider-oldali duplikátum-védelem kulcsa (a fiókban
+  // bekapcsolt rendelésszám-ismétlés-tiltás ezt figyeli, 71/152 hibakóddal).
+  // A helyesbítő ÖNÁLLÓ bizonylat: az eredeti számla rendelésszámával minden
+  // helyesbítő azonnal a tiltásba futna, ezért itt a bizonylat-egyedi kulcs
+  // megy ki. Így a 71/152 tényleg azt jelenti: „EZ a helyesbítő már létezik",
+  // és a külső azonosítóra futó feloldó lekérdezés a helyes bizonylatot találja.
+  const rendelesSzam = corrective ? corrective.kulsoAzon : input.orderNumber
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <xmlszamla xmlns="http://www.szamlazz.hu/xmlszamla" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamla https://www.szamlazz.hu/szamla/docs/xsds/agent/xmlszamla.xsd">
@@ -221,16 +300,16 @@ export function buildInvoiceXml(input: BuildInvoiceXmlInput): string {
     <szamlaKulsoAzon>${esc(kulsoAzon)}</szamlaKulsoAzon>
   </beallitasok>
   <fejlec>
-    <keltDatum>${input.issueDate}</keltDatum>
+    <keltDatum>${keltDatum}</keltDatum>
     <teljesitesDatum>${teljesitesDatum}</teljesitesDatum>
-    <fizetesiHataridoDatum>${input.issueDate}</fizetesiHataridoDatum>
+    <fizetesiHataridoDatum>${fizetesiHataridoDatum}</fizetesiHataridoDatum>
     <fizmod>Barion</fizmod>
     <penznem>HUF</penznem>
     <szamlaNyelve>hu</szamlaNyelve>
     <megjegyzes>${esc(megjegyzes)}</megjegyzes>
     <arfolyamBank></arfolyamBank>
     <arfolyam></arfolyam>
-    <rendelesSzam>${esc(input.orderNumber)}</rendelesSzam>
+    <rendelesSzam>${esc(rendelesSzam)}</rendelesSzam>
     <dijbekeroSzamlaszam></dijbekeroSzamlaszam>
     <elolegszamla>false</elolegszamla>
     <vegszamla>false</vegszamla>
@@ -393,6 +472,7 @@ export interface IssueInvoiceForOrderDeps {
    * queryInvoiceByKulsoAzon. Két helyen fut: (1) újrapróbálás ELŐTT — a
    * „kérés elment, válasz elveszett" eset feloldására; (2) 71/152-es
    * duplikátum-jelzés után — a meglévő számla számának átvételére.
+   * A lekérdezés NEM fogyaszt beküldési kísérletet (F10).
    */
   queryByKulsoAzon?: (
     kulsoAzon: string,
@@ -408,9 +488,11 @@ export interface IssueInvoiceForOrderDeps {
  * - Számlázz.hu kikapcsolva (nincs agent-kulcs) → 'disabled' (no-op);
  * - hiányzó vevő-/tételadat → invoiceStatus 'failed' + 'failed' (NEM dob,
  *   a job nem újrapróbálja — emberi adatpótlás kell);
- * - retryable provider/timeout-hiba → invoiceStatus 'failed' + THROW
- *   (a Payload job újrapróbálja; a szamlaKulsoAzon miatt a duplikáció
- *   Számlázz.hu-oldalon sem jöhet létre).
+ * - retryable provider/timeout-hiba → invoiceStatus MARAD 'pending' (a hibát
+ *   az invoiceLastError hordozza) + THROW. A 'pending' azért kötelező, mert az
+ *   order-poll resweep csak a ['none','pending'] rendeléseket veszi fel újra
+ *   (src/lib/order-poll/service.ts) — 'failed' esetén a job-retryk kimerülése
+ *   után a számla ÖRÖKRE elveszne. A valódi fék a perzisztens 5-ös plafon (F4).
  */
 export async function issueInvoiceForOrder(
   deps: IssueInvoiceForOrderDeps,
@@ -479,9 +561,11 @@ export async function issueInvoiceForOrder(
     })
     return { outcome: 'failed', reason }
   }
-  const attempts = previousAttempts + 1
 
-  const issueDate = deps.issueDate ?? new Date().toISOString().slice(0, 10)
+  // A kelt-dátum a SZÉKHELY szerinti naptári nap: UTC-ből képezve magyar idő
+  // szerint 00:00–02:00 között az előző napra (adott esetben az előző
+  // áfa-időszakra) állna ki a számla.
+  const issueDate = deps.issueDate ?? budapestDateString()
   const xml = buildInvoiceXml({
     agentKey: config.agentKey as string,
     orderNumber: order.orderNumber,
@@ -492,11 +576,11 @@ export async function issueInvoiceForOrder(
     vatMode: config.vatMode,
   })
 
-  await writeOrderInvoicingState(deps.payload, deps.orderId, {
-    invoiceStatus: 'pending',
-    invoiceAttempts: attempts,
-  })
-
+  /**
+   * A ténylegesen BEKÜLDÖTT kísérletek száma. A lekérdezés (F10) nem fogyaszt
+   * keretet, ezért a számláló csak a POST előtt, a pending-írással együtt nő.
+   */
+  let attempts = previousAttempts
   const lookup = deps.queryByKulsoAzon ?? queryInvoiceByKulsoAzon
   /** A meglévő bizonylat átvétele (lekérdezés-találat vagy 71/152-feloldás). */
   const adoptExisting = async (szamlaszam: string, via: string): Promise<IssueInvoiceResult> => {
@@ -504,9 +588,11 @@ export async function issueInvoiceForOrder(
       invoiceStatus: 'issued',
       invoiceNumber: szamlaszam,
       invoiceLastError: null,
-      // A teljesítési dátumot nem ismerjük (a bizonylat egy KORÁBBI kísérletben
-      // állt ki) — üresen marad; a helyesbítő ilyenkor figyelmeztetéssel a saját
-      // kiállítási napjára esik vissza.
+      // A teljesítési dátumot SZÁNDÉKOSAN nem írjuk felül: a bizonylat egy
+      // KORÁBBI kísérletben állt ki, tehát annak a kísérletnek a dátuma az
+      // érvényes — azt a pending-írás (F8) már rögzítette. A mező csak a
+      // funkció bevezetése előtti bizonylatoknál maradhat üres; a helyesbítő
+      // ilyenkor figyelmeztetéssel a saját kiállítási napjára esik vissza.
     })
     orderLog.info('a számla már korábban kiállt — a meglévő bizonylat átvéve', {
       invoiceNumber: szamlaszam,
@@ -519,14 +605,26 @@ export async function issueInvoiceForOrder(
   try {
     // A12: újrapróbáláskor („kérés elment, válasz elveszett" gyanú) a beküldés
     // MEGISMÉTLÉSE ELŐTT kötelező a szamlaKulsoAzon-alapú lekérdezés. A
-    // lekérdezés hibája szándékosan propagál: bizonytalan állapotban nem
-    // szabad vakon újra beküldeni.
+    // lekérdezés hibája szándékosan propagál (a státusz pending marad):
+    // bizonytalan állapotban nem szabad vakon újra beküldeni. A lekérdezés
+    // NEM fogyaszt kísérletet — a számláló csak a tényleges POST előtt nő (F10).
     if (previousAttempts > 0) {
       const found = await lookup(order.orderNumber, config)
       if (found) {
         return await adoptExisting(found.szamlaszam, 'retry-elotti lekerdezes')
       }
     }
+
+    attempts = previousAttempts + 1
+    await writeOrderInvoicingState(deps.payload, deps.orderId, {
+      invoiceStatus: 'pending',
+      invoiceAttempts: attempts,
+      // F8: a KIKÜLDÖTT teljesítési dátum már itt rögzül — ha a válasz
+      // elveszik, a későbbi helyesbítő így is az eredeti dátumot ismétli
+      // (B4/NAV-hónapszabály). Az adoptExisting szándékosan NEM írja felül:
+      // ott egy KORÁBBI kísérlet dátuma az érvényes, amit ez az írás rögzített.
+      invoiceCompletionDate: issueDate,
+    })
 
     const postXml = deps.postXml ?? postInvoiceXml
     const result = await postXml(xml, config)
@@ -576,12 +674,33 @@ export async function issueInvoiceForOrder(
         }).catch(() => undefined)
         return { outcome: 'failed', reason }
       } catch (lookupError) {
-        error = lookupError
+        // F11: a duplikátum-tény NEM veszhet el a lekérdezés hibája mögött —
+        // a bizonylat a szolgáltatónál MÁR LÉTEZIK, a kézi újrakiállítás dupla
+        // NAV-adatszolgáltatást okozna. A két üzenet fűzve megy tovább.
+        const detail = lookupError instanceof Error ? lookupError.message : String(lookupError)
+        const combined = `71/152 — a bizonylat a Számlázz.hu szerint már létezik; a lekérdezés hibája: ${detail}`
+        error =
+          lookupError instanceof SzamlazzApiError
+            ? new SzamlazzApiError({
+                message: combined,
+                kind: lookupError.kind,
+                ...(lookupError.httpStatus !== undefined
+                  ? { httpStatus: lookupError.httpStatus }
+                  : {}),
+                agentErrors: lookupError.agentErrors,
+                retryable: lookupError.retryable,
+              })
+            : new Error(combined)
       }
     }
     const message = error instanceof Error ? error.message : String(error)
+    // F4: újrapróbálható hibán a státusz PENDING marad — az order-poll resweep
+    // csak a ['none','pending'] rendeléseket veszi fel újra, 'failed' esetén a
+    // job-retryk kimerülése után a számla örökre elveszne. Végleges hibán
+    // (és csak ott) 'failed'.
+    const retryable = error instanceof SzamlazzApiError && error.retryable
     await writeOrderInvoicingState(deps.payload, deps.orderId, {
-      invoiceStatus: 'failed',
+      invoiceStatus: retryable ? 'pending' : 'failed',
       invoiceLastError: message,
     }).catch(() => undefined)
     if (error instanceof SzamlazzApiError) {
@@ -593,8 +712,9 @@ export async function issueInvoiceForOrder(
         error: error.message,
       })
       if (error.retryable) {
-        // A job-retry újrapróbálja — a szamlaKulsoAzon véd a duplikáció ellen,
-        // az invoiceAttempts plafon pedig a beküldések számát korlátozza.
+        // A job-retry (kimerülése után az order-poll resweep) újrapróbálja: a
+        // következő futás a beküldés ELŐTT lekérdezi a bizonylatot, a
+        // beküldések számát pedig az invoiceAttempts plafon korlátozza.
         throw error
       }
       return { outcome: 'failed', reason: error.message }

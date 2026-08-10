@@ -44,7 +44,6 @@ export {
   issueStornoForOrder,
   MAX_STORNO_ATTEMPTS,
   postStornoXml,
-  STORNO_KULSO_AZON_SUFFIX,
   type BuildStornoXmlInput,
   type IssueStornoForOrderDeps,
 } from './storno'
@@ -60,6 +59,10 @@ export {
 } from './corrective'
 export { queueCorrectiveInvoiceJob, queueStornoIssueJob } from './queue'
 export { writeOrderInvoicingState } from './order-state'
+// Közös dátum-segédek: a kelt-dátum zóna-tudatos képzése (Europe/Budapest) és
+// a Számla Agent dátummezőinek alak-kapuja. Az escapeXml az invoice.ts-en
+// keresztül exportálódik (ott is re-export a ./xml-ből).
+export { budapestDateString, isIsoDateString } from './xml'
 export {
   SzamlazzApiError,
   type IssueCorrectiveInvoiceResult,
