@@ -1,8 +1,69 @@
 import type { Payload } from 'payload'
 import { describe, expect, it, vi } from 'vitest'
 
-import { resolveServerOrigin, resolveServerUrl } from '../env'
+import { resolveServerOrigin } from '../env'
 import configPromise from '../payload.config'
+
+/** A szanitált config típusa — a Payload `SanitizedConfig`-ja, importálás nélkül. */
+type SanitizedPayloadConfig = Awaited<typeof configPromise>
+
+/**
+ * A Media `url` mezőinek afterRead hookja — CSAK az az argumentum-részhalmaz,
+ * amit a Payload implementációja ténylegesen olvas
+ * (node_modules/payload/dist/uploads/getBaseFields.js:98-107 és :190-197).
+ */
+interface UrlAfterReadArgs {
+  collection: { slug: string }
+  data: Record<string, unknown>
+  originalDoc: Record<string, unknown>
+  req: { payload: { config: SanitizedPayloadConfig } }
+  value: unknown
+}
+
+type UrlAfterReadHook = (args: UrlAfterReadArgs) => unknown
+
+/** Mezőfa-csomópont a bejáráshoz (a méretek beágyazott csoportokban ülnek). */
+interface FieldNode {
+  name?: string
+  fields?: FieldNode[]
+  hooks?: { afterRead?: UrlAfterReadHook[] }
+}
+
+/**
+ * A mezőfa ÖSSZES `url` nevű mezőjének afterRead hookja, útvonal-címkével.
+ *
+ * A gyökér-`url` és a `sizes.<méret>.url` mezők ugyanazt a hibát hordozzák,
+ * ezért mindegyiket meg kell mérni — a címke miatt a bukás megmondja, melyiket.
+ */
+function collectUrlAfterReadHooks(
+  fields: readonly unknown[],
+  prefix = '',
+): Array<{ path: string; hook: UrlAfterReadHook }> {
+  const found: Array<{ path: string; hook: UrlAfterReadHook }> = []
+  for (const rawField of fields) {
+    const field = rawField as FieldNode
+    const path = field.name ? `${prefix}${field.name}` : prefix
+    if (field.name === 'url') {
+      for (const hook of field.hooks?.afterRead ?? []) {
+        found.push({ path, hook })
+      }
+    }
+    if (Array.isArray(field.fields)) {
+      found.push(...collectUrlAfterReadHooks(field.fields, `${path}.`))
+    }
+  }
+  return found
+}
+
+/** Tesztadat a hook-hívásokhoz — DB nélkül, csak fájlnevek kellenek. */
+const FILENAME = 'kineticare-kep.jpg'
+const SIZES_DATA: Record<string, { filename: string }> = {
+  xs: { filename: 'kineticare-kep-320x200.jpg' },
+  sm: { filename: 'kineticare-kep-640x400.jpg' },
+  md: { filename: 'kineticare-kep-1280x800.jpg' },
+  lg: { filename: 'kineticare-kep-1920x1200.jpg' },
+  og: { filename: 'kineticare-kep-1200x630.jpg' },
+}
 
 /**
  * Smoke-teszt: a payload.config betöltődik, és a várt collection-slugok
@@ -58,39 +119,119 @@ describe('payload.config', () => {
   })
 
   /**
-   * Explicit publikus gyökér + CORS/CSRF-engedélylista.
+   * CORS/CSRF-engedélylista a publikus gyökér EREDETÉHEZ kötve.
    *
-   * Beállítás nélkül a Payload a BEJÖVŐ KÉRÉS hostjához igazodik: a
-   * cookie-alapú auth és a böngészőből érkező API-hívások védelme ilyenkor nem
-   * a saját deploy-URL-hez van kötve, hanem ahhoz, amit a kérés állít magáról.
-   * A lista a `NEXT_PUBLIC_SERVER_URL`-ből származik (src/env.ts) — ugyanabból
-   * a forrásból, mint a storefront `metadataBase`-e és az SEO-segédek gyökere,
-   * hogy a védett és a hirdetett URL ne csúszhasson szét.
+   * Beállítás nélkül a `csrf` üres, az `extractJWT` pedig üres listánál MINDEN
+   * eredetről elfogadja a süti-tokent
+   * (node_modules/payload/dist/auth/extractJWT.js:21 és :27). A lista a
+   * `NEXT_PUBLIC_SERVER_URL`-ből származik (src/env.ts) — ugyanabból a
+   * forrásból, mint a storefront `metadataBase`-e és az SEO-segédek gyökere,
+   * hogy a védett és a hirdetett cím ne csúszhasson szét.
    *
    * Az elvárt értéket a resolverből vesszük, nem beégetve: így a teszt attól
    * függetlenül a bekötést méri, hogy a futtató környezetben be van-e állítva a
    * `NEXT_PUBLIC_SERVER_URL` (CI-ben nincs, a fejlesztői gépen lehet). Magának a
-   * resolvernek a viselkedését — tartalék, záró perjel, eredet-kiemelés — a
-   * src/__tests__/security/env-assert.test.ts rögzíti.
+   * `buildOriginAllowlist`-nek a SZŰKÍTÉSÉT — az útvonal-előtag levágását — a
+   * src/__tests__/security/env-assert.test.ts méri, mert az az eset a
+   * teszt-környezetben sosem áll elő magától.
    */
-  it('a serverURL és a CORS/CSRF-engedélylista a publikus gyökérhez van kötve', async () => {
+  it('a CORS/CSRF-engedélylista a publikus gyökér EREDETÉHEZ van kötve', async () => {
     const config = await configPromise
 
-    expect(config.serverURL).toBe(resolveServerUrl())
     // Az allowlist az EREDETET tartalmazza: a böngésző Origin fejléce sem küld
     // útvonalat és záró perjelet, tehát a teljes URL sosem illeszkedne.
     expect(config.cors).toEqual([resolveServerOrigin()])
-    // A `csrf` a VÉGLEGES (szanitált) configból jön, ahol a Payload maga is
-    // hozzáfűzi a serverURL-t (payload/dist/config/sanitize.js) — a lista ezért
-    // hosszabb lehet, mint amit megadtunk. A szerződés: a saját eredet benne
-    // van, és IDEGEN eredet nem kerülhet bele.
     expect(config.csrf).toContain(resolveServerOrigin())
     for (const origin of config.csrf ?? []) {
       expect(origin.startsWith(resolveServerOrigin())).toBe(true)
     }
-    // A lista sosem lehet üres vagy „mindent enged" — az visszavenné a védelmet.
-    expect(config.serverURL).toMatch(/^https?:\/\/[^/]+/)
-    expect(config.cors).not.toBe('*')
+
+    /*
+     * Tartalmi állítás a korábbi VAK `expect(config.cors).not.toBe('*')` helyett:
+     * a `cors` TÖMB, egy tömb pedig sosem azonos a `'*'` stringgel — az a sor
+     * akkor is teljesült volna, ha a lista mindent átenged. Amit ténylegesen
+     * meg kell követelni: a lista nem üres, és minden eleme PONTOSAN egy eredet
+     * (nincs benne útvonal, záró perjel és nincs benne a „mindent enged" `'*'`).
+     */
+    expect(Array.isArray(config.cors)).toBe(true)
+    const corsOrigins = config.cors as string[]
+    expect(corsOrigins.length).toBeGreaterThan(0)
+    for (const origin of corsOrigins) {
+      expect(origin).not.toBe('*')
+      expect(origin).toBe(new URL(origin).origin)
+    }
+  })
+
+  /**
+   * A `serverURL` SZÁNDÉKOSAN ÜRES — ez döntés, nem feledékenység.
+   *
+   * Beállítva ELTÖRNÉ AZ ÖSSZES CMS-KÉPET: a Media `url` és `sizes.*.url`
+   * mezőinek afterRead hookja `relative: false` + a config `serverURL`-jével
+   * hívja a `generateFilePathOrURL`-t, ami ilyenkor ABSZOLÚT URL-t ad vissza
+   * (node_modules/payload/dist/utilities/formatAdminURL.js). A storefront
+   * viszont a `next/image`-nek adja tovább (src/components/content/MediaImage.tsx),
+   * és a next.config.ts-ben NINCS `images.remotePatterns` → a `/_next/image`
+   * élesben 400-at ad. A védelmet ez nem gyengíti: az `extractJWT` a `csrf`,
+   * a `headersWithCors` pedig a `cors` listát nézi — egyik sem a `serverURL`-t.
+   *
+   * A hatás mérése a következő tesztben (a hook tényleges kimenetén) van; itt
+   * maga a beállítás rögzül, hogy egy „hiányzik, pótoljuk" reflex ne írja vissza.
+   */
+  it('a serverURL szándékosan ÜRES (a Payload alapértelmezése) — nem feledékenység', async () => {
+    const config = await configPromise
+
+    expect(config.serverURL).toBe('')
+  })
+
+  /**
+   * REGRESSZIÓS TESZT: a Media `url` mezők GYÖKÉR-RELATÍV utat adnak vissza.
+   *
+   * Ez fogja meg magát a hibát, nem a beállítást: a szanitált configból
+   * kiszedjük a media collection `url` mezőinek afterRead hookjait (a gyökér-
+   * URL-ét és a méretekét is), lefuttatjuk őket, és megköveteljük, hogy a
+   * kimenet `/`-rel kezdődjön. Adatbázis nem kell — a hook tiszta
+   * útvonal-számítás.
+   *
+   * Ha a `serverURL` visszakerül a configba, ez a teszt BUKIK: a hook abszolút
+   * URL-t adna, amit a `next/image` `images.remotePatterns` nélkül 400-zal
+   * utasít el.
+   */
+  it('a Media url-mezői GYÖKÉR-RELATÍV utat adnak (a next/image nem 400-zik)', async () => {
+    const config = await configPromise
+
+    const media = (config.collections ?? []).find((collection) => collection.slug === 'media')
+    expect(media).toBeDefined()
+
+    const hooks = collectUrlAfterReadHooks(media?.fields ?? [])
+    // A gyökér-URL + mind a hat méret hookja meglegyen. Ha a Payload átalakítja
+    // a mezőfát (vagy egy méret kiesik a Media collectionből), inkább bukjon,
+    // mint hogy némán 0 hookon „menjen át" a teszt.
+    expect(hooks.map((entry) => entry.path)).toEqual([
+      'url',
+      'sizes.xs.url',
+      'sizes.sm.url',
+      'sizes.md.url',
+      'sizes.lg.url',
+      'sizes.og.url',
+    ])
+
+    for (const { path, hook } of hooks) {
+      const result = hook({
+        collection: { slug: 'media' },
+        data: { filename: FILENAME, sizes: SIZES_DATA },
+        originalDoc: { filename: FILENAME, sizes: SIZES_DATA },
+        req: { payload: { config } },
+        value: undefined,
+      })
+
+      expect(typeof result, path).toBe('string')
+      const url = result as string
+      expect(url.startsWith('/'), `${path} → ${url}`).toBe(true)
+      // A next/image a saját eredetről szolgált, gyökér-relatív utat kezeli
+      // loader-konfiguráció nélkül; abszolút („távoli") forrásra 400 jön.
+      expect(/^https?:\/\//i.test(url), `${path} → ${url}`).toBe(false)
+      expect(url, path).toContain('/media/file/')
+    }
   })
 
   /**

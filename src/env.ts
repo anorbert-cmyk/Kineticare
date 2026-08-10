@@ -87,15 +87,37 @@ export function resolveServerUrl(): string {
 }
 
 /**
+ * A CORS/CSRF-engedélylista felépítése a NYERS env-értékből — TISZTA függvény.
+ *
+ * Azért önálló és nyers bemenetű, hogy a tényleges szűkítés tesztelhető legyen
+ * olyan értékkel is, ami a teszt-környezetben sosem áll elő (pl.
+ * útvonal-előtagos gyökér). A `resolveServerOrigin` ennek a
+ * `process.env`-hez kötött hívása.
+ *
+ * A lista az EREDETET tartalmazza (séma + hoszt + port), nem a teljes URL-t: a
+ * böngésző az `Origin` fejlécben mindig csak az eredetet küldi, tehát egy
+ * útvonal-előtaggal megadott `NEXT_PUBLIC_SERVER_URL` (pl.
+ * `https://kineticare.hu/app`) esetén a teljes URL sosem illeszkedne — a
+ * bejelentkezés és minden sütis API-hívás NÉMÁN elhasalna.
+ *
+ * MINDEN hívás ÚJ tömböt ad vissza. Ez nem stílus: a Payload szanitálása a
+ * `csrf` tömbbe BELEÍR (`config.csrf.push(...)`,
+ * node_modules/payload/dist/config/sanitize.js:340-342), tehát a `cors` és a
+ * `csrf` nem oszthat közös tömb-referenciát.
+ */
+export function buildOriginAllowlist(rawValue: string | undefined | null): string[] {
+  const serverUrl = normalizeServerUrl(rawValue) ?? DEFAULT_SERVER_URL
+  return [new URL(serverUrl).origin]
+}
+
+/**
  * A publikus szerver-URL EREDETE (séma + hoszt + port), útvonal nélkül.
  *
- * A CORS- és CSRF-allowlist ezt kapja, nem a teljes URL-t: a böngésző az
- * `Origin` fejlécben mindig csak az eredetet küldi, tehát egy útvonal-előtaggal
- * megadott `NEXT_PUBLIC_SERVER_URL` (pl. `https://kineticare.hu/app`) esetén a
- * teljes URL sosem illeszkedne — a bejelentkezés némán elhasalna.
+ * A `buildOriginAllowlist` egyelemű listájának első (és egyetlen) eleme — a
+ * kettő ugyanabból a normalizálásból származik, tehát nem csúszhat szét.
  */
 export function resolveServerOrigin(): string {
-  return new URL(resolveServerUrl()).origin
+  return buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)[0]
 }
 
 /**

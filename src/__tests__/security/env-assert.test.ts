@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   assertRequiredEnv,
+  buildOriginAllowlist,
   DEFAULT_SERVER_URL,
   requiredEnvVars,
   resolveServerOrigin,
@@ -300,5 +301,57 @@ describe('resolveServerUrl / resolveServerOrigin', () => {
     vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'kineticare.hu')
     expect(resolveServerUrl()).toBe(DEFAULT_SERVER_URL)
     expect(resolveServerOrigin()).toBe(DEFAULT_SERVER_URL)
+  })
+})
+
+
+/**
+ * `buildOriginAllowlist` — a Payload `cors`/`csrf` listájának TISZTA építője
+ * (src/env.ts), amit a src/payload.config.ts közvetlenül hív.
+ *
+ * Miért nyers bemenettel, külön tesztben: a bekötés-tesztben
+ * (src/__tests__/payload-config.test.ts) az elvárt érték a resolverből jön, és
+ * a teszt-környezetben nincs útvonal-előtagos gyökér — ott tehát a
+ * „teljes URL vs. eredet" különbség NEM MÉRHETŐ, egy `[teljesURL]`-re rontott
+ * bekötés is zöld maradna. Az ALÁBBI eset az, ami ezt megfogja.
+ */
+describe('buildOriginAllowlist', () => {
+  it('útvonal-előtagos gyökérből CSAK az eredet kerül a listába', () => {
+    // Ez a diszkrimináló eset: a teljes URL (`https://pelda.hu/app`) allowlist-
+    // elemként SOSEM illeszkedne a böngésző Origin fejlécére.
+    expect(buildOriginAllowlist('https://pelda.hu/app')).toEqual(['https://pelda.hu'])
+    expect(buildOriginAllowlist('https://pelda.hu/app/')).toEqual(['https://pelda.hu'])
+    expect(buildOriginAllowlist('https://pelda.hu/app?x=1#y')).toEqual(['https://pelda.hu'])
+  })
+
+  it('a portot MEGTARTJA (az eredet része), a záró perjelet elhagyja', () => {
+    expect(buildOriginAllowlist('http://localhost:3000/')).toEqual(['http://localhost:3000'])
+    expect(buildOriginAllowlist('https://pelda.hu:8443/app')).toEqual(['https://pelda.hu:8443'])
+  })
+
+  it('hiányzó vagy hibás értéknél a fejlesztői tartalék eredete, dobás NÉLKÜL', () => {
+    const fallbackOrigin = new URL(DEFAULT_SERVER_URL).origin
+
+    expect(buildOriginAllowlist(undefined)).toEqual([fallbackOrigin])
+    expect(buildOriginAllowlist(null)).toEqual([fallbackOrigin])
+    expect(buildOriginAllowlist('')).toEqual([fallbackOrigin])
+    expect(buildOriginAllowlist('kineticare.hu')).toEqual([fallbackOrigin])
+    expect(buildOriginAllowlist('ftp://kineticare.hu')).toEqual([fallbackOrigin])
+  })
+
+  /**
+   * MINDEN hívás ÚJ tömböt ad: a Payload szanitálása a `csrf` tömbbe beleírhat
+   * (node_modules/payload/dist/config/sanitize.js:340-342), közös referencia
+   * mellett ez a `cors` listát is átírná.
+   */
+  it('minden hívás önálló tömböt ad vissza (a csrf-be a Payload beleír)', () => {
+    const first = buildOriginAllowlist('https://pelda.hu')
+    const second = buildOriginAllowlist('https://pelda.hu')
+
+    expect(first).toEqual(second)
+    expect(first).not.toBe(second)
+
+    first.push('https://idegen.example')
+    expect(second).toEqual(['https://pelda.hu'])
   })
 })
