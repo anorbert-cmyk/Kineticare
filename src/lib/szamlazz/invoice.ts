@@ -532,8 +532,13 @@ export async function issueInvoiceForOrder(
 
   const buyer = buyerFromOrder(order)
   if (!buyer) {
-    orderLog.warn(
-      'hiányos vevő-számlázási adatok (név/irsz/település/cím) — számla NEM állítható ki, emberi pótlás szükséges',
+    // VÉGLEGES vesztés-ág: a rendelés kifizetve, a kurzus kiadva, számla
+    // viszont soha nem áll ki (a hívó `outcome: 'failed'`-del, DOBÁS NÉLKÜL
+    // zár, tehát nincs újrapróbálás). A szomszédos, ugyanilyen végleges ágak
+    // (rendelésszám, ár-snapshot, kimerült plafon) mind `error` + `RIASZTÁS:`
+    // szintűek — ez eddig warn volt, ezért NÉMÁN veszett el.
+    orderLog.error(
+      'RIASZTÁS: hiányos vevő-számlázási adatok (név/irsz/település/cím) — számla NEM állítható ki, emberi pótlás szükséges',
     )
     await writeOrderInvoicingState(deps.payload, deps.orderId, { invoiceStatus: 'failed' })
     return { outcome: 'failed', reason: 'hiányos vevő-számlázási adatok' }

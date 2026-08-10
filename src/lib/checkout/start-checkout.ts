@@ -4,6 +4,12 @@ import type { Order, Product, User } from '../../payload-types'
 import { withAdvisoryLock } from '../advisory-lock'
 import { BARION_DEFAULT_PAYMENT_WINDOW, BarionApiError, startPayment } from '../barion'
 import { logger, type Logger } from '../logger'
+import {
+  billingSummaryMessage,
+  validateBilling,
+  type BillingFieldError,
+  type NormalizedBilling,
+} from './billing'
 
 /**
  * Checkout-start szolgáltatás (T-021) — a POST /api/checkout/start végpont
@@ -11,7 +17,10 @@ import { logger, type Logger } from '../logger'
  * injektálva, így mockolt fetch-csel egységtesztelhető).
  *
  * A pénzügyi főlánc első láncszeme:
- *  1. input-validáció (productId, quantity, opcionális kliens-ár, waiver),
+ *  1. input-validáció (productId, quantity, opcionális kliens-ár, waiver,
+ *     SZÁMLÁZÁSI ADATOK) — a számlázási mezők ellenőrzése itt is kötelező,
+ *     mert a kliens megkerülhető, és hiányos vevőadattal a fizetés lemenne, a
+ *     számla viszont soha nem állna ki,
  *  2. termék- és státuszellenőrzés (archived/draft nem megvásárolható),
  *  3. ADVISORY-ZÁR alatt (S2): duplavásárlás-blokk (paid vagy aktív
  *     payment_pending → 409) ÉS a rendelés létrehozása — a kettő együtt egy
@@ -27,6 +36,16 @@ import { logger, type Logger } from '../logger'
  *
  * A rendelés `paid`-re állítása NEM itt történik: az kizárólag a
  * Barion-callback-útvonal (T-022) joga (T-063).
+ *
+ * SZÁMLÁZÁSI SZERZŐDÉS — EGYÁGÚ: a `billing` KÖTELEZŐ, profil-tartalék nincs.
+ * Korábban a mező elhagyása a felhasználó tárolt profiljára esett vissza; ez
+ * egyetlen hívót szolgált (a `barionPaymentAdapter.initiatePayment`), az pedig
+ * élesben elérhetetlen (a plugin `paymentMethods` tömbje üres, a `/payments/*`
+ * végpontokat a `withoutPluginPaymentEndpoints` szűrő eltávolítja). A tartalék
+ * ára viszont valós volt: egy elfelejtett `billing` mező némán, egy AVULT
+ * profilból állította volna elő a számlát. Az adapter azóta a hívó oldalán,
+ * KIMONDVA építi a profilból a `billing`-et — ugyanazzal a kötelező
+ * validációval, tehát hiányos profillal azon az úton sem jön létre rendelés.
  */
 
 /** Üzleti hiba HTTP-státusszal — a route-handler ezt képezi válaszra. */
@@ -47,6 +66,16 @@ export interface CheckoutStartInput {
   priceHuf?: unknown
   /** Az elállási jogról való lemondás elfogadása — kötelező (true). */
   consentWithdrawalWaiver?: unknown
+  /**
+   * A számlázási adatok (név/irsz/település/cím + opcionális adószám) —
+   * KÖTELEZŐ. Ez a rendelésre rögzített IGAZSÁG: a `customerSnapshot` — és így
+   * a számla — ebből készül. Hiányzó, hiányos vagy hibás adat → 400, a
+   * rendelés létrejötte és a Barion-hívás ELŐTT.
+   *
+   * Nincs profil-tartalék: a hívónak KI KELL MONDANIA, mi kerüljön a számlára.
+   * (Az indoklás a fájl fejlécének „SZÁMLÁZÁSI SZERZŐDÉS" bekezdésében.)
+   */
+  billing?: unknown
 }
 
 export interface CheckoutStartOptions {
@@ -79,6 +108,21 @@ interface ParsedInput {
   productId: number
   quantity: number
   priceHuf?: number
+  billing: NormalizedBilling
+}
+
+/**
+ * Magyar, a végpont hibaformátumába illeszkedő üzenet a számlázási hibákból.
+ *
+ * Az ÖSSZEFOGLALÓT a tényleges hibahalmazból származtatjuk
+ * (`billingSummaryMessage`) — így a hibás adószám nem „hiányos adat"-ként megy
+ * vissza. Ha az összefoglaló épp egybeesik az egyetlen mezőhibával, nem
+ * ismételjük meg.
+ */
+function billingErrorMessage(errors: readonly BillingFieldError[]): string {
+  const details = errors.map((item) => item.message)
+  const summary = billingSummaryMessage(errors)
+  return (details.includes(summary) ? details : [summary, ...details]).join(' ')
 }
 
 function parseInput(input: CheckoutStartInput): ParsedInput {
@@ -116,7 +160,28 @@ function parseInput(input: CheckoutStartInput): ParsedInput {
     )
   }
 
-  return { productId, quantity, ...(priceHuf !== undefined ? { priceHuf } : {}) }
+  /**
+   * SZÁMLÁZÁSI ADATOK — a kérésben küldött érték az EGYETLEN forrás. A
+   * felhasználó profilja csak a pénztár űrlapjának ELŐKITÖLTÉSE (kliens-oldal);
+   * a szolgáltatás nem esik vissza rá, és részlegesen kitöltött `billing`-et
+   * sem egészít ki belőle — a kevert rekord később megmagyarázhatatlan számlát
+   * adna.
+   *
+   * A validáció itt is KÖTELEZŐEN lefut — a kliens megkerülhető, hiányos
+   * snapshottal pedig a fizetés lemenne, a számla viszont soha nem állna ki
+   * (issueInvoiceForOrder `failed`-del, dobás nélkül zár → nincs retry).
+   */
+  const billingResult = validateBilling(input.billing)
+  if (!billingResult.ok) {
+    throw new CheckoutError(400, billingErrorMessage(billingResult.errors))
+  }
+
+  return {
+    productId,
+    quantity,
+    ...(priceHuf !== undefined ? { priceHuf } : {}),
+    billing: billingResult.value,
+  }
 }
 
 /** A termék megvásárolhatóságának ellenőrzése (státusz + ár), magyar üzenetekkel. */
@@ -230,17 +295,30 @@ function isOrderNumberConflict(error: unknown): boolean {
   return false
 }
 
-/** Vevő-snapshot a rendelésre (számlázási/audit célokra, szerver-oldali adatokból). */
-function buildCustomerSnapshot(user: User): Record<string, unknown> {
+/**
+ * Vevő-snapshot a rendelésre (számlázási/audit célokra).
+ *
+ * A számlázási mezők forrása a VALIDÁLT `billing` — vagyis az, amit a hívó
+ * (élesben: a pénztár űrlapja) ténylegesen megadott. A snapshot a rendeléshez
+ * rögzített igazság: a Számlázz.hu-számla ebből készül (`buyerFromOrder`), a
+ * felhasználó későbbi profilmódosítása már nem hat rá.
+ *
+ * A mező típusa JSON (src/plugins/ecommerce.ts), tehát a tartalma
+ * sémaváltozás és migráció nélkül alakítható.
+ */
+function buildCustomerSnapshot(
+  user: User,
+  billing: NormalizedBilling,
+): Record<string, unknown> {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
-    billingName: user.billingName ?? null,
-    billingZip: user.billingZip ?? null,
-    billingCity: user.billingCity ?? null,
-    billingStreet: user.billingStreet ?? null,
-    taxNumber: user.taxNumber ?? null,
+    billingName: billing.name,
+    billingZip: billing.zip,
+    billingCity: billing.city,
+    billingStreet: billing.street,
+    taxNumber: billing.taxNumber,
     snapshotAt: new Date().toISOString(),
   }
 }
@@ -252,7 +330,7 @@ function buildCustomerSnapshot(user: User): Record<string, unknown> {
 export async function startCheckout(options: CheckoutStartOptions): Promise<CheckoutStartResult> {
   const { payload, user } = options
   const log = options.logger ?? logger
-  const { productId, quantity, priceHuf } = parseInput(options.input)
+  const { productId, quantity, priceHuf, billing } = parseInput(options.input)
 
   // A terméket a legfrissebb (draft) verzióval olvassuk — a vásárlási
   // jogosultságot a szerkesztői `status` mező dönti el, nem a drafts _status.
@@ -285,7 +363,7 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
         items: [{ product: productId, quantity }],
         consentWithdrawalWaiver: true,
         consentWithdrawalWaiverAt: nowIso,
-        customerSnapshot: buildCustomerSnapshot(user),
+        customerSnapshot: buildCustomerSnapshot(user, billing),
         ...(options.ipAddress ? { ipAddress: options.ipAddress } : {}),
       },
       overrideAccess: true,
@@ -450,6 +528,8 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
     userId: user.id,
     productId,
     totalHuf,
+    // A számlázási adat SZEMÉLYES adat — sem a mezői, sem származtatott
+    // értékük nem kerül a naplóba.
   })
 
   return { orderNumber, gatewayUrl }

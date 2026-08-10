@@ -759,15 +759,29 @@ describe('issueInvoiceForOrder', () => {
     expect(updates).toHaveLength(0)
   })
 
-  it('hiányos vevő-adatnál invoiceStatus=failed, NEM dob (a job nem próbálja újra)', async () => {
+  it('hiányos vevő-adatnál invoiceStatus=failed, NEM dob (a job nem próbálja újra), és RIASZTÁS megy a naplóba', async () => {
     const order = createOrder()
     order.customerSnapshot = { name: 'Teszt Anna' }
     const { payload } = createMockPayload(order)
     let calls = 0
+    // Ez VÉGLEGES vesztés-ág: a rendelés kifizetve, számla soha nem áll ki, és
+    // a hívó nem dob, tehát nincs újrapróbálás. Ezért itt `error` + `RIASZTÁS:`
+    // kell (a szomszédos, ugyanilyen ágak konvenciója) — `warn` mellett a
+    // rendelés NÉMÁN veszne el.
+    const logged: Array<{ level: 'warn' | 'error'; message: string }> = []
+    const recordingLogger = {
+      debug: () => undefined,
+      info: () => undefined,
+      warn: (message: string) => logged.push({ level: 'warn', message }),
+      error: (message: string) => logged.push({ level: 'error', message }),
+      child: () => recordingLogger,
+    }
+
     const result = await issueInvoiceForOrder({
       payload,
       orderId: 101,
       config: ENABLED_CONFIG,
+      logger: recordingLogger,
       queryByKulsoAzon: noLookup,
       postXml: async () => {
         calls += 1
@@ -777,6 +791,11 @@ describe('issueInvoiceForOrder', () => {
     expect(result.outcome).toBe('failed')
     expect(order.invoiceStatus).toBe('failed')
     expect(calls).toBe(0)
+
+    const alert = logged.find((entry) => entry.message.includes('hiányos vevő-számlázási adatok'))
+    expect(alert).toBeDefined()
+    expect(alert?.level).toBe('error')
+    expect(alert?.message.startsWith('RIASZTÁS:')).toBe(true)
   })
 
   it('agent-elutasításnál invoiceStatus=failed, nem dob (üzleti hiba, nem retryable)', async () => {

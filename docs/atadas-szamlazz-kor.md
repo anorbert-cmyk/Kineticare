@@ -1,348 +1,250 @@
-# Átadás-dokumentum: Számlázz.hu-megfelelőségi kör (#53) — állapot, döntések, hátralévő munka
+# Kineticare — átadás-dokumentum
 
-> **Kinek szól:** a következő agent-session (vagy emberi fejlesztő), aki a
-> Számlázz.hu-integráció élesítését folytatja. **Készült:** 2026-08-09 ~23:30 UTC
-> · **Frissítve: 2026-08-10 ~09:30 UTC** (élesítés után + igény-ellenőrzés:
-> 8–11. szakasz). **Önálló dokumentum** — a session mulandó állapotára
-> (scratchpad, futó folyamatok) nem támaszkodik; ami kell, az a repóban van.
+> **Kinek szól:** a következő agent-session vagy emberi fejlesztő, aki átveszi
+> a munkát. **Frissítve: 2026-08-10 ~14:05 UTC.** **Önálló dokumentum** — a
+> session mulandó állapotára (scratchpad, futó folyamatok, worktree-k) nem
+> támaszkodik; ami kell, az a repóban van.
 >
-> **A doksi két részből áll.** Az 1–7. szakasz a **lezárt** Számlázz.hu-kör
-> naplója. A 8–11. szakasz **kiadható feladat** a következő agentnek —
-> ott kezdd, ha új munkát veszel fel.
+> **Hogyan használd:** a 0. szakasz a helyzet egy percben. Az 1. mondja meg,
+> mi van élesben. **A 2. a következő feladatod.** A 3. a priorizált backlog, a
+> 4. pedig azt, amit NE csinálj meg. Az 5–11. szakasz technikai anyag:
+> receptek, specifikációk, környezet, tilos zónák.
+>
+> **Előzmény:** a doksi a Számlázz.hu-megfelelőségi kör (#53) naplójaként
+> indult; az akkori 21 review-finding teljesítés-naplója a 4. szakaszból a
+> `docs/szamlazz-megfeleles.md` és a git-történet felé mutat tovább.
 
 ---
-
 ## 0. HA CSAK EGY DOLGOT OLVASOL EL
 
-> **✅ LEZÁRVA 2026-08-10 ~10:26 UTC.** Mindkét migráció élesben van (#59 →
-> `d4c5ca1`, #60 → `db9ed72`), a deploy-logban ott a `Migrated:` sor mindkettőre.
-> Az alábbi leírás **azért marad benne**, mert a hiba osztálya néma és
-> visszatérő: a 8.2-es ellenőrző recept és a 8.3-as migráció-generálási fogás
-> újra kelleni fog.
+**A rendszer élesben fut, és ma odáig jutott, hogy a fizetési főlánc egyáltalán
+működőképes legyen.** Kiderült ugyanis, hogy addig nem volt az: az éles
+adatbázis nem azt a sémát tartalmazta, amit a kód feltételez, ezért élesben
+rendelés létre sem jöhetett. Ezt két Payload-generált migráció javította
+(#59, #60), és igazoltuk is.
 
-🔴 **Az éles adatbázis nem azt tartalmazta, amit a kód feltételez** (8. szakasz).
-Nem egy mező hiányzott, hanem a fizetési főlánc fele: az `orders.refunds`
-oszlop, az `orders.status` enumból a `created`/`payment_pending`/`paid`/
-`payment_failed` értékek, a `payload_jobs` task-slug enumokból az
-`invoice-issue` és `order-poll`, valamint a `webhook_events.processed_at` és
-`.result`. Ok: **fejlesztői módban a Payload push-a némán pótolja őket,
-élesben nem** — a migrációk soha nem hozták létre.
+**A következő feladatod a 2. szakaszban van:** a pénzútvonal két megerősített
+KRITIKUS hibájának javítása **kész, zöld és élesítésre vár** a #62 PR-ben —
+három iteráció és két keresztreview után. **Egyetlen dolog hiányzik: egy
+tulajdonosi visszaigazolás** arról, hogy az `ENABLE_JOB_WORKERS` `true`-ra van
+állítva a Railway service-en (2.4).
 
-Következmény: élesben rendelés **létre sem jöhetett**, fizetés nem volt
-rögzíthető, a számlázó job nem volt ütemezhető. Két teljes fejlesztési kör
-landolt úgy, hogy élesben egyáltalán nem működhetett.
+⚠️ **A legfontosabb tanulság, ami rád is vonatkozik:** a ma feltárt hibák MIND
+némák voltak. Nem dobtak kivételt, nem írtak logot, a CI zöld volt, a Railway
+„SUCCESS"-t mutatott — és közben az éles rendszer fele nem működött. Fejlesztői
+módban minden jónak látszott, mert a Payload `push`-a némán pótolta a hiányzó
+sémát. **Ne a zöld CI-ból következtess a működésre.** A 8.2-ben van egy
+reprodukálható recept, amivel ezt bármikor ellenőrizheted, és a 3.1-ben négy
+javasolt CI-őr, ami gépivé tenné.
 
-A javítás **kétlépcsős** volt, mert a második migráció enum-cseréje
-átkonvertálja a meglévő sorokat, és egy régi státuszú rendelés miatt az app
-el sem indult volna: előbb az additív `refunds`-migráció ment ki, és csak
-miután élesben igazolható lett, hogy nincs átkonvertálandó rendelés, jött a
-többi. A részletek a 8.4–8.6-ban.
+## 1. Mi van ÉLESBEN (2026-08-10)
 
-## 1. Pillanatkép — hol tartunk
+| PR | main | Mit vitt ki | Igazolás |
+| --- | --- | --- | --- |
+| #59 | `d4c5ca1` | Kurzusok-lista javítás + `orders.refunds` migráció | valódi `next build`; `Migrated: …szamlazz_refunds_oszlop (4ms)`; `server_start` a SHA-val |
+| #60 | `db9ed72` | A fizetési főfolyam séma-driftje (állapotgép-enum, job-slug enumok, `webhook_events`) | `Migrated: …sema_drift_allapotgep_es_jobok (16ms)`; `server_start` a SHA-val |
+| #61 | `82940ef` | Rendelések/Kosarak/Űrlapbeküldések listák + keresés-őr + doksi | `server_start` a SHA-val; migrációt nem igényelt |
 
-- **✅ A KÖR ÉLESBEN VAN.** main: **`b013f15`** — a #56 PR squash-merge-elve,
-  a Railway-deploy SUCCESS, **mindkét migráció lefutott**, az app válaszol.
-  A teljes bizonyíték-tábla a 4. szakasz végén („ÉLESÍTÉS MEGTÖRTÉNT").
-- **Előzmény a mainen:** `5d6f5da` (#52 — C-backlog + biztonsági kör 2).
-- **PR #56:** merged — https://github.com/anorbert-cmyk/Kineticare/pull/56.
-- **Kapu-állapot a merge előtt:** typecheck ✔ · vitest **1335 passed / 0 failed**
-  ✔ · lint 0 error (1 örökölt, dokumentált warning) ✔ · build ✔; GitHub CI 5/5.
-- **✅ A REVIEW MIND A 21 FINDINGJA LEZÁRVA** (F1–F17; F17 tudatosan elfogadott
-  korlátként dokumentálva). A javító-kört 4 Opus-ügynök végezte, a döntések a
-  4. szakaszban maradtak meg — **teljesítés-naplóként**, hogy a teszt-fiókos
-  validálásnál visszakereshető legyen, mit miért így oldottunk meg.
-- **⚠️ FONTOS: a számlázás élesben MÉG KIKAPCSOLT.** A `SZAMLAZZ_AGENT_KEY`
-  Railway-változó nincs beállítva, ezért a kód `enabled=false` ágon fut (szándékos
-  no-op) — a Számlázz.hu felé egyetlen hívás sem megy ki. A bekapcsolás
-  előfeltételei a 4. szakasz végén („AMI MÉG HÁTRAVAN").
+`/` · `/admin` · `/kurzusok` → HTTP 200. Railway: projekt `pretty-spontaneity`,
+service `Kineticare`, domain `kineticare-production.up.railway.app`.
 
-## 2. Kontextus — mi zárult le ma (előzmények)
+**Amit ez megjavított:**
 
-1. **Biztonsági kör 2** (task #50): a leállt workflow worktree-maradványaiból a fő
-   szálban felszüretelve, 16 commit, teljes kapu + 3-lencsés önreview → **PR #52**.
-2. **#48 lánc**: push → PR #52 leírás (KIEMELT access-control szekcióval:
-   `stornoNumber` + `correctiveInvoiceNumber` owner-only olvasás, üzemeltetői
-   utasításra) → CI zöld (6/6) → squash-merge → **Railway-deploy igazolva** →
-   **PR #40 lezárva** (meghaladott; magyarázó komment a PR-en).
-3. **Számlázz.hu-kutatás** (task #52): 4 kutató + szintézis → **45 hivatalos
-   követelmény** (A1–A16, B1–B9, C1–C10, D1–D10) → a repóban:
-   `docs/szamlazz-hivatalos-kovetelmenyek.md`.
-4. **#53 implementáció** (ez a kör): lásd 3. szakasz.
+1. **Az admin listák használhatók.** A Kurzusok lista korábban NULLA
+   adat-oszloppal rendelődött ki (a plugin `defaultColumns: ['prices']`-t állít
+   be, de nincs `prices` nevű mező), ezért a kurzus meg sem volt nyitható. A
+   Rendelések és Kosarak keresője Postgres-hibára futott (`ILIKE` egy
+   `timestamptz` oszlopon). Az Űrlapbeküldések listája azonosítót és
+   Turnstile-tokent mutatott beküldő és dátum helyett.
+2. **A fizetési főlánc sémája teljes.** Rendelés létrejön (`created` →
+   `payment_pending` → `paid` → `refunded`), a Barion-callback le tudja
+   könyvelni a kimenetelét, és mind az öt job beütemezhető.
 
-## 3. A kör commitjai a branchen (időrendben)
+**Független igazolás:** a configból felépített teljes drizzle-séma
+(**112 tábla, 60 enum**) ma pontosan megegyezik a legutolsó migrációs
+snapshottal — **nincs több drift**.
 
-| Commit | Tartalom |
+**Ami ettől még NEM működik élesben:** a `BARION_POSKEY_TEST` ál-érték és a
+`SZAMLAZZ_AGENT_KEY` nincs beállítva, tehát valódi vásárlás és számlázás még
+nem futott. Lásd a 11. szakaszt.
+
+## 2. ➡️ A KÖVETKEZŐ FELADAT: a pénzútvonal-javítás élesítése
+
+> **Állapot 2026-08-10 ~14:00 UTC:** a munka **kész és zöld**, a
+> `claude/higgsfield-mcp-integration-za6671` branchen (`8acfadc`), a **#62**
+> PR-ben. **Egyetlen dolog hiányzik az élesítéshez: egy tulajdonosi
+> visszaigazolás** (2.4). A PR címe még „WIP" — átcímezendő.
+
+### 2.1 Mit old meg (két megerősített KRITIKUS hiba)
+
+**Jobok.** A `jobs.autoRun` a Payloadban NEM állít sorba jobokat, csak a MÁR
+SORBAN ÁLLÓKAT futtatja (a Payload saját típusdokumentációja mondja ki). A
+kódban mindössze három task került valaha sorba (`invoice-issue`,
+`storno-issue`, `corrective-invoice-issue`), az `order-poll` és a
+`webhook-retry` **egy sem**. Élesben ez azt jelentette, hogy egy elveszett vagy
+késői Barion-callback SOHA nem pótlódott: a fizető vevő rendelése örökre
+`payment_pending` maradt — pénz levonva, kurzus nincs.
+
+**Pénztár.** A „Számlázási adatok" kártya díszlet volt: a `handleSubmit` nem
+olvasta ki az inputokat, a `<form>` `noValidate`. A beírt adat elveszett, és
+hiányos profil mellett a fizetés lement, a kurzus kiment, **számla viszont soha
+nem állt ki** — az egyetlen nyom egy warn-szintű naplósor.
+
+### 2.2 Hogyan lett megoldva (három iteráció, két keresztreview)
+
+| Kör | Mi történt |
 | --- | --- |
-| `af34826` | 5 új orders-mező a sémában (invoiceAttempts/LastError/CompletionDate, correctiveInvoiceAttempts/LastError) + redact-lista (`agentkey`, `szamlaagentkulcs`) |
-| `a170bab` | Kliens-mag: **záró perjeles végpont** (redirect-POST→GET veszély ellen), **hibakód-osztályozás** (1 → retryable; 71/152 → `duplicate`-kind), új `pdf.ts` (xmlszamlapdf-lekérdezés `szamlaKulsoAzon` alapján, 7-es kód → null), `SZAMLAZZ_AFAKULCS` konfig ('27'\|'AAM', hangos validáció), új `xml.ts` (escapeXml, körimport-mentesen) |
-| `9f771a7` | Folyamatok: retry-előtti lookup + 71/152-feloldás mindhárom ágon; perzisztens kísérlet-plafon (max 5); stornó-XML **dátumok nélkül**; helyesbítő az eredeti teljesítési dátumot ismétli (`invoiceCompletionDate`); **egységár-alapú** tételszámítás; `fizmod=Barion` |
-| `8fb80cb` | Generált migráció: az 5 új orders-oszlop (helyi PG-n lefuttatva) |
-| `f6c977b` | **+31 teszt** (Opus T1-ügynök): lookup.test.ts (stubolt fetch), osztályozás, qty>1 egyenletek, AAM, dátum-öröklés, duplikátum/retry/plafon-ágak — mutációs ellenőrzéssel |
-| `6c9a03f` | **docs/szamlazz-megfeleles.md** (Opus T2-ügynök): 45 soros követelmény-tábla státuszokkal, 8 teszt-fiókos forgatókönyv (T1–T8), 8 pontos fiók-oldali checklist, üzemeltetési jegyzet + a szamlazz-storno.md tényjavításai |
-| (kicsi) | stornoAttempts admin-leírás konzisztencia |
-| `01b5726` | `correctiveInvoiceAttemptsSeq` oszlop + generált migráció (az F1 előkészítése) |
-| `0a466fb` | A hivatalos követelmény-szintézis a repóba |
-| `395f0a5` | Ez az átadás-doksi (első kiadás) |
+| 1. | Két worktree-ügynök megírta a javítást. **Mindkettő elbukott a keresztreview-n**; a jobs-ág egy **blokkolóval**: a `schedule` bekapcsolása Payload-oldali sémaváltozást hoz, migráció nélkül a deploy a ma működő jobrendszert is leállította volna. |
+| 2. | Javító kör. A jobs-ág két utat mért össze (marad a `schedule` + migráció, vagy saját `onInit`-ütemező) és indokolt döntést hozott; a checkout-ág hét találatot rendezett. **A review ismét „javítandó"** — a checkout-nál az EREDETI hiba még mindig visszaállítható volt zöld suite mellett. |
+| 3. | A fő szál rendezte a maradékot (2.3), és legenerálta a migrációt. |
 
-### 3.b A JAVÍTÓ-KÖR commitjai (2026-08-10, 4 Opus-ügynök + kézi összefésülés)
+### 2.3 Amit a második review talált — és ami emiatt változott
 
-| Commit | Tartalom |
+1. **Az eredeti kliens-hiba visszaállítható volt zöld suite mellett.** A review
+   független worktree-ben átírta a `handleSubmit`-et úgy, hogy megkerülje a
+   tiszta magot és üres számlázási adatot küldjön — **168/168 teszt átment**. A
+   `planCheckoutSubmission` jól tesztelt volt, de a **mag és a komponens közti
+   huzalozás** — pontosan az a pont, ahol a hiba élt — fedezetlen maradt.
+   Javítás: a mellékhatás-lánc külön gyárba került
+   (`createCheckoutSubmitHandler`), és `src/__tests__/checkout-submit-handler.test.ts`
+   DOM nélkül állítja, hogy a beküldött törzs a MÓDOSÍTOTT állapotból épül.
+   **Negatív kontroll: az eredeti hiba visszaállítása négy teszten bukik.**
+2. **Az akadálymentességi javítás fedezetlen volt** (a fókusz és a
+   mezőhiba-törlés kivehető volt anélkül, hogy bármi bukjon). Most le van fedve,
+   és az `aria-live` régió **mindig renderelődik**, üresen is — a dinamikusan
+   beszúrt élő régiót több képernyőolvasó megbízhatatlanul jelenti be.
+3. **A saját hibaüzenetünk példája** (`12345678-1-42`) olyan adószám volt, amit
+   a rendszer elutasít: a vevő betűre követte volna az utasítást, és másik
+   hibát kapott volna. A példa CDV-helyesre cserélve, és **önellenőrző teszt**
+   futtatja át a súgószövegekből kiszedett példákat a validáción.
+4. **A jobs-ág javító köre HAMIS állítást vitt a kódba**: azt írta, hogy a
+   listáról hiányzó auth-hibakódot a szállítási-hiba-számláló „úgyis elkapja".
+   A forrásból cáfolható — az `order`-osztályba esik, tehát SOHA nem szakít meg.
+   A komment javítva, és bevezetve a hiányzó háló: **`MAX_LEADING_FAILURES` (5)**
+   futás-szintű mennyezet, ami csak addig él, amíg nem volt egyetlen sikeres
+   válasz sem — így a „rossz kulcs / teljes kimaradás" eset elkapódik, de egy
+   mérgezett rendelés a sor elején nem tud sorfejként blokkolni.
+
+Megnyugtató mellékeredmény: a review a CDV-algoritmust **három valódi magyar
+cégadószámon** (MOL, OTP, Richter) ellenőrizte — mind átmegy, tehát a
+szigorítás nem zár ki legitim céges vevőt.
+
+### 2.4 ⚠️ Az élesítés EGYETLEN nyitott feltétele
+
+**Be van-e állítva az `ENABLE_JOB_WORKERS` `true`-ra a Railway service-en?**
+
+A jobok csak akkor futnak, ha igen (`src/jobs/index.ts`: `env.ENABLE_JOB_WORKERS === 'true'`).
+Az agent ezt **nem tudja ellenőrizni**: a Railway MCP `railway-agent` helyesen
+elrejti a változók értékét (`<hidden_from_agent>`), a `.env*` olvasása pedig
+tilos. Annyi igazolt, hogy **a változó létezik** a service-en.
+
+- Ha `true` → a deploy után a jobok azonnal futni kezdenek.
+- Ha nem → a migráció akkor is biztonságosan lefut (additív), de a jobok nem
+  indulnak; a beállítás lesz a következő lépés.
+
+### 2.5 A migráció (a fő szál generálta, Payload-eszközzel)
+
+`src/migrations/20260810_132919_job_utemezes_stats.ts` — **tisztán additív**:
+
+```sql
+CREATE TABLE "payload_jobs_stats" (
+  "id" serial PRIMARY KEY NOT NULL, "stats" jsonb,
+  "updated_at" timestamp(3) with time zone, "created_at" timestamp(3) with time zone);
+ALTER TABLE "payload_jobs" ADD COLUMN "meta" jsonb;
+```
+
+Meglévő adatot nem ír át, **nem tud elbukni**, és a rollback is ártalmatlan (a
+régi kód figyelmen kívül hagyja). Ez élesen más osztály, mint a #60 enum-cseréje.
+
+**Kereszt-ellenőrzés:** a generált SQL **szó szerint egyezik** azzal, amit az
+ügynök a snapshot-diffből előre megadott — két független úton ugyanaz.
+
+**Igazolás éles módban, tiszta adatbázison:** a migráció lefut; a
+`config.jobs.scheduling` ÉS `stats` igaz; mindkét periodikus task ütemezve (a
+három esemény-vezérelt nem); a `payload-jobs-stats` global és a
+`payload_jobs.meta` oszlop létezik és olvasható; a `payload_migrations`-ben
+**nincs `dev` sor**.
+
+### 2.6 Élesítés után KÖTELEZŐ megnézni
+
+A jobok most futnak először élesben, **ál-Barion-kulccsal**. A javítás pont
+ezt kezeli (megszakít és riaszt), de az első futásokat nézd meg a Railway
+deploy-logban: van-e `RIASZTÁS:` sor, és nem termel-e naplóözönt.
+
+### 2.7 Amit a review nyitva hagyott (alacsony súly, NEM blokkoló)
+
+| Ág | Tétel |
 | --- | --- |
-| `436d847` | **F2, F5, F7, F9** — hibrid tételszámítás (tétel-szintű nettó-kerekítés, 2 tizedes egységár), bizonylat-egyedi `rendelesSzam` a helyesbítőn, `YYYY-MM-DD` dátum-kapu + escape, Europe/Budapest kiállítási dátum (`xml.ts`: `budapestDateString`, `isIsoDateString`) |
-| `109279a` | **F1, F3, F4, F10, F11** — seq-kulcsolt helyesbítő-plafon, a stornó-`szamlaKulsoAzon` és a rá épült lookup kivezetése + eszkaláció, retryable→`pending` a számla-ágon, lookup nem fogyaszt keretet, duplikátum-tény megőrzése a hibaüzenetben |
-| `456939f` | **F6, F12, F13, F16** — közös `bodyReadError` (törzs-olvasás osztályozása mindhárom kliensben), URL-query megőrzése + credential-tiltás, `szlahu_error` dekódolás, `SZAMLAZZ_AFAKULCS` induláskori assert |
-| `f5622b0` | Tesztek minden ágra (a suite 1295 → **1335** zöld) |
-| `157d110` | A két doksi átvezetése a javított állapotra (C6 → TISZTÁZANDÓ, új T-tételek, A9/A12/A14 igazítás, F17-szakasz) |
+| jobs | Maradék sorfej-blokkolás: 3 egymást követő szállítási hiba a batch ELEJÉN tartósan elzárja a mögötte lévőket |
+| jobs | Beragadt job mellett fékezetlen error-szintű naplóözön (nincs throttling) |
+| checkout | Az „elérhetetlen ág" találat csak részben teljesült, a hozzáírt komment téves |
+| checkout | A külföldi irányítószám-kompromisszum dokumentációja alábecsüli a hatást |
+| checkout | Elavult adószám-fixtúrák a repóban, és a két éles viselkedésváltozás sehol nincs rögzítve |
 
-> **Összefésülési jegyzet:** az `invoice.ts`-t két ügynök is szerkesztette (A: builder
-> + számítás + docblock; B: `issueInvoiceForOrder` folyamat). A 4 konfliktus
-> kommentekre és egy importra szorítkozott, kézzel oldva fel; a `storno.ts`
-> duplikált `isAbortError`-ját a C által bevezetett közös helperre cseréltem.
-> A B által előre jelzett 2 teszt-igazítás (F4/F10) és az F8 új állítása a
-> `szamlazz.test.ts`-ben elvégezve.
+**A két éles viselkedésváltozás, amit a megrendelőnek tudnia kell:**
+(a) hiányos számlázási adattal **innentől nem lehet fizetni** (eddig lement a
+fizetés, csak a számla maradt el) — ez helyes, de a konverzióban látszani fog;
+(b) **nem magyar irányítószámról nem lehet vásárolni**, mert a számla-XML
+`<vevo>` blokkja ma nem tartalmaz `<orszag>` taget. Ez tulajdonosi döntést
+igényel.
 
-## 4. A REVIEW 21 FINDINGJA — DÖNTÉSEK ÉS TELJESÍTÉS ✅
+## 3. Nyitott, IGAZOLT tételek — prioritással
 
-> **STÁTUSZ (2026-08-10): mind a 17 tétel (F1–F17) LEZÁRVA.** Ez a szakasz már
-> nem feladatlista, hanem **teljesítés-napló**: megőrzi, mit miért így oldottunk
-> meg — a teszt-fiókos validálásnál és a későbbi vitákban ez a hivatkozási pont.
-> Az F17 tudatosan elfogadott korlátként, dokumentálva zárult.
+Ezeket egy 17 ügynökös audit-kör tárta fel, és mindegyiket egy független
+ügynök adverzariálisan igazolta (`valos=true`). A sorrend az én javaslatom.
 
-A 3 lencse (helyesség / szabályzat / protokoll-biztonság) findingjai
-duplikátum-összevonás után, **döntésekkel**. Jelölés: 🔴 = súlyos, 🟡 = kisebb.
-A hivatkozott sorszámok a `01b5726` állapotra értendők — a friss kódot olvasd.
+| # | Tétel | Miért ennyire fontos |
+| --- | --- | --- |
+| 1 | **G1–G4 CI-őrök** (lásd 3.1) | Ezek a MAI teljes incidenst elkapták volna. Két őrhöz működő prototípus is készült. |
+| 2 | A 2. szakasz két javításának befejezése | Pénz és számlaadási kötelezettség múlik rajta. |
+| 3 | **A checkout a PISZKOZAT verzióból dönt** | A `startCheckout` `draft: true`-val olvas, az ár-snapshot és a storefront a publikált sorból. Egy félkész szerkesztés azonnal átbillenti a vásárolhatóságot, miközben az oldalon semmi nem változik: a kurzusoldal árat és „Megveszem" gombot mutat, de minden vásárlás 400-zal hasal el. Fordítva: piszkozatban `published`-re állított kurzus az API-n megvásárolható, miközben meg sem jelenik. Napló nincs. |
+| 4 | **A Rendelések listán nem látszik, MIT vettek** | A megrendelő első admin-igénye („ki mit vett és mikor"). A tételek egy névtelen tab alatt, összecsukott tömbben ülnek; oszlopként sem segít, mert a Payload `ArrayCell`-je csak darabszámot ír ki. Külön megjelenítés kell. |
+| 5 | **A carts keresője némán 0 találatot ad** | A #61-ben a `carts.useAsTitle` `id` lett, ami megszünteti a Postgres-hibát — de a Payload a `like`-ot `equals`-re fordítja az id-n, tehát nem-számra némán üres, számra pedig pontos egyezés. Nem hiba, de dokumentálandó/jobbítandó. |
+| 6 | T-013 statisztika-nézet | Megrendelői igény, nincs megírva. Teljes spec a 9. szakaszban. **Tulajdonosi döntésre vár.** |
+| 7 | Admin videó-feltöltés (tus) | Megrendelői igény; a megvalósult állapot tudatos eltérés (Bunny + kézi GUID). **Megrendelői döntés kell.** |
 
-### F1 🔴 `corrective.ts` — a kísérlet-plafon rendelés-szintű, nem bizonylat-szintű
-- **Hiba:** a `correctiveInvoiceAttempts` minden refundSeq beküldését egy közös
-  számlálóba gyűjti és sosem nullázódik → több részrefund után a későbbi bizonylat
-  jogtalanul „kimerült"-re fut; ráadásul új seq-nél a `previousAttempts > 0` miatt
-  értelmetlen retry-előtti lookup fut a még nem létező kulcsra.
-- **DÖNTÉS (előkészítve):** a számláló **seq-kulcsolt** lesz. Az oszlop
-  (`correctiveInvoiceAttemptsSeq`) és a migrációja MÁR A BRANCHEN VAN (`01b5726`).
-  Implementálandó a `corrective.ts`-ben:
-  ```
-  const attemptsSeq = order.correctiveInvoiceAttemptsSeq ?? 0
-  const previousAttempts = attemptsSeq === deps.refundSeq
-    ? (order.correctiveInvoiceAttempts ?? 0) : 0
-  ```
-  és MINDEN attempts-írás mellé `correctiveInvoiceAttemptsSeq: deps.refundSeq`.
-  A plafon-ellenőrzés és a `previousAttempts > 0` lookup-feltétel így magától
-  bizonylat-szintű. Teszt: 2. refund friss számlálóval indul; kimerült seq1 nem
-  blokkolja seq2-t; azonos seq retryje tovább számol.
+### 3.1 A négy javasolt CI-őr (G1–G4)
 
-### F2 🔴 `invoice.ts` `computeLineAmounts` — qty>1 áfa-egyenlet-drift
-- **Hiba:** az egységár-alapú kerekítés az A9 2. egyenletét
-  (`nettoErtek × 27% ≈ afaErtek`) a mennyiséggel arányosan rontja (qty=7 → 1,4 Ft;
-  qty=99 → ~20 Ft) → 260/263 hibakód-kockázat; a checkout 1–99 db-ot enged.
-- **DÖNTÉS — hibrid számítás:**
-  ```
-  bruttoErtek = bruttoUnit × qty                     (pontos)
-  nettoErtek  = round(bruttoErtek / 1,27)            (tétel-szintű)
-  afaErtek    = bruttoErtek − nettoErtek             (3. egyenlet pontos, 2. ±0,64 Ft)
-  nettoEgysegar = (nettoErtek / qty) 2 tizedesre, stringként
-                                                     (1. egyenlet ≤ 0,005×qty ≤ 0,5 Ft)
-  ```
-  AAM: netto=brutto, afa=0, egysegar=netto/qty (2 tizedes). qty=1-nél a mostani
-  viselkedés változatlan (egész egységár). A docblockba MINDHÁROM egyenlet + a
-  tolerancia-indoklás. **Tesztek frissítése:** az „egyenlet PONTOSAN" teszt
-  cserélendő: |egysegar×qty − netto| ≤ 0,5 és |netto×0,27 − afa| ≤ 1 minden
-  qty-re (1/3/7/10/99); a megfeleles-doksi A9-sora + új T-tétel (qty>1
-  teszt-fiókos validálás).
+Egy ügynök nem csak javasolta, hanem **meg is építette és lemérte** őket.
 
-### F3 🔴 `storno.ts` — a `-STORNO` kulsoAzon-feltevés nem igazolt, vak újraküldés veszélye
-- **Hiba:** a C3 szerint az `xmlszamlast`-beli `szamlaKulsoAzon` a SZTORNÓZANDÓ
-  számlát hivatkozza — nem a létrejövő stornónak ad azonosítót. A retry-lookup
-  „nincs találat" (7-es kód) válasza így NEM bizonyítja, hogy nincs stornó → a
-  vak újraküldés dupla stornót csinálhat (ami a C5 szerint javíthatatlan).
-- **DÖNTÉS — konzervatív visszavágás:**
-  1. A stornó-XML-ből **kivenni a `szamlaKulsoAzon` mezőt** (a `fejlec.szamlaszam`
-     az egyértelmű, kötelező hivatkozás; a `-STORNO` érték rosszabb esetben
-     ütközést okoz).
-  2. A stornó-ágon a retry-előtti lookupot és a 71/152→lookup feloldást
-     **eltávolítani**; helyette: `previousAttempts > 0` esetén NE küldjön be
-     vakon újra — `failed` + **error-szintű RIASZTÁS**: „a stornó állapota
-     bizonytalan, kézi ellenőrzés kell a Számlázz.hu-fiókban". A duplicate-kind
-     hibára ugyanez (failed + riasztás, kézi egyeztetés).
-  3. Az alkalmazás-szintű no-op (stornoNumber/stornoStatus) marad az elsődleges védelem.
-  4. `docs/szamlazz-megfeleles.md`: C3/C5/A12-stornó sor **TISZTÁZANDÓ**-ra;
-     új T-tétel: teszt-fiókban igazolni, visszakereshető-e a stornó a kérésben
-     küldött kulsoAzon-nal — ha igen, a lookup-ág visszahozható.
-  5. storno.test.ts: az érintett tesztek (lookup-adopt, duplikátum-adopt) átírása
-     az új viselkedésre.
+- **G1 — séma-drift őr** (`src/__tests__/schema-drift-guard.test.ts`): a
+  migrációk `up()` blokkjait ál-`db`-vel lefuttatja, a drizzle SQL-objektum
+  `queryChunks`-ából kiolvassa a statikus SQL-t, újrajátssza a sémát, és
+  összeveti a legutolsó snapshottal. **Adatbázis nem kell.** Pozitív kontroll a
+  mai HEAD-en: 12 migráció, 833 statement, 0 ismeretlen utasítás, 0 eltérés,
+  2,8 s. Negatív kontroll (a mai két javító migrációt kivéve): pontosan a négy
+  éles driftet adja vissza, hamis találat nélkül.
+- **G2 — konfig ↔ snapshot őr** (`src/__tests__/schema-config-sync.test.ts`): a
+  Payload postgres-adapter séma-építése NEM igényel DB-kapcsolatot, ezért a
+  configból `generateDrizzleJson`-nal előállítható ugyanaz a formátum, mint a
+  snapshot. **Ez fogta volna el a driftet ELSŐKÉNT** — a kód már tartalmazta a
+  `refunds` mezőt és a `payment_pending` státuszt, amikor a snapshot még nem.
+- **G3 — migráció-immutabilitás** (`.checksums.json` manifest + CI-lépés): a
+  CLAUDE.md 3. tilos zónája ma őr nélkül áll, és **pont ez okozta a driftet** —
+  egy későbbi commit visszanyúlt egy korábbi migráció snapshotjához
+  (`git log` szerint a 2026-07-30-i migráció snapshotja a 08-08-i commitban
+  keletkezett). A git-ág előfeltétele: a `ci.yml` `actions/checkout` lépéseihez
+  `fetch-depth: 0` kell.
+- **G4 — migráció-integritás**: minden `.ts`-hez van `.json`, az `index.ts`
+  pontosan a fájlokat sorolja lexikografikus sorrendben, a fájlnevek
+  időrend-tartók. **A mai incidens ELSŐ dominója egy hiányzó `.json` volt** — a
+  migráció 9 napig snapshot nélkül állt a repóban, zöld CI mellett.
 
-### F4 🔴 `invoice.ts` — retryable hibánál `failed` státusz → kiesik a resweepből
-- **Hiba:** retryable hibán `invoiceStatus='failed'` íródik; az order-poll resweep
-  csak `['none','pending']`-et vesz fel → a job kimerülése után a számla örökre
-  elveszik, csak warn szól.
-- **DÖNTÉS:** retryable hibaágon a státusz **maradjon `'pending'`** (a hibát az
-  `invoiceLastError` hordozza + warn); csak végleges hibán legyen `'failed'`.
-  Így a resweep (INVOICE_PENDING_STALE_MS után) újra sorba állítja, a perzisztens
-  5-ös plafon pedig valóban fékez, és a plafon-ág error-riasztása elérhetővé
-  válik. CSAK az invoice-ágon (stornó/helyesbítő újrasorbaállítását a refund-
-  folyamat queue-hívása végzi, ott nincs resweep). Teszt: retryable → pending
-  marad + lastError; a plafon-forgatókönyv resweep-úton.
+## 4. ⛔ Amit MEGCÁFOLTAK — ezeket NE csináld meg
 
-### F5 🔴 `corrective.ts`/`invoice.ts` — a helyesbítő `rendelesSzam`-ütközése
-- **Hiba:** a helyesbítő ugyanazt a `rendelesSzam`-ot küldi, mint az eredeti
-  számla. A checklist által KÖTELEZŐEN bekapcsolt rendelésszám-ismétlés-tiltás
-  mellett minden helyesbítő 71/152-be fut, a feloldó lookup (a saját kulsoAzon-ra)
-  nem talál semmit → zsákutca-`failed`; a 2 napos „azonos adat" ablakban ráadásul
-  a Számlázz.hu az ELSŐ helyesbítőt adná vissza sikerként a másodikhoz.
-- **DÖNTÉS:** `buildInvoiceXml`-ben a `<rendelesSzam>` helyesbítő esetén a
-  bizonylat-egyedi kulcs legyen: `corrective ? corrective.kulsoAzon : orderNumber`.
-  Így a 71/152 tényleg „EZ a helyesbítő már létezik"-et jelent, és a meglévő
-  feloldás helyesen működik. Teszt + a megfeleles-doksi A12/T7 kiegészítése
-  (helyesbítő-eset).
+Az adverzariális kör két „hibát" is elejtett. Ez megtakarított munka, ne
+kezdd újra:
 
-### F6 🔴 `pdf.ts:135` / `storno.ts:175` / `client.ts:306` — `response.text()` a try-n kívül
-- **Hiba:** a törzs-olvasás közbeni hiba (timeout streamelés közben, TCP-vágás)
-  nyers TypeError-ként lép ki → elveszik a `retryable` osztályozás → a refund-ág
-  nem állítja sorba a retry-jobot, a bizonylat némán elveszik.
-- **DÖNTÉS:** mindhárom helyen a `text()` (és a parse) kerüljön try/catch alá,
-  amely `isAbortError()`-rel `timeout`/`network` kind-ú, `retryable: true`
-  SzamlazzApiError-t dob. Teszt: stubolt fetch, amelynek `text()` metódusa dob.
+- **„Néma ingyenes-csapda az árazásban"** — az az állítás, hogy a `HUF ár
+  engedélyezése` pipa hiánya ingyen kiadja az egyébként fizetős kurzust,
+  **a teherhordó magjában hamis**.
+- **„Fordítatlan select-opciócímkék őre"** — a bejelentett három élő találat
+  nem áll fenn, és a javasolt szabály maga okozott volna regressziót.
 
-### F7 🔴 `invoice.ts:225` — dátumok escape/formátum-kapu nélkül az XML-ben
-- **Hiba:** a `teljesitesDatum` forrása az `invoiceCompletionDate` szabad szöveges
-  DB-mező (admin readOnly ≠ API-védelem) — escape és formátum-ellenőrzés nélkül
-  interpolálódik → XML-injektálási felület staff-jogosultsággal.
-- **DÖNTÉS:** (1) a builderben MINDEN dátum (kelt/teljesítés/határidő) menjen át
-  `/^\d{4}-\d{2}-\d{2}$/` kapun — eltérésnél `invalid_data` SzamlazzApiError;
-  (2) a `corrective.ts` az `invoiceCompletionDate`-et olvasáskor is validálja
-  (nem megfelelő → warn + issueDate-fallback). Field-access (`update: () => false`)
-  NEM kerül rá — az a CLAUDE.md 4. zónája, külön emberi PR-be való (jegyezd a PR-ben).
-- Teszt: injektálós string → dob; rossz formátumú completionDate → fallback+warn.
-
-### F8 🟡 `invoice.ts` — `invoiceCompletionDate` csak siker-ágon íródik
-- **DÖNTÉS:** a pending-írás (a tényleges beküldés előtti) tartalmazza az
-  `invoiceCompletionDate: issueDate`-et — a kiküldött XML dátuma akkor is rögzül,
-  ha a válasz elveszik; a lookup-adopt ág így a HELYES (első beküldéskori) dátumot
-  találja a rendelésen, és nem hagy űrt a helyesbítő B4-szabályának.
-  FIGYELEM az F10-hez: az attempts/pending-írás átrendeződik — a completionDate
-  azzal együtt mozogjon (csak a POST-oló ágon íródjon, adoptnál NE íródjon felül).
-  A T1-tesztek „adopt nem ír completionDate-et" állítása ETTŐL MÉG IGAZ marad;
-  a „pending-írás tartalmazza" új állítás kerül mellé.
-
-### F9 🟡 `invoice.ts`/`corrective.ts` — `issueDate` UTC-ből
-- **DÖNTÉS:** közös segéd (pl. `xml.ts`-be): `budapestDateString(now = new Date())`
-  `Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Budapest' })`-tel; az
-  invoice + corrective default-issueDate erre áll át. Teszt: fix Date-injektálással
-  a 00:30 CEST eset.
-
-### F10 🟡 `invoice.ts`/`corrective.ts` — a lookup is kísérletet fogyaszt + sorrend
-- **Hiba:** a számláló a lookup ELŐTT nő → lekérdezés-hibák beküldés nélkül
-  elégetik az 5-ös keretet.
-- **DÖNTÉS — folyamat-átrendezés (invoice + corrective, a stornónál a lookup
-  F3 szerint megszűnik):**
-  ```
-  plafon-ellenőrzés (previousAttempts >= MAX → failed + ERROR-riasztás)
-  if previousAttempts > 0: lookup  ← számláló-növelés NÉLKÜL; hibája propagál,
-                                      a státusz pending marad (F4)
-    találat → adopt (számláló változatlan)
-  attempts = previousAttempts + 1
-  pending-írás: invoiceAttempts + (invoice-ágon) invoiceCompletionDate (F8)
-  postXml → siker / duplicate-feloldás / retryable(pending+lastError) / failed
-  ```
-  Teszt: lookup-hiba nem növeli az attempts-et; csak tényleges POST fogyaszt.
-
-### F11 🟡 `invoice.ts:579` (+corrective) — a duplikátum-tény elvész a lastErrorból
-- **DÖNTÉS:** a duplikátum-feloldás lookup-hibaágán az üzenet fűzött legyen:
-  `„71/152 — a bizonylat a Számlázz.hu szerint már létezik; a lekérdezés hibája: <msg>"`
-  — ez megy a `*LastError`-be és a dobott hibába is (a kézi kiállítás → dupla
-  számla forgatókönyv megelőzésére).
-
-### F12 🟡 `client.ts:90` — az URL-normalizálás eldobja a query-t
-- **DÖNTÉS:** `parsed.search` megőrzése: `origin + pathname.replace(/\/*$/, '/') + parsed.search`;
-  ha `parsed.username`/`password` van az URL-ben → hangos konfigurációs hiba. Teszt.
-
-### F13 🟡 `client.ts:195` — `szlahu_error` fejléc URL-dekódolása
-- **DÖNTÉS:** `decodeURIComponent(value.replace(/\+/g, ' '))` try/catch-csel
-  (hibás kódolásnál a nyers érték marad). Teszt.
-
-### F14 🟡 docblock-hazugságok (`invoice.ts:29–36`, `corrective.ts:42–45`, `storno.ts:35–36`)
-- **DÖNTÉS:** átírás a tényleges viselkedésre: hibrid kerekítés (F2), `vatMode`,
-  és a `szamlaKulsoAzon` mint VISSZAKERESÉSI kulcs (a duplikátum-védelem a
-  `rendelesSzam` + fiókbeállítás). A „horgony önmagában véd a duplikálástól"
-  állítás sehol nem maradhat.
-
-### F15 🟡 `docs/szamlazz-megfeleles.md` + storno-doksi + storno.ts komment — C6 „garantáltan"
-- **DÖNTÉS:** a C6 sor TISZTÁZANDÓ-ra; a „garantáltan" szó ki; új T-tétel:
-  előző havi számla stornója dátum nélkül → a stornó-PDF teljesítési dátumának
-  ellenőrzése. Ha nem az eredetit veszi át, a `buildStornoXml`-be visszakerül a
-  `teljesitesDatum` az `invoiceCompletionDate`-ből.
-
-### F16 🟡 doksi: „indulásnál hangos hiba" pontatlan + `SZAMLAZZ_AFAKULCS` env-assert
-- **DÖNTÉS:** (1) a doksi szövege: „az első számlázási művelet futásakor";
-  (2) `src/env.ts` `assertRequiredEnv`: HA a `SZAMLAZZ_AFAKULCS` be van állítva
-  és nem `'27'`/`'AAM'` → már INDULÁSKOR dobjon (minden környezetben; a hiányzó
-  kulcs továbbra is oké — default 27). Teszt az env-assert suite-ban.
-  (3) A PR-leírásba: maintainer-teendő a `.env.example` bővítése
-  (`SZAMLAZZ_AFAKULCS` kulcsnév, érték nélkül) + az elavult „Üres =
-  https://www.szamlazz.hu/szamla" komment frissítése (záró perjel) — az agent a
-  CLAUDE.md 1. zónája miatt NEM nyúl a fájlhoz.
-
-### F17 🟡 attempts read-modify-write nem atomikus
-- **DÖNTÉS:** MOST NEM javítjuk kóddal — az ütközési ablak a gyakorlatban nulla
-  (a job-retryk másodpercek alatt lefutnak, a resweep 10+ perces stale-ablak után
-  indít újat). A megfeleles-doksi üzemeltetési jegyzetébe kerül egy őszinte
-  bekezdés + a PR-leírásba mint ismert, elfogadott korlát. (Ha később mégis kell:
-  a teljes kiállítási szakasz `withAdvisoryLock('szamla:order:<id>')` alá tehető
-  — a Barion-refund már így fut.)
-
-### A javító-kör zárása — ✅ ELVÉGEZVE (2026-08-10)
-
-1. ✅ **Teljes kapu zölden** (`157d110`): typecheck · vitest **1335/0** · lint
-   0 error · build. **GitHub CI 5/5 zöld.**
-2. ✅ A `docs/szamlazz-megfeleles.md` és a `szamlazz-storno.md` átvezetve
-   (A9 hibrid képlet, A12/C3/C5 a stornó-lookup kivezetéséhez, C6 → TISZTÁZANDÓ,
-   A14 bizonylat-szintű számlálóval, F17-szakasz; T-lista **8 → 11 tétel**).
-3. ✅ Fókuszált commitok magyar üzenettel (3.b tábla).
-4. ✅ Push + a **PR #56 leírása** a végállapotra frissítve.
-
-### ✅ ÉLESÍTÉS MEGTÖRTÉNT (2026-08-10 07:56 UTC)
-
-A **PR #56 mergelve**, a kör **élesben fut**. Bizonyítékok (a CLAUDE.md
-üzemeltetési 1. pontja szerinti teljes ellenőrzés):
-
-| Ellenőrzés | Eredmény |
-| --- | --- |
-| main | `b013f15` (squash-merge) |
-| Build-log | TÉNYLEGES `npm run build` → `next build` → `✓ Compiled successfully in 9.2s` |
-| **Migráció** | `Migrated: 20260809_223906_szamlazz_megfeleles (5ms)` **és** `Migrated: 20260809_232121_szamlazz_attempts_seq (2ms)` — mindkettő lefutott |
-| Runtime | `server_start` `commitSha=b013f15…`, Node v24.18.0 |
-| Elérhetőség | `/admin` és `/` → HTTP 200 |
-| Deploy-státusz | SUCCESS |
-
-> **Két tanulság a deployról** (a következő körre):
-> 1. A Railway MCP `list-deployments` **elavult státuszt mutathat**: a deploy
->    25+ percig „WAITING"-nek látszott, miközben a `getDeploymentInfo`
->    lépés-eseményei szerint már 07:56:25-kor minden fázis (SNAPSHOT_CODE →
->    CONFIGURE_NETWORK) COMPLETED volt. **Ha WAITING-et látsz snapshot és
->    build-log nélkül, előbb a `railway-agent`-tel kérdezz rá** — ne indíts
->    új deployt vaktában.
-> 2. **A `create-deployment` MCP-hívás ÚJ SERVICE-T hoz létre**, nem a
->    `serviceId`-vel megadott meglévőt deployolja (ez a körben egy fölösleges
->    „just-heart" service-t eredményezett, amit törölni kellett). Meglévő
->    service újraindításához a `redeploy` (snapshot kell hozzá) vagy a
->    `railway-agent` `restartServiceTool`-ja a helyes út.
-
-### ⬅️ AMI MÉG HÁTRAVAN (a következő agentnek / az üzemeltetőnek)
-
-1. **Teszt-fiókos validálás** (11 forgatókönyv a megfelelőségi doksiban) — az
-   éles SZÁMLÁZÁS bekapcsolásának előfeltétele; kiemelten: stornó-
-   `szamlaKulsoAzon` visszakereshetőség (T10 — ha igazolt, a stornó-lookup
-   visszahozható), stornó-dátum öröklése (T11), qty>1 tizedes egységár
-   elfogadása (T9).
-2. **Fiók-oldali checklist** (8 pont, `docs/szamlazz-megfeleles.md`) —
-   kiemelten a **rendelésszám-ismétlés tiltásának bekapcsolása** (erre épül a
-   hivatalos idempotencia) és a `SZAMLAZZ_AFAKULCS` értéke (könyvelővel!).
-3. **A számlázás élesítése**: a `SZAMLAZZ_AGENT_KEY` Railway-változó
-   beállítása. **Amíg nincs beállítva, a számlázás kikapcsolt** (`enabled=false`,
-   szándékos no-op) — a most élesített kód tehát fut, de nem hív ki a
-   Számlázz.hu-ra. A sorrend: 1. és 2. pont → utána a kulcs.
-4. **Maintainer-teendő** (agent nem nyúlhat `.env*`-hez): `SZAMLAZZ_AFAKULCS`
-   kulcsnév az `.env.example`-be (érték nélkül) + a `SZAMLAZZ_API_URL` melletti
-   elavult komment frissítése (a default mostantól záró perjeles).
+Ugyanígy: a #61 kódváltozásait hat támadási vektorral próbálták megtörni, és
+**egyik sem talált valós hibát** — az `orderNumber` NULL-esete, a
+`listSearchableFields` access-oldala, az `orders` oszlopainak owner-only
+szivárgása és a magyar címkék DB-hatása mind tisztázva van.
 
 ## 5. Környezet, fogások, azonosítók
 
@@ -386,7 +288,7 @@ A **PR #56 mergelve**, a kör **élesben fut**. Bizonyítékok (a CLAUDE.md
 - **Review-findingok nyers anyaga:** e doksi 4. szakasza teljes körű; az eredeti
   21 finding a session-scratchpad `tasks/wn4vg8orx.output` fájljában volt (mulandó).
 
-## 6. Tilos zónák — e kör szempontjából
+## 6. Tilos zónák — amire a gyakorlatban figyelj
 
 - Titok soha, sehova (a tesztek DUMMY-mintát használnak); `.env*`-hez nem nyúlunk
   (a `.env.example`-bővítés maintainer-teendőként jelzendő).
@@ -397,7 +299,7 @@ A **PR #56 mergelve**, a kör **élesben fut**. Bizonyítékok (a CLAUDE.md
   külön, emberi jóváhagyású PR-re vár (task #51).
 - Pinned `@payloadcms/*`, package.json, lockfile: érintetlen marad.
 
-## 7. Nyitott tételek a körön TÚL (backlog)
+## 7. Üzemeltetői és fiók-oldali backlog (nem kód)
 
 1. **Fiók-oldali előfeltételek** (ember): a `docs/szamlazz-megfeleles.md`
    checklistje — teszt-fiók, kisbetűs Agent-kulcs, **rendelésszám-ismétlés
@@ -416,25 +318,26 @@ A **PR #56 mergelve**, a kör **élesben fut**. Bizonyítékok (a CLAUDE.md
    (Turbopack-figyelmeztetés, nem blokkoló).
 7. **Lockfile-regenerálás** (a `--legacy-peer-deps` kivezetéséhez) — külön,
    emberi döntésű PR.
-8. **🔴 `orders.refunds` séma-drift** — lásd a 8. szakaszt. ÉLES HIBA, elsőbbséget élvez.
-9. **T-013 statisztika-nézet** — lásd a 9. szakaszt (megrendelői igény, nincs megírva).
-10. **Admin videó-feltöltés (tus)** — lásd a 10. szakaszt (tudatos eltérés a specifikációtól).
+
+A KÓD-oldali backlog a 3. szakaszban van, prioritással.
 
 ---
 
-# MÁSODIK RÉSZ — FELADATLEÍRÁSOK A KÖVETKEZŐ AGENTNEK
+# MÁSODIK RÉSZ — TECHNIKAI ANYAG
 
-> Ez a rész **2026-08-10-én került a doksiba**, a „minden be van kötve?"
-> ellenőrző kör eredményeként. A 8–10. szakasz **nincs megvalósítva** — ezek
-> kiadható feladatok. Mindegyik önmagában elég részletes ahhoz, hogy egy másik
-> agent a repó ismerete nélkül nekiálljon: pontos fájlnevek, mezőnevek,
-> oszlopnevek, bekötési pontok, buktatók és elfogadási kritériumok.
+> A 8. szakasz a ma lezárt séma-drift esete: **a receptjei újra kelleni
+> fognak**, ezért maradt benne. A 9–11. szakasz kiadható feladatleírás — elég
+> részletes ahhoz, hogy egy másik agent a repó ismerete nélkül nekiálljon:
+> pontos fájlnevek, mezőnevek, oszlopnevek, bekötési pontok és elfogadási
+> kritériumok.
 
-## 8. 🔴 SÉMA-DRIFT: az adatbázis nem azt tartalmazta, amit a kód feltételez
+## 8. SÉMA-DRIFT: a ma lezárt eset és a receptek
 
-> **Állapot 2026-08-10 ~10:00 UTC:** az `orders.refunds` rész **javítva és
-> élesítésre kész** (migráció a repóban). A többi drift migrációja **kész, de
-> szándékosan visszatartva** — lásd 8.6, éles adat-ellenőrzés kell hozzá.
+> **✅ LEZÁRVA** — mindkét migráció élesben van (#59 `d4c5ca1`, #60 `db9ed72`),
+> és a konfigból generált séma ma pontosan egyezik a snapshottal. Ez a szakasz
+> **azért marad benne**, mert a hiba osztálya néma és visszatérő: a 8.2-es
+> ellenőrző recept és a 8.3-as migráció-generálási fogás újra kelleni fog. A
+> 8.5–8.6 a kockázatkezelést és a kétlépcsős élesítést rögzíti.
 
 ### 8.1 Mi a baj — a hiba osztálya
 
