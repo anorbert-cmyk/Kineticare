@@ -148,3 +148,64 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
 11. **A `robots.ts` és `sitemap.ts` csak a gyökér `src/app/` mappából
     generálódik.** A `(frontend)` route-groupból a `robots.ts` némán kimarad —
     a build route-manifestjében ellenőrizhető, hogy létrejött-e.
+
+### Railway MCP-eszközök
+
+12. **A `list-deployments` ELAVULT státuszt adhat vissza.** Egy deploy 25+ percig
+    `WAITING`-nek látszott (snapshot és build-log nélkül), miközben a valóságban
+    már rég lefutott: a `railway-agent` `getDeploymentInfo`-ja szerint minden
+    fázis (`SNAPSHOT_CODE` → `CONFIGURE_NETWORK`) `completed` volt, a státusz
+    `SUCCESS`. **Ha WAITING-et látsz build-log és snapshot nélkül, előbb a
+    `railway-agent`-tel kérdezz rá a lépés-eseményekre** — ne indíts új deployt
+    vaktában, mert a „beragadás" lehet, hogy csak megjelenítési hiba.
+13. **A `create-deployment` ÚJ SERVICE-T hoz létre**, nem a megadott `serviceId`-jű
+    meglévőt deployolja — nálunk így keletkezett egy fölösleges service, amit
+    törölni kellett. Meglévő service újraindításához: `redeploy` (snapshot kell
+    hozzá) vagy a `railway-agent` `restartServiceTool`-ja.
+14. **A migrációk a deploy részeként FUTNAK.** A start-parancs
+    `npx payload migrate && npm start` — a `railway.json`-ban ÉS a
+    service-beállításban is (a 2. pont miatt mindkettőt nézd meg). A `&&` miatt
+    bukó migráció esetén az app el sem indul → healthcheck-hiba, tehát a baj
+    látható, nem néma. **Ellenőrzés:** a deploy-logban ott kell lennie a
+    `Migrating: …` / `Migrated: …` soroknak.
+
+### Ügynök-munkafolyamat (workflow, worktree, harvest)
+
+15. **Tesztből SOSEM mehet ki valódi hálózati hívás.** Egy szolgáltatás-teszt
+    injektált mock nélkül a VALÓDI szamlazz.hu-t hívta meg — a ~1,5 mp-es
+    futásidő árulta el (a többi teszt milliszekundumos). Minden folyamat-teszt
+    injektálja a HTTP-hívókat (`postXml`, `queryByKulsoAzon`), a `fetch`-eseket
+    pedig `vi.stubGlobal('fetch', …)` + `afterEach(vi.unstubAllGlobals)` fedi.
+    Ahol egy ágon hívásnak NEM szabad futnia, oda hangosan dobó mock való.
+16. **Fan-outnál adj TISZTA fájl-tulajdonlást.** Ha két ügynök ugyanazt a fájlt
+    kapja (akár más régióban), a harvest kézi összefésülést igényel. Bevált:
+    `git add -A` (hogy az index a már alkalmazott változatot tartalmazza), majd
+    `git apply --3way` a második patchre — a konfliktusok általában kommentekre
+    és importokra szorítkoznak. Duplikált segédfüggvényeket a harvestnél kell
+    egy közös változatra visszavezetni.
+17. **A párhuzamossági korlát ~2 ügynök** (CPU-alapú cap), a többi sorban áll:
+    egy 4 ügynökös kör ~35–40 perc. Ezzel tervezz, ne tekintsd elakadásnak.
+18. **A „permission handler returned updatedInput" hiba SZÓRVÁNYOS és NEM
+    blokkoló.** Egy ügynöknél egyszer előfordult, utána zavartalanul dolgozott
+    tovább — emiatt nem kell workflow-t újraindítani. Ha sorozatosan jelentkezik,
+    a munkát a fő szálban kell befejezni.
+19. **Leállt workflow után minden visszanyerhető** a worktree-kből és a
+    `~/.claude/projects/.../subagents/workflows/<runId>/journal.jsonl`-ből (az
+    ügynökök jelentései soronként). Egy session-újraindulás így nem jelent
+    elveszett munkát — a fő szálban kell felszüretelni.
+
+### Git és shell
+
+20. **Squash-merge után a branch commitjai NEM ősei a mainnek.** A
+    `git merge-base --is-ancestor` ezért hamisan „nincs benne"-t mond. A helyes
+    ellenőrzés: `git diff <branch-tip> <squash-commit>` — ha üres, a tartalom
+    hiánytalanul átment, és a branch force-with-lease-szel újraalapozható.
+21. **Idézőjelet tartalmazó commit-üzenet töri a `git commit -m "…"`-t** (a
+    string korán lezárul, a maradék pathspec-ként hibázik, de a `git add` már
+    lefutott — így a következő commit magával viszi a bestage-elt fájlokat!).
+    Használj `git commit -F -` + heredoc-ot, és commit után ellenőrizd a
+    `git status`-t.
+22. **Helyi Postgres a migráció-generáláshoz** (a `pgrun` user kell, mert az
+    `initdb` rootként nem indul): a socket-könyvtárnak `pgrun`-írhatónak kell
+    lennie (`-k <dir>`), és a scratchpad SZÜLŐ könyvtáraira is kell `o+x`
+    bejárási jog, különben a `pg_ctl` „Permission denied"-dal áll le.
