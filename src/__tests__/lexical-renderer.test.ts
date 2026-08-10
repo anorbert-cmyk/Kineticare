@@ -115,9 +115,15 @@ describe('lista és gyakorlatlista', () => {
 })
 
 describe('link, CTA, videó', () => {
-  it('külső link bekezdésben → <a href>', () => {
+  /**
+   * A href a `sanitizeCmsUrl` (src/lib/safe-url.ts) NORMALIZÁLT alakja, ezért a
+   * csupasz hosztra bekerül a gyökér-perjel. Ez szándékos: a hívók a
+   * `/^https?:\/\//i` mintával döntik el, hogy külső-e a cím, és a nyers alak
+   * ezt elronthatja (`https:pelda.hu` → belsőként renderelődne).
+   */
+  it('külső link bekezdésben → <a href> (normalizált alakkal)', () => {
     expect(html(root(paragraph(text('Látogasd meg: '), linkNode('https://pelda.hu', 'pelda.hu'))))).toBe(
-      '<p>Látogasd meg: <a href="https://pelda.hu">pelda.hu</a></p>',
+      '<p>Látogasd meg: <a href="https://pelda.hu/">pelda.hu</a></p>',
     )
   })
 

@@ -31,6 +31,49 @@ describe('sanitizeCmsUrl — engedélyezett alakok', () => {
   })
 })
 
+/**
+ * Az ABSZOLÚT ág NORMALIZÁLT alakot ad vissza, nem a nyerset.
+ *
+ * Ez nem kozmetika: minden hívó a `/^https?:\/\//i` mintával dönti el, hogy a
+ * cím KÜLSŐ-e (Button.tsx:79, LexicalContent.tsx:99, Services.tsx:83,
+ * PressLogos.tsx:77, serialize.tsx:205 és :232, menu-tree.ts:116). Ettől függ,
+ * hogy `<a>` lesz-e belőle `next/link` helyett, és hogy megkapja-e az „új ablak
+ * + rel=noopener noreferrer" ágat. A `https:evil.example` alak az
+ * URL-értelmező szerint IDEGEN hosztra mutató abszolút cím, a mintára viszont
+ * nem illeszkedik — nyersen visszaadva BELSŐ linkként renderelődne.
+ */
+describe('sanitizeCmsUrl — az abszolút ág normalizált alakot ad vissza', () => {
+  /** A hívók külső-jelölő mintája — a teszt ezt méri, nem csak a szöveget. */
+  const isExternalPattern = /^https?:\/\//i
+
+  it.each([
+    ['egy perjeles, hoszt nélküli séma', 'https:evil.example', 'https://evil.example/'],
+    ['backslash a séma után', 'http:\\\\evil.example', 'http://evil.example/'],
+    ['csupasz hoszt (a gyökér-perjel bekerül)', 'https://pelda.hu', 'https://pelda.hu/'],
+    ['nagybetűs hoszt (kisbetűsre normalizálva)', 'https://PELDA.hu/Cikk', 'https://pelda.hu/Cikk'],
+  ])('%s → %s', (_label, input, expected) => {
+    const result = sanitizeCmsUrl(input)
+
+    expect(result).toBe(expected)
+    // A LÉNYEG: a visszaadott alak a hívók külső-mintájára ILLESZKEDIK, tehát
+    // `<a target="_blank" rel="noopener noreferrer">` ágra kerül, nem next/link-re.
+    expect(isExternalPattern.test(result ?? '')).toBe(true)
+  })
+
+  it('a nyers alak NEM illeszkedne a hívók külső-mintájára (ez a hiba, amit javít)', () => {
+    expect(isExternalPattern.test('https:evil.example')).toBe(false)
+    expect(isExternalPattern.test('http:\\\\evil.example')).toBe(false)
+  })
+
+  it('a mailto és a relatív alakok NEM normalizálódnak abszolúttá', () => {
+    // A mailto-nak nincs hoszt-része; a parser nem tesz hozzá perjelet.
+    expect(sanitizeCmsUrl('mailto:info@kineticare.hu')).toBe('mailto:info@kineticare.hu')
+    // A relatív ág nyers marad — a next/link pontosan így várja.
+    expect(sanitizeCmsUrl('/kurzusok')).toBe('/kurzusok')
+    expect(sanitizeCmsUrl('#ingyenes')).toBe('#ingyenes')
+  })
+})
+
 describe('sanitizeCmsUrl — tiltott és hibás bemenetek', () => {
   it.each([
     ['javascript séma', 'javascript:alert(1)'],
