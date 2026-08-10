@@ -184,12 +184,12 @@ const refundsTypescriptSchema: JSONSchema4 = {
  * újraépül); a régi processing/completed értékek kódoldalon megszűnnek.
  */
 const orderStatusStateMachineOptions = [
-  { label: 'Created', value: 'created' },
-  { label: 'Payment pending', value: 'payment_pending' },
-  { label: 'Paid', value: 'paid' },
-  { label: 'Payment failed', value: 'payment_failed' },
-  { label: 'Cancelled', value: 'cancelled' },
-  { label: 'Refunded', value: 'refunded' },
+  { label: 'Létrehozva', value: 'created' },
+  { label: 'Fizetésre vár', value: 'payment_pending' },
+  { label: 'Fizetve', value: 'paid' },
+  { label: 'Sikertelen fizetés', value: 'payment_failed' },
+  { label: 'Lemondva', value: 'cancelled' },
+  { label: 'Visszatérítve', value: 'refunded' },
 ]
 
 const withOrderStatusStateMachine = (field: Field): Field => {
@@ -239,9 +239,15 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
     // mezőket. A nem létező oszlopnév miatt a lista NULLA oszloppal rendelődik
     // ki: nincs cím, nincs kattintható link, a kurzus nem nyitható meg. A
     // `...defaultCollection.admin` ezt öröklené, ezért itt explicit lista kell.
-    // Az első oszlop a dokumentumra mutató link, ezért `sku` (kötelező, egyedi,
-    // és ez a useAsTitle) — a displayTitle a régi sorokon üres lehet.
+    // Az első oszlop a dokumentumra mutató link, ezért `sku` áll elöl: ez a
+    // useAsTitle, egyedi, és a gyakorlatban minden során ki van töltve — míg a
+    // displayTitle a mező bevezetése előtti sorokon üres. (A `sku` nincs
+    // `required`-re állítva, mert a plugin gyári mezője; a link üres címke
+    // mellett is működik, csak a sor azonosíthatatlan lenne.)
     defaultColumns: ['sku', 'displayTitle', 'audience', 'priceInHUF', 'status', 'updatedAt'],
+    // A useAsTitle önmagában csak a technikai azonosítóra keresne; a szerkesztő
+    // a kurzus CÍMÉRE keres.
+    listSearchableFields: ['sku', 'displayTitle'],
   },
   fields: [
     ...mapFieldsDeep(defaultCollection.fields, withOwnerOnlyPriceAccess),
@@ -504,6 +510,25 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
     group: WEBSHOP_GROUP,
     description:
       'A leadott rendelések és a fizetésük állapota. A rendeléseket a rendszer kezeli — kézzel ne módosítsd őket.',
+    // A plugin `useAsTitle: 'createdAt'`-ot állít be. A lista keresőmezője a
+    // useAsTitle mezőre tesz ILIKE-ot, egy timestamptz oszlopon viszont nincs
+    // ilyen operátor: a keresés Postgres-hibára fut ("operator does not exist:
+    // timestamp with time zone ~~* unknown"). A rendelésszám a helyes cím is:
+    // egyedi, ember által olvasható, és a hook minden rendelésre kitölti.
+    useAsTitle: 'orderNumber',
+    // A plugin nem ad defaultColumns-t az ordersre, így a Payload automatikus
+    // választása szerepelt — rendelésszám, összeg és fizetési állapot nélkül.
+    defaultColumns: [
+      'orderNumber',
+      'createdAt',
+      'customerEmail',
+      'totalHufSnapshot',
+      'status',
+      'invoiceStatus',
+    ],
+    // A szerkesztő rendelésszámra és e-mailre keres; a useAsTitle önmagában
+    // csak az elsőt fedné.
+    listSearchableFields: ['orderNumber', 'customerEmail'],
   },
   fields: [
     ...mapFieldsDeep(defaultCollection.fields, visitOrderFields),
@@ -896,6 +921,11 @@ export const ecommerce = async (config: Config): Promise<Config> => {
           ...defaultCollection.admin,
           group: WEBSHOP_GROUP,
           description: 'A vásárlók félbehagyott kosarai. Automatikusan keletkezik — ne szerkeszd.',
+          // Ugyanaz a hiba, mint az ordersnél: a plugin `useAsTitle: 'createdAt'`-ja
+          // miatt a lista keresője ILIKE-ot futtatna egy timestamptz oszlopon.
+          // A kosárnak nincs ember által olvasható azonosítója, ezért az `id` —
+          // erre a Payload külön, típushelyes keresést épít.
+          useAsTitle: 'id',
         },
       }),
     },

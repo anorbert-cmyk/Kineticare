@@ -450,6 +450,10 @@ export default buildConfig({
         admin: {
           group: 'Űrlapok',
           description: 'A látogatók által beküldött üzenetek. Csak olvasásra való.',
+          // A plugin nem ad defaultColumns-t, ezért a Payload automatikus
+          // választása szerepelt: azonosító és Turnstile-token — a szerkesztőnek
+          // egyik sem mond semmit. Az űrlap neve + a beérkezés ideje kell.
+          defaultColumns: ['form', 'createdAt', 'id'],
         },
         access: {
           // Admin oldalon staff+owner olvashatja/kezelheti a beküldéseket;

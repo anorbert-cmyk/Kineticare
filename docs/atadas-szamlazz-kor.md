@@ -14,6 +14,12 @@
 
 ## 0. HA CSAK EGY DOLGOT OLVASOL EL
 
+> **✅ LEZÁRVA 2026-08-10 ~10:26 UTC.** Mindkét migráció élesben van (#59 →
+> `d4c5ca1`, #60 → `db9ed72`), a deploy-logban ott a `Migrated:` sor mindkettőre.
+> Az alábbi leírás **azért marad benne**, mert a hiba osztálya néma és
+> visszatérő: a 8.2-es ellenőrző recept és a 8.3-as migráció-generálási fogás
+> újra kelleni fog.
+
 🔴 **Az éles adatbázis nem azt tartalmazta, amit a kód feltételez** (8. szakasz).
 Nem egy mező hiányzott, hanem a fizetési főlánc fele: az `orders.refunds`
 oszlop, az `orders.status` enumból a `created`/`payment_pending`/`paid`/
@@ -26,10 +32,11 @@ Következmény: élesben rendelés **létre sem jöhetett**, fizetés nem volt
 rögzíthető, a számlázó job nem volt ütemezhető. Két teljes fejlesztési kör
 landolt úgy, hogy élesben egyáltalán nem működhetett.
 
-Állapot: a `refunds` migráció **kész és élesíthető** (additív, nem tud
-elbukni). A többi migráció **kész, de visszatartva** — az enum-csere
+A javítás **kétlépcsős** volt, mert a második migráció enum-cseréje
 átkonvertálja a meglévő sorokat, és egy régi státuszú rendelés miatt az app
-el sem indulna. A kiadás feltétele a 8.6-ban.
+el sem indult volna: előbb az additív `refunds`-migráció ment ki, és csak
+miután élesben igazolható lett, hogy nincs átkonvertálandó rendelés, jött a
+többi. A részletek a 8.4–8.6-ban.
 
 ## 1. Pillanatkép — hol tartunk
 
@@ -506,30 +513,41 @@ kellene kitölteni. **Az tilos** (CLAUDE.md 3. zóna).
 
 Így az SQL-t végig a Payload írja; kézzel egyetlen utasítást sem fogalmazol.
 
-### 8.4 Ami már KÉSZ és élesíthető: `orders.refunds`
+### 8.4 ✅ ÉLESÍTVE — mindkét migráció kint van
 
-Migráció: `src/migrations/20260810_094820_szamlazz_refunds_oszlop.ts` —
-egyetlen utasítás, `ALTER TABLE "orders" ADD COLUMN "refunds" jsonb;`.
-**Additív, meglévő adatot nem ír át, nem tud elbukni.**
+| | 1. lépcső | 2. lépcső |
+| --- | --- | --- |
+| Migráció | `20260810_094820_szamlazz_refunds_oszlop` | `20260810_095237_sema_drift_allapotgep_es_jobok` |
+| PR | #59 | #60 |
+| main | `d4c5ca1` | `db9ed72` |
+| deploy-log | `Migrated: … (4ms)` | `Migrated: … (16ms)` |
+| `server_start` commitSha | `d4c5ca1` | `db9ed72` |
 
-Igazolva: tiszta DB → `npx payload migrate` → az oszlop létrejön;
-`NODE_ENV=production` mellett a `payload.find({ collection: 'orders' })`
-hiba nélkül lefut, és a visszatérítés-nyom írása is sikeres;
-`payload_migrations`-ben nincs `dev` sor.
+Az 1. lépcső **additív** volt (`ALTER TABLE "orders" ADD COLUMN "refunds" jsonb;`),
+tehát adattól függetlenül nem tudott elbukni — ezért mehetett előre. A 2.
+lépcső kockázatos magja az `orders.status` enum újraépítése volt (lásd 8.5).
 
-### 8.5 Ami KÉSZ, de VISSZATARTVA: állapotgép-enum + jobok + webhook_events
+Igazolás élesítés előtt: tiszta adatbázis → `npx payload migrate` →
+`NODE_ENV=production` mellett a teljes életciklus lefut — rendelés létrehozás
+(`created`, `KH-2026-000001`) → `payment_pending` → `paid` → `refunded` →
+visszatérítés-nyom írás → webhook-esemény kimenetellel → **mind az öt job**
+ütemezése (`order-poll`, `invoice-issue`, `storno-issue`,
+`corrective-invoice-issue`, `webhook-retry`). A `payload_migrations` táblában
+**nincs `dev` sor**, tehát nem a fejlesztői push takarta el a hiányt.
 
-A migráció legenerálva és tiszta adatbázison igazolva (a teljes életciklus
-lefut éles módban: rendelés → `payment_pending` → `paid` → visszatérítés-nyom
-→ webhook-kimenetel → `order-poll` és `invoice-issue` job ütemezés).
+### 8.5 A 2. lépcső kockázata és ahogy kezeltük
 
-**De NEM mehet ki vakon.** A generált SQL az `orders.status` enumot
-újraépíti, és a meglévő sorokat átkonvertálja:
+A generált SQL kockázatos MAGJA az `orders.status` enum újraépítése (a
+migráció ezen felül a job-task-slug enumok `ADD VALUE`-jait, az
+`enum_webhook_events_result` létrehozását és a két `webhook_events` oszlopot is
+tartalmazza — azok mind additívak):
 
 ```sql
 ALTER TABLE "orders" ALTER COLUMN "status" SET DATA TYPE text;
+ALTER TABLE "orders" ALTER COLUMN "status" SET DEFAULT 'created'::text;
 DROP TYPE "public"."enum_orders_status";
 CREATE TYPE "public"."enum_orders_status" AS ENUM('created','payment_pending','paid','payment_failed','cancelled','refunded');
+ALTER TABLE "orders" ALTER COLUMN "status" SET DEFAULT 'created'::"public"."enum_orders_status";
 ALTER TABLE "orders" ALTER COLUMN "status" SET DATA TYPE "public"."enum_orders_status" USING "status"::"public"."enum_orders_status";
 ```
 
@@ -540,33 +558,37 @@ konverzió elszáll. Kipróbálva, ez a pontos hibaüzenet:
 invalid input value for enum enum_orders_status: "processing"
 ```
 
-A Railway `startCommand`-ja `npx payload migrate && npm start`, tehát egy
-bukó migráció azt jelenti, hogy **az alkalmazás el sem indul** — éles leállás.
+A Railway `startCommand`-ja `npx payload migrate && npm start`, tehát egy bukó
+migráció azt jelenti, hogy **az alkalmazás el sem indul** — éles leállás.
 
-### 8.6 A visszatartott migráció kiadásának FELTÉTELE
+**Amit tettünk:** előbb az 1. lépcső (additív) ment ki. Attól kezdve a
+Rendelések lista élesben újra működött, és a tulajdonos visszaigazolta, hogy a
+lista **teljesen üres** — nincs átkonvertálandó sor. Csak ezután ment ki a 2.
+lépcső. Az éles adathoz az agent nem fér hozzá: a Railway MCP `railway-agent`
+helyesen NEM adja ki a Postgres jelszavát (`<hidden_from_agent>`), a `.env*`
+olvasása pedig tilos.
 
-Előbb el kell dönteni, van-e régi státuszú rendelés élesben:
+### 8.6 Ha LEGKÖZELEBB enum-értéket kell cserélni
 
-```sql
-SELECT status, count(*) FROM orders GROUP BY status;
-```
+Ez a recept marad érvényes, ha a jövőben megint enum-készlet változik ÉS már
+van éles adat:
 
-- **Ha üres, vagy csak `cancelled`/`refunded` van** → a migráció kiadható
-  változtatás nélkül.
-- **Ha van `processing` vagy `completed`** → két járható út:
-  1. a szerkesztő az adminban átállítja ezeket a rendeléseket egy megmaradó
-     státuszra (a `refunds`-javítás élesítése UTÁN a Rendelések lista újra
-     működik, tehát ez elvégezhető) — majd jöhet a migráció;
-  2. vagy a konfig **átmenetileg megtartja** a `processing`/`completed`
-     értékeket az enumban: akkor a Payload csak `ALTER TYPE ... ADD VALUE`
-     utasításokat generál, ami additív és **nem tud elbukni**. Ez a
-     kockázatmentes út, cserébe két holt státusz marad az admin legördülőben.
-
-**Az éles adathoz az agent nem fér hozzá:** a Railway MCP `railway-agent`
-helyesen NEM adja ki a Postgres jelszavát (`<hidden_from_agent>`), és a
-`.env*` olvasása tilos. Ezt a lekérdezést tehát **embernek kell lefuttatnia**
-(Railway dashboard → Postgres → Connect), vagy az adminból megnézni a
-Rendelések listát.
+1. **Adat-ellenőrzés előbb.** `SELECT status, count(*) FROM orders GROUP BY status;`
+   Ha van olyan sor, aminek az értéke az ÚJ készletben nem szerepel, a
+   típus-újraépítés elbukik.
+2. **Ha van ilyen sor**, két járható út van:
+   - a szerkesztő az adminban átállítja őket egy megmaradó státuszra, vagy
+   - a konfig **megtartja** a régi értékeket az enumban — de ez **csak akkor
+     additív, ha a megtartott értékek EREDETI RELATÍV SORRENDJE sértetlen
+     marad.** A drizzle-kit pozíció-alapú szekvencia-diffel dolgozik: ha a régi
+     érték a listában hátrébb kerül, azt `removed`+`added` párnak látja, és nem
+     `ADD VALUE`-t, hanem TÍPUS-ÚJRAÉPÍTÉST generál — vagyis pontosan a fenti,
+     elbukó `USING` konverziót. Az `options` tömböt tehát úgy kell
+     összeállítani, hogy a régi DB-sorrend részsorozata maradjon az újnak.
+     **A generált migrációban ellenőrizd is:** csak `ALTER TYPE … ADD VALUE`
+     sorok lehetnek benne, `DROP TYPE` egy sem.
+3. **Kétlépcsős élesítés**, ha a kockázatos rész elkülöníthető: előbb az
+   additív fele, utána — a felszabaduló felület birtokában — a kockázatos.
 
 ### 8.7 Tanulság, amit érdemes kikényszeríteni
 
@@ -605,8 +627,12 @@ része, hogy **ezt a sort is javítsd** a mapping-doksiban.
    utolsó 12 hónap.
 3. Minden hónapra három szám: **otthoni (laikus)**, **szakmai (szakember)**,
    **összesen** — forintban, magyar ezres tagolással (`toLocaleString('hu-HU')`).
-4. Csak a **`paid`** státuszú rendelések számítanak bevételnek; a `refunded`
-   külön oszlopban jelenik meg (vagy kimarad — lásd 9.6), nem keveredik bele.
+4. Bevételnek **kizárólag a `paid` státuszú rendelések** számítanak; a
+   `refunded`, `payment_failed` és `cancelled` teljes egészében kimarad az
+   aggregátumból (lásd 9.6 1. szabály és 9.10 5. teszteset). A visszatérítések
+   külön kimutatása **nem része ennek a feladatnak** — ha később mégis kell, az
+   a `refunds` mező owner-only olvasása miatt önálló, jogosultsági döntést
+   igénylő kör.
 5. A nézet **csak `staff`/`owner` szerepkörnek** érhető el; `customer` nem.
 6. **Nincs új npm-függőség**, nincs adatbázis-migráció (a 9.5-ös „B" opció
    kivételével, ami külön döntés).
@@ -624,7 +650,11 @@ része, hogy **ezt a sort is javítsd** a mapping-doksiban.
 | `orderNumber` | `order_number` | `KH-<év>-<6 jegy>` |
 | `invoiceCompletionDate` | `invoice_completion_date` | `YYYY-MM-DD` string, a számla teljesítési dátuma |
 | `createdAt` | `created_at` | timestamptz |
-| `refunds` | *(hiányzik, lásd 8. szakasz!)* | **owner-only olvasás** — ne olvasd be ebbe a nézetbe |
+| `refunds` | `refunds` | **owner-only olvasás** (`read: isOwnerFieldAccess`) — **ne olvasd be ebbe a nézetbe**. Az oszlop a 8.4 óta élesben létezik. |
+
+A táblázat a **konfig szerinti** sémát írja le, ami a 8. szakasz két
+migrációja óta megegyezik az élessel. Korábban nem egyezett — ha valaha
+gyanús eltérést látsz, a 8.2-es A/B recepttel ellenőrizd, ne feltételezd.
 
 **`orders_items` tábla** (a rendelés tételei — ez kell az ág-bontáshoz):
 
@@ -755,8 +785,9 @@ const result = await payload.find({
 
 - `depth: 1` kell, hogy az `items[].product` objektumként jöjjön az `audience`
   mezővel; `depth: 0`-nál csak az id-t kapod.
-- **Ne olvasd be a `refunds` mezőt** semmilyen formában (owner-only, és
-  jelenleg nem is létezik az oszlop — 8. szakasz).
+- **Ne olvasd be a `refunds` mezőt** semmilyen formában: owner-only olvasás,
+  tehát egy `staff` szerkesztőnek látható nézetbe nem kerülhet (CLAUDE.md 4.
+  zóna).
 - **Méret:** amíg pár ezer rendelés van, a `limit: 0` rendben. Ha ez nő, vagy a
   nézet lassul, váltás nyers SQL-aggregátumra a drizzle-n keresztül
   (`payload.db.drizzle.execute(sql\`…\`)`) — ez **nem migráció**, tehát nem
@@ -774,6 +805,17 @@ WHERE o.status = 'paid'
 GROUP BY 1, 2
 ORDER BY 1;
 ```
+
+⚠️ Ez a vázlat **`created_at` szerint** csoportosít, tehát a 9.5-ös (A) utat
+képezi le. Ha az aggregátorban a javasolt (B) utat választottad, a hónap-kulcsot
+itt is a `COALESCE(o.invoice_completion_date, to_char(o.created_at AT TIME ZONE
+'Europe/Budapest','YYYY-MM-DD'))` első 7 karakteréből kell képezni — különben a
+nyers SQL más hónapba sorol, mint a JS-aggregátor.
+
+⚠️ A `COUNT(DISTINCT o.id)` itt (hónap, célközönség) bontásban számol: egy
+vegyes rendelés MINDKÉT sorban megjelenik, ezért a két sor darabszáma **nem
+adható össze** havi rendelésszámmá. A `MonthlyRevenueRow.orderCount`-hoz külön,
+csak hónapra csoportosító `COUNT(DISTINCT o.id)` lekérdezés kell.
 
 ### 9.8 Bekötés — pontosan hova
 
@@ -816,9 +858,21 @@ npm run generate:importmap
 Ez az `src/app/(payload)/admin/importMap.js` fájlt írja át. **A generált fájlt
 commitold** (a meglévők is be vannak commitolva).
 
-**c) Szerepkör-kapu a nézetben — ezt NE hagyd ki.** Egy egyedi admin-nézet
-alapból csak a „be van jelentkezve az adminba" szintet garantálja; a
-szerepkört magadnak kell ellenőrizned:
+**c) 🔴 Szerepkör-kapu a nézetben — ez NEM opcionális, ez az EGYETLEN védelem.**
+
+A Payload 3.86 az `admin.components.views`-ben regisztrált útvonalakat
+**nyilvános** admin-route-ként kezeli: az `isCustomAdminView` bármely
+konfigurált view-path-ra igazat ad, ezért a Root view auth-átirányítása
+(`Root/index.js`: `if (!permissions.canAccessAdmin && !isPublicAdminRoute(…) &&
+!isCustomAdminView(…)) redirect(…)`) **kimarad**.
+
+Következmény: **be sem jelentkezett látogató is elérheti a
+`/admin/statisztika` oldalt**, és a szerver-komponensed `req.user === null`
+mellett fut le. A kapu tehát nem „a bejelentkezés fölé" jön — a kapu maga a
+teljes védelem, és a be-nem-jelentkezett esetet is le kell fednie. A
+`hasStaffOrOwnerRole(null)` `false`-t ad, ezért az alábbi minta helyes; a kapu
+elhagyása vagy pusztán a NavLink elrejtése **nyilvános bevétel-kimutatást**
+eredményezne.
 
 ```tsx
 import type { AdminViewServerProps } from 'payload'
@@ -837,6 +891,10 @@ A `hasStaffOrOwnerRole` a `src/access/roles.ts`-ben van (`RoleUser` típussal).
 A `StatisticsNavLink` kliens-komponensben is érdemes elrejteni a linket
 nem-jogosult felhasználó elől, de **a védelem a szerver-oldali kapu** — a
 link elrejtése csak kozmetika.
+
+**Írj rá tesztet is:** a kapu a nézet egyetlen védelme, tehát ugyanolyan
+elbánást érdemel, mint egy access-szabály — legyen eset a be-nem-jelentkezett
+(`req.user === null`), a `customer` és a `staff` ágra.
 
 ### 9.9 A diagram — ne hozz be függőséget
 
