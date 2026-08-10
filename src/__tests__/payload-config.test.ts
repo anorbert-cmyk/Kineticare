@@ -1,7 +1,7 @@
 import type { Payload } from 'payload'
 import { describe, expect, it, vi } from 'vitest'
 
-import { resolveServerOrigin } from '../env'
+import { buildOriginAllowlist } from '../env'
 import configPromise from '../payload.config'
 
 /** A szanitált config típusa — a Payload `SanitizedConfig`-ja, importálás nélkül. */
@@ -140,10 +140,10 @@ describe('payload.config', () => {
 
     // Az allowlist az EREDETET tartalmazza: a böngésző Origin fejléce sem küld
     // útvonalat és záró perjelet, tehát a teljes URL sosem illeszkedne.
-    expect(config.cors).toEqual([resolveServerOrigin()])
-    expect(config.csrf).toContain(resolveServerOrigin())
+    expect(config.cors).toEqual([buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)[0]])
+    expect(config.csrf).toContain(buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)[0])
     for (const origin of config.csrf ?? []) {
-      expect(origin.startsWith(resolveServerOrigin())).toBe(true)
+      expect(origin.startsWith(buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)[0])).toBe(true)
     }
 
     /*

@@ -154,6 +154,17 @@ export function sanitizeCmsUrl(value: unknown): string | null {
    * A horgony- és a gyökér-relatív ág szándékosan NYERS marad: azoknak nincs
    * bázis-URL nélkül értelmezhető abszolút alakjuk, és a `next/link` a relatív
    * útvonalat pontosan így várja.
+   *
+   * A NORMALIZÁLÁS LÁTHATÓ MELLÉKHATÁSAI (mind funkcionálisan azonos célra
+   * mutat, tehát nem törés — de a renderelt `href` SZÖVEGE megváltozik, amin
+   * egy pontos egyezésre néző HTML-snapshot vagy e2e elbukhat):
+   *  - percent-kódolás: `/kézrehabilitáció` → `/k%C3%A9zrehabilit%C3%A1ci%C3%B3`,
+   *    és ugyanígy a query is (`?subject=Kérdés` → `?subject=K%C3%A9rd%C3%A9s`);
+   *  - punycode: `https://példa.hu/x` → `https://xn--plda-bpa.hu/x`;
+   *  - alapértelmezett port elhagyása: `https://pelda.hu:443/x` → `https://pelda.hu/x`;
+   *  - üres útvonal kiegészítése: `https://pelda.hu?q=1` → `https://pelda.hu/?q=1`;
+   *  - a hoszt kisbetűsítése.
+   * A látogató ebből semmit nem lát: a link FELIRATA külön mező.
    */
   return parsed.href
 }

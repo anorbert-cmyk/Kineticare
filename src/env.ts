@@ -70,12 +70,18 @@ export function normalizeServerUrl(rawValue: string | undefined | null): string 
 /**
  * A publikus szerver-URL — EGY forrásból.
  *
- * Ezt használja a Payload `serverURL`-je (src/payload.config.ts), a storefront
- * `metadataBase`-e (src/app/(frontend)/layout.tsx) és az SEO-segédek
- * `SITE_URL`-je (src/lib/seo.ts). Korábban mindhárom helyen külön állt ugyanaz
- * a `process.env.NEXT_PUBLIC_SERVER_URL ?? 'http://localhost:3000'` kifejezés —
- * a párhuzamos forrás azzal a kockázattal jár, hogy a CORS/CSRF-allowlist és a
- * kanonikus URL szétcsúszik.
+ * Két fogyasztója van: a storefront `metadataBase`-e
+ * (src/app/(frontend)/layout.tsx) és az SEO-segédek `SITE_URL`-je
+ * (src/lib/seo.ts). Korábban mindkét helyen külön állt ugyanaz a
+ * `process.env.NEXT_PUBLIC_SERVER_URL ?? 'http://localhost:3000'` kifejezés —
+ * a párhuzamos forrás azzal a kockázattal jár, hogy a kanonikus URL és a
+ * CORS/CSRF-engedélylista szétcsúszik.
+ *
+ * A CORS/CSRF-lista NEM ezt hívja, hanem a `buildOriginAllowlist`-et — de
+ * UGYANABBÓL az env-értékből, ugyanazzal a normalizálással.
+ *
+ * A Payload `serverURL`-je SZÁNDÉKOSAN ÜRES marad; az indoklás (media-URL
+ * abszolutizálás → next/image 400) a src/payload.config.ts-ben.
  *
  * A függvény SOSEM dob: a payload.config modul-betöltéskor hívja, és egy hibás
  * env miatt a config betöltése (tehát a teszt- és szkript-futás is) nem
@@ -91,8 +97,7 @@ export function resolveServerUrl(): string {
  *
  * Azért önálló és nyers bemenetű, hogy a tényleges szűkítés tesztelhető legyen
  * olyan értékkel is, ami a teszt-környezetben sosem áll elő (pl.
- * útvonal-előtagos gyökér). A `resolveServerOrigin` ennek a
- * `process.env`-hez kötött hívása.
+ * útvonal-előtagos gyökér). A hívók a `process.env`-ből adják át az értéket.
  *
  * A lista az EREDETET tartalmazza (séma + hoszt + port), nem a teljes URL-t: a
  * böngésző az `Origin` fejlécben mindig csak az eredetet küldi, tehát egy
@@ -101,23 +106,16 @@ export function resolveServerUrl(): string {
  * bejelentkezés és minden sütis API-hívás NÉMÁN elhasalna.
  *
  * MINDEN hívás ÚJ tömböt ad vissza. Ez nem stílus: a Payload szanitálása a
- * `csrf` tömbbe BELEÍR (`config.csrf.push(...)`,
- * node_modules/payload/dist/config/sanitize.js:340-342), tehát a `cors` és a
- * `csrf` nem oszthat közös tömb-referenciát.
+ * `csrf` tömbbe BELEÍRHAT (`config.csrf.push(config.serverURL)`,
+ * node_modules/payload/dist/config/sanitize.js:340-342) — ma nem teszi, mert
+ * az ott lévő feltétel `config.serverURL !== ''`, a mi configunkban pedig a
+ * `serverURL` szándékosan üres. A védekezés tehát arra az esetre szól, ha a
+ * `serverURL` valaha visszakerül: akkor sem oszthat közös tömb-referenciát a
+ * `cors` és a `csrf`.
  */
 export function buildOriginAllowlist(rawValue: string | undefined | null): string[] {
   const serverUrl = normalizeServerUrl(rawValue) ?? DEFAULT_SERVER_URL
   return [new URL(serverUrl).origin]
-}
-
-/**
- * A publikus szerver-URL EREDETE (séma + hoszt + port), útvonal nélkül.
- *
- * A `buildOriginAllowlist` egyelemű listájának első (és egyetlen) eleme — a
- * kettő ugyanabból a normalizálásból származik, tehát nem csúszhat szét.
- */
-export function resolveServerOrigin(): string {
-  return buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)[0]
 }
 
 /**

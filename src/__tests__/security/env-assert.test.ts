@@ -5,7 +5,6 @@ import {
   buildOriginAllowlist,
   DEFAULT_SERVER_URL,
   requiredEnvVars,
-  resolveServerOrigin,
   resolveServerUrl,
   szamlazzVatModes,
   turnstileEnvPair,
@@ -273,16 +272,17 @@ describe('assertRequiredEnv — NEXT_PUBLIC_SERVER_URL alakja', () => {
 })
 
 /**
- * A publikus gyökér feloldása (`resolveServerUrl`) és annak eredete
- * (`resolveServerOrigin`) — EGY forrás a Payload `serverURL`-je, a storefront
- * `metadataBase`-e és az SEO-segédek számára.
+ * A publikus gyökér feloldása (`resolveServerUrl`) és az eredet-lista
+ * (`buildOriginAllowlist`) — EGY env-értékből, ugyanazzal a normalizálással.
+ * A `resolveServerUrl` fogyasztói: a storefront `metadataBase`-e és az SEO
+ * `SITE_URL`-je; a `buildOriginAllowlist`-é a `cors` és a `csrf`.
  */
-describe('resolveServerUrl / resolveServerOrigin', () => {
+describe('resolveServerUrl / buildOriginAllowlist', () => {
   it('a záró perjelet levágja (az Origin fejlécben sincs)', () => {
     vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'https://kineticare.hu/')
 
     expect(resolveServerUrl()).toBe('https://kineticare.hu')
-    expect(resolveServerOrigin()).toBe('https://kineticare.hu')
+    expect(buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)[0]).toBe('https://kineticare.hu')
   })
 
   it('útvonal-előtagos gyökérnél az allowlist az EREDETET kapja', () => {
@@ -291,7 +291,7 @@ describe('resolveServerUrl / resolveServerOrigin', () => {
     expect(resolveServerUrl()).toBe('https://kineticare.hu/app')
     // A böngésző Origin fejléce sosem tartalmaz útvonalat, tehát a teljes URL
     // allowlist-elemként sosem illeszkedne.
-    expect(resolveServerOrigin()).toBe('https://kineticare.hu')
+    expect(buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)[0]).toBe('https://kineticare.hu')
   })
 
   it('hiányzó vagy hibás env esetén a fejlesztői tartalék, dobás NÉLKÜL', () => {
@@ -300,7 +300,7 @@ describe('resolveServerUrl / resolveServerOrigin', () => {
 
     vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'kineticare.hu')
     expect(resolveServerUrl()).toBe(DEFAULT_SERVER_URL)
-    expect(resolveServerOrigin()).toBe(DEFAULT_SERVER_URL)
+    expect(buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)[0]).toBe(DEFAULT_SERVER_URL)
   })
 })
 

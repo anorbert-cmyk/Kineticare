@@ -17,7 +17,6 @@ import { pollOrderStatus } from '../../lib/order-status-poll'
  */
 export interface ThankYouViewProps {
   orderNumber: string | null
-  isLoggedIn: boolean
 }
 
 const POLL_INTERVAL_MS = 2000
@@ -31,15 +30,21 @@ type ViewState =
   | { kind: 'unauthorized' }
   | { kind: 'not-found' }
 
-export function ThankYouView({ orderNumber, isLoggedIn }: ThankYouViewProps) {
+export function ThankYouView({ orderNumber }: ThankYouViewProps) {
   const [state, setState] = useState<ViewState>({ kind: 'polling', attempts: 0 })
 
   useEffect(() => {
-    // A hiányzó rendelésszám és a be nem jelentkezett látogató a PROPOKBÓL
-    // következik (mindkettő szerver-oldalról érkezik, tehát a szerver- és a
-    // kliens-render azonos): ezeket a nézeteket renderben döntjük el, nem
-    // állapotba írjuk. Az effekt ilyenkor csak nem indít poll-ozást.
-    if (!orderNumber || !isLoggedIn) {
+    // A hiányzó rendelésszám a PROPBÓL következik (szerver-oldalról érkezik,
+    // tehát a szerver- és a kliens-render azonos): ezt a nézetet renderben
+    // döntjük el, nem állapotba írjuk. Az effekt ilyenkor nem poll-oz.
+    //
+    // A BEJELENTKEZETTSÉGET viszont NEM propból tudjuk: ez az oldal mindig
+    // kereszt-oldali navigációval nyílik (Barion-visszairányítás), ahol a
+    // csrf-engedélylista miatt a szerver nem látja a süti-tokent. A poll
+    // azonos eredetű `fetch`, az KÜLD `Origin`-t — a 401 → `unauthorized`
+    // állapot dönti el, hogy tényleg nincs-e bejelentkezve. Részletes
+    // indoklás: src/app/(frontend)/fizetes/koszonom/page.tsx fejléce.
+    if (!orderNumber) {
       return
     }
 
@@ -89,7 +94,7 @@ export function ThankYouView({ orderNumber, isLoggedIn }: ThankYouViewProps) {
     return () => {
       cancelled = true
     }
-  }, [orderNumber, isLoggedIn])
+  }, [orderNumber])
 
   // Propokból közvetlenül következő nézetek (állapot nélkül).
   if (!orderNumber) {
@@ -98,18 +103,6 @@ export function ThankYouView({ orderNumber, isLoggedIn }: ThankYouViewProps) {
         <h1>Köszönjük!</h1>
         <p>Hiányzik a rendelésszám a hivatkozásból. A rendelésedet a Kurzusaim oldalon találod.</p>
         <Button href="/kurzusaim">Kurzusaim</Button>
-      </div>
-    )
-  }
-
-  if (!isLoggedIn) {
-    return (
-      <div className="kc-thankyou" role="status">
-        <h1>Köszönjük!</h1>
-        <p>A rendelésed állapotának megtekintéséhez jelentkezz be.</p>
-        <Button href={`/belepes?returnUrl=${encodeURIComponent('/fizetes/koszonom?order=' + orderNumber)}`}>
-          Belépés
-        </Button>
       </div>
     )
   }

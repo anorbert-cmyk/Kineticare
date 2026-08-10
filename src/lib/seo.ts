@@ -41,10 +41,10 @@ export interface SeoDoc {
 
 export const SITE_NAME = 'Kineticare'
 /**
- * A kanonikus oldal-gyökér — a Payload `serverURL`-jével és a keret-layout
- * `metadataBase`-ével KÖZÖS forrásból (src/env.ts). Külön kifejezésként a
- * három könnyen szétcsúszna, és a CORS/CSRF-engedélylista más URL-t védene,
- * mint amit a linkek és a megosztási képek hirdetnek.
+ * A kanonikus oldal-gyökér — a keret-layout `metadataBase`-ével KÖZÖS
+ * forrásból (src/env.ts `resolveServerUrl`). A CORS/CSRF-engedélylista
+ * ugyanennek az env-értéknek az EREDETÉT kapja (`buildOriginAllowlist`), így
+ * nem védhet más URL-t, mint amit a linkek és a megosztási képek hirdetnek.
  */
 export const SITE_URL = resolveServerUrl()
 
