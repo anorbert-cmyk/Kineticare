@@ -1,3 +1,4 @@
+import { Cron } from 'croner'
 import type { JobsConfig } from 'payload'
 import { describe, expect, it } from 'vitest'
 
@@ -61,7 +62,17 @@ import configPromise from '../../payload.config'
  *    ugyanarra a taskra futtatható vagy futó, `meta.scheduled = true` jelű job
  *    darabszámát nézi, és csak 0 esetén ad `shouldSchedule: true`-t. Tehát
  *    taskonként EGY kintlévő ütemezett job lehet — a percenkénti tick nem
- *    termel job-hegyet.
+ *    termel job-hegyet. Ezt az alapértelmezést a projekt SAJÁT, beragadás-tűrő
+ *    hookra cseréli (src/jobs/schedule-guard.ts) — az indoklás ott, a
+ *    viselkedés bizonyítása a handle-schedules.test.ts-ben.
+ *
+ * ═══ MI VAN EBBEN A FÁJLBAN, ÉS MI NINCS ═══
+ * Ez a fájl a KONFIGURÁCIÓ ALAKJÁT őrzi (van-e schedule, fedi-e autoRun-entry,
+ * nem sűrűbb-e a ritmusa a tickénél). Azt, hogy a Payload ütemezője ténylegesen
+ * sorba állítja-e a jobot — és milyen task/queue/meta értékekkel —, a VALÓDI
+ * `handleSchedules`-t meghajtó src/__tests__/jobs/handle-schedules.test.ts
+ * bizonyítja. A kettő szándékosan külön: itt nincs Payload-viselkedés-tükör,
+ * csak egyetlen, kifejezetten megjelölt szanitizálás-tükör a negatív kontrollhoz.
  */
 
 /** Ezeknek a taskoknak PERIODIKUSAN futniuk KELL — enélkül pénz veszik el. */
@@ -105,15 +116,36 @@ function payloadWouldEnableScheduling(config: JobsConfig): boolean {
 }
 
 /**
+ * Egy cron LEGSŰRŰBB tüzelési köze ezredmásodpercben.
+ *
+ * A `croner` a Payload SAJÁT cron-motorja (a `handleSchedules` és az
+ * `_initializeCrons` is ezt használja), ezért a ritmust ugyanazzal a
+ * szemantikával mérjük, mint amivel élesben tüzelni fog — nem saját
+ * cron-értelmezővel. Fix kezdőpont: az eredmény determinisztikus.
+ */
+function minIntervalMs(cron: string): number {
+  const runs = new Cron(cron, { sloppyRanges: true }).nextRuns(
+    24,
+    new Date('2026-01-01T00:00:00Z'),
+  )
+  let min = Number.POSITIVE_INFINITY
+  for (let index = 1; index < runs.length; index += 1) {
+    min = Math.min(min, runs[index].getTime() - runs[index - 1].getTime())
+  }
+  return min
+}
+
+/**
  * A teljes ütemezési lánc ellenőrzése EGY configon. Üres tömb = minden
  * kötelezően periodikus task ténylegesen sorba fog kerülni.
  *
- * Az utolsó szabály (azonos cron) a PROJEKT invariánsa, nem Payload-törvény:
- * a schedule-cron fizikailag nem tud sűrűbben tüzelni, mint az ugyanarra a
- * queue-ra állított autoRun-cron (a sorba állítás csak annak a tickjén fut),
- * és a legegyszerűbb garancia erre a KÖZÖS KONSTANS (src/jobs/queues.ts). Ha
- * valaha szándékosan RITKÁBB schedule kell egy queue-n belül, ezt a szabályt
- * tudatosan kell lazítani.
+ * Az utolsó szabály NEM „azonos cron", hanem „a schedule nem SŰRŰBB, mint az
+ * autoRun-tick". Ez a valódi Payload-korlát: a sorba állítás kizárólag az
+ * autoRun-cron tickjén történik meg, tehát egy sűrűbb schedule-cron nem tud
+ * gyakrabban tüzelni — a szándék és a valóság csendben szétcsúszna. A RITKÁBB
+ * schedule viszont teljesen legitim (pl. ugyanazon a queue-n egy napi task),
+ * ezért azt nem tekintjük résnek: a korábbi „azonos cron" szabály itt épített
+ * volna be egy jövőbeli hamis bukást.
  */
 function findSchedulingGaps(config: JobsConfig, requiredSlugs: readonly string[]): SchedulingGap[] {
   const gaps: SchedulingGap[] = []
@@ -156,10 +188,13 @@ function findSchedulingGaps(config: JobsConfig, requiredSlugs: readonly string[]
         })
         continue
       }
-      if (covering.cron !== schedule.cron) {
+      if (typeof covering.cron === 'string' && minIntervalMs(schedule.cron) < minIntervalMs(covering.cron)) {
         gaps.push({
           task: slug,
-          reason: `a schedule cronja ('${schedule.cron}') eltér az autoRun cronjától ('${String(covering.cron)}')`,
+          reason:
+            `a schedule cronja ('${schedule.cron}') SŰRŰBB, mint az autoRun cronja ` +
+            `('${covering.cron}') — a sorba állítás csak az autoRun tickjén történik meg, ` +
+            'tehát a szándékolt ritmus élesben nem valósulna meg',
         })
       }
     }
@@ -221,13 +256,33 @@ describe('job-ütemezés — a végleges (szanitált) Payload-config', () => {
   it('a queue-k és a cronok a megosztott konstansokból jönnek (nem tudnak szétcsúszni)', async () => {
     const config = await configPromise
 
-    expect(taskBySlug(config.jobs, 'order-poll')?.schedule).toEqual([
+    expect(taskBySlug(config.jobs, 'order-poll')?.schedule).toMatchObject([
       { cron: ORDER_MAINTENANCE_CRON, queue: ORDER_MAINTENANCE_QUEUE },
     ])
-    expect(taskBySlug(config.jobs, 'webhook-retry')?.schedule).toEqual([
+    expect(taskBySlug(config.jobs, 'webhook-retry')?.schedule).toMatchObject([
       { cron: WEBHOOK_RETRY_CRON, queue: WEBHOOK_RETRY_QUEUE },
     ])
   })
+
+  /**
+   * A beragadás-tűrő őr (src/jobs/schedule-guard.ts) MINDEN ütemezett taskon
+   * kötelező: nélküle a Payload alapértelmezése lép életbe, amelyet egyetlen
+   * beragadt `processing: true` sor véglegesen és némán kikapcsol.
+   */
+  it.each(REQUIRED_SCHEDULED_TASKS)(
+    'a(z) %s schedule-jén ott a beragadás-tűrő beforeSchedule őr',
+    async (slug) => {
+      const config = await configPromise
+
+      for (const schedule of taskBySlug(config.jobs, slug)?.schedule ?? []) {
+        expect(
+          typeof schedule.hooks?.beforeSchedule,
+          `a(z) ${slug} schedule-jéről hiányzik a beforeSchedule őr — a Payload alapértelmezése ` +
+            'egyetlen beragadt jobtól véglegesen kikapcsolná az ütemezést',
+        ).toBe('function')
+      }
+    },
+  )
 
   /**
    * Ez a lista kényszeríti ki a DÖNTÉST: minden task vagy ütemezett, vagy
@@ -241,13 +296,23 @@ describe('job-ütemezés — a végleges (szanitált) Payload-config', () => {
       .filter((task) => (task.schedule?.length ?? 0) === 0)
       .map((task) => task.slug)
 
-    expect([...slugs].sort()).toEqual([...REQUIRED_SCHEDULED_TASKS, ...EVENT_DRIVEN_TASKS].sort())
-    expect([...withoutSchedule].sort()).toEqual([...EVENT_DRIVEN_TASKS].sort())
+    expect(
+      [...slugs].sort(),
+      'Új vagy megszűnt task a jobs-configban. Ez NEM elírás-ellenőrzés: dönteni kell, hogy az ' +
+        'új task PERIODIKUS (kerüljön a REQUIRED_SCHEDULED_TASKS listába és kapjon `schedule`-t) ' +
+        'vagy ESEMÉNY-VEZÉRELT (kerüljön az EVENT_DRIVEN_TASKS listába, és a kód állítsa sorba ' +
+        '`payload.jobs.queue`-val). A csendes kimaradás ára: a task soha nem fut le.',
+    ).toEqual([...REQUIRED_SCHEDULED_TASKS, ...EVENT_DRIVEN_TASKS].sort())
+    expect(
+      [...withoutSchedule].sort(),
+      'Egy task `schedule` nélkül maradt, pedig nincs az esemény-vezéreltek között — így SEMMI ' +
+        'nem állítja sorba, tehát soha nem fut le.',
+    ).toEqual([...EVENT_DRIVEN_TASKS].sort())
   })
 })
 
 describe('job-ütemezés — a schedule ÉS az autoRun együtt (bekapcsolt workerek)', () => {
-  it('nincs ütemezési rés: minden kötelező task queue-ja szerepel az autoRun-ban, egyező ritmussal', () => {
+  it('nincs ütemezési rés: minden kötelező task queue-ja szerepel az autoRun-ban, tickelhető ritmussal', () => {
     expect(findSchedulingGaps(workersOnConfig(), REQUIRED_SCHEDULED_TASKS)).toEqual([])
   })
 
@@ -318,7 +383,7 @@ describe('job-ütemezés — negatív kontroll (a kapu tényleg bukik)', () => {
     expect(gaps[0].reason).toContain('disableScheduling')
   })
 
-  it('szétcsúszott cron (schedule sűrűbb, mint az autoRun-tick) → rés', () => {
+  it('SŰRŰBB schedule-cron, mint az autoRun-tick → rés', () => {
     const broken = cloneJobsConfig(workersOnConfig())
     broken.tasks = broken.tasks?.map((task) =>
       task.slug === 'order-poll'
@@ -329,7 +394,23 @@ describe('job-ütemezés — negatív kontroll (a kapu tényleg bukik)', () => {
     const gaps = findSchedulingGaps(broken, REQUIRED_SCHEDULED_TASKS)
 
     expect(gaps).toHaveLength(1)
-    expect(gaps[0].reason).toContain('eltér az autoRun cronjától')
+    expect(gaps[0].reason).toContain('SŰRŰBB')
+  })
+
+  /**
+   * POZITÍV kontroll a lazításhoz: a RITKÁBB schedule (pl. napi karbantartás
+   * ugyanazon a queue-n) LEGITIM, nem rés. Az eredeti „azonos cron" invariáns
+   * itt hamisan bukott volna — ez a teszt őrzi, hogy ne épüljön vissza.
+   */
+  it('RITKÁBB schedule-cron ugyanazon a queue-n → NEM rés (tudatosan megengedett)', () => {
+    const relaxed = cloneJobsConfig(workersOnConfig())
+    relaxed.tasks = relaxed.tasks?.map((task) =>
+      task.slug === 'order-poll'
+        ? { ...task, schedule: [{ cron: '0 3 * * *', queue: ORDER_MAINTENANCE_QUEUE }] }
+        : task,
+    )
+
+    expect(findSchedulingGaps(relaxed, REQUIRED_SCHEDULED_TASKS)).toEqual([])
   })
 })
 
@@ -365,12 +446,5 @@ describe('job-ütemezés — az autoRun ÖNMAGÁBAN nem elég (a hiba oka)', () 
     expect(
       findSchedulingGaps(autoRunOnly, REQUIRED_SCHEDULED_TASKS).map((gap) => gap.task),
     ).toEqual([...REQUIRED_SCHEDULED_TASKS])
-  })
-
-  it('a jelenlegi configgal a tükör és a Payload tényleges eredménye is igaz', async () => {
-    const config = await configPromise
-
-    expect(payloadWouldEnableScheduling(workersOnConfig())).toBe(true)
-    expect(config.jobs.scheduling).toBe(true)
   })
 })

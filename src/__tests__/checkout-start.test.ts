@@ -163,19 +163,34 @@ afterEach(() => {
 })
 
 /**
- * A `happyInput` SZÁNDÉKOSAN nem hordoz `billing`-et: így a profil-tartalék
- * ága marad lefedve (mockUser teljes számlázási profillal). A pénztárból
- * érkező, felülíró adat külön describe-ban.
+ * A `happyInput` az ÉLES kérésalak: a `billing` kötelező, profil-tartalék
+ * nincs. Így minden alábbi teszt azon az alakon fut, amit a pénztár ténylegesen
+ * küld — nem egy élesben elérhetetlen kódúton.
  */
-const happyInput = { productId: 42, consentWithdrawalWaiver: true }
+const PROFILE_BILLING = {
+  name: 'Minta Mari',
+  zip: '1011',
+  city: 'Budapest',
+  street: 'Fő utca 1.',
+}
 
-/** A pénztárban BEÍRT, a profiltól eltérő számlázási adatok. */
+const happyInput = {
+  productId: 42,
+  consentWithdrawalWaiver: true,
+  billing: PROFILE_BILLING,
+}
+
+/**
+ * A pénztárban BEÍRT, a profiltól eltérő számlázási adatok. Az adószám
+ * SZINTETIKUS, de szerkezetileg helyes (CDV + áfakód + megyekód) — nem valódi
+ * cég adószáma.
+ */
 const CHECKOUT_BILLING = {
   name: 'Példa Kft.',
   zip: '9700',
   city: 'Szombathely',
   street: 'Fő tér 2/A',
-  taxNumber: '12345678142',
+  taxNumber: '12345676142',
 }
 
 describe('startCheckout — boldog út', () => {
@@ -196,7 +211,12 @@ describe('startCheckout — boldog út', () => {
     expect(createData.items).toEqual([{ product: 42, quantity: 1 }])
     expect(createData.consentWithdrawalWaiver).toBe(true)
     expect(typeof createData.consentWithdrawalWaiverAt).toBe('string')
-    expect(createData.customerSnapshot).toMatchObject({ id: 7, email: 'vevo@example.test' })
+    expect(createData.customerSnapshot).toMatchObject({
+      id: 7,
+      email: 'vevo@example.test',
+      billingName: 'Minta Mari',
+      billingZip: '1011',
+    })
     expect(createData).not.toHaveProperty('amount')
     expect(createData).not.toHaveProperty('totalHufSnapshot')
     expect(createData).not.toHaveProperty('orderNumber')
@@ -264,9 +284,8 @@ describe('startCheckout — számlázási adatok (B)', () => {
       billingZip: '9700',
       billingCity: 'Szombathely',
       billingStreet: 'Fő tér 2/A',
-      // Az adószám a hivatalos 12345678-1-42 alakra normalizálva megy tovább.
-      taxNumber: '12345678-1-42',
-      billingSource: 'checkout',
+      // Az adószám a hivatalos 12345676-1-42 alakra normalizálva megy tovább.
+      taxNumber: '12345676-1-42',
     })
     expect(snapshot.billingName).not.toBe(mockUser.billingName)
     // A számla ebből a snapshotból készül: a kötelező vevőmezők megvannak.
@@ -275,24 +294,25 @@ describe('startCheckout — számlázási adatok (B)', () => {
       irsz: '9700',
       telepules: 'Szombathely',
       cim: 'Fő tér 2/A',
-      adoszam: '12345678-1-42',
+      adoszam: '12345676-1-42',
     })
   })
 
-  it('billing nélkül a PROFIL a tartalék (billingSource: profile)', async () => {
-    fetchMock.mockResolvedValueOnce(barionStartSuccess())
+  it('billing NÉLKÜL → 400: nincs csendes visszaesés a felhasználó profiljára', async () => {
     const { payload, calls } = createMockPayload()
 
-    await startCheckout({ payload, user: mockUser, input: happyInput })
-
-    expect((calls.create[0] as Record<string, unknown>).customerSnapshot).toMatchObject({
-      billingName: 'Minta Mari',
-      billingZip: '1011',
-      billingCity: 'Budapest',
-      billingStreet: 'Fő utca 1.',
-      taxNumber: null,
-      billingSource: 'profile',
+    // A mockUser profilja HIÁNYTALAN — korábban a szolgáltatás abból dolgozott
+    // volna. Innentől a hívónak ki kell mondania, mi kerül a számlára.
+    const promise = startCheckout({
+      payload,
+      user: mockUser,
+      input: { productId: 42, consentWithdrawalWaiver: true },
     })
+
+    await expect(promise).rejects.toMatchObject({ status: 400 })
+    await expect(promise).rejects.toThrowError(/számlázási adatok hiányosak/)
+    expect(calls.create).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('HIÁNYOS pénztári adat → 400, rendelés NEM jön létre, Barion NEM hívódik', async () => {
@@ -333,46 +353,77 @@ describe('startCheckout — számlázási adatok (B)', () => {
     const promise = startCheckout({
       payload,
       user: mockUser,
-      input: { ...happyInput, billing: { ...CHECKOUT_BILLING, zip: '97' } },
+      input: { ...happyInput, billing: { ...CHECKOUT_BILLING, zip: '9' } },
     })
 
     await expect(promise).rejects.toMatchObject({ status: 400 })
-    await expect(promise).rejects.toThrowError(/négyjegyű/)
+    await expect(promise).rejects.toThrowError(/irányítószámot/)
     expect(calls.create).toHaveLength(0)
   })
 
-  it('A HIBA GYÖKERE: hiányos PROFIL + billing nélküli kérés → 400 (nem jön létre számlázhatatlan rendelés)', async () => {
+  it('A HIBA GYÖKERE: üres számlázási adat → 400 (nem jön létre számlázhatatlan rendelés)', async () => {
     const { payload, calls } = createMockPayload()
-    const userWithoutBilling = {
-      ...(mockUser as unknown as Record<string, unknown>),
-      billingName: null,
-      billingZip: null,
-      billingCity: null,
-      billingStreet: null,
-    } as unknown as User
 
-    const promise = startCheckout({ payload, user: userWithoutBilling, input: happyInput })
+    const promise = startCheckout({
+      payload,
+      user: mockUser,
+      input: { ...happyInput, billing: { name: '', zip: '', city: '', street: '' } },
+    })
 
     await expect(promise).rejects.toMatchObject({ status: 400 })
-    await expect(promise).rejects.toThrowError(/számlázási adatok szükségesek/)
+    await expect(promise).rejects.toThrowError(/számlázási adatok hiányosak/)
     // Korábban itt LÉTREJÖTT a rendelés, a fizetés lement, és a számla soha
     // nem állt ki (buyerFromOrder → null → invoiceStatus 'failed', retry nélkül).
     expect(calls.create).toHaveLength(0)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('hibás adószám → 400 (a Számla Agent visszautasítaná)', async () => {
+  it('SZERKEZETILEG lehetetlen adószám → 400 (a Számla Agent visszautasítaná)', async () => {
     const { payload, calls } = createMockPayload()
 
     const promise = startCheckout({
       payload,
       user: mockUser,
-      input: { ...happyInput, billing: { ...CHECKOUT_BILLING, taxNumber: 'HU12345678' } },
+      // Csak a hossz stimmel: a CDV, az áfakód és a megyekód is hibás.
+      input: { ...happyInput, billing: { ...CHECKOUT_BILLING, taxNumber: '12345678-9-99' } },
     })
 
     await expect(promise).rejects.toMatchObject({ status: 400 })
     await expect(promise).rejects.toThrowError(/adószám/)
     expect(calls.create).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('a hibaüzenet NEM mond hiányt ott, ahol az adat ki van töltve', async () => {
+    const { payload } = createMockPayload()
+
+    const promise = startCheckout({
+      payload,
+      user: mockUser,
+      input: { ...happyInput, billing: { ...CHECKOUT_BILLING, taxNumber: 'HU12345676' } },
+    })
+
+    await expect(promise).rejects.toThrowError(/közösségi adószám/)
+    await expect(promise).rejects.not.toThrowError(/hiányos/)
+  })
+
+  it('KÜLFÖLDI irányítószámmal is létrejön a rendelés (a vásárlás nem vész el)', async () => {
+    fetchMock.mockResolvedValueOnce(barionStartSuccess())
+    const { payload, calls } = createMockPayload()
+
+    await startCheckout({
+      payload,
+      user: mockUser,
+      input: {
+        ...happyInput,
+        billing: { name: 'Kovács Béla', zip: '10115', city: 'Berlin', street: 'Torstraße 1.' },
+      },
+    })
+
+    expect((calls.create[0] as Record<string, unknown>).customerSnapshot).toMatchObject({
+      billingZip: '10115',
+      billingCity: 'Berlin',
+    })
   })
 })
 
@@ -603,7 +654,7 @@ describe('POST /api/checkout/start route-handler', () => {
     expect(response.status).toBe(200)
     expect((calls.create[0] as Record<string, unknown>).customerSnapshot).toMatchObject({
       billingCity: 'Szombathely',
-      billingSource: 'checkout',
+      billingStreet: 'Fő tér 2/A',
     })
   })
 

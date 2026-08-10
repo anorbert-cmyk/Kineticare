@@ -6,12 +6,17 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Field } from '@/components/ui/Field'
 import { PriceTag } from '@/components/ui/PriceTag'
+import type { BillingFieldName } from '../../lib/checkout/billing'
 import {
-  billingErrorMap,
-  toBillingPayload,
-  validateBilling,
-  type BillingFieldName,
-} from '../../lib/checkout/billing'
+  BILLING_INPUT_NAME,
+  WAIVER_LOSS_INPUT_ID,
+  WAIVER_START_INPUT_ID,
+  planCheckoutSubmission,
+  prefillBillingForm,
+  withBillingValue,
+  withoutBillingError,
+  type BillingFieldErrors,
+} from '../../lib/checkout/form-submission'
 import { submitCheckout, type CheckoutUser, type CheckoutProduct } from '../../lib/checkout-submit'
 
 /**
@@ -26,11 +31,17 @@ import { submitCheckout, type CheckoutUser, type CheckoutProduct } from '../../l
  * a `Field` alapból kontrollálatlan, de a natív input-attribútumokat átadja,
  * ezért `value` + `onChange` megadásával MAGÁNAK A KOMPONENSNEK a módosítása
  * nélkül válik kontrollálttá (a többi hívási helye — RegisterForm, LoginForm,
- * AccountView — érintetlen; sőt, azok is pontosan ezt a mintát követik). A
- * FormData-s kiolvasás helyett azért ez a választás, mert (a) a mezőnkénti,
- * magyar hibaüzenet megjelenítéséhez amúgy is state kell, és (b) így a beírt
- * érték egyetlen forrásból (a state-ből) megy a beküldésbe — nem fordulhat
- * elő újra, hogy az űrlap megjelenít egy mezőt, a submit pedig nem olvassa ki.
+ * AccountView — érintetlen). A FormData-s kiolvasás helyett azért ez a
+ * választás, mert (a) a mezőnkénti, magyar hibaüzenet megjelenítéséhez amúgy
+ * is state kell, és (b) így a beírt érték egyetlen forrásból (a state-ből) megy
+ * a beküldésbe — nem fordulhat elő újra, hogy az űrlap megjelenít egy mezőt, a
+ * submit pedig nem olvassa ki.
+ *
+ * A DÖNTÉSI MAG NEM ITT VAN: a beküldési törzs összeállítása, a validáció, az
+ * összefoglaló üzenet és a fókuszcél az `src/lib/checkout/form-submission.ts`
+ * tiszta függvényeiben él — azok node-környezetben, DOM nélkül tesztelhetők
+ * (jsdom nincs telepítve, a `renderToStaticMarkup` pedig nem tud különbséget
+ * tenni kontrollált és kontrollálatlan mező között).
  *
  * A `noValidate` szándékosan marad: a böngésző natív (nem magyar, nem
  * testre szabható) buborékai helyett a validáció a közös
@@ -43,17 +54,6 @@ export interface CheckoutFormProps {
   alreadyPurchased: boolean
 }
 
-interface BillingFormState {
-  name: string
-  zip: string
-  city: string
-  street: string
-  taxNumber: string
-}
-
-const BILLING_INCOMPLETE_ERROR =
-  'A számlázási adatok hiányosak — a számla kiállításához minden csillagozott mezőt ki kell tölteni.'
-
 export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormProps) {
   const [waiverStart, setWaiverStart] = useState(false)
   const [waiverLoss, setWaiverLoss] = useState(false)
@@ -61,50 +61,55 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
   const [error, setError] = useState<string | null>(null)
   // A profil mezői kizárólag ELŐKITÖLTÉSKÉNT szolgálnak: innentől a state az
   // igazság, és a beküldött (esetleg felülírt) érték kerül a rendelésre.
-  const [billing, setBilling] = useState<BillingFormState>({
-    name: user.billingName ?? user.name ?? '',
-    zip: user.billingZip ?? '',
-    city: user.billingCity ?? '',
-    street: user.billingStreet ?? '',
-    taxNumber: user.taxNumber ?? '',
-  })
-  const [billingErrors, setBillingErrors] = useState<Partial<Record<BillingFieldName, string>>>({})
+  const [billing, setBilling] = useState(() => prefillBillingForm(user))
+  const [billingErrors, setBillingErrors] = useState<BillingFieldErrors>({})
 
   const requiresWaiver = !product.isFree
   const waiverComplete = !requiresWaiver || (waiverStart && waiverLoss)
 
-  const updateBilling = (field: keyof BillingFormState, value: string): void => {
-    setBilling((previous) => ({ ...previous, [field]: value }))
+  const updateBilling = (field: BillingFieldName, value: string): void => {
+    setBilling((previous) => withBillingValue(previous, field, value))
+    // A mező hibája gépeléskor eltűnik (az aria-invalid is), különben a
+    // képernyőolvasó a már javított mezőt is végig érvénytelennek mondaná.
+    setBillingErrors((previous) => withoutBillingError(previous, field))
+  }
+
+  /** A hibás mezőre visszük a fókuszt — a görgetést a böngésző intézi. */
+  const focusElement = (elementId: string | null): void => {
+    if (elementId === null || typeof document === 'undefined') {
+      return
+    }
+    document.getElementById(elementId)?.focus()
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
 
-    if (alreadyPurchased) {
-      setError('Ezt a kurzust már megvetted — a Kurzusaim oldalon éred el.')
-      return
-    }
-    if (!waiverComplete) {
-      setError('A vásárláshoz mindkét hozzájárulást el kell fogadnod.')
-      return
-    }
+    const plan = planCheckoutSubmission({
+      productId: product.id,
+      alreadyPurchased,
+      waiverRequired: requiresWaiver,
+      waiverStartAccepted: waiverStart,
+      waiverLossAccepted: waiverLoss,
+      billing,
+    })
 
-    const billingResult = validateBilling(billing)
-    if (!billingResult.ok) {
-      setBillingErrors(billingErrorMap(billingResult.errors))
-      setError(BILLING_INCOMPLETE_ERROR)
+    if (plan.kind === 'blocked') {
+      setError(plan.message)
+      focusElement(plan.focusElementId)
+      return
+    }
+    if (plan.kind === 'invalid') {
+      setBillingErrors(plan.fieldErrors)
+      setError(plan.message)
+      focusElement(plan.focusElementId)
       return
     }
     setBillingErrors({})
 
     setSubmitting(true)
-    const result = await submitCheckout({
-      productId: product.id,
-      quantity: 1,
-      consentWithdrawalWaiver: true,
-      billing: toBillingPayload(billingResult.value),
-    })
+    const result = await submitCheckout(plan.body)
     setSubmitting(false)
 
     if (result.ok) {
@@ -116,6 +121,18 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
 
   return (
     <form className="kc-checkout-form" noValidate onSubmit={handleSubmit}>
+      {/*
+        A hibadoboz az űrlap TETEJÉN van: korábban a hosszú elállási kártya
+        UTÁN, a lap alján jelent meg, tehát mobilon a beküldés után a
+        felhasználó semmit nem látott. A fókusz emellett az első hibás mezőre
+        ugrik, így a hiba akkor is előkerül, ha a doboz a képernyőn kívül esne.
+      */}
+      {error ? (
+        <div aria-live="assertive" className="kc-checkout-form__error" role="alert">
+          {error}
+        </div>
+      ) : null}
+
       <Card className="kc-checkout-summary">
         <div className="kc-checkout-summary__row">
           <span>{product.sku}</span>
@@ -134,49 +151,58 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
           felülírhatod őket — a rendelésre az itt megadott adat kerül.
         </p>
         <Field
-          autoComplete="name"
+          autoComplete="billing name"
           error={billingErrors.name}
           label="Név"
-          name="billingName"
+          name={BILLING_INPUT_NAME.name}
           onChange={(event) => updateBilling('name', event.target.value)}
           required
           value={billing.name}
         />
         <div className="kc-checkout-billing__grid">
+          {/*
+            `inputMode="numeric"` szándékosan NINCS: a mező külföldi
+            irányítószámot is elfogad (pl. `SW1A 1AA`), a szám-billentyűzet
+            pedig mobilon el sem érhetővé tenné a betűket.
+          */}
           <Field
-            autoComplete="postal-code"
+            autoComplete="billing postal-code"
             error={billingErrors.zip}
-            inputMode="numeric"
             label="Irányítószám"
-            name="billingZip"
+            name={BILLING_INPUT_NAME.zip}
             onChange={(event) => updateBilling('zip', event.target.value)}
             required
             value={billing.zip}
           />
           <Field
-            autoComplete="address-level2"
+            autoComplete="billing address-level2"
             error={billingErrors.city}
             label="Település"
-            name="billingCity"
+            name={BILLING_INPUT_NAME.city}
             onChange={(event) => updateBilling('city', event.target.value)}
             required
             value={billing.city}
           />
         </div>
         <Field
-          autoComplete="street-address"
+          autoComplete="billing address-line1"
           error={billingErrors.street}
           label="Cím"
-          name="billingStreet"
+          name={BILLING_INPUT_NAME.street}
           onChange={(event) => updateBilling('street', event.target.value)}
           required
           value={billing.street}
         />
+        {/*
+          Az adószámra nincs szabványos autofill-token, és a böngésző
+          amúgy is rossz mezőt (telefonszám, kártyaszám) kínálna fel.
+        */}
         <Field
+          autoComplete="off"
           error={billingErrors.taxNumber}
           hint="Csak céges vásárlás esetén."
           label="Adószám (céges vásárlásnál)"
-          name="taxNumber"
+          name={BILLING_INPUT_NAME.taxNumber}
           onChange={(event) => updateBilling('taxNumber', event.target.value)}
           value={billing.taxNumber}
         />
@@ -198,13 +224,13 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
             <input
               aria-describedby="waiver-start-hint"
               checked={waiverStart}
-              id="waiver-start"
+              id={WAIVER_START_INPUT_ID}
               name="waiverStart"
               onChange={(event) => setWaiverStart(event.target.checked)}
               required
               type="checkbox"
             />
-            <label htmlFor="waiver-start">
+            <label htmlFor={WAIVER_START_INPUT_ID}>
               Kifejezetten kérem, hogy a digitális tartalomhoz a hozzáférés azonnal megkezdődjön.
             </label>
           </div>
@@ -216,13 +242,13 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
             <input
               aria-describedby="waiver-loss-hint"
               checked={waiverLoss}
-              id="waiver-loss"
+              id={WAIVER_LOSS_INPUT_ID}
               name="waiverLoss"
               onChange={(event) => setWaiverLoss(event.target.checked)}
               required
               type="checkbox"
             />
-            <label htmlFor="waiver-loss">
+            <label htmlFor={WAIVER_LOSS_INPUT_ID}>
               Tudomásul veszem, hogy a teljesítés megkezdésével elveszítem a 14 napos elállási
               jogomat.
             </label>
@@ -239,12 +265,6 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
           </p>
         </Card>
       )}
-
-      {error ? (
-        <div aria-live="assertive" className="kc-checkout-form__error" role="alert">
-          {error}
-        </div>
-      ) : null}
 
       <div className="kc-checkout-form__actions">
         <Button disabled={submitting || alreadyPurchased || !waiverComplete} type="submit">

@@ -10,6 +10,7 @@ import * as migration_20260809_223906_szamlazz_megfeleles from './20260809_22390
 import * as migration_20260809_232121_szamlazz_attempts_seq from './20260809_232121_szamlazz_attempts_seq';
 import * as migration_20260810_094820_szamlazz_refunds_oszlop from './20260810_094820_szamlazz_refunds_oszlop';
 import * as migration_20260810_095237_sema_drift_allapotgep_es_jobok from './20260810_095237_sema_drift_allapotgep_es_jobok';
+import * as migration_20260810_132919_job_utemezes_stats from './20260810_132919_job_utemezes_stats';
 
 export const migrations = [
   {
@@ -71,5 +72,10 @@ export const migrations = [
     up: migration_20260810_095237_sema_drift_allapotgep_es_jobok.up,
     down: migration_20260810_095237_sema_drift_allapotgep_es_jobok.down,
     name: '20260810_095237_sema_drift_allapotgep_es_jobok',
+  },
+  {
+    up: migration_20260810_132919_job_utemezes_stats.up,
+    down: migration_20260810_132919_job_utemezes_stats.down,
+    name: '20260810_132919_job_utemezes_stats'
   },
 ];

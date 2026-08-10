@@ -9,6 +9,7 @@ import {
 } from '../../lib/idempotency'
 import { logger } from '../../lib/logger'
 import { WEBHOOK_RETRY_CRON, WEBHOOK_RETRY_QUEUE } from '../queues'
+import { createStaleAwareBeforeSchedule } from '../schedule-guard'
 
 /**
  * webhook-retry task (T-014): a feldolgozatlan (received) és elhasalt (failed)
@@ -28,6 +29,10 @@ import { WEBHOOK_RETRY_CRON, WEBHOOK_RETRY_QUEUE } from '../queues'
  * futtatja. Enélkül az elhasalt webhook-események sosem próbálódnak újra. A
  * cron és a queue az autoRun-nal KÖZÖS konstansból jön (../queues), mert a
  * `handleSchedules` csak azonos queue-név mellett fut le rá.
+ *
+ * A `beforeSchedule` hook a Payload alapértelmezett duplikátum-védelmét váltja
+ * ki: az alapértelmezés egyetlen beragadt (`processing: true`) sortól VÉGLEGESEN
+ * és NÉMÁN kikapcsolna — lásd ../schedule-guard.ts.
  */
 const RETRY_BATCH_SIZE = 25
 
@@ -53,6 +58,7 @@ export const webhookRetryTask: TaskConfig<WebhookRetryJobIO> = {
     {
       cron: WEBHOOK_RETRY_CRON,
       queue: WEBHOOK_RETRY_QUEUE,
+      hooks: { beforeSchedule: createStaleAwareBeforeSchedule({ taskSlug: 'webhook-retry' }) },
     },
   ],
   outputSchema: [

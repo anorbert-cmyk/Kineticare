@@ -50,11 +50,35 @@ import {
  *   `handleSchedules` következő futásidőt;
  * - `meta` (json) mező a `payload-jobs` collectionön
  *   (payload/dist/queues/config/collection.js, `if (jobsConfig.stats)`): ide
- *   kerül a `scheduled: true` jelölés, erre épül a duplikátum-védelem.
- * Postgresen ez egy új tábla + egy új oszlop, tehát MIGRÁCIÓ szükséges — a
- * Payload migrációs eszközével generálva (CLAUDE.md 3. tilos zóna). A deploy
- * `npx payload migrate && npm start` sorrendje miatt a migrációnak ugyanabban
- * a változáskörben kell mennie, mint ennek a confignak.
+ *   kerül a `scheduled: true` jelölés (payload/dist/queues/operations/
+ *   handleSchedules/index.js, `scheduleQueueable`).
+ * Postgresen ez pontosan két DDL-utasítás — egy új tábla + egy új, NULLABLE
+ * oszlop —, tehát MIGRÁCIÓ szükséges, a Payload migrációs eszközével generálva
+ * (CLAUDE.md 3. tilos zóna). A deploy `npx payload migrate && npm start`
+ * sorrendje miatt a migrációnak UGYANABBAN a változáskörben kell mennie, mint
+ * ennek a confignak.
+ *
+ * MIÉRT BLOKKOLÓ a migráció hiánya (a pontos mechanizmus). Az autoRun-cron
+ * tickje ELŐSZÖR a `handleSchedules`-t hívja, és csak UTÁNA a `jobs.run`-t
+ * (payload/dist/index.js, `_initializeCrons`). A `handleSchedules` első dolga
+ * egy `db.findGlobal({ slug: 'payload-jobs-stats' })` — hiányzó tábla esetén ez
+ * DOB, a tick megszakad, tehát a MÁR MA MŰKÖDŐ esemény-vezérelt jobok
+ * (invoice-issue / storno-issue / corrective-invoice-issue) SEM futnának le.
+ * A migráció nélküli deploy tehát nem „csak" az új ütemezést nem hozná, hanem
+ * a meglévő számlázási láncot is leállítaná.
+ *
+ * MIÉRT EZT AZ UTAT VÁLASZTOTTUK (a migráció nélküli `onInit` + saját
+ * `payload.jobs.queue` helyett). Az onInit-es saját ütemező valóban nem igényel
+ * sémaváltozást, de a Payload-oldali garanciákat mind újra kellene építeni,
+ * rosszabbul: (1) a `lastScheduledRun` nem perzisztálódna, tehát egy az
+ * intervallumnál gyakrabban újrainduló folyamat (crash-loop, sűrű deploy)
+ * SOHA nem érne el ütemezésig; (2) a duplikátum-védelemhez ugyanúgy DB-számolás
+ * kell, ugyanazzal a versenyhelyzettel; (3) a saját időzítőt külön ki kellene
+ * zárni a `next build` és a `payload migrate` folyamatokból (a Payload ezt az
+ * `isNextBuild()` őrrel maga megteszi); (4) két párhuzamos ütemező-mechanizmus
+ * maradna a kódban, és egy későbbi `schedule` felvétele némán duplán ütemezne.
+ * Ezzel szemben a migráció ADDITÍV és mindkét irányban biztonságos: a régi kód
+ * figyelmen kívül hagyja az új táblát/oszlopot, tehát a rollback is ártalmatlan.
  *
  * A workerek az ENABLE_JOB_WORKERS env ("true") mögött indulnak: dev-ben
  * alapértelmezés szerint KI vannak kapcsolva (nincs autoRun cron), staging/prod

@@ -3,6 +3,7 @@ import type { Endpoint, GroupField } from 'payload'
 
 import type { User } from '../../payload-types'
 import { logger } from '../logger'
+import type { CheckoutBillingInput } from '../checkout/billing'
 import { startCheckout } from '../checkout/start-checkout'
 
 /**
@@ -74,6 +75,24 @@ function relationshipId(value: unknown): number | string | null {
   return null
 }
 
+/**
+ * A plugin cart-alakja NEM hordoz számlázási adatot, a checkout-szolgáltatás
+ * viszont KÖTELEZŐEN kéri (nincs benne rejtett profil-visszaesés). Ezért a
+ * hiányzó adatot itt, a hívó oldalán, KIMONDVA a felhasználó tárolt profiljából
+ * állítjuk elő — a validáció ezen az úton is lefut, tehát hiányos profillal
+ * ezen az ágon sem jöhet létre számlázhatatlan rendelés.
+ */
+function billingFromProfile(user: User): CheckoutBillingInput {
+  return {
+    // A `buyerFromOrder` is a billingName → name sorrendet követi (invoice.ts).
+    name: user.billingName ?? user.name ?? '',
+    zip: user.billingZip ?? '',
+    city: user.billingCity ?? '',
+    street: user.billingStreet ?? '',
+    ...(user.taxNumber ? { taxNumber: user.taxNumber } : {}),
+  }
+}
+
 export const barionPaymentAdapter: PaymentAdapter = {
   name: 'barion',
   label: 'Barion bankkártyás fizetés',
@@ -91,18 +110,16 @@ export const barionPaymentAdapter: PaymentAdapter = {
       throw new Error('A kosár üres — nincs megvásárolható tétel a fizetés indításához.')
     }
 
-    // A plugin cart-alakja nem hordoz számlázási adatot, ezért a `billing`
-    // szándékosan kimarad: a checkout-szolgáltatás ilyenkor a felhasználó
-    // TÁROLT profiljából dolgozik — ugyanazzal a kötelező validációval, tehát
-    // hiányos vevőadattal ezen az úton sem jöhet létre rendelés.
+    const user = req.user as unknown as User
     const result = await startCheckout({
       payload: req.payload,
-      user: req.user as unknown as User,
+      user,
       input: {
         productId: typeof productId === 'string' ? Number(productId) : productId,
         quantity: firstItem?.quantity ?? 1,
         consentWithdrawalWaiver:
           (data as Record<string, unknown>).consentWithdrawalWaiver === true,
+        billing: billingFromProfile(user),
       },
     })
 
