@@ -14,12 +14,22 @@
 
 ## 0. HA CSAK EGY DOLGOT OLVASOL EL
 
-🔴 **`orders.refunds` oszlop hiányzik az éles adatbázisból** (8. szakasz).
-Bizonyítottan: tiszta DB + a commitolt migrációk után `NODE_ENV=production`
-mellett **minden orders-olvasás és -írás elszáll**. Élesben ez azt jelenti,
-hogy az admin Rendelések listája és **az első valódi vásárlás is hibára fut**.
-Azért nem robbant még be, mert a pénzútvonal élesben még nem futott.
-Javítás: Payload-generált migráció, kb. 15 perc — a recept a 8.4-ben.
+🔴 **Az éles adatbázis nem azt tartalmazta, amit a kód feltételez** (8. szakasz).
+Nem egy mező hiányzott, hanem a fizetési főlánc fele: az `orders.refunds`
+oszlop, az `orders.status` enumból a `created`/`payment_pending`/`paid`/
+`payment_failed` értékek, a `payload_jobs` task-slug enumokból az
+`invoice-issue` és `order-poll`, valamint a `webhook_events.processed_at` és
+`.result`. Ok: **fejlesztői módban a Payload push-a némán pótolja őket,
+élesben nem** — a migrációk soha nem hozták létre.
+
+Következmény: élesben rendelés **létre sem jöhetett**, fizetés nem volt
+rögzíthető, a számlázó job nem volt ütemezhető. Két teljes fejlesztési kör
+landolt úgy, hogy élesben egyáltalán nem működhetett.
+
+Állapot: a `refunds` migráció **kész és élesíthető** (additív, nem tud
+elbukni). A többi migráció **kész, de visszatartva** — az enum-csere
+átkonvertálja a meglévő sorokat, és egy régi státuszú rendelés miatt az app
+el sem indulna. A kiadás feltétele a 8.6-ban.
 
 ## 1. Pillanatkép — hol tartunk
 
@@ -413,88 +423,160 @@ A **PR #56 mergelve**, a kör **élesben fut**. Bizonyítékok (a CLAUDE.md
 > agent a repó ismerete nélkül nekiálljon: pontos fájlnevek, mezőnevek,
 > oszlopnevek, bekötési pontok, buktatók és elfogadási kritériumok.
 
-## 8. 🔴 KRITIKUS ÉLES HIBA: `orders.refunds` oszlop hiányzik az adatbázisból
+## 8. 🔴 SÉMA-DRIFT: az adatbázis nem azt tartalmazta, amit a kód feltételez
 
-### 8.1 Mi a baj
+> **Állapot 2026-08-10 ~10:00 UTC:** az `orders.refunds` rész **javítva és
+> élesítésre kész** (migráció a repóban). A többi drift migrációja **kész, de
+> szándékosan visszatartva** — lásd 8.6, éles adat-ellenőrzés kell hozzá.
 
-A Payload-konfigban (`src/plugins/ecommerce.ts`, az orders-override `refunds`
-json-mezője) létezik egy `refunds` mező, **de egyetlen migráció sem hozza létre
-a `refunds` oszlopot** az `orders` táblában. A séma-snapshotokban szerepel
-(`src/migrations/20260730_080404_sync_schema_code.json`-tól kezdve mindegyikben),
-a hozzá tartozó `.ts` migráció viszont csak az `order_number` és a
-`total_huf_snapshot` oszlopot adja hozzá — a `refunds`-t nem.
+### 8.1 Mi a baj — a hiba osztálya
 
-Ez azért maradt észrevétlen, mert **fejlesztői módban a Payload `push`-a némán
-létrehozza** a hiányzó oszlopot (és beír egy `dev` sort a `payload_migrations`
-táblába). Éles módban (`NODE_ENV=production`) a push ki van kapcsolva → az
-oszlop soha nem jön létre.
+Több mező és enum-érték szerepel a Payload-konfigban **és a séma-snapshotokban**
+(`src/migrations/*.json`), **de egyetlen migrációs `.ts` sem hozza létre őket**.
 
-### 8.2 Bizonyíték (reprodukálható, 2026-08-10-én lefuttatva)
+Azért maradt észrevétlen, mert **fejlesztői módban a Payload `push`-a némán
+pótolja** a hiányzókat (és beír egy `dev` sort a `payload_migrations` táblába).
+Éles módban (`NODE_ENV=production`) a push ki van kapcsolva → a séma soha nem
+áll össze. Minden fejlesztői próba működik, az éles rendszer néma halott.
 
-Tiszta adatbázis + **csak a commitolt migrációk** (`npx payload migrate`), majd
-`NODE_ENV=production` mellett Payload-lekérdezés:
+**A drift teljes listája** (tiszta, csak-migrációs adatbázis vs. a konfig
+szerinti igazi séma összevetéséből):
 
-```
-FIND FAILED: Failed query: select "orders"."id", … "orders"."refunds", … from "orders"
-REFUND WRITE FAILED: Failed query: select … "orders"."refunds" … where "orders"."order_number" ilike $1
-```
+| Hiányzik élesben | Következmény |
+| --- | --- |
+| `orders.refunds` (jsonb) | **minden** orders-olvasás és -írás elszáll |
+| `enum_orders_status`: `created`, `payment_pending`, `paid`, `payment_failed` | rendelés **létre sem jön**, fizetés nem rögzíthető |
+| `enum_payload_jobs_task_slug` + `..._log_task_slug`: `invoice-issue`, `order-poll` | a **számlázó** és a **fizetés-lekérdező** job nem ütemezhető |
+| `webhook_events.processed_at`, `webhook_events.result` + `enum_webhook_events_result` (5 érték) | a Barion-callback nem tudja lekönyvelni a kimenetelét |
 
-A `psql` visszaigazolja, hogy a migrációk után csak `refund_reason` és
-`refunded_at` létezik, `refunds` nem:
+Vagyis: a fizetési főlánc élesben **működésképtelen volt**. Ez magyarázza,
+hogy „még nem futott éles vásárlás" — nem is tudott volna.
+
+### 8.2 Hogyan derül ki (reprodukálható recept)
+
+Ez a legfontosabb rész: **ezzel a módszerrel bármikor újra ellenőrizhető.**
+
+1. Tiszta adatbázis A: `createdb` → `npx payload migrate` → ez a **valós éles
+   séma** (csak a commitolt migrációk).
+2. Tiszta adatbázis B: `createdb` → `npx payload migrate` → majd **fejlesztői
+   módban** egy `getPayload({ config })` hívás → a push szinkronba hozza a
+   konfiggal → ez a **konfig szerinti igazi séma**.
+3. Vesd össze a kettőt:
 
 ```sql
-select column_name from information_schema.columns
-where table_name='orders' and column_name like '%refund%';
--- refunded_at, refund_reason        (refunds NINCS)
+-- oszlopok
+select table_name||'.'||column_name||' :: '||data_type
+from information_schema.columns where table_schema='public' order by 1;
+-- enum-értékek
+select t.typname||' = '||e.enumlabel from pg_enum e
+join pg_type t on t.oid=e.enumtypid order by t.typname, e.enumsortorder;
 ```
 
-### 8.3 Következmény élesben
+`comm -13 <A> <B>` = ami élesben HIÁNYZIK. Üres kimenet = nincs drift.
 
-A drizzle a **kód-oldali sémából** építi a SELECT-et, ezért a hiányzó oszlop
-nem csak az írást, hanem **minden orders-olvasást** eldönt:
+4. Végső próba éles módban, A adatbázison:
+   `NODE_ENV=production` + `payload.find`/`create`/`update` + `payload.jobs.queue`.
+   Ellenőrizd, hogy a `payload_migrations`-ben **nincs `dev` sor** — különben a
+   push pótolt, és hamis zöldet mérsz.
 
-- Az admin **Rendelések lista és rendelés-részletező 500-zal elszáll.**
-- **Új rendelés nem hozható létre**: a rendelésszám-generáló hook `find`-ol az
-  `order_number`-re → ugyanez a hibás SELECT → a checkout elhasal.
-- A **visszatérítés (RefundPanel)** sem működik.
+### 8.3 Hogyan generálj migrációt, ha a snapshot HAZUDIK
 
-Azért nem robbant még be, mert a pénzútvonal élesben **még nem futott** (a
-`BARION_POSKEY_TEST` ál-kulcs, éles vásárlás nem történt). Az első valódi
-vásárlás viszont ebbe fut bele.
+Ez a kör legfontosabb fogása. A `payload migrate:create` a **legutolsó
+séma-snapshotot** diffeli a konfig ellen (`buildCreateMigration.js`:
+`generateMigration(drizzleJsonBefore, drizzleJsonAfter)`), **nem az
+adatbázist**. Ha a snapshot már tartalmazza a hiányzó oszlopot, a válasz:
+`No schema changes detected` — és felajánl egy üres migrációt, amit kézzel
+kellene kitölteni. **Az tilos** (CLAUDE.md 3. zóna).
 
-### 8.4 A javítás (kb. 15 perc)
+**A megoldás — kétlépéses generálás, végig a Payload eszközével:**
 
-**TILOS kézzel migrációt írni** (CLAUDE.md 3. zóna) — a Payload eszközével kell
-generálni. Recept (a helyi Postgres a 5. szakaszban leírt módon indítandó, a
-`pgdata`-t a `pgrun` felhasználó által **elérhető** könyvtárba tedd, pl.
-`/home/pgrun/pgcheck` — a scratchpad alá tett `pgdata` „Permission denied"-del bukik):
+1. **Ideiglenesen állítsd a konfigot a VALÓS éles állapotra** (vedd ki a
+   mezőt, állítsd vissza az enum-értékeket, vedd ki a job-taskokat). Készíts
+   előbb másolatot az érintett fájlokról!
+2. `npx payload migrate:create temp_valos_eles_allapot` → ez **eldobható**, de
+   a mellette született `.json` snapshot mostantól a valóságot tükrözi. (A
+   `down()`-ja pont a keresett SQL — de NE másold ki kézzel.)
+3. **Állítsd vissza a konfigot** a másolatokból.
+4. `npx payload migrate:create <rendes_nev>` → a Payload most a valós
+   állapotból diffel, és **maga generálja** a helyes `ALTER TABLE` /
+   `ALTER TYPE` utasításokat.
+5. **Töröld az eldobható migrációt** (`.ts` + `.json`), és vedd ki a
+   bejegyzését a `src/migrations/index.ts`-ből. Ez a saját, még soha nem
+   futtatott melléktermék eltávolítása — NEM meglévő migráció szerkesztése.
 
-```bash
-export DATABASE_URI=postgresql://kineticare@127.0.0.1:5432/kineticare
-npx payload migrate          # a meglévők lefuttatása TISZTA adatbázison
-npx payload migrate:create szamlazz_refunds_oszlop
+Így az SQL-t végig a Payload írja; kézzel egyetlen utasítást sem fogalmazol.
+
+### 8.4 Ami már KÉSZ és élesíthető: `orders.refunds`
+
+Migráció: `src/migrations/20260810_094820_szamlazz_refunds_oszlop.ts` —
+egyetlen utasítás, `ALTER TABLE "orders" ADD COLUMN "refunds" jsonb;`.
+**Additív, meglévő adatot nem ír át, nem tud elbukni.**
+
+Igazolva: tiszta DB → `npx payload migrate` → az oszlop létrejön;
+`NODE_ENV=production` mellett a `payload.find({ collection: 'orders' })`
+hiba nélkül lefut, és a visszatérítés-nyom írása is sikeres;
+`payload_migrations`-ben nincs `dev` sor.
+
+### 8.5 Ami KÉSZ, de VISSZATARTVA: állapotgép-enum + jobok + webhook_events
+
+A migráció legenerálva és tiszta adatbázison igazolva (a teljes életciklus
+lefut éles módban: rendelés → `payment_pending` → `paid` → visszatérítés-nyom
+→ webhook-kimenetel → `order-poll` és `invoice-issue` job ütemezés).
+
+**De NEM mehet ki vakon.** A generált SQL az `orders.status` enumot
+újraépíti, és a meglévő sorokat átkonvertálja:
+
+```sql
+ALTER TABLE "orders" ALTER COLUMN "status" SET DATA TYPE text;
+DROP TYPE "public"."enum_orders_status";
+CREATE TYPE "public"."enum_orders_status" AS ENUM('created','payment_pending','paid','payment_failed','cancelled','refunded');
+ALTER TABLE "orders" ALTER COLUMN "status" SET DATA TYPE "public"."enum_orders_status" USING "status"::"public"."enum_orders_status";
 ```
 
-A generált migráció várhatóan egyetlen sor: `ALTER TABLE "orders" ADD COLUMN
-"refunds" jsonb;`. **Fontos:** a `migrate:create` csak akkor generálja helyesen,
-ha az adatbázisban **nem futott dev-push** (nincs `dev` sor a
-`payload_migrations`-ben) — különben a Payload már szinkronban látja a sémát és
-„nincs változás"-t ír. Ezért kell tiszta DB.
+Ha **bármelyik meglévő sor** `processing` vagy `completed` státuszú, a `USING`
+konverzió elszáll. Kipróbálva, ez a pontos hibaüzenet:
 
-**Ellenőrzés a merge előtt** (ez a lényeg, ne hagyd ki): tiszta adatbázis →
-`npx payload migrate` → `NODE_ENV=production` mellett egy `payload.find({
-collection: 'orders' })` fusson le hiba nélkül.
+```
+invalid input value for enum enum_orders_status: "processing"
+```
 
-**Élesítés után** a Railway a `startCommand`-ban (`npx payload migrate && npm
-start`) automatikusan lefuttatja. A deploy-log ellenőrzendő: szerepelnie kell a
-`Migrated: …szamlazz_refunds_oszlop` sornak (CLAUDE.md üzemeltetési 1. és 5.).
+A Railway `startCommand`-ja `npx payload migrate && npm start`, tehát egy
+bukó migráció azt jelenti, hogy **az alkalmazás el sem indul** — éles leállás.
 
-### 8.5 Tanulság, amit érdemes kikényszeríteni
+### 8.6 A visszatartott migráció kiadásának FELTÉTELE
 
-A hiba osztálya általános: **a séma-snapshot és a generált SQL szétcsúszhat**.
-Érdemes egy CI-lépés vagy teszt, ami tiszta DB-n lefuttatja a migrációkat, majd
-`NODE_ENV=production` mellett minden collectionre egy `find`-ot végez. Ez
-minden jövőbeli drift-et azonnal elkap. (Ez maga is kiadható feladat.)
+Előbb el kell dönteni, van-e régi státuszú rendelés élesben:
+
+```sql
+SELECT status, count(*) FROM orders GROUP BY status;
+```
+
+- **Ha üres, vagy csak `cancelled`/`refunded` van** → a migráció kiadható
+  változtatás nélkül.
+- **Ha van `processing` vagy `completed`** → két járható út:
+  1. a szerkesztő az adminban átállítja ezeket a rendeléseket egy megmaradó
+     státuszra (a `refunds`-javítás élesítése UTÁN a Rendelések lista újra
+     működik, tehát ez elvégezhető) — majd jöhet a migráció;
+  2. vagy a konfig **átmenetileg megtartja** a `processing`/`completed`
+     értékeket az enumban: akkor a Payload csak `ALTER TYPE ... ADD VALUE`
+     utasításokat generál, ami additív és **nem tud elbukni**. Ez a
+     kockázatmentes út, cserébe két holt státusz marad az admin legördülőben.
+
+**Az éles adathoz az agent nem fér hozzá:** a Railway MCP `railway-agent`
+helyesen NEM adja ki a Postgres jelszavát (`<hidden_from_agent>`), és a
+`.env*` olvasása tilos. Ezt a lekérdezést tehát **embernek kell lefuttatnia**
+(Railway dashboard → Postgres → Connect), vagy az adminból megnézni a
+Rendelések listát.
+
+### 8.7 Tanulság, amit érdemes kikényszeríteni
+
+A hiba osztálya általános és néma. Érdemes CI-lépés vagy teszt, ami tiszta
+adatbázison lefuttatja a migrációkat, majd `NODE_ENV=production` mellett
+minden collectionre végez egy `find`-ot, és elvégzi a 8.2-es A/B
+séma-összevetést. Ez minden jövőbeli driftet azonnal elkap. **Ez maga is
+kiadható feladat**, és a mostani tapasztalat alapján magas prioritású:
+két teljes fejlesztési kör (fizetés-állapotgép, job-alapú számlázás) landolt
+úgy, hogy élesben egyáltalán nem működhetett.
 
 ## 9. T-013 — Statisztika/kimutatás admin-nézet (MEGRENDELŐI IGÉNY, NINCS MEG)
 
