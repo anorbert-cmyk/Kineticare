@@ -2,11 +2,24 @@
 
 > **Kinek szól:** a következő agent-session (vagy emberi fejlesztő), aki a
 > Számlázz.hu-integráció élesítését folytatja. **Készült:** 2026-08-09 ~23:30 UTC
-> · **Frissítve: 2026-08-10 ~08:05 UTC (élesítés után).** **Önálló dokumentum** —
-> a session mulandó állapotára (scratchpad, futó folyamatok) nem támaszkodik;
-> ami kell, az a repóban van.
+> · **Frissítve: 2026-08-10 ~09:30 UTC** (élesítés után + igény-ellenőrzés:
+> 8–11. szakasz). **Önálló dokumentum** — a session mulandó állapotára
+> (scratchpad, futó folyamatok) nem támaszkodik; ami kell, az a repóban van.
+>
+> **A doksi két részből áll.** Az 1–7. szakasz a **lezárt** Számlázz.hu-kör
+> naplója. A 8–11. szakasz **kiadható feladat** a következő agentnek —
+> ott kezdd, ha új munkát veszel fel.
 
 ---
+
+## 0. HA CSAK EGY DOLGOT OLVASOL EL
+
+🔴 **`orders.refunds` oszlop hiányzik az éles adatbázisból** (8. szakasz).
+Bizonyítottan: tiszta DB + a commitolt migrációk után `NODE_ENV=production`
+mellett **minden orders-olvasás és -írás elszáll**. Élesben ez azt jelenti,
+hogy az admin Rendelések listája és **az első valódi vásárlás is hibára fut**.
+Azért nem robbant még be, mert a pénzútvonal élesben még nem futott.
+Javítás: Payload-generált migráció, kb. 15 perc — a recept a 8.4-ben.
 
 ## 1. Pillanatkép — hol tartunk
 
@@ -386,3 +399,440 @@ A **PR #56 mergelve**, a kör **élesben fut**. Bizonyítékok (a CLAUDE.md
    (Turbopack-figyelmeztetés, nem blokkoló).
 7. **Lockfile-regenerálás** (a `--legacy-peer-deps` kivezetéséhez) — külön,
    emberi döntésű PR.
+8. **🔴 `orders.refunds` séma-drift** — lásd a 8. szakaszt. ÉLES HIBA, elsőbbséget élvez.
+9. **T-013 statisztika-nézet** — lásd a 9. szakaszt (megrendelői igény, nincs megírva).
+10. **Admin videó-feltöltés (tus)** — lásd a 10. szakaszt (tudatos eltérés a specifikációtól).
+
+---
+
+# MÁSODIK RÉSZ — FELADATLEÍRÁSOK A KÖVETKEZŐ AGENTNEK
+
+> Ez a rész **2026-08-10-én került a doksiba**, a „minden be van kötve?"
+> ellenőrző kör eredményeként. A 8–10. szakasz **nincs megvalósítva** — ezek
+> kiadható feladatok. Mindegyik önmagában elég részletes ahhoz, hogy egy másik
+> agent a repó ismerete nélkül nekiálljon: pontos fájlnevek, mezőnevek,
+> oszlopnevek, bekötési pontok, buktatók és elfogadási kritériumok.
+
+## 8. 🔴 KRITIKUS ÉLES HIBA: `orders.refunds` oszlop hiányzik az adatbázisból
+
+### 8.1 Mi a baj
+
+A Payload-konfigban (`src/plugins/ecommerce.ts`, az orders-override `refunds`
+json-mezője) létezik egy `refunds` mező, **de egyetlen migráció sem hozza létre
+a `refunds` oszlopot** az `orders` táblában. A séma-snapshotokban szerepel
+(`src/migrations/20260730_080404_sync_schema_code.json`-tól kezdve mindegyikben),
+a hozzá tartozó `.ts` migráció viszont csak az `order_number` és a
+`total_huf_snapshot` oszlopot adja hozzá — a `refunds`-t nem.
+
+Ez azért maradt észrevétlen, mert **fejlesztői módban a Payload `push`-a némán
+létrehozza** a hiányzó oszlopot (és beír egy `dev` sort a `payload_migrations`
+táblába). Éles módban (`NODE_ENV=production`) a push ki van kapcsolva → az
+oszlop soha nem jön létre.
+
+### 8.2 Bizonyíték (reprodukálható, 2026-08-10-én lefuttatva)
+
+Tiszta adatbázis + **csak a commitolt migrációk** (`npx payload migrate`), majd
+`NODE_ENV=production` mellett Payload-lekérdezés:
+
+```
+FIND FAILED: Failed query: select "orders"."id", … "orders"."refunds", … from "orders"
+REFUND WRITE FAILED: Failed query: select … "orders"."refunds" … where "orders"."order_number" ilike $1
+```
+
+A `psql` visszaigazolja, hogy a migrációk után csak `refund_reason` és
+`refunded_at` létezik, `refunds` nem:
+
+```sql
+select column_name from information_schema.columns
+where table_name='orders' and column_name like '%refund%';
+-- refunded_at, refund_reason        (refunds NINCS)
+```
+
+### 8.3 Következmény élesben
+
+A drizzle a **kód-oldali sémából** építi a SELECT-et, ezért a hiányzó oszlop
+nem csak az írást, hanem **minden orders-olvasást** eldönt:
+
+- Az admin **Rendelések lista és rendelés-részletező 500-zal elszáll.**
+- **Új rendelés nem hozható létre**: a rendelésszám-generáló hook `find`-ol az
+  `order_number`-re → ugyanez a hibás SELECT → a checkout elhasal.
+- A **visszatérítés (RefundPanel)** sem működik.
+
+Azért nem robbant még be, mert a pénzútvonal élesben **még nem futott** (a
+`BARION_POSKEY_TEST` ál-kulcs, éles vásárlás nem történt). Az első valódi
+vásárlás viszont ebbe fut bele.
+
+### 8.4 A javítás (kb. 15 perc)
+
+**TILOS kézzel migrációt írni** (CLAUDE.md 3. zóna) — a Payload eszközével kell
+generálni. Recept (a helyi Postgres a 5. szakaszban leírt módon indítandó, a
+`pgdata`-t a `pgrun` felhasználó által **elérhető** könyvtárba tedd, pl.
+`/home/pgrun/pgcheck` — a scratchpad alá tett `pgdata` „Permission denied"-del bukik):
+
+```bash
+export DATABASE_URI=postgresql://kineticare@127.0.0.1:5432/kineticare
+npx payload migrate          # a meglévők lefuttatása TISZTA adatbázison
+npx payload migrate:create szamlazz_refunds_oszlop
+```
+
+A generált migráció várhatóan egyetlen sor: `ALTER TABLE "orders" ADD COLUMN
+"refunds" jsonb;`. **Fontos:** a `migrate:create` csak akkor generálja helyesen,
+ha az adatbázisban **nem futott dev-push** (nincs `dev` sor a
+`payload_migrations`-ben) — különben a Payload már szinkronban látja a sémát és
+„nincs változás"-t ír. Ezért kell tiszta DB.
+
+**Ellenőrzés a merge előtt** (ez a lényeg, ne hagyd ki): tiszta adatbázis →
+`npx payload migrate` → `NODE_ENV=production` mellett egy `payload.find({
+collection: 'orders' })` fusson le hiba nélkül.
+
+**Élesítés után** a Railway a `startCommand`-ban (`npx payload migrate && npm
+start`) automatikusan lefuttatja. A deploy-log ellenőrzendő: szerepelnie kell a
+`Migrated: …szamlazz_refunds_oszlop` sornak (CLAUDE.md üzemeltetési 1. és 5.).
+
+### 8.5 Tanulság, amit érdemes kikényszeríteni
+
+A hiba osztálya általános: **a séma-snapshot és a generált SQL szétcsúszhat**.
+Érdemes egy CI-lépés vagy teszt, ami tiszta DB-n lefuttatja a migrációkat, majd
+`NODE_ENV=production` mellett minden collectionre egy `find`-ot végez. Ez
+minden jövőbeli drift-et azonnal elkap. (Ez maga is kiadható feladat.)
+
+## 9. T-013 — Statisztika/kimutatás admin-nézet (MEGRENDELŐI IGÉNY, NINCS MEG)
+
+### 9.1 Miért ez a feladat
+
+A `docs/megrendeloi-igeny-specifikacio.txt` „Admin-igények" szakasza szó
+szerint kéri:
+
+> „Statisztika/grafikon/kimutatás: havi bevétel, bontásban szakmai
+> (professzionális) vs. otthoni-rehabilitációs értékesítés szerint."
+
+**Ez nincs megvalósítva**: nincs admin-nézet, nincs aggregáció, nincs
+diagram-könyvtár a `package.json`-ben.
+
+⚠️ **Figyelem, félrevezető nyom:** a `docs/igeny-valtozas-pontok.md` 10. sora
+azt állítja, hogy „T-013 statisztika/grafikon ✅ orders-aggregáció +
+kategória-bontás". **Ez téves.** A kódban a T-013 a **menük láthatósági
+access-szabálya** (`src/access/menus-visibility.ts`, `src/access/policies.ts:20`) —
+a jegyszámozás elcsúszott, a pipa nem erre a funkcióra vonatkozik. A feladat
+része, hogy **ezt a sort is javítsd** a mapping-doksiban.
+
+### 9.2 Elfogadási kritériumok
+
+1. Az adminban elérhető egy **Statisztika** nézet a bal oldali navigációból.
+2. **Havi bontású bevétel** táblázatban ÉS oszlopdiagramon, alapértelmezésben az
+   utolsó 12 hónap.
+3. Minden hónapra három szám: **otthoni (laikus)**, **szakmai (szakember)**,
+   **összesen** — forintban, magyar ezres tagolással (`toLocaleString('hu-HU')`).
+4. Csak a **`paid`** státuszú rendelések számítanak bevételnek; a `refunded`
+   külön oszlopban jelenik meg (vagy kimarad — lásd 9.6), nem keveredik bele.
+5. A nézet **csak `staff`/`owner` szerepkörnek** érhető el; `customer` nem.
+6. **Nincs új npm-függőség**, nincs adatbázis-migráció (a 9.5-ös „B" opció
+   kivételével, ami külön döntés).
+7. Zöld kapu: `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`.
+
+### 9.3 Az adatforrás — pontosan mi van a DB-ben
+
+**`orders` tábla** (mezőnév → oszlopnév):
+
+| Payload-mező | Oszlop | Megjegyzés |
+| --- | --- | --- |
+| `status` | `status` | enum: `created`, `payment_pending`, `paid`, `payment_failed`, `cancelled`, `refunded` |
+| `totalHufSnapshot` | `total_huf_snapshot` | **Ezt használd** a rendelés-szintű végösszeghez (Ft). Nincs rajta olvasási access-korlát. |
+| `amount` | `amount` | plugin-mező, ugyanezt tükrözi — tartalék |
+| `orderNumber` | `order_number` | `KH-<év>-<6 jegy>` |
+| `invoiceCompletionDate` | `invoice_completion_date` | `YYYY-MM-DD` string, a számla teljesítési dátuma |
+| `createdAt` | `created_at` | timestamptz |
+| `refunds` | *(hiányzik, lásd 8. szakasz!)* | **owner-only olvasás** — ne olvasd be ebbe a nézetbe |
+
+**`orders_items` tábla** (a rendelés tételei — ez kell az ág-bontáshoz):
+
+| Payload-mező | Oszlop |
+| --- | --- |
+| `items[].product` | `product_id` → `products.id` |
+| `items[].quantity` | `quantity` |
+| `items[].titleSnapshot` | `title_snapshot` (a **sku**, nem a marketingcím) |
+| `items[].priceHufSnapshot` | `price_huf_snapshot` (**egységár**, Ft) |
+
+**`products` tábla:** `audience` oszlop — select, `'laikus' | 'szakember'`,
+**nullable** (a mező bevezetése előtti sorokban NULL).
+
+🔑 **Kulcsszabály:** az ág-bontást **tétel-szinten** kell számolni, nem
+rendelés-szinten — egy rendelés tartalmazhat otthoni ÉS szakmai kurzust is.
+A tétel bevétele = `price_huf_snapshot × quantity`.
+
+🔑 **Az `audience` normalizálása kötelezően a meglévő helperrel történik:**
+`normalizeAudience()` a `src/lib/course-audience.ts`-ből — minden nem-`'szakember'`
+érték (NULL, ismeretlen string) a **laikus** ágba esik. A megjelenő nevek
+ugyanonnan: `AUDIENCE_LABELS`.
+
+### 9.4 Fájlterv
+
+| Fájl | Mi kerül bele |
+| --- | --- |
+| `src/lib/statistics/revenue.ts` | **Tiszta** aggregáló függvények — se DB, se React. Ez a tesztelhető mag. |
+| `src/lib/statistics/query.ts` | A Payload-lekérdezés + leképezés az aggregátor bemenetére. |
+| `src/components/admin/StatisticsView.tsx` | Az admin-nézet (React **szerver**-komponens). |
+| `src/components/admin/RevenueChart.tsx` | Tiszta SVG oszlopdiagram (nincs függőség). |
+| `src/components/admin/StatisticsNavLink.tsx` | `'use client'` link a bal oldali navba. |
+| `src/__tests__/statistics-revenue.test.ts` | Az aggregátor egységtesztjei. |
+
+Minta a szerkezetre és a stílusra: `src/components/admin/RefundPanel.tsx` és
+`GrantPurchasePanel.tsx` (meglévő, működő admin-komponensek), illetve a
+`src/lib/refund/route-handler.ts` a függőség-injekciós, tesztelhető mintára.
+
+### 9.5 A LEGFONTOSABB DÖNTÉS: melyik dátum szerint csoportosítunk?
+
+**Nincs `paidAt` mező.** A `paid` átmenet
+(`src/lib/order-status/apply-barion-state.ts`, a `data: { status: 'paid' }` írás)
+**nem ír időbélyeget**. Három út:
+
+- **(A) `createdAt` szerint — ajánlott v1-re.** Nulla migráció, azonnal
+  működik. Kockázat: a hónapfordulón leadott, de a következő hónapban fizetett
+  rendelés az előző hónapba esik. Kártyás fizetésnél ez ritka és kicsi.
+  A nézet feliratában **írd ki**: „a rendelés leadásának hónapja szerint".
+- **(B) `invoiceCompletionDate` elsőbbséggel, `createdAt` tartalékkal** — szintén
+  migráció nélküli, és számviteli szempontból pontosabb, mert a számla
+  teljesítési dátuma. Hátrány: amíg a számlázás nincs élesítve
+  (`SZAMLAZZ_AGENT_KEY` nincs beállítva), ez a mező üres → mindenhol a tartalék
+  fut. **Jó középút.**
+- **(C) Új `paidAt` date-mező.** Pontos, de: mező felvétele az orders-overridebe
+  + **Payload-generált** migráció + írás a `paid` átmenetnél + a régi sorokra
+  backfill nincs (marad NULL → `createdAt`-re esik vissza). Csak akkor válaszd,
+  ha a megrendelő kifejezetten a fizetés dátumát kéri.
+
+**Javaslat:** (B) — és a fallback-logikát tedd az aggregátorba, hogy tesztelhető
+legyen.
+
+⚠️ **Időzóna:** a hónap-kulcsot **Budapest szerint** kell képezni, NEM
+`toISOString().slice(0, 7)`-tel (az UTC → a hónapforduló körüli rendelések rossz
+hónapba kerülnek; ez pontosan az F9 finding tanulsága). Használd az
+`Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Budapest', … })` mintát —
+kész implementáció: `budapestDateString()` a `src/lib/szamlazz/xml.ts`-ben.
+Ha közösen használnád, emeld ki egy `src/lib/date/budapest.ts` modulba, és a
+szamlazz-oldali importot vezesd át rá (a szamlazz-tesztek fogják őrizni).
+
+### 9.6 Az aggregátor (`src/lib/statistics/revenue.ts`)
+
+Tiszta függvény, DB nélkül — ez teszi egységtesztelhetővé:
+
+```ts
+export interface RevenueOrderItemInput {
+  audience: unknown        // products.audience — normalizeAudience() szűri
+  priceHuf: number         // priceHufSnapshot (EGYSÉGÁR)
+  quantity: number
+}
+
+export interface RevenueOrderInput {
+  status: string
+  createdAt: string                  // ISO
+  invoiceCompletionDate?: string | null   // 'YYYY-MM-DD'
+  totalHuf: number | null
+  items: RevenueOrderItemInput[]
+}
+
+export interface MonthlyRevenueRow {
+  month: string            // 'YYYY-MM', Budapest szerint
+  laikusHuf: number
+  szakemberHuf: number
+  totalHuf: number
+  orderCount: number
+}
+
+export function aggregateMonthlyRevenue(
+  orders: RevenueOrderInput[],
+  options?: { months?: number; now?: Date },
+): MonthlyRevenueRow[]
+```
+
+Viselkedési szabályok, amiket a teszt is ellenőrizzen:
+
+1. Csak `status === 'paid'` számít bele.
+2. A hónap-kulcs `invoiceCompletionDate` → ha nincs, `createdAt`; **Budapest**
+   időzóna szerint.
+3. A tétel bevétele `priceHuf × quantity`, az ág `normalizeAudience(audience)`.
+4. `laikusHuf + szakemberHuf` legyen egyenlő a hónap `totalHuf`-jával.
+   Ha egy rendelésnek **nincs tétele** (régi/hibás sor), a `totalHuf`-ját tedd
+   a laikus ágba, és ezt kommenteld — különben az összegek nem stimmelnek.
+5. A hiányzó hónapok **nullás sorként** jelenjenek meg (ne ugorja át őket a
+   diagram), az utolsó `months` (alapérték 12) hónapra, növekvő sorrendben.
+6. Üres bemenet → az utolsó 12 hónap, csupa nulla.
+
+### 9.7 A lekérdezés (`src/lib/statistics/query.ts`)
+
+Payload local API, a nézet szerver-komponenséből:
+
+```ts
+const result = await payload.find({
+  collection: 'orders',
+  where: { status: { equals: 'paid' } },
+  depth: 1,            // hozza a products-ot az items[].product alá (audience kell)
+  limit: 0,            // minden találat — lásd a méret-figyelmeztetést lent
+  overrideAccess: true, // CSAK a 9.8 szerinti explicit szerepkör-kapu UTÁN!
+})
+```
+
+- `depth: 1` kell, hogy az `items[].product` objektumként jöjjön az `audience`
+  mezővel; `depth: 0`-nál csak az id-t kapod.
+- **Ne olvasd be a `refunds` mezőt** semmilyen formában (owner-only, és
+  jelenleg nem is létezik az oszlop — 8. szakasz).
+- **Méret:** amíg pár ezer rendelés van, a `limit: 0` rendben. Ha ez nő, vagy a
+  nézet lassul, váltás nyers SQL-aggregátumra a drizzle-n keresztül
+  (`payload.db.drizzle.execute(sql\`…\`)`) — ez **nem migráció**, tehát nem
+  ütközik a 3. tilos zónával:
+
+```sql
+SELECT to_char(o.created_at AT TIME ZONE 'Europe/Budapest', 'YYYY-MM') AS month,
+       COALESCE(p.audience, 'laikus')                                  AS audience,
+       SUM(oi.price_huf_snapshot * oi.quantity)                        AS revenue_huf,
+       COUNT(DISTINCT o.id)                                            AS order_count
+FROM orders o
+JOIN orders_items oi ON oi._parent_id = o.id
+LEFT JOIN products  p ON p.id = oi.product_id
+WHERE o.status = 'paid'
+GROUP BY 1, 2
+ORDER BY 1;
+```
+
+### 9.8 Bekötés — pontosan hova
+
+**a) `src/payload.config.ts`** — a meglévő `admin` blokkot bővítsd (a
+`buildConfig({ admin: { … } })` rész, jelenleg `user`, `importMap` és `meta`
+kulcsokkal):
+
+```ts
+admin: {
+  user: Users.slug,
+  importMap: { baseDir: path.resolve(dirname) },
+  meta: { titleSuffix: ' – Kineticare admin' },
+  components: {
+    views: {
+      statisztika: {
+        Component: '/components/admin/StatisticsView#StatisticsView',
+        path: '/statisztika',
+        exact: true,
+        meta: { title: 'Statisztika' },
+      },
+    },
+    // A Payload NEM teszi be automatikusan a navigációba a saját nézetet:
+    afterNavLinks: ['/components/admin/StatisticsNavLink#StatisticsNavLink'],
+  },
+},
+```
+
+Az útvonal így `/admin/statisztika` lesz. A `Component` string alakja
+**ugyanaz a konvenció**, mint a már bekötött `RefundPanel`-é
+(`'/components/admin/RefundPanel#RefundPanel'`) — a `/` a `importMap.baseDir`-hez
+(`src/`) képest értendő.
+
+**b) Az importMap regenerálása KÖTELEZŐ** — enélkül a nézet nem töltődik be, és
+a build is elhasalhat:
+
+```bash
+npm run generate:importmap
+```
+
+Ez az `src/app/(payload)/admin/importMap.js` fájlt írja át. **A generált fájlt
+commitold** (a meglévők is be vannak commitolva).
+
+**c) Szerepkör-kapu a nézetben — ezt NE hagyd ki.** Egy egyedi admin-nézet
+alapból csak a „be van jelentkezve az adminba" szintet garantálja; a
+szerepkört magadnak kell ellenőrizned:
+
+```tsx
+import type { AdminViewServerProps } from 'payload'
+import { hasStaffOrOwnerRole } from '../../access/roles'
+
+export const StatisticsView = async ({ initPageResult }: AdminViewServerProps) => {
+  const { req } = initPageResult
+  if (!hasStaffOrOwnerRole(req.user)) {
+    return <div>Ehhez a nézethez nincs jogosultságod.</div>   // magyar hibaüzenet!
+  }
+  // …lekérdezés + aggregáció + render
+}
+```
+
+A `hasStaffOrOwnerRole` a `src/access/roles.ts`-ben van (`RoleUser` típussal).
+A `StatisticsNavLink` kliens-komponensben is érdemes elrejteni a linket
+nem-jogosult felhasználó elől, de **a védelem a szerver-oldali kapu** — a
+link elrejtése csak kozmetika.
+
+### 9.9 A diagram — ne hozz be függőséget
+
+Nincs chart-könyvtár a projektben, és **ne is tegyél bele** (a `package.json`
+és a lockfile érintése külön, emberi döntésű PR — lásd 7. szakasz 7. pont).
+Egy havi oszlopdiagramhoz bőven elég a kézzel írt SVG:
+
+- `<svg viewBox="0 0 W H" role="img" aria-label="…">`, hónaponként két
+  `<rect>` (otthoni / szakmai) egymás mellett vagy egymásra halmozva.
+- A magasság `érték / maxÉrték * grafikonMagasság`; a `maxÉrték` 0 esetén
+  védekezz a nullosztás ellen.
+- **Színek**: a Payload admin CSS-változóit használd (`var(--theme-elevation-…)`,
+  `var(--theme-success-…)`), hogy sötét témában is olvasható maradjon.
+- **Akadálymentesség**: a diagram mellett **mindig legyen ott a táblázat is** —
+  a számokat képernyőolvasó is elérje. WCAG AA kontraszt kötelező.
+- A `docs/ertekesitesi-ux-skill.md` betöltése **ehhez nem szükséges**: az a
+  kezdőlapra, navigációra, termék-megjelenítésre és tipográfiára vonatkozik
+  (CLAUDE.md „Felületi (UX/UI) munka"), ez viszont belső admin-felület.
+
+### 9.10 Tesztek (`src/__tests__/statistics-revenue.test.ts`)
+
+Az aggregátor tiszta függvény → nem kell hozzá DB. Minimum esetek:
+
+1. **Hónapforduló Budapest szerint**: `2026-01-31T23:30:00Z` (= budapesti
+   február 1. 00:30) a **`2026-02`** vödörbe essen.
+2. **NULL `audience`** → laikus ág.
+3. **Vegyes rendelés** (egy otthoni + egy szakmai tétel) helyesen hasadjon szét.
+4. **`quantity > 1`** → `priceHuf × quantity`.
+5. **Nem-`paid` státusz** (`refunded`, `payment_failed`, `cancelled`) kimarad.
+6. **Üres hónap** nullás sorként jelenjen meg, ne hiányozzon.
+7. `laikusHuf + szakemberHuf === totalHuf` minden során.
+
+⚠️ **Tesztből valódi hálózati hívás és valódi DB-hívás TILOS** (volt már
+kicsúszó éles hívás — 5. szakasz). Az aggregátor-teszt tiszta adatokkal
+dolgozzon; ha DB-t érintő tesztet írnál, a meglévő TCP-próbás skip-mintát kövesd.
+
+### 9.11 Buktatók, amikbe bele fogsz futni
+
+1. **`npm run generate:importmap` elfelejtése** → a nézet 404/üres. Ez a
+   leggyakoribb hiba.
+2. **`depth: 0`** → `items[].product` csak id → nincs `audience` → minden
+   laikusnak látszik.
+3. **`toISOString()` hónap-kulcs** → UTC-drift a hónapfordulón (9.5).
+4. **`overrideAccess: true` szerepkör-kapu nélkül** → adatszivárgás. Előbb a
+   kapu, utána a lekérdezés.
+5. **`any` típus** → CLAUDE.md tiltja; `unknown` + szűkítés (az `audience`
+   pontosan ezért `unknown` a bemeneti típusban).
+6. **Kikommentezett kód** nem maradhat a repóban (CLAUDE.md).
+7. **Branch-konvenció**: `feat/<ticket>-<rovid-nev>`, ékezet nélkül,
+   pl. `feat/T-013-statisztika-nezet`.
+
+## 10. Másodlagos hiány: admin videó-feltöltés (tus) — tudatos eltérés
+
+A megrendelői specifikáció „Kurzuskezelés" pontja **adminból induló tus
+feltöltést** kért (eredetileg Cloudflare Streamre). A megvalósult állapot: a
+videó-platform **Bunny Stream** lett (`docs/video-platform-dontes.md`), és az
+adminban a `products.videos[]` tömbbe **kézzel kell beilleszteni a Bunny GUID-ot**
+— a feltöltés a Bunny felületén történik.
+
+Ez **dokumentált döntés, nem elfelejtett funkció**, de a megrendelő felé
+tisztázandó, hogy így marad-e. Ha bekötendő, a feladat: Bunny Stream
+`POST /library/{id}/videos` → tus-feltöltés az adminból, a visszakapott GUID
+automatikus beírásával. Ehhez a Bunny API-kulcs **szerver-oldali** kezelése kell
+(kliensbe kulcs nem kerülhet — CLAUDE.md 1. zóna), tehát egy saját route-handler
+a `src/app/(frontend)/api/admin/…` alatt, a refund-route mintájára.
+
+## 11. Ami a fentieken túl NINCS lezárva (az igény-ellenőrzés eredménye)
+
+Ezek nem hiányzó funkciók, hanem **nem igazolt** működés — az átadás előtt
+tisztázandók:
+
+1. **A pénzútvonal élesben soha nem futott.** A `BARION_POSKEY_TEST` ál-érték,
+   a `SZAMLAZZ_AGENT_KEY` nincs beállítva. Éles kulcsokkal végigvitt
+   próbavásárlás (fizetés → hozzáférés → számla → visszatérítés) még hátravan.
+2. **Nincs böngészős végponttól-végpontig teszt** (C6 nyitott). Az 1335 teszt
+   egységteszt; a valódi checkout-folyamatot ember vagy Playwright-teszt kell
+   végigvigye. A recept: `docs/e2e-staging-runbook.md`.
+3. **Számlázz.hu teszt-fiókos validálás** (T1–T11) — 4. szakasz „AMI MÉG
+   HÁTRAVAN".
+4. **Adatbázis-mentés (C14)** — nincs. Éles Postgres-újraindítás mentés nélkül
+   tilos (CLAUDE.md üzemeltetési 3.).
