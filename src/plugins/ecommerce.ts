@@ -229,6 +229,36 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
     singular: 'Kurzus',
     plural: 'Kurzusok',
   },
+  /**
+   * A VERZIÓ-VÉGPONTOK lezárása (S2/d).
+   *
+   * A plugin a products collectionre `versions: { drafts: { autosave: true } }`-t
+   * kapcsol (@payloadcms/plugin-ecommerce/dist/collections/products/
+   * createProductsCollection.js), de `readVersions` szabályt NEM ad meg — csak
+   * create/read/update/delete-et. Hiányzó access-függvénynél a Payload
+   * `executeAccess`-e (payload/dist/auth/executeAccess.js) így dönt:
+   *   if (access) { … }
+   *   if (req.user) { return true }
+   * vagyis BÁRMELY bejelentkezett felhasználó — a `customer` szerepkör is —
+   * lekérdezhette a `GET /api/products/versions` és
+   * `GET /api/products/:id/versions/:vid` végpontot
+   * (payload/dist/collections/operations/findVersions.js és findVersionByID.js:
+   * `collectionConfig.access.readVersions`).
+   *
+   * Ez MEGKERÜLTE a `read` szabályt: az `adminOrPublishedStatus` szándékosan
+   * csak a published kurzusokat engedi ki a nem-adminoknak, a verzió-végpont
+   * viszont a NEM PUBLIKÁLT (draft) állapotok TELJES tartalmát adta vissza —
+   * árazással, videó-sorokkal, még meg nem hirdetett kurzusokkal együtt.
+   *
+   * `isAdmin` = staff+owner (src/access/isAdmin.ts), ugyanaz a szint, amivel a
+   * plugin a create/update/delete-et is védi. Az admin verzió-nézete (a
+   * dokumentum „Verziók" füle) staff/owner-ként fut, tehát változatlanul
+   * működik.
+   */
+  access: {
+    ...defaultCollection.access,
+    readVersions: isAdmin,
+  },
   admin: {
     ...defaultCollection.admin,
     useAsTitle: 'sku',
