@@ -1,5 +1,11 @@
 import { createLogger } from '../logger'
-import { getSzamlazzConfig, parseAgentResponse } from './client'
+import {
+  bodyReadError,
+  getSzamlazzConfig,
+  isAbortError,
+  parseAgentResponse,
+  type SzamlazzParsedSuccess,
+} from './client'
 import { SzamlazzApiError, type SzamlazzClientConfig } from './types'
 import { escapeXml } from './xml'
 
@@ -59,15 +65,6 @@ export function buildInvoiceLookupXml(input: BuildInvoiceLookupXmlInput): string
 export interface InvoiceLookupResult {
   /** A megtalált bizonylat (számla / stornó / helyesbítő) sorszáma. */
   szamlaszam: string
-}
-
-function isAbortError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (error.name === 'AbortError' ||
-      error.name === 'TimeoutError' ||
-      error.message.toLowerCase().includes('aborted'))
-  )
 }
 
 /**
@@ -132,23 +129,30 @@ export async function queryInvoiceByKulsoAzon(
     })
   }
 
-  const body = await response.text()
+  // A törzs-olvasás és az értelmezés EGY védett blokkban: a stream félbeszakadása
+  // (timeout a fejlécek után, TCP-vágás félúton) osztályozott, retryable hibává
+  // válik — nyers TypeError-ként kilépve a hívó nem állítaná sorba az újrapróbáló
+  // jobot, és a bizonylat némán elveszne. A parseAgentResponse saját, MÁR
+  // strukturált hibái változatlanul mennek tovább (7-es kód → null, a többi dob).
+  let result: SzamlazzParsedSuccess
   try {
-    const result = parseAgentResponse(body, response.headers)
-    logger.info('bizonylat-lekérdezés: találat', {
-      endpoint,
-      durationMs,
-      szamlaszam: result.szamlaszam,
-    })
-    return { szamlaszam: result.szamlaszam }
+    const body = await response.text()
+    result = parseAgentResponse(body, response.headers)
   } catch (error) {
-    if (
-      error instanceof SzamlazzApiError &&
-      error.agentErrors.some((entry) => entry.code.trim() === SZAMLAZZ_NOT_FOUND_CODE)
-    ) {
-      logger.info('bizonylat-lekérdezés: nincs találat (7-es kód)', { endpoint, durationMs })
-      return null
+    if (error instanceof SzamlazzApiError) {
+      if (error.agentErrors.some((entry) => entry.code.trim() === SZAMLAZZ_NOT_FOUND_CODE)) {
+        logger.info('bizonylat-lekérdezés: nincs találat (7-es kód)', { endpoint, durationMs })
+        return null
+      }
+      throw error
     }
-    throw error
+    throw bodyReadError(error, resolved.timeoutMs, 'bizonylat-lekérdezés')
   }
+
+  logger.info('bizonylat-lekérdezés: találat', {
+    endpoint,
+    durationMs,
+    szamlaszam: result.szamlaszam,
+  })
+  return { szamlaszam: result.szamlaszam }
 }
