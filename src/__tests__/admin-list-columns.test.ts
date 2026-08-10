@@ -110,18 +110,35 @@ function invalidColumns(collection: CollectionConfig): string[] {
   )
 }
 
-/** A lista keresője ezekre a mezőkre tesz ILIKE-ot. */
-function effectiveSearchFields(collection: CollectionConfig): string[] {
+/**
+ * Minden mező, amire a felület `ILIKE`-ot tehet.
+ *
+ * FONTOS: a `useAsTitle` akkor is benne van, ha van `listSearchableFields` —
+ * mert a `useAsTitle` a listakeresőn KÍVÜL a **relationship-választó**
+ * keresését is vezérli (`@payloadcms/ui` Relationship/Input: `fieldToSearch =
+ * collection?.admin?.useAsTitle || 'id'`, majd `{[fieldToSearch]: {like: …}}`).
+ * Ha ezt kihagynánk, egy `orders.useAsTitle = 'createdAt'` visszaállítás
+ * észrevétlen maradna, és a Tranzakció szerkesztőjében a „Rendelés"
+ * legördülőbe gépelve visszajönne a timestamptz-hiba.
+ */
+function searchTouchedFields(collection: CollectionConfig): string[] {
+  const declared = collection.admin?.listSearchableFields ?? []
+  const useAsTitle = collection.admin?.useAsTitle ?? 'id'
+  return [...new Set([useAsTitle, ...declared])]
+}
+
+/**
+ * A LISTA keresője ezekre fut. Az üres `listSearchableFields` tömb nem
+ * „nincs megadva", hanem NÉMÁN kikapcsolt keresés — ezt külön jelezzük.
+ */
+function listSearchIsSilentlyDisabled(collection: CollectionConfig): boolean {
   const declared = collection.admin?.listSearchableFields
-  if (declared && declared.length > 0) {
-    return declared
-  }
-  return [collection.admin?.useAsTitle ?? 'id']
+  return Array.isArray(declared) && declared.length === 0
 }
 
 function unsearchableFields(collection: CollectionConfig): string[] {
   const { usable } = collectColumnNames(collection.fields)
-  return effectiveSearchFields(collection).filter((name) => {
+  return searchTouchedFields(collection).filter((name) => {
     // Az `id`-ra a Payload külön, típushelyes keresést épít.
     if (name === 'id') {
       return false
@@ -146,12 +163,22 @@ describe('admin listanézet-őr', () => {
     expect(offenders).toEqual([])
   })
 
-  it('MINDEN collection listakeresője típushelyes mezőn fut (nincs ILIKE dátumon/enumon)', async () => {
+  it('MINDEN collection listakeresője ÉS relationship-választója típushelyes mezőn fut', async () => {
     const config = await configPromise
 
     const offenders = (config.collections ?? [])
       .map((collection) => ({ slug: collection.slug, unsearchable: unsearchableFields(collection) }))
       .filter((entry) => entry.unsearchable.length > 0)
+
+    expect(offenders).toEqual([])
+  })
+
+  it('egyetlen collection sem kapcsolja ki NÉMÁN a listakeresőt üres listSearchableFields-szel', async () => {
+    const config = await configPromise
+
+    const offenders = (config.collections ?? [])
+      .filter((collection) => listSearchIsSilentlyDisabled(collection))
+      .map((collection) => collection.slug)
 
     expect(offenders).toEqual([])
   })
@@ -181,9 +208,11 @@ describe('admin listanézet-őr', () => {
       if (!collection) {
         throw new Error(`a végleges configban nincs '${slug}' collection`)
       }
-      expect({ slug, search: effectiveSearchFields(collection) }).not.toEqual({
+      // A useAsTitle akkor sem lehet createdAt, ha van listSearchableFields:
+      // a relationship-választó keresése kizárólag a useAsTitle-t használja.
+      expect({ slug, useAsTitle: collection.admin?.useAsTitle }).not.toEqual({
         slug,
-        search: ['createdAt'],
+        useAsTitle: 'createdAt',
       })
       expect({ slug, gond: unsearchableFields(collection) }).toEqual({ slug, gond: [] })
     }
