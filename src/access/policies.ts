@@ -16,7 +16,8 @@ import { visibleTestimonialsOrAdmin } from './testimonials-visibility'
  *
  * Mátrix-leképezés:
  * - pages/posts: látogató/customer csak publishedet olvas (saját `status` mező!),
- *   staff+owner mindent olvas; create/update/delete staff+owner.
+ *   staff+owner mindent olvas; create/update/delete staff+owner. A drafts miatt
+ *   a verzió-végpontok (readVersions) is staff+owner — lásd staffOrOwnerVersions.
  * - menus (T-013): a read nyilvános, de nem-adminoknak csak a visible=true
  *   sorok látszanak (visibleMenusOrAdmin); create/update/delete staff+owner.
  * - categories: nincs státusz-mezője, a frontend-navigáció miatt a read
@@ -37,14 +38,44 @@ const staffOrOwnerWrite: Pick<
   delete: isStaffOrOwner,
 }
 
+/**
+ * A VERZIÓ-VÉGPONTOK zárása a drafts-os collectionökön (S2/d kiterjesztés).
+ *
+ * A `GET /api/<slug>/versions` és `GET /api/<slug>/versions/:id` (ahol a `:id`
+ * a VERZIÓ azonosítója, nem a szülő dokumentumé) NEM az
+ * `access.read`-en múlik, hanem az `access.readVersions`-ön
+ * (payload/dist/collections/operations/findVersions.js, findVersionByID.js).
+ * Hiányzó szabálynál a Payload `executeAccess`-e minden BEJELENTKEZETT
+ * felhasználót átenged (`if (req.user) return true`,
+ * payload/dist/auth/executeAccess.js) — a `publishedOrAdmin` read-szabály tehát
+ * megkerülhető volt: egy regisztrált vevő a verzió-végponton kiolvashatta a még
+ * NEM PUBLIKÁLT oldalak és bejegyzések teljes tartalmát.
+ *
+ * A kritérium a VERZIÓZÁS, nem a drafts: a Payload `versions: true` esetén is
+ * verzió-táblát tart fenn és kiadja a fenti végpontokat (a szanitizálás a
+ * `versions: true`-t `{ drafts: false, maxPerDoc: 100 }`-ra bontja,
+ * node_modules/payload/dist/collections/config/sanitize.js). Ma minden
+ * verziózott collectionünk drafts-os is (pages, posts); a többinek nincs
+ * verzió-végpontja. A products ugyanezt a zárat a plugin-override-ban kapja meg
+ * (src/plugins/ecommerce.ts, productsCollectionOverride).
+ *
+ * Nem szűkíti a szerkesztői munkát: az admin verzió-nézete és a Next
+ * draft-előnézet is staff/owner-ként, illetve `overrideAccess: true`-val fut.
+ */
+const staffOrOwnerVersions: Pick<NonNullable<CollectionConfig['access']>, 'readVersions'> = {
+  readVersions: isStaffOrOwner,
+}
+
 export const collectionAccessPolicies: Record<string, CollectionConfig['access']> = {
   pages: {
     read: publishedOrAdmin,
     ...staffOrOwnerWrite,
+    ...staffOrOwnerVersions,
   },
   posts: {
     read: publishedOrAdmin,
     ...staffOrOwnerWrite,
+    ...staffOrOwnerVersions,
   },
   menus: {
     // T-013: centrális visible-szűrés — nem-admin csak a visible=true sorokat

@@ -22,6 +22,7 @@ import { Users } from './collections/Users'
 import { WebhookEvents } from './collections/WebhookEvents'
 import { buildOriginAllowlist } from './env'
 import { jobsConfig } from './jobs'
+import { restrictJobStatsGlobalAccess } from './jobs/jobs-stats-access'
 import { registerBarionWebhookProcessor } from './lib/barion-callback/process-callback'
 import { contactStaffEmail, kineticareEmailAdapter, sendMail, usersAuthEmails } from './lib/email'
 import { logger } from './lib/logger'
@@ -573,4 +574,11 @@ export default buildConfig({
     // plugin-collectionöket (webshop, űrlapok) is besorolja.
     adminGroups,
   ],
-})
+  // A SZANITIZÁLÁS UTÁNI lépés (S2/c). A `jobs.scheduling` bekapcsolásával a
+  // Payload maga tol be egy `payload-jobs-stats` globalt, access nélkül —
+  // amire a szanitizálás a „bármely bejelentkezett felhasználó" defaultot teszi,
+  // olvasásra ÉS ÍRÁSRA. Mivel a global csak a szanitizálás közben jön létre,
+  // előre nem konfigurálható: a zár a `buildConfig` EREDMÉNYÉRE kerül.
+  // A részletes indoklás (miért nem végpont-szűrő, és miért nem töri el a saját
+  // ütemezést) az src/jobs/jobs-stats-access.ts fejlécében.
+}).then(restrictJobStatsGlobalAccess)

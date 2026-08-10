@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger'
 import { accessExpiredMessage } from '@/lib/course-access'
 import { resolveSingleCourseAccess } from '@/lib/course-access-lookup'
 import { fetchWatchedRefs } from '@/lib/course-progress/lookup'
+import { toPlayerVideos } from '@/lib/course-player-videos'
 import { courseTitle, hasUserPurchased, parseCourseIdParam } from '@/lib/courses'
 import type { Product, User } from '@/payload-types'
 
@@ -135,15 +136,10 @@ export default async function KurzusaimPlayerPage({ params }: KurzusaimPlayerPag
             id: product.id,
             slug: product.slug ?? null,
             title: courseTitle(product),
-            videos: Array.isArray(product.videos)
-              ? product.videos.map((video) => ({
-                  id: video.id ?? undefined,
-                  title: video.title ?? undefined,
-                  streamAssetId: video.streamAssetId ?? undefined,
-                  durationSec: video.durationSec ?? undefined,
-                  status: video.status ?? undefined,
-                }))
-              : [],
+            // S2/b: a Bunny-GUID csak élő hozzáféréssel megy ki az
+            // RSC-payloadba. A szabály és az indoklása egy helyen él, tesztelve:
+            // src/lib/course-player-videos.ts.
+            videos: toPlayerVideos(product, hasAccess),
           }}
           hasAccess={hasAccess}
           watchedRefs={watchedRefs}

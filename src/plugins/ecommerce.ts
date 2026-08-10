@@ -10,6 +10,7 @@ import {
   isAdminFieldAccess,
   isDocumentOwner,
   isOwnerFieldAccess,
+  streamAssetReadAccess,
 } from '../access'
 import { courseSlugField } from '../fields/course-slug'
 import { orderIntegrityBeforeChange } from '../lib/order-integrity'
@@ -228,6 +229,36 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
     singular: 'Kurzus',
     plural: 'Kurzusok',
   },
+  /**
+   * A VERZIÓ-VÉGPONTOK lezárása (S2/d).
+   *
+   * A plugin a products collectionre `versions: { drafts: { autosave: true } }`-t
+   * kapcsol (@payloadcms/plugin-ecommerce/dist/collections/products/
+   * createProductsCollection.js), de `readVersions` szabályt NEM ad meg — csak
+   * create/read/update/delete-et. Hiányzó access-függvénynél a Payload
+   * `executeAccess`-e (payload/dist/auth/executeAccess.js) így dönt:
+   *   if (access) { … }
+   *   if (req.user) { return true }
+   * vagyis BÁRMELY bejelentkezett felhasználó — a `customer` szerepkör is —
+   * lekérdezhette a `GET /api/products/versions` és
+   * `GET /api/products/versions/:id` végpontot (a `:id` a VERZIÓ azonosítója)
+   * (payload/dist/collections/operations/findVersions.js és findVersionByID.js:
+   * `collectionConfig.access.readVersions`).
+   *
+   * Ez MEGKERÜLTE a `read` szabályt: az `adminOrPublishedStatus` szándékosan
+   * csak a published kurzusokat engedi ki a nem-adminoknak, a verzió-végpont
+   * viszont a NEM PUBLIKÁLT (draft) állapotok TELJES tartalmát adta vissza —
+   * árazással, videó-sorokkal, még meg nem hirdetett kurzusokkal együtt.
+   *
+   * `isAdmin` = staff+owner (src/access/isAdmin.ts), ugyanaz a szint, amivel a
+   * plugin a create/update/delete-et is védi. Az admin verzió-nézete (a
+   * dokumentum „Verziók" füle) staff/owner-ként fut, tehát változatlanul
+   * működik.
+   */
+  access: {
+    ...defaultCollection.access,
+    readVersions: isAdmin,
+  },
   admin: {
     ...defaultCollection.admin,
     useAsTitle: 'sku',
@@ -402,6 +433,15 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
           admin: {
             description:
               'A Bunny Stream videó GUID-ja — a VÉDETT libraryből, a Bunny felületén a videó adatlapján található. Kézzel másolandó be.',
+          },
+          // S2/b: a fizetős tartalom kulcsa nem kerülhet ki a nyilvános REST
+          // API-n. Staff/owner és a terméket MEGVÁSÁRLÓ vevő olvassa; anonim és
+          // nem-vevő felé a Payload törli a mezőt a válaszból. A szerver-oldali
+          // lejátszási út (stream-token, lejátszó-oldal) overrideAccess: true-val
+          // olvas, azt a szabály nem érinti — a részletek a függvény fejlécében
+          // (src/access/streamAssetRead.ts).
+          access: {
+            read: streamAssetReadAccess,
           },
         },
         {
