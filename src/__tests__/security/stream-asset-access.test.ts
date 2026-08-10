@@ -1,4 +1,7 @@
-import type { CollectionConfig, Field, FieldAccess, Payload } from 'payload'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
+
+import type { CollectionConfig, Field, FieldAccess, Payload, SanitizedConfig } from 'payload'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { streamAssetReadAccess } from '../../access'
@@ -19,15 +22,24 @@ import configPromise from '../../payload.config'
  *    customer / staff / owner;
  * 2. a mező a VÉGLEGES, szanitált configban tényleg be van kötve, és a videó-sor
  *    többi almezője (cím, hossz, állapot) NEM kapott korlátozást;
- * 3. a LEJÁTSZÁS változatlanul működik: a stream-token szolgáltatás
- *    `overrideAccess: true`-val olvassa a terméket, ami a Payload
- *    mező-hookjában rövidre zárja az access-ellenőrzést;
- * 4. NEGATÍV KONTROLL: ha ugyanez az olvasás access-ellenőrzés ALÁ kerülne
+ * 3. a BEKÖTÉS TÉNYLEG HAT: a Payload SAJÁT `afterRead` mező-hookja fut le a
+ *    szanitált products-collectionnel, és ténylegesen TÖRLI a mezőt — ezt nem
+ *    tükör méri (lásd alább a „miért nem tükör" megjegyzést);
+ * 4. a LEJÁTSZÁS változatlanul működik: a stream-token szolgáltatás
+ *    `overrideAccess: true`-val olvassa a terméket, amit a hook rövidre zár;
+ * 5. NEGATÍV KONTROLL: ha ugyanez az olvasás access-ellenőrzés ALÁ kerülne
  *    (overrideAccess nélkül, nem-vevő kontextusban), a mező eltűnne és a
- *    lejátszás elhasalna — vagyis a 3. pont nem véletlen, hanem a szigorítás
+ *    lejátszás elhasalna — vagyis a 4. pont nem véletlen, hanem a szigorítás
  *    biztonsági feltétele.
  *
- * Hálózati hívás sehol: a Payload local API-t ál-objektum adja (CLAUDE.md 15.).
+ * ═══ MIÉRT NEM TÜKÖR ═══
+ * Korábban egy saját `applyFieldAccess` segédfüggvény képezte le a Payload
+ * viselkedését. Az ilyen tükör akkor is zöld marad, ha a mező a configban NINCS
+ * bekötve — csak a szabályfüggvényt méri, a bekötést nem. Ezért a fájl a
+ * VALÓDI hookot futtatja: payload/dist/fields/hooks/afterRead/index.js.
+ *
+ * Adatbázis és hálózat sehol: a hook `depth: 0`-val fut (nincs
+ * relációfeloldás), a local API-t ál-objektum adja (CLAUDE.md 15.).
  */
 
 const DUMMY_TOKEN_KEY = 'DUMMY-BUNNY-TOKEN-AUTH-KEY-NEM-VALODI-TITOK'
@@ -153,16 +165,42 @@ describe('a bekötés a VÉGLEGES, szanitált configban', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// A VALÓDI Payload mező-hook betöltése
+// ---------------------------------------------------------------------------
+
 /**
- * A LEJÁTSZÁSI ÚT — a Payload mező-hookjának hű utánzatával.
- *
- * A Payload az afterRead-ben így dönt (payload/dist/fields/hooks/afterRead/
- * promise.js):
- *   const canReadField = overrideAccess ? true : await field.access.read({...})
- *   if (!canReadField) { delete siblingDoc[field.name] }
- * Ezt a két sort képezi le az alábbi `applyFieldAccess`: a mezőt TÖRLI, ha az
- * olvasás tiltott — pontosan úgy, ahogy az éles kód tenné.
+ * A `payload` csomag `exports` mezője csak a `.`, `./internal`, `./node`,
+ * `./shared`, `./i18n/*` és `./migrations` alutakat vezeti ki — a
+ * `fields/hooks/afterRead/index.js` csomagnévvel NEM importálható. Ezért a
+ * csomag belépési pontjából (`require.resolve('payload')`) számolt ABSZOLÚT
+ * fájlúttal, dinamikusan töltjük be. Ez a REPÓBAN TELEPÍTETT Payload kódja,
+ * nem másolat.
  */
+type AfterReadArgsShape = {
+  collection: unknown
+  context: Record<string, unknown>
+  depth: number
+  doc: Record<string, unknown>
+  draft: boolean
+  fallbackLocale: null
+  global: null
+  locale: string
+  overrideAccess: boolean
+  req: unknown
+  showHiddenFields: boolean
+}
+
+type AfterReadFn = (args: AfterReadArgsShape) => Promise<Record<string, unknown>>
+
+async function loadPayloadAfterRead(): Promise<AfterReadFn> {
+  const requireFromHere = createRequire(import.meta.url)
+  const entry = requireFromHere.resolve('payload')
+  const modulePath = entry.replace(/index\.js$/, 'fields/hooks/afterRead/index.js')
+  const loaded = (await import(pathToFileURL(modulePath).href)) as { afterRead: AfterReadFn }
+  return loaded.afterRead
+}
+
 const buyerUser = {
   id: 7,
   email: 'vevo@example.test',
@@ -188,41 +226,132 @@ function makeProduct(): Product {
   } as unknown as Product
 }
 
-interface FieldAccessReq {
+let afterRead: AfterReadFn
+let config: SanitizedConfig
+let productsCollection: unknown
+
+beforeAll(async () => {
+  afterRead = await loadPayloadAfterRead()
+  config = await configPromise
+  productsCollection = (config.collections ?? []).find(
+    (collection) => collection.slug === 'products',
+  )
+  expect(productsCollection, 'a products collection a szanitált configban').toBeDefined()
+})
+
+/**
+ * Egy termék-dokumentum végigfuttatása a VALÓDI Payload `afterRead` hookján, a
+ * SZANITÁLT products-collectionnel — pontosan úgy, ahogy a REST-olvasás teszi.
+ * `depth: 0`, tehát relációfeloldás (és adatbázis-kör) nincs.
+ */
+async function readProduct(options: {
   user: TestUser | null
+  overrideAccess?: boolean
+}): Promise<Product> {
+  const doc = JSON.parse(JSON.stringify(makeProduct())) as Record<string, unknown>
+  const req = {
+    context: {},
+    payload: { config },
+    user: options.user,
+  }
+  const result = await afterRead({
+    collection: productsCollection,
+    context: {},
+    depth: 0,
+    doc,
+    draft: false,
+    fallbackLocale: null,
+    global: null,
+    locale: '',
+    overrideAccess: options.overrideAccess ?? false,
+    req,
+    showHiddenFields: false,
+  })
+  return result as unknown as Product
 }
 
-/** A Payload mező-hookjának hű utánzata a `videos[].streamAssetId` mezőre. */
-function applyFieldAccess(product: Product, overrideAccess: boolean, req: FieldAccessReq): Product {
-  const videos = (product.videos ?? []).map((video) => {
-    const canRead = overrideAccess
-      ? true
-      : streamAssetReadAccess({
-          doc: product,
-          id: product.id,
-          req,
-        } as unknown as Parameters<FieldAccess>[0])
-    const copy: Record<string, unknown> = { ...video }
-    if (!canRead) {
-      // Ugyanaz a művelet, amit a Payload végez: `delete siblingDoc[field.name]`.
-      delete copy.streamAssetId
-    }
-    return copy
+describe('a VALÓDI Payload mező-hook a szanitált configgal', () => {
+  it('anonim látogató NEM kapja meg a streamAssetId-t', async () => {
+    const product = await readProduct({ user: null })
+
+    expect(product.videos?.[0]?.streamAssetId).toBeUndefined()
+    // A cím és a hossz megmarad — a kurzusoldal epizódlistája nem sérül.
+    expect(product.videos?.[0]?.title).toBe('1. lecke')
+    expect(product.videos?.[0]?.durationSec).toBe(1800)
   })
-  return { ...product, videos } as Product
-}
+
+  it('a NEM-VEVŐ customer sem kapja meg', async () => {
+    const product = await readProduct({ user: { id: 8, role: 'customer', purchases: [] } })
+
+    expect(product.videos?.[0]?.streamAssetId).toBeUndefined()
+    expect(product.videos?.[0]?.title).toBe('1. lecke')
+  })
+
+  it('a VEVŐ customer megkapja', async () => {
+    const product = await readProduct({
+      user: { id: 7, role: 'customer', purchases: [PRODUCT_ID] },
+    })
+
+    expect(product.videos?.[0]?.streamAssetId).toBe(DUMMY_ASSET_ID)
+  })
+
+  it('a staff és az owner megkapja (vásárlás nélkül is)', async () => {
+    for (const user of [
+      { id: 2, role: 'staff' as Role },
+      { id: 1, role: 'owner' as Role },
+    ]) {
+      const product = await readProduct({ user })
+      expect(product.videos?.[0]?.streamAssetId, user.role).toBe(DUMMY_ASSET_ID)
+    }
+  })
+
+  /**
+   * A RÖVIDZÁR: `overrideAccess: true` esetén a hook a mező-access-t be sem
+   * hívja. A szerver-oldali lejátszási út ezért marad ép — ezt a következő
+   * blokk a stream-token szolgáltatáson is végigméri.
+   */
+  it('overrideAccess: true mellett a mező megmarad, anonim kontextusban is', async () => {
+    const product = await readProduct({ user: null, overrideAccess: true })
+
+    expect(product.videos?.[0]?.streamAssetId).toBe(DUMMY_ASSET_ID)
+  })
+
+  /**
+   * A sorosított válaszban SEHOL nem szerepelhet a GUID: a REST-válasz JSON-je
+   * megy ki a hálózatra, tehát mezőnkénti ellenőrzés helyett a teljes kimenetre
+   * is ránézünk.
+   */
+  it('a GUID a nem-vevőnek adott VÁLASZ JSON-jében sehol nem szerepel', async () => {
+    const serialized = JSON.stringify(await readProduct({ user: { id: 8, role: 'customer' } }))
+
+    expect(serialized).not.toContain(DUMMY_ASSET_ID)
+    expect(serialized).toContain('1. lecke')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A lejátszási út (stream-token) — ÁL local API a VALÓDI hookkal
+// ---------------------------------------------------------------------------
 
 interface PlaybackPayloadOptions {
   /** Ha false: az ál-local-API FIGYELMEN KÍVÜL hagyja az overrideAccess-t (negatív kontroll). */
   honourOverrideAccess?: boolean
-  req?: FieldAccessReq
+  user?: TestUser | null
 }
 
+/**
+ * Ál Payload local API: a `findByID` a VALÓDI `afterRead` hookon engedi át a
+ * dokumentumot, ugyanazzal a szanitált collectionnel, amit az éles kód használ.
+ * Így a lejátszási lánc a valódi mező-viselkedéssel mérhető, adatbázis nélkül.
+ */
 function createPlaybackPayload(options: PlaybackPayloadOptions = {}) {
   const honour = options.honourOverrideAccess !== false
-  const req: FieldAccessReq = options.req ?? { user: null }
+  const user = options.user ?? null
   const findByID = vi.fn(async (args: { overrideAccess?: boolean }) =>
-    applyFieldAccess(makeProduct(), honour ? args.overrideAccess === true : false, req),
+    readProduct({
+      user,
+      overrideAccess: honour ? args.overrideAccess === true : false,
+    }),
   )
   const payload = {
     findByID,
@@ -282,30 +411,5 @@ describe('a lejátszás (stream-token út) a szigorítás után is működik', (
     await expect(
       issueStreamToken({ payload, user: buyerUser, productId: PRODUCT_ID }),
     ).rejects.toMatchObject({ status: 503 })
-  })
-})
-
-describe('a nyilvános REST-olvasás (overrideAccess nélkül) mit ad vissza', () => {
-  const readAs = (user: TestUser | null): Product =>
-    applyFieldAccess(makeProduct(), false, { user })
-
-  it('anonim és nem-vevő customer NEM kapja meg a streamAssetId-t', () => {
-    for (const user of [null, { id: 8, role: 'customer' as Role, purchases: [] }]) {
-      const product = readAs(user)
-      expect(product.videos?.[0]?.streamAssetId).toBeUndefined()
-      // A cím és a hossz megmarad — a kurzusoldal epizódlistája nem sérül.
-      expect(product.videos?.[0]?.title).toBe('1. lecke')
-      expect(product.videos?.[0]?.durationSec).toBe(1800)
-    }
-  })
-
-  it('a vevő, a staff és az owner megkapja', () => {
-    for (const user of [
-      { id: 7, role: 'customer' as Role, purchases: [PRODUCT_ID] },
-      { id: 2, role: 'staff' as Role },
-      { id: 1, role: 'owner' as Role },
-    ]) {
-      expect(readAs(user).videos?.[0]?.streamAssetId).toBe(DUMMY_ASSET_ID)
-    }
   })
 })
