@@ -1,5 +1,6 @@
 import type { JobsConfig } from 'payload'
 
+import { isStaffOrOwner } from '../access/isStaffOrOwner'
 import { correctiveInvoiceIssueTask } from './tasks/corrective-invoice-issue'
 import { invoiceIssueTask } from './tasks/invoice-issue'
 import { orderPollTask } from './tasks/order-poll'
@@ -95,6 +96,101 @@ function jobWorkersEnabled(env: NodeJS.ProcessEnv): boolean {
 }
 
 /**
+ * A job-végpontok jogosultsága (S2/a — access-control szigorítás).
+ *
+ * ═══ A HIBA, AMIT BEZÁR (a Payload forrásából ellenőrizve) ═══
+ * A `jobs.access` alapértelmezése a szanitizáláskor kerül be
+ * (payload/dist/config/defaults.js, `addDefaultsToConfig`):
+ *   config.jobs = { …, access: { cancel: defaultAccess, queue: defaultAccess,
+ *                                run: defaultAccess, ...config.jobs?.access } }
+ * ahol `defaultAccess = ({ req: { user } }) => Boolean(user)`
+ * (payload/dist/auth/defaultAccess.js) — vagyis BÁRMELY BEJELENTKEZETT
+ * FELHASZNÁLÓ, a `customer` szerepkör is. (A végpontokban látható
+ * `?? (() => true)` fallback csak a szanitizálatlan configra vonatkozik; élesben
+ * nem ez a hatályos érték.) A saját `access` a spread miatt FELÜLÍRJA a defaultot.
+ *
+ * Az érintett REST-végpontok (a jobs-collection `endpoints` tömbje,
+ * payload/dist/queues/config/collection.js):
+ *   GET /api/payload-jobs/run              → jobokat futtat
+ *   GET /api/payload-jobs/handle-schedules → jobokat állít sorba
+ * Mindkettő a `jobs.access.run` szabályt nézi. Külön `/queue` és `/cancel`
+ * REST-végpont a 3.86-ban NINCS — azok az access-ágak kizárólag a local API
+ * `overrideAccess: false` hívásain élnek (a teljesség kedvéért ezeket is
+ * beállítjuk). Következmény a szigorítás előtt: egy regisztrált vevő is
+ * indíthatta/ütemezhette a számlázási és karbantartó jobokat — erőforrás-
+ * visszaélés, rosszabb esetben ismételt Számlázz.hu-hívás.
+ *
+ * ═══ MIÉRT NEM TÖRI EL A SAJÁT ÜTEMEZÉST ═══
+ * A szerver-oldali utak MIND `overrideAccess: true`-val futnak, ami az
+ * access-ellenőrzést ÁT IS UGORJA (nem „true-t ad", hanem be sem lép):
+ * - az autoRun-cron (`payload/dist/index.js`, `_initializeCrons`) a
+ *   `this.jobs.handleSchedules(...)` (ebben NINCS access-ág) és a
+ *   `this.jobs.run(...)` local API-t hívja; utóbbi
+ *   `overrideAccess: args?.overrideAccess !== false` → `true`
+ *   (payload/dist/queues/localAPI.js), a `runJobs` pedig csak
+ *   `if (!overrideAccess)` esetén ellenőriz;
+ * - a saját `payload.jobs.queue(...)` hívásaink (src/lib/order-paid.ts,
+ *   src/lib/szamlazz/queue.ts) sem adnak `overrideAccess: false`-t, tehát a
+ *   `queue` access-ága szintén nem fut le.
+ * A szigorítás így KIZÁRÓLAG a HTTP-felületet érinti; a számlázási lánc és a
+ * karbantartó ütemezés változatlanul működik. Ezt teszt bizonyítja:
+ * src/__tests__/jobs/jobs-access.test.ts (a VALÓDI Payload-végpontot és a
+ * VALÓDI local API-t futtatja, ál-adatbázissal).
+ *
+ * ═══ MIÉRT staff+owner ═══
+ * A jobok futtatása/ütemezése üzemeltetői művelet: az adminban dolgozó staff
+ * elakadt jobot újraindíthat, a customer szerepkörnek viszont semmi dolga vele.
+ */
+const JOBS_ACCESS: NonNullable<JobsConfig['access']> = {
+  cancel: isStaffOrOwner,
+  queue: isStaffOrOwner,
+  run: isStaffOrOwner,
+}
+
+/**
+ * A `payload-jobs` COLLECTION jogosultsága (S2/a, második fele).
+ *
+ * ═══ MIÉRT KELL A JOBS.ACCESS MELLÉ ═══
+ * A `jobs.access` KIZÁRÓLAG a `/run` és `/handle-schedules` végpontot védi. A
+ * jobs-collection ezen felül megkapja a Payload SZOKÁSOS CRUD REST-felületét is
+ * (GET/POST/PATCH/DELETE `/api/payload-jobs…`), annak jogosultsága pedig a
+ * COLLECTION `access` blokkjából jön. A Payload gyári jobs-collectionje
+ * (payload/dist/queues/config/collection.js) NEM ad meg `access`-t, tehát a
+ * collection-defaultok lépnek életbe (payload/dist/collections/config/
+ * defaults.js): `create/read/update/delete: defaultAccess`, és
+ * `defaultAccess = ({ req: { user } }) => Boolean(user)`
+ * (payload/dist/auth/defaultAccess.js) — vagyis BÁRMELY bejelentkezett
+ * felhasználó, a `customer` szerepkör is.
+ *
+ * Ez súlyosabb, mint a `/run` nyitottsága: a `POST /api/payload-jobs` egy
+ * tetszőleges `taskSlug` + `input` + `queue` hármassal ÚJ JOBOT hoz létre, amit
+ * az autoRun-cron a következő tickjén LEFUTTAT. Egy regisztrált vevő így
+ * futtathatta volna a számlázási taskokat idegen rendelés-azonosítókkal, a
+ * `GET`-tel pedig kiolvashatta a jobok `input`/`error` tartalmát.
+ *
+ * ═══ MIÉRT NEM TÖRI EL A JOB-RENDSZERT ═══
+ * A jobok írását/olvasását a Payload belül NEM a collection-access-en át
+ * végzi: a `runJobs` és a `handleSchedules` a `payload.db.*` szintre megy
+ * (payload/dist/queues/utilities/updateJob.js: `req.payload.db.updateJobs`),
+ * a `payload.jobs.queue` pedig `payload.db.create`-tel ír, amíg nincs
+ * `jobs.depth`/`jobs.runHooks` beállítva (payload/dist/queues/localAPI.js) —
+ * ezek mind megkerülik a collection-access-t. A szigorítás tehát csak a HTTP-n
+ * érkező, felhasználói kéréseket érinti.
+ */
+const jobsCollectionOverrides: NonNullable<JobsConfig['jobsCollectionOverrides']> = ({
+  defaultJobsCollection,
+}) => ({
+  ...defaultJobsCollection,
+  access: {
+    ...defaultJobsCollection.access,
+    create: isStaffOrOwner,
+    delete: isStaffOrOwner,
+    read: isStaffOrOwner,
+    update: isStaffOrOwner,
+  },
+})
+
+/**
  * A jobs-konfig felépítése az env függvényében. Tiszta függvény, hogy a
  * teszt a bekapcsolt worker-ág (autoRun) és a task-schedule-ök EGYÜTTES
  * helyességét is ellenőrizni tudja — az `ENABLE_JOB_WORKERS` a tesztfutásban
@@ -102,6 +198,8 @@ function jobWorkersEnabled(env: NodeJS.ProcessEnv): boolean {
  */
 export function buildJobsConfig(env: NodeJS.ProcessEnv = process.env): JobsConfig {
   return {
+    access: JOBS_ACCESS,
+    jobsCollectionOverrides,
     tasks: [
       webhookRetryTask,
       orderPollTask,

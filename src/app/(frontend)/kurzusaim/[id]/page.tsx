@@ -139,7 +139,13 @@ export default async function KurzusaimPlayerPage({ params }: KurzusaimPlayerPag
               ? product.videos.map((video) => ({
                   id: video.id ?? undefined,
                   title: video.title ?? undefined,
-                  streamAssetId: video.streamAssetId ?? undefined,
+                  // S2/b: a Bunny-GUID csak annak megy ki, akinek ÉL a
+                  // hozzáférése. A lejátszó `hasAccess: false` esetén amúgy is
+                  // korán visszatér (paywall-kártya), tehát a mezőre ott nincs
+                  // szüksége — a termék-olvasás viszont overrideAccess: true-val
+                  // megy, így a mezőt itt kell elhagyni, különben a nem-vevő is
+                  // megkapná az RSC-válaszban.
+                  streamAssetId: hasAccess ? (video.streamAssetId ?? undefined) : undefined,
                   durationSec: video.durationSec ?? undefined,
                   status: video.status ?? undefined,
                 }))

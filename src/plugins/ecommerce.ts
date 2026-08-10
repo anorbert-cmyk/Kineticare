@@ -10,6 +10,7 @@ import {
   isAdminFieldAccess,
   isDocumentOwner,
   isOwnerFieldAccess,
+  streamAssetReadAccess,
 } from '../access'
 import { courseSlugField } from '../fields/course-slug'
 import { orderIntegrityBeforeChange } from '../lib/order-integrity'
@@ -402,6 +403,15 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
           admin: {
             description:
               'A Bunny Stream videó GUID-ja — a VÉDETT libraryből, a Bunny felületén a videó adatlapján található. Kézzel másolandó be.',
+          },
+          // S2/b: a fizetős tartalom kulcsa nem kerülhet ki a nyilvános REST
+          // API-n. Staff/owner és a terméket MEGVÁSÁRLÓ vevő olvassa; anonim és
+          // nem-vevő felé a Payload törli a mezőt a válaszból. A szerver-oldali
+          // lejátszási út (stream-token, lejátszó-oldal) overrideAccess: true-val
+          // olvas, azt a szabály nem érinti — a részletek a függvény fejlécében
+          // (src/access/streamAssetRead.ts).
+          access: {
+            read: streamAssetReadAccess,
           },
         },
         {
