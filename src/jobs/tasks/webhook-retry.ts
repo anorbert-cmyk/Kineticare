@@ -8,7 +8,8 @@ import {
   webhookEventStore,
 } from '../../lib/idempotency'
 import { logger } from '../../lib/logger'
-import { WEBHOOK_RETRY_QUEUE } from '../queues'
+import { WEBHOOK_RETRY_CRON, WEBHOOK_RETRY_QUEUE } from '../queues'
+import { createStaleAwareBeforeSchedule } from '../schedule-guard'
 
 /**
  * webhook-retry task (T-014): a feldolgozatlan (received) és elhasalt (failed)
@@ -21,6 +22,17 @@ import { WEBHOOK_RETRY_QUEUE } from '../queues'
  *   esemény kimarad (isRetryDue).
  * - MAX_WEBHOOK_ATTEMPTS kimerülése után az esemény failed marad, és
  *   error-szintű "owner-jelzés" kerül a logba (riasztási pont).
+ *
+ * ÜTEMEZÉS (schedule): ez az egyetlen dolog, ami ezt a jobot valaha SORBA
+ * ÁLLÍTJA — a kódban semmi nem hívja rá a `payload.jobs.queue`-t, az `autoRun`
+ * pedig a Payload saját dokumentációja szerint csak a MÁR SORBAN ÁLLÓ jobokat
+ * futtatja. Enélkül az elhasalt webhook-események sosem próbálódnak újra. A
+ * cron és a queue az autoRun-nal KÖZÖS konstansból jön (../queues), mert a
+ * `handleSchedules` csak azonos queue-név mellett fut le rá.
+ *
+ * A `beforeSchedule` hook a Payload alapértelmezett duplikátum-védelmét váltja
+ * ki: az alapértelmezés egyetlen beragadt (`processing: true`) sortól VÉGLEGESEN
+ * és NÉMÁN kikapcsolna — lásd ../schedule-guard.ts.
  */
 const RETRY_BATCH_SIZE = 25
 
@@ -42,6 +54,13 @@ export const webhookRetryTask: TaskConfig<WebhookRetryJobIO> = {
   // Job-szintű újrapróbálás: ha maga a task is elhasal (pl. DB-kimaradás),
   // a queue még egyszer megpróbálja, utána failed job + log.
   retries: 1,
+  schedule: [
+    {
+      cron: WEBHOOK_RETRY_CRON,
+      queue: WEBHOOK_RETRY_QUEUE,
+      hooks: { beforeSchedule: createStaleAwareBeforeSchedule({ taskSlug: 'webhook-retry' }) },
+    },
+  ],
   outputSchema: [
     { name: 'scanned', type: 'number', required: true },
     { name: 'retried', type: 'number', required: true },

@@ -184,12 +184,12 @@ const refundsTypescriptSchema: JSONSchema4 = {
  * újraépül); a régi processing/completed értékek kódoldalon megszűnnek.
  */
 const orderStatusStateMachineOptions = [
-  { label: 'Created', value: 'created' },
-  { label: 'Payment pending', value: 'payment_pending' },
-  { label: 'Paid', value: 'paid' },
-  { label: 'Payment failed', value: 'payment_failed' },
-  { label: 'Cancelled', value: 'cancelled' },
-  { label: 'Refunded', value: 'refunded' },
+  { label: 'Létrehozva', value: 'created' },
+  { label: 'Fizetésre vár', value: 'payment_pending' },
+  { label: 'Fizetve', value: 'paid' },
+  { label: 'Sikertelen fizetés', value: 'payment_failed' },
+  { label: 'Lemondva', value: 'cancelled' },
+  { label: 'Visszatérítve', value: 'refunded' },
 ]
 
 const withOrderStatusStateMachine = (field: Field): Field => {
@@ -233,6 +233,21 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
     useAsTitle: 'sku',
     group: WEBSHOP_GROUP,
     description: 'A megvásárolható kurzusok. Az árat és a közzétételt csak tulajdonos állíthatja.',
+    // KÖTELEZŐ felülírás: a plugin `defaultColumns: ['prices']`-t állít be
+    // (createProductsCollection), DE nincs `prices` nevű mező — a pricesField
+    // egy NÉVTELEN group → row alá teszi a `priceInHUFEnabled` + `priceInHUF`
+    // mezőket. A nem létező oszlopnév miatt a lista NULLA oszloppal rendelődik
+    // ki: nincs cím, nincs kattintható link, a kurzus nem nyitható meg. A
+    // `...defaultCollection.admin` ezt öröklené, ezért itt explicit lista kell.
+    // Az első oszlop a dokumentumra mutató link, ezért `sku` áll elöl: ez a
+    // useAsTitle, egyedi, és a gyakorlatban minden során ki van töltve — míg a
+    // displayTitle a mező bevezetése előtti sorokon üres. (A `sku` nincs
+    // `required`-re állítva, mert a plugin gyári mezője; a link üres címke
+    // mellett is működik, csak a sor azonosíthatatlan lenne.)
+    defaultColumns: ['sku', 'displayTitle', 'audience', 'priceInHUF', 'status', 'updatedAt'],
+    // A useAsTitle önmagában csak a technikai azonosítóra keresne; a szerkesztő
+    // a kurzus CÍMÉRE keres.
+    listSearchableFields: ['sku', 'displayTitle'],
   },
   fields: [
     ...mapFieldsDeep(defaultCollection.fields, withOwnerOnlyPriceAccess),
@@ -495,6 +510,25 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
     group: WEBSHOP_GROUP,
     description:
       'A leadott rendelések és a fizetésük állapota. A rendeléseket a rendszer kezeli — kézzel ne módosítsd őket.',
+    // A plugin `useAsTitle: 'createdAt'`-ot állít be. A lista keresőmezője a
+    // useAsTitle mezőre tesz ILIKE-ot, egy timestamptz oszlopon viszont nincs
+    // ilyen operátor: a keresés Postgres-hibára fut ("operator does not exist:
+    // timestamp with time zone ~~* unknown"). A rendelésszám a helyes cím is:
+    // egyedi, ember által olvasható, és a hook minden rendelésre kitölti.
+    useAsTitle: 'orderNumber',
+    // A plugin nem ad defaultColumns-t az ordersre, így a Payload automatikus
+    // választása szerepelt — rendelésszám, összeg és fizetési állapot nélkül.
+    defaultColumns: [
+      'orderNumber',
+      'createdAt',
+      'customerEmail',
+      'totalHufSnapshot',
+      'status',
+      'invoiceStatus',
+    ],
+    // A szerkesztő rendelésszámra és e-mailre keres; a useAsTitle önmagában
+    // csak az elsőt fedné.
+    listSearchableFields: ['orderNumber', 'customerEmail'],
   },
   fields: [
     ...mapFieldsDeep(defaultCollection.fields, visitOrderFields),
@@ -577,6 +611,43 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       },
     },
     {
+      // A Számlázz.hu hivatalos szabálya (A14): ugyanaz a kérés legfeljebb
+      // ötször küldhető be, utána emberi beavatkozás kell — a perzisztens
+      // számláló a job-újrapróbálás és a resweep együttesét is plafonozza.
+      name: 'invoiceAttempts',
+      type: 'number',
+      defaultValue: 0,
+      label: 'Számla-kísérletek száma',
+      admin: {
+        readOnly: true,
+        description:
+          'A számlakiállítási kísérletek száma (legfeljebb 5, utána emberi beavatkozás kell). A rendszer állítja.',
+      },
+    },
+    {
+      name: 'invoiceLastError',
+      type: 'text',
+      label: 'Számlázás utolsó hibája',
+      admin: {
+        readOnly: true,
+        description: 'Az utolsó sikertelen számlakiállítási kísérlet hibaüzenete — hibakereséshez.',
+      },
+    },
+    {
+      // Az eredeti számla teljesítési dátuma (ÉÉÉÉ-HH-NN). A helyesbítő számla
+      // dátumszabálya (NAV): a helyesbítő teljesítési dátumának naptári hónapja
+      // nem térhet el az eredetiétől — a bevett gyakorlat az eredeti dátum
+      // megismétlése, ezért a kiállításkor küldött teljesítési dátum itt rögzül.
+      name: 'invoiceCompletionDate',
+      type: 'text',
+      label: 'Számla teljesítési dátuma',
+      admin: {
+        readOnly: true,
+        description:
+          'Az eredeti számla teljesítési dátuma (ÉÉÉÉ-HH-NN) — a helyesbítő számla ezt ismétli meg. A rendszer állítja.',
+      },
+    },
+    {
       // Stornó-számla állapota (C4). Az invoiceStatus mintáját követi: a
       // rendszer (refund-folyamat + storno-issue job) állítja, kézzel nem
       // írandó. A 'storned' a végállapot — az issueStornoForOrder ezt (vagy a
@@ -613,7 +684,7 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       admin: {
         readOnly: true,
         description:
-          'A stornó-kiállítási kísérletek száma (a retry-job számlálója). A rendszer állítja.',
+          'A stornó-kiállítási kísérletek száma (legfeljebb 5, utána emberi beavatkozás kell). A rendszer állítja.',
       },
     },
     {
@@ -666,6 +737,42 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
         readOnly: true,
         description:
           'A refunds-nyom hányadik bejegyzéséhez tartozik a legutóbbi helyesbítő számla (idempotencia). A rendszer állítja.',
+      },
+    },
+    {
+      // A14: a helyesbítő-kiállítás kísérletei is plafonozva (max. 5).
+      name: 'correctiveInvoiceAttempts',
+      type: 'number',
+      defaultValue: 0,
+      label: 'Helyesbítő-kísérletek száma',
+      admin: {
+        readOnly: true,
+        description:
+          'A helyesbítő-kiállítási kísérletek száma (legfeljebb 5, utána emberi beavatkozás kell). A rendszer állítja.',
+      },
+    },
+    {
+      name: 'correctiveInvoiceLastError',
+      type: 'text',
+      label: 'Helyesbítő utolsó hibája',
+      admin: {
+        readOnly: true,
+        description: 'Az utolsó sikertelen helyesbítő-kísérlet hibaüzenete — hibakereséshez.',
+      },
+    },
+    {
+      // A helyesbítő-számláló BIZONYLAT-szintű kulcsa: melyik refund-sorszámhoz
+      // tartozik a correctiveInvoiceAttempts. Eltérő sorszámú új bizonylatnál a
+      // számláló nulláról indul — a hivatalos „ugyanaz a kérés max. 5×" szabály
+      // kérésenként (bizonylatonként) értendő, nem rendelésenként.
+      name: 'correctiveInvoiceAttemptsSeq',
+      type: 'number',
+      defaultValue: 0,
+      label: 'Helyesbítő-kísérletek refund-sorszáma',
+      admin: {
+        readOnly: true,
+        description:
+          'Melyik refund-sorszámú helyesbítőhöz tartozik a kísérletszámláló. A rendszer állítja.',
       },
     },
     {
@@ -814,6 +921,11 @@ export const ecommerce = async (config: Config): Promise<Config> => {
           ...defaultCollection.admin,
           group: WEBSHOP_GROUP,
           description: 'A vásárlók félbehagyott kosarai. Automatikusan keletkezik — ne szerkeszd.',
+          // Ugyanaz a hiba, mint az ordersnél: a plugin `useAsTitle: 'createdAt'`-ja
+          // miatt a lista keresője ILIKE-ot futtatna egy timestamptz oszlopon.
+          // A kosárnak nincs ember által olvasható azonosítója, ezért az `id` —
+          // erre a Payload külön, típushelyes keresést épít.
+          useAsTitle: 'id',
         },
       }),
     },

@@ -3,14 +3,24 @@
  */
 export {
   getSzamlazzConfig,
+  isDuplicateOrderError,
   parseAgentResponse,
   postInvoiceXml,
   SZAMLAZZ_DEFAULT_API_URL,
   SZAMLAZZ_DEFAULT_INVOICE_PREFIX,
   SZAMLAZZ_DEFAULT_TIMEOUT_MS,
+  SZAMLAZZ_DUPLICATE_AGENT_CODES,
+  SZAMLAZZ_RETRYABLE_AGENT_CODES,
   type SzamlazzEnv,
   type SzamlazzParsedSuccess,
 } from './client'
+export {
+  buildInvoiceLookupXml,
+  queryInvoiceByKulsoAzon,
+  SZAMLAZZ_NOT_FOUND_CODE,
+  type BuildInvoiceLookupXmlInput,
+  type InvoiceLookupResult,
+} from './pdf'
 export {
   buildInvoiceXml,
   buyerFromOrder,
@@ -18,6 +28,7 @@ export {
   escapeXml,
   issueInvoiceForOrder,
   itemsFromOrder,
+  MAX_INVOICE_ATTEMPTS,
   VAT_RATE_PERCENT,
   type BuildInvoiceXmlInput,
   type ComputeLineAmountsOptions,
@@ -33,7 +44,6 @@ export {
   issueStornoForOrder,
   MAX_STORNO_ATTEMPTS,
   postStornoXml,
-  STORNO_KULSO_AZON_SUFFIX,
   type BuildStornoXmlInput,
   type IssueStornoForOrderDeps,
 } from './storno'
@@ -43,11 +53,16 @@ export {
   correctiveKulsoAzon,
   isRetryableCorrectiveError,
   issueCorrectiveInvoiceForOrder,
+  MAX_CORRECTIVE_ATTEMPTS,
   type BuildCorrectiveInvoiceXmlInput,
   type IssueCorrectiveInvoiceDeps,
 } from './corrective'
 export { queueCorrectiveInvoiceJob, queueStornoIssueJob } from './queue'
 export { writeOrderInvoicingState } from './order-state'
+// Közös dátum-segédek: a kelt-dátum zóna-tudatos képzése (Europe/Budapest) és
+// a Számla Agent dátummezőinek alak-kapuja. Az escapeXml az invoice.ts-en
+// keresztül exportálódik (ott is re-export a ./xml-ből).
+export { budapestDateString, isIsoDateString } from './xml'
 export {
   SzamlazzApiError,
   type IssueCorrectiveInvoiceResult,
@@ -59,4 +74,5 @@ export {
   type SzamlazzAgentError,
   type SzamlazzClientConfig,
   type SzamlazzErrorKind,
+  type SzamlazzVatMode,
 } from './types'

@@ -6,6 +6,11 @@ import * as migration_20260808_150710_szekcio_rendszer_blokkok from './20260808_
 import * as migration_20260809_123608_kurzus_seo_mezok from './20260809_123608_kurzus_seo_mezok';
 import * as migration_20260809_140731_kurzus_haladas_es_celkozonseg from './20260809_140731_kurzus_haladas_es_celkozonseg';
 import * as migration_20260809_180031_storno_statusz_es_kurzus_slug from './20260809_180031_storno_statusz_es_kurzus_slug';
+import * as migration_20260809_223906_szamlazz_megfeleles from './20260809_223906_szamlazz_megfeleles';
+import * as migration_20260809_232121_szamlazz_attempts_seq from './20260809_232121_szamlazz_attempts_seq';
+import * as migration_20260810_094820_szamlazz_refunds_oszlop from './20260810_094820_szamlazz_refunds_oszlop';
+import * as migration_20260810_095237_sema_drift_allapotgep_es_jobok from './20260810_095237_sema_drift_allapotgep_es_jobok';
+import * as migration_20260810_132919_job_utemezes_stats from './20260810_132919_job_utemezes_stats';
 
 export const migrations = [
   {
@@ -46,6 +51,31 @@ export const migrations = [
   {
     up: migration_20260809_180031_storno_statusz_es_kurzus_slug.up,
     down: migration_20260809_180031_storno_statusz_es_kurzus_slug.down,
-    name: '20260809_180031_storno_statusz_es_kurzus_slug'
+    name: '20260809_180031_storno_statusz_es_kurzus_slug',
+  },
+  {
+    up: migration_20260809_223906_szamlazz_megfeleles.up,
+    down: migration_20260809_223906_szamlazz_megfeleles.down,
+    name: '20260809_223906_szamlazz_megfeleles',
+  },
+  {
+    up: migration_20260809_232121_szamlazz_attempts_seq.up,
+    down: migration_20260809_232121_szamlazz_attempts_seq.down,
+    name: '20260809_232121_szamlazz_attempts_seq',
+  },
+  {
+    up: migration_20260810_094820_szamlazz_refunds_oszlop.up,
+    down: migration_20260810_094820_szamlazz_refunds_oszlop.down,
+    name: '20260810_094820_szamlazz_refunds_oszlop',
+  },
+  {
+    up: migration_20260810_095237_sema_drift_allapotgep_es_jobok.up,
+    down: migration_20260810_095237_sema_drift_allapotgep_es_jobok.down,
+    name: '20260810_095237_sema_drift_allapotgep_es_jobok',
+  },
+  {
+    up: migration_20260810_132919_job_utemezes_stats.up,
+    down: migration_20260810_132919_job_utemezes_stats.down,
+    name: '20260810_132919_job_utemezes_stats'
   },
 ];

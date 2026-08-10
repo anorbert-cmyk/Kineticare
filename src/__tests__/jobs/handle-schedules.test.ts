@@ -1,0 +1,252 @@
+import { BasePayload, type PayloadRequest, type SanitizedConfig, type Where } from 'payload'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { ORDER_MAINTENANCE_QUEUE, WEBHOOK_RETRY_QUEUE } from '../../jobs/queues'
+import configPromise from '../../payload.config'
+
+/**
+ * A VALÓDI `handleSchedules` az ÉLES configgal, ál-adatbázissal.
+ *
+ * ═══ MIÉRT KELL EZ A FÁJL ═══
+ * A `scheduling.test.ts` a config ALAKJÁT ellenőrzi (van-e `schedule`, egyezik-e
+ * a queue és a cron). Az viszont ott NEM derül ki, hogy a Payload ütemezője
+ * ténylegesen SORBA ÁLLÍTJA-e a jobot, és milyen értékekkel. Ez a fájl ezért a
+ * Payload SAJÁT `handleSchedules` operációját futtatja le (payload/dist/queues/
+ * operations/handleSchedules) — nem a tükrét —, és a `jobs.queue` hívást méri.
+ *
+ * ═══ HOGYAN ═══
+ * A `BasePayload` konstruktora önmagában nem nyúl adatbázishoz (a kapcsolódás a
+ * `payload.init()`/`db.connect()` dolga), a `jobs` pedig egy sima objektum
+ * (`getJobsLocalAPI(this)`), tehát a `queue` metódusa lecserélhető kémre. Így a
+ * VALÓDI ütemező-kód fut, csak a persistence-réteg ál. Adatbázis nem kell.
+ *
+ * ═══ AMIT EZ BIZONYÍT ═══
+ * 1. az order-poll PONTOSAN EGYSZER kerül sorba, `queue: order-maintenance` és
+ *    `meta.scheduled: true` értékekkel (utóbbi az a mező, amiért a `payload_jobs`
+ *    táblának `meta` oszlop kell — lásd a migrációs vonzatot a src/jobs/index.ts
+ *    fejlécében);
+ * 2. a `handleSchedules` a `payload-jobs-stats` globalt OLVASSA és ÍRJA, tehát a
+ *    hozzá tartozó tábla nélkül a deploy elhasalna;
+ * 3. egy BERAGADT (`processing: true`, régóta nem frissült) job NEM kapcsolja ki
+ *    az ütemezést — miközben a Payload alapértelmezett hookjával kikapcsolná
+ *    (negatív kontroll, ugyanezzel az ál-adatbázissal).
+ */
+
+/** A stats-global slugja (payload/dist/queues/config/global.js). */
+const JOB_STATS_GLOBAL_SLUG = 'payload-jobs-stats'
+
+interface QueueCall {
+  task?: string
+  queue?: string
+  meta?: unknown
+  waitUntil?: Date
+  input?: unknown
+}
+
+interface FakeDbOptions {
+  /** „Fut vagy futtatható" jobok száma (a duplikátum-védelem alap-számlálása). */
+  runnableOrActive?: number
+  /** Ebből beragadt (processing: true + régen frissült). */
+  stale?: number
+}
+
+interface Harness {
+  payload: BasePayload
+  req: PayloadRequest
+  queueCalls: QueueCall[]
+  countedWheres: Where[]
+  globalWrites: string[]
+}
+
+/**
+ * A beragadt-számlálás felismerése: az őr (src/jobs/schedule-guard.ts) a második
+ * lekérdezésbe `processing` és `updatedAt` feltételt is tesz — a Payload
+ * alapértelmezett számlálásában ilyen nincs.
+ */
+function isStaleCountQuery(where: Where): boolean {
+  const conditions = Array.isArray(where.and) ? where.and : []
+  return conditions.some((condition) => 'processing' in condition)
+}
+
+function createHarness(config: SanitizedConfig, options: FakeDbOptions = {}): Harness {
+  const queueCalls: QueueCall[] = []
+  const countedWheres: Where[] = []
+  const globalWrites: string[] = []
+
+  const db = {
+    count: async ({ where }: { where: Where }) => {
+      countedWheres.push(where)
+      return {
+        totalDocs: isStaleCountQuery(where) ? (options.stale ?? 0) : (options.runnableOrActive ?? 0),
+      }
+    },
+    createGlobal: async ({ slug }: { slug: string }) => {
+      globalWrites.push(slug)
+      return {}
+    },
+    findGlobal: async ({ slug }: { slug: string }) => {
+      globalWrites.push(`read:${slug}`)
+      return undefined
+    },
+    updateGlobal: async ({ slug }: { slug: string }) => {
+      globalWrites.push(slug)
+      return {}
+    },
+  }
+
+  const payload = new BasePayload()
+  payload.config = config
+  payload.db = db as unknown as BasePayload['db']
+  payload.jobs.queue = (async (args: QueueCall) => {
+    queueCalls.push(args)
+    return { id: queueCalls.length }
+  }) as unknown as BasePayload['jobs']['queue']
+
+  return {
+    payload,
+    req: { payload } as unknown as PayloadRequest,
+    queueCalls,
+    countedWheres,
+    globalWrites,
+  }
+}
+
+/** Az éles config másolata, a saját `beforeSchedule` őr NÉLKÜL (negatív kontroll). */
+function withDefaultScheduleHooks(config: SanitizedConfig): SanitizedConfig {
+  return {
+    ...config,
+    jobs: {
+      ...config.jobs,
+      tasks: (config.jobs.tasks ?? []).map((task) => ({
+        ...task,
+        schedule: task.schedule?.map((entry) => {
+          const withoutHooks = { ...entry }
+          delete withoutHooks.hooks
+          return withoutHooks
+        }),
+      })),
+    },
+  } as SanitizedConfig
+}
+
+let config: SanitizedConfig
+
+beforeEach(async () => {
+  config = await configPromise
+  // CLAUDE.md 15.: tesztből SOSEM mehet ki valódi hálózati hívás.
+  vi.stubGlobal('fetch', () => {
+    throw new Error('TESZT: valódi hálózati hívás nem futhat')
+  })
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+describe('handleSchedules — a VALÓDI Payload-ütemező az éles configgal', () => {
+  it('az order-poll PONTOSAN EGYSZER kerül sorba, a helyes task/queue/meta értékekkel', async () => {
+    const harness = createHarness(config, { runnableOrActive: 0 })
+
+    const result = await harness.payload.jobs.handleSchedules({
+      queue: ORDER_MAINTENANCE_QUEUE,
+      req: harness.req,
+    })
+
+    expect(harness.queueCalls).toHaveLength(1)
+    expect(harness.queueCalls[0]).toMatchObject({
+      task: 'order-poll',
+      queue: ORDER_MAINTENANCE_QUEUE,
+      meta: { scheduled: true },
+    })
+    expect(harness.queueCalls[0].waitUntil).toBeInstanceOf(Date)
+    expect(result.queued).toHaveLength(1)
+    expect(result.skipped).toHaveLength(0)
+    expect(result.errored).toHaveLength(0)
+  })
+
+  it('a webhook-retry a saját queue-ján kerül sorba (a queue-szűrés működik)', async () => {
+    const harness = createHarness(config, { runnableOrActive: 0 })
+
+    await harness.payload.jobs.handleSchedules({
+      queue: WEBHOOK_RETRY_QUEUE,
+      req: harness.req,
+    })
+
+    expect(harness.queueCalls).toHaveLength(1)
+    expect(harness.queueCalls[0]).toMatchObject({
+      task: 'webhook-retry',
+      queue: WEBHOOK_RETRY_QUEUE,
+      meta: { scheduled: true },
+    })
+  })
+
+  /**
+   * Ez a séma-vonzat BIZONYÍTÉKA: a `handleSchedules` a stats-globalt olvassa,
+   * az `afterSchedule` pedig írja. A `payload_jobs_stats` tábla nélkül tehát a
+   * cron-tick az első lépésén elhasalna — és mivel a tick ELŐBB ütemez, csak
+   * UTÁNA futtat, a ma működő esemény-vezérelt jobok is leállnának.
+   */
+  it('a stats-globalt olvassa ÉS írja (ezért kell hozzá a payload_jobs_stats tábla)', async () => {
+    const harness = createHarness(config, { runnableOrActive: 0 })
+
+    await harness.payload.jobs.handleSchedules({
+      queue: ORDER_MAINTENANCE_QUEUE,
+      req: harness.req,
+    })
+
+    expect(harness.globalWrites).toContain(`read:${JOB_STATS_GLOBAL_SLUG}`)
+    expect(harness.globalWrites).toContain(JOB_STATS_GLOBAL_SLUG)
+  })
+
+  it('ÉLŐ (nem beragadt) job blokkol — nem lesz duplikátum', async () => {
+    const harness = createHarness(config, { runnableOrActive: 1, stale: 0 })
+
+    const result = await harness.payload.jobs.handleSchedules({
+      queue: ORDER_MAINTENANCE_QUEUE,
+      req: harness.req,
+    })
+
+    expect(harness.queueCalls).toHaveLength(0)
+    expect(result.skipped).toHaveLength(1)
+  })
+})
+
+describe('handleSchedules — beragadt job (a néma leállás elleni védelem)', () => {
+  it('a beragadt job NEM kapcsolja ki az ütemezést: a jobot így is sorba állítjuk', async () => {
+    const harness = createHarness(config, { runnableOrActive: 1, stale: 1 })
+
+    const result = await harness.payload.jobs.handleSchedules({
+      queue: ORDER_MAINTENANCE_QUEUE,
+      req: harness.req,
+    })
+
+    expect(harness.queueCalls).toHaveLength(1)
+    expect(harness.queueCalls[0]).toMatchObject({ task: 'order-poll' })
+    expect(result.queued).toHaveLength(1)
+    // Az őr tényleg megnézte a beragadást (második, `processing`-re szűrt számolás).
+    expect(harness.countedWheres.filter(isStaleCountQuery)).toHaveLength(1)
+  })
+
+  /**
+   * NEGATÍV KONTROLL — a Payload ALAPÉRTELMEZETT hookjával (a sajátunk nélkül)
+   * UGYANEZ a beragadt sor kikapcsolja az ütemezést. Ez mutatja meg, hogy az őr
+   * nem díszlet: nélküle egyetlen elhalt job VÉGLEGESEN és NÉMÁN megállítaná a
+   * periodikus jobokat.
+   */
+  it('a saját őr NÉLKÜL ugyanez a beragadt job végleg blokkolna (negatív kontroll)', async () => {
+    const harness = createHarness(withDefaultScheduleHooks(config), {
+      runnableOrActive: 1,
+      stale: 1,
+    })
+
+    const result = await harness.payload.jobs.handleSchedules({
+      queue: ORDER_MAINTENANCE_QUEUE,
+      req: harness.req,
+    })
+
+    expect(harness.queueCalls).toHaveLength(0)
+    expect(result.skipped).toHaveLength(1)
+    // Az alapértelmezett hook a beragadást meg sem nézi.
+    expect(harness.countedWheres.filter(isStaleCountQuery)).toHaveLength(0)
+  })
+})

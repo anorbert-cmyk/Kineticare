@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { assertRequiredEnv, requiredEnvVars, turnstileEnvPair } from '../../env'
+import { assertRequiredEnv, requiredEnvVars, szamlazzVatModes, turnstileEnvPair } from '../../env'
 
 /**
  * Induláskori ENV-assert (src/env.ts) — a `register()` (src/instrumentation.ts)
@@ -34,6 +34,7 @@ beforeEach(() => {
   vi.stubEnv('BARION_POSKEY_PROD', undefined)
   vi.stubEnv(SITE_KEY_ENV, undefined)
   vi.stubEnv(SECRET_KEY_ENV, undefined)
+  vi.stubEnv('SZAMLAZZ_AFAKULCS', undefined)
 })
 
 afterEach(() => {
@@ -134,6 +135,63 @@ describe('assertRequiredEnv — Turnstile-kulcspár konzisztenciája', () => {
 
     expect(() => assertRequiredEnv(warn)).not.toThrow()
     expect(warn).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * SZAMLAZZ_AFAKULCS (F16) — OPCIONÁLIS kulcs szigorú értékkészlettel.
+ *
+ * A `getSzamlazzConfig` csak LUSTÁN, az első számlázási művelet közben fut le,
+ * ahol a hiba a jobban vagy a rendelés-visszaigazoló e-mail try/catch-ében
+ * nyelődne el: egy elgépelt áfakulcs úgy állítaná le a számlázást, hogy arról
+ * senki nem szerez tudomást. Ezért a hibás érték MÁR INDULÁSKOR megakasztja az
+ * appot — minden környezetben, mert az áfakulcs adóügyi következménye élesen és
+ * stagingen egyaránt súlyos.
+ */
+describe('assertRequiredEnv — SZAMLAZZ_AFAKULCS induláskori ellenőrzése', () => {
+  it('nincs beállítva → nem dob (alapértelmezés: 27)', () => {
+    vi.stubEnv('NODE_ENV', 'test')
+
+    expect(() => assertRequiredEnv()).not.toThrow()
+  })
+
+  it('üres/whitespace érték → nem dob (hiánynak számít)', () => {
+    vi.stubEnv('NODE_ENV', 'test')
+    vi.stubEnv('SZAMLAZZ_AFAKULCS', '   ')
+
+    expect(() => assertRequiredEnv()).not.toThrow()
+  })
+
+  it("a támogatott értékek ('27', 'AAM') nem akasztják meg az indulást", () => {
+    vi.stubEnv('NODE_ENV', 'test')
+
+    for (const mode of szamlazzVatModes) {
+      vi.stubEnv('SZAMLAZZ_AFAKULCS', mode)
+      expect(() => assertRequiredEnv(), mode).not.toThrow()
+    }
+  })
+
+  it('ismeretlen érték → már induláskor dob, néven nevezett magyar hibával', () => {
+    vi.stubEnv('NODE_ENV', 'test')
+    vi.stubEnv('SZAMLAZZ_AFAKULCS', 'TAM')
+
+    expect(() => assertRequiredEnv()).toThrowError(/SZAMLAZZ_AFAKULCS/)
+    expect(() => assertRequiredEnv()).toThrowError(/nem indulhat el/)
+    // A hibás érték szerepel az üzenetben (nem titok — adóügyi kód).
+    expect(() => assertRequiredEnv()).toThrowError(/TAM/)
+  })
+
+  it('MINDEN környezetben dob (nem csak élesben)', () => {
+    // A '0' és a '27%' a két legvalószínűbb elgépelés — egyik sem érvényes kulcs.
+    for (const nodeEnv of ['development', 'test', 'production']) {
+      for (const badValue of ['0', '27%']) {
+        vi.stubEnv('NODE_ENV', nodeEnv)
+        vi.stubEnv('SZAMLAZZ_AFAKULCS', badValue)
+        expect(() => assertRequiredEnv(), `${nodeEnv}/${badValue}`).toThrowError(
+          /SZAMLAZZ_AFAKULCS/,
+        )
+      }
+    }
   })
 })
 

@@ -1,3 +1,4 @@
+import { isSzamlazzVatMode, szamlazzVatModes } from '../../env'
 import { createLogger } from '../logger'
 import { SzamlazzApiError, type SzamlazzAgentError, type SzamlazzClientConfig } from './types'
 
@@ -16,9 +17,34 @@ import { SzamlazzApiError, type SzamlazzAgentError, type SzamlazzClientConfig } 
  * 'apikey' kulcsot amúgy is maszkolja.
  */
 
-export const SZAMLAZZ_DEFAULT_API_URL = 'https://www.szamlazz.hu/szamla'
+/**
+ * A hivatalos Agent-végpont — ZÁRÓ PERJELLEL (https://www.szamlazz.hu/szamla/).
+ * A perjel nélküli alakra a szerver átirányíthat, és egy 301/302-es redirectet
+ * a fetch GET-ként követne: a multipart törzs (benne az XML) elveszne, a hívás
+ * pedig 53-as „Hiányzó XML fájl" hibába futna.
+ */
+export const SZAMLAZZ_DEFAULT_API_URL = 'https://www.szamlazz.hu/szamla/'
 export const SZAMLAZZ_DEFAULT_TIMEOUT_MS = 15_000
 export const SZAMLAZZ_DEFAULT_INVOICE_PREFIX = 'KIN'
+
+/**
+ * Hivatalos hibakód-osztályozás (docs.szamlazz.hu/agent/basics/error-handling):
+ * - '1' — rendszerkarbantartás: az EGYETLEN explicit újrapróbálhatóként
+ *   dokumentált kód (pár perc múlva). Minden más agent-kód végleges: auth/fiók
+ *   (3, 135, 136, 164), kérésformátum (53, 57), e-számla-beállítás (54, 55),
+ *   előtag (202), tétel-matematika (259–264) — ezekre az újraküldés ugyanazt
+ *   a hibát adná, a max. 5 beküldés keretét pedig feleslegesen égetné.
+ * - '71'/'152' — „Már létező rendelésszám": nem hiba, hanem idempotencia-
+ *   találat (kind: 'duplicate') — a hívó a szamlaKulsoAzon-lekérdezéssel veszi
+ *   át a meglévő bizonylat számát.
+ */
+export const SZAMLAZZ_RETRYABLE_AGENT_CODES: ReadonlySet<string> = new Set(['1'])
+export const SZAMLAZZ_DUPLICATE_AGENT_CODES: ReadonlySet<string> = new Set(['71', '152'])
+
+/** 71/152 — a Számlázz.hu duplikátum-jelzése (idempotencia-találat, nem hiba). */
+export function isDuplicateOrderError(error: unknown): error is SzamlazzApiError {
+  return error instanceof SzamlazzApiError && error.kind === 'duplicate'
+}
 
 const logger = createLogger({ module: 'szamlazz' })
 
@@ -27,6 +53,7 @@ export interface SzamlazzEnv {
   SZAMLAZZ_AGENT_KEY?: string
   SZAMLAZZ_API_URL?: string
   SZAMLAZZ_INVOICE_PREFIX?: string
+  SZAMLAZZ_AFAKULCS?: string
   SZAMLAZZ_TIMEOUT_MS?: string
   [key: string]: string | undefined
 }
@@ -45,6 +72,22 @@ function parseTimeoutMs(raw: string | undefined): number {
 }
 
 /**
+ * Beágyazott hitelesítő adat maszkolása a hibaüzenetben (`//user:pass@` →
+ * `//***@`). A hibaüzenet naplóba és képernyőre is kerülhet — egy elgépelt,
+ * jelszót tartalmazó URL-t nem szabad ott kiírni.
+ */
+function maskUrlCredentials(raw: string): string {
+  return raw.replace(/\/\/[^/@\s]*@/, '//***@')
+}
+
+function invalidApiUrlError(rawApiUrl: string): Error {
+  return new Error(
+    `Számlázz.hu-konfigurációs hiba: a SZAMLAZZ_API_URL nem érvényes https URL ` +
+      `('${maskUrlCredentials(rawApiUrl)}'). Az alapértelmezett érték: ${SZAMLAZZ_DEFAULT_API_URL}.`,
+  )
+}
+
+/**
  * Környezetfeloldás. SZAMLAZZ_AGENT_KEY nélkül enabled=false (kikapcsolt
  * számlázás). Érvénytelen SZAMLAZZ_API_URL esetén dob — az elgépelt végpont
  * ne csendben működjön. Tiszta függvény (teszteléshez env-paraméteres).
@@ -53,17 +96,41 @@ export function getSzamlazzConfig(env: SzamlazzEnv = process.env): SzamlazzClien
   const agentKey = readEnv(env, 'SZAMLAZZ_AGENT_KEY')
   const rawApiUrl = readEnv(env, 'SZAMLAZZ_API_URL') ?? SZAMLAZZ_DEFAULT_API_URL
 
-  let normalizedApiUrl: string
+  let parsed: URL
   try {
-    const parsed = new URL(rawApiUrl)
-    if (parsed.protocol !== 'https:') {
-      throw new Error('not-https')
-    }
-    normalizedApiUrl = parsed.origin + parsed.pathname.replace(/\/+$/, '')
+    parsed = new URL(rawApiUrl)
   } catch {
+    throw invalidApiUrlError(rawApiUrl)
+  }
+  if (parsed.username !== '' || parsed.password !== '') {
+    // A hitelesítő adat az URL-ben nemcsak felesleges (az agent-kulcs az
+    // XML-törzsben utazik), hanem szivárgásveszélyes is: proxykon, naplókban,
+    // Referer-fejlécben végigmenne. Inkább hangos hiba, mint csendes titok.
     throw new Error(
-      `Számlázz.hu-konfigurációs hiba: a SZAMLAZZ_API_URL nem érvényes https URL ('${rawApiUrl}'). ` +
-        `Az alapértelmezett érték: ${SZAMLAZZ_DEFAULT_API_URL}.`,
+      'Számlázz.hu-konfigurációs hiba: a SZAMLAZZ_API_URL nem tartalmazhat beágyazott ' +
+        'felhasználónevet vagy jelszót (https://felhasznalo:jelszo@… alak). Töröld a ' +
+        'hitelesítő adatot az URL-ből — a Számla Agent kulcs kizárólag az XML-törzsben utazik.',
+    )
+  }
+  if (parsed.protocol !== 'https:') {
+    throw invalidApiUrlError(rawApiUrl)
+  }
+  // Pontosan EGY záró perjel — perjel nélkül a POST egy redirecten GET-té
+  // silányulhat (a multipart törzs elveszne), dupla perjel pedig zaj.
+  // A query string MEGMARAD: egy proxy-végpont ('…/agent?env=test') elhagyott
+  // paramétere csendben ÉLES bizonylatot állíttatna ki teszt-szándék mellett.
+  // (A fragment szándékosan kimarad — a hálózatra amúgy sem megy ki.)
+  const normalizedApiUrl = parsed.origin + parsed.pathname.replace(/\/*$/, '/') + parsed.search
+
+  const rawVatMode = readEnv(env, 'SZAMLAZZ_AFAKULCS') ?? '27'
+  if (!isSzamlazzVatMode(rawVatMode)) {
+    // Hangos hiba: egy elgépelt áfakulcs minden számlát rossz kulccsal állítana
+    // ki — azt nem szabad csendben az alapértelmezésre ejteni. (Ugyanez a
+    // kulcs INDULÁSKOR is ellenőrződik, lásd src/env.ts assertRequiredEnv.)
+    throw new Error(
+      `Számlázz.hu-konfigurációs hiba: a SZAMLAZZ_AFAKULCS értéke csak ` +
+        `${szamlazzVatModes.map((mode) => `'${mode}'`).join(' vagy ')} lehet ('${rawVatMode}'). ` +
+        `Alanyi adómentes eladóként az 'AAM' a jogszerű; általános esetben hagyd üresen (alapértelmezés: 27).`,
     )
   }
 
@@ -72,6 +139,7 @@ export function getSzamlazzConfig(env: SzamlazzEnv = process.env): SzamlazzClien
     apiUrl: normalizedApiUrl,
     ...(agentKey ? { agentKey } : {}),
     invoicePrefix: readEnv(env, 'SZAMLAZZ_INVOICE_PREFIX') ?? SZAMLAZZ_DEFAULT_INVOICE_PREFIX,
+    vatMode: rawVatMode,
     timeoutMs: parseTimeoutMs(readEnv(env, 'SZAMLAZZ_TIMEOUT_MS')),
   }
 }
@@ -107,8 +175,40 @@ function extractAgentErrors(xml: string): SzamlazzAgentError[] {
   return errors
 }
 
-function isTruthyHeader(value: string | null): boolean {
+function isTruthyHeader(value: string | null): value is string {
   return value !== null && value !== '' && value !== '0' && value.toLowerCase() !== 'false'
+}
+
+/**
+ * A `szlahu_error` fejléc értéke URL-KÓDOLT (hivatalos A6 követelmény).
+ * Dekódolás nélkül a hibaüzenet a rendelés `*LastError` mezőjébe is így kerül,
+ * és az ügyintéző `Sikertelen+bejelentkez%C3%A9s`-t lát a magyar mondat helyett.
+ * Hibás kódolásnál (URIError) a NYERS érték marad — a hibaüzenet elveszni nem
+ * fog, csak olvashatatlanabb.
+ */
+function decodeHeaderValue(value: string): string {
+  try {
+    return decodeURIComponent(value.replace(/\+/g, ' '))
+  } catch {
+    return value
+  }
+}
+
+/**
+ * Agent-hiba a hibakódok hivatalos osztályozásával: 71/152 → 'duplicate'
+ * (idempotencia-találat, a hívó lekérdezéssel oldja fel); '1' → retryable
+ * (karbantartás); minden más végleges 'agent' hiba.
+ */
+function agentErrorFromCodes(message: string, agentErrors: SzamlazzAgentError[]): SzamlazzApiError {
+  const codes = agentErrors.map((entry) => entry.code.trim())
+  const duplicate = codes.some((code) => SZAMLAZZ_DUPLICATE_AGENT_CODES.has(code))
+  const retryable = !duplicate && codes.some((code) => SZAMLAZZ_RETRYABLE_AGENT_CODES.has(code))
+  return new SzamlazzApiError({
+    message,
+    kind: duplicate ? 'duplicate' : 'agent',
+    agentErrors,
+    retryable,
+  })
 }
 
 export interface SzamlazzParsedSuccess {
@@ -136,12 +236,10 @@ export function parseAgentResponse(body: string, headers: Headers): SzamlazzPars
   const headerError = headers.get('szlahu_error')
   if (isTruthyHeader(headerError)) {
     const headerCode = headers.get('szlahu_error_code') ?? 'Ismeretlen'
-    throw new SzamlazzApiError({
-      message: `Számla Agent hiba (fejléc): ${headerCode} — ${headerError}`,
-      kind: 'agent',
-      agentErrors: [{ code: headerCode, message: headerError as string }],
-      retryable: false,
-    })
+    const decodedError = decodeHeaderValue(headerError)
+    throw agentErrorFromCodes(`Számla Agent hiba (fejléc): ${headerCode} — ${decodedError}`, [
+      { code: headerCode, message: decodedError },
+    ])
   }
 
   const sikeres = tagValue(body, 'sikeres')
@@ -159,14 +257,12 @@ export function parseAgentResponse(body: string, headers: Headers): SzamlazzPars
   }
   if (sikeres === 'false') {
     const agentErrors = extractAgentErrors(body)
-    throw new SzamlazzApiError({
-      message: `Számla Agent elutasította a számlakiállítást: ${
+    throw agentErrorFromCodes(
+      `Számla Agent elutasította a számlakiállítást: ${
         agentErrors.map((error) => `${error.code} — ${error.message}`).join('; ') || 'ismeretlen hiba'
       }`,
-      kind: 'agent',
       agentErrors,
-      retryable: false,
-    })
+    )
   }
 
   throw new SzamlazzApiError({
@@ -176,13 +272,47 @@ export function parseAgentResponse(body: string, headers: Headers): SzamlazzPars
   })
 }
 
-function isAbortError(error: unknown): boolean {
+/** Timeout/abort eredetű hiba-e (AbortSignal.timeout, fetch-megszakítás). */
+export function isAbortError(error: unknown): boolean {
   return (
     error instanceof Error &&
     (error.name === 'AbortError' ||
       error.name === 'TimeoutError' ||
       error.message.toLowerCase().includes('aborted'))
   )
+}
+
+/**
+ * A válasz-TÖRZS beolvasása közben keletkezett hiba osztályozása.
+ *
+ * A fejlécek megérkezése UTÁN a stream még elszakadhat: az AbortSignal.timeout
+ * a törzs olvasása közben is elsülhet, a Railway privát hálózata pedig félúton
+ * elvághatja a TCP-kapcsolatot. Osztályozás nélkül ez nyers TypeError-ként
+ * lépne ki, elveszítve a `retryable` jelzést — a hívó (refund-folyamat) nem
+ * állítaná sorba az újrapróbáló jobot, és a bizonylat NÉMÁN elveszne.
+ *
+ * A `context` a hívó ágát nevezi meg a magyar üzenetben (pl. bizonylat-lekérdezés).
+ */
+export function bodyReadError(
+  error: unknown,
+  timeoutMs: number,
+  context?: string,
+): SzamlazzApiError {
+  const suffix = context ? ` (${context})` : ''
+  if (isAbortError(error)) {
+    return new SzamlazzApiError({
+      message: `A Számlázz.hu válaszának letöltése nem fejeződött be ${timeoutMs} ms-en belül${suffix}.`,
+      kind: 'timeout',
+      retryable: true,
+    })
+  }
+  return new SzamlazzApiError({
+    message: `A Számlázz.hu válaszának letöltése megszakadt${suffix}: ${
+      error instanceof Error ? error.message : String(error)
+    }`,
+    kind: 'network',
+    retryable: true,
+  })
 }
 
 /**
@@ -252,8 +382,25 @@ export async function postInvoiceXml(
     })
   }
 
-  const body = await response.text()
-  const result = parseAgentResponse(body, response.headers)
+  // A törzs-olvasás és az értelmezés EGY védett blokkban: a stream félbeszakadása
+  // (timeout a fejlécek után, TCP-vágás) osztályozott, retryable hibává válik,
+  // a parseAgentResponse saját — már strukturált — hibái viszont változatlanul
+  // mennek tovább (különben a duplicate/agent besorolás veszne el).
+  let result: SzamlazzParsedSuccess
+  try {
+    const body = await response.text()
+    result = parseAgentResponse(body, response.headers)
+  } catch (error) {
+    if (error instanceof SzamlazzApiError) {
+      throw error
+    }
+    logger.error('Számlázz.hu válasz-törzs olvasási hiba', {
+      endpoint,
+      durationMs: Date.now() - startedAt,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    })
+    throw bodyReadError(error, resolved.timeoutMs)
+  }
   logger.info('Számlázz.hu számla kiállítva', {
     endpoint,
     durationMs,
