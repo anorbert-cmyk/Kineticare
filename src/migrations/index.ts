@@ -8,6 +8,7 @@ import * as migration_20260809_140731_kurzus_haladas_es_celkozonseg from './2026
 import * as migration_20260809_180031_storno_statusz_es_kurzus_slug from './20260809_180031_storno_statusz_es_kurzus_slug';
 import * as migration_20260809_223906_szamlazz_megfeleles from './20260809_223906_szamlazz_megfeleles';
 import * as migration_20260809_232121_szamlazz_attempts_seq from './20260809_232121_szamlazz_attempts_seq';
+import * as migration_20260810_094820_szamlazz_refunds_oszlop from './20260810_094820_szamlazz_refunds_oszlop';
 
 export const migrations = [
   {
@@ -58,6 +59,11 @@ export const migrations = [
   {
     up: migration_20260809_232121_szamlazz_attempts_seq.up,
     down: migration_20260809_232121_szamlazz_attempts_seq.down,
-    name: '20260809_232121_szamlazz_attempts_seq'
+    name: '20260809_232121_szamlazz_attempts_seq',
+  },
+  {
+    up: migration_20260810_094820_szamlazz_refunds_oszlop.up,
+    down: migration_20260810_094820_szamlazz_refunds_oszlop.down,
+    name: '20260810_094820_szamlazz_refunds_oszlop',
   },
 ];
