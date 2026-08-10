@@ -52,17 +52,31 @@ javasolt CI-őr, ami gépivé tenné.
 | #62 | `aaec794` | A soha nem futó jobok + a díszlet-számlázási űrlap | `Migrated: …job_utemezes_stats (8ms)`; `server_start` a SHA-val; a jobok azóta **tisztán futnak** (lásd lent) |
 | #53–#55 | `c514464` | Dependabot: `@types/react`, `posthog-js`, `tsx` | CI 5/5 zöld mindháromra, friss mainre ráállítva |
 | #64 | `babee08` | CMS-URL engedélylista + CORS/CSRF-eredetlista (a #41 nem access-control fele) | CI 4/4 zöld; fő fában 1587 teszt + `next build` exit 0 |
-| #65 | `7e21fbb` | jobs-jogosultság, `payload-jobs-stats` global, `streamAssetId`, `readVersions` (access-control) | CI zöld a VALÓDI S1+S2 kombináción; fő fában 1642 teszt + build exit 0; deploy a doksi írásakor sorban állt — **ellenőrizendő**: build-log + `server_start` |
+| #65 | `7e21fbb` | jobs-jogosultság, `payload-jobs-stats` global, `streamAssetId`, `readVersions` (access-control) | CI zöld a VALÓDI S1+S2 kombináción; fő fában 1642 teszt + build exit 0; deploy SUCCESS, tényleges `npm run build`, és a jobok azóta **tisztán futnak** (lásd lent) |
 
 `/` · `/admin` · `/kurzusok` → HTTP 200. Railway: projekt `pretty-spontaneity`,
 service `Kineticare`, domain `kineticare-production.up.railway.app`.
 
-A #64 deploy tételesen igazolva (a CLAUDE.md üzemeltetési 1. pontja szerint —
+Mindkét deploy tételesen igazolva (a CLAUDE.md üzemeltetési 1. pontja szerint —
 a „SUCCESS" önmagában NEM elég): a build-logban ott a tényleges `npm run build`
-→ `✓ Compiled successfully in 8.4s` (nem `Build · skipped`), mind a hat fázis
-`completed`, healthcheck `[1/1] succeeded`, `server_start` megvan, és a jobok
-azóta is tisztán futnak (percenként `webhook-retry`, 5 percenként `order-poll`,
-tickenként pontosan egy job, nulla hiba).
+→ `✓ Compiled successfully` (nem `Build · skipped`), mind a hat fázis
+`completed`, healthcheck `[1/1] succeeded`, `server_start` megvan.
+
+**A legfontosabb éles bizonyíték** — az access-szigorítás NEM állította le a
+saját ütemezést. A `7e21fbb` futásidejű naplója közvetlenül a deploy után:
+
+```
+19:27 → 19:37   webhook-retry task lefutott   (percenként, minden körben 0 hiba)
+19:30, 19:35    order-poll task lefutott      (5 percenként, invoiceResweep: skipped-disabled)
+                Running 1 jobs. · new: 1 · retrying: 0
+                ERROR/FATAL: egy sem
+```
+
+Ez azért számít, mert a kör legnagyobb kockázata pontosan az volt, hogy a
+`jobs.access`, a collection-CRUD és a `payload-jobs-stats` global lezárása
+elvágja a számlázási és karbantartó láncot. A forrásból levezetett érvelést
+(minden belső út a `db.*` rétegen megy, a local API `overrideAccess`
+alapértelmezése `true`) az éles napló megerősíti.
 
 **Amit ez megjavított:**
 
