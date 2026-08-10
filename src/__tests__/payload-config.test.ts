@@ -1,6 +1,7 @@
 import type { Payload } from 'payload'
 import { describe, expect, it, vi } from 'vitest'
 
+import { resolveServerOrigin, resolveServerUrl } from '../env'
 import configPromise from '../payload.config'
 
 /**
@@ -54,6 +55,42 @@ describe('payload.config', () => {
     const config = await configPromise
 
     expect(config.graphQL?.disable).toBe(true)
+  })
+
+  /**
+   * Explicit publikus gyökér + CORS/CSRF-engedélylista.
+   *
+   * Beállítás nélkül a Payload a BEJÖVŐ KÉRÉS hostjához igazodik: a
+   * cookie-alapú auth és a böngészőből érkező API-hívások védelme ilyenkor nem
+   * a saját deploy-URL-hez van kötve, hanem ahhoz, amit a kérés állít magáról.
+   * A lista a `NEXT_PUBLIC_SERVER_URL`-ből származik (src/env.ts) — ugyanabból
+   * a forrásból, mint a storefront `metadataBase`-e és az SEO-segédek gyökere,
+   * hogy a védett és a hirdetett URL ne csúszhasson szét.
+   *
+   * Az elvárt értéket a resolverből vesszük, nem beégetve: így a teszt attól
+   * függetlenül a bekötést méri, hogy a futtató környezetben be van-e állítva a
+   * `NEXT_PUBLIC_SERVER_URL` (CI-ben nincs, a fejlesztői gépen lehet). Magának a
+   * resolvernek a viselkedését — tartalék, záró perjel, eredet-kiemelés — a
+   * src/__tests__/security/env-assert.test.ts rögzíti.
+   */
+  it('a serverURL és a CORS/CSRF-engedélylista a publikus gyökérhez van kötve', async () => {
+    const config = await configPromise
+
+    expect(config.serverURL).toBe(resolveServerUrl())
+    // Az allowlist az EREDETET tartalmazza: a böngésző Origin fejléce sem küld
+    // útvonalat és záró perjelet, tehát a teljes URL sosem illeszkedne.
+    expect(config.cors).toEqual([resolveServerOrigin()])
+    // A `csrf` a VÉGLEGES (szanitált) configból jön, ahol a Payload maga is
+    // hozzáfűzi a serverURL-t (payload/dist/config/sanitize.js) — a lista ezért
+    // hosszabb lehet, mint amit megadtunk. A szerződés: a saját eredet benne
+    // van, és IDEGEN eredet nem kerülhet bele.
+    expect(config.csrf).toContain(resolveServerOrigin())
+    for (const origin of config.csrf ?? []) {
+      expect(origin.startsWith(resolveServerOrigin())).toBe(true)
+    }
+    // A lista sosem lehet üres vagy „mindent enged" — az visszavenné a védelmet.
+    expect(config.serverURL).toMatch(/^https?:\/\/[^/]+/)
+    expect(config.cors).not.toBe('*')
   })
 
   /**

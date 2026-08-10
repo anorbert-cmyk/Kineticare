@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import type { BlockServices } from '../../payload-types'
+import { sanitizeCmsUrl } from '../../lib/safe-url'
 import { MediaImage } from '../content/MediaImage'
 import { Section } from '../ui/Section'
 
@@ -74,7 +75,9 @@ export function Services({ block }: ServicesProps) {
             const number = row.number?.trim() || String(index + 1).padStart(2, '0')
             const rowTitle = row.title.trim()
             const body = row.body?.trim() ?? ''
-            const url = row.url?.trim() ?? ''
+            // CMS-webcím allowlist-szűrése (src/lib/safe-url.ts): tiltott
+            // sémánál a sor hivatkozás NÉLKÜL renderelődik (a cím és a szöveg marad).
+            const url = sanitizeCmsUrl(row.url) ?? ''
             const label = row.felirat?.trim() ?? ''
             const hasLink = url.length > 0 && label.length > 0
             const isExternal = /^https?:\/\//i.test(url)

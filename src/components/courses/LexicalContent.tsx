@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
+import { sanitizeCmsUrl } from '../../lib/safe-url'
 import type { Product } from '../../payload-types'
 
 /**
@@ -53,18 +54,6 @@ function renderFormattedText(node: LexicalNode, key: string): ReactNode {
   return <span key={key}>{content}</span>
 }
 
-/** Biztonságos href: csak http(s), belső útvonal, horgony vagy mailto. */
-function safeHref(url: unknown): string | null {
-  if (typeof url !== 'string' || url.trim().length === 0) {
-    return null
-  }
-  const trimmed = url.trim()
-  if (/^(https?:\/\/|\/|#|mailto:)/i.test(trimmed)) {
-    return trimmed
-  }
-  return null
-}
-
 function renderChildren(node: LexicalNode, keyPrefix: string): ReactNode[] {
   return (node.children ?? []).map((child, index) => renderNode(child, `${keyPrefix}-${index}`))
 }
@@ -98,7 +87,11 @@ function renderNode(node: LexicalNode, key: string): ReactNode {
     case 'quote':
       return <blockquote key={key}>{renderChildren(node, key)}</blockquote>
     case 'link': {
-      const href = safeHref(node.fields?.url)
+      // A közös CMS-URL-szűrő (src/lib/safe-url.ts). A korábbi helyi
+      // `safeHref` prefix-mintája átengedte a protokoll-relatív `//idegen.host`
+      // és a `/\idegen.host` alakot — mindkettő IDEGEN eredetre visz —,
+      // valamint a vezérlőkarakteres trükköket; a közös szűrő ezeket zárja.
+      const href = sanitizeCmsUrl(node.fields?.url)
       const children = renderChildren(node, key)
       if (!href) {
         return <span key={key}>{children}</span>

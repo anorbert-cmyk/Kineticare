@@ -20,6 +20,7 @@ import { Posts } from './collections/Posts'
 import { Testimonials } from './collections/Testimonials'
 import { Users } from './collections/Users'
 import { WebhookEvents } from './collections/WebhookEvents'
+import { resolveServerOrigin, resolveServerUrl } from './env'
 import { jobsConfig } from './jobs'
 import { registerBarionWebhookProcessor } from './lib/barion-callback/process-callback'
 import { contactStaffEmail, kineticareEmailAdapter, sendMail, usersAuthEmails } from './lib/email'
@@ -30,6 +31,17 @@ import { ecommerce } from './plugins/ecommerce'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
+
+/**
+ * A publikus szerver-URL és annak eredete (src/env.ts, EGY forrásból — ugyanaz
+ * az érték hajtja a storefront `metadataBase`-ét és az SEO-segédeket is).
+ *
+ * Az `origin` azért külön, mert a CORS/CSRF-allowlist a böngésző `Origin`
+ * fejlécével kerül karakter-pontos összehasonlításra, abban pedig sosincs
+ * útvonal és záró perjel.
+ */
+const serverURL = resolveServerUrl()
+const serverOrigin = resolveServerOrigin()
 
 /** Admin-szerepkör (owner/staff) — a form-submissions olvasásához. */
 const isAdmin: Access = ({ req }) => req.user?.role === 'owner' || req.user?.role === 'staff'
@@ -367,6 +379,27 @@ export default buildConfig({
   // A titok kötelező — az induláskori ENV-assert (src/env.ts + src/instrumentation.ts)
   // gondoskodik róla, hogy hiányában az app ne induljon el.
   secret: process.env.PAYLOAD_SECRET || '',
+  // Explicit publikus gyökér + CORS/CSRF-engedélylista.
+  //
+  // Beállítás NÉLKÜL a Payload a BEJÖVŐ KÉRÉS hostjához igazodik: a
+  // cookie-alapú auth és a böngészőből érkező API-hívások védelme ilyenkor
+  // nincs a saját deploy-URL-hez kötve, hanem ahhoz, amit a kérés állít
+  // magáról. Az explicit lista ezt a deploy tényleges eredetéhez szögezi.
+  //
+  // A Railway healthcheckjét (`/admin`, railway.json) nem érinti: az egy
+  // Origin-fejléc és süti nélküli, szerver-szerver GET — a CORS-fejlécek csak
+  // Origin jelenlétében kerülnek a válaszba, a CSRF-lista pedig kizárólag a
+  // sütis hitelesítésre vonatkozik. A healthcheck akkor is 200-at kap, ha a
+  // belső cím eltér a publikus URL-től.
+  //
+  // ÜZEMELTETÉSI KÖVETKEZMÉNY: a `NEXT_PUBLIC_SERVER_URL`-nek pontosan azt az
+  // eredetet kell tartalmaznia, amit a szerkesztők a böngészőben megnyitnak.
+  // Ha az admint másik hoszton (pl. a `*.up.railway.app` alapdoménen vagy
+  // `www.` előtaggal) is használják, azt az eredetet is ide kell venni,
+  // különben a bejelentkezés ott elhasal.
+  serverURL,
+  cors: [serverOrigin],
+  csrf: [serverOrigin],
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },

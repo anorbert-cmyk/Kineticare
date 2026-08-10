@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { assertRequiredEnv, requiredEnvVars, szamlazzVatModes, turnstileEnvPair } from '../../env'
+import {
+  assertRequiredEnv,
+  DEFAULT_SERVER_URL,
+  requiredEnvVars,
+  resolveServerOrigin,
+  resolveServerUrl,
+  szamlazzVatModes,
+  turnstileEnvPair,
+} from '../../env'
 
 /**
  * Induláskori ENV-assert (src/env.ts) — a `register()` (src/instrumentation.ts)
@@ -21,6 +29,8 @@ import { assertRequiredEnv, requiredEnvVars, szamlazzVatModes, turnstileEnvPair 
  */
 
 const DUMMY_ENV_VALUE = 'DUMMY-42'
+/** A NEXT_PUBLIC_SERVER_URL-nek az ALAKJA is ellenőrzött, ezért valódi URL kell. */
+const DUMMY_SERVER_URL = 'https://dummy.example'
 const [SITE_KEY_ENV, SECRET_KEY_ENV] = turnstileEnvPair
 
 beforeEach(() => {
@@ -29,6 +39,7 @@ beforeEach(() => {
   for (const key of requiredEnvVars) {
     vi.stubEnv(key, DUMMY_ENV_VALUE)
   }
+  vi.stubEnv('NEXT_PUBLIC_SERVER_URL', DUMMY_SERVER_URL)
   vi.stubEnv('BARION_ENVIRONMENT', undefined)
   vi.stubEnv('BARION_POSKEY_TEST', DUMMY_ENV_VALUE)
   vi.stubEnv('BARION_POSKEY_PROD', undefined)
@@ -208,5 +219,86 @@ describe('assertRequiredEnv — környezetfüggő Barion POSKey (változatlan vi
     vi.stubEnv('BARION_ENVIRONMENT', 'prod')
 
     expect(() => assertRequiredEnv()).toThrowError(/BARION_POSKEY_PROD/)
+  })
+})
+
+/**
+ * NEXT_PUBLIC_SERVER_URL — a MEGLÉTE alapkulcsként ellenőrzött, itt az ALAKJA
+ * a tét.
+ *
+ * Erre az értékre épül a Payload `serverURL`-je és a CORS/CSRF-engedélylistája
+ * (src/payload.config.ts), a storefront `metadataBase`-e és az SEO-segédek
+ * kanonikus gyökere. Hibás alaknál a lista olyan értékre állna, amire a
+ * böngésző `Origin` fejléce sosem illeszkedik: az admin-bejelentkezés CSENDBEN
+ * hasalna el. Ezért az alak-hiba már induláskor, minden környezetben megállítja
+ * az appot — a `resolveServerUrl` viszont sosem dob, hogy a config betöltése
+ * (tesztek, szkriptek) egy rossz env-től ne törjön el.
+ */
+describe('assertRequiredEnv — NEXT_PUBLIC_SERVER_URL alakja', () => {
+  it('abszolút http/https cím rendben van (a záró perjeles alak is)', () => {
+    vi.stubEnv('NODE_ENV', 'test')
+
+    for (const value of [
+      'http://localhost:3000',
+      'https://kineticare.hu',
+      'https://kineticare.hu/',
+    ]) {
+      vi.stubEnv('NEXT_PUBLIC_SERVER_URL', value)
+      expect(() => assertRequiredEnv(), value).not.toThrow()
+    }
+  })
+
+  it.each([
+    ['séma nélküli hoszt', 'kineticare.hu'],
+    ['nem URL szöveg', 'DUMMY-42'],
+    ['protokoll-relatív cím', '//kineticare.hu'],
+    ['gyökér-relatív útvonal', '/kineticare'],
+    ['nem http(s) séma', 'ftp://kineticare.hu'],
+  ])('hibás alak (%s) → már induláskor dob, magyar üzenettel', (_label, value) => {
+    vi.stubEnv('NODE_ENV', 'test')
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', value)
+
+    expect(() => assertRequiredEnv()).toThrowError(/NEXT_PUBLIC_SERVER_URL/)
+    expect(() => assertRequiredEnv()).toThrowError(/nem indulhat el/)
+  })
+
+  it('MINDEN környezetben dob (nem csak élesben)', () => {
+    for (const nodeEnv of ['development', 'test', 'production']) {
+      vi.stubEnv('NODE_ENV', nodeEnv)
+      vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'kineticare.hu')
+      expect(() => assertRequiredEnv(), nodeEnv).toThrowError(/NEXT_PUBLIC_SERVER_URL/)
+    }
+  })
+})
+
+/**
+ * A publikus gyökér feloldása (`resolveServerUrl`) és annak eredete
+ * (`resolveServerOrigin`) — EGY forrás a Payload `serverURL`-je, a storefront
+ * `metadataBase`-e és az SEO-segédek számára.
+ */
+describe('resolveServerUrl / resolveServerOrigin', () => {
+  it('a záró perjelet levágja (az Origin fejlécben sincs)', () => {
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'https://kineticare.hu/')
+
+    expect(resolveServerUrl()).toBe('https://kineticare.hu')
+    expect(resolveServerOrigin()).toBe('https://kineticare.hu')
+  })
+
+  it('útvonal-előtagos gyökérnél az allowlist az EREDETET kapja', () => {
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'https://kineticare.hu/app')
+
+    expect(resolveServerUrl()).toBe('https://kineticare.hu/app')
+    // A böngésző Origin fejléce sosem tartalmaz útvonalat, tehát a teljes URL
+    // allowlist-elemként sosem illeszkedne.
+    expect(resolveServerOrigin()).toBe('https://kineticare.hu')
+  })
+
+  it('hiányzó vagy hibás env esetén a fejlesztői tartalék, dobás NÉLKÜL', () => {
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', undefined)
+    expect(resolveServerUrl()).toBe(DEFAULT_SERVER_URL)
+
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'kineticare.hu')
+    expect(resolveServerUrl()).toBe(DEFAULT_SERVER_URL)
+    expect(resolveServerOrigin()).toBe(DEFAULT_SERVER_URL)
   })
 })

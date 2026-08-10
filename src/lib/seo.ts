@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 
 import { courseTitle } from './courses'
+import { resolveServerUrl } from '../env'
 import type { Media, Post, Product } from '../payload-types'
 
 /**
@@ -39,7 +40,13 @@ export interface SeoDoc {
 }
 
 export const SITE_NAME = 'Kineticare'
-export const SITE_URL = process.env.NEXT_PUBLIC_SERVER_URL ?? 'http://localhost:3000'
+/**
+ * A kanonikus oldal-gyökér — a Payload `serverURL`-jével és a keret-layout
+ * `metadataBase`-ével KÖZÖS forrásból (src/env.ts). Külön kifejezésként a
+ * három könnyen szétcsúszna, és a CORS/CSRF-engedélylista más URL-t védene,
+ * mint amit a linkek és a megosztási képek hirdetnek.
+ */
+export const SITE_URL = resolveServerUrl()
 
 /** Relatív útvonal → abszolút URL (JSON-LD-hez és og:image-höz). */
 export function absoluteUrl(path: string): string {

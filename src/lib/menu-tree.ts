@@ -2,6 +2,7 @@ import type { Menu, Page, Post, Product } from '../payload-types'
 
 import { COURSE_BASE_PATH, courseHref } from './course-url'
 import { extractRelationshipId } from './menu-validation'
+import { sanitizeCmsUrl } from './safe-url'
 
 /**
  * Menüfa → navigációs fa (NavItem) építése — tiszta, DB nélkül
@@ -69,8 +70,13 @@ function isPublishedTarget(doc: Page | Post | Product): boolean {
  */
 export function resolveMenuHref(menu: Menu): string | null {
   if (menu.type === 'url') {
-    const url = typeof menu.url === 'string' ? menu.url.trim() : ''
-    return url.length > 0 ? url : null
+    // A „Külső link" típusú menüpont webcíme szabadon gépelhető CMS-tartalom,
+    // ezért allowlist-szűrésen megy át (src/lib/safe-url.ts). A `null` itt a
+    // MEGLÉVŐ jelentést kapja — „a cél nem feloldható" —, tehát a menüpont
+    // ugyanúgy kimarad a navigációból, mint egy nem publikált oldalra mutató
+    // hivatkozás. Ez a menük EGYETLEN href-forrása: a NavItem.href-et csak a
+    // `buildNavTree` állítja elő, tehát a fejléc és a mobil menü is fedve van.
+    return sanitizeCmsUrl(menu.url)
   }
 
   const ref = resolveRef(menu)

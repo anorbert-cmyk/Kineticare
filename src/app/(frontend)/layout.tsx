@@ -7,6 +7,7 @@ import { PostHogPageView } from '@/components/analytics/PostHogPageView'
 import { PostHogProvider } from '@/components/analytics/PostHogProvider'
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
+import { resolveServerUrl } from '@/env'
 
 import './styles.css'
 
@@ -18,7 +19,11 @@ const DEFAULT_DESCRIPTION =
   'Kineticare — kézrehabilitációs online videókurzusok otthoni gyógytornászati programmal. Tanfolyamok, tudástár és szakmai támogatás kézsérülés utáni felépüléshez.'
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SERVER_URL ?? 'http://localhost:3000'),
+  // A publikus gyökér EGY forrásból (src/env.ts) — ugyanaz az érték hajtja a
+  // Payload `serverURL`-jét és a CORS/CSRF-engedélylistát is. A `resolveServerUrl`
+  // hibás env esetén sem dob (a boot-assert állítja meg az appot), így ez a
+  // `new URL` mindig érvényes bemenetet kap.
+  metadataBase: new URL(resolveServerUrl()),
   title: {
     default: `${SITE_NAME} — ${SITE_TAGLINE}`,
     template: `%s | ${SITE_NAME}`,

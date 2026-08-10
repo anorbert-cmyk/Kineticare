@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { sanitizeCmsUrl } from '../../../lib/safe-url'
 import { Container } from '../../ui/Container'
 import { Section } from '../../ui/Section'
 
@@ -56,10 +57,15 @@ export function CredentialsStrip({
   variant = 'default',
 }: CredentialsStripProps = {}) {
   const credentials = items && items.length > 0 ? items : CREDENTIALS
+  // A cél a `credsStrip` blokkból akár szabadon gépelt CMS-webcím is lehet,
+  // ezért allowlist-szűrésen megy át (src/lib/safe-url.ts). Tiltott sémánál a
+  // csík LINK NÉLKÜL renderelődik — a hitel-tételek megmaradnak.
+  const safeHref = link ? sanitizeCmsUrl(link.href) : null
+  const safeLink = link && safeHref ? { ...link, href: safeHref } : null
   // A nyíl dekoratív (a linket a felirat nevezi meg), ezért aria-hidden.
-  const linkContent = link ? (
+  const linkContent = safeLink ? (
     <>
-      {link.label} <span aria-hidden="true">→</span>
+      {safeLink.label} <span aria-hidden="true">→</span>
     </>
   ) : null
 
@@ -75,18 +81,18 @@ export function CredentialsStrip({
               </span>
             ))}
           </div>
-          {link ? (
-            link.newTab ? (
+          {safeLink ? (
+            safeLink.newTab ? (
               <a
                 className="kc-text-link kc-creds__link"
-                href={link.href}
+                href={safeLink.href}
                 rel="noopener noreferrer"
                 target="_blank"
               >
                 {linkContent}
               </a>
             ) : (
-              <Link className="kc-text-link kc-creds__link" href={link.href}>
+              <Link className="kc-text-link kc-creds__link" href={safeLink.href}>
                 {linkContent}
               </Link>
             )
