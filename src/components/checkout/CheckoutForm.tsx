@@ -6,6 +6,12 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Field } from '@/components/ui/Field'
 import { PriceTag } from '@/components/ui/PriceTag'
+import {
+  billingErrorMap,
+  toBillingPayload,
+  validateBilling,
+  type BillingFieldName,
+} from '../../lib/checkout/billing'
 import { submitCheckout, type CheckoutUser, type CheckoutProduct } from '../../lib/checkout-submit'
 
 /**
@@ -15,6 +21,21 @@ import { submitCheckout, type CheckoutUser, type CheckoutProduct } from '../../l
  * 29. § (1) m) SZÓ SZERINTI szövegekkel, NEM előre kipipálva — mindkettő
  * kötelező a submit-hoz (a fizetős termékekre; az ingyenes tétel nem igényli).
  * A fizetési gomb felirata KÖTÖTT: „Megrendelés és fizetés".
+ *
+ * SZÁMLÁZÁSI ADATOK — kontrollált mezők, szándékosan:
+ * a `Field` alapból kontrollálatlan, de a natív input-attribútumokat átadja,
+ * ezért `value` + `onChange` megadásával MAGÁNAK A KOMPONENSNEK a módosítása
+ * nélkül válik kontrollálttá (a többi hívási helye — RegisterForm, LoginForm,
+ * AccountView — érintetlen; sőt, azok is pontosan ezt a mintát követik). A
+ * FormData-s kiolvasás helyett azért ez a választás, mert (a) a mezőnkénti,
+ * magyar hibaüzenet megjelenítéséhez amúgy is state kell, és (b) így a beírt
+ * érték egyetlen forrásból (a state-ből) megy a beküldésbe — nem fordulhat
+ * elő újra, hogy az űrlap megjelenít egy mezőt, a submit pedig nem olvassa ki.
+ *
+ * A `noValidate` szándékosan marad: a böngésző natív (nem magyar, nem
+ * testre szabható) buborékai helyett a validáció a közös
+ * `src/lib/checkout/billing.ts` modulból jön — UGYANAZ a szabály fut a
+ * szerveren is, mert a kliens megkerülhető.
  */
 export interface CheckoutFormProps {
   product: CheckoutProduct
@@ -22,14 +43,39 @@ export interface CheckoutFormProps {
   alreadyPurchased: boolean
 }
 
+interface BillingFormState {
+  name: string
+  zip: string
+  city: string
+  street: string
+  taxNumber: string
+}
+
+const BILLING_INCOMPLETE_ERROR =
+  'A számlázási adatok hiányosak — a számla kiállításához minden csillagozott mezőt ki kell tölteni.'
+
 export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormProps) {
   const [waiverStart, setWaiverStart] = useState(false)
   const [waiverLoss, setWaiverLoss] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // A profil mezői kizárólag ELŐKITÖLTÉSKÉNT szolgálnak: innentől a state az
+  // igazság, és a beküldött (esetleg felülírt) érték kerül a rendelésre.
+  const [billing, setBilling] = useState<BillingFormState>({
+    name: user.billingName ?? user.name ?? '',
+    zip: user.billingZip ?? '',
+    city: user.billingCity ?? '',
+    street: user.billingStreet ?? '',
+    taxNumber: user.taxNumber ?? '',
+  })
+  const [billingErrors, setBillingErrors] = useState<Partial<Record<BillingFieldName, string>>>({})
 
   const requiresWaiver = !product.isFree
   const waiverComplete = !requiresWaiver || (waiverStart && waiverLoss)
+
+  const updateBilling = (field: keyof BillingFormState, value: string): void => {
+    setBilling((previous) => ({ ...previous, [field]: value }))
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -44,11 +90,20 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
       return
     }
 
+    const billingResult = validateBilling(billing)
+    if (!billingResult.ok) {
+      setBillingErrors(billingErrorMap(billingResult.errors))
+      setError(BILLING_INCOMPLETE_ERROR)
+      return
+    }
+    setBillingErrors({})
+
     setSubmitting(true)
     const result = await submitCheckout({
       productId: product.id,
       quantity: 1,
       consentWithdrawalWaiver: true,
+      billing: toBillingPayload(billingResult.value),
     })
     setSubmitting(false)
 
@@ -74,37 +129,56 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
 
       <Card className="kc-checkout-billing">
         <h2>Számlázási adatok</h2>
+        <p className="kc-field__hint">
+          A számla ezekkel az adatokkal készül. Ha a profilodban máshogy szerepelnek, itt
+          felülírhatod őket — a rendelésre az itt megadott adat kerül.
+        </p>
         <Field
+          autoComplete="name"
+          error={billingErrors.name}
           label="Név"
           name="billingName"
+          onChange={(event) => updateBilling('name', event.target.value)}
           required
-          defaultValue={user.billingName ?? user.name ?? ''}
+          value={billing.name}
         />
         <div className="kc-checkout-billing__grid">
           <Field
+            autoComplete="postal-code"
+            error={billingErrors.zip}
+            inputMode="numeric"
             label="Irányítószám"
             name="billingZip"
+            onChange={(event) => updateBilling('zip', event.target.value)}
             required
-            defaultValue={user.billingZip ?? ''}
+            value={billing.zip}
           />
           <Field
+            autoComplete="address-level2"
+            error={billingErrors.city}
             label="Település"
             name="billingCity"
+            onChange={(event) => updateBilling('city', event.target.value)}
             required
-            defaultValue={user.billingCity ?? ''}
+            value={billing.city}
           />
         </div>
         <Field
+          autoComplete="street-address"
+          error={billingErrors.street}
           label="Cím"
           name="billingStreet"
+          onChange={(event) => updateBilling('street', event.target.value)}
           required
-          defaultValue={user.billingStreet ?? ''}
+          value={billing.street}
         />
         <Field
+          error={billingErrors.taxNumber}
           hint="Csak céges vásárlás esetén."
           label="Adószám (céges vásárlásnál)"
           name="taxNumber"
-          defaultValue={user.taxNumber ?? ''}
+          onChange={(event) => updateBilling('taxNumber', event.target.value)}
+          value={billing.taxNumber}
         />
       </Card>
 

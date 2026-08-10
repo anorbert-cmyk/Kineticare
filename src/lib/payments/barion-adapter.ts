@@ -91,6 +91,10 @@ export const barionPaymentAdapter: PaymentAdapter = {
       throw new Error('A kosár üres — nincs megvásárolható tétel a fizetés indításához.')
     }
 
+    // A plugin cart-alakja nem hordoz számlázási adatot, ezért a `billing`
+    // szándékosan kimarad: a checkout-szolgáltatás ilyenkor a felhasználó
+    // TÁROLT profiljából dolgozik — ugyanazzal a kötelező validációval, tehát
+    // hiányos vevőadattal ezen az úton sem jöhet létre rendelés.
     const result = await startCheckout({
       payload: req.payload,
       user: req.user as unknown as User,
