@@ -20,6 +20,7 @@ import { Posts } from './collections/Posts'
 import { Testimonials } from './collections/Testimonials'
 import { Users } from './collections/Users'
 import { WebhookEvents } from './collections/WebhookEvents'
+import { buildOriginAllowlist } from './env'
 import { jobsConfig } from './jobs'
 import { restrictJobStatsGlobalAccess } from './jobs/jobs-stats-access'
 import { registerBarionWebhookProcessor } from './lib/barion-callback/process-callback'
@@ -31,6 +32,18 @@ import { ecommerce } from './plugins/ecommerce'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
+
+/**
+ * A CORS/CSRF-engedélylista a publikus szerver-URL EREDETÉBŐL (src/env.ts —
+ * ugyanaz a normalizálás hajtja a storefront `metadataBase`-ét és az
+ * SEO-segédeket is, tehát a védett és a hirdetett cím nem csúszhat szét).
+ *
+ * A `cors` és a `csrf` KÜLÖN hívást kap, mert a Payload szanitálása a `csrf`
+ * tömbbe beleírhat (node_modules/payload/dist/config/sanitize.js:340-342) —
+ * közös tömb-referencia mellett ez a `cors`-t is átírná.
+ */
+const corsAllowlist = buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)
+const csrfAllowlist = buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)
 
 /** Admin-szerepkör (owner/staff) — a form-submissions olvasásához. */
 const isAdmin: Access = ({ req }) => req.user?.role === 'owner' || req.user?.role === 'staff'
@@ -368,6 +381,82 @@ export default buildConfig({
   // A titok kötelező — az induláskori ENV-assert (src/env.ts + src/instrumentation.ts)
   // gondoskodik róla, hogy hiányában az app ne induljon el.
   secret: process.env.PAYLOAD_SECRET || '',
+  // -------------------------------------------------------------------------
+  // A `serverURL` SZÁNDÉKOSAN NINCS BEÁLLÍTVA (marad a Payload alapértelmezett
+  // üres stringje, node_modules/payload/dist/config/defaults.js:75 és :154).
+  //
+  // Nem feledékenység: beállítva ELTÖRNÉ AZ ÖSSZES CMS-KÉPET. A Media
+  // collection `url` és `sizes.*.url` mezőinek afterRead hookja
+  // (node_modules/payload/dist/uploads/getBaseFields.js:98-107 és :190-197) a
+  // `relative: false` + `serverURL: req.payload.config.serverURL` párossal hívja
+  // a `generateFilePathOrURL`-t, az pedig a `formatAdminURL`-en át
+  // (node_modules/payload/dist/utilities/formatAdminURL.js) így dönt:
+  // `if (relative || !serverURL) return pathname` — különben
+  // `new URL(pathnameWithBase, serverURLObj.origin).toString()`, tehát ABSZOLÚT
+  // URL. A storefront viszont a `next/image`-nek adja tovább ezt az értéket
+  // (src/components/content/MediaImage.tsx), a next.config.ts-ben pedig NINCS
+  // `images.remotePatterns` — abszolút, „távoli" forrásra a `/_next/image`
+  // élesben 400-at ad („url" parameter is not allowed). Üres `serverURL`
+  // mellett a hook GYÖKÉR-RELATÍV utat ad vissza, ami a saját eredetről
+  // szolgálódik ki. (Ha valaha mégis kell abszolút gyökér, előbb az
+  // `images.remotePatterns` bővítendő — együtt, egy változtatásban.)
+  //
+  // Amit a `serverURL` elhagyása NEM vesz el:
+  //  - a CSRF-védelmet: az `extractJWT` cookie-ága KIZÁRÓLAG a
+  //    `payload.config.csrf` listát nézi
+  //    (node_modules/payload/dist/auth/extractJWT.js:18-37);
+  //  - a CORS-fejléceket: a `headersWithCors` KIZÁRÓLAG a
+  //    `req.payload.config.cors`-t nézi
+  //    (node_modules/payload/dist/utilities/headersWithCors.js).
+  // Mellékhaszon: a `sanitize.js:340-342` csak nem üres `serverURL` esetén fűzi
+  // a `csrf` listához a teljes URL-t, tehát így duplikátum sem keletkezik.
+  //
+  // -------------------------------------------------------------------------
+  // CORS/CSRF-engedélylista — a deploy TÉNYLEGES eredetéhez szögezve.
+  //
+  // Beállítás nélkül a `csrf` üres, és az `extractJWT` üres listánál MINDEN
+  // eredetről elfogadja a süti-tokent (extractJWT.js:21 és :27). Az explicit
+  // lista ezt zárja le. Az éles eredet ma EGYETLEN érték:
+  // `https://kineticare-production.up.railway.app` — a Railway service-doménje,
+  // egyedi domén nincs (docs/atadas-szamlazz-kor.md).
+  //
+  // MIRE TERJED KI (a hatókör nagyobb, mint az admin-bejelentkezés): az
+  // `extractJWT` minden `payload.auth({ headers })` hívásnál lefut, tehát az
+  // eredet-eltérés nem csak az admin-loginra hat, hanem a PÉNZTÁRRA
+  // (src/lib/checkout/route-handler.ts:54), a VIDEÓLEJÁTSZÁSRA
+  // (src/lib/stream/route-handler.ts:49), a HALADÁS-MENTÉSRE
+  // (src/lib/course-progress/route-handler.ts:44), a rendelés-státuszra
+  // (src/lib/checkout/order-status-handler.ts:34), a visszatérítésre
+  // (src/lib/refund/route-handler.ts:70), a kézi hozzáférés-adásra
+  // (src/lib/grant-purchase-route.ts:58), az admin-előnézetre
+  // (src/lib/preview/route-handler.ts:61) és a bejelentkezést igénylő
+  // storefront-oldalak szerver-oldali renderére (/fiok, /kurzusaim, /penztar,
+  // /kosar, /fizetes/koszonom …) is. Rossz `NEXT_PUBLIC_SERVER_URL` mellett
+  // ezek MIND 401-et / kijelentkezett állapotot adnának.
+  //
+  // ORIGIN NÉLKÜLI KÉRÉS — tartalék szabály: ha nincs `Origin` fejléc (tipikusan
+  // GET-navigáció), az `extractJWT` a `Sec-Fetch-Site`-ra vált
+  // (extractJWT.js:30-37): `same-origin` / `same-site` / `none` elfogadva,
+  // `cross-site` ÉS A FEJLÉC HIÁNYA elutasítva. Következmény: egy KÜLSŐ oldalról
+  // (levélből, keresőből) érkező első oldalletöltés kijelentkezettnek látszhat,
+  // a helyben indított navigációk viszont `same-origin`-ok. Nem-böngészős,
+  // sütis kliensünk NINCS: a süti-hitelesítést használó végpontokat kivétel
+  // nélkül a saját frontendünk hívja, a szerver-szerver forgalom (Barion
+  // callback, Railway healthcheck, Számlázz.hu) pedig süti nélküli.
+  //
+  // A Railway healthcheckjét (`/admin`, railway.json) nem érinti: az egy
+  // Origin-fejléc és süti nélküli, szerver-szerver GET — a CORS-fejlécek csak
+  // Origin jelenlétében kerülnek a válaszba, a CSRF-lista pedig kizárólag a
+  // sütis hitelesítésre vonatkozik. A healthcheck akkor is 200-at kap, ha a
+  // belső cím eltér a publikus URL-től.
+  //
+  // ÜZEMELTETÉSI KÖVETKEZMÉNY: a `NEXT_PUBLIC_SERVER_URL`-nek pontosan azt az
+  // eredetet kell tartalmaznia, amit a látogatók és a szerkesztők a böngészőben
+  // megnyitnak. Ha az appot másik hoszton (pl. új egyedi doménen vagy `www.`
+  // előtaggal) is elérhetővé tesszük, azt az eredetet is ide kell venni,
+  // különben ott minden sütis művelet elhasal.
+  cors: corsAllowlist,
+  csrf: csrfAllowlist,
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },

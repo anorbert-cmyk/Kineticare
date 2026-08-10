@@ -1,5 +1,7 @@
 import type { Field } from 'payload'
 
+import { validateCmsUrl } from '../lib/safe-url'
+
 /**
  * Közös link-mezők a szekció-blokkokhoz (szekció-rendszer terv, 2. pont).
  *
@@ -67,6 +69,23 @@ export const linkFields = ({
       required: urlRequired,
       label: 'Hová vigyen (webcím)',
       admin: { description: urlDescription },
+      /*
+       * Szerver-oldali ellenőrzés MENTÉSKOR (src/lib/safe-url.ts).
+       *
+       * A publikus oldalon a tiltott alakú cím csendben eltűnik (a
+       * `sanitizeCmsUrl` `null`-t ad, a Button letiltott gombot rendereli) — a
+       * szerkesztő ebből semmit nem látna. Ez a validate a mező mellett, magyar
+       * üzenettel szól, ott ahol a hiba keletkezett. Ez a MEZŐ-definíció hajtja
+       * az összes szekció-CTA-t: services.rows[].url, pressLogos.logos[].url,
+       * filmHero.ctas[].url, ctaBanner.cta.url, credsStrip.link.url,
+       * freeSos.cta.url.
+       *
+       * Az üres érték ott marad érvényes, ahol a mező nem kötelező; a
+       * kötelezőséget a validate maga kezeli, mert saját `validate` mellett a
+       * Payload nem teszi be az alapértelmezett (required-et is ellenőrző)
+       * validációt (payload/dist/fields/config/sanitize.js:153-167).
+       */
+      validate: (value: string | null | undefined) => validateCmsUrl(value, { required: urlRequired }),
     },
     {
       name: 'ujAblakban',

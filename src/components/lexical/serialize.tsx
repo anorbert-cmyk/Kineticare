@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createElement, Fragment, type ReactNode } from 'react'
 
 import { courseHref } from '../../lib/course-url'
+import { sanitizeCmsUrl } from '../../lib/safe-url'
 import { mediaAlt, mediaDimensions, pickMediaUrl, type MediaLike } from '../content/media-url'
 import { TEXT_FORMAT, type LexicalContent, type LexicalNode, type VideoEmbed } from './types'
 
@@ -101,7 +102,12 @@ function linkFields(node: LexicalNode): LinkFields | null {
   const fields = isRecord(node.fields) ? node.fields : null
   if (!fields) return null
   const linkType = fields.linkType
-  const url = typeof fields.url === 'string' ? fields.url.trim() : ''
+  // A KÜLSŐ (szerkesztő által szabadon gépelt) webcím allowlist-szűrésen megy
+  // át: tiltott sémánál üres marad, és a link a szövegét renderelő, href
+  // nélküli ágra esik (a „hiányos link-cél" graceful mintája). A BELSŐ link
+  // rendszer-generált — a `resolveInternalHref` fix előtagjai miatt sémát nem
+  // vihet be —, ezért az változatlanul megy tovább.
+  const url = sanitizeCmsUrl(fields.url) ?? ''
   const internalHref = linkType === 'internal' ? resolveInternalHref(fields.doc) : null
   if (!url && !internalHref) return null
   return {

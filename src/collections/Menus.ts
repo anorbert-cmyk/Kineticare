@@ -6,6 +6,7 @@ import {
   validateMenuTypeConsistency,
   type MenuValidationIssue,
 } from '../lib/menu-validation'
+import { validateCmsUrl } from '../lib/safe-url'
 
 /**
  * Menüfa-validáció (T-013): max 2 szint (gyökér → gyermek), nincs önmagára
@@ -112,6 +113,33 @@ export const Menus: CollectionConfig = {
       admin: {
         condition: (_, siblingData) => siblingData?.type === 'url',
         description: 'Teljes webcím más oldalra, https://-sel kezdve.',
+      },
+      /*
+       * Szerver-oldali ellenőrzés MENTÉSKOR (src/lib/safe-url.ts).
+       *
+       * A `resolveMenuHref` (src/lib/menu-tree.ts) a tiltott alakú címet
+       * csendben ejti — a menüpont egyszerűen kimarad a navigációból, és a
+       * szerkesztő ebből semmit nem lát. Ez a validate a mező mellett, magyar
+       * üzenettel szól.
+       *
+       * CSAK a „Külső link" típusnál fut: a mező az admin `condition`-je miatt
+       * más típusnál nem is látszik, és a `resolveMenuHref` sem olvassa —
+       * egy régi, típusváltás után benne ragadt érték ezért ne akadályozza meg
+       * egy amúgy helyes menüpont mentését.
+       *
+       * A kötelezőséget NEM ez adja: „url" típusnál a `validateMenuTypeConsistency`
+       * (src/lib/menu-validation.ts) követeli meg a kitöltést, a teljes menüpont
+       * összefüggéseivel együtt.
+       */
+      validate: (value: string | null | undefined, { siblingData }: { siblingData?: unknown }) => {
+        const type =
+          typeof siblingData === 'object' && siblingData !== null
+            ? (siblingData as Record<string, unknown>).type
+            : undefined
+        if (type !== 'url') {
+          return true
+        }
+        return validateCmsUrl(value)
       },
     },
     {

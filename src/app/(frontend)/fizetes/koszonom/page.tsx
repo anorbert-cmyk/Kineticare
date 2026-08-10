@@ -1,13 +1,8 @@
 import type { Metadata } from 'next'
-import { headers } from 'next/headers'
-import { getPayload } from 'payload'
 
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { ThankYouView } from '@/components/checkout/ThankYouView'
-import type { User } from '@/payload-types'
-
-import config from '@payload-config'
 
 export const metadata: Metadata = {
   title: 'Köszönjük a vásárlást',
@@ -18,16 +13,6 @@ interface KoszonjukPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }
 
-async function getCurrentUser(): Promise<User | null> {
-  try {
-    const payload = await getPayload({ config })
-    const { user } = await payload.auth({ headers: await headers() })
-    return (user as User | null) ?? null
-  } catch {
-    return null
-  }
-}
-
 /**
  * /fizetes/koszonom — a Barion redirect célja (a T-021 redirectUrl-ja).
  *
@@ -36,16 +21,27 @@ async function getCurrentUser(): Promise<User | null> {
  * rendelésszám (a Barion visszairányításakor a T-021 által beállított
  * redirectUrl-ből, vagy a checkout-válaszból).
  *
- * Állapotok:
- * - `paid` → siker-nézet (rendelésszám + „a kurzust a Fiókodban éred el" +
- *   /kurzusaim link);
- * - 2 perc után is `payment_pending` → „a fizetés feldolgozása folyamatban"
- *   + „e-mailben értesítünk" szöveg;
- * - `cancelled`/`payment_failed` → a /sikertelen-nek megfelelő nézet.
+ * ═══ MIÉRT NINCS ITT SZERVER-OLDALI `payload.auth` ═══
+ * Ez az oldal MINDIG kereszt-oldali navigációval nyílik meg: a Barion a
+ * `secure.barion.com`-ról irányít vissza (src/lib/checkout/start-checkout.ts,
+ * `redirectUrl`). Egy ilyen top-level GET-navigáció `Origin` fejlécet nem
+ * küld, `Sec-Fetch-Site: cross-site` viszont igen — és a nem üres
+ * `csrf`-engedélylista mellett a Payload `extractJWT`-je pontosan ilyenkor
+ * DOBJA EL a süti-tokent (node_modules/payload/dist/auth/extractJWT.js, a
+ * cookie-ág Sec-Fetch-Site tartaléka). Valódi Chromiummal kimérve: a jelölés
+ * a szerver-átirányítás után is `cross-site` marad, tehát semmilyen redirect
+ * nem menti meg.
+ *
+ * Ha tehát a bejelentkezettséget ITT, szerveren döntenénk el, a frissen fizető
+ * vásárló MINDEN esetben a „jelentkezz be" nézetet kapná a „Köszönjük a
+ * vásárlást!" helyett. Ezért a hitelesítést a KLIENS-oldali poll végzi: az egy
+ * azonos eredetű `fetch`, ami KÜLD `Origin` fejlécet, tehát átmegy a
+ * csrf-szűrőn. A 401-et a `pollOrderStatus` `unauthorized`-ra képezi, és a
+ * nézet ugyanazt a belépés-ajánlót rendereli — csak most akkor, amikor a
+ * látogató tényleg nincs bejelentkezve.
  */
 export default async function KoszonjukPage({ searchParams }: KoszonjukPageProps) {
   const params = await searchParams
-  const user = await getCurrentUser()
 
   const orderParam = params.order
   const orderNumber = typeof orderParam === 'string' && orderParam.trim().length > 0 ? orderParam.trim() : null
@@ -53,7 +49,7 @@ export default async function KoszonjukPage({ searchParams }: KoszonjukPageProps
   return (
     <Section>
       <Container size="narrow">
-        <ThankYouView orderNumber={orderNumber} isLoggedIn={user !== null} />
+        <ThankYouView orderNumber={orderNumber} />
       </Container>
     </Section>
   )

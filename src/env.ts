@@ -28,6 +28,97 @@ export const requiredEnvVars = [
 export type RequiredEnvVar = (typeof requiredEnvVars)[number]
 
 /**
+ * A publikus szerver-URL fejlesztői tartaléka.
+ *
+ * Élesben SOSEM ez érvényesül: a `NEXT_PUBLIC_SERVER_URL` a `requiredEnvVars`
+ * tagja, tehát hiányában az induláskori assert megállítja az appot. A tartalék
+ * a helyi fejlesztésé, a teszteké és azoké a szkripteké, amelyek a
+ * payload.configot env-teljes környezet nélkül töltik be.
+ */
+export const DEFAULT_SERVER_URL = 'http://localhost:3000'
+
+/**
+ * A `NEXT_PUBLIC_SERVER_URL` nyers értékének normalizálása; `null`, ha nem
+ * használható publikus gyökérként.
+ *
+ * Elvárás: abszolút `http:`/`https:` URL. A záró perjelet levágjuk, mert a
+ * gyökér mindenhol előtagként toldódik hozzá az útvonalhoz (`absoluteUrl`,
+ * `metadataBase`), a CORS/CSRF-összehasonlítás pedig karakter-pontos: az
+ * `Origin` fejlécben sosincs záró perjel, tehát egy `https://kineticare.hu/`
+ * alakú érték NEM illeszkedne a böngésző által küldött eredetre.
+ */
+export function normalizeServerUrl(rawValue: string | undefined | null): string | null {
+  if (typeof rawValue !== 'string') {
+    return null
+  }
+  const trimmed = rawValue.trim()
+  if (trimmed.length === 0) {
+    return null
+  }
+  let parsed: URL
+  try {
+    parsed = new URL(trimmed)
+  } catch {
+    return null
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return null
+  }
+  return trimmed.replace(/\/+$/, '')
+}
+
+/**
+ * A publikus szerver-URL — EGY forrásból.
+ *
+ * Két fogyasztója van: a storefront `metadataBase`-e
+ * (src/app/(frontend)/layout.tsx) és az SEO-segédek `SITE_URL`-je
+ * (src/lib/seo.ts). Korábban mindkét helyen külön állt ugyanaz a
+ * `process.env.NEXT_PUBLIC_SERVER_URL ?? 'http://localhost:3000'` kifejezés —
+ * a párhuzamos forrás azzal a kockázattal jár, hogy a kanonikus URL és a
+ * CORS/CSRF-engedélylista szétcsúszik.
+ *
+ * A CORS/CSRF-lista NEM ezt hívja, hanem a `buildOriginAllowlist`-et — de
+ * UGYANABBÓL az env-értékből, ugyanazzal a normalizálással.
+ *
+ * A Payload `serverURL`-je SZÁNDÉKOSAN ÜRES marad; az indoklás (media-URL
+ * abszolutizálás → next/image 400) a src/payload.config.ts-ben.
+ *
+ * A függvény SOSEM dob: a payload.config modul-betöltéskor hívja, és egy hibás
+ * env miatt a config betöltése (tehát a teszt- és szkript-futás is) nem
+ * hasalhat el. A hibás alak nem marad némán rossz: az induláskori
+ * `assertRequiredEnv` külön, magyar hibaüzenettel megállítja az appot.
+ */
+export function resolveServerUrl(): string {
+  return normalizeServerUrl(process.env.NEXT_PUBLIC_SERVER_URL) ?? DEFAULT_SERVER_URL
+}
+
+/**
+ * A CORS/CSRF-engedélylista felépítése a NYERS env-értékből — TISZTA függvény.
+ *
+ * Azért önálló és nyers bemenetű, hogy a tényleges szűkítés tesztelhető legyen
+ * olyan értékkel is, ami a teszt-környezetben sosem áll elő (pl.
+ * útvonal-előtagos gyökér). A hívók a `process.env`-ből adják át az értéket.
+ *
+ * A lista az EREDETET tartalmazza (séma + hoszt + port), nem a teljes URL-t: a
+ * böngésző az `Origin` fejlécben mindig csak az eredetet küldi, tehát egy
+ * útvonal-előtaggal megadott `NEXT_PUBLIC_SERVER_URL` (pl.
+ * `https://kineticare.hu/app`) esetén a teljes URL sosem illeszkedne — a
+ * bejelentkezés és minden sütis API-hívás NÉMÁN elhasalna.
+ *
+ * MINDEN hívás ÚJ tömböt ad vissza. Ez nem stílus: a Payload szanitálása a
+ * `csrf` tömbbe BELEÍRHAT (`config.csrf.push(config.serverURL)`,
+ * node_modules/payload/dist/config/sanitize.js:340-342) — ma nem teszi, mert
+ * az ott lévő feltétel `config.serverURL !== ''`, a mi configunkban pedig a
+ * `serverURL` szándékosan üres. A védekezés tehát arra az esetre szól, ha a
+ * `serverURL` valaha visszakerül: akkor sem oszthat közös tömb-referenciát a
+ * `cors` és a `csrf`.
+ */
+export function buildOriginAllowlist(rawValue: string | undefined | null): string[] {
+  const serverUrl = normalizeServerUrl(rawValue) ?? DEFAULT_SERVER_URL
+  return [new URL(serverUrl).origin]
+}
+
+/**
  * Cloudflare Turnstile (kapcsolat-űrlap spam-védelem) — PÁRBAN érvényes kulcsok.
  *
  * - `TURNSTILE_SITE_KEY` — a kliensoldali widget kulcsa (a /kapcsolat oldal
@@ -160,6 +251,22 @@ export function assertRequiredEnv(
     throw new Error(
       `Az alkalmazás nem indulhat el. Hiányzó kötelező környezeti változó(k): ${missing.join(', ')}. ` +
         'Állítsd be őket a környezetben (pl. helyben .env fájlban), majd indítsd újra a szervert.',
+    )
+  }
+
+  // NEXT_PUBLIC_SERVER_URL: a megléte fent már ellenőrzött, itt az ALAKJA a
+  // tét. Hibás alak (séma nélküli hoszt, elgépelt cím) esetén a Payload
+  // CORS/CSRF-allowlistje olyan értékre állna, amire a böngésző `Origin`
+  // fejléce sosem illeszkedik: az admin-bejelentkezés CSENDBEN, magyarázat
+  // nélkül hasalna el, a `metadataBase` pedig kérés-időben dobna. Ezért itt,
+  // induláskor bukik el hangosan — minden környezetben.
+  const rawServerUrl = process.env.NEXT_PUBLIC_SERVER_URL
+  if (normalizeServerUrl(rawServerUrl) === null) {
+    throw new Error(
+      `Az alkalmazás nem indulhat el. Érvénytelen NEXT_PUBLIC_SERVER_URL ('${rawServerUrl?.trim() ?? ''}'): ` +
+        'teljes, abszolút webcím kell, http:// vagy https:// előtaggal ' +
+        `(pl. '${DEFAULT_SERVER_URL}'). Erre az értékre épül a CORS/CSRF-engedélylista, ` +
+        'a kanonikus oldal-URL és a megosztási képek címe.',
     )
   }
 

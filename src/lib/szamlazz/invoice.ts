@@ -8,6 +8,7 @@ import {
   postInvoiceXml,
   type SzamlazzParsedSuccess,
 } from './client'
+import { isTrustedInvoicePdfUrl } from './invoice-url'
 import { queryInvoiceByKulsoAzon, type InvoiceLookupResult } from './pdf'
 import { writeOrderInvoicingState } from './order-state'
 import {
@@ -410,15 +411,13 @@ export function itemsFromOrder(order: Order): InvoiceItemInput[] | null {
   return mapped
 }
 
-/**
- * A számla-PDF/vevői fiók URL megbízható hosztjai. A Számlázz.hu a
- * `<vevoifiokurl>` mezőt szabad szövegként adja vissza — az érték a rendelés
- * `invoicePdfUrl` mezőjébe kerül, amit a fiók-oldal KATTINTHATÓ linkként jelenít
- * meg (src/components/account/AccountView.tsx). Ellenőrzés nélkül egy hibás
- * vagy manipulált válasz tetszőleges címre (akár `javascript:`-re) vinné a
- * vásárlót a saját rendelés-oldaláról.
+/*
+ * A számlalink allowlistje a függőség nélküli `./invoice-url` levél-modulban él,
+ * hogy a vásárló fiók-oldala (`'use client'`) is ugyanazt az implementációt
+ * használhassa — ez a modul a Payload local API-t és a naplózót is behúzza,
+ * tehát kliensre nem kerülhet. A re-export a meglévő importálók kedvéért marad.
  */
-const TRUSTED_INVOICE_URL_HOST = 'szamlazz.hu'
+export { isTrustedInvoicePdfUrl }
 
 /** Naplóbarát hoszt-részlet: a teljes URL sosem kerül naplóba. */
 function safeUrlHost(value: string): string {
@@ -427,28 +426,6 @@ function safeUrlHost(value: string): string {
   } catch {
     return 'értelmezhetetlen-url'
   }
-}
-
-/**
- * Megbízható-e a számlához kapott URL: KIZÁRÓLAG `https` séma, és a hoszt a
- * `szamlazz.hu` vagy annak aldomainje.
- *
- * A hoszt-egyezés nem puszta végződés-vizsgálat, hanem pontos illeszkedés vagy
- * `.`-tal elválasztott aldomain — különben a `szamlazz.hu.tamado.example` is
- * átmenne.
- */
-export function isTrustedInvoicePdfUrl(value: string): boolean {
-  let parsed: URL
-  try {
-    parsed = new URL(value)
-  } catch {
-    return false
-  }
-  if (parsed.protocol !== 'https:') {
-    return false
-  }
-  const host = parsed.hostname.toLowerCase()
-  return host === TRUSTED_INVOICE_URL_HOST || host.endsWith(`.${TRUSTED_INVOICE_URL_HOST}`)
 }
 
 /**

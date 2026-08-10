@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { assertRequiredEnv, requiredEnvVars, szamlazzVatModes, turnstileEnvPair } from '../../env'
+import {
+  assertRequiredEnv,
+  buildOriginAllowlist,
+  DEFAULT_SERVER_URL,
+  requiredEnvVars,
+  resolveServerUrl,
+  szamlazzVatModes,
+  turnstileEnvPair,
+} from '../../env'
 
 /**
  * Induláskori ENV-assert (src/env.ts) — a `register()` (src/instrumentation.ts)
@@ -21,6 +29,8 @@ import { assertRequiredEnv, requiredEnvVars, szamlazzVatModes, turnstileEnvPair 
  */
 
 const DUMMY_ENV_VALUE = 'DUMMY-42'
+/** A NEXT_PUBLIC_SERVER_URL-nek az ALAKJA is ellenőrzött, ezért valódi URL kell. */
+const DUMMY_SERVER_URL = 'https://dummy.example'
 const [SITE_KEY_ENV, SECRET_KEY_ENV] = turnstileEnvPair
 
 beforeEach(() => {
@@ -29,6 +39,7 @@ beforeEach(() => {
   for (const key of requiredEnvVars) {
     vi.stubEnv(key, DUMMY_ENV_VALUE)
   }
+  vi.stubEnv('NEXT_PUBLIC_SERVER_URL', DUMMY_SERVER_URL)
   vi.stubEnv('BARION_ENVIRONMENT', undefined)
   vi.stubEnv('BARION_POSKEY_TEST', DUMMY_ENV_VALUE)
   vi.stubEnv('BARION_POSKEY_PROD', undefined)
@@ -208,5 +219,139 @@ describe('assertRequiredEnv — környezetfüggő Barion POSKey (változatlan vi
     vi.stubEnv('BARION_ENVIRONMENT', 'prod')
 
     expect(() => assertRequiredEnv()).toThrowError(/BARION_POSKEY_PROD/)
+  })
+})
+
+/**
+ * NEXT_PUBLIC_SERVER_URL — a MEGLÉTE alapkulcsként ellenőrzött, itt az ALAKJA
+ * a tét.
+ *
+ * Erre az értékre épül a Payload `serverURL`-je és a CORS/CSRF-engedélylistája
+ * (src/payload.config.ts), a storefront `metadataBase`-e és az SEO-segédek
+ * kanonikus gyökere. Hibás alaknál a lista olyan értékre állna, amire a
+ * böngésző `Origin` fejléce sosem illeszkedik: az admin-bejelentkezés CSENDBEN
+ * hasalna el. Ezért az alak-hiba már induláskor, minden környezetben megállítja
+ * az appot — a `resolveServerUrl` viszont sosem dob, hogy a config betöltése
+ * (tesztek, szkriptek) egy rossz env-től ne törjön el.
+ */
+describe('assertRequiredEnv — NEXT_PUBLIC_SERVER_URL alakja', () => {
+  it('abszolút http/https cím rendben van (a záró perjeles alak is)', () => {
+    vi.stubEnv('NODE_ENV', 'test')
+
+    for (const value of [
+      'http://localhost:3000',
+      'https://kineticare.hu',
+      'https://kineticare.hu/',
+    ]) {
+      vi.stubEnv('NEXT_PUBLIC_SERVER_URL', value)
+      expect(() => assertRequiredEnv(), value).not.toThrow()
+    }
+  })
+
+  it.each([
+    ['séma nélküli hoszt', 'kineticare.hu'],
+    ['nem URL szöveg', 'DUMMY-42'],
+    ['protokoll-relatív cím', '//kineticare.hu'],
+    ['gyökér-relatív útvonal', '/kineticare'],
+    ['nem http(s) séma', 'ftp://kineticare.hu'],
+  ])('hibás alak (%s) → már induláskor dob, magyar üzenettel', (_label, value) => {
+    vi.stubEnv('NODE_ENV', 'test')
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', value)
+
+    expect(() => assertRequiredEnv()).toThrowError(/NEXT_PUBLIC_SERVER_URL/)
+    expect(() => assertRequiredEnv()).toThrowError(/nem indulhat el/)
+  })
+
+  it('MINDEN környezetben dob (nem csak élesben)', () => {
+    for (const nodeEnv of ['development', 'test', 'production']) {
+      vi.stubEnv('NODE_ENV', nodeEnv)
+      vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'kineticare.hu')
+      expect(() => assertRequiredEnv(), nodeEnv).toThrowError(/NEXT_PUBLIC_SERVER_URL/)
+    }
+  })
+})
+
+/**
+ * A publikus gyökér feloldása (`resolveServerUrl`) és az eredet-lista
+ * (`buildOriginAllowlist`) — EGY env-értékből, ugyanazzal a normalizálással.
+ * A `resolveServerUrl` fogyasztói: a storefront `metadataBase`-e és az SEO
+ * `SITE_URL`-je; a `buildOriginAllowlist`-é a `cors` és a `csrf`.
+ */
+describe('resolveServerUrl / buildOriginAllowlist', () => {
+  it('a záró perjelet levágja (az Origin fejlécben sincs)', () => {
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'https://kineticare.hu/')
+
+    expect(resolveServerUrl()).toBe('https://kineticare.hu')
+    expect(buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)[0]).toBe('https://kineticare.hu')
+  })
+
+  it('útvonal-előtagos gyökérnél az allowlist az EREDETET kapja', () => {
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'https://kineticare.hu/app')
+
+    expect(resolveServerUrl()).toBe('https://kineticare.hu/app')
+    // A böngésző Origin fejléce sosem tartalmaz útvonalat, tehát a teljes URL
+    // allowlist-elemként sosem illeszkedne.
+    expect(buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)[0]).toBe('https://kineticare.hu')
+  })
+
+  it('hiányzó vagy hibás env esetén a fejlesztői tartalék, dobás NÉLKÜL', () => {
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', undefined)
+    expect(resolveServerUrl()).toBe(DEFAULT_SERVER_URL)
+
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'kineticare.hu')
+    expect(resolveServerUrl()).toBe(DEFAULT_SERVER_URL)
+    expect(buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)[0]).toBe(DEFAULT_SERVER_URL)
+  })
+})
+
+
+/**
+ * `buildOriginAllowlist` — a Payload `cors`/`csrf` listájának TISZTA építője
+ * (src/env.ts), amit a src/payload.config.ts közvetlenül hív.
+ *
+ * Miért nyers bemenettel, külön tesztben: a bekötés-tesztben
+ * (src/__tests__/payload-config.test.ts) az elvárt érték a resolverből jön, és
+ * a teszt-környezetben nincs útvonal-előtagos gyökér — ott tehát a
+ * „teljes URL vs. eredet" különbség NEM MÉRHETŐ, egy `[teljesURL]`-re rontott
+ * bekötés is zöld maradna. Az ALÁBBI eset az, ami ezt megfogja.
+ */
+describe('buildOriginAllowlist', () => {
+  it('útvonal-előtagos gyökérből CSAK az eredet kerül a listába', () => {
+    // Ez a diszkrimináló eset: a teljes URL (`https://pelda.hu/app`) allowlist-
+    // elemként SOSEM illeszkedne a böngésző Origin fejlécére.
+    expect(buildOriginAllowlist('https://pelda.hu/app')).toEqual(['https://pelda.hu'])
+    expect(buildOriginAllowlist('https://pelda.hu/app/')).toEqual(['https://pelda.hu'])
+    expect(buildOriginAllowlist('https://pelda.hu/app?x=1#y')).toEqual(['https://pelda.hu'])
+  })
+
+  it('a portot MEGTARTJA (az eredet része), a záró perjelet elhagyja', () => {
+    expect(buildOriginAllowlist('http://localhost:3000/')).toEqual(['http://localhost:3000'])
+    expect(buildOriginAllowlist('https://pelda.hu:8443/app')).toEqual(['https://pelda.hu:8443'])
+  })
+
+  it('hiányzó vagy hibás értéknél a fejlesztői tartalék eredete, dobás NÉLKÜL', () => {
+    const fallbackOrigin = new URL(DEFAULT_SERVER_URL).origin
+
+    expect(buildOriginAllowlist(undefined)).toEqual([fallbackOrigin])
+    expect(buildOriginAllowlist(null)).toEqual([fallbackOrigin])
+    expect(buildOriginAllowlist('')).toEqual([fallbackOrigin])
+    expect(buildOriginAllowlist('kineticare.hu')).toEqual([fallbackOrigin])
+    expect(buildOriginAllowlist('ftp://kineticare.hu')).toEqual([fallbackOrigin])
+  })
+
+  /**
+   * MINDEN hívás ÚJ tömböt ad: a Payload szanitálása a `csrf` tömbbe beleírhat
+   * (node_modules/payload/dist/config/sanitize.js:340-342), közös referencia
+   * mellett ez a `cors` listát is átírná.
+   */
+  it('minden hívás önálló tömböt ad vissza (a csrf-be a Payload beleír)', () => {
+    const first = buildOriginAllowlist('https://pelda.hu')
+    const second = buildOriginAllowlist('https://pelda.hu')
+
+    expect(first).toEqual(second)
+    expect(first).not.toBe(second)
+
+    first.push('https://idegen.example')
+    expect(second).toEqual(['https://pelda.hu'])
   })
 })
