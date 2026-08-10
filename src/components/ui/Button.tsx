@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
+import { sanitizeCmsUrl } from '../../lib/safe-url'
+
 /**
  * Button — a storefront elsődleges akcióeleme.
  *
@@ -51,22 +53,34 @@ export function Button({
   onClick,
   openInNewTab = false,
 }: ButtonProps) {
+  // A gomb célja gyakran CMS-tartalom (szekció-blokkok CTA-mezői), ezért a
+  // href allowlist-szűrésen megy át (src/lib/safe-url.ts): tiltott sémánál
+  // (`javascript:` és társai) a gomb LETILTOTT állapotban, href nélkül jelenik
+  // meg — a felirat így nem tűnik el, de a link nem kattintható. A saját,
+  // rendszer-generált útvonalak (`/kurzusok`, `#ingyenes`, `/penztar?termek=1`)
+  // változatlanul átmennek.
+  const safeHref = sanitizeCmsUrl(href)
+  // A megjelenés a TÉNYLEGES állapotot kövesse: a kiszűrt cél ugyanúgy
+  // letiltott gomb, mint az explicit `disabled` — különben aktívnak látszana
+  // egy olyan elem, amire kattintva nem történik semmi.
+  const isDisabled = disabled || (Boolean(href) && safeHref === null)
+
   const classes = [
     'kc-button',
     `kc-button--${variant}`,
     size === 'sm' ? 'kc-button--sm' : '',
-    disabled ? 'kc-button--disabled' : '',
+    isDisabled ? 'kc-button--disabled' : '',
     className ?? '',
   ]
     .filter(Boolean)
     .join(' ')
 
-  if (href && !disabled) {
-    if (/^https?:\/\//i.test(href)) {
+  if (safeHref && !disabled) {
+    if (/^https?:\/\//i.test(safeHref)) {
       return (
         <a
           className={classes}
-          href={href}
+          href={safeHref}
           {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         >
           {children}
@@ -76,7 +90,7 @@ export function Button({
     return (
       <Link
         className={classes}
-        href={href}
+        href={safeHref}
         {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       >
         {children}
@@ -84,7 +98,7 @@ export function Button({
     )
   }
 
-  if (href && disabled) {
+  if (href) {
     return (
       <span className={classes} aria-disabled="true">
         {children}

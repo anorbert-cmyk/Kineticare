@@ -12,6 +12,7 @@ import type { CourseAccessView } from '../../lib/course-access'
 import { courseHref } from '../../lib/course-url'
 import { courseTitle } from '../../lib/courses'
 import { formatPriceHuf } from '../../lib/format-price'
+import { isTrustedInvoicePdfUrl } from '../../lib/szamlazz/invoice-url'
 import type { Order, User } from '../../payload-types'
 
 /**
@@ -178,6 +179,23 @@ export function AccountView({ accessByProductId, user, orders }: AccountViewProp
                 tone: 'neutral' as const,
               }
               const total = typeof order.totalHufSnapshot === 'number' ? order.totalHufSnapshot : null
+              /*
+               * A számlalink RENDERELÉSKOR is átmegy az allowlisten
+               * (src/lib/szamlazz/invoice-url.ts), nem csak íráskor.
+               *
+               * Íráskor a Számlázz.hu válaszából érkező `vevoifiokurl` már
+               * szűrve mentődik (src/lib/szamlazz/invoice.ts), DE az
+               * `orders.invoicePdfUrl` az adminban közönséges, szerkeszthető
+               * szövegmező (src/plugins/ecommerce.ts): nincs rajta `readOnly`
+               * és nincs field-szintű access, tehát staff/owner kézzel bármit
+               * beírhat — és az az érték itt, a VÁSÁRLÓ fiókjában kerülne
+               * `href`-be. A védelemnek ezért ott is kell lennie, ahol a link
+               * ténylegesen keletkezik.
+               */
+              const invoiceHref =
+                typeof order.invoicePdfUrl === 'string' && isTrustedInvoicePdfUrl(order.invoicePdfUrl)
+                  ? order.invoicePdfUrl
+                  : null
               return (
                 <li key={order.id} className="kc-account__order">
                   <div className="kc-account__order-row">
@@ -187,10 +205,17 @@ export function AccountView({ accessByProductId, user, orders }: AccountViewProp
                   <div className="kc-account__order-meta">
                     <span>{order.createdAt ? new Date(order.createdAt).toLocaleDateString('hu-HU') : ''}</span>
                     {total !== null ? <span>{formatPriceHuf(total)}</span> : null}
-                    {order.invoicePdfUrl ? (
-                      <a href={order.invoicePdfUrl} target="_blank" rel="noopener noreferrer">
+                    {invoiceHref ? (
+                      <a href={invoiceHref} target="_blank" rel="noopener noreferrer">
                         Számla letöltése
                       </a>
+                    ) : order.invoicePdfUrl ? (
+                      // Van tárolt cím, de nem megbízható — a link NEM renderelődik
+                      // linkként. A szöveg nem hazudik „feldolgozás alatt"-ot: a
+                      // számla létezhet, csak ez a hivatkozás nem használható.
+                      <span className="kc-account__order-invoice-pending">
+                        A számla letöltése átmenetileg nem érhető el
+                      </span>
                     ) : order.status === 'paid' ? (
                       <span className="kc-account__order-invoice-pending">A számla feldolgozás alatt</span>
                     ) : null}
