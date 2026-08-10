@@ -1,7 +1,7 @@
 # Kineticare — átadás-dokumentum
 
 > **Kinek szól:** a következő agent-session vagy emberi fejlesztő, aki átveszi
-> a munkát. **Frissítve: 2026-08-10 ~13:15 UTC.** **Önálló dokumentum** — a
+> a munkát. **Frissítve: 2026-08-10 ~14:05 UTC.** **Önálló dokumentum** — a
 > session mulandó állapotára (scratchpad, futó folyamatok, worktree-k) nem
 > támaszkodik; ami kell, az a repóban van.
 >
@@ -23,10 +23,11 @@ adatbázis nem azt a sémát tartalmazta, amit a kód feltételez, ezért élesb
 rendelés létre sem jöhetett. Ezt két Payload-generált migráció javította
 (#59, #60), és igazoltuk is.
 
-**A következő feladatod a 2. szakaszban van:** két félkész javítás áll a
-munkabranchen, mindkettő megerősített KRITIKUS hibát old meg, és mindkettő
-elbukott a keresztreview-n. **Egyik sem merge-elhető a jelenlegi formájában** —
-az egyiknél a deploy a ma működő jobrendszert is leállítaná.
+**A következő feladatod a 2. szakaszban van:** a pénzútvonal két megerősített
+KRITIKUS hibájának javítása **kész, zöld és élesítésre vár** a #62 PR-ben —
+három iteráció és két keresztreview után. **Egyetlen dolog hiányzik: egy
+tulajdonosi visszaigazolás** arról, hogy az `ENABLE_JOB_WORKERS` `true`-ra van
+állítva a Railway service-en (2.4).
 
 ⚠️ **A legfontosabb tanulság, ami rád is vonatkozik:** a ma feltárt hibák MIND
 némák voltak. Nem dobtak kivételt, nem írtak logot, a CI zöld volt, a Railway
@@ -67,97 +68,125 @@ snapshottal — **nincs több drift**.
 `SZAMLAZZ_AGENT_KEY` nincs beállítva, tehát valódi vásárlás és számlázás még
 nem futott. Lásd a 11. szakaszt.
 
-## 2. ➡️ A KÖVETKEZŐ FELADAT: két félkész javítás a branchen
+## 2. ➡️ A KÖVETKEZŐ FELADAT: a pénzútvonal-javítás élesítése
 
-A `claude/higgsfield-mcp-integration-za6671` branchen két WIP-commit áll a
-main fölött. **Egyik sem merge-elhető.** Mindkettő megerősített KRITIKUS hibát
-old meg, mindkettőt egy-egy worktree-ügynök írta, és mindkettőt egy független
-ügynök keresztreviewzta — a verdikt mindkettőnél **javítandó**.
+> **Állapot 2026-08-10 ~14:00 UTC:** a munka **kész és zöld**, a
+> `claude/higgsfield-mcp-integration-za6671` branchen (`8acfadc`), a **#62**
+> PR-ben. **Egyetlen dolog hiányzik az élesítéshez: egy tulajdonosi
+> visszaigazolás** (2.4). A PR címe még „WIP" — átcímezendő.
 
-| Commit | Mit old meg | Verdikt |
-| --- | --- | --- |
-| `8352346` | `wip(jobs)`: az `order-poll` és a `webhook-retry` **soha nem fut le** | javítandó — **blokkoló** |
-| `c5597a5` | `wip(checkout)`: a pénztár számlázási űrlapja **díszlet** | javítandó |
-
-### 2.1 A két hiba, amit megoldanak (mindkettő igazolt)
+### 2.1 Mit old meg (két megerősített KRITIKUS hiba)
 
 **Jobok.** A `jobs.autoRun` a Payloadban NEM állít sorba jobokat, csak a MÁR
 SORBAN ÁLLÓKAT futtatja (a Payload saját típusdokumentációja mondja ki). A
-kódban mindössze három task kerül valaha sorba — `invoice-issue`,
-`storno-issue`, `corrective-invoice-issue` (`src/lib/order-paid.ts:49`,
-`src/lib/szamlazz/queue.ts:40`). Az `order-poll` és a `webhook-retry` slugra
-SEHOL nincs `payload.jobs.queue` hívás, és egyik tasknak sincs `schedule`
-mezője. **Következmény élesben:** egy elveszett vagy késői Barion-callback
-SOHA nem pótlódik utánpollolással → a fizető vevő rendelése örökre
-`payment_pending`, pénz levonva, kurzus nincs. Az árva rendelések nem záródnak
-`cancelled`-re, a számla-resweep sem fut, és az elhasalt webhook-események
-sosem próbálódnak újra.
+kódban mindössze három task került valaha sorba (`invoice-issue`,
+`storno-issue`, `corrective-invoice-issue`), az `order-poll` és a
+`webhook-retry` **egy sem**. Élesben ez azt jelentette, hogy egy elveszett vagy
+késői Barion-callback SOHA nem pótlódott: a fizető vevő rendelése örökre
+`payment_pending` maradt — pénz levonva, kurzus nincs.
 
-**Pénztár.** A `/penztar` renderel egy „Számlázási adatok" kártyát négy
-`required` mezővel, de a `<form>` `noValidate`, és a `handleSubmit` nem olvassa
-ki az inputokat — csak `{ productId, quantity, consentWithdrawalWaiver }`-t küld.
-**A beírt számlázási adat elvész.** A `customerSnapshot` a user nem kötelező
-profilmezőiből épül; ha azok üresek: fizetés lemegy → `buyerFromOrder` null →
-`invoiceStatus: 'failed'` + `warn` → a job `outcome:'failed'`-del SIKERESEN
-lezárul (nem dob, tehát nincs retry) → **soha nem áll ki számla**. Pénz
-beszedve, kurzus kiadva, számlaadási kötelezettség teljesítetlen, az egyetlen
-nyom egy warn-szintű naplósor.
+**Pénztár.** A „Számlázási adatok" kártya díszlet volt: a `handleSubmit` nem
+olvasta ki az inputokat, a `<form>` `noValidate`. A beírt adat elveszett, és
+hiányos profil mellett a fizetés lement, a kurzus kiment, **számla viszont soha
+nem állt ki** — az egyetlen nyom egy warn-szintű naplósor.
 
-### 2.2 Miért nem merge-elhetők — a keresztreview találatai
+### 2.2 Hogyan lett megoldva (három iteráció, két keresztreview)
 
-#### A — job-ütemezés — keresztreview verdikt: **javitando**
+| Kör | Mi történt |
+| --- | --- |
+| 1. | Két worktree-ügynök megírta a javítást. **Mindkettő elbukott a keresztreview-n**; a jobs-ág egy **blokkolóval**: a `schedule` bekapcsolása Payload-oldali sémaváltozást hoz, migráció nélkül a deploy a ma működő jobrendszert is leállította volna. |
+| 2. | Javító kör. A jobs-ág két utat mért össze (marad a `schedule` + migráció, vagy saját `onInit`-ütemező) és indokolt döntést hozott; a checkout-ág hét találatot rendezett. **A review ismét „javítandó"** — a checkout-nál az EREDETI hiba még mindig visszaállítható volt zöld suite mellett. |
+| 3. | A fő szál rendezte a maradékot (2.3), és legenerálta a migrációt. |
 
-| Súly | Találat | Mit kell tenni |
-| --- | --- | --- |
-| kritikus | A változás jelenlegi formájában deploy esetén a MA MŰKÖDŐ jobrendszert is leállítja (migráció + generált típusok nélkül nem önhordó) | A harvestnek EGY változáskörben kell tartalmaznia: (a) helyi Postgresszel generált `payload migrate:create` migrációt (új `payload_jobs_stats` tábla + `meta` jsonb oszlop) — a CLAUDE.md 3. zóna miatt kézzel írni tilos, csak generálni; (b) `npm run generate:types` újrafuttatását. Amíg ezek nincsenek  |
-| magas | Az új Barion-megszakító (circuit breaker) sorfej-blokkolást (poison pill) hoz be: EGY hibás rendelés befagyaszthatja az összes többit | A megszakítás feltételét szűkíteni: kizárólag hitelesítés-osztályú hibára (HTTP 401/403 + provider auth-kód) törjön meg azonnal, a `timeout` / `network` / 5xx ágon pedig csak N (pl. 3) EGYMÁST KÖVETŐ hiba után — így egyetlen mérgezett rekord nem tud sorfejként blokkolni. Kiegészítő védelem: a batch- |
-| magas | Egyetlen beragadt `processing: true` job VÉGLEGESEN és NÉMÁN kikapcsolja az új ütemezést | Vagy saját `beforeSchedule` hook a két schedule-entryn, amely a `processing: true` + `updatedAt` régebbi, mint X perc sorokat NEM számolja bele (illetve elévültnek jelöli), vagy egy külön 'beragadt job' figyelő + magyar RIASZTÁS-log (a projekt meglévő mintája szerint). Minimum: dokumentált üzemeltet |
-| kozepes | A választott megoldás megsérti a feladat kikötését (nincs sémaváltozás), holott létezik migráció nélküli, kevesebb kódot igénylő helyes megoldás | Emberi döntés kell: (A) marad a `schedule`, de a migráció + `generate:types` UGYANEBBEN a körben landol, és a 3. finding beragadási módja kezelve lesz; vagy (B) átállás az onInit + `payload.jobs.queue` útra, amely a kikötést is tartja és azonnal deployolható. A jelentésben mindkettőt fel kell tüntet |
-| kozepes | A generált `src/payload-types.ts` elavult lett — a változáskör hiányos | `npm run generate:types` futtatása és a `src/payload-types.ts` becommitolása ugyanabban a változáskörben (a migráció generálásakor amúgy is meg kell tenni). Hosszabb távon érdemes CI-lépés a típus-drift ellenőrzésére. |
-| kozepes | A provider-hiba `/auth/i` heurisztikája épp azt az esetet nem biztos, hogy lefedi, amiért készült — a kód kommentje viszont biztosnak állítja be | Konkrét, hivatkozott hibakódlistára cserélni (ha nincs hivatalos forrás a repóban, akkor a heurisztikát elhagyni és a 2. findingben javasolt 'N egymást követő hiba' szabályra bízni a felismerést). A kódkommentet a valós bizonyossághoz igazítani. |
-| kozepes | A 14 új teszt túlnyomó része a saját tükrét bizonyítja, nem a Payload viselkedését — a tényleges sorba állítást EGYETLEN teszt sem hajtja meg | Egy fókuszált teszt hozzáadása, amely fake `db`-vel meghívja a valódi `handleSchedules`-t az éles configgal, és állítja: `jobs.queue` pontosan egyszer, `task: 'order-poll'` + `queue: ORDER_MAINTENANCE_QUEUE` + `meta.scheduled: true` értékekkel hívódik; illetve hogy egy 'beragadt' (processing=true) s |
-| kozepes | A javítás élesbeli hatásosságának előfeltétele (ENABLE_JOB_WORKERS=true a Railway service-en) nincs igazolva | A fő szálnak élesítés ELŐTT ellenőriznie kell a Railway service-változók között az `ENABLE_JOB_WORKERS=true` meglétét (titkot ne másoljon sehova, csak a meglét tényét rögzítse), és a deploy után a naplóban vissza kell keresni az első `handleSchedules`-tickeket és az első ténylegesen lefutott order-p |
-| alacsony | A számla-resweep kihagyása néma (debug szint) és a summary-ból nem megkülönböztethető a 'nincs teendő' esettől | Egy `invoiceResweepSkipped: boolean` (vagy `resweepStatus` szöveg) mező felvétele a summarybe és az `outputSchema`-ba — ez a job `output` json mezőjébe megy, tehát NEM jár sémaváltozással. A konfighiba-ágat érdemes 'RIASZTÁS:' prefixű error-ra emelni a projekt meglévő mintája szerint. |
-| alacsony | A teszt 'azonos cron' invariánsa jövőbeli hamis bukást épít be | Az invariánst 'a schedule-cron nem sűrűbb az autoRun-cronnál' irányba lazítani (vagy legalább a bukási üzenetben kimondani, hogy ez projekt-döntés és tudatosan lazítható), a teljességi zár assertjéhez pedig magyar magyarázó üzenetet adni. |
+### 2.3 Amit a második review talált — és ami emiatt változott
 
-#### B — pénztár számlázási adatai — keresztreview verdikt: **javitando**
+1. **Az eredeti kliens-hiba visszaállítható volt zöld suite mellett.** A review
+   független worktree-ben átírta a `handleSubmit`-et úgy, hogy megkerülje a
+   tiszta magot és üres számlázási adatot küldjön — **168/168 teszt átment**. A
+   `planCheckoutSubmission` jól tesztelt volt, de a **mag és a komponens közti
+   huzalozás** — pontosan az a pont, ahol a hiba élt — fedezetlen maradt.
+   Javítás: a mellékhatás-lánc külön gyárba került
+   (`createCheckoutSubmitHandler`), és `src/__tests__/checkout-submit-handler.test.ts`
+   DOM nélkül állítja, hogy a beküldött törzs a MÓDOSÍTOTT állapotból épül.
+   **Negatív kontroll: az eredeti hiba visszaállítása négy teszten bukik.**
+2. **Az akadálymentességi javítás fedezetlen volt** (a fókusz és a
+   mezőhiba-törlés kivehető volt anélkül, hogy bármi bukjon). Most le van fedve,
+   és az `aria-live` régió **mindig renderelődik**, üresen is — a dinamikusan
+   beszúrt élő régiót több képernyőolvasó megbízhatatlanul jelenti be.
+3. **A saját hibaüzenetünk példája** (`12345678-1-42`) olyan adószám volt, amit
+   a rendszer elutasít: a vevő betűre követte volna az utasítást, és másik
+   hibát kapott volna. A példa CDV-helyesre cserélve, és **önellenőrző teszt**
+   futtatja át a súgószövegekből kiszedett példákat a validáción.
+4. **A jobs-ág javító köre HAMIS állítást vitt a kódba**: azt írta, hogy a
+   listáról hiányzó auth-hibakódot a szállítási-hiba-számláló „úgyis elkapja".
+   A forrásból cáfolható — az `order`-osztályba esik, tehát SOHA nem szakít meg.
+   A komment javítva, és bevezetve a hiányzó háló: **`MAX_LEADING_FAILURES` (5)**
+   futás-szintű mennyezet, ami csak addig él, amíg nem volt egyetlen sikeres
+   válasz sem — így a „rossz kulcs / teljes kimaradás" eset elkapódik, de egy
+   mérgezett rendelés a sor elején nem tud sorfejként blokkolni.
 
-| Súly | Találat | Mit kell tenni |
-| --- | --- | --- |
-| magas | A CheckoutForm-teszt VAKON zöld: a bejelentett kliens-hibára nulla valódi lefedettség | A hat nem diszkrimináló állítást törölni kell (a hamis kommenttel együtt), és a valódi viselkedést kell lefedni. A `node` környezet (vitest.config.ts `environment: 'node'`, jsdom/happy-dom NINCS telepítve) miatt a legolcsóbb út: emeld ki a beküldési törzs összeállítását egy tiszta függvénybe (pl. `b |
-| magas | Az adószám-validáció nem oldja meg, amit ígér, közben valós vevőket zár ki | Vagy szigorúbb, vagy engedékenyebb legyen, de ne a kettő rossz metszete. Szigorítás (olcsó, ~10 sor): CDV-ellenőrzés az első 8 jegyre (súlyok 9,7,3,1,9,7,3), áfakód ∈ 1–5, megyekód ∈ 02–44 ∪ {51}. Ezzel a Számla Agent által elutasítható alakok tényleg kiszűrődnek. Az EU-előtagos alakhoz: vagy vágd l |
-| kozepes | Nem magyar címről innentől NEM lehet vásárolni — és ez nincs a kockázatlistán | Minimum: kerüljön a jelentésbe és a release-jegyzetbe kifejezetten, hogy a külföldi cím innentől blokkolt, hogy az üzemeltető dönthessen. Helyes megoldás (külön ticketre): országmező a pénztárban, nem magyar ország esetén szabad formátumú irányítószám, és a `<orszag>` tag felvétele a számla-XML `<ve |
-| kozepes | A magyar felhasználói hibaüzenet félrevezet adószám- és hossz-hiba esetén | Az összefoglalót a tényleges hibahalmazból származtasd: pl. ha a `billingErrorMap`-ben csak `taxNumber` van, akkor a `BILLING_TAX_NUMBER_ERROR` menjen ki; egyébként semleges szöveg („Ellenőrizd a pirossal jelölt mezőket."). Egy sor a `handleSubmit`-ban. |
-| kozepes | A mezőhibák nem tűnnek el gépelés közben, és a hiba a lap alján jelenik meg | Az `updateBilling`-ben töröld az adott mező hibáját (`setBillingErrors(prev => { const next = {...prev}; delete next[field]; return next })`). Submit-hibánál mozgasd a fókuszt az első hibás inputra (`document.getElementById('kc-field-billingZip')?.focus()` a `Field` id-konvenciója szerint), vagy ted |
-| kozepes | A maradék (már meglévő) számlázhatatlan rendelés továbbra is NÉMÁN vész el | Emeld a 535. sori `warn`-t `error`-ra a `RIASZTÁS:` előtaggal (egysoros, a fájl saját konvenciója szerint), és javasolj külön ticketet egy egyszeri riportra az `invoiceStatus: 'failed'` + `invoiceLastError ~ hiányos vevő` rendelésekről, hogy az emberi adatpótlás elindulhasson. |
-| alacsony | Egyszerűbb, kevesebb kódot igénylő helyes megoldás létezik: a profil-tartalék HALOTT ÁGAT szolgál ki | Mérlegelendő: a `billing` legyen feltétel nélkül kötelező, a profil-tartalék és a `billingSource` essen ki; ha az adaptert életben kell tartani, ott a `req.user` profiljából ÖSSZE lehet állítani a `billing`-et a hívó oldalon (2 sor), és a szolgáltatás szerződése egyágú marad. Ha marad a tartalék, ak |
-| alacsony | A checkout-billing.test.ts-ben nincs hangosan dobó fetch-őr (CLAUDE.md 15.) | `vi.stubGlobal('fetch', () => { throw new Error('TESZT: valódi hálózati hívás nem futhat') })` a fájl elején + `afterEach(vi.unstubAllGlobals)`. |
-| alacsony | Validációs apróságok: elérhetetlen ágak, találgató normalizálás, zero-width rés, autoComplete | (a) elérhetetlen ágak törlése; (b) a zip-normalizálásnál a belső szóköz elfogadása helyett inkább csak trim + `H-` előtag; (c) a `normalizeText` szűrje a nem nyomtatható/zero-width karaktereket (`\p{C}` osztály) is; (d) fogadj el számot is, vagy dokumentáld a szerződésben; (e) `autoComplete="section |
-### 2.3 Hogyan folytasd
+Megnyugtató mellékeredmény: a review a CDV-algoritmust **három valódi magyar
+cégadószámon** (MOL, OTP, Richter) ellenőrizte — mind átmegy, tehát a
+szigorítás nem zár ki legitim céges vevőt.
 
-1. **A blokkoló (jobs) feloldása.** A `schedule` bekapcsolása a Payload
-   oldalán sémaváltozást hoz: a `sanitize.js` a `config.jobs.scheduling`
-   mellett a `config.jobs.stats`-ot is `true`-ra állítja, és betol egy
-   `payload-jobs-stats` globalt plusz egy `meta` json mezőt a `payload-jobs`
-   collectionre. **Ehhez Payload-generált migráció kell** (a CLAUDE.md 3.
-   zónája miatt kézzel írni tilos) — a recept az 5.3-ban van, és a
-   snapshot-diffelés miatt valószínűleg a KÉTLÉPÉSES változat kell. Plusz
-   `npm run generate:types` újrafuttatása.
-   **Amíg ez nincs meg, a deploy a MA MŰKÖDŐ jobrendszert is leállítaná.**
-2. **A többi review-találat rendezése** a 2.2 táblázat szerint.
-3. **Ellenőrizd az élesbeli előfeltételt:** a jobok csak akkor futnak, ha a
-   Railway service-en az `ENABLE_JOB_WORKERS` be van kapcsolva. Ez NINCS
-   igazolva — nézd meg, mielőtt „kész"-nek mondod a javítást.
-4. **Teljes kapu** (`typecheck`, `test`, `lint`, `build`) → PR → CI zöld →
-   merge → **Railway deploy-ellenőrzés**: a build-logban tényleges
-   `npm run build`, a deploy-logban a `Migrated:` sor, és a `server_start`
-   commitSha-ja egyezzen a merge-commitéval.
-5. **Deploy után figyeld a naplót**: a jobok most először fognak futni
-   élesben, ál-Barion-kulccsal. Ha zajt vagy hibát termelnek, az azonnal
-   látszani fog.
+### 2.4 ⚠️ Az élesítés EGYETLEN nyitott feltétele
 
-**A patchek biztonságban vannak** a branchen (a WIP-commitokban), tehát ha a
-konténer elszáll, nem vész el semmi.
+**Be van-e állítva az `ENABLE_JOB_WORKERS` `true`-ra a Railway service-en?**
+
+A jobok csak akkor futnak, ha igen (`src/jobs/index.ts`: `env.ENABLE_JOB_WORKERS === 'true'`).
+Az agent ezt **nem tudja ellenőrizni**: a Railway MCP `railway-agent` helyesen
+elrejti a változók értékét (`<hidden_from_agent>`), a `.env*` olvasása pedig
+tilos. Annyi igazolt, hogy **a változó létezik** a service-en.
+
+- Ha `true` → a deploy után a jobok azonnal futni kezdenek.
+- Ha nem → a migráció akkor is biztonságosan lefut (additív), de a jobok nem
+  indulnak; a beállítás lesz a következő lépés.
+
+### 2.5 A migráció (a fő szál generálta, Payload-eszközzel)
+
+`src/migrations/20260810_132919_job_utemezes_stats.ts` — **tisztán additív**:
+
+```sql
+CREATE TABLE "payload_jobs_stats" (
+  "id" serial PRIMARY KEY NOT NULL, "stats" jsonb,
+  "updated_at" timestamp(3) with time zone, "created_at" timestamp(3) with time zone);
+ALTER TABLE "payload_jobs" ADD COLUMN "meta" jsonb;
+```
+
+Meglévő adatot nem ír át, **nem tud elbukni**, és a rollback is ártalmatlan (a
+régi kód figyelmen kívül hagyja). Ez élesen más osztály, mint a #60 enum-cseréje.
+
+**Kereszt-ellenőrzés:** a generált SQL **szó szerint egyezik** azzal, amit az
+ügynök a snapshot-diffből előre megadott — két független úton ugyanaz.
+
+**Igazolás éles módban, tiszta adatbázison:** a migráció lefut; a
+`config.jobs.scheduling` ÉS `stats` igaz; mindkét periodikus task ütemezve (a
+három esemény-vezérelt nem); a `payload-jobs-stats` global és a
+`payload_jobs.meta` oszlop létezik és olvasható; a `payload_migrations`-ben
+**nincs `dev` sor**.
+
+### 2.6 Élesítés után KÖTELEZŐ megnézni
+
+A jobok most futnak először élesben, **ál-Barion-kulccsal**. A javítás pont
+ezt kezeli (megszakít és riaszt), de az első futásokat nézd meg a Railway
+deploy-logban: van-e `RIASZTÁS:` sor, és nem termel-e naplóözönt.
+
+### 2.7 Amit a review nyitva hagyott (alacsony súly, NEM blokkoló)
+
+| Ág | Tétel |
+| --- | --- |
+| jobs | Maradék sorfej-blokkolás: 3 egymást követő szállítási hiba a batch ELEJÉN tartósan elzárja a mögötte lévőket |
+| jobs | Beragadt job mellett fékezetlen error-szintű naplóözön (nincs throttling) |
+| checkout | Az „elérhetetlen ág" találat csak részben teljesült, a hozzáírt komment téves |
+| checkout | A külföldi irányítószám-kompromisszum dokumentációja alábecsüli a hatást |
+| checkout | Elavult adószám-fixtúrák a repóban, és a két éles viselkedésváltozás sehol nincs rögzítve |
+
+**A két éles viselkedésváltozás, amit a megrendelőnek tudnia kell:**
+(a) hiányos számlázási adattal **innentől nem lehet fizetni** (eddig lement a
+fizetés, csak a számla maradt el) — ez helyes, de a konverzióban látszani fog;
+(b) **nem magyar irányítószámról nem lehet vásárolni**, mert a számla-XML
+`<vevo>` blokkja ma nem tartalmaz `<orszag>` taget. Ez tulajdonosi döntést
+igényel.
 
 ## 3. Nyitott, IGAZOLT tételek — prioritással
 
