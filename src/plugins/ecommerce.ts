@@ -233,6 +233,15 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
     useAsTitle: 'sku',
     group: WEBSHOP_GROUP,
     description: 'A megvásárolható kurzusok. Az árat és a közzétételt csak tulajdonos állíthatja.',
+    // KÖTELEZŐ felülírás: a plugin `defaultColumns: ['prices']`-t állít be
+    // (createProductsCollection), DE nincs `prices` nevű mező — a pricesField
+    // egy NÉVTELEN group → row alá teszi a `priceInHUFEnabled` + `priceInHUF`
+    // mezőket. A nem létező oszlopnév miatt a lista NULLA oszloppal rendelődik
+    // ki: nincs cím, nincs kattintható link, a kurzus nem nyitható meg. A
+    // `...defaultCollection.admin` ezt öröklené, ezért itt explicit lista kell.
+    // Az első oszlop a dokumentumra mutató link, ezért `sku` (kötelező, egyedi,
+    // és ez a useAsTitle) — a displayTitle a régi sorokon üres lehet.
+    defaultColumns: ['sku', 'displayTitle', 'audience', 'priceInHUF', 'status', 'updatedAt'],
   },
   fields: [
     ...mapFieldsDeep(defaultCollection.fields, withOwnerOnlyPriceAccess),
