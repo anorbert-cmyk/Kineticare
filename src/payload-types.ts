@@ -122,8 +122,12 @@ export interface Config {
     defaultIDType: number;
   };
   fallbackLocale: null;
-  globals: {};
-  globalsSelect: {};
+  globals: {
+    'payload-jobs-stats': PayloadJobsStat;
+  };
+  globalsSelect: {
+    'payload-jobs-stats': PayloadJobsStatsSelect<false> | PayloadJobsStatsSelect<true>;
+  };
   locale: null;
   widgets: {
     collections: CollectionsWidget;
@@ -1632,12 +1636,24 @@ export interface Order {
    */
   invoiceStatus?: ('none' | 'pending' | 'issued' | 'failed') | null;
   /**
+   * A számlakiállítási kísérletek száma (legfeljebb 5, utána emberi beavatkozás kell). A rendszer állítja.
+   */
+  invoiceAttempts?: number | null;
+  /**
+   * Az utolsó sikertelen számlakiállítási kísérlet hibaüzenete — hibakereséshez.
+   */
+  invoiceLastError?: string | null;
+  /**
+   * Az eredeti számla teljesítési dátuma (ÉÉÉÉ-HH-NN) — a helyesbítő számla ezt ismétli meg. A rendszer állítja.
+   */
+  invoiceCompletionDate?: string | null;
+  /**
    * A stornó-számla állapota. A rendszer állítja — ne írd át.
    */
   stornoStatus?: ('none' | 'pending' | 'storned' | 'failed') | null;
   stornoNumber?: string | null;
   /**
-   * A stornó-kiállítási kísérletek száma (a retry-job számlálója). A rendszer állítja.
+   * A stornó-kiállítási kísérletek száma (legfeljebb 5, utána emberi beavatkozás kell). A rendszer állítja.
    */
   stornoAttempts?: number | null;
   /**
@@ -1653,6 +1669,18 @@ export interface Order {
    * A refunds-nyom hányadik bejegyzéséhez tartozik a legutóbbi helyesbítő számla (idempotencia). A rendszer állítja.
    */
   correctiveInvoiceSeq?: number | null;
+  /**
+   * A helyesbítő-kiállítási kísérletek száma (legfeljebb 5, utána emberi beavatkozás kell). A rendszer állítja.
+   */
+  correctiveInvoiceAttempts?: number | null;
+  /**
+   * Az utolsó sikertelen helyesbítő-kísérlet hibaüzenete — hibakereséshez.
+   */
+  correctiveInvoiceLastError?: string | null;
+  /**
+   * Melyik refund-sorszámú helyesbítőhöz tartozik a kísérletszámláló. A rendszer állítja.
+   */
+  correctiveInvoiceAttemptsSeq?: number | null;
   /**
    * A számlázási adatok mentett másolata a rendelés idejéből.
    */
@@ -2098,6 +2126,15 @@ export interface PayloadJob {
   queue?: string | null;
   waitUntil?: string | null;
   processing?: boolean | null;
+  meta?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -2903,6 +2940,9 @@ export interface OrdersSelect<T extends boolean = true> {
   invoiceNumber?: T;
   invoicePdfUrl?: T;
   invoiceStatus?: T;
+  invoiceAttempts?: T;
+  invoiceLastError?: T;
+  invoiceCompletionDate?: T;
   stornoStatus?: T;
   stornoNumber?: T;
   stornoAttempts?: T;
@@ -2910,6 +2950,9 @@ export interface OrdersSelect<T extends boolean = true> {
   correctiveInvoiceStatus?: T;
   correctiveInvoiceNumber?: T;
   correctiveInvoiceSeq?: T;
+  correctiveInvoiceAttempts?: T;
+  correctiveInvoiceLastError?: T;
+  correctiveInvoiceAttemptsSeq?: T;
   customerSnapshot?: T;
   consentWithdrawalWaiver?: T;
   consentWithdrawalWaiverAt?: T;
@@ -3208,6 +3251,7 @@ export interface PayloadJobsSelect<T extends boolean = true> {
   queue?: T;
   waitUntil?: T;
   processing?: T;
+  meta?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -3242,6 +3286,34 @@ export interface PayloadMigrationsSelect<T extends boolean = true> {
   batch?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-jobs-stats".
+ */
+export interface PayloadJobsStat {
+  id: number;
+  stats?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-jobs-stats_select".
+ */
+export interface PayloadJobsStatsSelect<T extends boolean = true> {
+  stats?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -3283,6 +3355,7 @@ export interface TaskOrderPoll {
     failed: number;
     orphaned: number;
     invoiceRequeued: number;
+    invoiceResweep: string;
   };
 }
 /**

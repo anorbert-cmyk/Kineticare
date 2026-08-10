@@ -211,7 +211,20 @@ afterEach(() => {
   lockState.reset()
 })
 
-const happyInput = { productId: 42, consentWithdrawalWaiver: true }
+/**
+ * A `billing` a valódi pénztár-beküldés része (B): számlázási adat nélkül a
+ * szolgáltatás 400-zal állna meg, és a zár-forgatókönyvek el sem indulnának.
+ */
+const happyInput = {
+  productId: 42,
+  consentWithdrawalWaiver: true,
+  billing: {
+    name: 'Minta Mari',
+    zip: '1011',
+    city: 'Budapest',
+    street: 'Fő utca 1.',
+  },
+}
 
 describe('checkout-zár — sorosítás (TOCTOU)', () => {
   it('két párhuzamos kérés: a védett szakaszok NEM lapolódnak át, csak EGY rendelés jön létre', async () => {
