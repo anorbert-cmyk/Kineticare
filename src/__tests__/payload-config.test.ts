@@ -106,6 +106,25 @@ describe('payload.config', () => {
   })
 
   /**
+   * K1: a 10 MB-os feltöltési korlát (T-019) önmagában NÉMÁN csonkolna — a
+   * multipart-parser `truncated: true`-val fogadná el a túlméretes fájlt, és a
+   * feltöltés sikeresnek látszana egy hibás fájllal. Az `abortOnLimit: true`
+   * kapcsolja elutasításra: 413 + a `responseOnLimit` magyar üzenet
+   * (payload/dist/uploads/fetchAPI-multipart/processMultipart.js — a config
+   * upload-blokkja 1:1-ben a parser opcióira megy,
+   * utilities/addDataAndFileToRequest.js).
+   */
+  it('a túlméretes feltöltés 413-as ELUTASÍTÁST kap (abortOnLimit), magyar üzenettel (K1)', async () => {
+    const config = await configPromise
+
+    expect(config.upload?.limits?.fileSize).toBe(10485760)
+    expect(config.upload?.abortOnLimit).toBe(true)
+    expect(config.upload?.responseOnLimit).toBe(
+      'A fájl mérete meghaladja a megengedett 10 MB-os korlátot.',
+    )
+  })
+
+  /**
    * C1/A2 biztonsági zárás: a GraphQL API-nak KIKAPCSOLVA kell maradnia. A
    * beépített resetPasswordUser/forgotPasswordUser mutációk a
    * resetPasswordOperation-ön át megkerülnék a szerveroldali jelszó-politikát
