@@ -110,7 +110,18 @@ function setup(options: SetupOptions = {}) {
       }
       return { docs: pending, totalDocs: pending.length }
     },
-    findByID: async () => user,
+    findByID: async ({ collection, id }: { collection: string; id: number }) => {
+      // Az M5 zár a záron belül ÚJRAOLVASSA a rendelést — a mock a tárolt
+      // (és az update által mutált) példányt adja vissza, mint a valódi DB.
+      if (collection === 'orders') {
+        const found = [...pending, ...paidResweep].find((order) => order.id === id)
+        if (!found) {
+          throw new Error(`teszthiba: nincs ilyen rendelés: ${id}`)
+        }
+        return found
+      }
+      return user
+    },
     update: async ({ collection, data }: { collection: string; data: Record<string, unknown> }) => {
       if (collection === 'orders') {
         orderUpdates.push(data)

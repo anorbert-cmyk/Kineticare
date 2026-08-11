@@ -20,8 +20,17 @@ import { createStaleAwareBeforeSchedule } from '../schedule-guard'
  *   érintetlen marad.
  * - Exponenciális backoff: a retryDelayMs szerinti várakozás letelte előtt az
  *   esemény kimarad (isRetryDue).
- * - MAX_WEBHOOK_ATTEMPTS kimerülése után az esemény failed marad, és
- *   error-szintű "owner-jelzés" kerül a logba (riasztási pont).
+ * - KIMERÜLÉS (attempts >= MAX_WEBHOOK_ATTEMPTS): az esemény failed marad, és a
+ *   riasztás A KIMERÜLÉS PILLANATÁBAN megy (az utolsó kísérlet failed+
+ *   retryable:false kimenetelénél, error-szintű owner-jelzés).
+ *
+ * ABLAK-VÉDELEM (K3): a scan-szűrő KIZÁRI a kimerült rekordokat
+ * (`attempts < MAX`). Ez azért kell, mert a 25-ös, legrégebbit-előnyben-
+ * részesítő (`updatedAt` növekvő) ablakot a kimerült sorok véglegesen
+ * eltömhetnék — az updatedAt-jük befagy, mindig az ablak elején maradnának, és
+ * az ÚJ failed események sosem kerülnének sorra. A kimerülés ettől még nem
+ * néma: a riasztás a kimerülés pillanatában kimegy (fent), a rekord pedig
+ * failed státusszal, attempts=MAX-szal lekérdezhető marad.
  *
  * ÜTEMEZÉS (schedule): ez az egyetlen dolog, ami ezt a jobot valaha SORBA
  * ÁLLÍTJA — a kódban semmi nem hívja rá a `payload.jobs.queue`-t, az `autoRun`
@@ -75,7 +84,22 @@ export const webhookRetryTask: TaskConfig<WebhookRetryJobIO> = {
 
     const candidates = await store.find({
       collection: 'webhook-events',
-      where: { status: { in: ['received', 'failed'] } },
+      where: {
+        and: [
+          { status: { in: ['received', 'failed'] } },
+          // K3 ablak-védelem: a kimerült (attempts >= MAX) rekordok KIZÁRVA —
+          // különben a legrégebbit-előnyben-részesítő, 25-ös ablakot véglegesen
+          // eltömik (az updatedAt-jük befagy), és az új failed események sosem
+          // kerülnének sorra. A hiányzó attempts (régi/NULL sor) újrapróbálható,
+          // azt az isRetryDue úgyis 0-ként kezeli.
+          {
+            or: [
+              { attempts: { less_than: MAX_WEBHOOK_ATTEMPTS } },
+              { attempts: { exists: false } },
+            ],
+          },
+        ],
+      },
       sort: 'updatedAt',
       limit: RETRY_BATCH_SIZE,
       overrideAccess: true,
@@ -93,18 +117,6 @@ export const webhookRetryTask: TaskConfig<WebhookRetryJobIO> = {
         skipped += 1
         continue
       }
-      const attempts = event.attempts ?? 0
-      if (attempts >= MAX_WEBHOOK_ATTEMPTS) {
-        exhausted += 1
-        logger.error('webhook-esemény újrapróbálásai kimerültek — owner beavatkozás szükséges', {
-          provider: event.provider,
-          externalId: event.externalId,
-          eventId: event.id,
-          attempts,
-          lastError: event.lastError,
-        })
-        continue
-      }
       if (!isRetryDue(event, nowMs)) {
         skipped += 1
         continue
@@ -120,15 +132,30 @@ export const webhookRetryTask: TaskConfig<WebhookRetryJobIO> = {
       if (outcome.kind === 'processed' || outcome.kind === 'already-processed') {
         succeeded += 1
       } else if (outcome.kind === 'failed') {
-        failed += 1
-        logger.warn('webhook-esemény újrapróbálása sikertelen', {
-          provider: event.provider,
-          externalId: event.externalId,
-          eventId: event.id,
-          attempts: outcome.attempts,
-          retryable: outcome.retryable,
-          error: outcome.error,
-        })
+        if (!outcome.retryable) {
+          // A kimerülés PILLANATA: ez volt az utolsó megengedett kísérlet — a
+          // scan-szűrő (K3) többé nem adja vissza ezt a rekordot, tehát az
+          // owner-riasztás ITT, egyszer, error-szinten megy ki.
+          exhausted += 1
+          failed += 1
+          logger.error('webhook-esemény újrapróbálásai kimerültek — owner beavatkozás szükséges', {
+            provider: event.provider,
+            externalId: event.externalId,
+            eventId: event.id,
+            attempts: outcome.attempts,
+            error: outcome.error,
+          })
+        } else {
+          failed += 1
+          logger.warn('webhook-esemény újrapróbálása sikertelen', {
+            provider: event.provider,
+            externalId: event.externalId,
+            eventId: event.id,
+            attempts: outcome.attempts,
+            retryable: outcome.retryable,
+            error: outcome.error,
+          })
+        }
       }
     }
 

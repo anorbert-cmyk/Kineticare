@@ -51,16 +51,23 @@ function createState(overrides: Partial<BarionPaymentStateResponse> = {}): Bario
   }
 }
 
-function createMockPayload() {
+function createMockPayload(order: Order) {
   const user = { id: CUSTOMER_ID, email: 'vevo@example.test', purchases: [] as number[] } as
     unknown as User
   const updates: Array<{ collection: string; data: Record<string, unknown> }> = []
   const payload = {
-    findByID: vi.fn(async () => user),
+    // Az M5 zár a záron belül findByID-val OLVASSA ÚJRA a rendelést — a mock
+    // ezért collection-tudatos: 'orders'-re a teszt rendelése, 'users'-re a vevő.
+    findByID: vi.fn(async ({ collection }: { collection: string }) =>
+      collection === 'orders' ? order : user,
+    ),
     update: vi.fn(async (args: { collection: string; data: Record<string, unknown> }) => {
       updates.push({ collection: args.collection, data: args.data })
       if (args.collection === 'users') {
         Object.assign(user, args.data)
+      }
+      if (args.collection === 'orders') {
+        Object.assign(order, args.data)
       }
       return args.data
     }),
@@ -118,8 +125,8 @@ describe('assertPaymentAmountMatches — a tiszta összeg-ellenőrző', () => {
 
 describe('applyBarionStateTransition — paid-átmenet összeg-assert', () => {
   it('(1) EGYEZÉS → paid: státusz-írás + purchases-jogosultság + transitionedToPaid', async () => {
-    const { payload, updates, user } = createMockPayload()
     const order = createOrder()
+    const { payload, updates, user } = createMockPayload(order)
 
     const result = await applyBarionStateTransition({
       payload,
@@ -138,11 +145,12 @@ describe('applyBarionStateTransition — paid-átmenet összeg-assert', () => {
 
   it('(2) TOTAL-ELTÉRÉS → rejected/total-mismatch: se státusz, se jogosultság, riasztás', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const { payload, updates, user } = createMockPayload()
+    const order = createOrder()
+    const { payload, updates, user } = createMockPayload(order)
 
     const result = await applyBarionStateTransition({
       payload,
-      order: createOrder(),
+      order,
       mapped: 'paid',
       state: createState({ Total: 1 }),
       log: createLogger(),
@@ -159,11 +167,12 @@ describe('applyBarionStateTransition — paid-átmenet összeg-assert', () => {
 
   it('(3) CURRENCY-ELTÉRÉS → rejected/total-mismatch (azonos szám, más deviza)', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const { payload, updates, user } = createMockPayload()
+    const order = createOrder()
+    const { payload, updates, user } = createMockPayload(order)
 
     const result = await applyBarionStateTransition({
       payload,
-      order: createOrder(),
+      order,
       mapped: 'paid',
       state: createState({ Currency: 'EUR' }),
       log: createLogger(),
@@ -178,11 +187,12 @@ describe('applyBarionStateTransition — paid-átmenet összeg-assert', () => {
 
   it('(4) HIÁNYZÓ Total/Currency → rejected/total-mismatch (konzervatív elutasítás)', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const { payload, updates, user } = createMockPayload()
+    const order = createOrder()
+    const { payload, updates, user } = createMockPayload(order)
 
     const result = await applyBarionStateTransition({
       payload,
-      order: createOrder(),
+      order,
       mapped: 'paid',
       state: createState({ Total: undefined, Currency: undefined }),
       log: createLogger(),
@@ -197,11 +207,12 @@ describe('applyBarionStateTransition — paid-átmenet összeg-assert', () => {
 
   it('MÁR paid rendelés + eltérő Total → a jogosultság-kijavítás sem fut le', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const { payload, updates, user } = createMockPayload()
+    const order = createOrder({ status: 'paid' })
+    const { payload, updates, user } = createMockPayload(order)
 
     const result = await applyBarionStateTransition({
       payload,
-      order: createOrder({ status: 'paid' }),
+      order,
       mapped: 'paid',
       state: createState({ Total: 1 }),
       log: createLogger(),
@@ -214,11 +225,12 @@ describe('applyBarionStateTransition — paid-átmenet összeg-assert', () => {
   })
 
   it('a cancelled és a pending ág NEM függ az összegtől (csak a paid-átmenet védett)', async () => {
-    const { payload, updates } = createMockPayload()
+    const order = createOrder()
+    const { payload, updates } = createMockPayload(order)
 
     const pending = await applyBarionStateTransition({
       payload,
-      order: createOrder(),
+      order,
       mapped: 'payment_pending',
       state: createState({ Total: undefined, Currency: undefined, Status: 'Started' }),
       log: createLogger(),
@@ -227,7 +239,7 @@ describe('applyBarionStateTransition — paid-átmenet összeg-assert', () => {
 
     const cancelled = await applyBarionStateTransition({
       payload,
-      order: createOrder(),
+      order,
       mapped: 'cancelled',
       state: createState({ Total: undefined, Currency: undefined, Status: 'Canceled' }),
       log: createLogger(),

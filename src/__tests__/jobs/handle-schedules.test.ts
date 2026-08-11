@@ -30,6 +30,13 @@ import configPromise from '../../payload.config'
  * 3. egy BERAGADT (`processing: true`, régóta nem frissült) job NEM kapcsolja ki
  *    az ütemezést — miközben a Payload alapértelmezett hookjával kikapcsolná
  *    (negatív kontroll, ugyanezzel az ál-adatbázissal).
+ *
+ * ═══ K4 FELÜLÍRÁS ═══
+ * A K4 versenyhelyzet-javítás óta a saját őr (src/jobs/schedule-guard.ts) a
+ * sorba állítást MAGA végzi, advisory-zár alatt, és `shouldSchedule: false`-szal
+ * tér vissza — különben a handleSchedules még egyszer sorba állítaná. Ezért a
+ * `result.queued/skipped` listák a saját őrös futásoknál `skipped`-et mutatnak:
+ * a BIZONYÍTÉK itt a `jobs.queue`-hívás (queueCalls), nem a visszatérési lista.
  */
 
 /** A stats-global slugja (payload/dist/queues/config/global.js). */
@@ -137,10 +144,14 @@ beforeEach(async () => {
   vi.stubGlobal('fetch', () => {
     throw new Error('TESZT: valódi hálózati hívás nem futhat')
   })
+  // Az ál-adatbázisnak nincs drizzle-példánya, tehát az advisory-zár
+  // passthrough-figyelmeztetése itt zajként jelentkezne — elnyomva.
+  vi.spyOn(console, 'log').mockImplementation(() => {})
 })
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('handleSchedules — a VALÓDI Payload-ütemező az éles configgal', () => {
@@ -159,8 +170,11 @@ describe('handleSchedules — a VALÓDI Payload-ütemező az éles configgal', (
       meta: { scheduled: true },
     })
     expect(harness.queueCalls[0].waitUntil).toBeInstanceOf(Date)
-    expect(result.queued).toHaveLength(1)
-    expect(result.skipped).toHaveLength(0)
+    // K4: a saját őr MAGA állítja sorba a jobot (a queueCalls a bizonyíték), és
+    // shouldSchedule:false-t ad vissza — a handleSchedules ezért „skipped"-ként
+    // könyveli a kört. Ez szándékos: így nem állíthatja sorba még egyszer.
+    expect(result.queued).toHaveLength(0)
+    expect(result.skipped).toHaveLength(1)
     expect(result.errored).toHaveLength(0)
   })
 
@@ -222,7 +236,9 @@ describe('handleSchedules — beragadt job (a néma leállás elleni védelem)',
 
     expect(harness.queueCalls).toHaveLength(1)
     expect(harness.queueCalls[0]).toMatchObject({ task: 'order-poll' })
-    expect(result.queued).toHaveLength(1)
+    // K4: a sorba állítás a hookban történt — a visszatérési listában „skipped".
+    expect(result.queued).toHaveLength(0)
+    expect(result.skipped).toHaveLength(1)
     // Az őr tényleg megnézte a beragadást (második, `processing`-re szűrt számolás).
     expect(harness.countedWheres.filter(isStaleCountQuery)).toHaveLength(1)
   })

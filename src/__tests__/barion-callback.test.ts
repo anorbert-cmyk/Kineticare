@@ -164,7 +164,16 @@ function createMockPayload(options: MockPayloadOptions = {}) {
       }
       return { docs: [], totalDocs: 0 }
     }),
-    findByID: vi.fn(async () => user),
+    findByID: vi.fn(async ({ collection }: { collection: string }) => {
+      // Az M5 zár a záron belül findByID-val OLVASSA ÚJRA a rendelést.
+      if (collection === 'orders') {
+        if (!order) {
+          throw new Error('teszthiba: a rendelés-fixtúra null — ide nem futhat az átmenet')
+        }
+        return order
+      }
+      return user
+    }),
     update: vi.fn(
       async (args: { collection: string; id: number | string; data: Record<string, unknown> }) => {
         calls.update.push(args)
@@ -479,10 +488,10 @@ describe('(d) függő státusz — Prepared/Started', () => {
   })
 })
 
-describe('(e) hamis/ismeretlen PaymentId', () => {
-  it('GetState hibázik és rendelés sincs → riasztás + failed, a handler ettől 200-at adott', async () => {
+describe('(e) hamis/ismeretlen PaymentId — M6 terminális elutasítás', () => {
+  it('400 + PaymentNotFound provider-hiba → TERMINÁLIS rejected (processedAt beírva), a retry NEM viszi újra', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const { POST, docs, capture } = setup({ order: null })
+    const { POST, docs, capture, store, payload } = setup({ order: null })
     fetchMock.mockResolvedValueOnce(barionProviderError())
 
     const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
@@ -491,12 +500,61 @@ describe('(e) hamis/ismeretlen PaymentId', () => {
 
     await capture.runAll()
 
-    // Rögzítve a webhook-events-ben, failed státusszal (processedAt NINCS — retryable marad),
-    // és riasztás került a naplóba.
-    expect(docs[0]).toMatchObject({ status: 'failed', result: 'failed' })
+    // TERMINÁLIS lezárás: a processWebhook processed-re állította, result='rejected',
+    // a processedAt beíródott — az esemény NEM újrapróbálható.
+    expect(docs[0]).toMatchObject({ status: 'processed', result: 'rejected', attempts: 1 })
+    expect(typeof docs[0]?.processedAt).toBe('string')
+    const logs = logOutput(logSpy)
+    expect(logs).toContain('RIASZTÁS')
+    expect(logs).toContain('terminálisan elutasítva')
+
+    // Amit a webhook-retry tenne: semmit — a processed esemény no-op.
+    const retry = await processWebhook({
+      store,
+      provider: 'barion',
+      externalId: PAYMENT_ID,
+      handler: createBarionCallbackProcessor({ payload, store }),
+    })
+    expect(retry.kind).toBe('already-processed')
+    // Nem indult újabb kimenő Barion-hívás sem.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('HTTP 404 GetState → szintén TERMINÁLIS rejected (hamis GUID = 1 hívás + 1 riasztás)', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { POST, docs, capture } = setup({ order: null })
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ Errors: [] }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
+    expect(response.status).toBe(200)
+    await capture.runAll()
+
+    expect(docs[0]).toMatchObject({ status: 'processed', result: 'rejected' })
+    expect(typeof docs[0]?.processedAt).toBe('string')
+    expect(logOutput(logSpy)).toContain('RIASZTÁS')
+  })
+
+  it('HTTP 503 GetState → NEM terminális: failed + processedAt NULL (a retry-job újrapróbálja)', async () => {
+    const { POST, docs, capture } = setup({ order: null })
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ Errors: [] }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
+    expect(response.status).toBe(200)
+    await capture.runAll()
+
+    expect(docs[0]).toMatchObject({ status: 'failed', result: 'failed', attempts: 1 })
     expect(docs[0]?.processedAt ?? null).toBeNull()
     expect(docs[0]?.lastError).toBeTruthy()
-    expect(logOutput(logSpy)).toContain('barion-callback')
   })
 })
 

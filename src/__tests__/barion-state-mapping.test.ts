@@ -131,21 +131,25 @@ describe('állapotgép-invariánsok a javított leképezéssel', () => {
     }
   }
 
-  function mockPayload() {
+  function mockPayload(order: Order) {
     const updates: Array<{ collection: string; data: Record<string, unknown> }> = []
     const payload = {
       update: vi.fn(async (args: { collection: string; data: Record<string, unknown> }) => {
         updates.push(args)
         return args.data
       }),
-      findByID: vi.fn(async () => ({ id: 7, purchases: [42] })),
+      // Az M5 zár a záron belül findByID-val OLVASSA ÚJRA a rendelést —
+      // 'orders'-re a fixtúra rendelését adjuk, 'users'-re a vevőt.
+      findByID: vi.fn(async ({ collection }: { collection: string }) =>
+        collection === 'orders' ? order : { id: 7, purchases: [42] },
+      ),
     }
     return { payload: payload as unknown as Payload, updates }
   }
 
   it('Failed → cancelled: a függő rendelés LEZÁRUL (a beragadás megszűnik)', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    const { payload, updates } = mockPayload()
+    const { payload, updates } = mockPayload(createOrder('payment_pending'))
 
     const transition = await applyBarionStateTransition({
       payload,
@@ -162,7 +166,7 @@ describe('állapotgép-invariánsok a javított leképezéssel', () => {
 
   it('paid rendelést a Failed sem billentheti ki (állapotgép-védelem marad)', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    const { payload, updates } = mockPayload()
+    const { payload, updates } = mockPayload(createOrder('paid'))
 
     const transition = await applyBarionStateTransition({
       payload,
@@ -179,7 +183,7 @@ describe('állapotgép-invariánsok a javított leképezéssel', () => {
 
   it('PartiallySucceeded → pending: a rendelés NEM lesz paid és nem is zárul le', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    const { payload, updates } = mockPayload()
+    const { payload, updates } = mockPayload(createOrder('payment_pending'))
 
     const transition = await applyBarionStateTransition({
       payload,
