@@ -30,7 +30,7 @@
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 /** A datált migrációs fájl nevének alakja — a G3/G4-őr ugyanezt a mintát használja. */
 const DATED_FILE = /^\d{8}_\d{6}_[a-z0-9_]+\.(ts|json)$/
@@ -86,4 +86,12 @@ function main(): void {
   )
 }
 
-main()
+/**
+ * Indítás-kapu: a generátor CSAK közvetlen futtatáskor írja újra a manifestet
+ * (`npx tsx src/scripts/update-migration-checksums.ts`) — a src/scripts/seed.ts
+ * mintájára. Importálva a modul mellékhatás nélkül töltődik be: egy esetleges
+ * jövőbeli import (pl. tesztből) sosem okozhat csendes manifest-írást.
+ */
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main()
+}

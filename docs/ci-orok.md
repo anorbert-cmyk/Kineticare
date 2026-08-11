@@ -52,7 +52,8 @@ Az őrök a vitest-sor részei (`src/__tests__/`), tehát a `verify` CI-job
   óta a könyvtárban datált fájl csak újként és csak .ts+.json párban jöhet, az
   index.ts és a manifest csak módosulhat; (c) a manifest append-only; (d) a
   baseline-commit tiszta (pontosan a manifestet adta hozzá); (e) az új .ts
-  fájlokban destruktív utasítás csak elismerő sorral.
+  fájlok **up() oldalán** destruktív utasítás csak elismerő sorral (a down()
+  sosem igényel markert).
 - **Miért:** a már lefutott migráció utólagos bitorlása visszafordíthatatlan —
   az éles adatbázis a régi tartalmat alkalmazta. A baseline azért kell, mert a
   main története NEM tiszta (a `20260730_080404_sync_schema_code.ts` és a .json
@@ -64,11 +65,16 @@ Az őrök a vitest-sor részei (`src/__tests__/`), tehát a `verify` CI-job
     módosítás szándékos volt, az emberi maintainer dönt (lásd baseline lent).
   - **Új migrációt adtál hozzá:** frissítsd a manifestet ugyanabban a PR-ben:
     `npx tsx src/scripts/update-migration-checksums.ts`
-  - **Destruktív-op jelzés:** ha az új migráció `DROP TABLE` / `DROP COLUMN` /
-    `DROP TYPE` / `SET DATA TYPE ... USING` utasítást tartalmaz, a fájlba a
-    kategóriánkénti elismerő sor kell, pontosan így:
+  - **Destruktív-op jelzés:** ha az új migráció **up() oldala** `DROP TABLE` /
+    `DROP COLUMN` / `DROP TYPE` / `SET DATA TYPE ... USING` utasítást tartalmaz,
+    a fájlba a kategóriánkénti elismerő sor kell, pontosan így:
     `// destruct-op-ack: <DROP TABLE|DROP COLUMN|DROP TYPE|USING> — <indoklás>`
-    (em-dash, nem-üres indoklás). A marker **nem kivétel-engedély**: a humán
+    (em-dash, nem-üres indoklás). A detektor KIZÁRÓLAG az up()-oldalt vizsgálja
+    — a forrást az `export async function down` határán bontja, és a repo
+    migrációinak egységes vázától eltérő fájlnál hangosan bukik. A down()
+    **sosem igényel markert**: minden Payload-generált down() rutinszerűen
+    DROP TABLE/DROP TYPE-ot tartalmaz, az a visszagörgetés szükségszerű része.
+    A marker **nem kivétel-engedély**: a humán
     PR-review-nek szóló **kényszer-nyilatkozat**, amely kikényszeríti, hogy a
     destruktív művelet tudatosan le legyen írva és review-ban látható legyen.
     A `DROP INDEX` szándékosan nem kategória — az index újraépíthető.
@@ -99,9 +105,13 @@ Az őrök a vitest-sor részei (`src/__tests__/`), tehát a `verify` CI-job
 
 ### Meta-őr (`src/__tests__/guard-files-integrity.test.ts`)
 
-- **Mit fog:** az öt őrfájl létezik (a vitest-include egy törölt őrtesztet némán
-  elnézne), és az őrfájlok nem tartalmazzák a kihagyó/fókuszáló/környezet-elnéző
-  tokeneket — még kommentben sem.
+- **Mit fog:** a kilenc őrzött fájl létezik (a vitest-include egy törölt
+  őrtesztet némán elnézne): az öt őrteszt (G1–G4 + meta-őr), a G1/G2 megosztott
+  motorja (`helpers/migration-schema.ts`), a 2. tilos zóna végrehajtható őre
+  (`ecommerce-payments-guard.test.ts`) és az incidens-regressziós őrök
+  (`koszonom-oldal.test.ts`, `payload-config.test.ts`) — és egyik sem
+  tartalmazhatja a kihagyó/fókuszáló/környezet-elnéző tokeneket, még kommentben
+  sem.
 - **Bukáskor:** a törölt őrfájlt visszaállítani; a tokent eltávolítani. Az
   őrfájl-halmaz tudatos módosítása csak külön, emberi review-jú PR-ben, a
   meta-őr egyidejű frissítésével.

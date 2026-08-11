@@ -6,15 +6,20 @@ import { describe, expect, it } from 'vitest'
 
 /**
  * A CI-ŐRÖK META-ŐRE (guard-files-integrity) — a CLAUDE.md 2. és 3. tilos
- * zónájának végrehajtható őrei (G1–G4) CSAK AKKOR FUTNAK, HA LÉTEZNEK.
+ * zónájának végrehajtható őrei (G1–G4, a megosztott séma-motorjuk, a
+ * fizetési/checkout őr és az incidens-regressziós őrök) CSAK AKKOR FUTNAK,
+ * HA LÉTEZNEK.
  *
  * Két csendes halálmód ellen fog:
  *
  *  1. HIÁNYZÓ ŐRFÁJL: a vitest-include (`src/**\/*.test.ts`) egy törölt vagy
  *     átnevezett őrtesztet NÉMÁN ELNÉZ — nincs hibaüzenet, a sor zöld marad,
- *     miközben a tilos zóna őrizetlenné válik. Ezért az öt őrfájl LÉTEZÉSE
- *     külön asszertálva van. (A 2026-08-10-i séma-drift incidens — 9 nap zöld
- *     CI éles leállás mellett — pontosan ilyen csendes vakfoltból nőtt ki.)
+ *     miközben a tilos zóna őrizetlenné válik. Ezért a kilenc őrfájl LÉTEZÉSE
+ *     külön asszertálva van (a helpers/migration-schema.ts nem .test.ts, azt
+ *     az include egyáltalán nem nézné — a hiánya a G1/G2 importjaként ugyan
+ *     kirobbanna, de a fájltartalmi token-vizsgálat miatt itt is őrzött).
+ *     (A 2026-08-10-i séma-drift incidens — 9 nap zöld CI éles leállás
+ *     mellett — pontosan ilyen csendes vakfoltból nőtt ki.)
  *
  *  2. KIÜTETT ŐRFÁJL: egy `.skip`-változatú kihagyó, egy `.only`-változatú
  *     fókuszáló vagy egy környezet-elnéző segéd (amely adatbázis hiányában
@@ -30,13 +35,21 @@ import { describe, expect, it } from 'vitest'
 
 const TESTS_DIR = fileURLToPath(new URL('.', import.meta.url))
 
-/** A tilos zónák végrehajtható őrei — mindnek léteznie kell a tesztsorban. */
+/** A tilos zónák végrehajtható őrei és a közös motorjuk — mindnek léteznie kell a tesztsorban. */
 const GUARD_FILES = [
+  // A séma↔kód és migráció-immutabilitás őrei (G1–G4) + ez a meta-őr:
   'schema-drift-guard.test.ts',
   'schema-config-sync.test.ts',
   'migration-immutability.test.ts',
   'migration-integrity.test.ts',
   'guard-files-integrity.test.ts',
+  // A G1/G2 megosztott kanonizáló- és replay-motorja:
+  'helpers/migration-schema.ts',
+  // A CLAUDE.md 2. tilos zónájának (fizetés/checkout) végrehajtható őre:
+  'ecommerce-payments-guard.test.ts',
+  // Incidens-regressziós őrök:
+  'koszonom-oldal.test.ts',
+  'payload-config.test.ts',
 ]
 
 /**
@@ -56,7 +69,7 @@ const FORBIDDEN_TOKENS = [
 ]
 
 describe('meta-őr — az őrfájlok épsége (a vitest-include némán elnézné a hiányt)', () => {
-  it('(1) mind az öt őrfájl létezik az src/__tests__/ alatt', () => {
+  it('(1) mind a kilenc őrfájl létezik az src/__tests__/ alatt', () => {
     const missing = GUARD_FILES.filter((name) => !existsSync(join(TESTS_DIR, name)))
     expect(
       missing,

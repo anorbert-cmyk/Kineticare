@@ -27,6 +27,9 @@
  * compositePrimaryKeys/uniqueConstraints/checkConstraints/policies) üresnek
  * kell lenniük: ha a jövőben tartalom kerülne beléjük, a kanonizáló HANGOSAN
  * elhasal — a csendes átengedés itt is tiltott, mint a statement-parse-ban.
+ * Ugyanez KULCSSZINTEN is: minden modellzett szinten (gyökér, enum, tábla,
+ * oszlop, index, idegen kulcs) ZÁRT ismert-kulcslista dolgozik — a pinned
+ * formátumtól eltérő (ismeretlen) kulcs hangos bukás, nem csendes vakfolt.
  *
  * HANGOS BUKÁS ELVE. Minden ellenőrzés, amely ismeretlen statement-alakot,
  * nem statikus SQL-t (interpolált sql template), vagy a modellbe nem
@@ -169,13 +172,96 @@ function expectEmptyBucket(value: unknown, label: string): void {
 }
 
 /**
- * A snapshot JSON → kanonikus modell. A top-level `id`/`prevId`/`_meta` és
- * minden egyéb, a kivonatba nem kerülő mező eleve nem jut át — így a
- * generálásonként változó UUID-k a diffet nem mocskolják, miközben a
- * tartalmi dimenziók (táblák, enumok) sorrend-hűen megmaradnak.
+ * A pinned drizzle snapshot-formátum ZÁRT kulcslistái szintenként. A formátum
+ * a repóban rögzített drizzle-verzióhoz kötött: egy jövőbeli formátum-bővülés
+ * (pl. új mezőtípus-kulcs a táblaobjektumban) itt hangos bukás legyen, ne
+ * néma vakfolt — a kanonizálót tudatosan kell bővíteni, mielőtt az új
+ * dimenzió csendben elveszne.
+ *
+ * A listák a formátum TELJES szókészlete (a futásidejű generateDrizzleJson-
+ * kimenet és a szerializált fájl uniója): a `generated`/`identity`/`where`/
+ * `opclass`/`schemaTo` kulcsokat a generátor ma undefined-ként hordozza, és a
+ * JSON.stringify a fájlba íráskor eldobja őket — ezért a snapshot-fájlokban
+ * nem látszanak, de a G2 futásidejű összevetésében jelen vannak. Tartalommal
+ * bírva egyiket sem tudná a kanonikus modell összevetni — azt külön
+ * ellenőrizzük (lásd a canonicalizeSnapshot belső megjegyzéseit).
+ */
+const SNAPSHOT_ROOT_KEYS = [
+  'version',
+  'dialect',
+  'tables',
+  'enums',
+  'schemas',
+  'sequences',
+  'roles',
+  'policies',
+  'views',
+  '_meta',
+  'id',
+  'prevId',
+] as const
+const SNAPSHOT_ENUM_KEYS = ['name', 'schema', 'values'] as const
+const SNAPSHOT_TABLE_KEYS = [
+  'name',
+  'schema',
+  'columns',
+  'indexes',
+  'foreignKeys',
+  'compositePrimaryKeys',
+  'uniqueConstraints',
+  'policies',
+  'checkConstraints',
+  'isRLSEnabled',
+] as const
+const SNAPSHOT_COLUMN_KEYS = [
+  'name',
+  'type',
+  'typeSchema',
+  'primaryKey',
+  'notNull',
+  'default',
+  'generated',
+  'identity',
+] as const
+const SNAPSHOT_INDEX_KEYS = ['name', 'columns', 'isUnique', 'method', 'concurrently', 'with', 'where'] as const
+const SNAPSHOT_INDEX_COLUMN_KEYS = ['expression', 'isExpression', 'asc', 'nulls', 'opclass'] as const
+const SNAPSHOT_FOREIGN_KEY_KEYS = [
+  'name',
+  'tableFrom',
+  'columnsFrom',
+  'tableTo',
+  'columnsTo',
+  'onDelete',
+  'onUpdate',
+  'schemaTo',
+] as const
+
+/** Kulcsszintű szigorúság: ismeretlen kulcs bármely modellzett szinten hangos bukás. */
+function expectKnownKeys(value: Record<string, unknown>, knownKeys: readonly string[], label: string): void {
+  const known = new Set<string>(knownKeys)
+  for (const key of Object.keys(value)) {
+    if (!known.has(key)) {
+      throw new Error(
+        `a snapshot ${label} része ismeretlen kulcsot tartalmaz: '${key}' — ` +
+          'a snapshot-formátum a pinned drizzle-verzióhöz kötött; ha a generátor bővült, ' +
+          'a kanonizálót tudatosan ki kell bővíteni, mielőtt ez a tartalom csendben elveszne',
+      )
+    }
+  }
+}
+
+/**
+ * A snapshot JSON → kanonikus modell. A top-level `id`/`prevId`/`_meta`
+ * generálási zaj a kivonatba nem jut át — így a generálásonként változó
+ * UUID-k a diffet nem mocskolják, miközben a tartalmi dimenziók (táblák,
+ * enumok) sorrend-hűen megmaradnak. Kulcsszinten a kanonizáló ZÁRT: minden
+ * modellzett szinten (gyökér, enum, tábla, oszlop, index, idegen kulcs) csak
+ * a pinned formátum ismert kulcsai fogadhatók el — ismeretlen kulcs hangos
+ * bukás (expectKnownKeys), nem csendes átengedés.
  */
 export function canonicalizeSnapshot(json: unknown): CanonicalSchema {
   const root = asPlainObject(json, 'gyökere')
+  expectKnownKeys(root, SNAPSHOT_ROOT_KEYS, 'gyökere')
 
   expectEmptyBucket(root.sequences, 'sequences')
   expectEmptyBucket(root.roles, 'roles')
@@ -191,6 +277,7 @@ export function canonicalizeSnapshot(json: unknown): CanonicalSchema {
       throw new Error(`a snapshot enums-kulcsa nem public-alapú: ${enumKey}`)
     }
     const enumObject = asPlainObject(enumValue, `enums.${enumKey}`)
+    expectKnownKeys(enumObject, SNAPSHOT_ENUM_KEYS, `enums.${enumKey}`)
     if (!Array.isArray(enumObject.values) || !enumObject.values.every((v) => typeof v === 'string')) {
       throw new Error(`a snapshot enums.${enumKey}.values nem szöveges tömb`)
     }
@@ -204,6 +291,7 @@ export function canonicalizeSnapshot(json: unknown): CanonicalSchema {
     }
     const tableName = tableKey.slice('public.'.length)
     const tableObject = asPlainObject(tableValue, `tables.${tableKey}`)
+    expectKnownKeys(tableObject, SNAPSHOT_TABLE_KEYS, `tables.${tableKey}`)
 
     expectEmptyBucket(tableObject.compositePrimaryKeys, `tables.${tableKey}.compositePrimaryKeys`)
     expectEmptyBucket(tableObject.uniqueConstraints, `tables.${tableKey}.uniqueConstraints`)
@@ -217,6 +305,15 @@ export function canonicalizeSnapshot(json: unknown): CanonicalSchema {
     const columnsObject = asPlainObject(tableObject.columns, `tables.${tableKey}.columns`)
     for (const [columnName, columnValue] of Object.entries(columnsObject)) {
       const column = asPlainObject(columnValue, `tables.${tableKey}.columns.${columnName}`)
+      expectKnownKeys(column, SNAPSHOT_COLUMN_KEYS, `tables.${tableKey}.columns.${columnName}`)
+      // A `generated`/`identity` kulcsot a generátor ma undefined-ként hordozza
+      // (a fájlba íráskor elveszik) — TARTALOMMAL a modell nem tudná összevetni.
+      if (column.generated !== undefined || column.identity !== undefined) {
+        throw new Error(
+          `a snapshot ${tableKey}.${columnName} oszlopa generated/identity tartalmat hordoz — ` +
+            'ezt a dimenziót a séma-őr (még) nem modellezi',
+        )
+      }
       const canonical: CanonicalColumn = {
         type: String(column.type),
         notNull: Boolean(column.notNull),
@@ -234,16 +331,33 @@ export function canonicalizeSnapshot(json: unknown): CanonicalSchema {
     const indexesObject = asPlainObject(tableObject.indexes ?? {}, `tables.${tableKey}.indexes`)
     for (const [indexName, indexValue] of Object.entries(indexesObject)) {
       const index = asPlainObject(indexValue, `tables.${tableKey}.indexes.${indexName}`)
+      expectKnownKeys(index, SNAPSHOT_INDEX_KEYS, `tables.${tableKey}.indexes.${indexName}`)
+      // Parciális (where-predikátumos) indexet a CREATE INDEX replay-oldallal
+      // nem tud az őr összevetni — a kulcs ma mindig undefined.
+      if (index.where !== undefined) {
+        throw new Error(
+          `a snapshot ${tableKey}.${indexName} indexe parciális (where-predikátumos) — ` +
+            'a séma-őr ezt (még) nem modellezi',
+        )
+      }
       if (!Array.isArray(index.columns)) {
         throw new Error(`a snapshot ${tableKey}.${indexName} indexének columns mezője nem tömb`)
       }
       const expressions: string[] = []
       for (const columnEntry of index.columns) {
         const entry = asPlainObject(columnEntry, `tables.${tableKey}.indexes.${indexName}.columns[]`)
+        expectKnownKeys(entry, SNAPSHOT_INDEX_COLUMN_KEYS, `tables.${tableKey}.indexes.${indexName}.columns[]`)
         if (entry.isExpression) {
           throw new Error(
             `a snapshot ${tableKey}.${indexName} indexe kifejezés-oszlopot tartalmaz — ` +
               'a séma-őr ezt (még) nem tudja a CREATE INDEX replay oldalával összevetni',
+          )
+        }
+        // Operátor-osztályos index-oszlopot sem tud az őr összevetni — a kulcs ma mindig undefined.
+        if (entry.opclass !== undefined) {
+          throw new Error(
+            `a snapshot ${tableKey}.${indexName} indexe operátor-osztályos (opclass) oszlopot tartalmaz — ` +
+              'a séma-őr ezt (még) nem modellezi',
           )
         }
         expressions.push(String(entry.expression))
@@ -258,6 +372,15 @@ export function canonicalizeSnapshot(json: unknown): CanonicalSchema {
     )
     for (const [fkName, fkValue] of Object.entries(foreignKeysObject)) {
       const fk = asPlainObject(fkValue, `tables.${tableKey}.foreignKeys.${fkName}`)
+      expectKnownKeys(fk, SNAPSHOT_FOREIGN_KEY_KEYS, `tables.${tableKey}.foreignKeys.${fkName}`)
+      // A public sémán kívüli cél nem modellezett (a tableTo séma-előtag nélküli
+      // kanonikus név) — a `schemaTo` kulcs ma mindig undefined.
+      if (fk.schemaTo !== undefined) {
+        throw new Error(
+          `a snapshot ${tableKey}.${fkName} idegen kulcsa sémaminősített (schemaTo) célra mutat — ` +
+            'a séma-őr a public sémán kívüli hivatkozást (még) nem modellezi',
+        )
+      }
       foreignKeys[fkName] = {
         tableTo: String(fk.tableTo),
         columnsFrom: asStringArray(fk.columnsFrom, `tables.${tableKey}.foreignKeys.${fkName}.columnsFrom`),

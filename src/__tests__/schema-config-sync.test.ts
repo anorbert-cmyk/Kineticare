@@ -42,7 +42,7 @@
  * el a teszt-folyamatot, és semmilyen valódi titkot nem helyettesít.
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getPayload } from 'payload'
 import type { PostgresAdapter } from '@payloadcms/db-postgres'
 
@@ -55,12 +55,18 @@ import {
 } from './helpers/migration-schema'
 
 describe('G2 — config↔snapshot őr (payload.config ↔ legutolsó snapshot)', () => {
+  afterEach(() => {
+    // A stubolt env-értékek (pl. PAYLOAD_DISABLE_DEPENDENCY_CHECKER) ne
+    // szivárogjanak át a sor többi tesztjébe — a security/env-assert.test.ts mintája.
+    vi.unstubAllEnvs()
+  })
+
   it(
     'a sanitize-ált configból épülő drizzle-séma megegyezik a legutolsó kanonizált snapshot-tal',
     { timeout: 60_000 },
     async () => {
       const config = await configPromise
-      process.env.PAYLOAD_DISABLE_DEPENDENCY_CHECKER = 'true'
+      vi.stubEnv('PAYLOAD_DISABLE_DEPENDENCY_CHECKER', 'true')
       config.telemetry = false
       config.typescript = { ...config.typescript, autoGenerate: false }
       if (!config.secret) {
@@ -109,5 +115,24 @@ describe('G2 — config↔snapshot őr (payload.config ↔ legutolsó snapshot)'
       diff.some((line) => line.includes(`eltérő enum-értékek (sorrendérzékeny): ${enumName}`)),
       `a diff-motor nem jelezte a(z) ${enumName} enum sorrendcseréjét: ${diff.join(' | ')}`,
     ).toBe(true)
+  })
+
+  it('önkalibráció: a kanonizáló az ismeretlen kulcsot (jövőbeli formátum-bővülést) hangosan dobja', () => {
+    const fresh = (): Record<string, unknown> =>
+      structuredClone(readSnapshot(latestSnapshotPath())) as Record<string, unknown>
+
+    // Gyökér-szint: új top-level kulcs a pinned snapshot-formátumon felül.
+    const rootMutated = fresh()
+    rootMutated.jovobeli_vodor = {}
+    expect(() => canonicalizeSnapshot(rootMutated)).toThrow(/ismeretlen kulcsot tartalmaz: 'jovobeli_vodor'/)
+
+    // Tábla-szint: új mezőtípus-kulcs a táblaobjektumban — ilyen csendes
+    // vakfoltról szólt a review-finding, most hangos bukás.
+    const tableMutated = fresh()
+    const tables = tableMutated.tables as Record<string, Record<string, unknown>>
+    tables[Object.keys(tables).sort()[0]].jovobeli_mezotipus_kulcs = {}
+    expect(() => canonicalizeSnapshot(tableMutated)).toThrow(
+      /ismeretlen kulcsot tartalmaz: 'jovobeli_mezotipus_kulcs'/,
+    )
   })
 })

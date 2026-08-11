@@ -39,9 +39,14 @@ import { afterAll, describe, expect, it } from 'vitest'
  *     `SET DATA TYPE ... USING` jelenléte bukás, KIVÉVE ha a fájl a
  *     kategóriánkénti elismerő sort tartalmazza:
  *       // destruct-op-ack: <DROP TABLE|DROP COLUMN|DROP TYPE|USING> — <indoklás>
- *     A marker nem kivétel-engedély, hanem a humán PR-review-nek szóló
- *     KÉNYSZER-NYILATKOZAT (lásd docs/ci-orok.md). A `DROP INDEX` szándékosan
- *     NEM kategória — az index újraépíthető, adatot nem veszít.
+ *     A detektor KIZÁRÓLAG az up()-oldalt vizsgálja: a forrást az
+ *     `export async function down` határán bontja (a repo-váztól eltérő fájl
+ *     hangos bukás — fail-closed), mert minden Payload-generált down()
+ *     rutinszerűen DROP TABLE/DROP TYPE-ot tartalmaz, így a down() SOSEM
+ *     igényel markert. A marker nem kivétel-engedély, hanem a humán
+ *     PR-review-nek szóló KÉNYSZER-NYILATKOZAT (lásd docs/ci-orok.md).
+ *     A `DROP INDEX` szándékosan NEM kategória — az index újraépíthető,
+ *     adatot nem veszít.
  *
  * BASELINE-feloldás: dinamikus, NINCS beégetett sha — a legfrissebb commit, ami
  * a manifestet hozzáadta (`git log --diff-filter=A -1`). Azért kell baseline,
@@ -261,6 +266,42 @@ function findDestructiveOps(source: string): DestructCategory[] {
   return [...found].sort()
 }
 
+/** Sor-eleji (`^`-horgonyú) függvénydeklaráció-pozíciók — komment vagy sql-template nem adhat hamis találatot. */
+function declarationIndices(source: string, name: 'up' | 'down'): number[] {
+  const pattern = new RegExp(`^export async function ${name}\\s*\\(`, 'gm')
+  const indices: number[] = []
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(source)) !== null) {
+    indices.push(match.index)
+  }
+  return indices
+}
+
+/**
+ * A forrás up()-oldala: minden, ami az `export async function down` határ
+ * ELŐTT van. A detektor csak ezt az oldalt vizsgálja, mert a Payload-generált
+ * down() rutinszerűen tartalmaz DROP TABLE/DROP TYPE-ot — a down()-beli DROP
+ * a visszagörgetés szükségszerű része, nem külön elismerendő kockázat.
+ *
+ * FAIL-CLOSED: a repo migrációi egységes vázúak (pontosan egy up, utána
+ * pontosan egy down). A váztól eltérő fájlnál az up()-oldal nem egyértelmű,
+ * ezért az őr hangosan DOB — sosem találgat.
+ */
+function extractUpSide(source: string, fileName: string): string {
+  const upIndices = declarationIndices(source, 'up')
+  const downIndices = declarationIndices(source, 'down')
+  if (upIndices.length !== 1 || downIndices.length !== 1 || downIndices[0] <= upIndices[0]) {
+    throw new Error(
+      `${fileName}: a destruktív-op detektor a repo migrációinak egységes vázát várja ` +
+        '(pontosan egy `export async function up`, majd azt követően pontosan egy ' +
+        `\`export async function down\`) — talált: up=${upIndices.length}, down=${downIndices.length}. ` +
+        'Az up()-oldal így nem egyértelmű; ha a fájl szándékosan más alakú, a detektort ' +
+        'kell tudatosan, e teszt frissítésével bővíteni.',
+    )
+  }
+  return source.slice(0, downIndices[0])
+}
+
 /** Az elismerő sor pontos alakja: `// destruct-op-ack: <KATEGÓRIA> — <nem-üres indoklás>` (em-dash). */
 const ACK_LINE = /^\s*\/\/\s*destruct-op-ack:\s*(DROP TABLE|DROP COLUMN|DROP TYPE|USING)\s*—\s*\S.*$/
 
@@ -275,10 +316,11 @@ function findAcknowledgedCategories(source: string): DestructCategory[] {
   return [...acknowledged].sort()
 }
 
-/** Az (5)-ös szabály: destruktív utasítás csak kategóriánkénti elismerő sorral. */
+/** Az (5)-ös szabály: az up()-oldalon destruktív utasítás csak kategóriánkénti elismerő sorral. */
 function evaluateDestructiveOps(fileName: string, source: string): string[] {
+  const upSide = extractUpSide(source, fileName)
   const acknowledged = new Set(findAcknowledgedCategories(source))
-  return findDestructiveOps(source)
+  return findDestructiveOps(upSide)
     .filter((category) => !acknowledged.has(category))
     .map(
       (category) =>
@@ -609,74 +651,111 @@ describe('G3 — migráció-immutabilitás (CLAUDE.md 3. tilos zóna)', () => {
     })
   })
 
-  describe('a destruktív-op detektor egységtesztjei (szintetikus forrás-stringek)', () => {
-    it('tiszta migráció (CREATE/ALTER ADD) → zöld', () => {
-      const source = 'CREATE TABLE "a" ("id" serial PRIMARY KEY);\nALTER TABLE "b" ADD COLUMN "c" jsonb;'
+  describe('a destruktív-op detektor egységtesztjei (szintetikus migráció-vázak)', () => {
+    /**
+     * A repo migrációinak egységes váza szintetikus SQL-lel — a detektor
+     * fixture-ei ebben a formában készülnek, ahogy a Payload generálja.
+     */
+    const fixtureMigration = (upSql: string, downSql = ''): string =>
+      'export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {\n' +
+      `  await db.execute(sql\`\n${upSql}\n  \`)\n` +
+      '}\n\n' +
+      'export async function down({ db, payload, req }: MigrateDownArgs): Promise<void> {\n' +
+      (downSql === '' ? '' : `  await db.execute(sql\`\n${downSql}\n  \`)\n`) +
+      '}\n'
+
+    it('tiszta up() (CREATE/ALTER ADD) rutin-DROP-os down() mellett → zöld, marker NEM kell', () => {
+      // Minden Payload-generált down() DROP TABLE/DROP TYPE-ot hordoz — a
+      // detektor ezért kizárólag az up()-oldalt nézi, a down() sosem igényel markert.
+      const source = fixtureMigration(
+        'CREATE TABLE "a" ("id" serial PRIMARY KEY);\nALTER TABLE "b" ADD COLUMN "c" jsonb;',
+        'ALTER TABLE "b" DROP COLUMN "c";\nDROP TABLE "a" CASCADE;\nDROP TYPE "enum_a_status";',
+      )
       expect(evaluateDestructiveOps('fixture.ts', source)).toEqual([])
     })
 
-    it('DROP TABLE marker nélkül → piros; a kategóriánkénti markerrel → zöld', () => {
-      const source = 'DROP TABLE "payload_jobs_stats" CASCADE;'
+    it('up()-beli DROP TABLE marker nélkül → piros; a kategóriánkénti markerrel → zöld', () => {
+      const source = fixtureMigration('DROP TABLE "payload_jobs_stats" CASCADE;')
       expect(evaluateDestructiveOps('fixture.ts', source)).toHaveLength(1)
-      const acknowledged = `// destruct-op-ack: DROP TABLE — a down visszagörgeti az up tábláját\n${source}`
+      const acknowledged = `// destruct-op-ack: DROP TABLE — az elavult statisztika-tábla tudatos leépítése\n${source}`
       expect(evaluateDestructiveOps('fixture.ts', acknowledged)).toEqual([])
     })
 
-    it('DROP COLUMN marker nélkül → piros; markerrel → zöld', () => {
-      const source = 'ALTER TABLE "payload_jobs" DROP COLUMN "meta";'
+    it('up()-beli DROP COLUMN marker nélkül → piros; markerrel → zöld', () => {
+      const source = fixtureMigration('ALTER TABLE "payload_jobs" DROP COLUMN "meta";')
       expect(evaluateDestructiveOps('fixture.ts', source)).toHaveLength(1)
-      const acknowledged = `// destruct-op-ack: DROP COLUMN — a meta oszlopot az up hozta létre\n${source}`
+      const acknowledged = `// destruct-op-ack: DROP COLUMN — a meta oszlopot az up hozta létre, sosem írta senki\n${source}`
       expect(evaluateDestructiveOps('fixture.ts', acknowledged)).toEqual([])
     })
 
-    it('DROP TYPE marker nélkül → piros; markerrel → zöld', () => {
-      const source = 'DROP TYPE "enum_products_status";'
+    it('up()-beli DROP TYPE marker nélkül → piros; markerrel → zöld', () => {
+      const source = fixtureMigration('DROP TYPE "enum_products_status";')
       expect(evaluateDestructiveOps('fixture.ts', source)).toHaveLength(1)
-      const acknowledged = `// destruct-op-ack: DROP TYPE — az enumot az up hozta létre\n${source}`
+      const acknowledged = `// destruct-op-ack: DROP TYPE — az enum új néven, új értékekkel jön újra\n${source}`
       expect(evaluateDestructiveOps('fixture.ts', acknowledged)).toEqual([])
     })
 
-    it('SET DATA TYPE … USING marker nélkül → piros; USING-markerrel → zöld', () => {
-      const source = 'ALTER TABLE "orders" ALTER COLUMN "total" SET DATA TYPE integer USING "total"::integer;'
+    it('up()-beli SET DATA TYPE … USING marker nélkül → piros; USING-markerrel → zöld', () => {
+      const source = fixtureMigration(
+        'ALTER TABLE "orders" ALTER COLUMN "total" SET DATA TYPE integer USING "total"::integer;',
+      )
       expect(evaluateDestructiveOps('fixture.ts', source)).toHaveLength(1)
       const acknowledged = `// destruct-op-ack: USING — a cast minden soron értelmezhető\n${source}`
       expect(evaluateDestructiveOps('fixture.ts', acknowledged)).toEqual([])
     })
 
     it('SET DATA TYPE USING NÉLKÜL → zöld (nem kategória)', () => {
-      const source = 'ALTER TABLE "orders" ALTER COLUMN "note" SET DATA TYPE text;'
+      const source = fixtureMigration('ALTER TABLE "orders" ALTER COLUMN "note" SET DATA TYPE text;')
       expect(evaluateDestructiveOps('fixture.ts', source)).toEqual([])
     })
 
     it('DROP INDEX → zöld (szándékosan NEM kategória: újraépíthető, adatot nem veszít)', () => {
-      const source = 'DROP INDEX "idx_orders_created_at";'
+      const source = fixtureMigration('DROP INDEX "idx_orders_created_at";')
       expect(evaluateDestructiveOps('fixture.ts', source)).toEqual([])
     })
 
-    it('statement-szintű: a DROP másik statementben is kategória (több utasítás egy fájlban)', () => {
-      const source = 'CREATE TABLE "a" ("id" serial);\nDROP TABLE "b";'
+    it('statement-szintű: a DROP másik statementben is kategória (több utasítás egy up()-ban)', () => {
+      const source = fixtureMigration('CREATE TABLE "a" ("id" serial);\nDROP TABLE "b";')
       const violations = evaluateDestructiveOps('fixture.ts', source)
       expect(violations).toHaveLength(1)
       expect(violations[0]).toContain('DROP TABLE')
     })
 
     it('rossz kategóriájú marker nem takarja a jelen lévőt → piros', () => {
-      const source = '// destruct-op-ack: DROP TABLE — indoklás\nALTER TABLE "t" DROP COLUMN "c";'
+      const source = `// destruct-op-ack: DROP TABLE — indoklás\n${fixtureMigration('ALTER TABLE "t" DROP COLUMN "c";')}`
       expect(evaluateDestructiveOps('fixture.ts', source)).toHaveLength(1)
     })
 
     it('indoklás nélküli marker nem számít elismerésnek → piros', () => {
-      const source = '// destruct-op-ack: DROP TABLE —\nDROP TABLE "b";'
+      const source = `// destruct-op-ack: DROP TABLE —\n${fixtureMigration('DROP TABLE "b";')}`
       expect(evaluateDestructiveOps('fixture.ts', source)).toHaveLength(1)
     })
 
-    it('több kategória egy fájlban: mindegyikhez külön marker kell', () => {
-      const source = 'DROP TABLE "a";\nALTER TABLE "t" DROP COLUMN "c";'
+    it('több kategória egy up()-ban: mindegyikhez külön marker kell', () => {
+      const source = fixtureMigration('DROP TABLE "a";\nALTER TABLE "t" DROP COLUMN "c";')
       expect(evaluateDestructiveOps('fixture.ts', source)).toHaveLength(2)
       const halfAcknowledged = `// destruct-op-ack: DROP TABLE — indoklás\n${source}`
       expect(evaluateDestructiveOps('fixture.ts', halfAcknowledged)).toHaveLength(1)
       const fullyAcknowledged = `// destruct-op-ack: DROP COLUMN — indoklás\n${halfAcknowledged}`
       expect(evaluateDestructiveOps('fixture.ts', fullyAcknowledged)).toEqual([])
+    })
+
+    it('fail-closed: a repo-váztól eltérő forrás → hangos dobás (sosem találgat)', () => {
+      // Nincs up()/down() deklaráció:
+      expect(() => evaluateDestructiveOps('fixture.ts', 'CREATE TABLE "a" ("id" serial);')).toThrow(
+        /egységes vázát várja/,
+      )
+      // Hiányzik a down() határ:
+      expect(() =>
+        evaluateDestructiveOps('fixture.ts', 'export async function up(): Promise<void> {}\n'),
+      ).toThrow(/egységes vázát várja/)
+      // Többszörös up() deklaráció:
+      const duplicatedUp = `${fixtureMigration('CREATE TABLE "a" ("id" serial);')}export async function up(): Promise<void> {}\n`
+      expect(() => evaluateDestructiveOps('fixture.ts', duplicatedUp)).toThrow(/egységes vázát várja/)
+      // A down() az up() ELŐTT áll:
+      const downFirst =
+        'export async function down(): Promise<void> {}\nexport async function up(): Promise<void> {}\n'
+      expect(() => evaluateDestructiveOps('fixture.ts', downFirst)).toThrow(/egységes vázát várja/)
     })
   })
 
