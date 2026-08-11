@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { ConsentSettingsButton } from '../analytics/ConsentSettingsButton'
 import { Container } from '../ui/Container'
 
 /**
@@ -54,6 +55,11 @@ export function Footer() {
                     <Link href={link.href}>{link.label}</Link>
                   </li>
                 ))}
+                <li>
+                  {/* GDPR: a süti-hozzájárulás visszavonása/módosítása — a
+                      ConsentBanner-t nyitja újra (kliens-komponens). */}
+                  <ConsentSettingsButton />
+                </li>
                 <li className="kc-site-footer__contact">
                   Kapcsolat: <a href={`mailto:${FOOTER_CONTACT_EMAIL}`}>{FOOTER_CONTACT_EMAIL}</a>
                 </li>

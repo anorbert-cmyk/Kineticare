@@ -24,6 +24,13 @@ export const CONSENT_STORAGE_KEY = 'kc_analytics_consent'
 /** A consent-változást jelző window-esemény neve (a provider hallgat rá). */
 export const CONSENT_EVENT = 'kc:analytics-consent'
 
+/**
+ * A consent-banner ÚJRANYITÁSÁT kérő window-esemény (GDPR visszavonási út):
+ * a footer „Süti-beállítások" gombja szórja, a ConsentBanner erre nyílik újra
+ * döntés UTÁN is. Tartalma nincs — a banner a tárolt állapotot olvassa.
+ */
+export const CONSENT_OPEN_EVENT = 'kc:analytics-consent-open'
+
 /** A consent állapotgép lehetséges értékei. */
 export type ConsentState = 'unknown' | 'granted' | 'denied'
 
@@ -143,4 +150,28 @@ export function updateConsent(
   const written = writeConsent(state, storage)
   dispatchConsentEvent(state, target)
   return written
+}
+
+/**
+ * 'kc:analytics-consent-open' esemény szórása — a ConsentBanner újranyitását
+ * kéri (a visszavonási/módosítási felület). Egyszerű Event (detail nélkül);
+ * cél nélkül (SSR) no-op, false-szal tér vissza.
+ */
+export function dispatchConsentOpenEvent(target?: ConsentEventTarget): boolean {
+  const resolved =
+    target ?? (typeof window !== 'undefined' ? (window as ConsentEventTarget) : undefined)
+  if (!resolved || typeof Event === 'undefined') {
+    return false
+  }
+  return resolved.dispatchEvent(new Event(CONSENT_OPEN_EVENT))
+}
+
+/**
+ * A consent-banner láthatósági szabálya: 'unknown' állapotban VAGY explicit
+ * újranyitásra (a footer „Süti-beállítások" gombja) látszik. `null` = a
+ * tárolót még nem olvastuk (SSR/hidrálás) — ilyenkor csak az újranyitás
+ * jelenítheti meg (az meg szintén csak kliens-oldali kattintásra igaz).
+ */
+export function consentBannerVisible(consent: ConsentState | null, reopened: boolean): boolean {
+  return reopened || consent === CONSENT_UNKNOWN
 }

@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card'
 import { PriceTag } from '@/components/ui/PriceTag'
 import { useCart, type CartItem } from '../../lib/cart'
 import { courseHref } from '../../lib/course-url'
+import { CHECKOUT_PATH, checkoutHref } from '../../lib/courses'
 
 /**
  * CartView — a kosár kliens-oldali megjelenítése (tételek, törlés, végösszeg,
@@ -15,6 +16,9 @@ import { courseHref } from '../../lib/course-url'
  *
  * - A tételek a localStorage-cartból jönnek; a szerver-oldali initialItem a
  *   /kosar?termek={id} konvenciót fogadja (a kliens hozzáadja, duplikáció nélkül).
+ * - A pénztár-link a termék-id-t is viszi (/penztar?termek={id}): a pénztár
+ *   szerver-oldala a kosárhoz NEM fér hozzá (localStorage, M8), így a query az
+ *   egyetlen csatorna. Egy termék = egy vásárlás — az első tétel kerül bele.
  * - A végösszeg MEGJELENÍTÉSRE — a fizetendő összeg a checkout során a
  *   szerver (T-021) válaszából igazolódik vissza.
  * - Üres kosár: segítő szöveg + CTA a kurzusokra.
@@ -31,8 +35,9 @@ export function CartView({ initialItem, isLoggedIn }: CartViewProps) {
     if (initialItem) {
       add(initialItem)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    // Az `add` a useCartból stabil (useCallback) — az effekt KLIENS-NAVIGÁCIÓNÁL
+    // is újrafut: /kosar?termek=A → /kosar?termek=B váltásnál B is bekerül.
+  }, [initialItem, add])
 
   if (isEmpty && !initialItem) {
     return (
@@ -42,6 +47,11 @@ export function CartView({ initialItem, isLoggedIn }: CartViewProps) {
       </div>
     )
   }
+
+  // A pénztár szerver-oldala csak a ?termek= query-t látja (a kosár
+  // localStorage-os) — a link az első tétel id-jét viszi.
+  const checkoutPath =
+    state.items.length > 0 ? checkoutHref(state.items[0].productId) : CHECKOUT_PATH
 
   return (
     <div className="kc-cart">
@@ -90,9 +100,9 @@ export function CartView({ initialItem, isLoggedIn }: CartViewProps) {
           A fizetendő végösszeget a rendszer a fizetéskor, a szerveren újraszámolja.
         </p>
         {isLoggedIn ? (
-          <Button href="/penztar">Tovább a penztárhoz</Button>
+          <Button href={checkoutPath}>Tovább a penztárhoz</Button>
         ) : (
-          <Button href={`/belepes?returnUrl=${encodeURIComponent('/penztar')}`}>
+          <Button href={`/belepes?returnUrl=${encodeURIComponent(checkoutPath)}`}>
             Belépés a fizetéshez
           </Button>
         )}

@@ -686,6 +686,26 @@
   color: var(--kc-footer-accent);
 }
 
+/* A „Süti-beállítások" gomb (GDPR visszavonási út) a legál-linkek sorában —
+   vizuálisan azonos a linkekkel, csak button elemként. */
+.kc-site-footer__legal button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem; /* 44px érintési cél — mint a linkeknél */
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--kc-footer-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+  cursor: pointer;
+}
+
+.kc-site-footer__legal button:hover {
+  color: var(--kc-footer-accent);
+}
+
 .kc-site-footer__contact {
   display: inline-flex;
   align-items: center;

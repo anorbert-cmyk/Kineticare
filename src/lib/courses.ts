@@ -197,6 +197,27 @@ export function coursePriceLabel(
   return price === null ? null : formatPriceHuf(price)
 }
 
+export type CoursePriceBadgeKind = 'price' | 'free' | 'none'
+
+/**
+ * A kurzusoldal buybox ár-címkéje:
+ * - 'price': érvényes ár van → a PriceTag látszik (forintban, rejtett ár nincs);
+ * - 'free': TUDATOSAN ingyenes termék (priceInHUFEnabled: false) → „Ingyenes";
+ * - 'none': az ár-pipa BE van kapcsolva, de az ár ÜRES (konfigurációs hiba) —
+ *   ilyenkor NEM írunk „Ingyenes"-t: a címke a „Megveszem" gomb mellett
+ *   megtévesztő lenne (a termék ára hiányzik, a checkout elutasítaná).
+ *   A hibás rekordot a staff javítja — a storefront addig sem árat, sem
+ *   „Ingyenes"-t nem mutat.
+ */
+export function coursePriceBadgeKind(
+  product: Pick<Product, 'priceInHUF' | 'priceInHUFEnabled'>,
+): CoursePriceBadgeKind {
+  if (coursePriceHuf(product) !== null) {
+    return 'price'
+  }
+  return product.priceInHUFEnabled === false ? 'free' : 'none'
+}
+
 export interface CourseCategoryOption {
   id: number
   slug: string

@@ -10,7 +10,6 @@ import { Section } from '@/components/ui/Section'
 import { CheckoutForm } from '@/components/checkout/CheckoutForm'
 import { logger } from '@/lib/logger'
 import { coursePriceHuf, courseTitle, hasUserPurchased } from '@/lib/courses'
-import { readCart } from '@/lib/cart'
 import type { Product, User } from '@/payload-types'
 
 import config from '../../../payload.config'
@@ -49,8 +48,11 @@ async function getProductById(id: number): Promise<Product | null> {
  *
  * - auth-kötelező: anon → /belepes?returnUrl=/penztar?termek={id} (a
  *   returnUrl a termék-query-vel együtt megy tovább).
- * - A termék a ?termek={id} query-ből vagy a kosár-state-ből jön; a két
- *   waiver-checkbox (a 45/2014. Korm. rend. 29. § (1) m) szövegei SZÓ
+ * - A termék KIZÁRÓLAG a ?termek={id} query-ből jön. A kosár localStorage-os,
+ *   kliens-oldali — a szerver-komponens a 'use client'-es readCart()-ot NEM
+ *   hívhatja (korábbi kosár-fallback ág garantált render-hiba volt, M8); a
+ *   /kosar oldalról a CartView teszi a termék-id-t a pénztár-linkbe.
+ * - A két waiver-checkbox (a 45/2014. Korm. rend. 29. § (1) m) szövegei SZÓ
  *   SZERINT) csak a fizetős termékekre vonatkozik — az ingyenes tétel
  *   (priceInHUFEnabled: false) nem igényel waiver-t és nem megy a Barion
  *   checkouton keresztül.
@@ -71,17 +73,11 @@ export default async function PenztarPage({ searchParams }: PenztarPageProps) {
     redirect(`/belepes?returnUrl=${encodeURIComponent(returnUrl)}`)
   }
 
-  // A termék meghatározása: a query elsődleges, a kosár-state tartalék.
+  // A termék meghatározása: KIZÁRÓLAG a query (a kosár kliens-oldali; a
+  // /kosar oldal CartView-je teszi a termék-id-t a pénztár-linkbe — M8).
   let product: Product | null = null
   if (termekId !== null) {
     product = await getProductById(termekId)
-  }
-  if (!product) {
-    const cart = readCart()
-    const first = cart.items[0]
-    if (first) {
-      product = await getProductById(first.productId)
-    }
   }
 
   if (!product || (product.status !== 'published' && product.status !== 'archived')) {

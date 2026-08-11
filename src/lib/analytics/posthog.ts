@@ -11,6 +11,7 @@ import {
   type ConsentReader,
   type ConsentState,
 } from './consent'
+import { sanitizeAnalyticsUrl } from './page-url'
 
 /**
  * PostHog-integráció — központi konfig és esemény-névregiszter.
@@ -163,12 +164,22 @@ export function captureAnalyticsEvent(
   posthog.capture(event, properties)
 }
 
+/**
+ * A $pageview esemény payloadja (tiszta — egységtesztelhető). A kimenő URL a
+ * capture-határon MINDIG megtisztított: a jelszó-visszaállító jegy (és bármely
+ * jövőbeli érzékeny query-paraméter) sosem mehet harmadik félhez (M9 —
+ * ./page-url.ts); a kampány-paraméterek (utm_*) megmaradnak.
+ */
+export function buildPageViewProperties(url: string): { $current_url: string } {
+  return { $current_url: sanitizeAnalyticsUrl(url) }
+}
+
 /** $pageview rögzítése a route-váltás figyelőből. */
 export function capturePageView(url: string): void {
   if (!initialized || typeof window === 'undefined') {
     return
   }
-  posthog.capture('$pageview', { $current_url: url })
+  posthog.capture('$pageview', buildPageViewProperties(url))
 }
 
 /** Tesztelési segéd: az init-zárolt állapot visszaállítása. */

@@ -1,0 +1,131 @@
+import { createElement, Fragment, isValidElement, type ReactElement, type ReactNode } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { getPayload } from 'payload'
+
+import { CheckoutForm } from '../components/checkout/CheckoutForm'
+import type { Product, User } from '../payload-types'
+
+/**
+ * M8 REGRESSZIÓ-ŐR: a /penztar szerver-oldala NEM olvassa a kosarat.
+ *
+ * ═══ A HIBA, AMIT BEZÁR ═══
+ * A pénztár szerver-komponense a 'use client'-es `readCart()`-ot hívta
+ * kosár-fallbackként: a localStorage-os kosárhoz a szerver sosem fér hozzá,
+ * a hívás pedig garantált render-hiba volt. A fallback most letisztult: a
+ * termék KIZÁRÓLAG a ?termek={id} query-ből jön (a /kosar oldal CartView-je
+ * teszi a linkbe), hiányában a „nincs kiválasztott termék" nézet renderelődik.
+ *
+ * A koszonom-oldal.test.ts mintája: a VALÓDI oldal-komponens fut, a getPayload
+ * és a request-headers mockolva (valódi DB és hálózat nélkül).
+ */
+
+vi.mock('payload', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('payload')>()
+  return { ...actual, getPayload: vi.fn() }
+})
+
+vi.mock('next/headers', () => ({
+  headers: vi.fn(async () => new Headers()),
+}))
+
+const getPayloadMock = vi.mocked(getPayload)
+
+const mockUser = {
+  id: 7,
+  email: 'vevo@example.test',
+  name: 'Minta Mari',
+  purchases: [],
+} as unknown as User
+
+const publishedProduct = {
+  id: 42,
+  sku: 'KURZUS-ALAP',
+  status: 'published',
+  priceInHUF: 5000,
+  priceInHUFEnabled: true,
+} as unknown as Product
+
+/** Bejelentkezett user + a termék-lekérdezés kimenetele. */
+function mockPayloadBehavior(product: Product | null) {
+  getPayloadMock.mockResolvedValue({
+    auth: vi.fn(async () => ({ user: mockUser })),
+    findByID: vi.fn(async () => {
+      if (product === null) {
+        throw new Error('Not Found')
+      }
+      return product
+    }),
+  } as never)
+}
+
+beforeEach(() => {
+  getPayloadMock.mockReset()
+})
+
+async function renderPenztar(searchParams: Record<string, string | string[] | undefined>) {
+  // A vi.mock-hoistelés miatt az oldalt dinamikusan importáljuk.
+  const { default: PenztarPage } = await import('../app/(frontend)/penztar/page')
+  return PenztarPage({ searchParams: Promise.resolve(searchParams) })
+}
+
+function renderMarkup(node: ReactNode): string {
+  return renderToStaticMarkup(createElement(Fragment, null, node))
+}
+
+/** Az elemfában megkeresi az adott komponens-típus első elemét (koszonom-oldal minta). */
+function findElement(node: unknown, type: unknown): ReactElement | null {
+  if (!isValidElement(node)) {
+    return null
+  }
+  if (node.type === type) {
+    return node
+  }
+  const children = (node.props as { children?: unknown } | undefined)?.children
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      const found = findElement(child, type)
+      if (found) {
+        return found
+      }
+    }
+    return null
+  }
+  return findElement(children, type)
+}
+
+describe('/penztar — a kosár-fallback kivétele (M8)', () => {
+  it('nem numerikus termek-paraméternél (pl. rendelésszám) a „nincs kiválasztott termék" nézet renderelődik — readCart-hívás nélkül', async () => {
+    // Ez az ág hívta korábban a szerver-oldali readCart()-ot (garantált hiba).
+    mockPayloadBehavior(publishedProduct)
+    const tree = await renderPenztar({ termek: 'KH-2026-000123' })
+
+    const html = renderMarkup(tree)
+    expect(html).toContain('Nincs kiválasztott termék a fizetéshez.')
+    expect(html).toContain('href="/kurzusok"')
+    // A pénztár-űrlap NEM renderelődik termék nélkül.
+    expect(findElement(tree, CheckoutForm)).toBeNull()
+  })
+
+  it('ismeretlen termék-id-nél ugyanaz a fallback (a termék-lekérdezés null-t ad)', async () => {
+    mockPayloadBehavior(null)
+    const tree = await renderPenztar({ termek: '999' })
+
+    const html = renderMarkup(tree)
+    expect(html).toContain('Nincs kiválasztott termék a fizetéshez.')
+    expect(findElement(tree, CheckoutForm)).toBeNull()
+  })
+
+  it('POZITÍV KONTROLL: érvényes termek-paraméternél a CheckoutForm a termékkel renderelődik', async () => {
+    mockPayloadBehavior(publishedProduct)
+    const tree = await renderPenztar({ termek: '42' })
+
+    const form = findElement(tree, CheckoutForm)
+    expect(form).not.toBeNull()
+    const props = form!.props as { product: { id: number; priceHuf: number | null }; alreadyPurchased: boolean }
+    expect(props.product.id).toBe(42)
+    expect(props.product.priceHuf).toBe(5000)
+    expect(props.alreadyPurchased).toBe(false)
+  })
+})

@@ -70,7 +70,7 @@ export interface BarionTransitionResult {
   action: BarionTransitionAction
   /**
    * rejected akciónál az ok (paid-cancel-rejected / cancel-not-allowed /
-   * paid-not-allowed / total-mismatch).
+   * paid-not-allowed / total-mismatch / duplicate-paid-order).
    */
   reason?: string
   /** true, ha a rendelés már a célállapotban volt (no-op átmenet). */
@@ -178,6 +178,50 @@ function orderProductIds(order: Order): number[] {
 function userPurchaseIds(user: User): number[] {
   const purchases = user.purchases ?? []
   return purchases.map((entry) => (typeof entry === 'object' ? entry.id : entry))
+}
+
+/**
+ * K5 — DUPLA-FIZETÉS felismerése: létezik-e ugyanannak a vevő+termék párnak
+ * MÁS, már paid státuszú rendelése.
+ *
+ * MIÉRT KELL: a checkout-start duplavásárlás-blokkja (start-checkout.ts
+ * assertNoDuplicatePurchase) csak SZŰK ABLAKBAN véd — a paid rendelést és az
+ * AKTÍV (Barion-ablakon belüli) payment_pending-et látja. Elveszett callback +
+ * lejárt fizetési ablak után a vevő MÁSODIK rendelést is indíthat, és ha
+ * mindkét fizetés a Barionnál sikeres, a két rendelés egymástól függetlenül
+ * mehetne paid-re (dupla terhelés). Ez a segéd a paid-ÁTMENET közös pontján
+ * ad utolsó védelmi vonalat: a második paid-átmenet blokkolva + riasztva lesz
+ * (manuális ellenőrzés/visszatérítés), a jogosultság-beírás nem fut le rá.
+ *
+ * Jól körülhatárolt, önállóan tesztelt segéd — a harvest-összefésülés miatt
+ * SZÁNDÉKOSAN külön függvény (ebben a fájlban a D-csomag változása CSAK ez a
+ * blokk: ez a segéd + a paid-ágban az őrt hívó pár sor).
+ */
+export async function hasPaidOrderFor(
+  payload: Payload,
+  input: { customerId: number | string; productIds: number[]; excludeOrderId: number | string },
+): Promise<boolean> {
+  const { customerId, productIds, excludeOrderId } = input
+  if (productIds.length === 0) {
+    return false
+  }
+  const result = await payload.find({
+    collection: 'orders',
+    where: {
+      and: [
+        { customer: { equals: customerId } },
+        { 'items.product': { in: productIds } },
+        { status: { equals: 'paid' } },
+        { id: { not_equals: excludeOrderId } },
+      ],
+    },
+    limit: 1,
+    depth: 0,
+    overrideAccess: true,
+    // A where-alak a generált Where-típusnál szűkebben igazolt (a
+    // start-checkout.ts duplavásárlás-ellenőrzésének mintája).
+  } as unknown as Parameters<Payload['find']>[0])
+  return result.totalDocs > 0
 }
 
 /**
@@ -343,6 +387,30 @@ async function applyBarionStateTransitionLocked(
 
   const alreadyPaid = order.status === 'paid'
   if (!alreadyPaid) {
+    // K5 DUPLA-FIZETÉS BLOKK: ha ugyanannak a vevő+termék párnak MÁS rendelése
+    // már paid, ez a második fizetés NEM állhat paid-re (dupla terhelés) —
+    // blokkolás + riasztás, manuális rendezés (visszatérítés) szükséges. A
+    // segéd és az indoklás: hasPaidOrderFor (lásd fentebb). A MÁR paid
+    // rendelés no-op ága szándékosan NEM érintett: az idempotens
+    // jogosultság-javítás továbbra is futhat.
+    const customerRef = order.customer
+    const customerId =
+      typeof customerRef === 'object' && customerRef !== null ? customerRef.id : customerRef
+    if (
+      customerId !== null &&
+      customerId !== undefined &&
+      (await hasPaidOrderFor(payload, {
+        customerId,
+        productIds: orderProductIds(order),
+        excludeOrderId: order.id,
+      }))
+    ) {
+      log.error(
+        'RIASZTÁS: a vevő+termék párhoz már létezik MÁS paid rendelés — a második paid-átmenet BLOKKOLVA, manuális ellenőrzés/visszatérítés szükséges',
+        { customerId, orderStatus: order.status },
+      )
+      return { action: 'rejected', reason: 'duplicate-paid-order' }
+    }
     if (order.status === 'created') {
       log.warn('created státuszú rendelés ugrik paid-re (payment_pending átugorva)')
     }

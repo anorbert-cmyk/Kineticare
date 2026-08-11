@@ -7,11 +7,14 @@ import {
 } from '../lib/security/password-policy'
 import { createLogger } from '../lib/logger'
 import { resolveClientIp } from '../lib/client-ip'
+import { grantFreeCoursesToUser } from '../lib/free-course-grant'
 import {
   APIError,
   AuthenticationError,
   LockedAuth,
+  type CollectionAfterChangeHook,
   type CollectionAfterErrorHook,
+  type CollectionAfterLoginHook,
   type CollectionBeforeChangeHook,
   type CollectionConfig,
   type PayloadRequest,
@@ -22,6 +25,7 @@ import {
   isSelfOrAdmin,
   isStaffOrOwner,
 } from '../access'
+import type { User } from '../payload-types'
 
 const logger = createLogger({ module: 'users' })
 
@@ -133,6 +137,44 @@ const logFailedLogin: CollectionAfterErrorHook = ({ error, req }) => {
     ip,
     reason: error instanceof LockedAuth ? 'zárolt fiók' : 'hibás jelszó',
   })
+}
+
+// M4: az ingyenes kurzusok AUTOMATIKUS hozzáférés-adása regisztrációkor és
+// bejelentkezéskor. A free CTA („Ingyenes — azonnal eléred", courses.ts
+// resolveCourseCta) a /kurzusaim oldalra visz, de a purchases-be korábban csak
+// a fizetési főlánc írt — az ingyenes kurzus így sosem jelent meg a vevőnél
+// (CTA-zsákutca). A tényleges logika az src/lib/free-course-grant.ts
+// szolgáltatásban él (idempotens, missing-only); a hookok csak vékony bekötés.
+//
+// BEST-EFFORT: a grant hibája SOSEM törheti a regisztrációt vagy a
+// bejelentkezést — hiba esetén csak naplózunk; a vevő a következő belépésnél
+// kapja meg a hozzáférést (a hívás idempotens, az újrafutás no-op).
+const grantFreeCoursesBestEffort = async (
+  req: PayloadRequest,
+  user: Pick<User, 'id' | 'purchases'>,
+): Promise<void> => {
+  try {
+    await grantFreeCoursesToUser({ payload: req.payload, user })
+  } catch (error) {
+    logger.error('ingyenes kurzus-hozzáférés automatikus beírása sikertelen', {
+      userId: user.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+const grantFreeCoursesAfterCreate: CollectionAfterChangeHook = async ({ doc, req, operation }) => {
+  // Csak a regisztráció (create) indítja — update-nél NEM fut le (így a grant
+  // saját purchases-beírása sem váltja ki újra: nincs hook-visszacsatolás).
+  if (operation === 'create') {
+    await grantFreeCoursesBestEffort(req, doc as Pick<User, 'id' | 'purchases'>)
+  }
+  return doc
+}
+
+const grantFreeCoursesAfterLogin: CollectionAfterLoginHook = async ({ req, user }) => {
+  await grantFreeCoursesBestEffort(req, user as Pick<User, 'id' | 'purchases'>)
+  return user
 }
 
 export const Users: CollectionConfig = {
@@ -265,6 +307,8 @@ export const Users: CollectionConfig = {
   ],
   hooks: {
     beforeChange: [promoteFirstUserToOwner, enforcePasswordPolicy],
+    afterChange: [grantFreeCoursesAfterCreate],
+    afterLogin: [grantFreeCoursesAfterLogin],
     afterError: [logFailedLogin],
   },
 }

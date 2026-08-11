@@ -12,6 +12,9 @@ import { capturePageView } from '@/lib/analytics/posthog'
  * kezeli, a posthog-js History-patche önmagában nem érzékeli megbízhatóan),
  * ezért itt, a pathname+searchParams figyelésével küldjük manuálisan.
  * A useSearchParams miatt a szülőben <Suspense>-be kerül (Next build-szabály).
+ * A kimenő URL-t a capture-határ tisztítja (M9): a jelszó-visszaállító jegy
+ * és bármely jövőbeli érzékeny query-paraméter kivágásra kerül, a kampány-
+ * paraméterek megmaradnak — src/lib/analytics/page-url.ts.
  */
 export function PostHogPageView(): null {
   const pathname = usePathname()

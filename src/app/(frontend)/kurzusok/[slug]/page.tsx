@@ -25,7 +25,13 @@ import {
   withSearchParams,
   type CourseSearchParams,
 } from '@/lib/course-url'
-import { courseCover, coursePriceHuf, courseTitle, hasUserPurchased } from '@/lib/courses'
+import {
+  courseCover,
+  coursePriceBadgeKind,
+  coursePriceHuf,
+  courseTitle,
+  hasUserPurchased,
+} from '@/lib/courses'
 import { logger } from '@/lib/logger'
 import { absoluteUrl, breadcrumbJsonLd, buildProductMetadata, courseJsonLd } from '@/lib/seo'
 import type { Product, User } from '@/payload-types'
@@ -190,6 +196,11 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
   const title = courseTitle(product)
   const cover = courseCover(product)
   const price = coursePriceHuf(product)
+  // Az ár-címke fajtája: 'price' → PriceTag; 'free' (tudatosan ingyenes) →
+  // „Ingyenes"; 'none' (ár-pipa BE, ár ÜRES — konfig-hiba) → NINCS címke
+  // (az „Ingyenes" a „Megveszem" mellett megtévesztő lenne — courses.ts
+  // coursePriceBadgeKind).
+  const priceBadge = coursePriceBadgeKind(product)
   const category = categoryTitle(product)
   // Kétirányú kurzusstruktúra: visszafogott jelzés arról, melyik ághoz tartozik
   // a kurzus (audience nélküli, régi soroknál a laikus fallback látszik).
@@ -258,15 +269,15 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
                   width={cover.width ?? undefined}
                 />
               ) : null}
-              {price !== null ? (
+              {priceBadge === 'price' && price !== null ? (
                 <p className="kc-course-buybox__price">
                   <PriceTag label="Ár:" priceHuf={price} />
                 </p>
-              ) : (
+              ) : priceBadge === 'free' ? (
                 <p className="kc-course-buybox__price kc-course-buybox__price--free">
                   Ingyenes
                 </p>
-              )}
+              ) : null}
               <CourseCta hasPurchased={purchased} product={product} />
             </Card>
           </div>
