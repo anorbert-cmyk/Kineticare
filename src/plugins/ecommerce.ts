@@ -143,6 +143,30 @@ const withOrderItemSnapshots = (field: Field): Field => {
 }
 
 /**
+ * A Rendelések lista „Tételek" oszlopának cella-komponense (a megrendelő
+ * „ki mit vett és mikor" igénye): a tételsorok (sku × db — tételár) az
+ * OrderItemsCell-ben jelennek meg. A withOrderItemSnapshots ÁLTAL HOZZÁADOTT
+ * MEZŐK ÉS A PLUGIN GYÁRI ADMIN-BEÁLLÍTÁSAI megmaradnak — csak a Cell kerül
+ * be (a spread-sorrend miatt a snapshot-mezők itt már a named részei).
+ */
+const withOrderItemsCell = (field: Field): Field => {
+  const named = namedField(field)
+  if (!named || named.name !== 'items' || named.type !== 'array') {
+    return field
+  }
+  return {
+    ...named,
+    admin: {
+      ...named.admin,
+      components: {
+        ...named.admin?.components,
+        Cell: '/components/admin/OrderItemsCell#OrderItemsCell',
+      },
+    },
+  } as Field
+}
+
+/**
  * Az orders.refunds json-mező ERŐS típusa a generált payload-types.ts-hez.
  *
  * A `json` mezőkből a típusgenerátor alapból `unknown`-t (bármit) csinál — a
@@ -206,7 +230,7 @@ const withOrderStatusStateMachine = (field: Field): Field => {
 }
 
 const visitOrderFields = (field: Field): Field =>
-  withOrderStatusStateMachine(withOrderItemSnapshots(field))
+  withOrderStatusStateMachine(withOrderItemsCell(withOrderItemSnapshots(field)))
 
 /**
  * Admin-csoport a webshop-collectionöknek: a plugin gyári collectionjei
@@ -562,6 +586,10 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       'orderNumber',
       'createdAt',
       'customerEmail',
+      // „Ki mit vett": a tételsorokat (sku × db — tételár) az OrderItemsCell
+      // rendereli (lásd withOrderItemsCell). Az oszlopfejléc a plugin magyar
+      // „Tételek" fordítása.
+      'items',
       'totalHufSnapshot',
       'status',
       'invoiceStatus',
