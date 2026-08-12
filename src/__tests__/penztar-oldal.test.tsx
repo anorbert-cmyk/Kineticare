@@ -129,3 +129,17 @@ describe('/penztar — a kosár-fallback kivétele (M8)', () => {
     expect(props.alreadyPurchased).toBe(false)
   })
 })
+
+describe('/penztar — archivált termék', () => {
+  it('archived terméknél a tájékoztató állapot renderelődik, a beküldhető űrlap NEM', async () => {
+    // A beküldés a checkout API-n 400-zal („archivált") hasalna el — az űrlap
+    // megjelenítése díszlet volt (a 2.4-es minta szerinti viselkedésváltozás).
+    mockPayloadBehavior({ ...publishedProduct, status: 'archived' } as Product)
+    const tree = await renderPenztar({ termek: '42' })
+
+    const html = renderMarkup(tree)
+    expect(html).toContain('Ez a kurzus jelenleg nem vásárolható meg.')
+    expect(html).toContain('href="/kurzusok"')
+    expect(findElement(tree, CheckoutForm)).toBeNull()
+  })
+})

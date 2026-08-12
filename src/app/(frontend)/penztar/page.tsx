@@ -56,6 +56,8 @@ async function getProductById(id: number): Promise<Product | null> {
  *   SZERINT) csak a fizetős termékekre vonatkozik — az ingyenes tétel
  *   (priceInHUFEnabled: false) nem igényel waiver-t és nem megy a Barion
  *   checkouton keresztül.
+ * - ARCHIVÁLT terméknél az űrlap helyett tájékoztató állapot jelenik meg (a
+ *   beküldés úgyis 400-zal hasalna el).
  * - A fizetési gomb felirata KÖTÖTT: „Megrendelés és fizetés".
  */
 export default async function PenztarPage({ searchParams }: PenztarPageProps) {
@@ -88,6 +90,23 @@ export default async function PenztarPage({ searchParams }: PenztarPageProps) {
           <div className="kc-cart-empty" role="status">
             <p>Nincs kiválasztott termék a fizetéshez.</p>
             <Link className="kc-button kc-button--primary" href="/kurzusok">Válassz kurzust</Link>
+          </div>
+        </Container>
+      </Section>
+    )
+  }
+
+  // Archivált terméknél az űrlap helyett tiszta tájékoztató állapot: a beküldés
+  // úgyis 400-zal hasalna el („Ez a termék már nem megvásárolható (archivált)."),
+  // a díszlet-űrlap pedig a néma hiba kínosabbik fajtája.
+  if (product.status === 'archived') {
+    return (
+      <Section>
+        <Container size="narrow">
+          <h1>Pénztár</h1>
+          <div className="kc-cart-empty" role="status">
+            <p>Ez a kurzus jelenleg nem vásárolható meg.</p>
+            <Link className="kc-button kc-button--primary" href="/kurzusok">Nézd meg a kurzusokat</Link>
           </div>
         </Container>
       </Section>

@@ -184,20 +184,49 @@ function parseInput(input: CheckoutStartInput): ParsedInput {
   }
 }
 
-/** A termék megvásárolhatóságának ellenőrzése (státusz + ár), magyar üzenetekkel. */
-function assertPurchasable(product: Product, priceHuf?: number): void {
+/**
+ * A termék megvásárolhatóságának ellenőrzése (státusz + ár), magyar üzenetekkel.
+ *
+ * MINDEN elutasító ág naplóz (warn) — ezek eddig némán estek el, pedig a
+ * piszkozat-incidens (átadás-doksi 3. szakasz 3. sor) épp azt mutatta, hogy a
+ * néma 400-as a legrosszabb hibaforma. A felhasználói üzenetek változatlanok.
+ */
+function assertPurchasable(product: Product, log: Logger, priceHuf?: number): void {
   if (product.status === 'archived') {
+    log.warn('checkout-start: vásárlás elutasítva — a termék archivált', {
+      productId: product.id,
+      productStatus: product.status,
+      reason: 'archived',
+    })
     throw new CheckoutError(400, 'Ez a termék már nem megvásárolható (archivált).')
   }
   if (product.status !== 'published') {
+    log.warn('checkout-start: vásárlás elutasítva — a termék státusza nem publikált', {
+      productId: product.id,
+      productStatus: product.status,
+      reason: 'status-not-published',
+    })
     throw new CheckoutError(400, 'Ez a termék jelenleg nem megvásárolható.')
   }
   if (product.priceInHUFEnabled !== true || typeof product.priceInHUF !== 'number') {
+    log.warn('checkout-start: vásárlás elutasítva — a termékhez nincs érvényes ár', {
+      productId: product.id,
+      productStatus: product.status,
+      priceEnabled: product.priceInHUFEnabled === true,
+      reason: 'price-missing',
+    })
     throw new CheckoutError(400, 'A termékhez nem tartozik érvényes ár, így nem vásárolható meg.')
   }
   // Szerver-oldali ár-kikényszerítés: a kliens ára sosem forrás — ha eltér a
   // szerveren tárolt ártól, a kérést elutasítjuk (eltérés = 400).
   if (priceHuf !== undefined && priceHuf !== product.priceInHUF) {
+    log.warn('checkout-start: vásárlás elutasítva — a kliens ára eltér a szerver árától', {
+      productId: product.id,
+      productStatus: product.status,
+      clientPriceHuf: priceHuf,
+      serverPriceHuf: product.priceInHUF,
+      reason: 'client-price-mismatch',
+    })
     throw new CheckoutError(
       400,
       'A megadott ár eltér a termék aktuális árától. Frissítsd az oldalt, és próbáld újra.',
@@ -332,13 +361,17 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
   const log = options.logger ?? logger
   const { productId, quantity, priceHuf, billing } = parseInput(options.input)
 
-  // A terméket a legfrissebb (draft) verzióval olvassuk — a vásárlási
-  // jogosultságot a szerkesztői `status` mező dönti el, nem a drafts _status.
+  // A terméket a PUBLIKÁLT sorral olvassuk (draft nélkül) — így a checkout,
+  // az ár-snapshot hook (src/lib/order-integrity.ts) és a storefront ugyanazzal
+  // a verzióval dolgozik. A vásárlási jogosultságot a szerkesztői `status`
+  // mező dönti el, nem a drafts _status — és a piszkozat-állapot (autosave)
+  // sem billentheti át némán a vásárolhatóságot (átadás-doksi 3. szakasz 3.
+  // sor: a piszkozatban átállított státusz az oldal frissülése nélkül
+  // billentette a 400-as elutasításokat).
   const product = (await payload
     .findByID({
       collection: 'products',
       id: productId,
-      draft: true,
       depth: 0,
       overrideAccess: true,
     })
@@ -346,7 +379,7 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
   if (!product) {
     throw new CheckoutError(404, 'A megadott termék nem található.')
   }
-  assertPurchasable(product, priceHuf)
+  assertPurchasable(product, log, priceHuf)
 
   // Rendelés létrehozása: az árakat és a rendelésszámot az orders
   // beforeChange-hookja tölti szerver-oldali (DB) forrásból — a kliens
