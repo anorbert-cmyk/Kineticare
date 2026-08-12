@@ -202,6 +202,11 @@ export const Users: CollectionConfig = {
     // iat + tokenExpiration, node_modules/payload/dist/auth/jwt.js) — nem
     // milliszekundumban, mint a lockTime-ot.
     tokenExpiration: 7200, // 2 óra (másodpercben)
+    // A session-süti Secure-jelölése: a Payload 3.86 defaultja secure:false
+    // (collections/config/defaults.js), így a süti síma HTTP-n is elkészülne.
+    // Élesben (https) KÖTELEZŐ a secure; fejlesztésben (http://localhost)
+    // kikapcsolva marad, különben a böngésző el sem tárolná.
+    cookies: { secure: process.env.NODE_ENV === 'production' },
   },
   access: {
     // Az admin felületet staff+owner éri el.
