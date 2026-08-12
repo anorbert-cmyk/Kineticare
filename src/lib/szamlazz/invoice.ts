@@ -501,6 +501,20 @@ export async function issueInvoiceForOrder(
     return { outcome: 'already-issued', ...(order.invoiceNumber ? { invoiceNumber: order.invoiceNumber } : {}) }
   }
 
+  /**
+   * Védelem mélységében: számla KIZÁRÓLAG paid rendeléshez állítható ki. A
+   * sorbaállítás ma csak a paid-átmenetből (és a paid-rendeléseket pásztázó
+   * resweepből) történik, de a szolgáltatás a FRISSEN olvasott rendelésen is
+   * kikényszeríti — egy jövőbeli hívó vagy egy refundálás utáni elavult job így
+   * sem állíthat ki számlát nem-fizetett rendelésre.
+   */
+  if (order.status !== 'paid') {
+    orderLog.info('a rendelés státusza nem paid — számlakiállítás kihagyva', {
+      status: order.status ?? null,
+    })
+    return { outcome: 'skipped', reason: 'a rendelés státusza nem paid' }
+  }
+
   if (!order.orderNumber) {
     orderLog.error('RIASZTÁS: a rendelés rendelésszám nélkül fut — számla nem állítható ki')
     await writeOrderInvoicingState(deps.payload, deps.orderId, { invoiceStatus: 'failed' })

@@ -1,6 +1,7 @@
 import type { Payload } from 'payload'
 
 import type { User } from '../payload-types'
+import { auditLogStore, writeAuditLog } from './audit'
 import { maskEmail } from './email/mask'
 import { logger, type Logger } from './logger'
 
@@ -183,6 +184,18 @@ export async function grantPurchase(options: GrantPurchaseOptions): Promise<Gran
     productId: product.id,
     sku: product.sku,
     result: 'granted',
+  })
+
+  // A strukturált napló mellett az audit-logs collectionbe is kerüljön — a
+  // manuális hozzáférés-adas az admin-felületen is nyomon követhető legyen.
+  // A writeAuditLog best-effort (sosem dob a hívó felé).
+  await writeAuditLog({
+    store: auditLogStore(payload),
+    actor: options.grantedBy?.id ?? null,
+    action: 'grant-purchase',
+    entityType: 'users',
+    entityId: user.id,
+    after: { productId: product.id, sku: product.sku, reason: options.reason ?? null },
   })
 
   return {

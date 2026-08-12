@@ -131,6 +131,22 @@ describe('classifyRateLimitedRoute — mit korlátozunk', () => {
     expect(classifyRateLimitedRoute('post', '/API/Users')).toBe('registration')
     expect(classifyRateLimitedRoute('POST', '/api/form-submissions//')).toBe('form-submission')
   })
+
+  it('a percent-kódolt alak NEM kerülheti meg az osztályozást (M3)', () => {
+    // A router a dekódolt útra illeszt — az osztályozónak is azt kell látnia.
+    expect(classifyRateLimitedRoute('POST', '/api/users/%66orgot-password')).toBe('password-forgot')
+    expect(classifyRateLimitedRoute('POST', '/api/users/%72eset-password')).toBe('password-reset')
+    expect(classifyRateLimitedRoute('POST', '/api/%75sers')).toBe('registration')
+    expect(classifyRateLimitedRoute('POST', '/api/checkout/%73tart')).toBe('checkout-start')
+    expect(classifyRateLimitedRoute('POST', '/api/%66orm-submissions')).toBe('form-submission')
+  })
+
+  it('érvénytelen kódolás és dupla-kódolás sem dob, és nem nyit kiskaput', () => {
+    // Érvénytelen %-szekvencia: nyers alak marad → nincs osztály (a router sem illeszti).
+    expect(classifyRateLimitedRoute('POST', '/api/users/%6')).toBeNull()
+    // Dupla-kódolás: egy dekódolás után sem nem lesz védett út (a router is egyszer dekódol).
+    expect(classifyRateLimitedRoute('POST', '/api/users/%2566orgot-password')).toBeNull()
+  })
 })
 
 describe('SlidingWindowRateLimiter — csúszóablak', () => {

@@ -86,7 +86,7 @@ export interface SzamlazzClientConfig {
 }
 
 /** A számlakiállítás kimenetele a job és a naplózás számára. */
-export type IssueInvoiceOutcome = 'issued' | 'already-issued' | 'disabled' | 'failed'
+export type IssueInvoiceOutcome = 'issued' | 'already-issued' | 'disabled' | 'failed' | 'skipped'
 
 export interface IssueInvoiceResult {
   outcome: IssueInvoiceOutcome

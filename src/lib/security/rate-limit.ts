@@ -195,12 +195,20 @@ const ROUTE_CLASS_BY_PATH = new Map<string, RateLimitedRouteClass>([
 ])
 
 /**
- * Az útvonal normalizálása osztályozás előtt: kisbetűsítés (hogy a
- * `/api/USERS`-féle alakkal ne lehessen megkerülni a táblát) és a záró
- * perjel(ek) levágása.
+ * Az útvonal normalizálása osztályozás előtt: percent-dekódolás (a router is a
+ * dekódolt útra illeszt — különben a `/api/users/%66orgot-password`-féle alak
+ * NÉMÁN kikerülné a keretet), kisbetűsítés és a záró perjel(ek) levágása.
+ * Érvénytelen kódolásnál a nyers alak marad: az ilyen út a routerben sem
+ * illeszkedik védett végpontra, tehát nincs mit megkerülni.
  */
 function normalizePathname(pathname: string): string {
-  const lowered = pathname.toLowerCase()
+  let decoded = pathname
+  try {
+    decoded = decodeURIComponent(pathname)
+  } catch {
+    // érvénytelen %-szekvencia — a nyers alakkal osztályozunk
+  }
+  const lowered = decoded.toLowerCase()
   const trimmed = lowered.replace(/\/+$/, '')
   return trimmed.length > 0 ? trimmed : '/'
 }

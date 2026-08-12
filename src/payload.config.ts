@@ -23,6 +23,7 @@ import { WebhookEvents } from './collections/WebhookEvents'
 import { buildOriginAllowlist } from './env'
 import { jobsConfig } from './jobs'
 import { restrictJobStatsGlobalAccess } from './jobs/jobs-stats-access'
+import { restrictLockedDocumentsAccess } from './lib/security/locked-documents-access'
 import { registerBarionWebhookProcessor } from './lib/barion-callback/process-callback'
 import { contactStaffEmail, kineticareEmailAdapter, sendMail, usersAuthEmails } from './lib/email'
 import { logger } from './lib/logger'
@@ -581,4 +582,9 @@ export default buildConfig({
   // előre nem konfigurálható: a zár a `buildConfig` EREDMÉNYÉRE kerül.
   // A részletes indoklás (miért nem végpont-szűrő, és miért nem töri el a saját
   // ütemezést) az src/jobs/jobs-stats-access.ts fejlécében.
-}).then(restrictJobStatsGlobalAccess)
+})
+  .then(restrictJobStatsGlobalAccess)
+  // Ugyanígy generált és alapértelmezetten nyitott a `payload-locked-documents`
+  // collection is (defaultAccess = bármely bejelentkezett user) — a zárak
+  // hamisítását zárja a restrictLockedDocumentsAccess.
+  .then(restrictLockedDocumentsAccess)
