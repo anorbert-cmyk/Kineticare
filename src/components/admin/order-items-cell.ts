@@ -64,10 +64,15 @@ function readQuantity(record: Record<string, unknown>): number {
   return typeof quantity === 'number' && Number.isFinite(quantity) && quantity > 0 ? quantity : 1
 }
 
-/** A tételár: priceHufSnapshot × quantity; hiányzó/hibás snapshotnál null. */
+/** A tételár: priceHufSnapshot × quantity; hiányzó/hibás snapshotnál (vagy túlcsordulásnál) null. */
 function readLinePriceHuf(record: Record<string, unknown>, quantity: number): number | null {
   const price = record.priceHufSnapshot
-  return typeof price === 'number' && Number.isFinite(price) ? price * quantity : null
+  if (typeof price !== 'number' || !Number.isFinite(price)) {
+    return null
+  }
+  const lineTotal = price * quantity
+  // A szorzat túlcsordulhat (valós adatból elérhetetlen, de a lista sosem omolhat el):
+  return Number.isFinite(lineTotal) ? lineTotal : null
 }
 
 /** Egy tétel-sor szűkítése; nem-objektum sor esetén null (a hívó fallbacket ad ki). */

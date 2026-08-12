@@ -96,4 +96,14 @@ describe('formatOrderItemsLines', () => {
       `kurzus-c × 1 — 500${NBSP}Ft`,
     ])
   })
+
+  it('túlcsorduló ár×mennyiség esetén az ár „—" (a cella sosem dob)', () => {
+    const lines = formatOrderItemsLines([
+      { product: 1, quantity: 1, titleSnapshot: 'kurzus-d', priceHufSnapshot: Number.MAX_VALUE },
+    ])
+
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('kurzus-d × 1')
+    expect(lines[0]).toContain('—')
+  })
 })
