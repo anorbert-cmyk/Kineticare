@@ -76,6 +76,20 @@ describe('stripSensitiveFields', () => {
     expect(output.user).toEqual({ nested: [{ keep: 1 }] })
     expect((output.circular as Record<string, unknown>).self).toBeNull()
   })
+
+  it('a kombinált érzékeny kulcsok is redaktilódnak (részleges illesztés), az azonosítók megmaradnak', () => {
+    const input = {
+      resetPasswordToken: 'tok',
+      sessions: [{ id: 's1' }],
+      accessToken: 'at',
+      mySecretValue: 'x',
+      email: 'vevo@example.test',
+      name: 'Teszt',
+      status: 'paid',
+    }
+    const output = stripSensitiveFields(input) as Record<string, unknown>
+    expect(output).toEqual({ email: 'vevo@example.test', name: 'Teszt', status: 'paid' })
+  })
 })
 
 describe('auditActionsForChange', () => {

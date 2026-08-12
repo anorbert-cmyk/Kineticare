@@ -33,21 +33,31 @@ export function auditLogStore(payload: Payload): AuditLogStore {
   return payload as unknown as AuditLogStore
 }
 
-/** A logger redact-listájával konzisztens, sosem tárolható mezőnevek. */
-const SENSITIVE_KEYS: ReadonlySet<string> = new Set([
+/** A logger redact-listájával konzisztens, sosem tárolható kulcs-jelöltek. */
+const SENSITIVE_KEY_MARKERS = [
   'password',
   'hash',
   'salt',
   'token',
-  'accesstoken',
-  'refreshtoken',
   'secret',
   'apikey',
   'poskey',
   'authorization',
   'session',
   'loginattempts',
-])
+] as const
+
+/**
+ * Érzékeny-e a kulcs? RÉSZLEGES, kisbetűs illesztés: a `resetPasswordToken`,
+ * `sessions` vagy `accessToken` is redaktilódjon — pontos egyezés mellett
+ * ezek némán kiszivárogtak az audit-bejegyzésekbe (a before/after a teljes
+ * dokumentumot hordozza). Az `email` szándékosan NEM marker: az audit-sor
+ * értéke pont az azonosíthatóság.
+ */
+export function isSensitiveAuditKey(key: string): boolean {
+  const lowered = key.toLowerCase()
+  return SENSITIVE_KEY_MARKERS.some((marker) => lowered.includes(marker))
+}
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -71,7 +81,7 @@ export function stripSensitiveFields(
   nextSeen.add(value)
   const output: Record<string, unknown> = {}
   for (const [key, item] of Object.entries(value)) {
-    if (SENSITIVE_KEYS.has(key.toLowerCase())) {
+    if (isSensitiveAuditKey(key)) {
       continue
     }
     output[key] = stripSensitiveFields(item, nextSeen)

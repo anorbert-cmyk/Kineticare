@@ -45,6 +45,7 @@ function createMockPayload(options: MockOptions = {}) {
   const product = { id: 42, sku: SKU }
   const updates: Array<{ collection: string; id: number | string; data: Record<string, unknown> }> =
     []
+  const creates: Array<{ collection: string; data: Record<string, unknown> }> = []
 
   const payload = {
     find: vi.fn(async ({ collection }: { collection: string }) => {
@@ -67,9 +68,15 @@ function createMockPayload(options: MockOptions = {}) {
         return args.data
       },
     ),
+    create: vi.fn(
+      async (args: { collection: string; data: Record<string, unknown> }) => {
+        creates.push(args)
+        return { id: 1 }
+      },
+    ),
   }
 
-  return { payload: payload as unknown as Payload, updates, user, product }
+  return { payload: payload as unknown as Payload, updates, creates, user, product }
 }
 
 describe('grantPurchase — kimeneti ágak', () => {
@@ -96,6 +103,40 @@ describe('grantPurchase — kimeneti ágak', () => {
       id: 7,
       data: { purchases: [11, 42] },
     })
+  })
+
+  it('granted: az audit-logs collectionbe is bekerül (action, actor, tétel)', async () => {
+    const { payload, creates } = createMockPayload({ purchases: [] })
+
+    const result = await grantPurchase({
+      payload,
+      email: EMAIL,
+      productIdOrSku: SKU,
+      reason: 'elhibázott fizetés jóváírása',
+      grantedBy: { id: 1, email: 'owner@example.test' },
+      logger: silentLogger(),
+    })
+
+    expect(result.status).toBe('granted')
+    const auditWrites = creates.filter((entry) => entry.collection === 'audit-logs')
+    expect(auditWrites).toHaveLength(1)
+    expect(auditWrites[0].data).toMatchObject({
+      action: 'grant-purchase',
+      actor: 1,
+      entityType: 'users',
+      entityId: '7',
+      after: { productId: 42, sku: SKU, reason: 'elhibázott fizetés jóváírása' },
+    })
+  })
+
+  it('already-had / user-not-found ágon NEM keletkezik audit-sor', async () => {
+    const had = createMockPayload({ purchases: [42] })
+    await grantPurchase({ payload: had.payload, email: EMAIL, productIdOrSku: SKU, logger: silentLogger() })
+    expect(had.creates).toHaveLength(0)
+
+    const missing = createMockPayload({ userExists: false })
+    await grantPurchase({ payload: missing.payload, email: EMAIL, productIdOrSku: SKU, logger: silentLogger() })
+    expect(missing.creates).toHaveLength(0)
   })
 
   it('already-had: meglévő hozzáférésnél nem ír (no-op, nem hiba)', async () => {

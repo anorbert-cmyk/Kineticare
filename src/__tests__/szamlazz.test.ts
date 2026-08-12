@@ -696,6 +696,34 @@ describe('issueInvoiceForOrder', () => {
     expect(sentXml[0]).toContain(`<szamlaKulsoAzon>${ORDER_NUMBER}</szamlaKulsoAzon>`)
   })
 
+  it('nem-paid rendelésre a kiállítás KIHAGYÓDIK (skipped) — számla nem készül, provider-hívás nincs', async () => {
+    for (const status of [
+      'created',
+      'payment_pending',
+      'payment_failed',
+      'cancelled',
+      'refunded',
+    ] as Array<Order['status']>) {
+      const { payload, order, updates } = createMockPayload(createOrder({ status }))
+      const result = await issueInvoiceForOrder({
+        payload,
+        orderId: 101,
+        config: ENABLED_CONFIG,
+        issueDate: '2026-08-04',
+        queryByKulsoAzon: noLookup,
+        postXml: async () => {
+          throw new Error('TESZT-HIBA: nem-paid rendelésre nem mehet ki számlakérés')
+        },
+      })
+
+      expect(result.outcome).toBe('skipped')
+      expect(result.reason).toContain('nem paid')
+      // Az invoice-állapot érintetlen marad (a rendelés később paid lehet a rendes úton):
+      expect(updates).toHaveLength(0)
+      expect(order?.invoiceStatus).toBe('none')
+    }
+  })
+
   it('nem megbízható vevői fiók URL: a számla kiáll, de a LINK nem mentődik + figyelmeztetés', async () => {
     const { payload, order } = createMockPayload(createOrder())
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

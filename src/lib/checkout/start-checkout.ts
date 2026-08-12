@@ -397,6 +397,11 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
             userId: user.id,
             productId,
           })
+          // Jitteres visszavárás: az ütköző tranzakciók azonnali újrapróbálása
+          // újra ugyanazt a „max + 1"-et számolhatja ki egyszerre.
+          await new Promise((resolve) =>
+            setTimeout(resolve, 10 * attempt + Math.floor(Math.random() * 20)),
+          )
         }
       }
 
