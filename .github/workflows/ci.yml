@@ -61,6 +61,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # A G3 migráció-immutabilitás őr (src/__tests__/migration-immutability.test.ts)
+          # a baseline-commitig visszamenőleg git-történetet olvas — shallow klónban
+          # fail-closed bukna. Teljes history kell (mint a gitleaks.yml-nél).
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}

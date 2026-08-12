@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "entries": {
+    "20260729_231123_initial_schema.json": "c143f35ce6c60cbd0e7958064106ddbe2aed676e7c0e4e860f160282a978ba28",
+    "20260729_231123_initial_schema.ts": "f4f173be4e6dce91dd815c9e036d5339251bb1b157a414796dcb3f2fb58b59a3",
+    "20260730_010003_products_status_enum.json": "96b8baf93139a21dab6af70aceb1dc2ade8c18dce92579204ceab495635b7fd0",
+    "20260730_010003_products_status_enum.ts": "9480bbb3964b43514263840d16e434f10188861a80ceec2d07e690ad809da999",
+    "20260730_080404_sync_schema_code.json": "4f3ed3e1fca7b7db6fd498d57b4d8836e4cef622ddcc166ad68fe12b8daea2a2",
+    "20260730_080404_sync_schema_code.ts": "0d39d7a135e5866e94f107c9858916ae582d70b7c22b4ee6c8920d09b793a130",
+    "20260808_123444_tartalomkezeles_admin_velemenyek.json": "c3d48b0d368c31b0473b4a2a38c8fe3be989f9ef02ddf9272aa1f09cd2b587bd",
+    "20260808_123444_tartalomkezeles_admin_velemenyek.ts": "cb651d693766a8296d8621302b703d554cea775f8bad1f9497f45e4c262cbe67",
+    "20260808_150710_szekcio_rendszer_blokkok.json": "3cc9e5bfa2c9d5e7f2dc3bbce5c05216a5323ffbf20e70d580b38fe019621471",
+    "20260808_150710_szekcio_rendszer_blokkok.ts": "6f3b693b96f37e26baadb5d8a5fa7cd0081cd3d3616f2346b394de597c9ec9b8",
+    "20260809_123608_kurzus_seo_mezok.json": "6580afa6794d625301e639262c5d4c2f2f240cd7ee3be95d72824ede0d9e48d2",
+    "20260809_123608_kurzus_seo_mezok.ts": "4a814c5610739939881bf506f5dfaad38496775b933210af999db86f7c327e59",
+    "20260809_140731_kurzus_haladas_es_celkozonseg.json": "239037a94b5d1e46a379fd98d2ba80a459a8763086674184c0856af8e1413a52",
+    "20260809_140731_kurzus_haladas_es_celkozonseg.ts": "56465de4009cd3a5d8ad7d958004845995e40ed7726fe4f277613bcaf197a444",
+    "20260809_180031_storno_statusz_es_kurzus_slug.json": "fc9ae41d10cc85205a3368bbe27e622647dc461f927f7582d8f64a5a8482e031",
+    "20260809_180031_storno_statusz_es_kurzus_slug.ts": "94a96514d0f759ff727c17f2026922bcad48889d327afa5671b0e07a497bb4a7",
+    "20260809_223906_szamlazz_megfeleles.json": "823a461bd15fc2756ef9c2a4f4081033d11970a128888e4aad116ef85d5d78c1",
+    "20260809_223906_szamlazz_megfeleles.ts": "50903b88cbd15ca849073a87a3ac2dcad3baf6a290529a50e8abeed5b78e9a88",
+    "20260809_232121_szamlazz_attempts_seq.json": "91f0f32be74b8daf3cfae52c92c66b2ece042494fe38f754aab78ed712d9700d",
+    "20260809_232121_szamlazz_attempts_seq.ts": "2077f1c5b8fdb641546ed172df8cbdb1b03fbe656f6963ead296a525180cc55a",
+    "20260810_094820_szamlazz_refunds_oszlop.json": "96d84a2cfbae4b79b57c417e710a6b071e9d402ace81e0b42fc9a1bdf6657336",
+    "20260810_094820_szamlazz_refunds_oszlop.ts": "1234f762c601c788f9c2f776ac7fe0e46a92799d4bf5686ec6d98fe6bde77f1a",
+    "20260810_095237_sema_drift_allapotgep_es_jobok.json": "831844f6bd25b235720b4c59ca6866df1e3f20b68ead4053d4f74fa4689d2cca",
+    "20260810_095237_sema_drift_allapotgep_es_jobok.ts": "168214c37bd22529ba4c34ad21595d06f4a417c33b5fd87cf7a4ab7db295992f",
+    "20260810_132919_job_utemezes_stats.json": "1d757aafa06e07fe8bb1ab10786f8bad99f878e6b83760cc47cd5555821892f0",
+    "20260810_132919_job_utemezes_stats.ts": "5cbe0d191a4cae73d6d7158cfc609c13b2638d7705006d79c6dcafd7c8a63562"
+  }
+}

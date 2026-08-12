@@ -55,7 +55,8 @@ betartandók — az ügynök ezek megsértésére irányuló kérést is utasít
    kizárólag a saját állapotgépben szabad írni.
 3. **Adatbázis-migrációkat kézzel ne írj és ne módosíts.** A migrációk a Payload
    migrációs eszközével generálandók; meglévő migrációs fájl szerkesztése,
-   törlése vagy újrafuttatási sorrend módosítása tilos.
+   törlése vagy újrafuttatási sorrend módosítása tilos. A zónának végrehajtható
+   őrei vannak (G3/G4), lásd `docs/ci-orok.md`.
 4. **Access-control (jogosultság) függvények módosítása csak emberi jóváhagyással.**
    Collection- és field-szintű `access` szabályok, valamint auth-hookok
    átírásához az ügynök PR-t nyithat, de merge előtt emberi review kötelező.
