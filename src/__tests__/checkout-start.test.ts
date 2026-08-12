@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import type { Payload } from 'payload'
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Order, Product, User } from '../payload-types'
 import { createCheckoutStartHandler } from '../lib/checkout/route-handler'
@@ -110,7 +110,14 @@ function createMockPayload(options: MockPayloadOptions = {}) {
 }
 
 const fetchMock = vi.fn()
-vi.stubGlobal('fetch', fetchMock)
+// A globális fetch-stub nem maradhat át más tesztfájlra (CLAUDE.md 15. tanulság):
+// beforeEach-ben állítjuk be, az afterEach pedig visszaállítja.
+beforeEach(() => {
+  vi.stubGlobal('fetch', fetchMock)
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 function barionStartSuccess(): Response {
   return new Response(

@@ -3,8 +3,9 @@
 **Készült:** 2026-08-09 · **Frissítve:** 2026-08-10 (javító-kör, F1–F17)
 **Forrás:** a hivatalos szamlazz.hu-dokumentáció kutatásának szintézise (45 követelmény,
 A1–A16 / B1–B9 / C1–C10 / D1–D10, `docs.szamlazz.hu`, `tudastar.szamlazz.hu`, élő XSD-k)
-**+ kód-audit** a `9f771a7` állapoton (`af34826` + `a170bab` + `9f771a7` implementációs kör),
-**a javító-kör átvezetésével** (a döntések forrása: `docs/atadas-szamlazz-kor.md` 4. szakasz).
+**+ kód-audit** a javító-kör implementációs állapotán (a squash-merge miatt az eredeti
+SHA-k nem feloldhatók; a vonatkozó PR-ek: #53–#60, a döntések forrása:
+`docs/atadas-szamlazz-kor.md` 4. szakasz).
 
 Ez a dokumentum azt rögzíti, hogy a Kineticare Számlázz.hu-integrációja a 45 hivatalos
 követelmény mindegyikéhez hogyan viszonyul, mit fed le a kód, mi marad fiók-oldali

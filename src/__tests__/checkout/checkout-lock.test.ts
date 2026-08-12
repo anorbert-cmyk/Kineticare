@@ -1,5 +1,5 @@
 import type { Payload } from 'payload'
-import { afterEach, beforeAll, afterAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, afterAll, describe, expect, it, vi } from 'vitest'
 
 import { CheckoutError, startCheckout } from '../../lib/checkout/start-checkout'
 import type { Order, Product, User } from '../../payload-types'
@@ -94,7 +94,14 @@ const publishedProduct = {
 } as unknown as Product
 
 const fetchMock = vi.fn()
-vi.stubGlobal('fetch', fetchMock)
+// A globális fetch-stub nem maradhat át más tesztfájlra (CLAUDE.md 15. tanulság):
+// beforeEach-ben állítjuk be, az afterEach pedig visszaállítja.
+beforeEach(() => {
+  vi.stubGlobal('fetch', fetchMock)
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 function barionStartSuccess(): Response {
   return new Response(

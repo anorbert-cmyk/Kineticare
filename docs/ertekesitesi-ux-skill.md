@@ -6,7 +6,7 @@
 > `docs/ux-hierarchia-audit.md` (Kimi-kutatás, 2026-08) + WCAG 2.2 + a
 > megrendelői igények (`docs/igeny-valtozas-pontok.md`).
 > **Miért itt él és nem `.claude/skills/`-ben?** A repóban a `.claude/`
-> szándékosan nem verziózható (CLAUDE.md-szabály), ez a fájl viszont a
+> szándékosan nem verziózható (a `.gitignore:25` tiltja), ez a fájl viszont a
 > projekt tudása — a `docs/` alatt marad, git-ben.
 
 ## 1. Az üzleti cél sorrendje (ebből vezethető le minden döntés)

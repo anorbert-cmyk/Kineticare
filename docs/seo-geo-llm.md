@@ -56,7 +56,7 @@ alapból kizárja őket a rosszindulatú botokkal együtt. Engedélyezve:
 - **OpenAI:** `GPTBot`, `OAI-SearchBot`, `ChatGPT-User`
 - **Anthropic:** `ClaudeBot`, `Claude-User`, `Claude-SearchBot`
 - **Perplexity:** `PerplexityBot`, `Perplexity-User`
-- **Egyéb:** `CCBot`, `Google-Extended`, `Google-Agent`, `Applebot-Extended`, `meta-externalagent`
+- **Egyéb:** `CCBot`, `Google-Extended`, `Google-Agent`, `Applebot-Extended`, `meta-externalagent`, `Bingbot`
 
 Ha valaha az AI-**tréninget** korlátozni akarjuk, azt a `Google-Extended` és
 `CCBot` eltávolításával kell megtenni. A **keresési/idézési** botokat

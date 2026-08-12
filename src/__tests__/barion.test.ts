@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   BARION_DEFAULT_TIMEOUT_MS,
@@ -48,7 +48,14 @@ const validEnv = {
 } as unknown as NodeJS.ProcessEnv
 
 const fetchMock = vi.fn()
-vi.stubGlobal('fetch', fetchMock)
+// A globális fetch-stub nem maradhat át más tesztfájlra (CLAUDE.md 15. tanulság):
+// beforeEach-ben állítjuk be, az afterEach pedig visszaállítja.
+beforeEach(() => {
+  vi.stubGlobal('fetch', fetchMock)
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 afterEach(() => {
   fetchMock.mockReset()

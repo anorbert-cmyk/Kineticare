@@ -47,6 +47,7 @@
 | `BARION_PAYEE_EMAIL` | a sandbox Barion-fiók e-mail-címe |
 | `ENABLE_JOB_WORKERS` | `true` (a callback retry-ladder így élőben is fut) |
 | `LOG_LEVEL` | `info` |
+| `PAYLOAD_MEDIA_DIR` | a csatolt **Volume mountpontja** (`/app/media`) — enélkül minden deploynál elvesznek a feltöltött képek (a konténer fájlrendszere efemer; a DB-rekord marad, a fájl eltűnik, a `/api/media/file/...` 500-at ad). Részletek: `.env.example`. |
 | `SEED_OWNER_EMAIL` | csak az első seed futtatásához (4. pont), utána törölhető |
 | `SEED_OWNER_PASSWORD` | csak az első seed futtatásához, utána törölhető |
 
@@ -148,7 +149,8 @@ Beállítás a csapatnak:
 ## 8. Költség- és korlát-megjegyzések
 
 - Hobby-csomag elegendő stagingre; a Next.js build memóriaigénye a legnagyobb
-  tétel (sharp miatt natív modul is épül — Nixpacks kezeli).
+  tétel (sharp miatt natív modul is épül — a Railpack builder kezeli; lásd a
+  runbook 0.1 pontját: a Nixpacks-említés régi állapot).
 - `numReplicas: 1` szándékos: így a boot-time migráció nem futhat párhuzamosan
   két példányban. Prod-skálázásnál a migrációt külön, deploy előtti lépésbe
   tesszük (pre-deploy job), a startCommandból kikerül.

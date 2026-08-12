@@ -65,7 +65,14 @@ vi.mock('../lib/advisory-lock', () => ({
 }))
 
 const fetchMock = vi.fn()
-vi.stubGlobal('fetch', fetchMock)
+// A globális fetch-stub nem maradhat át más tesztfájlra (CLAUDE.md 15. tanulság):
+// beforeEach-ben állítjuk be, az afterEach pedig visszaállítja.
+beforeEach(() => {
+  vi.stubGlobal('fetch', fetchMock)
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 /** A fetch-hívások naplója: URL + a zár állapota a hívás pillanatában. */
 const fetchLog: Array<{ url: string; lockHeld: boolean }> = []

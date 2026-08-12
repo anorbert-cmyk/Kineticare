@@ -34,7 +34,7 @@ npx tsx src/scripts/grant-purchase.ts --email=<vevő-email> --product=<sku-vagy-
 | Argumentum  | Kötelező | Jelentés                                                                 |
 | ----------- | -------- | ------------------------------------------------------------------------ |
 | `--email`   | igen     | A vevő regisztrált e-mail-címe (users kollekció).                        |
-| `--product` | igen     | A termék **sku**-ja VAGY numerikus adatbázis-**id**-je. (A products kollekcióban nincs külön slug mező — az egyedi üzleti kulcs a sku.) |
+| `--product` | igen     | A termék **sku**-ja VAGY numerikus adatbázis-**id**-je. (A products kollekcióban a C3 óta van `slug` mező is, de a grant a kanonikus üzleti kulcsot, a sku-t — vagy az id-t — várja.) |
 | `--reason`  | nem      | Szabad szöveges indoklás — bekerül a strukturált (JSON) naplóba.         |
 
 A script a Payload configon keresztül olvassa a `DATABASE_URI`-t /
