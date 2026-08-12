@@ -392,6 +392,22 @@ describe('/next/exit-preview — kilépés az előnézetből', () => {
     expect(harness.disabled()).toBe(true)
   })
 
+  it('proxy mögött a Location a NEXT_PUBLIC_SERVER_URL originjére épül (nem a belső hostra)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'https://kineticare.example.test')
+    try {
+      const harness = exitHarness()
+      // A request.url szándékosan a konténer BELSŐ címe (a Railway edge ezt adja át):
+      const response = await harness.handler(
+        new Request(`http://localhost:8080${EXIT_PREVIEW_PATH}?${RETURN_PATH_PARAM}=%2Fblog`),
+      )
+
+      expect(response.status).toBe(307)
+      expect(response.headers.get('Location')).toBe('https://kineticare.example.test/blog')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it.each([
     ['protokoll-relatív cím', `?${RETURN_PATH_PARAM}=%2F%2Fevil.example.test`],
     ['abszolút URL', `?${RETURN_PATH_PARAM}=https%3A%2F%2Fevil.example.test%2Fatveres`],
