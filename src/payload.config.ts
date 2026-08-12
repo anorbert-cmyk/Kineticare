@@ -4,10 +4,11 @@ import { FixedToolbarFeature, lexicalEditor } from '@payloadcms/richtext-lexical
 import { en } from '@payloadcms/translations/languages/en'
 import { hu } from '@payloadcms/translations/languages/hu'
 import path from 'node:path'
-import { APIError, buildConfig, type Access, type Payload } from 'payload'
+import { APIError, buildConfig, type CollectionBeforeValidateHook, type Payload } from 'payload'
 import sharp from 'sharp'
 import { fileURLToPath } from 'node:url'
 
+import { isAdmin } from './access'
 import { AuditLogs } from './collections/AuditLogs'
 import { ensureHomeImages, ensureHomeLayout, ensureHomeTestimonials } from './lib/home-seed'
 import { ensureMediaFiles } from './lib/media-restore'
@@ -24,6 +25,7 @@ import { buildOriginAllowlist } from './env'
 import { jobsConfig } from './jobs'
 import { restrictJobStatsGlobalAccess } from './jobs/jobs-stats-access'
 import { registerBarionWebhookProcessor } from './lib/barion-callback/process-callback'
+import { validateContactSubmissionData } from './lib/contact-submission'
 import { contactStaffEmail, kineticareEmailAdapter, sendMail, usersAuthEmails } from './lib/email'
 import { logger } from './lib/logger'
 import { adminGroups } from './plugins/admin-groups'
@@ -44,9 +46,6 @@ const dirname = path.dirname(filename)
  */
 const corsAllowlist = buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)
 const csrfAllowlist = buildOriginAllowlist(process.env.NEXT_PUBLIC_SERVER_URL)
-
-/** Admin-szerepkör (owner/staff) — a form-submissions olvasásához. */
-const isAdmin: Access = ({ req }) => req.user?.role === 'owner' || req.user?.role === 'staff'
 
 // ---------------------------------------------------------------------------
 // T-016: kapcsolat űrlap — beküldés-kezelés (spam-védelem + staff-értesítő)
@@ -86,6 +85,40 @@ const verifyTurnstile = async (data: unknown): Promise<unknown> => {
   const result = (await response.json().catch(() => ({}))) as { success?: boolean }
   if (!result.success) {
     throw new APIError('A spam-ellenőrzés (Turnstile) sikertelen. Kérjük, próbáld újra.', 400)
+  }
+  return data
+}
+
+/**
+ * K2: a kapcsolat-űrlap beküldésének SZERVER-oldali mező- és consent-
+ * ellenőrzése. A form-builder plugin a submissionData sorokat ellenőrzés
+ * nélkül tárolja, ezért a kötelező mezőket és a consentPrivacy
+ * hozzájárulást itt érvényesítjük — a szabályok és a magyar hibaüzenetek a
+ * kliensoldali validáció tükre (src/lib/contact-submission.ts). A hibák
+ * APIError-ként ugyanúgy magyarul érkeznek a klienshez, mint a
+ * Turnstile-hibák (a frontend errors[0].message-et jelenít meg).
+ *
+ * Csak CREATE-en fut: update-nél a `data` csak a küldött mezőket hordozza,
+ * így egy submissionData-t nem érintő staff-módosítást az ellenőrzés
+ * tévesen utasítana el. A nyilvános támadási felület (és a consent-mentes
+ * beküldés lehetősége) kizárólag a create — az update/delete staff+owner
+ * jogosultságú.
+ *
+ * A Turnstile-ellenőrzés ELŐTT fut: a mezőhiba olcsó és helyi, a
+ * siteverify pedig külső hívás — a formailag hibás beküldésre felesleges
+ * Turnstile-kérést nem indítunk.
+ */
+const validateContactSubmission: CollectionBeforeValidateHook = ({ data, operation }) => {
+  if (operation !== 'create') {
+    return data
+  }
+  const submissionData =
+    typeof data === 'object' && data !== null
+      ? (data as Record<string, unknown>).submissionData
+      : undefined
+  const errors = validateContactSubmissionData(submissionData)
+  if (errors.length > 0) {
+    throw new APIError(errors.join(' '), 400)
   }
   return data
 }
@@ -505,6 +538,14 @@ export default buildConfig({
     limits: {
       fileSize: 10485760,
     },
+    // K1: abortOnLimit nélkül a multipart-parser a túlméretes fájlt NÉMÁN
+    // CSONKOLNÁ (truncated: true), és a feltöltés sikeresnek látszana egy
+    // hibás fájllal. Bekapcsolva a parser a limit elérésekor 413-at dob a
+    // responseOnLimit üzenettel (payload/dist/uploads/fetchAPI-multipart/
+    // processMultipart.js — a config upload-blokkja 1:1-ben a parser
+    // opcióira megy, utilities/addDataAndFileToRequest.js).
+    abortOnLimit: true,
+    responseOnLimit: 'A fájl mérete meghaladja a megengedett 10 MB-os korlátot.',
   },
   onInit,
   plugins: [
@@ -530,6 +571,18 @@ export default buildConfig({
         admin: {
           group: 'Űrlapok',
           description: 'A weboldal űrlapjai (pl. Kapcsolat). A mezőket itt lehet átszabni.',
+        },
+        access: {
+          // M2: az űrlapok SZERKESZTÉSE staff+owner-jog. A plugin csak a
+          // read-et tölti ki (nyilvános — az marad, a nyilvános űrlap-render
+          // kéri); a create/update/delete-re a szanitizálás a „bármely
+          // bejelentkezett felhasználó" defaultAccess-t tenné
+          // (payload/auth/defaultAccess.js), így egy customer átírhatná a
+          // kapcsolat-űrlap mezőit és a beküldési e-mail-címet
+          // (PII-szivárgás). Az isAdmin = owner/staff (src/access).
+          create: isAdmin,
+          update: isAdmin,
+          delete: isAdmin,
         },
       },
       formSubmissionOverrides: {
@@ -565,7 +618,9 @@ export default buildConfig({
           },
         ],
         hooks: {
-          beforeValidate: [async ({ data }) => verifyTurnstile(data)],
+          // A sorrend számít: előbb a helyi mező-/consent-ellenőrzés (K2),
+          // utána a külső Turnstile-hívás.
+          beforeValidate: [validateContactSubmission, async ({ data }) => verifyTurnstile(data)],
           afterChange: [async ({ doc, operation }) => notifyStaffOnSubmission({ doc, operation })],
         },
       },

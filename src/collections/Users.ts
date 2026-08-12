@@ -150,7 +150,10 @@ export const Users: CollectionConfig = {
   auth: {
     maxLoginAttempts: 5,
     lockTime: 600_000, // 10 perc zárolás 5 sikertelen próbálkozás után
-    tokenExpiration: 7_200_000, // 2 óra
+    // A tokenExpiration-t a Payload MÁSODPERCBEN értelmezi (a JWT exp =
+    // iat + tokenExpiration, node_modules/payload/dist/auth/jwt.js) — nem
+    // milliszekundumban, mint a lockTime-ot.
+    tokenExpiration: 7200, // 2 óra (másodpercben)
   },
   access: {
     // Az admin felületet staff+owner éri el.
@@ -165,6 +168,10 @@ export const Users: CollectionConfig = {
     update: isSelfOrAdmin,
     // Törlés kizárólag owner.
     delete: isOwner,
+    // Zárolt fiók feloldása (maxLoginAttempts után) kizárólag owner: a kulcs
+    // hiányában a Payload a `defaultAccess`-t köti be, ami BÁRMELY
+    // bejelentkezett felhasználónak engedné (auth/defaultAccess.js).
+    unlock: isOwner,
   },
   fields: [
     // Az email mezőt az auth automatikusan hozzáadja.

@@ -15,6 +15,7 @@ import {
 } from '../access'
 import { visibleMenusOrAdmin } from '../access/menus-visibility'
 import { visibleTestimonialsOrAdmin } from '../access/testimonials-visibility'
+import { canReadOwnCourseProgress } from '../collections/CourseProgress'
 import { orderIntegrityBeforeChange } from '../lib/order-integrity'
 import configPromise from '../payload.config'
 
@@ -363,5 +364,138 @@ describe('collection access bekötés a végleges configban', () => {
     }
 
     expect(orders?.hooks?.beforeChange).toContain(orderIntegrityBeforeChange)
+  })
+
+  it('users: a zárolt fiók feloldása (unlock) kizárólag owner-jog (M1)', async () => {
+    const config = await configPromise
+    const users = (config.collections ?? []).find((c) => c.slug === 'users')
+
+    // A kulcs hiányában a szanitizálás a „bármely bejelentkezett felhasználó"
+    // defaultAccess-t kötné be (payload/dist/collections/config/defaults.js) —
+    // egy customer feloldhatná bármely zárolt fiókot.
+    expect(users?.access?.unlock).toBe(isOwner)
+    expect(users?.access?.unlock?.(accessArgs(owner))).toBe(true)
+    expect(users?.access?.unlock?.(accessArgs(staff))).toBe(false)
+    expect(users?.access?.unlock?.(accessArgs(customer))).toBe(false)
+    expect(users?.access?.unlock?.(accessArgs(null))).toBe(false)
+  })
+
+  it('users: a tokenExpiration másodpercben értelmezett 2 óra — 7200 (M7)', async () => {
+    const config = await configPromise
+    const users = (config.collections ?? []).find((c) => c.slug === 'users')
+
+    // A JWT exp = iat + tokenExpiration (payload/dist/auth/jwt.js), az iat
+    // MÁSODPERCBEN van — a korábbi 7_200_000 ezért ~83 napot jelentett.
+    expect(users?.auth).toMatchObject({ tokenExpiration: 7200 })
+  })
+
+  it('forms/form-submissions: űrlap-írás staff+owner, a beküldés nyilvános marad (M2)', async () => {
+    const config = await configPromise
+    const bySlug = new Map<string, CollectionConfig>(
+      (config.collections ?? []).map((c) => [c.slug, c]),
+    )
+
+    const forms = bySlug.get('forms')
+    expect(forms).toBeDefined()
+    // A read nyilvános marad (a plugin defaultja — a nyilvános űrlap-render kéri).
+    expect(forms?.access?.read?.(accessArgs(null))).toBe(true)
+    // M2: a plugin create/update/delete-re a „bármely bejelentkezett user"
+    // defaultAccess-t tenné (a plugin csak a read-et tölti ki) — helyette
+    // staff+owner (isAdmin), különben egy customer átírhatná a kapcsolat-űrlapot
+    // és a beküldési e-mail-címet (PII-szivárgás).
+    expect(forms?.access?.create).toBe(isAdmin)
+    expect(forms?.access?.update).toBe(isAdmin)
+    expect(forms?.access?.delete).toBe(isAdmin)
+    // Viselkedés-mátrix: anon/customer nem szerkeszthet űrlapot, staff/owner igen.
+    for (const operation of ['create', 'update', 'delete'] as const) {
+      const accessFn = forms?.access?.[operation]
+      expect(accessFn?.(accessArgs(null)), `forms/${operation}/anon`).toBe(false)
+      expect(accessFn?.(accessArgs(customer)), `forms/${operation}/customer`).toBe(false)
+      expect(accessFn?.(accessArgs(staff)), `forms/${operation}/staff`).toBe(true)
+      expect(accessFn?.(accessArgs(owner)), `forms/${operation}/owner`).toBe(true)
+    }
+
+    const submissions = bySlug.get('form-submissions')
+    expect(submissions).toBeDefined()
+    // A beküldés (create) nyilvános marad — a kapcsolat-űrlap működése.
+    expect(submissions?.access?.create?.(accessArgs(null))).toBe(true)
+    // A beküldések olvasása/kezelése staff+owner (PII-védelem).
+    expect(submissions?.access?.read).toBe(isAdmin)
+    expect(submissions?.access?.update).toBe(isAdmin)
+    expect(submissions?.access?.delete).toBe(isAdmin)
+    expect(submissions?.access?.read?.(accessArgs(null))).toBe(false)
+    expect(submissions?.access?.read?.(accessArgs(customer))).toBe(false)
+    expect(submissions?.access?.read?.(accessArgs(staff))).toBe(true)
+    expect(submissions?.access?.read?.(accessArgs(owner))).toBe(true)
+  })
+
+  it('webhook-events/audit-logs/course-progress: access-bekötés és mátrix (M10)', async () => {
+    const config = await configPromise
+    const bySlug = new Map<string, CollectionConfig>(
+      (config.collections ?? []).map((c) => [c.slug, c]),
+    )
+
+    const roleMatrix: Array<[string, { id: number; role: Role } | null]> = [
+      ['owner', owner],
+      ['staff', staff],
+      ['customer', customer],
+      ['látogató', null],
+    ]
+
+    // webhook-events: olvasás staff+owner, írás SENKI (kizárólag
+    // rendszerfolyamat, overrideAccess-szel). A collection helyi,
+    // nem exportált access-függvényeket használ — a bekötést a
+    // viselkedésen mérjük.
+    const webhookEvents = bySlug.get('webhook-events')
+    expect(webhookEvents).toBeDefined()
+    expect(webhookEvents?.access?.read?.(accessArgs(owner))).toBe(true)
+    expect(webhookEvents?.access?.read?.(accessArgs(staff))).toBe(true)
+    expect(webhookEvents?.access?.read?.(accessArgs(customer))).toBe(false)
+    expect(webhookEvents?.access?.read?.(accessArgs(null))).toBe(false)
+    for (const operation of ['create', 'update', 'delete'] as const) {
+      const accessFn = webhookEvents?.access?.[operation]
+      for (const [label, user] of roleMatrix) {
+        expect(accessFn?.(accessArgs(user)), `webhook-events/${operation}/${label}`).toBe(false)
+      }
+    }
+
+    // audit-logs: olvasás KIZÁRÓLAG owner (a before/after személyes adatot
+    // hordozhat), írás SENKI (az audit-trail integritása).
+    const auditLogs = bySlug.get('audit-logs')
+    expect(auditLogs).toBeDefined()
+    expect(auditLogs?.access?.read?.(accessArgs(owner))).toBe(true)
+    expect(auditLogs?.access?.read?.(accessArgs(staff))).toBe(false)
+    expect(auditLogs?.access?.read?.(accessArgs(customer))).toBe(false)
+    expect(auditLogs?.access?.read?.(accessArgs(null))).toBe(false)
+    for (const operation of ['create', 'update', 'delete'] as const) {
+      const accessFn = auditLogs?.access?.[operation]
+      for (const [label, user] of roleMatrix) {
+        expect(accessFn?.(accessArgs(user)), `audit-logs/${operation}/${label}`).toBe(false)
+      }
+    }
+
+    // course-progress: a read a saját-haladás szabály (bekötés-identitás +
+    // mátrix), create/update SENKI (csak a szerver route, overrideAccess-szel),
+    // delete staff+owner (hibás sor javítása az adminból).
+    const courseProgress = bySlug.get('course-progress')
+    expect(courseProgress).toBeDefined()
+    expect(courseProgress?.access?.read).toBe(canReadOwnCourseProgress)
+    expect(courseProgress?.access?.delete).toBe(isStaffOrOwner)
+    expect(courseProgress?.access?.read?.(accessArgs(owner))).toBe(true)
+    expect(courseProgress?.access?.read?.(accessArgs(staff))).toBe(true)
+    expect(courseProgress?.access?.read?.(accessArgs(customer))).toEqual({
+      user: { equals: customer.id },
+    })
+    expect(courseProgress?.access?.read?.(accessArgs(null))).toBe(false)
+    for (const operation of ['create', 'update'] as const) {
+      const accessFn = courseProgress?.access?.[operation]
+      for (const [label, user] of roleMatrix) {
+        expect(accessFn?.(accessArgs(user)), `course-progress/${operation}/${label}`).toBe(false)
+      }
+    }
+    expect(courseProgress?.access?.delete?.(accessArgs(null))).toBe(false)
+    expect(courseProgress?.access?.delete?.(accessArgs(customer))).toBe(false)
+    expect(courseProgress?.access?.delete?.(accessArgs(staff))).toBe(true)
+    expect(courseProgress?.access?.delete?.(accessArgs(owner))).toBe(true)
   })
 })
