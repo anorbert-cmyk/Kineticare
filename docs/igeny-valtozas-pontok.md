@@ -6,8 +6,8 @@
 
 | Igény (megrendelő) | Terv/ticket | Leképezés |
 |---|---|---|
-| Vásárlólista (ki mit vett, mikor) | T-012 admin lista | ⛔ NYITOTT — a ✅ korábban téves: a Rendelések listán a tételek nem látszanak (az átadás-doksi 3. szakasz 4. sora; `docs/atadas-szamlazz-kor.md`) |
-| Havi bevétel-statisztika, szakmai vs. otthoni bontás | T-013 statisztika/grafikon | ✅ orders-aggregáció + kategória-bontás |
+| Vásárlólista (ki mit vett, mikor) | T-012 admin lista | ✅ KÉSZ — a Rendelések lista „Tételek" oszlopa (sku × db — tételár) az OrderItemsCell-lel (`src/components/admin/OrderItemsCell.tsx` + `src/plugins/ecommerce.ts` withOrderItemsCell) |
+| Havi bevétel-statisztika, szakmai vs. otthoni bontás | T-013 statisztika/grafikon | ⛔ NYITOTT — a ✅ korábban téves (a jegyszámozás elcsúszott: a kódban a T-013 a menük láthatósági szabálya). Kész specifikáció: `docs/atadas-szamlazz-kor.md` 9. szakasz; tulajdonosi döntésre vár |
 | Aloldalak a főmenüpontok alá (max 2 szint) | T-009 menüfa | ✅ Menus collection (max 2 szint, validálva) |
 | Blogposzt-duplikálás | T-010 duplicate | ✅ posts duplicate (slug-unikum, draft) |
 | Kurzuskezelés: videó-feltöltés, leírás, képek, ár | T-005/T-008 products + Stream | ✅ products + Bunny Stream (a videó GUID-ja kézzel kerül az adminba) |

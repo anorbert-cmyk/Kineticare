@@ -24,6 +24,7 @@ import { BoldFeatureClient as BoldFeatureClient_e70f5e05f09f93e00b997edb1ef0c864
 import { ItalicFeatureClient as ItalicFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client'
 import { PriceCell as PriceCell_e27bf7b8cc50640dcdd584767b8eac3c } from '@payloadcms/plugin-ecommerce/client'
 import { PriceInput as PriceInput_b91672ccd6e8b071c11142ab941fedfb } from '@payloadcms/plugin-ecommerce/rsc'
+import { OrderItemsCell as OrderItemsCell_2c6d79b4079205291accce4c0768f7ee } from '../../../components/admin/OrderItemsCell'
 import { RefundPanel as RefundPanel_3023d898ecda64dc966986d07a3332f3 } from '../../../components/admin/RefundPanel'
 import { GrantPurchasePanel as GrantPurchasePanel_20de7d9cfe7b60454d34835b4d120a81 } from '../../../components/admin/GrantPurchasePanel'
 import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc'
@@ -56,6 +57,7 @@ export const importMap = {
   "@payloadcms/richtext-lexical/client#ItalicFeatureClient": ItalicFeatureClient_e70f5e05f09f93e00b997edb1ef0c864,
   "@payloadcms/plugin-ecommerce/client#PriceCell": PriceCell_e27bf7b8cc50640dcdd584767b8eac3c,
   "@payloadcms/plugin-ecommerce/rsc#PriceInput": PriceInput_b91672ccd6e8b071c11142ab941fedfb,
+  "/components/admin/OrderItemsCell#OrderItemsCell": OrderItemsCell_2c6d79b4079205291accce4c0768f7ee,
   "/components/admin/RefundPanel#RefundPanel": RefundPanel_3023d898ecda64dc966986d07a3332f3,
   "/components/admin/GrantPurchasePanel#GrantPurchasePanel": GrantPurchasePanel_20de7d9cfe7b60454d34835b4d120a81,
   "@payloadcms/next/rsc#CollectionCards": CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1
