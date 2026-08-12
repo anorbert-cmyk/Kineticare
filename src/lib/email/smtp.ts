@@ -37,7 +37,8 @@ class SmtpProtocolError extends EmailSendError {
   }
 }
 
-function encodeWord(value: string): string {
+/** A tesztek miatt exportált tiszta segéd (RFC 2047 encoded-word). */
+export function encodeWord(value: string): string {
   // RFC 2047 encoded-word a nem-ASCII (magyar ékezetes) subject/feladónév miatt.
   if (!/[^\x20-\x7E]/.test(value)) {
     return value
@@ -45,11 +46,13 @@ function encodeWord(value: string): string {
   return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`
 }
 
-function dotStuff(body: string): string {
+/** A tesztek miatt exportált tiszta segéd (dot-stuffing a DATA-blokkban). */
+export function dotStuff(body: string): string {
   return body.replace(/\r\n\./g, '\r\n..')
 }
 
-function buildMessage(config: SmtpConfig, message: MailMessage): string {
+/** A tesztek miatt exportált üzenet-összeállító (multipart/alternative, base64). */
+export function buildMessage(config: SmtpConfig, message: MailMessage): string {
   const boundary = `----kineticare-${Date.now().toString(36)}`
   const textPart = Buffer.from(message.text, 'utf8').toString('base64')
   const htmlPart = Buffer.from(message.html, 'utf8').toString('base64')

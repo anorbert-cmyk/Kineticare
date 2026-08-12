@@ -13,7 +13,10 @@
 /coverage
 
 # környezeti változók — titkok sosem kerülhetnek a repóba
+# (a mintafájlok — .env.example és társai — a kivétel: azok verziózandók)
 .env*
+!.env.example
+!.env.*.example
 
 # typescript
 *.tsbuildinfo

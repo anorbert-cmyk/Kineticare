@@ -1,5 +1,5 @@
 import type { Payload } from 'payload'
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { refundOrder } from '../lib/refund/refund-order'
 import type { IssueCorrectiveInvoiceDeps } from '../lib/szamlazz/corrective'
@@ -26,7 +26,14 @@ const ORDER_NUMBER = 'KH-2026-000777'
 const TOTAL_HUF = 20000
 
 const fetchMock = vi.fn()
-vi.stubGlobal('fetch', fetchMock)
+// A globális fetch-stub nem maradhat át más tesztfájlra (CLAUDE.md 15. tanulság):
+// beforeEach-ben állítjuk be, az afterEach pedig visszaállítja.
+beforeEach(() => {
+  vi.stubGlobal('fetch', fetchMock)
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 const savedEnv: Record<string, string | undefined> = {}
 

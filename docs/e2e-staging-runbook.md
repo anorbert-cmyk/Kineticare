@@ -21,7 +21,8 @@
 4. **Megrendelés és fizetés** → át kell irányítson a test.barion.com-ra.
 5. Fizess a `4444 8888 8888 5559` kártyával (bármilyen jövőbeli lejárat, bármilyen CVC).
 6. Visszairányítás a `/fizetes/koszonom` oldalra → max. néhány mp polling után
-   **„Sikeres fizetés”** + rendelésszám + „Kurzusaim” gomb.
+   **„Köszönjük a vásárlást!”** fejléc + „A fizetésed sikeresen megérkezett.” +
+   rendelésszám + „Kurzusaim” gomb.
 
 **Várható állapot (admin-ban ellenőrizendő):**
 - Orders: `paid`, `consentWithdrawalWaiver = true` + időbélyeg, Barion PaymentId kitöltve

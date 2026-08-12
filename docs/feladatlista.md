@@ -4,7 +4,12 @@
 
 ## Állapot most
 
-- main: `6560c7f`, CI zöld (typecheck 0, vitest 443/0, eslint 0 error, npm audit, gitleaks).
+> **Archív pillanatkép (2026-08-09)** — az aktuális, naprakész állapot az
+> `docs/atadas-szamlazz-kor.md` 1. szakaszában él (main: `3548b99`, CI zöld,
+> 100+ tesztfájl, 13 migráció). Az alábbi sorok a 2026-08-06-i hibakeresés
+> állapotát rögzítik, történeti értékük van.
+
+- main: `6560c7f`, CI zöld (typecheck 0, vitest 443/0, eslint 0 error, npm audit, gitleaks). *(2026-08-09-i pillanat)*
 - **A Railway ténylegesen buildel.** Korábban `Build · skipped (nothing to build)`
   döntéssel kihagyta a build lépést, és a régi `.next/` mappát indította — a deploy
   „SUCCESS"-t mutatott, miközben hetekkel régebbi kód futott. Javítva: explicit
@@ -44,7 +49,7 @@ A lista 4 blokkra bomlik: **(A) azonnali, rajtad múló**, **(B) integrációk
 | B2 | **Számlázz.hu** tesztkulcs | `SZAMLAZZ_AGENT_KEY` | szamlazz.hu (Számla Agent tesztfiók) | A számla- és stornó-jobok csak ezzel élnek. `valaszVerzio=2`, `szamlaKulsoAzon=orderNumber` idempotencia-horgony kész. |
 | B3 | **PostHog** EU projekt-kulcs | `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST` (EU: `https://eu.i.posthog.com`) | posthog.com (EU projekt) | A consent-banner és a funnel (`course_viewed` → `checkout_started` → `purchase_confirmed`) **kód szinten kész** — csak a kulcs hiányzik. Részletek: `docs/posthog.md`. |
 | B4 | **Hero-videó** Bunny Stream (publikus library) | `HERO_VIDEO_STREAM_ID` (kódban), `NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID`, `NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST` | Bunny Stream | A `HeroVideo` komponens kész (poster-first, reduced-motion, publikus iframe). Ma a hero a CMS heroImage-re esik vissza. Útmutató: `docs/hero-video-feltoltes.md`. |
-| B5 | **Adatvédelem oldal** a CMS-ben | — | `/admin` → Pages (`adatvedelem`) | A consent-banner ide linkel, jelenleg 404. A legacy `adatvedelem.html` a forrás. |
+| B5 | **Adatvédelem oldal** a CMS-ben | — | `/admin` → Pages (`adatvedelem`) | A consent-banner ide linkel, jelenleg 404. A legacy forrásfájl (`adatvedelem.html`) a repóból kikerült — a `docs/legacy/` alatt csak a `typ-kezrehab.html` maradt; a szöveget a Katáknak kell pótolni/jóváhagyni. |
 | B6 | **E-mail (SMTP)** rendszer-levelekhez | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | SMTP-szolgáltató | A `src/lib/email/smtp.ts` STARTTLS-t kér (OWASP-fix). Az order-confirmation és a reset-password e-mail csak ezzel él. |
 | B7 | **Claude GitHub App + `ANTHROPIC_API_KEY`** | GitHub repo secret | github.com/apps/claude + anthropic.com | A `@claude` megemlítés issue/PR-kommentben. A `ci.yml` és `gitleaks.yml` enélkül is fut. |
 | B8 | **Google Search Console** bekötés | — (DNS TXT vagy HTML-meta) | search.google.com/search-console | Domain-tulajdon igazolás, **sitemap beküldés** (`/sitemap.xml` már él), indexelés-figyelés. |
@@ -63,7 +68,7 @@ A lista 4 blokkra bomlik: **(A) azonnali, rajtad múló**, **(B) integrációk
 | # | Feladat | Prioritás | Megjegyzés |
 |---|---|---|---|
 | ~~C1~~ | ~~Reset-password szerveroldali jelszópolitika~~ | — | **KÉSZ** (2026-08-09): saját route-handler árnyékolja a `POST /api/users/reset-password` útvonalat (rate-limit + `validatePasswordStrength` + delegálás a Payloadnak), a politika REST-hívással sem kerülhető meg. Részletek: `docs/jelszo-politika.md`. |
-| C2 | **`@payloadcms/*` kormányzott bump** | Közepes | A peer-range `next <15.5.0`, ezért kell a `--legacy-peer-deps`; 20 tranzitív sebezhetőség (14 moderate + 6 high). Külön, kormányzott PR (CLAUDE.md 5.). A CI audit-kapu ezért `critical`-szintű. |
+| C2 | **`@payloadcms/*` kormányzott bump** | Közepes | A 3.86.0 peer-tartománya már beengedi a next@16.x-et (`>=16.2.6 <17.0.0`); a `legacy-peer-deps` a régebbi felbontású lockfile miatt marad, amíg a tiszta-registrys lockfile-újragenerálás külön, emberi döntésű PR-ben meg nem történik. A tranzitív sebezhetőségek miatt a CI audit-kapu `critical`-szintű. |
 | ~~C3~~ | ~~products `displayTitle` + `slug` mező~~ (SEO) | — | **KÉSZ** (2026-08-09): `displayTitle` + egyedi `slug` mező, kanonikus `/kurzusok/{slug}` URL tartós átirányítással a régi id-s címről; minden hivatkozás a közös `courseHref()`-re állt át. Üzemeltetés: a meglévő kurzusok slugja az adminban mentéskor áll elő (addig az id-s URL él). |
 | ~~C4~~ | ~~stornó-státusz mezők + retry-job~~ | — | **KÉSZ** (2026-08-09): `stornoStatus`/`stornoNumber`/`stornoAttempts`/`stornoLastError` a rendelésen, `storno-issue` retry-job az order-maintenance queue-n, MAX 5 kísérlet. Részletek: `docs/szamlazz-storno.md`. |
 | ~~C5~~ | ~~Helyesbítő számla részrefundhoz~~ | — | **KÉSZ** (2026-08-09): részrefundnál helyesbítő számla (`helyesbitoszamla` + `helyesbitettSzamlaszam`, negatív korrekciós tétel), `correctiveInvoiceStatus/Number/Seq` mezők + `corrective-invoice-issue` job, kétrétegű idempotenciával. Élesítés előtt egy sandbox-os végigfuttatás ajánlott. |
@@ -111,5 +116,6 @@ a teljes checklist: `docs/seo-geo-llm.md`.
 2. **B1** (Barion POSKey) → E2E a teljes vásárlási tölcséren, tesztkártyákkal
    (`docs/e2e-staging-runbook.md`).
 3. **B2** (Számlázz.hu) → számla-kiállítás a tesztvásárlásnál.
-4. **C1** (reset-password politika) — a legfontosabb fejlesztési tétel.
-5. **C14** (mentés) — élesítés előtt kötelező.
+4. **C14** (mentés) — élesítés előtt kötelező.
+5. A kód-oldali, priorizált hátralék az `docs/atadas-szamlazz-kor.md` 3. szakaszában él
+   (G1–G4 CI-őrök, checkout-draft, Rendelések-lista tételei stb.).

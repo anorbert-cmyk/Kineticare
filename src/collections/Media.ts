@@ -17,10 +17,9 @@ const mediaStaticDir = resolveMediaStaticDir()
  *    átkonvertálja; az imageSizes-ek a konvertált fájlból készülnek.
  *  - mimeTypes: csak raszterképek (jpeg/png/webp/avif/gif). SVG kizárva: nem
  *    méretezhető sharp-pal és script-injekciós kockázatot hordoz.
- *  - Méretlimit: 10 MB. A limit a HTTP-rétegben él, ezért a payload.config
- *    `upload: { limits: { fileSize: 10 * 1024 * 1024 }, abortOnLimit: true }`
- *    beállítása szükséges hozzá — TODO a payload.config.ts-ben (jelen ticket
- *    file-scope-ján kívül), addig itt dokumentált elvárás.
+ *  - Méretlimit: 10 MB. A limit a HTTP-rétegben él, és be van állítva: a
+ *    payload.config `upload: { limits: { fileSize: 10 * 1024 * 1024 } }` —
+ *    a túlméretes feltöltés elutasításra kerül (abortOnLimit), nem csonkolódik.
  *  - A focal point/crop szerkesztői felület és a kötelező alt megmarad.
  *
  * TÁROLÁS — a mai állapot (a korábbi „nyitott döntés" lezárva):

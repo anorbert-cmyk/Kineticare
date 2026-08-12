@@ -6,7 +6,7 @@
 
 | Igény (megrendelő) | Terv/ticket | Leképezés |
 |---|---|---|
-| Vásárlólista (ki mit vett, mikor) | T-012 admin lista | ✅ admin orders/users nézet |
+| Vásárlólista (ki mit vett, mikor) | T-012 admin lista | ⛔ NYITOTT — a ✅ korábban téves: a Rendelések listán a tételek nem látszanak (az átadás-doksi 3. szakasz 4. sora; `docs/atadas-szamlazz-kor.md`) |
 | Havi bevétel-statisztika, szakmai vs. otthoni bontás | T-013 statisztika/grafikon | ✅ orders-aggregáció + kategória-bontás |
 | Aloldalak a főmenüpontok alá (max 2 szint) | T-009 menüfa | ✅ Menus collection (max 2 szint, validálva) |
 | Blogposzt-duplikálás | T-010 duplicate | ✅ posts duplicate (slug-unikum, draft) |
