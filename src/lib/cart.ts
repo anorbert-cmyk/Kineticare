@@ -1,6 +1,6 @@
 'use client'
 
-import { useSyncExternalStore } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 
 import { formatPriceHuf } from './format-price'
 
@@ -160,16 +160,22 @@ export function useCart(): {
     cartStore.getServerSnapshot,
   )
 
+  // Az írás (addToCart/removeFromCart → writeCart) maga értesíti a store-t,
+  // így nem kell külön setState — a hook a store pillanatképét követi. A
+  // callbackok STABILAK (useCallback, üres deps: a modul-szintű függvényekre
+  // hivatkoznak), hogy a fogyasztók effekt-függőséglistába tehetők legyenek
+  // (a CartView initialItem-effektje így fut le kliens-navigációnál is).
+  const add = useCallback((item: CartItem) => {
+    addToCart(item)
+  }, [])
+  const remove = useCallback((productId: number) => {
+    removeFromCart(productId)
+  }, [])
+
   return {
     state,
-    // Az írás (addToCart/removeFromCart → writeCart) maga értesíti a store-t,
-    // így nem kell külön setState — a hook a store pillanatképét követi.
-    add: (item) => {
-      addToCart(item)
-    },
-    remove: (productId) => {
-      removeFromCart(productId)
-    },
+    add,
+    remove,
     totalHuf: cartTotalHuf(state),
     isEmpty: cartIsEmpty(state),
   }

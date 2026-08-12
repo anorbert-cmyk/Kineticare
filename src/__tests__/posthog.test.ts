@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   ANALYTICS_EVENTS,
+  buildPageViewProperties,
   buildPostHogOptions,
   captureAnalyticsEvent,
   capturePageView,
@@ -98,5 +99,15 @@ describe('initPostHog / capture no-op szabályok', () => {
     expect(ANALYTICS_EVENTS.courseViewed).toBe('course_viewed')
     expect(ANALYTICS_EVENTS.checkoutStarted).toBe('checkout_started')
     expect(ANALYTICS_EVENTS.purchaseConfirmed).toBe('purchase_confirmed')
+  })
+})
+
+describe('M9 — a $pageview URL-je a capture-határon megtisztítva', () => {
+  it('a capture felé készülő payloadból a reset-jegy KIVÁGVA, az utm MEGMARAD', () => {
+    // A capturePageView a buildPageViewProperties-en át küld — ez a tiszta
+    // függvény a capture-határ tényleges kimenete (a PostHog-kliens ezt kapja).
+    expect(
+      buildPageViewProperties('/jelszo-visszaallitas?token=DUMMY-JEGY&utm_source=hirlevel'),
+    ).toEqual({ $current_url: '/jelszo-visszaallitas?utm_source=hirlevel' })
   })
 })

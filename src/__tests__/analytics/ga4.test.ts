@@ -185,6 +185,31 @@ describe('consent-kapu: a gtag.js CSAK granted után tölt be', () => {
     expect(harness.loaded).toHaveLength(1)
     expect(commandsMatching(harness.commands(), 'config')).toHaveLength(1)
   })
+
+  it('M9: a config page_location MEGTISZTÍTVA megy — a reset-jegy kivágva, az utm megmarad', () => {
+    const harness = testRuntime()
+    harness.globals.location = {
+      href: 'https://shop.example.test/jelszo-visszaallitas?token=DUMMY-JEGY&utm_source=hirlevel#reszlet',
+    }
+    enableGoogleAnalytics(harness.runtime)
+
+    const configCommands = commandsMatching(harness.commands(), 'config')
+    expect(configCommands).toHaveLength(1)
+    expect(configCommands[0]).toEqual([
+      'config',
+      TEST_MEASUREMENT_ID,
+      { page_location: 'https://shop.example.test/jelszo-visszaallitas?utm_source=hirlevel' },
+    ])
+  })
+
+  it('M9: location nélküli futtatókörnyezetben a config változatlan (visszafelé kompatibilis)', () => {
+    const harness = testRuntime()
+    enableGoogleAnalytics(harness.runtime)
+
+    const configCommands = commandsMatching(harness.commands(), 'config')
+    expect(configCommands).toHaveLength(1)
+    expect(configCommands[0]).toEqual(['config', TEST_MEASUREMENT_ID])
+  })
 })
 
 describe('Consent Mode parancs-sorrend', () => {

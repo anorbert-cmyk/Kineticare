@@ -12,7 +12,11 @@ import { generateRequestId, getRequestId } from '../request-id'
  * - bejelentkezés kötelező (payload.auth); anon → 401;
  * - CSAK a saját rendelés: a lekérdezés customer=user.id szűrővel történik —
  *   más orderNumber esetén 404 (ne szivárogjon ki, létezik-e a rendelés);
- * - CSAK a { status } mező — semmi más rendelésadat nem megy ki.
+ * - CSAK a { status, productId } mezők — a productId az ELSŐ tétel termék-id-je
+ *   (null, ha nem feloldható): a köszönőoldal „Újrapróbálom" gombja ezzel tud
+ *   a /penztar?termek={id} útvonalra mutatni. Nem érzékeny adat: a vásárló a
+ *   SAJÁT rendelésének a termékét látja, amit a fiókja amúgy is megjelenít.
+ *   Egyéb rendelésadat (customer, összegek, tételek) továbbra sem megy ki.
  */
 export interface OrderStatusHandlerDeps {
   getPayload: () => Promise<Payload>
@@ -63,7 +67,17 @@ export function createOrderStatusHandler(
         return NextResponse.json({ error: 'A rendelés nem található.' }, { status: 404 })
       }
 
-      return NextResponse.json({ status: order.status }, { status: 200 })
+      // Az Újrapróbálom-útvonalhoz: az első tétel termék-id-je (a relationship
+      // nyers id vagy populate-olt dokumentum lehet; feloldhatatlanul null).
+      const firstProduct = Array.isArray(order.items) ? order.items[0]?.product : undefined
+      const productId =
+        typeof firstProduct === 'number'
+          ? firstProduct
+          : typeof firstProduct === 'object' && firstProduct !== null
+            ? firstProduct.id
+            : null
+
+      return NextResponse.json({ status: order.status, productId }, { status: 200 })
     } catch (error) {
       log.error('order-status: váratlan technikai hiba', {
         error: error instanceof Error ? error.message : String(error),

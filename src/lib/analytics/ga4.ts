@@ -1,4 +1,5 @@
 import { CONSENT_DENIED, CONSENT_GRANTED, type ConsentState } from './consent'
+import { sanitizeAnalyticsUrl } from './page-url'
 
 /**
  * Google Analytics 4 (gtag.js) integráció — CONSENT-FIRST, a PostHog-modul
@@ -175,6 +176,20 @@ const CONSENT_MODE_REVOKED = { analytics_storage: 'denied' } as const
 /** Elindult-e már a gtag.js betöltése (idempotencia — modulszintű, mint a PostHognál). */
 let scriptRequested = false
 
+/**
+ * A jelenlegi oldal címe a globális névtérből (böngészőben window.location.href).
+ * Teszt-futtatókörnyezetben hiányozhat — ilyenkor null (a config-paraméter
+ * elmarad, a gtag alapértelmezése lép).
+ */
+function currentLocationHref(globals: GaGlobalScope): string | null {
+  const location = globals.location
+  if (typeof location !== 'object' || location === null) {
+    return null
+  }
+  const href = (location as { href?: unknown }).href
+  return typeof href === 'string' && href.length > 0 ? href : null
+}
+
 /** Kérte-e már valaki a gtag.js betöltését (a provider és a tesztek használják). */
 export function isGoogleAnalyticsLoaded(): boolean {
   return scriptRequested
@@ -213,7 +228,23 @@ export function enableGoogleAnalytics(runtime?: GaRuntime): boolean {
   pushGtagCommand(resolved.globals, 'consent', 'default', CONSENT_MODE_DEFAULT)
   pushGtagCommand(resolved.globals, 'js', new Date())
   pushGtagCommand(resolved.globals, 'consent', 'update', CONSENT_MODE_GRANTED)
-  pushGtagCommand(resolved.globals, 'config', measurementId)
+
+  // M9: a config-idejű (automatikus) page_view a TELJES document.location-t
+  // küldené — a jelszó-visszaállító oldal jegyével együtt. A page_location
+  // ezért MEGTISZTÍTVA megy (./page-url.ts: a jegy-paraméterek kivágva, a
+  // kampány-attribúcióhoz kellő utm_* paraméterek megmaradnak). Ez CSAK a
+  // config-idejű találatot alakítja: a history-alapú (SPA) page_view-oknál a
+  // gtag enhanced measurement eseményszinten, az aktuális címmel tölti a
+  // page_locationt — azok az URL-ek pedig szerkezetileg jegymentesek (a
+  // tokenes oldal kizárólag levélből, teljes oldalletöltéssel érhető el).
+  const href = currentLocationHref(resolved.globals)
+  if (href !== null) {
+    pushGtagCommand(resolved.globals, 'config', measurementId, {
+      page_location: sanitizeAnalyticsUrl(href),
+    })
+  } else {
+    pushGtagCommand(resolved.globals, 'config', measurementId)
+  }
 
   // A jelző a betöltés ELŐTT áll át: így egy dobó betöltő sem indíthat
   // végtelen újrapróbálkozást, és nem kerülhet két <script> az oldalra.

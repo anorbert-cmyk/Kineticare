@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { markVideoWatched } from '../../lib/course-progress/client'
 import { summarizeCourseProgress } from '../../lib/course-progress/progress'
+import { mergePlayingSession } from '../../lib/course-player-refresh'
 import { courseHref } from '../../lib/course-url'
 import { playableStreamVideos, streamIframeSrc, streamVideoRef } from '../../lib/stream/contract'
 import { fetchStreamToken } from '../../lib/stream-token-client'
@@ -13,7 +14,14 @@ import { fetchStreamToken } from '../../lib/stream-token-client'
 /**
  * CoursePlayer — a kurzus lejátszója (epizódlista + Bunny Stream player,
  * tokenes embed a GET /api/stream-token végpontról, token-frissítés a lejárat
- * előtt 5 perccel — a lejátszás nem szakad meg, T-068).
+ * előtt 5 perccel — T-068).
+ *
+ * A token-frissítés NEM mountolja újra az iframe-et (az pozícióvesztéssel
+ * járt): a tárolt jegy megújul, de az iframe által betöltött src csak explicit
+ * epizód-betöltéskor változik (src/lib/course-player-refresh.ts). A timer-
+ * életciklus is rendezett: epizód-váltáskor az előző epizód frissítő-időzítője
+ * azonnal meghal, és a repülőben lévő kérések kései válasza sem kapcsolhat
+ * vissza a régi epizódhoz (generáció-számláló).
  *
  * A token-kérés a videó STABIL azonosítóját küldi (a szerződés-modul
  * `streamVideoRef`-je), nem a sorszámát: az epizódlista a feldolgozás alatti
@@ -63,7 +71,14 @@ const TOKEN_REFRESH_BEFORE_EXPIRY_SEC = 300 // 5 perc
 type PlayerState =
   | { kind: 'idle' }
   | { kind: 'loading'; videoIndex: number }
-  | { kind: 'playing'; videoIndex: number; token: string; expiresAtEpochSec: number }
+  | {
+      kind: 'playing'
+      videoIndex: number
+      token: string
+      expiresAtEpochSec: number
+      /** Az iframe által TÉNYLEGESEN betöltött embed-URL — token-frissítéskor NEM változik. */
+      loadedSrc: string | null
+    }
   | { kind: 'forbidden' }
   | { kind: 'unavailable' }
   | { kind: 'error'; message: string }
@@ -90,6 +105,14 @@ export function CoursePlayer({
   /** A legutóbbi sikertelen jelölés (ref + magyar üzenet) — az epizód alatt jelenik meg. */
   const [markError, setMarkError] = useState<{ ref: string; message: string } | null>(null)
   const refreshTimerRef = useRef<number | null>(null)
+  /**
+   * Betöltés-generáció: minden FELHASZNÁLÓI epizód-váltás (nem-refresh hívás)
+   * növeli. A repülőben lévő token-kérés a saját generációját őrzi; ha a
+   * válasz megérkezésekor a számláló már eltér, a válasz KÉSÉS — eldobjuk
+   * (se állapotváltás, se új időzítő). Így a régi epizód sem tud „vissza-
+   * kapcsolni" egy sikertelen vagy befejeződött váltás után.
+   */
+  const loadGenerationRef = useRef(0)
   /**
    * A token-frissítés `setTimeout`-ja korábban magát a `loadVideo` konstanst
    * hivatkozta a saját deklarációja ELŐTT (react-hooks/immutability): a
@@ -169,14 +192,26 @@ export function CoursePlayer({
       }
 
       if (!isRefresh) {
+        // Felhasználói váltás: az ELŐZŐ epizód frissítő-időzítője itt hal meg —
+        // egy sikertelen váltás után sem kapcsolhat vissza a régi epizód. A
+        // generáció-növelés a már REPÜLŐBEN lévő kérések válaszát is érvényteleníti.
+        loadGenerationRef.current += 1
+        clearRefreshTimer()
         setState({ kind: 'loading', videoIndex: index })
         setActiveIndex(index)
       }
+      const generation = loadGenerationRef.current
 
       const result = await fetchStreamToken({
         productId: product.id,
         videoId,
       })
+
+      if (generation !== loadGenerationRef.current) {
+        // Kései válasz: a felhasználó időközben másik epizódot nyitott — a
+        // régi epizód eredménye (és a belőle ütemezett frissítés) eldobandó.
+        return
+      }
 
       if (result.kind === 'forbidden') {
         setState({ kind: 'forbidden' })
@@ -203,7 +238,22 @@ export function CoursePlayer({
         void loadVideoRef.current?.(index, true)
       }, refreshInSec * 1000)
 
-      setState({ kind: 'playing', videoIndex: index, token: result.token, expiresAtEpochSec })
+      const nextSrc = streamIframeSrc({
+        libraryId: process.env.NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID,
+        streamAssetId: video.streamAssetId,
+        token: result.token,
+        expiresAtEpochSec,
+      })
+      // A token-frissítés NEM cseréli az iframe src-jét (nincs újramount,
+      // nincs pozícióvesztés) — a szabály a tiszta, tesztelt segédfüggvényé.
+      setState((previous) => ({
+        kind: 'playing',
+        ...mergePlayingSession(
+          previous.kind === 'playing' ? previous : null,
+          { videoIndex: index, token: result.token, expiresAtEpochSec, src: nextSrc },
+          isRefresh,
+        ),
+      }))
     },
     [hasAccess, product.id, videos, clearRefreshTimer],
   )
@@ -249,19 +299,13 @@ export function CoursePlayer({
   // A lejátszott epizód: a token ehhez a videóhoz szól, az iframe is ezt tölti.
   const playingVideo = state.kind === 'playing' ? videos[state.videoIndex] : undefined
   const playingIndex = state.kind === 'playing' ? state.videoIndex : -1
-  // A Bunny embed-URL a jegy MELLETT a lejárat másodpercét is viszi
-  // (`expires`), és a kettőnek egyeznie kell a szerver által hashelt értékkel.
-  // Ez a szám nem külön kérésből jön: a `playing` állapot már ma is tárolja,
-  // ugyanabból a válaszból, amiből a token.
-  const playingSrc =
-    state.kind === 'playing' && playingVideo
-      ? streamIframeSrc({
-          libraryId: process.env.NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID,
-          streamAssetId: playingVideo.streamAssetId,
-          token: state.token,
-          expiresAtEpochSec: state.expiresAtEpochSec,
-        })
-      : null
+  // Az iframe src-je a BETÖLTÉSKORI embed-URL (`loadedSrc`): a token-frissítés
+  // a tárolt jegyet újítja, de az src-t NEM — így a lejátszó nem mountol újra,
+  // a pozíció megmarad. A Bunny embed-URL a jegy MELLETT a lejárat
+  // másodpercét is viszi (`expires`), és a kettőnek egyeznie kell a szerver
+  // által hashelt értékkel; a `playing` állapot a legfrissebb jegyet is tárolja
+  // (egy későbbi explicit betöltés — pl. „Újrapróbálom" — már azzal építkezik).
+  const playingSrc = state.kind === 'playing' ? state.loadedSrc : null
 
   return (
     <div className="kc-player">

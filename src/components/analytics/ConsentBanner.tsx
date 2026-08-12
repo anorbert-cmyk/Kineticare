@@ -1,16 +1,24 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react'
 
-import { CONSENT_EVENT, readConsent, type ConsentState } from '@/lib/analytics/consent'
+import {
+  CONSENT_EVENT,
+  CONSENT_OPEN_EVENT,
+  consentBannerVisible,
+  readConsent,
+  type ConsentState,
+} from '@/lib/analytics/consent'
 import { optInToAnalytics, optOutOfAnalytics } from '@/lib/analytics/posthog'
 
 /**
  * ConsentBanner — GDPR-kompatibilis analytics-hozzájárulás sáv.
  *
- * - CSAK 'unknown' (még nem döntött) állapotban látható; döntés után
- *   végleg eltűnik (a tárolt consent a localStorage-ban él).
+ * - 'unknown' (még nem döntött) állapotban látható, ÉS a footer
+ *   „Süti-beállítások" gombjára ÚJRANYÍTHATÓ döntés után is (a GDPR-hez a
+ *   hozzájárulás visszavonása ugyanolyan könnyű kell legyen, mint a megadása —
+ *   a 'kc:analytics-consent-open' eseményre nyílik vissza).
  * - „Elfogadom" → opt_in (PostHog init + capture), „Elutasítom" → opt_out
  *   (a PostHog sosem inicializálódik) — oldalfrissítés nélkül.
  * - SSR/hidrálás-biztos: az első kliens-renderig null, így a szerver- és
@@ -117,20 +125,36 @@ export function ConsentBanner() {
   // nem sikerült (letiltott localStorage) — a korábbi setConsent pontosan így
   // viselkedett, ezért marad meg külön állapotként.
   const [decision, setDecision] = useState<ConsentState | null>(null)
+  // A footer „Süti-beállítások" gombjára történő újranyitás (GDPR visszavonási
+  // út): döntés után is újra látható a sáv, amíg a látogató újra nem dönt.
+  const [reopened, setReopened] = useState(false)
   const consent = decision ?? storedConsent
 
-  if (consent !== 'unknown') {
+  useEffect(() => {
+    const onOpen = (): void => {
+      // A korábbi helyi döntés-jelölést is töröljük, hogy a TÁROLT állapot
+      // látszódjon kiindulásként, és a sáv biztosan megjelenjen.
+      setDecision(null)
+      setReopened(true)
+    }
+    window.addEventListener(CONSENT_OPEN_EVENT, onOpen)
+    return () => window.removeEventListener(CONSENT_OPEN_EVENT, onOpen)
+  }, [])
+
+  if (!consentBannerVisible(consent, reopened)) {
     return null
   }
 
   const onAccept = (): void => {
     optInToAnalytics()
     setDecision('granted')
+    setReopened(false)
   }
 
   const onDecline = (): void => {
     optOutOfAnalytics()
     setDecision('denied')
+    setReopened(false)
   }
 
   return (

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Field } from '@/components/ui/Field'
-import { updateProfile, type ProfileUpdateInput } from '../../lib/account-client'
+import { GENERIC_UPDATE_ERROR, updateProfile, type ProfileUpdateInput } from '../../lib/account-client'
 import type { CourseAccessView } from '../../lib/course-access'
 import { courseHref } from '../../lib/course-url'
 import { courseTitle } from '../../lib/courses'
@@ -37,6 +37,35 @@ const ORDER_STATUS_LABELS: Record<string, { label: string; tone: 'success' | 'wa
   refunded: { label: 'Visszatérítve', tone: 'info' },
 }
 
+/**
+ * A profilmentés visszajelzése — a hiba- és a sikerág egy helyen, külön
+ * kiszedve, hogy a node-környezetű teszt (renderToStaticMarkup) is elérje.
+ * A hibaág az account-client magyar üzenetét mutatja, role="alert"-tel.
+ */
+export function ProfileSaveFeedback({
+  saved,
+  saveError,
+}: {
+  saved: boolean
+  saveError: string | null
+}) {
+  if (saveError !== null) {
+    return (
+      <span className="kc-account__error" role="alert">
+        {saveError}
+      </span>
+    )
+  }
+  if (saved) {
+    return (
+      <span className="kc-account__saved" role="status">
+        Mentve.
+      </span>
+    )
+  }
+  return null
+}
+
 export function AccountView({ accessByProductId, user, orders }: AccountViewProps) {
   const [profile, setProfile] = useState<ProfileUpdateInput>({
     name: user.name ?? '',
@@ -48,18 +77,26 @@ export function AccountView({ accessByProductId, user, orders }: AccountViewProp
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  /** A profilmentés hibaüzenete (magyar) — korábban NÉMA volt a hibaág. */
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const update = (key: keyof ProfileUpdateInput, value: string) => {
     setProfile((previous) => ({ ...previous, [key]: value }))
     setSaved(false)
+    setSaveError(null)
   }
 
   const handleSave = async () => {
     setSaving(true)
+    setSaved(false)
+    setSaveError(null)
     const result = await updateProfile(profile)
     setSaving(false)
     if (result.ok) {
       setSaved(true)
+    } else {
+      // A hibaág is magyar visszajelzést ad — az account-client üzenetével.
+      setSaveError(result.message ?? GENERIC_UPDATE_ERROR)
     }
   }
 
@@ -118,7 +155,7 @@ export function AccountView({ accessByProductId, user, orders }: AccountViewProp
           <Button disabled={saving} onClick={handleSave}>
             {saving ? 'Mentés…' : 'Mentés'}
           </Button>
-          {saved ? <span className="kc-account__saved" role="status">Mentve.</span> : null}
+          <ProfileSaveFeedback saved={saved} saveError={saveError} />
         </div>
       </Card>
 

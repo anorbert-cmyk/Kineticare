@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { captureAnalyticsEvent } from '@/lib/analytics/posthog'
+import { checkoutHref } from '../../lib/courses'
 import { pollOrderStatus } from '../../lib/order-status-poll'
 
 /**
@@ -26,7 +27,8 @@ type ViewState =
   | { kind: 'polling'; attempts: number }
   | { kind: 'paid' }
   | { kind: 'timeout' }
-  | { kind: 'failed'; status: string }
+  /** productId: az „Újrapróbálom" link célához (a státuszválasz hozza). */
+  | { kind: 'failed'; status: string; productId: number | null }
   | { kind: 'unauthorized' }
   | { kind: 'not-found' }
 
@@ -71,7 +73,7 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
           return
         }
         if (status === 'cancelled' || status === 'payment_failed') {
-          setState({ kind: 'failed', status })
+          setState({ kind: 'failed', status, productId: result.productId })
           return
         }
       } else if (result.kind === 'not-found') {
@@ -147,6 +149,12 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
   }
 
   if (state.kind === 'failed') {
+    // Az Újrapróbálom a TERMÉKRE mutat (a /penztar numerikus termék-id-t vár) —
+    // korábban a rendelésszám került a termék-paraméterbe, ami a pénztár
+    // „nincs kiválasztott termék" ágára vezetett (zsákutca). Ha a termék-id
+    // nem feloldható, a kurzuslista a biztonságos cél.
+    const retryHref =
+      state.productId !== null ? checkoutHref(state.productId) : '/kurzusok'
     return (
       <div aria-live="assertive" className="kc-thankyou kc-thankyou--failed" role="alert">
         <h1>A fizetés nem sikerült</h1>
@@ -155,7 +163,7 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
           újrapróbálhatod bármikor.
         </p>
         <div className="kc-thankyou__actions">
-          <Button href={`/penztar?termek=${encodeURIComponent(orderNumber ?? '')}`}>Újrapróbálom</Button>
+          <Button href={retryHref}>Újrapróbálom</Button>
           <Button href="/kapcsolat" variant="secondary">Segítséget kérek</Button>
         </div>
       </div>

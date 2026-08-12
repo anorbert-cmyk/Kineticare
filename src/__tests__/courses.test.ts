@@ -8,6 +8,7 @@ import {
   collectCourseCategories,
   coursePriceHuf,
   coursePriceLabel,
+  coursePriceBadgeKind,
   courseTitle,
   filterCoursesByCategory,
   hasUserPurchased,
@@ -177,6 +178,27 @@ describe('ár-formázás (Ft, ezres tagolás)', () => {
     expect(coursePriceLabel({ priceInHUFEnabled: false, priceInHUF: 19990 })).toBeNull()
     expect(coursePriceLabel({ priceInHUFEnabled: true, priceInHUF: null })).toBeNull()
     expect(coursePriceHuf({ priceInHUFEnabled: true, priceInHUF: 19990 })).toBe(19990)
+  })
+})
+
+describe('coursePriceBadgeKind — a kurzusoldal ár-címkéje (Ingyenes/Megveszem finding)', () => {
+  it('érvényes ár → price (a PriceTag látszik; 0 Ft explicit ár is ár marad)', () => {
+    expect(coursePriceBadgeKind({ priceInHUFEnabled: true, priceInHUF: 19990 })).toBe('price')
+    expect(coursePriceBadgeKind({ priceInHUFEnabled: true, priceInHUF: 0 })).toBe('price')
+  })
+
+  it('tudatosan ingyenes (priceInHUFEnabled: false) → free („Ingyenes" címke)', () => {
+    expect(coursePriceBadgeKind({ priceInHUFEnabled: false, priceInHUF: null })).toBe('free')
+    expect(coursePriceBadgeKind({ priceInHUFEnabled: false, priceInHUF: 19990 })).toBe('free')
+  })
+
+  it('HIBÁS konfiguráció (ár-pipa BE, ár ÜRES) → none: NEM „Ingyenes" a Megveszem mellett', () => {
+    // ═══ A finding esete: korábban ez az ág mutatta az „Ingyenes" címkét. ═══
+    expect(coursePriceBadgeKind({ priceInHUFEnabled: true, priceInHUF: null })).toBe('none')
+    expect(coursePriceBadgeKind({ priceInHUFEnabled: true, priceInHUF: undefined })).toBe('none')
+    // A pipa nélküli, ár nélküli (legacy/hiányzó mező) rekord sem „Ingyenes" —
+    // a resolveCourseCta-val konzisztensem az sem a free ág.
+    expect(coursePriceBadgeKind({ priceInHUFEnabled: undefined, priceInHUF: null })).toBe('none')
   })
 })
 

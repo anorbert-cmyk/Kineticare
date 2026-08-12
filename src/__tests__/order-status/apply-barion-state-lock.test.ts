@@ -127,6 +127,9 @@ function createMockPayload(order: Order, events: string[]) {
       }
       return user
     }),
+    // A K5 dupla-fizetés őre (hasPaidOrderFor) ezt kérdezi — itt nincs más
+    // paid rendelés, így az őr átenged (a zár-viselkedés a fókusz).
+    find: vi.fn(async () => ({ docs: [], totalDocs: 0 })),
     update: vi.fn(async (args: { collection: string; data: Record<string, unknown> }) => {
       updates.push({ collection: args.collection, data: args.data })
       if (args.collection === 'orders') {
