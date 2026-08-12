@@ -265,7 +265,7 @@ async function assertNoDuplicatePurchase(
       and: [
         baseWhere,
         { status: { equals: 'payment_pending' } },
-        { createdAt: { greaterThan: windowCutoff } },
+        { createdAt: { greater_than: windowCutoff } },
       ],
     },
     limit: 1,
