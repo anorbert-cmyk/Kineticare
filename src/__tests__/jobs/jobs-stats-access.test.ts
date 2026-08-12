@@ -155,7 +155,11 @@ describe('a zár után is fut az ütemezés (user nélküli, belső úton)', () 
 
     const result = await payload.jobs.handleSchedules({ queue: ORDER_MAINTENANCE_QUEUE, req })
 
-    expect(result.queued).toHaveLength(1)
+    // K4: a saját őr MAGA állítja sorba a jobot advisory-zár alatt (a `queued`
+    // a bizonyíték), és shouldSchedule:false-t ad vissza — a handleSchedules
+    // ezért „skipped"-ként könyveli a kört, nem „queued"-ként.
+    expect(result.queued).toHaveLength(0)
+    expect(result.skipped).toHaveLength(1)
     expect(queued).toHaveLength(1)
     expect(queued[0]).toMatchObject({ task: 'order-poll', queue: ORDER_MAINTENANCE_QUEUE })
     // …és mindezt a db-rétegen keresztül, nem a global-operationökön.

@@ -1,6 +1,7 @@
 import type { Payload } from 'payload'
 
 import type { Order, User } from '../../payload-types'
+import { withAdvisoryLock } from '../advisory-lock'
 import type { BarionPaymentStateResponse, OrderPaymentState } from '../barion'
 import type { Logger } from '../logger'
 
@@ -21,6 +22,28 @@ import type { Logger } from '../logger'
  * - cancelled: payment_pending → cancelled; paid felé TILOS visszaállítani
  *   (állapotgép-védelem, riasztás); más kiindulóból figyelmeztetés, marad.
  * - payment_pending: státusz marad (a poll-job ütemezzi az újrapollolást).
+ *
+ * PÁRHUZAMOSSÁG (M5 — paid-átmenet advisory-zár). Az átmenet „ellenőriz-majd-ír"
+ * (check-then-act) alakú: zár nélkül két párhuzamos szál (Barion-callback ×
+ * order-poll) MINDKETTŐ transitionedToPaid=true-t kaphatna, és az onOrderPaid-
+ * lánc (jogosultság-grant, számla-queue, e-mail) KÉTSZER futna; a poll ráadásul
+ * a futás elején beolvasott, esetleg ELAVULT rendelés-példányból indul. Ezért az
+ * írást hordozó ágak (paid/cancelled) rendelés-szintű Postgres advisory-zár
+ * alatt futnak (`order-transition:order:<id>`, src/lib/advisory-lock.ts — a
+ * refund-order.ts `refund:order:<id>` mintáját követve), és a záron BELÜL a
+ * rendelés FRISSEN ÚJRAOLVASOTT: minden döntés (állapotgép-ág + összeg-assert) a
+ * friss példányból születik. Így a második szál már a végleges státuszt látja —
+ * transitionedToPaid PONTOSAN EGYSZER igaz, a paid → cancelled visszaállítás
+ * pedig a friss állapoton is elakad az állapotgép-védelemen. A `payment_pending`
+ * ág nem ír, ezért zárfoglalás nélkül, azonnal visszatér.
+ *
+ * ZÁR-TARTOMANY (a advisory-lock.ts üzemeltetési korlátja miatt): a záron belül
+ * KIZÁRÓLAG gyors DB-műveletek futnak (rendelés-újraolvasás, státusz-írás,
+ * purchases-grant). A GetState (külső HTTP) a HÍVÓNÁL, a záron kívül történik;
+ * az onOrderPaid mellékhatásai (számla-queue + e-mail, szintén külső hívás)
+ * szintén a zár elengedése UTÁN futnak a hívónál — az egyszeri lefutást a
+ * atomikusan dőlt transitionedToPaid jelző garantálja, nem az, hogy a zár alatt
+ * futnának.
  *
  * A modul NEM végez esemény-lezárást (webhook-events) és NEM küld e-mailt/
  * számlázat — a mellékhatások (onOrderPaid) a HÍVÓ feladata, kizárólag
@@ -202,16 +225,25 @@ export async function grantPurchases(
   return { granted: missing.length, alreadyOwned: orderProductIds(order).length - missing.length }
 }
 
+/** A rendelés Barion-átmenetének advisory-zár kulcsa (egy rendelés = egy zár). */
+export function orderTransitionLockKey(orderId: number | string): string {
+  return `order-transition:order:${orderId}`
+}
+
 /**
  * Az állapotgép-átmenet végrehajtása a rendelésen. A visszaadott action
  * dönti el a hívó az esemény-lezárást / naplózást / mellékhatásokat.
+ *
+ * Az írást hordozó ágak (paid/cancelled) advisory-zár alatt, a rendelés
+ * FRISSEN ÚJRAOLVASOTT példányán futnak (lásd a modul fejlécét — M5).
  */
 export async function applyBarionStateTransition(
   input: BarionTransitionInput,
 ): Promise<BarionTransitionResult> {
-  const { payload, order, mapped, state, log } = input
+  const { payload, order, mapped, log } = input
 
   if (mapped === 'payment_pending') {
+    // Nincs írás — zárfoglalás sem kell (a friss példány itt nem hordoz döntést).
     if (order.status !== 'payment_pending' && order.status !== 'created') {
       log.warn('függő fizetésjelzés nem függő rendelésre — állapot változatlan', {
         orderStatus: order.status,
@@ -219,6 +251,34 @@ export async function applyBarionStateTransition(
     }
     return { action: 'pending' }
   }
+
+  return withAdvisoryLock(
+    payload,
+    orderTransitionLockKey(order.id),
+    async () => {
+      // FRISS ÚJRAOLVASÁS a záron BELÜL: a hívó példánya elavult lehet (a poll a
+      // futás elején olvasta be; a zárra várakozás közben egy párhuzamos szál —
+      // callback vagy poll — már átállíthatta). Minden döntés ebből születik.
+      const fresh = (await payload.findByID({
+        collection: 'orders',
+        id: order.id,
+        depth: 0,
+        overrideAccess: true,
+      })) as Order
+      return applyBarionStateTransitionLocked({ ...input, order: fresh })
+    },
+    log,
+  )
+}
+
+/**
+ * A tényleges átmenet-logika — KIZÁRÓLAG a zár alatt, friss rendelés-példányon
+ * szabad futnia (a publikus applyBarionStateTransition gondoskodik róla).
+ */
+async function applyBarionStateTransitionLocked(
+  input: BarionTransitionInput,
+): Promise<BarionTransitionResult> {
+  const { payload, order, mapped, state, log } = input
 
   if (mapped === 'cancelled') {
     if (order.status === 'payment_pending') {

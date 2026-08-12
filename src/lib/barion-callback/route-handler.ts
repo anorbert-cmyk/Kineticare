@@ -136,11 +136,23 @@ export function createBarionCallbackHandler(deps: BarionCallbackHandlerDeps) {
         handler: createBarionCallbackProcessor({ payload, store }),
       })
       if (outcome.kind === 'failed') {
-        eventLog.warn('barion-callback: aszinkron feldolgozás sikertelen (retry-job folytatja)', {
-          attempts: outcome.attempts,
-          retryable: outcome.retryable,
-          error: outcome.error,
-        })
+        if (!outcome.retryable) {
+          // Ez volt az utolsó megengedett kísérlet: a webhook-retry MÁR NEM
+          // viszi tovább — az owner-riasztás itt, a kimerülés pillanatában megy.
+          eventLog.error(
+            'webhook-esemény újrapróbálásai kimerültek — owner beavatkozás szükséges',
+            {
+              attempts: outcome.attempts,
+              error: outcome.error,
+            },
+          )
+        } else {
+          eventLog.warn('barion-callback: aszinkron feldolgozás sikertelen (retry-job folytatja)', {
+            attempts: outcome.attempts,
+            retryable: outcome.retryable,
+            error: outcome.error,
+          })
+        }
       }
     }
 
