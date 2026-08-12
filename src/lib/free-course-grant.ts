@@ -1,4 +1,4 @@
-import type { Payload } from 'payload'
+import type { Payload, PayloadRequest } from 'payload'
 
 import type { User } from '../payload-types'
 import { logger as rootLogger, type Logger } from './logger'
@@ -42,6 +42,14 @@ export interface GrantFreeCoursesInput {
   payload: Payload
   /** A frissen regisztrált/bejelentkezett felhasználó (purchases-szel). */
   user: Pick<User, 'id' | 'purchases'>
+  /**
+   * A hívó kérése — KÖTELEZŐ hook-hívásnál: a beágyazott update csak így fut
+   * a hívó tranzakciójában. Enélkül az afterChange(create)-ből a frissen
+   * létrejött (még nem commitolt) userre „Nem található" dobás jön, az
+   * afterLogin-ból pedig ön-blokkoló sorzár/deadlock (a login-tranzakció már
+   * írta a sort) — a pentest igazolta élesben (2026-08-12).
+   */
+  req?: PayloadRequest
   logger?: Logger
 }
 
@@ -101,6 +109,10 @@ export async function grantFreeCoursesToUser(
     id: user.id,
     data: { purchases: [...userPurchaseIds(user), ...missing] },
     overrideAccess: true,
+    // A hívó kérésének továbbadásával a beágyazott update a hívó
+    // tranzakciójában fut — különben afterChange(create)-ből NotFound,
+    // afterLogin-ből ön-blokkolás lenne (lásd a típus kommentjét).
+    ...(input.req ? { req: input.req } : {}),
   })
 
   log.info('ingyenes kurzus-hozzáférések automatikusan beírva', {

@@ -154,11 +154,17 @@ const grantFreeCoursesBestEffort = async (
   user: Pick<User, 'id' | 'purchases'>,
 ): Promise<void> => {
   try {
-    await grantFreeCoursesToUser({ payload: req.payload, user })
+    // A req TOVÁBBADÁSA KÖTELEZŐ: nélküle a beágyazott update új tranzakcióban
+    // futna — afterChange(create)-ből NotFound (a sor még nem commitolt),
+    // afterLogin-ből ön-blokkoló deadlock (a login-tranzakció már írta a sort).
+    await grantFreeCoursesToUser({ payload: req.payload, req, user })
   } catch (error) {
     logger.error('ingyenes kurzus-hozzáférés automatikus beírása sikertelen', {
       userId: user.id,
       error: error instanceof Error ? error.message : String(error),
+      // A drizzle a valódi PG-hibát a cause-ban hordozza — anélkül a naplóban
+      // csak a „Failed query" burkolat látszik (a pentest-es incidens tanulsága).
+      cause: error instanceof Error && error.cause ? String(error.cause) : undefined,
     })
   }
 }

@@ -499,10 +499,12 @@ describe('startCheckout — duplavásárlás-blokk', () => {
     ) as { and?: Array<Record<string, unknown>> }
     expect(pendingQuery).toBeDefined()
     const createdAtClause = pendingQuery.and?.find((clause) => 'createdAt' in clause) as
-      | { createdAt: { greaterThan: string } }
+      | { createdAt: { greater_than: string } }
       | undefined
     expect(createdAtClause).toBeDefined()
-    const cutoffMs = Date.parse(createdAtClause!.createdAt.greaterThan)
+    // A Payload where-operátora a greater_than (a korábbi camelCase greaterThan
+    // a valódi lekérdezésben „path cannot be queried" 500-ast dobott élesben).
+    const cutoffMs = Date.parse(createdAtClause!.createdAt.greater_than)
     expect(Date.now() - cutoffMs).toBeGreaterThanOrEqual(paymentWindowToMs() - 5000)
     expect(Date.now() - cutoffMs).toBeLessThanOrEqual(paymentWindowToMs() + 5000)
   })
