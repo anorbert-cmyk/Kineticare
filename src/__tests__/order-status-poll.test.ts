@@ -21,14 +21,28 @@ function fetchReturning(status: number, body?: unknown): typeof fetch {
 }
 
 describe('pollOrderStatus', () => {
-  it('200 + érvényes törzs → status', async () => {
-    const fetchImpl = fetchReturning(200, { status: 'paid' })
+  it('200 + érvényes törzs → status (a productId-val együtt, #70-es szerződés)', async () => {
+    const fetchImpl = fetchReturning(200, { status: 'paid', productId: 42 })
     const result = await pollOrderStatus('KH-2026-000123', fetchImpl)
-    expect(result).toEqual({ kind: 'status', status: 'paid' })
+    expect(result).toEqual({ kind: 'status', status: 'paid', productId: 42 })
     // A hívás ugyanazon az originen, sütivel megy (a csrf-szűrő átengedi):
     const [url, init] = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit]
     expect(url).toBe('/api/orders/KH-2026-000123/status')
     expect(init.credentials).toBe('include')
+  })
+
+  it('a productId hiányzik vagy érvénytelen → null (a státusz attól még status)', async () => {
+    expect(await pollOrderStatus('X', fetchReturning(200, { status: 'paid' }))).toEqual({
+      kind: 'status',
+      status: 'paid',
+      productId: null,
+    })
+    expect(
+      await pollOrderStatus('X', fetchReturning(200, { status: 'paid', productId: 'abc' })),
+    ).toEqual({ kind: 'status', status: 'paid', productId: null })
+    expect(await pollOrderStatus('X', fetchReturning(200, { status: 'paid', productId: -3 }))).toEqual(
+      { kind: 'status', status: 'paid', productId: null },
+    )
   })
 
   it('a rendelésszám URL-kódolva megy ki', async () => {
