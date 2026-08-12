@@ -78,10 +78,12 @@ function createMockPayload(options: MockPayloadOptions = {}) {
     create: [] as Array<Record<string, unknown>>,
     update: [] as Array<{ id: number | string; data: Record<string, unknown> }>,
     find: [] as unknown[],
+    findByID: [] as Array<Record<string, unknown>>,
   }
   const payload = {
     auth: vi.fn(async () => ({ user: options.authUser === undefined ? mockUser : options.authUser })),
-    findByID: vi.fn(async () => {
+    findByID: vi.fn(async (args: Record<string, unknown>) => {
+      calls.findByID.push(args)
       if (options.product === null) {
         throw new Error('Not Found')
       }
@@ -554,6 +556,23 @@ describe('startCheckout — termék- és inputellenőrzés', () => {
     })
     await expect(promise).rejects.toMatchObject({ status: 400 })
     await expect(promise).rejects.toThrowError(/termékazonosító/)
+  })
+})
+
+describe('startCheckout — piszkozat-regresszió (átadás-doksi 3. szakasz 3. sor)', () => {
+  it('a terméket a PUBLIKÁLT sorral olvassa: a products findByID draft: true NÉLKÜL hívódik', async () => {
+    fetchMock.mockResolvedValueOnce(barionStartSuccess())
+    const { payload, calls } = createMockPayload()
+
+    await startCheckout({ payload, user: mockUser, input: happyInput })
+
+    const productLookup = calls.findByID.find((args) => args.collection === 'products')
+    expect(productLookup).toBeDefined()
+    // A piszkozat-verzió (autosave) sosem lehet a vásárolhatóság forrása:
+    // a draft kulcs vagy hiányzik az argsból, vagy kifejezetten false.
+    expect(productLookup!.draft ?? false).toBe(false)
+    // A belső olvasás továbbra is access-felülírással fut.
+    expect(productLookup!.overrideAccess).toBe(true)
   })
 })
 
