@@ -632,6 +632,52 @@ export default buildConfig({
       // nem tud beütni.
       idle_in_transaction_session_timeout: 60_000,
     },
+    // A DEV-MÓDÚ DRIZZLE SÉMA-PUSH KIKAPCSOLVA.
+    //
+    // MIT VÉD. A Payload postgres-adaptere `push !== false` esetén minden
+    // NEM-production indulásnál drizzle-push-t futtat: lehúzza az adatbázis
+    // sémáját, összeveti a kódból épült drizzle-sémával, és a különbséget
+    // AZONNAL rákényszeríti a DB-re. Ha a különbség adatvesztéssel járna,
+    // a push interaktív megerősítést kér a folyamat stdin-jén:
+    //
+    //   · You're about to delete <tábla> table with N items
+    //   DATA LOSS WARNING: Possible data loss detected if schema is pushed.
+    //   Accept warnings and push schema to database? › (y/N)
+    //
+    // Ez a prompt két irányban ártalmas:
+    //   1. NEM-INTERAKTÍV FUTÁSNÁL ÖRÖK BEFAGYÁS. Scriptben, CI-ban vagy
+    //      ügynöki futtatásban nincs, aki válaszoljon: a folyamat stdin-re
+    //      várva `ep_poll`-ban áll, időkorlát nélkül. A Payload initje ilyenkor
+    //      soha nem fejeződik be, tehát MINDEN rá váró kérés is áll (nálunk a
+    //      dev szerver `GET /admin`-ja 90 mp után is válasz nélkül volt, és a
+    //      második kérés ugyanarra az init-ígéretre torlódott fel).
+    //   2. ROSSZ ENV MELLETT ADATVESZTÉS. Ha a DATABASE_URI éles-alakú
+    //      adatbázisra mutat, és a promptra bárki (vagy egy automatizmus) 'y'-t
+    //      ad, a push valóban ELDOBJA a kódsémából hiányzó táblákat/oszlopokat.
+    //
+    // MI AZ ELVÁRT MUNKAFOLYAMAT HELYETTE. A repó migráció-first (CLAUDE.md
+    // 3. tilos zóna, a G1–G4 őrökkel; a deploy start-parancsa
+    // `npx payload migrate && npm start`). Séma-változásnál — HELYBEN IS —
+    // a sorrend:
+    //
+    //   npx payload migrate:create <beszelo_nev>   # a Payload generálja
+    //   npx payload migrate                        # helyi DB felhúzása
+    //
+    // Kézzel migrációt írni vagy meglévőt szerkeszteni tilos; a push
+    // kikapcsolásával a séma egyetlen útja a verziózott migrációs lánc marad,
+    // vagyis a helyi és az éles adatbázis ugyanazon a gyártósoron áll.
+    //
+    // MIÉRT NEM TÖR EL SEMMIT. A `push` kizárólag a `db.connect()` ágban futó
+    // séma-ERŐLTETÉST kapcsolja; a drizzle-séma FELÉPÍTÉSE a `db.init()`-ben
+    // változatlanul megtörténik, ezért a config↔snapshot (G2) és a
+    // migrációs-lánc↔snapshot (G1) őrök ugyanúgy dolgoznak.
+    //
+    // A DÖNTÉS ALAPJA: két ügynök egymástól függetlenül mérte ki a fenti
+    // befagyást (6+ perc `ep_poll` nem-interaktív futtatásban), majd egy
+    // izolált adatbázison a negatív kontroll is reprodukálta — sémától idegen,
+    // adatot tartalmazó táblával a prompt kiírásra került, és a szerver nem
+    // állt fel; `push: false` mellett ugyanaz az indulás promptmentes.
+    push: false,
   }),
   sharp,
   // T-019 lezárás: a feltölthető fájlok mérete globálisan max. 10 MB (bájtban).

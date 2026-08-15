@@ -17,7 +17,7 @@ betartandók — az ügynök ezek megsértésére irányuló kérést is utasít
 
 | Parancs | Leírás |
 | --- | --- |
-| `npm run dev` | Fejlesztői szerver indítása |
+| `npm run dev` | Fejlesztői szerver indítása — friss/üres adatbázisnál ELŐTTE `npx payload migrate` kötelező (a dev séma-push ki van kapcsolva, lásd a 22a. üzemeltetési tanulságot) |
 | `npm run build` | Production build |
 | `npm run lint` | ESLint-ellenőrzés |
 | `npm run typecheck` | TypeScript típusellenőrzés |
@@ -208,7 +208,17 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
     lefutott — így a következő commit magával viszi a bestage-elt fájlokat!).
     Használj `git commit -F -` + heredoc-ot, és commit után ellenőrizd a
     `git status`-t.
-22. **Helyi Postgres a migráció-generáláshoz** (a `pgrun` user kell, mert az
+22a. **A Payload dev-módú séma-push KI VAN KAPCSOLVA** (`push: false` a
+    postgres-adapterben, őr-teszt védi). Ok: séma-eltérésnél a push interaktív,
+    TÁBLATÖRLÉST kínáló promptot ad, amin minden nem-interaktív futás némán,
+    örökre megakad (mérve: 6+ perc ep_poll, a GET /admin sosem válaszol), rossz
+    env mellett pedig éles-alakú adatbázison törölne. Sémaváltozásnál helyben
+    is a migrációs lánc az út: `npx payload migrate:create` + `npx payload
+    migrate`. Következmény: friss adatbázisnál a `npm run dev` előtt migrate
+    kell — enélkül az admin felállni feláll, de a seed/lekérdezések hangos
+    warnnal buknak.
+
+22b. **Helyi Postgres a migráció-generáláshoz** (a `pgrun` user kell, mert az
     `initdb` rootként nem indul): a socket-könyvtárnak `pgrun`-írhatónak kell
     lennie (`-k <dir>`), és a scratchpad SZÜLŐ könyvtáraira is kell `o+x`
     bejárási jog, különben a `pg_ctl` „Permission denied"-dal áll le.
