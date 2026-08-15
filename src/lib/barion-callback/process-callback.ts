@@ -251,8 +251,23 @@ export function createBarionCallbackProcessor(deps: BarionCallbackProcessorDeps)
 
       // 4. Friss paid-átmenet mellékhatásai (számla-job + visszaigazoló e-mail).
       //    Az onOrderPaid sosem dob — a callback-feldolgozás ettől nem bukhat el.
+      //    A feloldott fiók (vendég-vásárlásnál MOST létrehozott vagy megtalált)
+      //    dönti el a levél változatát: jelszó-beállító link vagy belépés.
       if (transition.transitionedToPaid) {
-        await onOrderPaid({ payload: deps.payload, order, logger: orderLog })
+        await onOrderPaid({
+          payload: deps.payload,
+          order,
+          logger: orderLog,
+          ...(transition.customer
+            ? {
+                account: {
+                  passwordSetupPending: transition.customer.passwordSetupPending,
+                  alreadyLinked: transition.customer.alreadyLinked,
+                  email: transition.customer.email,
+                },
+              }
+            : {}),
+        })
       }
 
       // 5. Esemény-lezárás az akcióhoz rendelt result-tal.

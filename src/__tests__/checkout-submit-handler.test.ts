@@ -12,6 +12,7 @@ import {
   createCheckoutSubmitHandler,
   type BillingFieldErrors,
   type CheckoutSubmissionContext,
+  type GuestFieldErrors,
 } from '../lib/checkout/form-submission'
 
 /**
@@ -54,6 +55,7 @@ const TELJES_BILLING = {
 interface Naplo {
   errors: (string | null)[]
   fieldErrors: BillingFieldErrors[]
+  guestErrors: GuestFieldErrors[]
   submitting: boolean[]
   focused: (string | null)[]
   kuldott: CheckoutSubmitInput[]
@@ -67,6 +69,7 @@ function felepit(
   const naplo: Naplo = {
     errors: [],
     fieldErrors: [],
+    guestErrors: [],
     submitting: [],
     focused: [],
     kuldott: [],
@@ -76,6 +79,7 @@ function felepit(
     readContext: () => context,
     setError: (message) => naplo.errors.push(message),
     setBillingErrors: (errors) => naplo.fieldErrors.push(errors),
+    setGuestErrors: (errors) => naplo.guestErrors.push(errors),
     setSubmitting: (value) => naplo.submitting.push(value),
     focusElement: (elementId) => naplo.focused.push(elementId),
     submit: async (body) => {

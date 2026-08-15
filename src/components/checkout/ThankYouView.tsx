@@ -170,15 +170,31 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
     )
   }
 
-  // A poll is adhat 401-et (közben lejárt munkamenet) — ugyanaz a nézet.
+  // 401 — nincs (érvényes) munkamenet. Ez KÉT esetet fed le:
+  //  - VENDÉG-VÁSÁRLÁS: a vevő bejelentkezés nélkül fizetett, a fiókja most
+  //    készül. Neki nincs mit tennie, és belépni sem tud még — ezért a szöveg
+  //    elsőként az e-mailre irányít (ott érkezik a jelszó-beállító link), a
+  //    belépés csak másodlagos ajánlat;
+  //  - lejárt munkamenet egy meglévő fióknál: neki a belépés a helyes út.
+  // A korábbi, feltétel nélküli „jelentkezz be" a vendégnek zsákutca volt.
   if (state.kind === 'unauthorized') {
     return (
       <div className="kc-thankyou" role="status">
-        <h1>Köszönjük!</h1>
-        <p>A rendelésed állapotának megtekintéséhez jelentkezz be.</p>
-        <Button href={`/belepes?returnUrl=${encodeURIComponent('/fizetes/koszonom?order=' + orderNumber)}`}>
-          Belépés
-        </Button>
+        <h1>Köszönjük a vásárlást!</h1>
+        <p>
+          A fizetésed feldolgozzuk, és a visszaigazolót e-mailben küldjük. Ha vendégként
+          vásároltál, a levélben egy <strong>jelszó-beállító link</strong> is lesz — azzal
+          nyílik meg a fiókod, benne a kurzussal. Több teendőd nincs.
+        </p>
+        <p className="kc-thankyou__order">
+          Rendelésszám: <strong>{orderNumber}</strong>
+        </p>
+        <div className="kc-thankyou__actions">
+          <Button href={`/belepes?returnUrl=${encodeURIComponent('/fizetes/koszonom?order=' + orderNumber)}`}>
+            Belépés (ha van fiókod)
+          </Button>
+          <Button href="/" variant="secondary">Vissza a kezdőlapra</Button>
+        </div>
       </div>
     )
   }

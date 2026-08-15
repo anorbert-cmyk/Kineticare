@@ -8,7 +8,7 @@ import {
   type BarionPaymentStateResponse,
 } from '../barion'
 import { logger as rootLogger, type Logger } from '../logger'
-import { onOrderPaid, queueInvoiceIssueJob } from '../order-paid'
+import { onOrderPaid, queueInvoiceIssueJob, type OrderPaidAccount } from '../order-paid'
 import { applyBarionStateTransition } from '../order-status/apply-barion-state'
 import { getSzamlazzConfig } from '../szamlazz'
 
@@ -88,8 +88,12 @@ export interface OrderPollDeps {
   logger?: Logger
   /** Injektálható (teszteléshez); alapból a valódi fetchPaymentState. */
   fetchState?: (paymentId: string) => Promise<BarionPaymentStateResponse>
-  /** Injektálható (teszteléshez); alapból a valódi onOrderPaid. */
-  onPaid?: (order: Order) => Promise<void>
+  /**
+   * Injektálható (teszteléshez); alapból a valódi onOrderPaid. A második
+   * paraméter a paid-átmenet által feloldott fiók — ettől függ a visszaigazoló
+   * levél változata (jelszó-beállító link vagy belépés-hivatkozás).
+   */
+  onPaid?: (order: Order, account?: OrderPaidAccount) => Promise<void>
   /** Injektálható (teszteléshez); alapból a valódi queueInvoiceIssueJob-hívás. */
   queueInvoice?: (orderId: number) => Promise<boolean>
   /**
@@ -250,7 +254,15 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
   const log = (deps.logger ?? rootLogger).child({ module: 'order-poll' })
   const now = deps.now ?? Date.now()
   const fetchState = deps.fetchState ?? fetchPaymentState
-  const onPaid = deps.onPaid ?? ((order: Order) => onOrderPaid({ payload: deps.payload, order, logger: log }))
+  const onPaid =
+    deps.onPaid ??
+    ((order: Order, account?: OrderPaidAccount) =>
+      onOrderPaid({
+        payload: deps.payload,
+        order,
+        logger: log,
+        ...(account ? { account } : {}),
+      }))
 
   const summary: OrderPollSummary = {
     scanned: 0,
@@ -407,7 +419,16 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
     })
 
     if (transition.transitionedToPaid) {
-      await onPaid(order)
+      await onPaid(
+        order,
+        transition.customer
+          ? {
+              passwordSetupPending: transition.customer.passwordSetupPending,
+              alreadyLinked: transition.customer.alreadyLinked,
+              email: transition.customer.email,
+            }
+          : undefined,
+      )
       summary.transitionedPaid += 1
       orderLog.info('order-poll: elveszett callback pótolva — a rendelés paid (utánpollolással zárult)')
     } else if (transition.action === 'paid') {

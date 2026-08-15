@@ -7,6 +7,13 @@ import {
   validateBilling,
   type BillingFieldName,
 } from './billing'
+import {
+  GUEST_FIELD_ORDER,
+  guestErrorMap,
+  guestSummaryMessage,
+  validateGuest,
+  type GuestFieldName,
+} from './guest'
 
 /**
  * A pénztár űrlapjának TISZTA döntési magja.
@@ -28,6 +35,12 @@ export type BillingFormValues = Record<BillingFieldName, string>
 
 /** Mezőnév → megjelenítendő magyar hibaüzenet. */
 export type BillingFieldErrors = Partial<Record<BillingFieldName, string>>
+
+/** A vendég-azonosító mezők (e-mail + név) NYERS állapota. */
+export type GuestFormValues = Record<GuestFieldName, string>
+
+/** Mezőnév → megjelenítendő magyar hibaüzenet (vendég-mezők). */
+export type GuestFieldErrors = Partial<Record<GuestFieldName, string>>
 
 /** A profilból előkitölthető mezők (a `CheckoutUser` érintett része). */
 export interface BillingProfile {
@@ -57,6 +70,20 @@ export function billingInputId(field: BillingFieldName): string {
   return `kc-field-${BILLING_INPUT_NAME[field]}`
 }
 
+/**
+ * A vendég-mezők input-nevei. SZÁNDÉKOSAN eltérnek a számlázási mezőktől: a
+ * `guestName` a FIÓK neve (ide megy a levél megszólítása), a `billingName`
+ * pedig a számlára kerülő — céges vásárlásnál cégnév — adat.
+ */
+export const GUEST_INPUT_NAME: Record<GuestFieldName, string> = {
+  email: 'guestEmail',
+  name: 'guestName',
+}
+
+export function guestInputId(field: GuestFieldName): string {
+  return `kc-field-${GUEST_INPUT_NAME[field]}`
+}
+
 export const CHECKOUT_ALREADY_PURCHASED_ERROR =
   'Ezt a kurzust már megvetted — a Kurzusaim oldalon éred el.'
 export const CHECKOUT_WAIVER_ERROR = 'A vásárláshoz mindkét hozzájárulást el kell fogadnod.'
@@ -78,6 +105,36 @@ export function prefillBillingForm(profile: BillingProfile): BillingFormValues {
     street: profile.billingStreet ?? '',
     taxNumber: profile.taxNumber ?? '',
   }
+}
+
+/**
+ * A vendég-mezők előkitöltése. Bejelentkezve NINCS vendég-blokk (a szerver a
+ * munkamenetből dolgozik), ezért az űrlap üres állapotból indul.
+ */
+export function emptyGuestForm(): GuestFormValues {
+  return { email: '', name: '' }
+}
+
+/** Egy mező új értéke (a state-frissítés tiszta megfelelője). */
+export function withGuestValue(
+  values: GuestFormValues,
+  field: GuestFieldName,
+  value: string,
+): GuestFormValues {
+  return { ...values, [field]: value }
+}
+
+/** A vendég-mező hibájának TÖRLÉSE gépelés közben (a számlázási mezők mintája). */
+export function withoutGuestError(
+  errors: GuestFieldErrors,
+  field: GuestFieldName,
+): GuestFieldErrors {
+  if (errors[field] === undefined) {
+    return errors
+  }
+  const next = { ...errors }
+  delete next[field]
+  return next
 }
 
 /** Egy mező új értéke (a state-frissítés tiszta megfelelője). */
@@ -117,16 +174,23 @@ export interface CheckoutSubmissionContext {
   waiverStartAccepted: boolean
   waiverLossAccepted: boolean
   billing: BillingFormValues
+  /**
+   * VENDÉG-VÁSÁRLÁS: az azonosító mezők állapota. Bejelentkezett vásárlásnál
+   * hiányzik (a vevőt a munkamenet azonosítja), és a törzsbe sem kerül bele.
+   */
+  guest?: GuestFormValues
 }
 
 export type CheckoutSubmissionPlan =
   /** A beküldés meg sem indulhat (már megvette / hiányzó nyilatkozat). */
   | { kind: 'blocked'; message: string; focusElementId: string | null }
-  /** A számlázási adatok hibásak — mezőhibák + összefoglaló + fókuszcél. */
+  /** A megadott adatok hibásak — mezőhibák + összefoglaló + fókuszcél. */
   | {
       kind: 'invalid'
       message: string
       fieldErrors: BillingFieldErrors
+      /** A vendég-mezők hibái (bejelentkezve mindig üres). */
+      guestErrors: GuestFieldErrors
       focusElementId: string
     }
   /** Mehet: ez a törzs megy ki a POST /api/checkout/start végpontra. */
@@ -155,15 +219,39 @@ export function planCheckoutSubmission(
     }
   }
 
+  /**
+   * A VENDÉG-MEZŐK ELŐBB: a beküldési űrlapon ezek állnak legelöl, és ha
+   * hiányoznak, a szerver úgyis 400-zal utasítana el. A fókusz így az első
+   * tényleg hibás mezőre kerül, nem a lejjebb lévő számlázási blokkra.
+   */
+  const guestResult = context.guest === undefined ? null : validateGuest(context.guest)
+  const guestErrors = guestResult !== null && !guestResult.ok ? guestErrorMap(guestResult.errors) : {}
+
   const result = validateBilling(context.billing)
+  const fieldErrors = result.ok ? {} : billingErrorMap(result.errors)
+
+  if (guestResult !== null && !guestResult.ok) {
+    const firstInvalid =
+      GUEST_FIELD_ORDER.find((field) => guestErrors[field] !== undefined) ?? 'email'
+    return {
+      kind: 'invalid',
+      // Ha a számlázási blokk is hibás, az összefoglaló a vendég-mezőkről szól:
+      // a felhasználó a fókuszált (első) hibát javítja, a többi a mezőknél látszik.
+      message: guestSummaryMessage(guestResult.errors),
+      fieldErrors,
+      guestErrors,
+      focusElementId: guestInputId(firstInvalid),
+    }
+  }
+
   if (!result.ok) {
-    const fieldErrors = billingErrorMap(result.errors)
     const firstInvalid =
       BILLING_FIELD_ORDER.find((field) => fieldErrors[field] !== undefined) ?? 'name'
     return {
       kind: 'invalid',
       message: billingSummaryMessage(result.errors),
       fieldErrors,
+      guestErrors: {},
       focusElementId: billingInputId(firstInvalid),
     }
   }
@@ -175,6 +263,9 @@ export function planCheckoutSubmission(
       quantity: context.quantity ?? 1,
       consentWithdrawalWaiver: true,
       billing: toBillingPayload(result.value),
+      // A vendég-blokk KIZÁRÓLAG bejelentkezés nélkül megy ki (belépve a
+      // szerver úgyis figyelmen kívül hagyná).
+      ...(guestResult !== null && guestResult.ok ? { guest: guestResult.value } : {}),
     },
   }
 }
@@ -198,6 +289,8 @@ export interface CheckoutSubmitHandlerDeps {
   readContext: () => CheckoutSubmissionContext
   setError: (message: string | null) => void
   setBillingErrors: (errors: BillingFieldErrors) => void
+  /** A vendég-mezők hibáinak beállítása (bejelentkezve mindig üres map). */
+  setGuestErrors: (errors: GuestFieldErrors) => void
   setSubmitting: (value: boolean) => void
   /** `null` esetén nincs fókuszálandó elem (a hívó ilyenkor ne csináljon semmit). */
   focusElement: (elementId: string | null) => void
@@ -221,12 +314,14 @@ export function createCheckoutSubmitHandler(
     }
     if (plan.kind === 'invalid') {
       deps.setBillingErrors(plan.fieldErrors)
+      deps.setGuestErrors(plan.guestErrors)
       deps.setError(plan.message)
       deps.focusElement(plan.focusElementId)
       return
     }
 
     deps.setBillingErrors({})
+    deps.setGuestErrors({})
     deps.setSubmitting(true)
     // A `submit` saját hibakezelése miatt itt nem dobhat; a `finally` mégis
     // kell, hogy egy váratlan kivétel se hagyja a gombot „Feldolgozás…"-ban.

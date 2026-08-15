@@ -618,17 +618,39 @@ describe('POST /api/checkout/start route-handler', () => {
       rateLimit: { limiter: new SlidingWindowRateLimiter() },
     })
 
-  it('bejelentkezés nélkül → 401, magyar üzenettel', async () => {
+  it('bejelentkezés nélkül, vendég-adat NÉLKÜL → 400, magyar üzenettel (a 401 megszűnt)', async () => {
+    // VENDÉG-VÁSÁRLÁS: a végpont már nem követel munkamenetet — de az
+    // azonosító adatok (e-mail + név) hiánya bemeneti hiba (400), nem
+    // jogosultsági (401). A fizetés semmiképp nem indul el.
     const { payload } = createMockPayload({ authUser: null })
     const POST = makeHandler(async () => payload)
 
     const response = await POST(makeRequest(happyInput))
 
-    expect(response.status).toBe(401)
-    expect(await response.json()).toEqual({
-      error: 'A fizetés indításához bejelentkezés szükséges.',
-    })
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as { error: string }
+    expect(body.error).toContain('add meg az e-mail-címed és a neved')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('bejelentkezés nélkül, TELJES vendég-adattal → 200 (a rendelés fiók nélkül, e-maillel jön létre)', async () => {
+    fetchMock.mockResolvedValueOnce(barionStartSuccess())
+    const { payload, calls } = createMockPayload({ authUser: null })
+    const POST = makeHandler(async () => payload)
+
+    const response = await POST(
+      makeRequest({
+        ...happyInput,
+        guest: { email: 'Vendeg.Vevo@Example.TEST', name: 'Vendég Vevő' },
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ orderNumber: ORDER_NUMBER, gatewayUrl: GATEWAY_URL })
+    const created = calls.create[0] as Record<string, unknown>
+    // Fiók MÉG nincs — a kapocs kizárólag a (kisbetűsített) e-mail-cím.
+    expect(created.customer).toBeUndefined()
+    expect(created.customerEmail).toBe('vendeg.vevo@example.test')
   })
 
   it('bejelentkezett vevő → 200 { orderNumber, gatewayUrl }', async () => {

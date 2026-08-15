@@ -47,10 +47,10 @@ const publishedProduct = {
   priceInHUFEnabled: true,
 } as unknown as Product
 
-/** Bejelentkezett user + a termék-lekérdezés kimenetele. */
-function mockPayloadBehavior(product: Product | null) {
+/** Bejelentkezett (vagy vendég) látogató + a termék-lekérdezés kimenetele. */
+function mockPayloadBehavior(product: Product | null, user: User | null = mockUser) {
   getPayloadMock.mockResolvedValue({
-    auth: vi.fn(async () => ({ user: mockUser })),
+    auth: vi.fn(async () => ({ user })),
     findByID: vi.fn(async () => {
       if (product === null) {
         throw new Error('Not Found')
@@ -141,5 +141,45 @@ describe('/penztar — archivált termék', () => {
     expect(html).toContain('Ez a kurzus jelenleg nem vásárolható meg.')
     expect(html).toContain('href="/kurzusok"')
     expect(findElement(tree, CheckoutForm)).toBeNull()
+  })
+})
+
+
+/**
+ * VENDÉG-VÁSÁRLÁS (tulajdonosi döntés, 2026-08-15): az anonim látogatót az
+ * oldal KORÁBBAN a /belepes-re irányította — a pénztárba be sem lehetett
+ * lépni regisztráció nélkül. Az irányítás megszűnt: az űrlap `user={null}`
+ * proppal renderelődik, és a vendég-mezőket (e-mail + név) mutatja.
+ */
+describe('/penztar — vendég-vásárlás (nincs bejelentkezés)', () => {
+  it('anonim látogatónál NINCS átirányítás: a CheckoutForm user={null} proppal renderelődik', async () => {
+    mockPayloadBehavior(publishedProduct, null)
+
+    const tree = await renderPenztar({ termek: '42' })
+
+    const form = findElement(tree, CheckoutForm)
+    expect(form).not.toBeNull()
+    const props = form!.props as { user: unknown; alreadyPurchased: boolean }
+    expect(props.user).toBeNull()
+    // „Már megvetted" állapot vendégként nem értelmezhető (nincs fiók).
+    expect(props.alreadyPurchased).toBe(false)
+  })
+
+  it('az űrlap vendégként az azonosító mezőket rendereli (e-mail + név)', async () => {
+    mockPayloadBehavior(publishedProduct, null)
+
+    const html = renderMarkup(await renderPenztar({ termek: '42' }))
+
+    expect(html).toContain('id="kc-field-guestEmail"')
+    expect(html).toContain('id="kc-field-guestName"')
+  })
+
+  it('bejelentkezve a vendég-mezők NEM jelennek meg (a munkamenet azonosít)', async () => {
+    mockPayloadBehavior(publishedProduct)
+
+    const html = renderMarkup(await renderPenztar({ termek: '42' }))
+
+    expect(html).not.toContain('id="kc-field-guestEmail"')
+    expect(html).toContain('id="kc-field-billingName"')
   })
 })

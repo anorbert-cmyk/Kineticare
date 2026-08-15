@@ -348,3 +348,103 @@ describe('applyBarionStateTransition — K5 dupla-fizetés blokk', () => {
     ).resolves.toBe(false)
   })
 })
+
+
+// ---------------------------------------------------------------------------
+// Vendég-rendelés paid-átmenete (a fiók a fizetés UTÁN dől el)
+// ---------------------------------------------------------------------------
+
+/**
+ * A vendég-rendelésen a `customer` ÜRES, a kapocs a `customerEmail`. A
+ * paid-átmenetnek ezért előbb fel kell oldania a fiókot (megtalálás vagy
+ * létrehozás), különben a jogosultság-beírás vevő nélkül maradna — pénz
+ * levonva, kurzus sehol.
+ *
+ * A fiók-feloldás saját, részletes tesztje: resolve-order-customer.test.ts.
+ * Itt a MAGBA KÖTÉST igazoljuk: a rendelés a fiókhoz kötődik, a jogosultság
+ * beíródik, és az eredmény hordozza a levél-változathoz szükséges jelzőt.
+ */
+function createGuestMockPayload() {
+  const order = createOrder({
+    customer: null,
+    customerEmail: 'vendeg@example.test',
+  } as Partial<Order>)
+  const users: Array<Record<string, unknown>> = [
+    { id: 1, email: 'tulaj@example.test', name: 'Tulajdonos', role: 'owner', purchases: [] },
+  ]
+  let nextId = 2
+  const updates: Array<{ collection: string; id: unknown; data: Record<string, unknown> }> = []
+  const payload = {
+    findByID: vi.fn(async ({ collection, id }: { collection: string; id: number }) =>
+      collection === 'orders' ? order : users.find((user) => user.id === id),
+    ),
+    find: vi.fn(async (args: { collection: string; where?: unknown }) => {
+      if (args.collection === 'users') {
+        const wanted = (args.where as { email?: { equals?: string } } | undefined)?.email?.equals
+        const docs = users.filter((user) => user.email === wanted)
+        return { docs, totalDocs: docs.length }
+      }
+      // Nincs másik paid rendelés (K5).
+      return { docs: [], totalDocs: 0 }
+    }),
+    count: vi.fn(async () => ({ totalDocs: users.length })),
+    create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+      const user = { ...data, id: nextId, purchases: [] }
+      nextId += 1
+      users.push(user)
+      return user
+    }),
+    update: vi.fn(
+      async (args: { collection: string; id: unknown; data: Record<string, unknown> }) => {
+        updates.push(args)
+        if (args.collection === 'orders') {
+          Object.assign(order, args.data)
+        }
+        if (args.collection === 'users') {
+          const user = users.find((entry) => entry.id === args.id)
+          Object.assign(user ?? {}, args.data)
+        }
+        return args.data
+      },
+    ),
+  }
+  return { payload: payload as unknown as Payload, order, users, updates }
+}
+
+describe('applyBarionStateTransition — vendég-rendelés (fiók nélküli) paid-átmenete', () => {
+  it('feloldja (létrehozza) a fiókot, hozzáköti a rendelést és beírja a jogosultságot', async () => {
+    const { payload, order, users, updates } = createGuestMockPayload()
+
+    const result = await applyBarionStateTransition({
+      payload,
+      order,
+      mapped: 'paid',
+      state: createState(),
+      log: createLogger({ module: 'teszt' }),
+    })
+
+    expect(result).toMatchObject({ action: 'paid', transitionedToPaid: true, purchasesGranted: 1 })
+    // A levél-változathoz szükséges jelzők (most létrehozott, jelszó nélküli fiók).
+    expect(result.customer).toMatchObject({
+      created: true,
+      alreadyLinked: false,
+      passwordSetupPending: true,
+      email: 'vendeg@example.test',
+    })
+    // Új, customer szerepkörű fiók.
+    expect(users).toHaveLength(2)
+    expect(users[1]).toMatchObject({ email: 'vendeg@example.test', role: 'customer' })
+    // A rendelés a fiókhoz kötve, és paid lett.
+    expect(
+      updates
+        .filter((update) => update.collection === 'orders')
+        .map((update) => ({ id: update.id, data: update.data })),
+    ).toEqual([
+      { id: 101, data: { customer: users[1].id } },
+      { id: 101, data: { status: 'paid' } },
+    ])
+    // A jogosultság a FELOLDOTT fiókra íródott.
+    const userUpdate = updates.find((update) => update.collection === 'users')
+    expect(userUpdate).toMatchObject({ id: users[1].id, data: { purchases: [PRODUCT_ID] } })
+  })
+})

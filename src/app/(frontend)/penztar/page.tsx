@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { getPayload } from 'payload'
 import { headers } from 'next/headers'
 
@@ -46,8 +45,12 @@ async function getProductById(id: number): Promise<Product | null> {
 /**
  * /penztar — a vásárlás befejezése.
  *
- * - auth-kötelező: anon → /belepes?returnUrl=/penztar?termek={id} (a
- *   returnUrl a termék-query-vel együtt megy tovább).
+ * - VENDÉG-VÁSÁRLÁS (tulajdonosi döntés, 2026-08-15): az oldal bejelentkezés
+ *   NÉLKÜL is használható. Korábban az anonim látogatót
+ *   /belepes?returnUrl=… -re irányítottuk; most az űrlap az azonosító
+ *   mezőkkel (e-mail + név) jelenik meg, és a fiók a FIZETÉS UTÁN jön létre
+ *   (vagy találódik meg az e-mail alapján). Bejelentkezve minden a régi: a
+ *   profil előkitölti a mezőket, a rendelés a fiókhoz kötődik.
  * - A termék KIZÁRÓLAG a ?termek={id} query-ből jön. A kosár localStorage-os,
  *   kliens-oldali — a szerver-komponens a 'use client'-es readCart()-ot NEM
  *   hívhatja (korábbi kosár-fallback ág garantált render-hiba volt, M8); a
@@ -69,11 +72,6 @@ export default async function PenztarPage({ searchParams }: PenztarPageProps) {
     typeof termekParam === 'string' && /^\d+$/.test(termekParam.trim())
       ? Number(termekParam.trim())
       : null
-
-  if (user === null) {
-    const returnUrl = termekId !== null ? `/penztar?termek=${termekId}` : '/penztar'
-    redirect(`/belepes?returnUrl=${encodeURIComponent(returnUrl)}`)
-  }
 
   // A termék meghatározása: KIZÁRÓLAG a query (a kosár kliens-oldali; a
   // /kosar oldal CartView-je teszi a termék-id-t a pénztár-linkbe — M8).
@@ -113,7 +111,9 @@ export default async function PenztarPage({ searchParams }: PenztarPageProps) {
     )
   }
 
-  const alreadyPurchased = hasUserPurchased(user.purchases, product.id)
+  // Vendégként nincs mit összevetni: a „már megvetted" állapotot a szerver a
+  // fizetés indításakor (e-mail alapján) is ellenőrzi, 409-cel.
+  const alreadyPurchased = user !== null && hasUserPurchased(user.purchases, product.id)
   const price = coursePriceHuf(product)
   const isFree = product.priceInHUFEnabled === false
 
@@ -138,15 +138,19 @@ export default async function PenztarPage({ searchParams }: PenztarPageProps) {
             priceHuf: price,
             isFree,
           }}
-          user={{
-            name: user.name,
-            email: user.email,
-            billingName: user.billingName,
-            billingZip: user.billingZip,
-            billingCity: user.billingCity,
-            billingStreet: user.billingStreet,
-            taxNumber: user.taxNumber,
-          }}
+          user={
+            user === null
+              ? null
+              : {
+                  name: user.name,
+                  email: user.email,
+                  billingName: user.billingName,
+                  billingZip: user.billingZip,
+                  billingCity: user.billingCity,
+                  billingStreet: user.billingStreet,
+                  taxNumber: user.taxNumber,
+                }
+          }
           alreadyPurchased={alreadyPurchased}
         />
       </Container>

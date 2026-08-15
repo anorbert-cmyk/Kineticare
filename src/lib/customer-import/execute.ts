@@ -22,14 +22,19 @@
  * a következő sorral folytatódik. A kilépési kódot a hívó (CLI) dönti el.
  */
 
-import { randomInt } from 'node:crypto'
-
 import type { Payload } from 'payload'
 
 import { maskEmail } from '../email/mask'
-import { validatePasswordStrength } from '../security/password-policy'
+import { generateInitialPassword } from '../security/initial-password'
 import type { Logger } from '../logger'
 import { purchaseIdsOf, type ImportPlan, type PlanEntry } from './plan'
+
+/**
+ * A kezdőjelszó-generátor KÖZÖS modulban él (`src/lib/security/initial-password.ts`),
+ * mert a vendég-vásárlás fiók-feloldása is ugyanezt használja. A re-export a
+ * meglévő hívók (és tesztek) kedvéért marad itt.
+ */
+export { generateInitialPassword }
 
 export type ExecutedAction = PlanEntry['action'] | 'failed'
 
@@ -65,55 +70,6 @@ export interface ExecuteOptions {
   readonly log?: Logger
   /** Soronkénti visszajelzés a CLI-nek (a lib maga nem ír a kimenetre). */
   readonly onOutcome?: (outcome: ExecutionOutcome) => void
-}
-
-/** A generált jelszó hossza — jóval a politika 12 karakteres minimuma felett. */
-const GENERATED_PASSWORD_LENGTH = 32
-
-const LOWER = 'abcdefghijkmnopqrstuvwxyz'
-const UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
-const DIGITS = '23456789'
-const SYMBOLS = '-_.!?*+#'
-const ALL = `${LOWER}${UPPER}${DIGITS}${SYMBOLS}`
-
-function pick(alphabet: string): string {
-  return alphabet[randomInt(alphabet.length)]
-}
-
-/**
- * Kriptográfiailag véletlen kezdőjelszó (`node:crypto`).
- *
- * A jelszó SOSEM kerül kiírásra, naplóba vagy fájlba — kizárólag azért kell,
- * mert a Payload auth-collection jelszó nélkül nem hoz létre felhasználót. A
- * vevő az aktiválási linkkel állít be sajátot.
- *
- * A karakterosztályok garantáltan képviselve vannak, mert a Users collection
- * `enforcePasswordPolicy` hookja (kis- és nagybetű + szám + 12 karakter) a 2.
- * felhasználótól kezdve minden create-re lefut — véletlen sztringnél ez ritkán,
- * de elbukhatna.
- */
-export function generateInitialPassword(email?: string): string {
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const characters = [pick(LOWER), pick(LOWER), pick(UPPER), pick(UPPER), pick(DIGITS), pick(DIGITS)]
-    while (characters.length < GENERATED_PASSWORD_LENGTH) {
-      characters.push(pick(ALL))
-    }
-    // Fisher–Yates keverés kriptográfiai véletlennel, hogy a garantált
-    // karakterosztályok ne mindig ugyanazon a pozíción álljanak.
-    for (let index = characters.length - 1; index > 0; index -= 1) {
-      const swap = randomInt(index + 1)
-      const temporary = characters[index]
-      characters[index] = characters[swap]
-      characters[swap] = temporary
-    }
-    const password = characters.join('')
-    if (validatePasswordStrength({ password, email }).length === 0) {
-      return password
-    }
-  }
-  // Elvi ág: 8 próbálkozás után is politikasértő jelszó gyakorlatilag
-  // lehetetlen — de csendben gyenge jelszót SOSEM adunk vissza.
-  throw new Error('Nem sikerült a jelszó-politikának megfelelő kezdőjelszót generálni.')
 }
 
 /** A felhasználó FRISS purchases-listája (a terv elavulhatott két futás közt). */
@@ -163,6 +119,10 @@ async function executeEntry(
         // A jelszó véletlen és eldobható — a vevő az aktiválási linkkel állít
         // be sajátot.
         password: generateInitialPassword(entry.email),
+        // A fiókhoz a vevő MÉG NEM választott jelszót. A jelző a rendszer által
+        // létrehozott fiókok közös jelölése (vendég-vásárlás is ezt írja), és
+        // az első sikeres belépéskor magától törlődik (Users afterLogin hook).
+        passwordSetupPending: true,
         ...(entry.missingProducts.length > 0
           ? { purchases: entry.missingProducts.map((product) => product.id) }
           : {}),

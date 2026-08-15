@@ -168,8 +168,13 @@ const TAX_NUMBER_COUNTY_CODES: ReadonlySet<string> = new Set([
  * és a számlára üres `nev` került volna. A `\p{Cc}` (vezérlő-) karakterek
  * ezzel szemben SZÓKÖZZÉ alakulnak, hogy a sortöréssel elválasztott szavak ne
  * tapadjanak össze. Végül: a whitespace-sorozatok egy szóközre, majd trim.
+ *
+ * EXPORTÁLT, mert a vendég-vásárlás azonosító mezői (`./guest.ts`) ugyanezt a
+ * normalizálást igénylik — a szabály MÁSOLÁSA két helyre azt kockáztatná, hogy
+ * a két oldal észrevétlenül szétcsúszik (a láthatatlan karakteres „név"
+ * pontosan így jutott át korábban a szűrőn).
  */
-function normalizeText(value: unknown): string {
+export function normalizeText(value: unknown): string {
   if (typeof value !== 'string') {
     return ''
   }

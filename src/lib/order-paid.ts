@@ -3,9 +3,13 @@ import type { Payload } from 'payload'
 import type { Order } from '../payload-types'
 import { getSzamlazzConfig } from './szamlazz'
 import { ORDER_MAINTENANCE_QUEUE } from '../jobs/queues'
+import { INVITE_TOKEN_TTL_MS } from './customer-import/invite'
+import { INVITE_TOKEN_TTL_DAYS } from './customer-import/send-invites'
 import { sendMail, type SendResult } from './email'
-import { orderConfirmationEmail } from './email/templates/order'
+import { maskEmail } from './email/mask'
+import { orderConfirmationEmail, type OrderConfirmationAccount } from './email/templates/order'
 import { logger as rootLogger, type Logger } from './logger'
+import { buildPasswordResetUrl } from './password-reset-url'
 
 /**
  * Friss paid-átmenet MELLÉKHATÁSAI (T-024/W4-01, W4-03) — a Barion-állapotgép
@@ -16,11 +20,23 @@ import { logger as rootLogger, type Logger } from './logger'
  * 1. invoice-issue job sorba állítása (Számlázz.hu — a tényleges kiállítás a
  *    jobban történik, saját retry-val; kikapcsolt integrációnál a job 'disabled'
  *    kimenetet ad, ezért a queue-hívás akkor is biztonságos, ha nincs kulcs).
- * 2. Vásárlás-visszaigazoló e-mail a vevőnek (best-effort).
+ * 2. Vásárlás-visszaigazoló e-mail a vevőnek (best-effort) — vendég-vásárlásnál
+ *    AKTIVÁLÓ levélként, a jelszó-beállító linkkel (lásd lentebb).
  *
  * A függvény SOSEM dob: mindkét mellékhatás best-effort — a fizetési főlánc
- * (paid + purchases) ettől függetlenül is konzisztens marad, a hibák naplózva
- * (a számlázás az order-poll resweep-jéből is utolérhető).
+ * (paid + hozzáférés + a fiók feloldása) ettől függetlenül is konzisztens marad,
+ * a hibák naplózva (a számlázás az order-poll resweep-jéből is utolérhető).
+ *
+ * AKTIVÁLÓ LINK (vendég-vásárlás). Ha a fiókhoz a vevő még nem választott
+ * jelszót (most létrehozott vagy korábban rendszer által létrehozott fiók), a
+ * levél tartalmazza a jelszó-beállító linket. A tokent NEM egy párhuzamos
+ * rendszer adja, hanem a Payload SAJÁT jelszó-visszaállítója
+ * (`payload.forgotPassword`, `disableEmail: true`) — ugyanaz a mechanizmus,
+ * amit a vásárló-import aktiváló levele használ (src/lib/customer-import/invite.ts),
+ * ugyanazzal a 30 napos élettartammal és ugyanazzal a fogadó oldallal.
+ *
+ * A LINK TITOK: sem a token, sem a teljes link SOHA nem kerül naplóba (a
+ * címzett is csak maszkolva) — az invite.ts szabálya itt is érvényes.
  */
 
 type JobsQueueLike = {
@@ -68,6 +84,20 @@ function snapshotString(snapshot: CustomerSnapshotShape, key: keyof CustomerSnap
   return typeof value === 'string' ? value.trim() : ''
 }
 
+/**
+ * A rendeléshez feloldott fiók — az apply-barion-state magja adja át.
+ * Szándékosan a MINIMÁLIS felület (nem a teljes OrderCustomerResolution),
+ * hogy a mellékhatás-modul ne függjön az állapotgéptől.
+ */
+export interface OrderPaidAccount {
+  /** true, ha a vevőnek még nincs saját jelszava → jelszó-beállító link jár neki. */
+  passwordSetupPending: boolean
+  /** true, ha a rendelés már a fiókhoz volt kötve (bejelentkezett vásárlás). */
+  alreadyLinked: boolean
+  /** A fiók e-mail-címe (a levél és az aktiváló link címzettje). */
+  email: string | null
+}
+
 export interface OnOrderPaidDeps {
   payload: Payload
   order: Order
@@ -76,6 +106,55 @@ export interface OnOrderPaidDeps {
   send?: (input: { to: string; subject: string; html: string; text: string }) => Promise<SendResult>
   /** Injektálható job-queue (teszteléshez); alapból a valódi queueInvoiceIssueJob. */
   queueInvoice?: (orderId: number) => Promise<boolean>
+  /**
+   * A rendeléshez feloldott fiók. Hiányában a levél a KORÁBBI (bejelentkezett)
+   * alakjában megy ki — így a régi hívási helyek viselkedése változatlan.
+   */
+  account?: OrderPaidAccount
+  /**
+   * Injektálható aktiváló-link-készítő (teszteléshez); alapból a Payload
+   * `forgotPassword` tokenjéből épült jelszó-beállító link. `null` = a link nem
+   * készíthető el (ilyenkor a levél a belépésre irányít).
+   */
+  createActivationUrl?: (input: { email: string; serverUrl: string }) => Promise<string | null>
+}
+
+/**
+ * Jelszó-beállító (aktiváló) link a Payload SAJÁT reset-tokenjéből.
+ *
+ * A hiba NEM végzetes: `null` esetén a levél a belépésre irányító változatban
+ * megy ki (ott is szerepel az „Elfelejtett jelszó" út), a fizetési főlánc pedig
+ * érintetlen. A naplóba SEM a token, SEM a link nem kerül.
+ */
+async function defaultActivationUrl(
+  payload: Payload,
+  input: { email: string; serverUrl: string },
+  log: Logger,
+): Promise<string | null> {
+  try {
+    // A visszatérési érték a Payload típusa szerint string, futásidőben viszont
+    // ismeretlen e-mailnél `null` — ezért unknown + típusszűkítés (az
+    // src/lib/customer-import/invite.ts mintája).
+    const token: unknown = await payload.forgotPassword({
+      collection: 'users',
+      data: { email: input.email },
+      disableEmail: true,
+      expiration: INVITE_TOKEN_TTL_MS,
+    })
+    if (typeof token !== 'string' || token === '') {
+      log.warn('aktiváló link nem készült el (a felhasználó nem található)', {
+        cimzett: maskEmail(input.email),
+      })
+      return null
+    }
+    return buildPasswordResetUrl(input.serverUrl, token)
+  } catch (error) {
+    log.warn('aktiváló link készítése sikertelen (best-effort — a levél belépés-linkkel megy)', {
+      cimzett: maskEmail(input.email),
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
 }
 
 /** A friss paid-átmenet mellékhatásai — sosem dob, minden hiba naplózva. */
@@ -124,6 +203,36 @@ export async function onOrderPaid(deps: OnOrderPaidDeps): Promise<void> {
         : items.reduce((sum, item) => sum + item.totalHuf, 0)
 
     const serverUrl = (process.env.NEXT_PUBLIC_SERVER_URL ?? '').replace(/\/+$/, '')
+
+    /**
+     * A LEVÉL VÁLTOZATA a fiók állapotából:
+     *  - nincs `account` (régi hívási hely) vagy bejelentkezett vásárlás
+     *    működő fiókkal → változatlan levél (Kurzusaim CTA);
+     *  - jelszó nélküli fiók → AKTIVÁLÓ levél a jelszó-beállító linkkel;
+     *  - vendégként vásárolt, de MÁR VAN fiókja → belépésre irányító levél
+     *    (jelszó-beállítót ilyenkor SZÁNDÉKOSAN nem küldünk).
+     */
+    const accountEmail = (deps.account?.email ?? '').trim() || recipient
+    let account: OrderConfirmationAccount | undefined
+    if (deps.account?.passwordSetupPending === true) {
+      const createActivationUrl =
+        deps.createActivationUrl ??
+        ((activationInput: { email: string; serverUrl: string }) =>
+          defaultActivationUrl(deps.payload, activationInput, log))
+      const activationUrl = await createActivationUrl({ email: accountEmail, serverUrl })
+      account =
+        activationUrl === null
+          ? { kind: 'login', loginUrl: `${serverUrl}/belepes`, email: accountEmail }
+          : {
+              kind: 'password-setup',
+              activationUrl,
+              expiresInDays: INVITE_TOKEN_TTL_DAYS,
+              email: accountEmail,
+            }
+    } else if (deps.account && !deps.account.alreadyLinked) {
+      account = { kind: 'login', loginUrl: `${serverUrl}/belepes`, email: accountEmail }
+    }
+
     const template = orderConfirmationEmail({
       orderNumber: deps.order.orderNumber ?? `#${deps.order.id}`,
       buyerName: snapshotString(snapshot, 'name') || null,
@@ -131,6 +240,7 @@ export async function onOrderPaid(deps: OnOrderPaidDeps): Promise<void> {
       totalHuf,
       coursesUrl: `${serverUrl}/kurzusaim`,
       invoiceNote: getSzamlazzConfig().enabled,
+      ...(account ? { account } : {}),
     })
 
     const send = deps.send ?? sendMail

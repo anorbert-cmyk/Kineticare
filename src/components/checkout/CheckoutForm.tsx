@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/Button'
@@ -7,15 +8,21 @@ import { Card } from '@/components/ui/Card'
 import { Field } from '@/components/ui/Field'
 import { PriceTag } from '@/components/ui/PriceTag'
 import type { BillingFieldName } from '../../lib/checkout/billing'
+import type { GuestFieldName } from '../../lib/checkout/guest'
 import {
   BILLING_INPUT_NAME,
+  GUEST_INPUT_NAME,
   WAIVER_LOSS_INPUT_ID,
   WAIVER_START_INPUT_ID,
   createCheckoutSubmitHandler,
+  emptyGuestForm,
   prefillBillingForm,
   withBillingValue,
+  withGuestValue,
   withoutBillingError,
+  withoutGuestError,
   type BillingFieldErrors,
+  type GuestFieldErrors,
 } from '../../lib/checkout/form-submission'
 import { submitCheckout, type CheckoutUser, type CheckoutProduct } from '../../lib/checkout-submit'
 
@@ -50,7 +57,12 @@ import { submitCheckout, type CheckoutUser, type CheckoutProduct } from '../../l
  */
 export interface CheckoutFormProps {
   product: CheckoutProduct
-  user: CheckoutUser
+  /**
+   * A bejelentkezett vásárló profilja — VENDÉG-vásárlásnál `null`. Ilyenkor az
+   * űrlap az azonosító mezőkkel (e-mail + név) indul, és a szerver ezekből
+   * hozza létre (vagy találja meg) a fiókot a fizetés után.
+   */
+  user: CheckoutUser | null
   alreadyPurchased: boolean
 }
 
@@ -70,8 +82,13 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
   const [error, setError] = useState<string | null>(null)
   // A profil mezői kizárólag ELŐKITÖLTÉSKÉNT szolgálnak: innentől a state az
   // igazság, és a beküldött (esetleg felülírt) érték kerül a rendelésre.
-  const [billing, setBilling] = useState(() => prefillBillingForm(user))
+  const [billing, setBilling] = useState(() => prefillBillingForm(user ?? {}))
   const [billingErrors, setBillingErrors] = useState<BillingFieldErrors>({})
+  // Vendég-vásárlás: az azonosító mezők. Bejelentkezve nincs ilyen állapot —
+  // a törzsbe sem kerül `guest` blokk (a szerver a munkamenetből dolgozik).
+  const isGuest = user === null
+  const [guest, setGuest] = useState(emptyGuestForm)
+  const [guestErrors, setGuestErrors] = useState<GuestFieldErrors>({})
 
   const requiresWaiver = !product.isFree
   const waiverComplete = !requiresWaiver || (waiverStart && waiverLoss)
@@ -81,6 +98,11 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
     // A mező hibája gépeléskor eltűnik (az aria-invalid is), különben a
     // képernyőolvasó a már javított mezőt is végig érvénytelennek mondaná.
     setBillingErrors((previous) => withoutBillingError(previous, field))
+  }
+
+  const updateGuest = (field: GuestFieldName, value: string): void => {
+    setGuest((previous) => withGuestValue(previous, field, value))
+    setGuestErrors((previous) => withoutGuestError(previous, field))
   }
 
   /** A hibás mezőre visszük a fókuszt — a görgetést a böngésző intézi. */
@@ -106,9 +128,11 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
       waiverStartAccepted: waiverStart,
       waiverLossAccepted: waiverLoss,
       billing,
+      ...(isGuest ? { guest } : {}),
     }),
     setError,
     setBillingErrors,
+    setGuestErrors,
     setSubmitting,
     focusElement,
     submit: submitCheckout,
@@ -148,11 +172,45 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
         </div>
       </Card>
 
+      {isGuest ? (
+        <Card className="kc-checkout-guest">
+          <h2>Elérhetőséged</h2>
+          <p className="kc-field__hint">
+            A vásárláshoz nem kell regisztrálni. A fizetés után erre a címre küldjük a
+            hozzáférést és egy linket, amivel jelszót állítasz be a fiókodhoz. Ha már van
+            fiókod ezzel a címmel, a kurzus abban jelenik meg —{' '}
+            <Link href="/belepes">be is jelentkezhetsz</Link>.
+          </p>
+          <Field
+            autoComplete="email"
+            error={guestErrors.email}
+            inputMode="email"
+            label="E-mail-cím"
+            name={GUEST_INPUT_NAME.email}
+            onChange={(event) => updateGuest('email', event.target.value)}
+            required
+            type="email"
+            value={guest.email}
+          />
+          <Field
+            autoComplete="name"
+            error={guestErrors.name}
+            hint="Ez a fiókod neve — a számlázási név ettől eltérhet (pl. cégnév)."
+            label="Neved"
+            name={GUEST_INPUT_NAME.name}
+            onChange={(event) => updateGuest('name', event.target.value)}
+            required
+            value={guest.name}
+          />
+        </Card>
+      ) : null}
+
       <Card className="kc-checkout-billing">
         <h2>Számlázási adatok</h2>
         <p className="kc-field__hint">
-          A számla ezekkel az adatokkal készül. Ha a profilodban máshogy szerepelnek, itt
-          felülírhatod őket — a rendelésre az itt megadott adat kerül.
+          {isGuest
+            ? 'A számla ezekkel az adatokkal készül — a rendelésre az itt megadott adat kerül.'
+            : 'A számla ezekkel az adatokkal készül. Ha a profilodban máshogy szerepelnek, itt felülírhatod őket — a rendelésre az itt megadott adat kerül.'}
         </p>
         <Field
           autoComplete="billing name"
