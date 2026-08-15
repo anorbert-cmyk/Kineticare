@@ -18,6 +18,7 @@ import { FilmHero } from './FilmHero'
 import { PressLogos } from './PressLogos'
 import { Services } from './Services'
 import { States } from './States'
+import { TeamMembers } from './TeamMembers'
 import { Usps } from './Usps'
 import { Welcome } from './Welcome'
 
@@ -27,8 +28,8 @@ import { Welcome } from './Welcome'
  * A Pages `layout` mezőjének blokkjait rendereli a szerkesztő által beállított
  * sorrendben. Két blokkfajtát köt össze egyetlen listában:
  *  - az új, Higgsfield-kinézetű blokkok (FilmHero, Welcome, Usps, States,
- *    Services, About, PressLogos, FaqBlock, CtaBanner) a teljes blokkot kapják
- *    és maguk kezelik a szekció-beállításaikat,
+ *    Services, About, PressLogos, TeamMembers, FaqBlock, CtaBanner) a teljes
+ *    blokkot kapják és maguk kezelik a szekció-beállításaikat,
  *  - az adatvezérelt / örökölt szekciók (credsStrip, courseCards, freeSos,
  *    howItWorks, testimonials, knowledge, richText) a meglévő kezdőlapi
  *    komponensekre képződnek le — a blokk mezői opcionális felülírásként
@@ -156,6 +157,8 @@ function BlockSwitch({
       return <About block={block} />
     case 'pressLogos':
       return <PressLogos block={block} />
+    case 'teamMembers':
+      return <TeamMembers block={block} />
     case 'faq':
       return <FaqBlock block={block} />
     case 'ctaBanner':

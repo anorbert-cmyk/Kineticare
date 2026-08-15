@@ -13,6 +13,7 @@ import { pressLogos } from './press-logos'
 import { richText } from './rich-text'
 import { services } from './services'
 import { states } from './states'
+import { teamMembers } from './team-members'
 import { testimonials } from './testimonials'
 import { usps } from './usps'
 import { welcome } from './welcome'
@@ -24,7 +25,9 @@ import { welcome } from './welcome'
  * a terv 4. pontja szerinti AJÁNLOTT kezdőlap-sorrendet követi (M1–M8 +
  * kinézet-blokkok), hogy a laikus szerkesztő fentről lefelé haladva építhessen
  * kezdőlapot. Az utolsó két blokk (szabad szöveg, CTA-sáv) nem kötődik
- * kezdőlapi pozícióhoz, ezért külön admin-csoportba kerül.
+ * kezdőlapi pozícióhoz, ezért külön admin-csoportba kerül. Ugyanebbe a
+ * csoportba tartozik a szakértő-kártya (teamMembers) is: elsősorban a /rolunk
+ * oldal páros bemutatkozása, de nem kötődik kezdőlapi sorrendhez.
  *
  * FONTOS: a tényleges megjelenési sorrendet mindig a szerkesztő állítja be a
  * Pages → Szekciók mezőben (fogd-és-vidd) — ez a lista csak felkínálja őket.
@@ -44,6 +47,7 @@ export const pageBlocks: Block[] = [
   testimonials,
   knowledge,
   faq,
+  teamMembers,
   richText,
   ctaBanner,
 ]
@@ -65,6 +69,7 @@ export {
   richText,
   services,
   states,
+  teamMembers,
   testimonials,
   usps,
   welcome,
