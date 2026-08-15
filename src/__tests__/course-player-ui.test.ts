@@ -175,11 +175,48 @@ describe('primaryAction — a gombfeliratok állapotgépe', () => {
     expect(action?.marksWatched).toBe(false)
   })
 
-  it('az utolsó lecke KÉSZ, de korábban kimaradt egy: még NEM „minden kész"', () => {
-    // Ez a szélsőséges eset a valóságban gyakori (a vevő ugrál a listában):
-    // a gomb nem hazudhatja azt, hogy a kurzus elkészült.
+  /**
+   * REGRESSZIÓ-ŐR. Ez a szélsőséges eset a valóságban gyakori: a vevő a
+   * railből előreugrik az utolsó leckére, végignézi (az automatikus jelölés
+   * késznek teszi), de korábban kihagyott egyet.
+   *
+   * Korábban ez az ág „Kurzus befejezése" gombot adott `marksWatched: true` +
+   * `targetRef: null` értékkel — a lecke viszont MÁR kész volt, ezért a
+   * jelölés azonnal kilépett, navigáció pedig nem volt: egy ENGEDÉLYEZETT
+   * gomb, ami a kurzus befejezését ígérte, és a kattintásra semmi nem
+   * történt. Most oda léptet, ahol a hiányzó munka van.
+   */
+  it('az utolsó lecke KÉSZ, de korábban kimaradt egy: a hiányzó leckére léptet', () => {
     const action = primaryAction(curriculum, 'l5', new Set(['l5']))
-    expect(action?.kind).toBe('complete-course')
+
+    expect(action?.kind).toBe('advance')
+    expect(action?.label).toBe('Hátralévő lecke: Bevezetés')
+    // A gomb SOSEM lehet no-op: vagy jelöl, vagy léptet.
+    expect(action?.targetRef).toBe('l1')
+    expect(action?.marksWatched).toBe(false)
+    expect(action?.disabled).toBe(false)
+  })
+
+  it('a hiányzó lecke az ELSŐ nem kész a megjelenítési sorrendben', () => {
+    const action = primaryAction(curriculum, 'l5', new Set(['l1', 'l5']))
+    expect(action?.targetRef).toBe('l3')
+  })
+
+  it('az elsődleges gomb SOHA nem enged no-opot (jelöl VAGY léptet VAGY letiltott)', () => {
+    const refek = ['l1', 'l3', 'l4', 'l5']
+    // Minden lecke × minden „mi van kész" kombináció bejárása.
+    for (const current of refek) {
+      for (let maszk = 0; maszk < 1 << refek.length; maszk += 1) {
+        const watched = new Set(refek.filter((_, i) => (maszk & (1 << i)) !== 0))
+        const action = primaryAction(curriculum, current, watched)
+        if (action === null) {
+          continue
+        }
+        const teszValamit =
+          action.disabled || action.targetRef !== null || (action.marksWatched && !watched.has(current))
+        expect(teszValamit, `${current} / ${[...watched].join(',')} → ${action.kind}`).toBe(true)
+      }
+    }
   })
 
   it('ismeretlen aktuális lecke esetén nincs akció', () => {

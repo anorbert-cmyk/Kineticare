@@ -315,7 +315,36 @@ export function buildCurriculum(
         lessons,
       })
     }
-    return { modules, lessons: modules.flatMap((entry) => entry.lessons), legacy: false }
+
+    const moduleLessons = modules.flatMap((entry) => entry.lessons)
+
+    /**
+     * ═══ MIÉRT NEM ELÉG A MODUL-SOROK LÉTEZÉSE ═══
+     * A modul-ág feltétele NEM „van modul-sor", hanem „a modulokból LETT
+     * legalább egy lecke". Enélkül egy FÉLKÉSZ modul kiütné a régi
+     * videólistát: a szerkesztő felveszi a „1. ALAPOK" modult, kitölti a
+     * címét és ment (a `lessons` mezőn nincs `required`/`minRows`, tehát ez
+     * menthető állapot) — és ettől a pillanattól MINDEN vevőnél üres a
+     * tananyag: a lejátszó a „még nincs tananyag" kapura fut, a jegykiadás
+     * 404-et ad, a haladás-jelölés 400-at, az admin pedig mindenkit 0%-on
+     * mutat. Hibaüzenet nélkül, a 27 meglévő videó mellett.
+     *
+     * A nem üres modul-szerkezet természetesen elnyeli a régi listát — az a
+     * szándékolt viselkedés (nincs duplázás); csak az ÜRES eredmény esik
+     * vissza a `videos` tömbre.
+     */
+    if (moduleLessons.length > 0) {
+      return { modules, lessons: moduleLessons, legacy: false }
+    }
+    const vanRegiVideo = Array.isArray(product.videos) && product.videos.length > 0
+    if (!vanRegiVideo) {
+      // Nincs mire visszaesni: a kurzusnak tényleg nincs még tananyaga. A
+      // modul-vázat megtartjuk, hogy a szerkesztő lássa, amit felvett.
+      return { modules, lessons: [], legacy: false }
+    }
+    // Visszaesés a régi listára. A sorszámláló nullázandó: a modul-ág
+    // (üres) bejárása után is 0-ról kell indulnia a lapos indexelésnek.
+    counters.flatIndex = 0
   }
 
   // Régi, fejezet nélküli videólista → EGY implicit modul.

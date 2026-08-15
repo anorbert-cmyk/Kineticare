@@ -168,13 +168,51 @@ export function primaryAction(
         disabled: true,
       }
     }
+    if (!isWatched) {
+      return {
+        kind: 'complete-course',
+        label: 'Kurzus befejezése',
+        moduleHint: null,
+        ariaLabel: `Kurzus befejezése — ${current.title} megjelölése késznek`,
+        marksWatched: true,
+        targetRef: null,
+        disabled: false,
+      }
+    }
+
+    /**
+     * Az utolsó lecke MÁR kész, a kurzus mégsem teljes: a vevő korábban
+     * kihagyott valamit (tipikusan a railből ugrott előre az utolsó leckére).
+     *
+     * Korábban ez az ág is a „Kurzus befejezése" gombot adta, `marksWatched:
+     * true` + `targetRef: null` értékkel — de a lecke már kész volt, ezért a
+     * jelölés azonnal kilépett, navigáció pedig nem volt: egy ENGEDÉLYEZETT
+     * gomb, ami a kurzus befejezését ígérte, és a kattintásra SEMMI nem
+     * történt (se jelölés, se lépés, se hibaüzenet). Ehelyett most oda
+     * léptetünk, ahol a hiányzó munka van: az első még nem kész leckére.
+     */
+    const hianyzo = sequence.find((lesson) => !watched.has(lesson.ref))
+    if (hianyzo === undefined) {
+      // Elvi ág: `everythingDone` már kizárta — a teljesség kedvéért.
+      return {
+        kind: 'course-complete',
+        label: 'Minden lecke kész',
+        moduleHint: null,
+        ariaLabel: 'Minden lecke kész',
+        marksWatched: false,
+        targetRef: null,
+        disabled: true,
+      }
+    }
+    const hianyzoModul = moduleTitleOf(curriculum, hianyzo)
+    const label = `Hátralévő lecke: ${hianyzo.title}`
     return {
-      kind: 'complete-course',
-      label: 'Kurzus befejezése',
-      moduleHint: null,
-      ariaLabel: `Kurzus befejezése — ${current.title} megjelölése késznek`,
-      marksWatched: true,
-      targetRef: null,
+      kind: 'advance',
+      label,
+      moduleHint: hianyzoModul === null ? null : `Modul: ${hianyzoModul}`,
+      ariaLabel: hianyzoModul === null ? label : `${label} (${hianyzoModul})`,
+      marksWatched: false,
+      targetRef: hianyzo.ref,
       disabled: false,
     }
   }

@@ -592,12 +592,27 @@ export function CoursePlayer({
 
   const handleSelectLesson = useCallback(
     (lessonRef: string) => {
-      // Mobilon a választás zárja a panelt; a fókusz NEM a megnyitó gombra tér
-      // vissza, hanem a lecke címére (azt a váltás-effekt intézi).
+      /**
+       * Mobilon a választás zárja a panelt. A fókusz ilyenkor NEM a megnyitó
+       * gombra tér vissza, hanem a lecke címére — azt a lecke-váltás effektje
+       * intézi.
+       *
+       * KIVÉTEL: ha a MÁR AKTÍV leckére kattint a felhasználó (tájékozódott a
+       * panelen, és ott hagyta a kijelölést az `aria-current` során), nincs
+       * lecke-váltás, tehát a váltás-effekt korán kilép, és a cím sem
+       * fókuszálódik — miközben a bezáródó panel `display: none` lesz, és a
+       * fókuszált gomb kiesik alóla. Ilyenkor a fókusz a `document.body`-ra
+       * zuhanna. Erre az ágra a szabályos zárás jár, ami visszaadja a fókuszt
+       * a megnyitó gombra.
+       */
+      if (lessonRef === activeRef) {
+        closeRail()
+        return
+      }
       setRailOpen(false)
       void loadLesson(lessonRef)
     },
-    [loadLesson],
+    [activeRef, closeRail, loadLesson],
   )
 
   const handlePrimary = useCallback(() => {
@@ -632,9 +647,26 @@ export function CoursePlayer({
       if (panel === null) {
         return
       }
-      const focusable = panel.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      )
+      /**
+       * ═══ CSAK A LÁTHATÓ ELEMEK SZÁMÍTANAK ═══
+       * A csukott modulok panelje `hidden` (→ `display: none`), a bennük lévő
+       * lecke-gombokat viszont a szelektor visszaadná: az csak a `disabled`-re
+       * szűr, a láthatóságra nem. A csapda így egy `display: none` elemet
+       * tartana „utolsónak", és a fókusz előre KISZIVÁROGNA a dialogból,
+       * visszafelé pedig beragadna. Mivel az `initialOpenModuleIds` csak az
+       * aktív lecke modulját nyitja ki, ez a TÖBBMODULOS kurzus
+       * ALAPÁLLAPOTA — nem ritka szélsőség.
+       *
+       * A láthatóság mércéje a `getClientRects()`: a `display: none` elem
+       * (és minden `display: none` ősű elem) nulla téglalapot ad. Ez a
+       * `offsetParent`-nél megbízhatóbb, mert a `position: fixed` elemeknél
+       * az utóbbi null is lehet láthatóan is.
+       */
+      const focusable = [
+        ...panel.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ].filter((element) => element.getClientRects().length > 0)
       if (focusable.length === 0) {
         event.preventDefault()
         return

@@ -146,6 +146,66 @@ describe('buildCurriculum — szerkezet', () => {
     expect(curriculum.legacy).toBe(false)
   })
 
+  /**
+   * REGRESSZIÓ-ŐR. A modul-ág feltétele NEM „van modul-sor", hanem „lett
+   * legalább egy lecke". Enélkül egy félkész (leckék nélkül mentett) modul
+   * kiütötte volna a régi videólistát, és a kurzus MINDEN vevőnél üres
+   * tananyaggal, hibaüzenet nélkül vált volna elérhetetlenné.
+   */
+  describe('félkész modul nem üti ki a régi videólistát', () => {
+    const LECKE_NELKULI_MODUL = product({
+      modules: [{ id: 'm1', title: '1. ALAPOK', summary: null, lessons: [] } as ModuleRow],
+      videos: [
+        videoRow({ id: 'v1', title: 'Régi 1', streamAssetId: 'g1', status: 'ready' }),
+        videoRow({ id: 'v2', title: 'Régi 2', streamAssetId: 'g2', status: 'ready' }),
+      ],
+    })
+
+    it('üres modul + régi videók → a RÉGI lista a tananyag', () => {
+      const curriculum = buildCurriculum(LECKE_NELKULI_MODUL, true)
+
+      expect(curriculum.legacy).toBe(true)
+      expect(curriculum.lessons.map((l) => l.ref)).toEqual(['v1', 'v2'])
+      expect(curriculum.modules[0]?.title).toBe(LEGACY_MODULE_TITLE)
+    })
+
+    it('a visszaesés után a lapos sorszámozás 0-ról indul', () => {
+      const curriculum = buildCurriculum(LECKE_NELKULI_MODUL, true)
+      expect(curriculum.lessons.map((l) => l.flatIndex)).toEqual([0, 1])
+    })
+
+    it('a haladás nevezője a régi videókból jön (nem 0)', () => {
+      expect(summarizeCurriculum(buildCurriculum(LECKE_NELKULI_MODUL, true), []).total).toBe(2)
+    })
+
+    it('csak az EGYIK modul üres → a modulok maradnak (nincs visszaesés)', () => {
+      const curriculum = buildCurriculum(
+        product({
+          modules: [
+            { id: 'm1', title: 'Üres modul', summary: null, lessons: [] } as ModuleRow,
+            moduleRow({ id: 'm2', title: 'Teli modul', lessons: [lessonRow({ id: 'l1', title: 'Lecke' })] }),
+          ],
+          videos: [videoRow({ id: 'v1', streamAssetId: 'g1', status: 'ready' })],
+        }),
+        true,
+      )
+
+      expect(curriculum.legacy).toBe(false)
+      expect(curriculum.lessons.map((l) => l.ref)).toEqual(['l1'])
+    })
+
+    it('üres modul ÉS nincs régi videó → a modul-váz megmarad, tananyag nélkül', () => {
+      const curriculum = buildCurriculum(
+        product({ modules: [{ id: 'm1', title: 'Üres', summary: null, lessons: [] } as ModuleRow] }),
+        true,
+      )
+
+      expect(curriculum.legacy).toBe(false)
+      expect(curriculum.lessons).toEqual([])
+      expect(curriculum.modules.map((m) => m.title)).toEqual(['Üres'])
+    })
+  })
+
   it('üres tananyag: nincs modul és nincs lecke', () => {
     const curriculum = buildCurriculum(product({}), true)
     expect(curriculum.modules).toEqual([])

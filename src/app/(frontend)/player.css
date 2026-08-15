@@ -77,15 +77,25 @@
   --kc-player-focus-offset: calc(
     var(--kc-header-height) + var(--kc-player-header-h) + var(--kc-space-3)
   );
+  /* …és az ALSÓ, ragadós akciósáv alá sem (WCAG 2.2 — 2.4.11 Focus Not
+     Obscured). A sáv gombja ~44px + 2×12px belső margó, plusz egy kis levegő:
+     Tab-bal lefelé haladva a böngésző különben pontosan a sáv MÖGÉ görgetné a
+     lecke-törzsben lévő mellékletlinket vagy szöveglinket. */
+  --kc-player-actions-h: calc(44px + 2 * var(--kc-space-3));
+  --kc-player-focus-offset-bottom: calc(
+    var(--kc-player-actions-h) + var(--kc-space-3)
+  );
 
   display: block;
   background-color: var(--kc-color-bg);
   color: var(--kc-color-text);
 }
 
-/* A lejátszóban minden görgetési cél a sticky sávok ALATT álljon meg. */
+/* A lejátszóban minden görgetési cél a sticky sávok KÖZÖTT álljon meg:
+   felül a fejléc(ek), alul a ragadós akciósáv. */
 .kc-player :is(h1, h2, h3, a, button, [tabindex]) {
   scroll-margin-top: var(--kc-player-focus-offset);
+  scroll-margin-bottom: var(--kc-player-focus-offset-bottom);
 }
 
 @media (min-width: 1024px) {
