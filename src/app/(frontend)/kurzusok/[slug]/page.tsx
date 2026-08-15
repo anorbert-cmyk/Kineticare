@@ -3,18 +3,25 @@ import { headers } from 'next/headers'
 import Link from 'next/link'
 import { notFound, permanentRedirect } from 'next/navigation'
 import { getPayload } from 'payload'
+import { Fragment, type ReactNode } from 'react'
 import { cache } from 'react'
 
 import { TrackEvent } from '@/components/analytics/TrackEvent'
 import { JsonLd } from '@/components/content/JsonLd'
-import { CourseCta } from '@/components/courses/CourseCta'
+import { CourseBuybox } from '@/components/courses/CourseBuybox'
+import { CourseCtaBand } from '@/components/courses/CourseCtaBand'
+import { CourseCurriculum } from '@/components/courses/CourseCurriculum'
+import { CourseFaq } from '@/components/courses/CourseFaq'
+import { CourseFitCheck } from '@/components/courses/CourseFitCheck'
+import { CourseGuarantee } from '@/components/courses/CourseGuarantee'
+import { CourseHowItWorks } from '@/components/courses/CourseHowItWorks'
+import { CourseJumpNav, type CourseJumpTarget } from '@/components/courses/CourseJumpNav'
 import { LexicalContent } from '@/components/courses/LexicalContent'
+import { MobileBuyBar } from '@/components/courses/MobileBuyBar'
 import { PreviewVideo, hasPreviewVideo } from '@/components/courses/PreviewVideo'
 import { RelatedCourses } from '@/components/courses/RelatedCourses'
-import { Badge } from '@/components/ui/Badge'
-import { Card } from '@/components/ui/Card'
+import { buildCourseSalesContent } from '@/components/courses/sales-content'
 import { Container } from '@/components/ui/Container'
-import { PriceTag } from '@/components/ui/PriceTag'
 import { Section } from '@/components/ui/Section'
 import { resolveSingleCourseAccess } from '@/lib/course-access-lookup'
 import { AUDIENCE_LABELS, normalizeAudience } from '@/lib/course-audience'
@@ -31,9 +38,18 @@ import {
   coursePriceHuf,
   courseTitle,
   hasUserPurchased,
+  resolveCourseCta,
 } from '@/lib/courses'
+import { buildCurriculum } from '@/lib/curriculum/curriculum'
+import { formatPriceHuf } from '@/lib/format-price'
 import { logger } from '@/lib/logger'
-import { absoluteUrl, breadcrumbJsonLd, buildProductMetadata, courseJsonLd } from '@/lib/seo'
+import {
+  absoluteUrl,
+  breadcrumbJsonLd,
+  buildProductMetadata,
+  courseJsonLd,
+  faqPageJsonLd,
+} from '@/lib/seo'
 import type { Product, User } from '@/payload-types'
 
 import config from '../../../../payload.config'
@@ -41,6 +57,7 @@ import config from '../../../../payload.config'
 /**
  * /kurzusok/[slug] — kurzus-oldal (az értékesítés motorja).
  *
+ * ═══ ÚTVONAL-SZABÁLYOK (VÁLTOZATLAN) ═══
  * - A [slug] szegmens ELSŐDLEGESEN a kurzus emberi olvasású `slug`-ja (C3).
  *   A régi, numerikus id-s cím (és minden nem kanonikus alak, pl. nagybetűs
  *   változat) továbbra is kiszolgálandó, de TARTÓS átirányítást kap a
@@ -54,9 +71,34 @@ import config from '../../../../payload.config'
  *   (users.purchases, csak olvasás) dől el — LEJÁRT hozzáférésnél (A1,
  *   accessDurationDays) viszont újra a vásárlási CTA jelenik meg, különben a
  *   vevő zsákutcába futna („vásárold meg újra" ↔ „tovább a kurzusaimhoz").
- * - A longDescription renderelését JELENLEG a helyi, minimális
- *   LexicalContent végzi — TODO(W2-értékelés): konszolidáció az 5B-hullám
- *   src/components/lexical/ rendererével (lásd a komponens fejlécét).
+ *
+ * ═══ AZ OLDAL SZERKEZETE (értékesítő átalakítás) ═══
+ * A kutatás (docs/ux-belso-oldalak-kutatas.md 4. és 5.1) négy P0-s hibát mért
+ * a korábbi felépítésen, és ez a felépítés pontosan azokra válaszol:
+ *
+ *  1. KÉTHASÁBOS FEJ (GOV.UK „two-thirds and one-third", B3.2): balra a média
+ *     és a teljes tartalom, jobbra a ragadós vásárlódoboz. A ragadás a TELJES
+ *     lap mellett utazik, nem csak a fej magasságában — a rács sora a fő
+ *     hasáb magasságát veszi fel, az oldalsó elem `align-self: start`-tal
+ *     ebben a sorban csúszik (kurzusok.css).
+ *  2. HORGONY-CHIPEK a fő szakaszokra (K11, B2.3) — csak a LÉTEZŐ szakaszokra.
+ *  3. SZAKASZOK mértékre fogott (34rem ≈ 75 karakter) folyószöveggel (B1.1),
+ *     párhuzamos tartalom rácsban (B3.1), GYIK harmonikában (B5.1) — de ár,
+ *     garancia és tananyag SOSEM harmonikában (B5.2).
+ *  4. ISMÉTELT CTA minden 2. szakasz után + mobil ragadós vásárlósáv (B6.1).
+ *
+ * ═══ TARTALOM-HATÁR ═══
+ * Az oldal SEMMILYEN értékesítő szöveget nem hardcode-ol: minden megjelenő
+ * mondat vagy termékmezőből jön (`salesHighlights`, `howItWorks`, `fitFor`,
+ * `notFitFor`, `guaranteeTitle`/`guaranteeText`, `faq`, `longDescription`,
+ * `modules`), vagy tényadatból képződik. A fallback-lánc egyetlen, tesztelt
+ * helyen él: src/components/courses/sales-content.ts.
+ *
+ * ═══ MÉRÉS ═══
+ * A PostHog értékesítési funnel VÁLTOZATLAN: a `course_viewed` továbbra is az
+ * oldal megnyitásakor sül el (TrackEvent), a `checkout_started` a pénztáron —
+ * az ismételt CTA-k ugyanarra a checkout-útvonalra visznek, ezért az
+ * eseménylánc nem duplázódik (docs/ertekesitesi-ux-skill.md 5. pont).
  */
 
 interface CoursePageProps {
@@ -149,6 +191,20 @@ function relatedProductsOf(product: Product): Product[] {
   )
 }
 
+/** A vásárlódoboz horgonya — a mobil ragadós sáv EZT figyeli. */
+const BUYBOX_ID = 'kurzus-vasarlas'
+
+/**
+ * A megjelenő szakaszok leírója. A `carriesCta` azt jelenti, hogy a szakasz
+ * MAGA hordoz vásárlási gombot (ilyen a garancia-sáv) — ilyenkor közvetlenül
+ * utána nem kell újabb CTA-sáv.
+ */
+interface PageSection {
+  target: CourseJumpTarget | null
+  node: ReactNode
+  carriesCta: boolean
+}
+
 export async function generateMetadata({ params }: CoursePageProps): Promise<Metadata> {
   const { slug } = await params
   const product = await getCourseByRouteParam(slug)
@@ -210,6 +266,166 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
   // mint a canonical meta — különben a gépi olvasó két URL-t látna egy oldalra.
   const path = courseHref(product)
 
+  // A tananyag NYILVÁNOS nézete: hozzáférés nélkül épül, ezért a fizetős
+  // tartalom hordozói (Bunny-GUID, lecke-szöveg, melléklet, külső link) bele
+  // sem kerülnek a modellbe (S2/b — curriculum.ts).
+  const curriculum = buildCurriculum(product, false)
+  const sales = buildCourseSalesContent(product, {
+    moduleCount: curriculum.modules.filter((module) => module.lessons.length > 0).length,
+    lessonCount: curriculum.lessons.length,
+    accessDurationDays:
+      typeof product.accessDurationDays === 'number' ? product.accessDurationDays : null,
+    free: priceBadge === 'free',
+    hasPreview: showPreview,
+  })
+
+  // A CTA állapotgépe (courses.ts) — a checkout-útvonal és az árlogika
+  // VÁLTOZATLAN. Az ismételt sávok csak a ténylegesen vásárolható állapotban
+  // jelennek meg: „már megvetted" vagy „nem vásárolható" mellett egyetlen
+  // (a vásárlódobozbeli) jelzés marad, ismétlés nélkül.
+  const cta = resolveCourseCta(product, purchased)
+  const showRepeatCta = cta.kind === 'buy' || cta.kind === 'free'
+  const priceLabel =
+    priceBadge === 'price' && price !== null
+      ? formatPriceHuf(price)
+      : priceBadge === 'free'
+        ? 'Ingyenes'
+        : null
+  const guaranteeLabel = sales.guarantee === null ? null : sales.guarantee.title
+
+  const ctaBand = (
+    <CourseCtaBand
+      courseTitle={title}
+      guaranteeLabel={guaranteeLabel}
+      hasPurchased={purchased}
+      priceBadge={priceBadge}
+      priceHuf={price}
+      product={product}
+    />
+  )
+
+  // ── A szakaszok, dokumentum-sorrendben ────────────────────────────────────
+  const sections: PageSection[] = []
+
+  if (sales.body !== null) {
+    sections.push({
+      target: { id: 'mi-ez', label: 'Mi ez?' },
+      carriesCta: false,
+      node: (
+        <section aria-labelledby="mi-ez-cim" className="kc-course-section" id="mi-ez">
+          <h2 className="kc-course-section__title" id="mi-ez-cim">
+            A kurzusról
+          </h2>
+          <LexicalContent className="kc-course-prose" content={sales.body} />
+        </section>
+      ),
+    })
+  }
+
+  if (sales.steps.length > 0) {
+    sections.push({
+      target: { id: 'hogyan-mukodik', label: 'Hogyan működik?' },
+      carriesCta: false,
+      node: (
+        <CourseHowItWorks
+          heading="Hogyan működik?"
+          headingId="hogyan-mukodik-cim"
+          steps={sales.steps}
+        />
+      ),
+    })
+  }
+
+  const curriculumModules = curriculum.modules.filter((module) => module.lessons.length > 0)
+  if (curriculumModules.length > 0) {
+    sections.push({
+      target: { id: 'tananyag', label: 'Tananyag' },
+      carriesCta: false,
+      node: (
+        <CourseCurriculum
+          heading="Tananyag"
+          headingId="tananyag-cim"
+          modules={curriculumModules}
+        />
+      ),
+    })
+  }
+
+  if (sales.fitFor.length > 0 || sales.notFitFor.length > 0) {
+    sections.push({
+      target: { id: 'kinek-valo', label: 'Kinek való?' },
+      carriesCta: false,
+      node: (
+        <CourseFitCheck
+          fitFor={sales.fitFor}
+          fitTitle="Neked való, ha…"
+          heading="Kinek való — és kinek nem?"
+          headingId="kinek-valo-cim"
+          notFitFor={sales.notFitFor}
+          notFitTitle="Nem javasoljuk, ha…"
+        />
+      ),
+    })
+  }
+
+  if (sales.guarantee !== null) {
+    sections.push({
+      target: { id: 'garancia', label: 'Garancia' },
+      // A garancia a döntést támogató FŐ érv — a kutatás szerint épp utána
+      // kell gombnak következnie, ezért a sáv maga hordozza a CTA-t (B6.1).
+      carriesCta: showRepeatCta,
+      node: (
+        <CourseGuarantee guarantee={sales.guarantee} headingId="garancia-cim">
+          {showRepeatCta ? ctaBand : null}
+        </CourseGuarantee>
+      ),
+    })
+  }
+
+  if (sales.faq.length > 0) {
+    sections.push({
+      target: { id: 'gyik', label: 'GYIK' },
+      carriesCta: false,
+      node: <CourseFaq heading="Gyakori kérdések" headingId="gyik-cim" items={sales.faq} />,
+    })
+  }
+
+  // Ismételt CTA: minden 2. szakasz után, és a lap végén. A saját CTA-t
+  // hordozó szakasz (garancia) nullázza a számlálót, hogy ne kerüljön két
+  // vásárlási sáv egymás mellé.
+  const rendered: ReactNode[] = []
+  let sinceCta = 0
+  for (const [index, section] of sections.entries()) {
+    rendered.push(<Fragment key={`szakasz-${index}`}>{section.node}</Fragment>)
+    if (section.carriesCta) {
+      sinceCta = 0
+      continue
+    }
+    sinceCta += 1
+    const isLast = index === sections.length - 1
+    // A KÖVETKEZŐ szakasz saját gombja elé nem kerül újabb sáv: két vásárlási
+    // sáv egymás után már nem ismétlés, hanem zaj.
+    const nextCarriesCta = sections[index + 1]?.carriesCta === true
+    if (showRepeatCta && sinceCta >= 2 && !isLast && !nextCarriesCta) {
+      rendered.push(<Fragment key={`cta-${index}`}>{ctaBand}</Fragment>)
+      sinceCta = 0
+    }
+  }
+  if (showRepeatCta && sinceCta > 0 && sections.length > 0) {
+    rendered.push(<Fragment key="cta-zaro">{ctaBand}</Fragment>)
+  }
+
+  const jumpTargets = sections
+    .map((section) => section.target)
+    .filter((target): target is CourseJumpTarget => target !== null)
+  // A vásárlódoboz másodlagos, alacsonyabb súlyú útja: a legfontosabb
+  // döntési szakaszra visz (kinek való → tananyag → az első létező szakasz).
+  const secondaryTarget =
+    jumpTargets.find((target) => target.id === 'kinek-valo') ??
+    jumpTargets.find((target) => target.id === 'tananyag') ??
+    jumpTargets[0] ??
+    null
+
   return (
     <>
       {/* PostHog funnel-lépés: a kurzus-oldal megnyitása (no-op consent nélkül). */}
@@ -234,6 +450,11 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
           { name: title, path },
         ])}
       />
+      {/* A FAQPage strukturált adat UGYANABBÓL a listából készül, mint a
+          látható harmonika — a kettő így sosem tud szétcsúszni (ez a
+          leggyakoribb ok, amiért a keresők elvetik a rich resultot). */}
+      {sales.faq.length > 0 ? <JsonLd data={faqPageJsonLd(sales.faq)} /> : null}
+
       <Section>
         <Container>
           <nav aria-label="Morzsamenü" className="kc-course-breadcrumb">
@@ -245,58 +466,72 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
             </ol>
           </nav>
 
-          <div className="kc-course-hero">
-            <div className="kc-course-hero__main">
-              <p className="kc-course-hero__category">
-                {category ? <Badge tone="info">{category}</Badge> : null}
-                <Badge tone="neutral">{audienceLabel}</Badge>
-              </p>
-              <h1>{title}</h1>
-              {product.shortDescription ? (
-                <p className="kc-course-hero__lead">{product.shortDescription}</p>
-              ) : null}
+          <div className="kc-course-layout">
+            {/* DOM-sorrend: a vásárlódoboz ELÖL. Mobilon így a cím, az ár és a
+                gomb a lap tetején van (a nézési idő 42%-a a felső 20%-ra esik),
+                desktopon pedig a rács teszi a jobb hasábba — a fókusz-út
+                végigjárva értelmes marad (B7.4). */}
+            <div className="kc-course-layout__aside">
+              <CourseBuybox
+                audienceLabel={audienceLabel}
+                categoryLabel={category}
+                guaranteeLabel={guaranteeLabel}
+                hasPurchased={purchased}
+                highlights={sales.highlights}
+                id={BUYBOX_ID}
+                lead={product.shortDescription ?? null}
+                priceBadge={priceBadge}
+                priceHuf={price}
+                product={product}
+                secondaryHref={secondaryTarget === null ? null : `#${secondaryTarget.id}`}
+                secondaryLabel={secondaryTarget === null ? null : secondaryTarget.label}
+                title={title}
+              />
             </div>
 
-            <Card className="kc-course-buybox">
-              {cover ? (
-                // eslint-disable-next-line @next/next/no-img-element -- a Payload media méretei kézileg vannak bekötve (width/height a CMS-ből)
-                <img
-                  alt={cover.alt}
-                  className="kc-course-buybox__cover"
-                  decoding="async"
-                  height={cover.height ?? undefined}
-                  src={cover.url}
-                  width={cover.width ?? undefined}
-                />
+            <div className="kc-course-layout__main">
+              {showPreview ? (
+                <figure className="kc-course-media">
+                  <PreviewVideo
+                    streamId={product.previewVideoStreamId}
+                    title={`${title} — előzetes`}
+                  />
+                  <figcaption className="kc-course-media__caption">Ingyenes előzetes</figcaption>
+                </figure>
+              ) : cover ? (
+                <figure className="kc-course-media">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- a Payload media méretei kézileg vannak bekötve (width/height a CMS-ből) */}
+                  <img
+                    alt={cover.alt}
+                    className="kc-course-media__image"
+                    decoding="async"
+                    height={cover.height ?? undefined}
+                    src={cover.url}
+                    width={cover.width ?? undefined}
+                  />
+                </figure>
               ) : null}
-              {priceBadge === 'price' && price !== null ? (
-                <p className="kc-course-buybox__price">
-                  <PriceTag label="Ár:" priceHuf={price} />
-                </p>
-              ) : priceBadge === 'free' ? (
-                <p className="kc-course-buybox__price kc-course-buybox__price--free">
-                  Ingyenes
-                </p>
-              ) : null}
-              <CourseCta hasPurchased={purchased} product={product} />
-            </Card>
+
+              <CourseJumpNav targets={jumpTargets} />
+
+              {rendered}
+            </div>
           </div>
-
-          {showPreview ? (
-            <section aria-labelledby="elozetes-cim" className="kc-course-section">
-              <h2 id="elozetes-cim">Előzetes</h2>
-              <PreviewVideo streamId={product.previewVideoStreamId} title={`${title} — előzetes`} />
-            </section>
-          ) : null}
-
-          {product.longDescription ? (
-            <section aria-labelledby="leiras-cim" className="kc-course-section">
-              <h2 id="leiras-cim">A kurzusról</h2>
-              <LexicalContent content={product.longDescription} />
-            </section>
-          ) : null}
         </Container>
       </Section>
+
+      {/* Mobil ragadós vásárlósáv: csak akkor, ha tényleg van mit indítani, és
+          csak akkor látszik, ha a fő vásárlódoboz már kigörgött a képből. JS
+          nélkül rejtve marad (MobileBuyBar). */}
+      {showRepeatCta && cta.href !== null ? (
+        <MobileBuyBar
+          anchorId={BUYBOX_ID}
+          courseTitle={title}
+          href={cta.href}
+          label={cta.label}
+          priceLabel={priceLabel}
+        />
+      ) : null}
 
       <RelatedCourses products={relatedProductsOf(product)} />
     </>

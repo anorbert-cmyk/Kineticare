@@ -442,6 +442,144 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
         description: 'A kurzus oldalán megjelenő teljes szöveg.',
       },
     },
+    /**
+     * ═══ AZ ÉRTÉKESÍTŐ KURZUSOLDAL STRUKTURÁLT SZAKASZAI ═══
+     *
+     * A kurzusoldal (`/kurzusok/[slug]`) döntést támogató elemei — előny-pipák,
+     * „hogyan működik", „kinek való / kinek nem", garancia, GYIK — eddig CSAK a
+     * `longDescription` folyószövegében fértek el, ezért nem lehetett őket sem
+     * kiemelni (garancia-sáv), sem összehasonlítható rácsba tenni, sem
+     * harmonikába zárni (GYIK). A kutatás mindegyiket nevesítve kéri:
+     * docs/ux-belso-oldalak-kutatas.md — B6.1 (ismételt CTA), B6.3 (garancia a
+     * termékoldalon), B3.1 (párhuzamos tartalom rácsba), B5.1 (GYIK harmonikába),
+     * B5.2 (az ár/garancia/tanterv SOSEM harmonikába).
+     *
+     * MINDEN mező OPCIONÁLIS és a szerkesztő tölti — a felület egyetlen szöveget
+     * sem hardcode-ol: ha a mező üres, a tartalom a MEGLÉVŐ szövegből képződik
+     * (a `longDescription` megfelelő szakaszából, ennek hiányában a tananyagból).
+     * A fallback-lánc egyetlen, tesztelt helyen él:
+     * src/components/courses/sales-content.ts.
+     */
+    {
+      name: 'salesHighlights',
+      type: 'array',
+      label: 'Fő előnyök (pipás sorok)',
+      labels: { singular: 'Előny', plural: 'Előnyök' },
+      maxRows: 5,
+      admin: {
+        description:
+          'Rövid, konkrét sorok a vásárlódobozban, pipával (pl. „Örökös hozzáférés”, „50+ videós gyakorlat”). Három sor a legjobb. Ha üresen hagyod, a Részletes leírás első felsorolásából — annak hiányában a tananyag adataiból — képződik.',
+      },
+      fields: [
+        {
+          name: 'text',
+          type: 'text',
+          required: true,
+          label: 'Előny',
+        },
+      ],
+    },
+    {
+      name: 'howItWorks',
+      type: 'array',
+      label: 'Hogyan működik? (lépések)',
+      labels: { singular: 'Lépés', plural: 'Lépések' },
+      maxRows: 4,
+      admin: {
+        description:
+          'Mi történik a vásárlás után, lépésről lépésre. Ez az ellenérv-csökkentő szakasz („mikor és hogyan érem el?”). Ha üresen hagyod, a vásárlási folyamat három tényszerű lépése jelenik meg.',
+      },
+      fields: [
+        {
+          name: 'title',
+          type: 'text',
+          required: true,
+          label: 'Lépés címe',
+        },
+        {
+          name: 'text',
+          type: 'textarea',
+          label: 'Lépés leírása',
+        },
+      ],
+    },
+    {
+      name: 'fitFor',
+      type: 'array',
+      label: 'Kinek való (pipás lista)',
+      labels: { singular: 'Sor', plural: 'Sorok' },
+      admin: {
+        description:
+          '„Ez a program neked való, ha…” — soronként egy állítás. Ha üresen hagyod, a Részletes leírás ilyen című szakaszának felsorolásából képződik.',
+      },
+      fields: [
+        {
+          name: 'text',
+          type: 'text',
+          required: true,
+          label: 'Sor',
+        },
+      ],
+    },
+    {
+      name: 'notFitFor',
+      type: 'array',
+      label: 'Kinek NEM való',
+      labels: { singular: 'Sor', plural: 'Sorok' },
+      admin: {
+        description:
+          '„Nem javasoljuk, ha…” — az őszinte kizárás bizalmat épít, és megelőzi a csalódott vásárlást. Ha üresen hagyod, a Részletes leírás ilyen című szakaszából képződik.',
+      },
+      fields: [
+        {
+          name: 'text',
+          type: 'text',
+          required: true,
+          label: 'Sor',
+        },
+      ],
+    },
+    {
+      name: 'guaranteeTitle',
+      type: 'text',
+      label: 'Garancia címe',
+      admin: {
+        description:
+          'Pl. „30 napos kipróbálási garancia”. A garancia kiemelt sávba kerül a kurzusoldalon, és rövid formában a vásárlódobozban is látszik. Ha üresen hagyod, a Részletes leírás garancia-szakasza jelenik meg (ha van ilyen).',
+      },
+    },
+    {
+      name: 'guaranteeText',
+      type: 'textarea',
+      label: 'Garancia szövege',
+      admin: {
+        description: '1–3 mondat arról, mit ígérünk és hogyan lehet élni vele.',
+      },
+    },
+    {
+      name: 'faq',
+      type: 'array',
+      label: 'Gyakori kérdések (GYIK)',
+      labels: { singular: 'Kérdés', plural: 'Kérdések' },
+      admin: {
+        description:
+          'A kurzusoldal alján, összecsukható listában. Ide a vásárlás előtti kételyek valók (mennyi idő, kinek jó, meddig érem el). Ha üresen hagyod, a Részletes leírás kérdés-szakaszából képződik.',
+      },
+      fields: [
+        {
+          name: 'question',
+          type: 'text',
+          required: true,
+          label: 'Kérdés',
+        },
+        {
+          name: 'answer',
+          type: 'textarea',
+          required: true,
+          label: 'Válasz',
+        },
+      ],
+    },
     {
       name: 'coverImage',
       type: 'upload',

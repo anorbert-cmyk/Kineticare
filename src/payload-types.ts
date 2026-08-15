@@ -1467,6 +1467,61 @@ export interface Product {
     [k: string]: unknown;
   } | null;
   /**
+   * Rövid, konkrét sorok a vásárlódobozban, pipával (pl. „Örökös hozzáférés”, „50+ videós gyakorlat”). Három sor a legjobb. Ha üresen hagyod, a Részletes leírás első felsorolásából — annak hiányában a tananyag adataiból — képződik.
+   */
+  salesHighlights?:
+    | {
+        text: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Mi történik a vásárlás után, lépésről lépésre. Ez az ellenérv-csökkentő szakasz („mikor és hogyan érem el?”). Ha üresen hagyod, a vásárlási folyamat három tényszerű lépése jelenik meg.
+   */
+  howItWorks?:
+    | {
+        title: string;
+        text?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * „Ez a program neked való, ha…” — soronként egy állítás. Ha üresen hagyod, a Részletes leírás ilyen című szakaszának felsorolásából képződik.
+   */
+  fitFor?:
+    | {
+        text: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * „Nem javasoljuk, ha…” — az őszinte kizárás bizalmat épít, és megelőzi a csalódott vásárlást. Ha üresen hagyod, a Részletes leírás ilyen című szakaszából képződik.
+   */
+  notFitFor?:
+    | {
+        text: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Pl. „30 napos kipróbálási garancia”. A garancia kiemelt sávba kerül a kurzusoldalon, és rövid formában a vásárlódobozban is látszik. Ha üresen hagyod, a Részletes leírás garancia-szakasza jelenik meg (ha van ilyen).
+   */
+  guaranteeTitle?: string | null;
+  /**
+   * 1–3 mondat arról, mit ígérünk és hogyan lehet élni vele.
+   */
+  guaranteeText?: string | null;
+  /**
+   * A kurzusoldal alján, összecsukható listában. Ide a vásárlás előtti kételyek valók (mennyi idő, kinek jó, meddig érem el). Ha üresen hagyod, a Részletes leírás kérdés-szakaszából képződik.
+   */
+  faq?:
+    | {
+        question: string;
+        answer: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
    * A kurzus kártyáján és az oldala tetején megjelenő kép.
    */
   coverImage?: (number | null) | Media;
@@ -3112,6 +3167,40 @@ export interface ProductsSelect<T extends boolean = true> {
         id?: T;
       };
   longDescription?: T;
+  salesHighlights?:
+    | T
+    | {
+        text?: T;
+        id?: T;
+      };
+  howItWorks?:
+    | T
+    | {
+        title?: T;
+        text?: T;
+        id?: T;
+      };
+  fitFor?:
+    | T
+    | {
+        text?: T;
+        id?: T;
+      };
+  notFitFor?:
+    | T
+    | {
+        text?: T;
+        id?: T;
+      };
+  guaranteeTitle?: T;
+  guaranteeText?: T;
+  faq?:
+    | T
+    | {
+        question?: T;
+        answer?: T;
+        id?: T;
+      };
   coverImage?: T;
   gallery?:
     | T
