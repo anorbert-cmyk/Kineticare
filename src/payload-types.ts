@@ -301,6 +301,7 @@ export interface Page {
         | BlockTestimonials
         | BlockKnowledge
         | BlockFaq
+        | BlockTeamMembers
         | BlockRichText
         | BlockCtaBanner
       )[]
@@ -457,13 +458,21 @@ export interface BlockCredsStrip {
  */
 export interface BlockCourseCards {
   /**
-   * Nem kötelező. Ha üresen hagyod, a beépített cím marad („Így tudunk neked segíteni").
+   * A cím fölötti rövid, nagybetűs felirat. Nem kötelező — üresen a beépített felirat marad („Kurzusok").
+   */
+  eyebrow?: string | null;
+  /**
+   * Nem kötelező. Ha üresen hagyod, a beépített cím marad („Kurzusaink").
    */
   heading?: string | null;
   /**
    * A cím alatti 1–2 mondat a kártyák előtt. Nem kötelező.
    */
   lead?: string | null;
+  /**
+   * A kurzuskártyák alján megjelenő gomb felirata. Nem kötelező — üresen a beépített felirat marad („Megnézem a programot”). A gomb dekoratív: maga a KÁRTYA a link.
+   */
+  ctaLabel?: string | null;
   /**
    * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
    */
@@ -1074,6 +1083,109 @@ export interface BlockFaq {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockTeamMembers".
+ */
+export interface BlockTeamMembers {
+  /**
+   * A cím fölötti apró szöveg (pl. „A csapat"). Nem kötelező.
+   */
+  eyebrow?: string | null;
+  /**
+   * A két bemutatkozás fölötti cím (pl. „Kik vagyunk?").
+   */
+  title?: string | null;
+  /**
+   * Egy-két mondat a nevek fölé. Nem kötelező.
+   */
+  lead?: string | null;
+  /**
+   * Pontosan két szakember fér ide, egymás mellett, egyenlő súllyal. A portrékat előbb töltsd fel a Tartalom → Képek közé; a legjobb, ha mindkét kép AZONOS képarányú és hasonló fejméretű (különben az egyik közelebbinek látszik).
+   */
+  members?:
+    | {
+        /**
+         * Álló (3:4 vagy 4:5) portré a legjobb. A képleírást (alt) a Képek közt add meg egyszer — ide nem kell újra beírni.
+         */
+        photo?: (number | null) | Media;
+        /**
+         * A szakember teljes neve (pl. „Kocsis Kata").
+         */
+        name: string;
+        /**
+         * Rövid szakmai megnevezés (pl. „Gyógytornász, manuálterapeuta, sportrehabilitációs tréner").
+         */
+        role?: string | null;
+        /**
+         * 2–4 mondat. A teljes szakmai életutat NE ide írd — arra valók lent a szakmai listák.
+         */
+        bio?: string | null;
+        /**
+         * Nem kötelező. Tagoltan írd (pl. „+36 30 169 2263") — mobilon kattintható hívás-linkké alakul.
+         */
+        phone?: string | null;
+        /**
+         * Nem kötelező. Kattintható levélírás-linkké alakul.
+         */
+        email?: string | null;
+        /**
+         * A szakmai háttér összecsukható listái (pl. Tanulmányok, Tanfolyamok, Publikációk, Konferenciák, Médiamegjelenések). Alapból zárva jelennek meg, a fejlécükben a tételek számával.
+         */
+        cvSections?:
+          | {
+              /**
+               * Pl. „Tanfolyamok, továbbképzések".
+               */
+              heading: string;
+              /**
+               * SORONKÉNT EGY tétel (pl. egy tanfolyam, egy előadás). Az üres sorok kimaradnak, a tételek számát a rendszer maga írja ki a lista címe mellé.
+               */
+              items: string;
+              id?: string | null;
+            }[]
+          | null;
+        /**
+         * Nem kötelező. Pl. „Bővebben a szakmai hátterről" — a részletes önéletrajz horgonyára vagy egy aloldalra mutathat.
+         */
+        link?: {
+          /**
+           * Ez a szöveg jelenik meg a linken (pl. „Bővebben a szakmai hátterről").
+           */
+          felirat?: string | null;
+          /**
+           * Saját oldalra elég a perjellel kezdődő rész (pl. /kurzusok), másik weboldalra a teljes cím https://-sel kezdve.
+           */
+          url?: string | null;
+          /**
+           * Másik weboldalra mutató linknél szokás bekapcsolni, hogy a látogató ne hagyja el a Kineticare oldalát.
+           */
+          ujAblakban?: boolean | null;
+        };
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'teamMembers';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "BlockRichText".
  */
 export interface BlockRichText {
@@ -1324,6 +1436,18 @@ export interface Product {
    * 1–3 mondat. A kurzuskártyákon és a kezdőlapon ez látszik.
    */
   shortDescription?: string | null;
+  /**
+   * Legfeljebb 3 rövid, pipával jelölt állítás a kezdőlapi kurzuskártyán (pl. „50+ videós gyakorlat”). Tényszerű, ellenőrizhető állítást írj — ígéretet ne. Ha üresen hagyod, a kártyán egyszerűen nem jelenik meg ez a rész.
+   */
+  cardHighlights?:
+    | {
+        /**
+         * Egy tömör állítás, legfeljebb 80 karakter — a kártyán egy sor.
+         */
+        text: string;
+        id?: string | null;
+      }[]
+    | null;
   /**
    * A kurzus oldalán megjelenő teljes szöveg.
    */
@@ -2439,6 +2563,7 @@ export interface PagesSelect<T extends boolean = true> {
         testimonials?: T | BlockTestimonialsSelect<T>;
         knowledge?: T | BlockKnowledgeSelect<T>;
         faq?: T | BlockFaqSelect<T>;
+        teamMembers?: T | BlockTeamMembersSelect<T>;
         richText?: T | BlockRichTextSelect<T>;
         ctaBanner?: T | BlockCtaBannerSelect<T>;
       };
@@ -2516,8 +2641,10 @@ export interface BlockCredsStripSelect<T extends boolean = true> {
  * via the `definition` "BlockCourseCards_select".
  */
 export interface BlockCourseCardsSelect<T extends boolean = true> {
+  eyebrow?: T;
   heading?: T;
   lead?: T;
+  ctaLabel?: T;
   sectionSettings?:
     | T
     | {
@@ -2808,6 +2935,49 @@ export interface BlockFaqSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockTeamMembers_select".
+ */
+export interface BlockTeamMembersSelect<T extends boolean = true> {
+  eyebrow?: T;
+  title?: T;
+  lead?: T;
+  members?:
+    | T
+    | {
+        photo?: T;
+        name?: T;
+        role?: T;
+        bio?: T;
+        phone?: T;
+        email?: T;
+        cvSections?:
+          | T
+          | {
+              heading?: T;
+              items?: T;
+              id?: T;
+            };
+        link?:
+          | T
+          | {
+              felirat?: T;
+              url?: T;
+              ujAblakban?: T;
+            };
+        id?: T;
+      };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "BlockRichText_select".
  */
 export interface BlockRichTextSelect<T extends boolean = true> {
@@ -2935,6 +3105,12 @@ export interface ProductsSelect<T extends boolean = true> {
   displayTitle?: T;
   slug?: T;
   shortDescription?: T;
+  cardHighlights?:
+    | T
+    | {
+        text?: T;
+        id?: T;
+      };
   longDescription?: T;
   coverImage?: T;
   gallery?:

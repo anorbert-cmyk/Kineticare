@@ -4,30 +4,51 @@
  * Forrás: a landing szekció- és kártya-nyelve
  * (higgsfield-site/app/src/kineticare.css): `.kc-eyebrow` (229.) felvezető
  * sora, `.kc-state-card` (381.) kép-kártyája, `.kc-inline-link` (522.) záró
- * hivatkozása. Minden szín/méret/térköz szerep-tokenről (tokens.css).
+ * hivatkozása. Minden szín/méret/térköz szerep-tokenről (tokens.css) — idegen
+ * landingről színt vagy betűt NEM veszünk át, csak SZERKEZETI mintát.
  *
  * ÚJRAHASZNOSÍTÁS: a felvezető sor a közös `.kc-eyebrow`, a szekciócím a közös
  * `.kc-section-title`, a bevezető a `.kc-section-lead`, a záró link a
- * `.kc-text-link` (mind content.css) — ez a lap CSAK azt teszi hozzá, ami a
- * blokk sajátja: a cím lépcsőjét a szekció-rendszer többi blokkjához igazítja
- * (--kc-text-3xl), és megadja a kártya-nyelvet.
+ * `.kc-text-link`, a kártya alapja a `.kc-card`, az ár a `.kc-price-tag`, a
+ * címkék a `.kc-badge` (mind content.css / ui.css) — ez a lap CSAK azt teszi
+ * hozzá, ami a blokk sajátja.
  *
- * A kártya-nyelv: a `.kc-card` alap (fehér felület, 1px hairline, árnyék
- * nélkül, hoverre akcent-keret) fölé itt a landing kép-kártya részletei
- * jönnek: a borító a kártya sarkával azonos ívű, hoverre finoman ráközelít, a
- * kártya lábában pedig hajszálvonal fölött áll az ÁR (ink, serif) és a
- * dekoratív nyíl (M3: név + ár + CTA a kártyán).
+ * A KÁRTYA MA „MINI-BUYBOX" (2026-08-15-i design-brief). A korábbi kártya
+ * borító + cím + rövid leírás + ár + nyíl volt; a döntéshez szükséges
+ * információ (mit kapok, meddig, kinek szól) hiányzott róla, a záró nyíl pedig
+ * gyenge cselekvésre-hívás. Az új sorrend:
  *
- * MIÉRT ITT VAN A KÁRTYA IS: a ProductCard nemcsak a kezdőlapon, hanem a
- * /kurzusok listán is él, ezért ezt a lapot MAGA a kártya-komponens is
- * importálja — így a restyle ott is érvényesül. A szabályok a kártya
+ *   borító → célközönség-címke → cím → pipás előny-sorok (max 3, CMS) →
+ *   rövid leírás → [hajszálvonal] → ár + hozzáférés → CTA-gomb
+ *
+ * A sorrend MINDEN kártyán azonos, és minden mező ugyanazon a magasságon áll
+ * (a láb `margin-top: auto`-val a kártya aljára ül) — ez a feltétele annak,
+ * hogy homogén tételeknél a kártya egyáltalán jó forma legyen
+ * (docs/ux-belso-oldalak-kutatas.md B4.1, NN/g „Cards" szemmozgás-vizsgálat).
+ *
+ * RÁCS. A `.kc-card-grid--courses` szándékosan felülírja a közös rács fix
+ * `repeat(3, 1fr)`-ét: két kurzusnál a fix hármas rács üres harmadik oszlopot
+ * hagyna, egyetlen kurzusnál pedig egy 1120 px széles óriáskártyát adna
+ * (B3.5). Az `auto-fit` + felső track-korlát elemszámhoz igazodik, a
+ * `min(100%, …)` alsó korlát pedig 320 px-en is megakadályozza a vízszintes
+ * túlcsordulást (B7.1 / WCAG 1.4.10 Reflow).
+ *
+ * MIÉRT ITT VAN A KÁRTYA IS: a stíluslapot maga a ProductCard is importálja,
+ * hogy a kártya bárhonnan renderelve ugyanígy nézzen ki. A szabályok a kártya
  * gyökér-osztályára szűkítve írják felül a globális content.css alapértékeit,
  * tehát a betöltési sorrendtől függetlenül, specificitásból érvényesek.
  *
- * KONTRASZT (tokens.css jegyzőkönyve): cím `text` (ink) fehéren 15,63:1,
- * leírás `text-muted` fehéren 9,30:1, ár `text` fehéren 15,63:1, a záró link
- * `primary` a paperen 5,16:1 — mind AA felett. Az `accent` (keret, nyíl)
- * DEKORÁCIÓ: szöveget nem hordoz, így az akcent-korlát nem érinti.
+ * KONTRASZT (tokens.css jegyzőkönyve, fehér kártyán): cím és előny-sor `text`
+ * (ink) 15,63:1 · leírás és hozzáférés-sor `text-muted` 9,30:1 · ár `text`
+ * 15,63:1 · CTA fehér az `accent-deep`-en 5,45:1 (hoveren `accent-deeper`,
+ * 7,08:1) · a semleges címke ink a tint-en 13,53:1 — mind AA felett. Az
+ * `accent` (keret, pipa-ikon) DEKORÁCIÓ: szöveget nem hordoz, így az
+ * akcent-korlát nem érinti.
+ *
+ * MAGYAR TÖRDELÉS: a kártya keskeny hasáb, a szavaink 22 %-a legalább 10 betűs
+ * (saját korpuszmérés), ezért a szöveges mezőkön `hyphens: auto` +
+ * `overflow-wrap: anywhere` (B3.4). A `lang="hu"` a dokumentum gyökerén áll
+ * (src/app/(frontend)/layout.tsx), tehát az elválasztás a magyar mintát követi.
  *
  * Betöltés: src/components/content/home/CourseCards.tsx és
  * src/components/content/ProductCard.tsx.
@@ -62,7 +83,16 @@
   transform: translateX(0.2rem);
 }
 
-/* ---- Kurzuskártya (a /kurzusok listán is) -------------------------------- */
+/* ---- Kurzus-rács --------------------------------------------------------
+   Elemszámhoz igazodó rács üres oszlop és óriáskártya nélkül. A track felső
+   korlátja (26rem) tartja a kártya olvasható mértékét akkor is, ha egyetlen
+   kurzus van kint. */
+.kc-card-grid.kc-card-grid--courses {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 26rem));
+  justify-content: center;
+}
+
+/* ---- Kurzuskártya (mini-buybox) ------------------------------------------ */
 
 /* A borító íve kövesse a kártyáét (a közös alap a kisebb `md` ívet adja). */
 .kc-product-card .kc-product-card__cover {
@@ -78,19 +108,77 @@
   transform: scale(1.02);
 }
 
-.kc-product-card .kc-product-card__title {
-  text-wrap: balance;
+/* A törzs a kártya teljes magasságát kitölti, hogy a láb az aljára ülhessen
+   (a 12px-es belső térközt a közös .kc-product-card__body adja). */
+.kc-product-card .kc-product-card__body {
+  flex: 1;
 }
 
-/* Kártya-láb: hajszálvonal fölött az ár és a dekoratív nyíl. */
+.kc-product-card .kc-product-card__audience {
+  display: block;
+}
+
+.kc-product-card .kc-product-card__title {
+  text-wrap: balance;
+  hyphens: auto;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Pipás előny-sorok (CMS: products.cardHighlights) -------------------- */
+
+.kc-product-card .kc-product-card__highlights {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-2);
+}
+
+.kc-product-card .kc-product-card__highlight {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--kc-space-3);
+}
+
+/* A pipa optikailag az első sor közepére igazodik (`em`-ben, hogy a
+   tipográfiai skálával együtt nőjön). Dekoratív ikon, ezért viheti a
+   halkabb `accent`-et. */
+.kc-product-card .kc-product-card__tick {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  margin-top: 0.2em;
+  color: var(--kc-color-accent);
+}
+
+.kc-product-card .kc-product-card__highlight-text {
+  font-size: var(--kc-text-sm);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-color-text);
+  hyphens: auto;
+  overflow-wrap: anywhere;
+}
+
+.kc-product-card .kc-product-card__description {
+  hyphens: auto;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Kártya-láb: hajszálvonal, ár + hozzáférés, CTA ---------------------- */
+
 .kc-product-card .kc-product-card__foot {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--kc-space-3);
+  flex-direction: column;
+  gap: var(--kc-space-4);
   margin-top: auto;
-  padding-top: var(--kc-space-3);
+  padding-top: var(--kc-space-4);
   border-top: 1px solid var(--kc-color-border);
+}
+
+.kc-product-card .kc-product-card__pricing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--kc-space-2) var(--kc-space-3);
 }
 
 /* A `margin-top: auto` a lábra került, az árra már nem kell. */
@@ -98,49 +186,59 @@
   margin-top: 0;
 }
 
-/* `margin-left: auto`: ár nélküli (ingyenes) kurzusnál is a láb jobb szélén marad. */
-.kc-product-card .kc-product-card__arrow {
-  margin-left: auto;
-  font-size: var(--kc-text-lg);
-  line-height: 1;
-  color: var(--kc-color-accent);
+.kc-product-card .kc-product-card__access {
+  font-size: var(--kc-text-xs);
+  color: var(--kc-color-text-muted);
+}
+
+/* A CTA a `kc-button--primary` vizuális nyelvét viseli, de SZÁNDÉKOSAN nem az
+   az osztály: a kártya egésze a link, ezért ez az elem aria-hidden dekoráció,
+   nem interaktív komponens. Saját osztály nélkül a jövőbeli gomb-viselkedések
+   (disabled, fókusz) tévesen ide is átszivárognának. */
+.kc-product-card .kc-product-card__cta {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: var(--kc-space-2);
+  padding: var(--kc-space-3) var(--kc-space-5);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-primary);
+  color: var(--kc-color-on-primary);
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-bold);
+  line-height: 1.4;
+  text-align: center;
+  transition: background-color var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-card--interactive.kc-product-card:hover .kc-product-card__cta,
+.kc-card--interactive.kc-product-card:focus-within .kc-product-card__cta {
+  background-color: var(--kc-color-primary-hover);
+}
+
+.kc-product-card .kc-product-card__cta-arrow {
   transition: transform var(--kc-motion-base) var(--kc-ease-out);
 }
 
-.kc-card--interactive.kc-product-card:hover .kc-product-card__arrow,
-.kc-card--interactive.kc-product-card:focus-within .kc-product-card__arrow {
+.kc-card--interactive.kc-product-card:hover .kc-product-card__cta-arrow,
+.kc-card--interactive.kc-product-card:focus-within .kc-product-card__cta-arrow {
   transform: translateX(0.2rem);
-}
-
-/* ---- Másodlagos (ingyenes) kurzuskártya ---------------------------------
- * Az UX-skill M4/K2: a lead-magnet ugyanabban a rácsban állhat, de NEM
- * nyomhatja el a fizetős ajánlatot. A visszafogás kizárólag a KÁRNYÍT és a
- * hátteret érinti — a SZÖVEG színe és mérete változatlan, tehát a WCAG AA
- * kontraszt ugyanaz marad, mint az elsődleges kártyán. (Halványított szöveg
- * itt tilos lenne: az rontaná a kontrasztot.)
- */
-.kc-product-card--secondary {
-  background: var(--kc-color-surface-tint);
-  border-style: dashed;
-}
-
-/* A nyíl-akcentus is visszafogottabb, de a fókusz/hover visszajelzés megmarad. */
-.kc-product-card--secondary .kc-product-card__arrow {
-  color: var(--kc-color-text-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .kc-course-cards__link span,
   .kc-product-card .kc-product-card__cover img,
-  .kc-product-card .kc-product-card__arrow {
+  .kc-product-card .kc-product-card__cta,
+  .kc-product-card .kc-product-card__cta-arrow {
     transition: none;
   }
 
   .kc-course-cards__link:hover span,
   .kc-card--interactive.kc-product-card:hover .kc-product-card__cover img,
   .kc-card--interactive.kc-product-card:focus-within .kc-product-card__cover img,
-  .kc-card--interactive.kc-product-card:hover .kc-product-card__arrow,
-  .kc-card--interactive.kc-product-card:focus-within .kc-product-card__arrow {
+  .kc-card--interactive.kc-product-card:hover .kc-product-card__cta-arrow,
+  .kc-card--interactive.kc-product-card:focus-within .kc-product-card__cta-arrow {
     transform: none;
   }
 }

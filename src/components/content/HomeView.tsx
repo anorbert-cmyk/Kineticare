@@ -1,5 +1,4 @@
 import type { Page, Post, Product, Testimonial } from '../../payload-types'
-import { coursePriceBadgeKind } from '../../lib/courses'
 import { faqPageJsonLd, organizationJsonLd } from '../../lib/seo'
 import { HERO_VIDEO_STREAM_ID } from '../../lib/hero-video'
 import { RenderBlocks } from '../blocks/RenderBlocks'
@@ -32,10 +31,13 @@ import { RichText } from '../lexical/RichText'
  *    hero-videó jelenik meg, egyébként a CMS heroImage — a videóblokk érintetlen.
  * M2 Szakmai hitel-csík a /rolunk linkkel (CredentialsStrip) — közvetlenül a
  *    hero alatt keretezi a vásárlási döntést.
- * M3 Fizetős kurzus-kártyák (cím/rövid leírás/ÁR/CTA) a hitel-csík után
- *    (CourseCards) — üresen a szekció elmarad.
+ * M3 Fizetős kurzus-kártyák („mini-buybox": cím/előnyök/ÁR/CTA) a hitel-csík
+ *    után (CourseCards) — CSAK fizetős termék, üresen a szekció elmarad.
  * M4 Ingyenes SOS Kézrelax — lead-magnet VISSZAFOGOTT, másodlagos súllyal,
  *    közvetlenül a fizetős blokk után, tint háttérrel elválasztva (FreeSos).
+ *    Az ingyenes ajánlat KIZÁRÓLAG itt jelenik meg (a hero másodlagos CTA-ja
+ *    is ide, a #ingyenes horgonyra mutat): a kurzus-rácsban szereplő
+ *    „másodlagos" kártyája 2026-08-15-én duplikációként kikerült.
  * M5 „Így működik az online kurzus" — 3 lépés, statikus (HowItWorks).
  * M6 Vélemények — a CMS `testimonials` collectionjéből, a termékblokk UTÁN
  *    (TestimonialsSection): legfeljebb 3 kiemelt és látható vélemény, `order`
@@ -115,14 +117,10 @@ export function HomeView({ home, products, posts, testimonials = [] }: HomeViewP
   }
 
   const visibleProducts = products.filter(isPubliclyVisibleProduct)
+  // A kurzus-rácsba KIZÁRÓLAG fizetős termék kerül. Az ingyenes lead-magnet
+  // helye a lentebbi FreeSos szekció: 2026-08-15-ig mindkét helyen szerepelt,
+  // ami duplikáció volt (kezdőlap-audit) — lásd CourseCards fejléce.
   const paidProducts = visibleProducts.filter(isPaidProduct)
-  // A rács másodlagos sávjába csak a TUDATOSAN ingyenes termék kerül
-  // (priceInHUFEnabled: false). A félrekonfigurált rekord — ár-pipa BE, de az
-  // ár ÜRES — se árat, se „Ingyenes"-t nem kaphat (courses.ts), ezért a
-  // kiemelt rácsban sem hirdetjük; a /kurzusok listán továbbra is ott van.
-  const freeProducts = visibleProducts.filter(
-    (product) => coursePriceBadgeKind(product) === 'free',
-  )
   // A FreeSos szekció egyetlen lead-magnetre van tervezve; a viselkedése
   // változatlan marad.
   const freeProduct = visibleProducts.find((product) => !isPaidProduct(product)) ?? null
@@ -145,7 +143,7 @@ export function HomeView({ home, products, posts, testimonials = [] }: HomeViewP
 
       <CredentialsStrip />
 
-      <CourseCards products={paidProducts} secondaryProducts={freeProducts} />
+      <CourseCards products={paidProducts} />
 
       <FreeSos freeProduct={freeProduct} />
 

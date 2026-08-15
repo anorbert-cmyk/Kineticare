@@ -297,6 +297,8 @@
 
 .kc-nav-desktop__item {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 /* Menülink: a landing csendes, aláhúzás-alapú linknyelve (`.kc-inline-link`) —
@@ -328,10 +330,43 @@
   text-underline-offset: 0.35em;
 }
 
+/* Lenyitó gomb az almenüs főmenüpontok mellett (aria-expanded + Esc-zárás).
+   Az érintési cél 44×44px (UX-skill 3. pont): táblagépen ez az EGYETLEN út az
+   almenüig, mert hover nincs, a mobil drawer pedig 900px felett rejtve van.
+   A negatív bal margó csak a LÁTVÁNYT húzza a felirathoz — a célfelület teljes
+   marad. Szín és hover: a menülink nyelve, tehát a kontraszt-levezetés is az. */
+.kc-nav-desktop__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: none;
+  margin-inline-start: calc(-1 * var(--kc-space-2));
+  padding: 0;
+  border: 0;
+  border-radius: var(--kc-radius-sm);
+  background-color: transparent;
+  color: var(--kc-header-ink);
+  cursor: pointer;
+  transition: color var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-nav-desktop__toggle:hover,
+.kc-nav-desktop__item:hover > .kc-nav-desktop__toggle {
+  color: var(--kc-header-accent);
+}
+
 .kc-nav-desktop__caret {
   width: 0.75rem;
   height: 0.75rem;
   flex: none;
+  transition: transform var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+/* Nyitott állapotban a nyíl felfelé mutat — az `aria-expanded` látható párja. */
+.kc-nav-desktop__toggle[aria-expanded='true'] .kc-nav-desktop__caret {
+  transform: rotate(180deg);
 }
 
 /* Almenü: hover ÉS billentyűzet-fókusz (focus-within) alatt is nyitva.
@@ -364,6 +399,31 @@
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
+}
+
+/**
+ * A HIDRATÁLÁS UTÁNI, JS-vezérelt állapot (DesktopNav `data-open`).
+ *
+ * A két szabály specifikussága (0,3,0) pontosan annyi, mint a fenti hover/
+ * focus-within szabályé — ezért a FORRÁSSORREND dönt, és ezeknek KÖTELEZŐ
+ * utánuk állniuk. Ez adja az Esc-re bezárást (WCAG 2.2 AA, 1.4.13
+ * „dismissible"): a `data-open='false'` akkor is zárva tartja a lenyílót, ha
+ * az egérmutató még mindig a menüpont fölött áll. `!important` nem kell, és
+ * ne is kerüljön ide — az összefüggést a sorrend hordozza.
+ *
+ * A `data-open` a szerver-renderelt HTML-ben NINCS jelen, tehát JS nélkül
+ * (és a hidratálás előtt) a fenti hover/focus-within réteg működik változatlanul.
+ */
+.kc-nav-desktop__item[data-open='true'] > .kc-nav-desktop__submenu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.kc-nav-desktop__item[data-open='false'] > .kc-nav-desktop__submenu {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(calc(-1 * var(--kc-space-2)));
 }
 
 .kc-nav-desktop__sublink {

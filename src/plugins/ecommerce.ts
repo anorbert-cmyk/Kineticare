@@ -403,6 +403,38 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       },
     },
     {
+      // A kurzuskártya „mini-buybox" pipás előny-sorai (kezdőlap M3). A
+      // kártyán MINDEN szöveg a CMS-ből jön — a komponensben hardcode-olt
+      // marketingszöveg nincs, csak a szekció-feliratok fallbackja.
+      // Legfeljebb 3 sor: a kártya összehasonlítható marad (UX-kutatás B4.1 —
+      // minden kártya UGYANAZOKAT a mezőket UGYANABBAN a sorrendben hozza), és
+      // a negyedik sor már folyószöveggé olvadna.
+      name: 'cardHighlights',
+      type: 'array',
+      label: 'Kiemelt előnyök (a kurzuskártyán)',
+      maxRows: 3,
+      labels: {
+        singular: 'Előny',
+        plural: 'Előnyök',
+      },
+      admin: {
+        description:
+          'Legfeljebb 3 rövid, pipával jelölt állítás a kezdőlapi kurzuskártyán (pl. „50+ videós gyakorlat”). Tényszerű, ellenőrizhető állítást írj — ígéretet ne. Ha üresen hagyod, a kártyán egyszerűen nem jelenik meg ez a rész.',
+      },
+      fields: [
+        {
+          name: 'text',
+          type: 'text',
+          label: 'Előny szövege',
+          required: true,
+          maxLength: 80,
+          admin: {
+            description: 'Egy tömör állítás, legfeljebb 80 karakter — a kártyán egy sor.',
+          },
+        },
+      ],
+    },
+    {
       name: 'longDescription',
       type: 'richText',
       label: 'Részletes leírás',

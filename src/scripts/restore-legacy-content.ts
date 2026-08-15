@@ -68,9 +68,11 @@
  */
 
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { getPayload, type Payload } from 'payload'
 
+import { HOME_IMAGES } from '../lib/home-seed'
 import { LEGACY_IMAGES, LEGACY_IMAGES_DIR, type LegacyImage } from '../lib/legacy-images'
 import config from '../payload.config'
 import type { Page, Product } from '../payload-types'
@@ -270,6 +272,41 @@ const ensureMedia = async (payload: Payload, image: LegacyImage): Promise<number
   return created.id
 }
 
+/**
+ * A sajtó-logósor képfájljai — a KEZDŐLAPI seed (src/lib/home-seed.ts,
+ * HOME_IMAGES) tölti fel őket a landing tükréből. Ez a script nem tölt fel
+ * semmit belőlük, csak megkeresi a meglévőket: így a /rolunk logósora akkor is
+ * helyes marad, ha a lányok időközben lecserélték valamelyik logót.
+ */
+const SAJTO_LOGO_FAJLOK: readonly string[] = HOME_IMAGES.filter((kep) =>
+  kep.file.startsWith('press-'),
+).map((kep) => kep.file)
+
+/**
+ * Meglévő média-elemek id-je fájlnév alapján — FELTÖLTÉS NÉLKÜL.
+ *
+ * A dedup ugyanaz, mint az `ensureMedia`-ban: a Média collection webp-re
+ * konvertál, ezért a kiterjesztés nélküli alapnévre szűrünk. A nem található
+ * fájl egyszerűen kimarad a listából (a hivatkozó szekció ilyenkor elmarad) —
+ * a script emiatt sosem áll meg.
+ */
+const findMediaIds = async (payload: Payload, files: readonly string[]): Promise<number[]> => {
+  const ids: number[] = []
+  for (const file of files) {
+    const baseName = file.replace(/\.[^.]+$/, '')
+    const existing = await payload.find({
+      collection: 'media',
+      where: { filename: { like: `${baseName}%` } },
+      limit: 1,
+      overrideAccess: true,
+    })
+    if (existing.docs.length > 0) {
+      ids.push(existing.docs[0].id)
+    }
+  }
+  return ids
+}
+
 // ---------------------------------------------------------------------------
 // Kategória — a seed által is ismert termékkategória független biztosítása.
 // ---------------------------------------------------------------------------
@@ -390,320 +427,711 @@ const kezdolapContent = (): RichTextContent =>
     para('– Dr. Kárpáti Katalin, ügyvéd'),
   ])
 
+// ---------------------------------------------------------------------------
+// A /szolgaltatasok és a /rolunk tartalma — EGY forrásból, két alakban.
+//
+// Ugyanaz a szöveg két helyen kell: a rich-text változatban (az oldal eredeti,
+// folyószöveges alakja, ami akkor jelenik meg, ha az oldalnak NINCS szekciósora)
+// ÉS a szekciósor (Pages.layout) blokkjaiban, ahol a mezők sima szövegek.
+// Ezért a szekciókra bontható tartalom ADATKÉNT él itt, és mindkét irány ebből
+// épül fel — a kettő így nem tud szétcsúszni.
+//
+// FONTOS: a szekciósor feltöltése EGYSZERI. Utána minden szöveg, sorrend,
+// háttér és láthatóság az adminban szerkeszthető (Pages → Szekciók), a script
+// pedig meglévő szekciósort SOHA nem ír felül (lásd ensurePageLayout).
+// ---------------------------------------------------------------------------
+
+/** Cím + szöveg pár (USP-kártya, szolgáltatás-sor). */
+interface CimSzoveg {
+  title: string
+  body: string
+}
+
+/** Szolgáltatás-sor: cím, szöveg és a sor végi hivatkozás. */
+interface SzolgaltatasSor extends CimSzoveg {
+  label: string
+  url: string
+  newTab?: boolean
+}
+
+// --- /szolgaltatasok --------------------------------------------------------
+
+/** A lap bevezetője: a probléma és a kivezető út (2 szekció). */
+const szolgaltatasokBevezetoNodes = (): BlockNode[] => [
+  heading('h2', 'Fáj a kezed, csuklód, könyököd vagy vállad?'),
+  para(
+    'Tudjuk, hogy ez a probléma mennyire tud hátráltatni a munkában vagy a sportban, de még a hétköznapokban is.',
+  ),
+  para(
+    'Ezért professzionális kezeléseinkkel és online programjainkkal abban segítünk, hogy minél gyorsabban visszanyerd a kezed erejét és mozgását – hosszú távú eredményekkel.',
+  ),
+  heading('h2', 'Van megoldás – ha tudod, merre indulj'),
+  para(
+    'A legtöbb kéz-, csukló- vagy könyökprobléma megfelelő terápiával hatékonyan kezelhető – és akár a műtét is elkerülhető.',
+  ),
+  para(
+    'Ehhez persze türelemre és kitartásra van szükség, de a test egy csodálatos „szerkezet”: ha segítünk neki, képes rendbehozni magát.',
+  ),
+  para(
+    'A kézfájdalmak kezelésében nem hiszünk a gyors, felületes megoldásokban. A kezeléseink és programjaink a legmodernebb mozgásterápiás és manuálterápiás módszerekre épülnek, hogy segítsenek a gyökérok megszüntetésében, és a hosszú távú regenerációban.',
+  ),
+]
+
+/** Rendelői kezelések — a részletes leírás és a technikák felsorolása. */
+const rendeloiKezelesekNodes = (): BlockNode[] => [
+  heading('h3', 'Rendelői kezelések – személyes terápiás megoldások'),
+  para(
+    'Ha gyors és hatékony eredményt szeretnél, gyógytornával, manuálterápiával és kiegészítő technikákkal segítünk a kezed, és ha szükséges, a gerinced panaszainak csökkentésében.',
+  ),
+  para(
+    'Akut sérülések, műtét utáni rehabilitáció és krónikus fájdalmak kezelésére egyénre szabott mozgásterápiát, manuálterápiát és különböző kiegészítő terápiákat és eszközöket alkalmazunk, hogy gyors és tartós eredményt érj el.',
+  ),
+  para('Amiben segíteni tudunk:'),
+  bulletList([
+    'Gyógytorna – akut sérülések, műtét utáni állapotok és krónikus fájdalmak esetén a mozgásterápia a gyógyulás alappillére',
+    'Manuálterápia – a lágyrészek és ízületek célzott, kézzel végzett kezelése',
+    'Kiegészítő terápiák – Kinesio Tape és Dynamic Tape® felhelyezés, flossing, köpölyterápia, fasciakés (eszközös lágyrész-mobilizáció), hegkezelés, NRX® bandázs',
+  ]),
+]
+
+/**
+ * Árlista + helyszínek. Az időpontkérés CTA-ja PARAMÉTERES:
+ *  - `gomb`      — a rich-text ág mai viselkedése (önálló bekezdésben álló link
+ *                  → a serializer elsődleges gombot renderel belőle),
+ *  - `szoveglink`— a szekciósoré: a lapon a fizetős kurzus CTA-ja az EGYETLEN
+ *                  elsődleges gomb (docs/ux-belso-oldalak-kutatas.md B6.5), a
+ *                  lead-jellegű időpontkérés ezért mondatba ágyazott szöveglink.
+ */
+const arlistaNodes = (idopontCta: 'gomb' | 'szoveglink'): BlockNode[] => [
+  heading('h3', 'Árlista – gyógytorna / manuálterápia'),
+  bulletList([
+    '50 perces alkalom – 18 000 Ft (tartalmazza a szükség szerinti Kinesio Tape vagy Dynamic Tape® felhelyezését, flossing-, köpöly- és/vagy eszközös lágyrész-manuálterápiás kezeléseket)',
+    '20 perces alkalom – 10 000 Ft (tartalmazza a szükség szerinti Kinesio Tape vagy Dynamic Tape® felhelyezését, flossing-, köpöly- és/vagy eszközös lágyrész-manuálterápiás kezeléseket)',
+  ]),
+  para(
+    'Az első alkalom minden esetben 50 perces vizsgálatot foglal magába. Rendelőinkben készpénzes és átutalásos fizetésre van lehetőség.',
+  ),
+  para('Helyszíneink: 1117 Budapest, Nádorliget u. 7/b • 1114 Budapest, Fadrusz utca 15.'),
+  idopontCta === 'gomb'
+    ? cta('/kapcsolat', 'Időpontot kérek')
+    : paragraph([
+        textNode('Személyes kezelésre a kapcsolat oldalon tudsz jelentkezni: '),
+        link('/kapcsolat', 'időpontot kérek'),
+        textNode('.'),
+      ]),
+]
+
+/** Online kurzus — az otthoni program bemutatása a rich-text ágban. */
+const onlineKurzusNodes = (): BlockNode[] => [
+  heading('h3', 'Online kurzus – otthoni fájdalomcsökkentő program'),
+  para('Nem tudsz eljutni személyes kezelésre?'),
+  para(
+    'Ha nincs lehetőséged rendelőbe járni, az otthoni gyakorlóvideóink segítenek enyhíteni a fájdalmad és visszaállítani a kezed működését.',
+  ),
+  para(
+    'Az otthoni programunk biztonságos, szakértői alapokra épülő mozgásprogramokat tartalmaz, amik segítenek neked otthon is hatékonyan kezelni a kézfájdalmadat. A saját tempódban haladhatsz, és bárhol, bármikor végezheted.',
+  ),
+  cta('/kurzusok', 'Megnézem a kurzusokat'),
+]
+
+/** Szakmai képzés — az akkreditált tantermi kurzus a rich-text ágban. */
+const szakmaiKepzesNodes = (): BlockNode[] => [
+  heading('h3', 'Szakmai képzések – akkreditált kézrehabilitációs képzés szakembereknek'),
+  para('Szeretnéd mélyíteni a kézsérülések és rehabilitáció terén szerzett ismereteidet?'),
+  para(
+    'Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe címmel akkreditált tantermi képzést biztosítunk gyógytornászok, orvosok, mozgásterapeuták és edzők számára, a ProBody Stúdióval együttműködve. (12 kreditpont – SZTK-A-33553/2024)',
+  ),
+  cta('https://probodystudio.hu/kez-workshop/', 'Tovább a szakmai képzésre', true),
+]
+
+/**
+ * A három szolgáltatási ág a SZEKCIÓSOR `services` blokkjához.
+ *
+ * Mindhárom sor UGYANABBAN a sorrendben hozza ugyanazokat az információkat
+ * (kinek való → hol/hogyan → mi az ár, illetve hol látod az árat) — a kutatás
+ * B4.1 szabálya szerint a párhuzamos ajánlatok csak így hasonlíthatók össze.
+ * Az árat a kurzusnál szándékosan NEM írjuk ide: az a termék adata (Webshop →
+ * Kurzusok), és a CMS-be másolva elavulna.
+ */
+const SZOLGALTATASI_AGAK: readonly SzolgaltatasSor[] = [
+  {
+    title: 'Rendelői kezelések',
+    body: 'Akut sérülés, műtét utáni állapot vagy krónikus fájdalom esetén: egyénre szabott gyógytorna, manuálterápia és kiegészítő terápiák. Két budapesti rendelőben (Nádorliget u. 7/b, Fadrusz utca 15.), 50 vagy 20 perces alkalmakban. Ár: 18 000 Ft (50 perc), illetve 10 000 Ft (20 perc).',
+    label: 'Időpontot kérek',
+    url: '/kapcsolat',
+  },
+  {
+    title: 'Otthoni online program',
+    body: 'Ha nincs lehetőséged rendelőbe járni: videós gyakorlatsorok, amelyek a saját tempódban vezetnek végig a felépülésen. Bárhol, bármikor végezhető, azonnali hozzáféréssel. Az árat és a program tartalmát a kurzusoldalon látod.',
+    label: 'Megnézem a kurzusokat',
+    url: '/kurzusok',
+  },
+  {
+    title: 'Szakmai képzések',
+    body: 'Gyógytornászoknak, orvosoknak, mozgásterapeutáknak és edzőknek: akkreditált tantermi képzés a kéz, a csukló- és könyökízület rehabilitációjáról, a ProBody Stúdióval együttműködve. 12 kreditpont (SZTK-A-33553/2024). A képzés időpontját és díját a ProBody Stúdió oldalán találod.',
+    label: 'Tovább a szakmai képzésre',
+    url: 'https://probodystudio.hu/kez-workshop/',
+    newTab: true,
+  },
+]
+
+/** „Ezért fogod imádni" — 3 érv. A sorszámot a rich-text ág a címbe írja, a
+ *  szekció-blokkban (usps) a megjelenítés adja. */
+const SZOLGALTATASOK_ERVEK: readonly CimSzoveg[] = [
+  {
+    title: 'A kéz a specialitásunk',
+    body: 'Nem csupán egy terület a sok közül, hanem a fő szakterületünk. Évek óta foglalkozunk kézrehabilitációval, és sokféle esettel találkoztunk már.',
+  },
+  {
+    title: 'Tartós eredmények',
+    body: 'Nemcsak csillapítjuk a tüneteket, hanem a kiváltó okokat is kezeljük. Megtanítunk arra is, mit tegyél, hogy többet ne okozzon problémát neked a kézfájdalom.',
+  },
+  {
+    title: 'Naprakész tudás',
+    body: 'Folyamatosan követjük a legújabb kutatásokat és módszereket, hogy a lehető leghatékonyabb kezelést kaphasd tőlünk.',
+  },
+]
+
+/** A lap két, élsportolóktól származó véleménye (rich-text ág). */
+const szolgaltatasokVelemenyNodes = (): BlockNode[] => [
+  heading('h2', 'Vélemények'),
+  heading('h3', '„Életem végéig hálás leszek neked”'),
+  quote(
+    '10 év élsport után jelentkező könyökízületi problémáim miatt kezdtem el dolgozni Kocsis Katával. Műtétre került a sor, amiben maximálisan támogatott: ott volt velem a műtőben, és a műtét után is mellettem maradt, amíg magamhoz nem tértem. A rehabilitáció teljes folyamatában számíthattam rá. Bár nem volt könnyű időszak, a közös munka mindig vidáman telt, tele biztatással és támogatással, amiért a mai napig hálás vagyok. Azóta is bármilyen egészségügyi problémám adódik, nyugodt szívvel fordulok hozzá.',
+  ),
+  para('– Konda Boglárka, vízilabdázó'),
+  quote(
+    'Pár évvel ezelőtt reménytelenül álltam a karrierem előtt. De hálát adok a sorsnak, hogy megismertelek, mert te vagy az a személy, akinek azt köszönhetem, hogy visszatérhettem oda, ahova tartozom, a Manézsba. A páratlan szakértelmed segítségével rengeteget javult az állapotom. A gyógyulás és a regeneráció mellett nagyon sokat tanulhattam tőled, és a mai napig hasznosítom ezt a tudást. A segítséged mellé egy igaz barátságot is kaptam! Életem végéig hálás leszek neked!',
+  ),
+  para('– Tarba Patrícia, artista'),
+]
+
 const szolgaltatasokContent = (): RichTextContent =>
   richText([
-    heading('h2', 'Fáj a kezed, csuklód, könyököd vagy vállad?'),
-    para(
-      'Tudjuk, hogy ez a probléma mennyire tud hátráltatni a munkában vagy a sportban, de még a hétköznapokban is.',
-    ),
-    para(
-      'Ezért professzionális kezeléseinkkel és online programjainkkal abban segítünk, hogy minél gyorsabban visszanyerd a kezed erejét és mozgását – hosszú távú eredményekkel.',
-    ),
-    heading('h2', 'Van megoldás – ha tudod, merre indulj'),
-    para(
-      'A legtöbb kéz-, csukló- vagy könyökprobléma megfelelő terápiával hatékonyan kezelhető – és akár a műtét is elkerülhető.',
-    ),
-    para(
-      'Ehhez persze türelemre és kitartásra van szükség, de a test egy csodálatos „szerkezet”: ha segítünk neki, képes rendbehozni magát.',
-    ),
-    para(
-      'A kézfájdalmak kezelésében nem hiszünk a gyors, felületes megoldásokban. A kezeléseink és programjaink a legmodernebb mozgásterápiás és manuálterápiás módszerekre épülnek, hogy segítsenek a gyökérok megszüntetésében, és a hosszú távú regenerációban.',
-    ),
+    ...szolgaltatasokBevezetoNodes(),
     heading('h2', 'Válaszd ki, hogyan segíthetünk neked a legjobban'),
-    heading('h3', 'Rendelői kezelések – személyes terápiás megoldások'),
-    para(
-      'Ha gyors és hatékony eredményt szeretnél, gyógytornával, manuálterápiával és kiegészítő technikákkal segítünk a kezed, és ha szükséges, a gerinced panaszainak csökkentésében.',
-    ),
-    para(
-      'Akut sérülések, műtét utáni rehabilitáció és krónikus fájdalmak kezelésére egyénre szabott mozgásterápiát, manuálterápiát és különböző kiegészítő terápiákat és eszközöket alkalmazunk, hogy gyors és tartós eredményt érj el.',
-    ),
-    para('Amiben segíteni tudunk:'),
-    bulletList([
-      'Gyógytorna – akut sérülések, műtét utáni állapotok és krónikus fájdalmak esetén a mozgásterápia a gyógyulás alappillére',
-      'Manuálterápia – a lágyrészek és ízületek célzott, kézzel végzett kezelése',
-      'Kiegészítő terápiák – Kinesio Tape és Dynamic Tape® felhelyezés, flossing, köpölyterápia, fasciakés (eszközös lágyrész-mobilizáció), hegkezelés, NRX® bandázs',
-    ]),
-    heading('h3', 'Árlista – gyógytorna / manuálterápia'),
-    bulletList([
-      '50 perces alkalom – 18 000 Ft (tartalmazza a szükség szerinti Kinesio Tape vagy Dynamic Tape® felhelyezését, flossing-, köpöly- és/vagy eszközös lágyrész-manuálterápiás kezeléseket)',
-      '20 perces alkalom – 10 000 Ft (tartalmazza a szükség szerinti Kinesio Tape vagy Dynamic Tape® felhelyezését, flossing-, köpöly- és/vagy eszközös lágyrész-manuálterápiás kezeléseket)',
-    ]),
-    para(
-      'Az első alkalom minden esetben 50 perces vizsgálatot foglal magába. Rendelőinkben készpénzes és átutalásos fizetésre van lehetőség.',
-    ),
-    para('Helyszíneink: 1117 Budapest, Nádorliget u. 7/b • 1114 Budapest, Fadrusz utca 15.'),
-    cta('/kapcsolat', 'Időpontot kérek'),
-    heading('h3', 'Online kurzus – otthoni fájdalomcsökkentő program'),
-    para('Nem tudsz eljutni személyes kezelésre?'),
-    para(
-      'Ha nincs lehetőséged rendelőbe járni, az otthoni gyakorlóvideóink segítenek enyhíteni a fájdalmad és visszaállítani a kezed működését.',
-    ),
-    para(
-      'Az otthoni programunk biztonságos, szakértői alapokra épülő mozgásprogramokat tartalmaz, amik segítenek neked otthon is hatékonyan kezelni a kézfájdalmadat. A saját tempódban haladhatsz, és bárhol, bármikor végezheted.',
-    ),
-    cta('/kurzusok', 'Megnézem a kurzusokat'),
-    heading('h3', 'Szakmai képzések – akkreditált kézrehabilitációs képzés szakembereknek'),
-    para('Szeretnéd mélyíteni a kézsérülések és rehabilitáció terén szerzett ismereteidet?'),
-    para(
-      'Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe címmel akkreditált tantermi képzést biztosítunk gyógytornászok, orvosok, mozgásterapeuták és edzők számára, a ProBody Stúdióval együttműködve. (12 kreditpont – SZTK-A-33553/2024)',
-    ),
-    cta('https://probodystudio.hu/kez-workshop/', 'Tovább a szakmai képzésre', true),
+    ...rendeloiKezelesekNodes(),
+    ...arlistaNodes('gomb'),
+    ...onlineKurzusNodes(),
+    ...szakmaiKepzesNodes(),
     heading('h2', 'Ezért fogod imádni'),
-    heading('h3', '1. A kéz a specialitásunk'),
-    para(
-      'Nem csupán egy terület a sok közül, hanem a fő szakterületünk. Évek óta foglalkozunk kézrehabilitációval, és sokféle esettel találkoztunk már.',
-    ),
-    heading('h3', '2. Tartós eredmények'),
-    para(
-      'Nemcsak csillapítjuk a tüneteket, hanem a kiváltó okokat is kezeljük. Megtanítunk arra is, mit tegyél, hogy többet ne okozzon problémát neked a kézfájdalom.',
-    ),
-    heading('h3', '3. Naprakész tudás'),
-    para(
-      'Folyamatosan követjük a legújabb kutatásokat és módszereket, hogy a lehető leghatékonyabb kezelést kaphasd tőlünk.',
-    ),
-    heading('h2', 'Vélemények'),
-    heading('h3', '„Életem végéig hálás leszek neked”'),
-    quote(
-      '10 év élsport után jelentkező könyökízületi problémáim miatt kezdtem el dolgozni Kocsis Katával. Műtétre került a sor, amiben maximálisan támogatott: ott volt velem a műtőben, és a műtét után is mellettem maradt, amíg magamhoz nem tértem. A rehabilitáció teljes folyamatában számíthattam rá. Bár nem volt könnyű időszak, a közös munka mindig vidáman telt, tele biztatással és támogatással, amiért a mai napig hálás vagyok. Azóta is bármilyen egészségügyi problémám adódik, nyugodt szívvel fordulok hozzá.',
-    ),
-    para('– Konda Boglárka, vízilabdázó'),
-    quote(
-      'Pár évvel ezelőtt reménytelenül álltam a karrierem előtt. De hálát adok a sorsnak, hogy megismertelek, mert te vagy az a személy, akinek azt köszönhetem, hogy visszatérhettem oda, ahova tartozom, a Manézsba. A páratlan szakértelmed segítségével rengeteget javult az állapotom. A gyógyulás és a regeneráció mellett nagyon sokat tanulhattam tőled, és a mai napig hasznosítom ezt a tudást. A segítséged mellé egy igaz barátságot is kaptam! Életem végéig hálás leszek neked!',
-    ),
-    para('– Tarba Patrícia, artista'),
+    ...SZOLGALTATASOK_ERVEK.flatMap((item, index) => [
+      heading('h3', `${index + 1}. ${item.title}`),
+      para(item.body),
+    ]),
+    ...szolgaltatasokVelemenyNodes(),
   ])
+
+// --- /rolunk ----------------------------------------------------------------
+
+/** A lap bevezetője: miért fontos a kéz, és mikor kell segítség. */
+const rolunkBevezetoNodes = (): BlockNode[] => [
+  para(
+    '– és igazából neked is. Akinek nem fáj a keze, talán bele sem gondol, hogy szinte minden ébren töltött percben használjuk a kezünket valamire.',
+  ),
+  para(
+    'Ha pedig azért vagy itt, mert megoldást keresel valamilyen húzódásra, sérülésre vagy idegi-, ízületi fájdalomra, akkor pontosan tudod:',
+  ),
+  heading('h2', '…ez nem „csak egy kéz”'),
+  para(
+    'Ez a te összekötő kapcsod a világgal: ezzel dolgozol, alkotsz, simogatsz, bátorítasz, gyógyítasz, táplálsz, és mindent ezzel mozgatsz.',
+  ),
+  para(
+    'Így egy sérülés vagy fájdalom kihat az önállóságodra, a munkádra, a hobbidra, de még a legapróbb hétköznapi mozdulataidra is. Ezért olyan fontos, hogy a kezed megkapja azt a törődést és szakértői segítséget, amire szüksége van.',
+  ),
+  heading('h2', 'Amikor már napi szinten problémát okoz a fájdalom'),
+  para(
+    'Tudjuk, milyen kiszolgáltatott érzés az, amikor megsérül az ember keze, vagy a túlerőltetés miatt gyullad be egy ízület vagy ideg. Főleg, amikor nem hogy nem múlik a fájdalom, de egyre erősebb lesz…',
+  ),
+  para(
+    'Minden nehezebb ilyenkor: aggódsz, hogy meddig fogod tudni így végezni a munkádat, vagy sportolóként azon stresszelsz, hogy ki kell-e hagynod versenyeket.',
+  ),
+  para('Ha te is szeretnéd, hogy végre…'),
+  bulletList([
+    'megszabadulj a fájdalomtól,',
+    'szabadon használhasd újra a kezed anélkül, hogy vigyáznod kellene vele,',
+    'visszatérjen bele az erő, és ugyanúgy használhasd, mint régen,',
+    'ne kelljen attól tartanod, hogy mi lesz, ha romlik a helyzet,',
+  ]),
+  para('…akkor a legjobb helyen vagy, és szívesen segítünk.'),
+]
+
+/** „Megérdemled a profi törődést" — az alapítói történet bekezdései. */
+const ROLUNK_BEMUTATKOZAS: readonly string[] = [
+  'Kocsis Kata és Kiss Kata vagyunk, a KINETICARE alapítói. Gyógytornász, manuálterapeuta, sportrehabilitációs tréner végzettséggel, de az évek során egyre inkább a kézrehabilitáció került nálunk a fókuszba.',
+  'A klinikán és utána a saját rendelőnkben is egyre szembetűnőbb volt, hogy milyen sokan jönnek hozzánk a kéz valamelyik részének a problémájával.',
+  'Úgyhogy egyre jobban beleástuk magunkat a témába: a külföldi továbbképzésektől a boncolásokon és műtéteken át a legújabb kezelési technikákig mindent igyekszünk felkutatni, amit a kéz anatómiájáról és rehabilitációjáról tudni érdemes, hogy a pácienseinknek átfogó, profi segítséget nyújthassunk.',
+  'Büszkék vagyunk rá, hogy válogatott sportolók, olimpikonok, kismamák és irodai dolgozók, de még a társszakmákban dolgozók is (és persze sokan mások) hozzánk fordulnak, ha megoldást szeretnének.',
+  'Szakmai képzéseket és workshopokat is tartunk a témában, és emellett a Magyar Sportrehabilitációs Egyesület és a Magyar Gyógytornász-Fizioterapeuták Társaságának munkájában is részt veszünk.',
+  'Hiszünk abban, hogy a megfelelő technikákkal helyrehozhatók a sérülések, sokszor akár a műtétek is elkerülhetőek, és hogy a te kezed is megérdemli a profi törődést.',
+  'Akár kezelésre jössz hozzánk, akár az otthon végezhető gyakorlatainkkal „kezeled” magad, a cél ugyanaz: segítünk megszabadulni a kézfájdalmaiktól, hogy újra élvezhesd a munkát, a sportot és a hétköznapi teendőket.',
+]
+
+/**
+ * A két alapító neve, titulusa és telefonszáma.
+ *
+ * Ez a rész a szekciósorban is kell (a `teamMembers` fotós szakértő-kártya
+ * blokk még nem létezik — docs/tartalom-leltar-regi-oldal.md 4. szakasz),
+ * ezért a szekciósor szabad szöveges blokkja EZT a csoportot használja: a két
+ * telefonszám így nem vész el a blokkosítással.
+ */
+const rolunkSzakemberNodes = (): BlockNode[] => [
+  heading('h2', 'Kocsis Kata'),
+  para('Gyógytornász, sportrehabilitációs tréner, gyógymasszőr – telefon: +36 30 169 2263'),
+  heading('h2', 'Kiss Kata'),
+  para('Gyógytornász, manuálterapeuta, sportrehabilitációs tréner – telefon: +36 20 357 3493'),
+]
+
+/** A lap két véleménye (rich-text ág; a szekciósorban a `testimonials` blokk
+ *  adja ugyanezt a Vélemények collectionből). */
+const rolunkVelemenyNodes = (): BlockNode[] => [
+  heading('h2', 'Vélemények'),
+  heading('h3', '„Már az első alkalom után lecsökkent a fájdalom.”'),
+  quote(
+    '2024. szeptemberében kerültem Kocsis Katához, amiért örökre hálás leszek. Mérhetetlen könyökfájdalmam volt a bal kezemben, és társult hozzá egy hüvelykujj-panasz is. Alapos vizsgálat után elmagyarázta, mi a probléma, és megkezdte a kezelést. A kedves mosolya és zseniális szakmai tudása felbecsülhetetlen! Már az első kezelés mérföldkő volt, hiszen tudtam használni a kezem, és elmúlt a fájdalom. Ajánlani? IGEN, de inkább kötelezővé tenném mindenkinek, akinek kézpanasza van az élete bármely szakaszában.',
+  ),
+  para('– Varró Barbara, Nagy Sportágválasztó ügyvezető'),
+  quote(
+    'Kata minden újonnan jövő kihívást egy megoldandó feladatként kezel, és látszik rajta az elhivatottság a szakmája iránt. Így volt ez legutóbb a síelésre való felkészítéssel is, a mozgásformához szükséges erősítő feladatokat végeztük. A gyakorlatsorok végrehajtását mindig kellő szigorral és odafigyeléssel ellenőrzi – ez az a precízitás és hozzáállás, amit a páciensek később meghálálnak. Az erőfeszítéseidet mindig dicsérő szavak követik, neki pedig az a legnagyobb dicséret, ha az óra végén mosolyogva, jóleső fáradtsággal, de panaszmentesen lépsz ki az ajtón.',
+  ),
+  para('– Takács Mátyás, építészmérnök'),
+]
+
+/** „Amiben mások vagyunk" — 3 megkülönböztető állítás. */
+const ROLUNK_MEGKULONBOZTETOK: readonly CimSzoveg[] = [
+  {
+    title: 'A kéz a specialitásunk',
+    body: 'Úgy fogyasztjuk a kézrehabilitációval kapcsolatos legújabb szakmai anyagokat és technikákat, mint a legizgalmasabb sorozatot: mindig jön az újabb „epizód”, amiért teljes lelkesedéssel rajongunk, és azonnal ki is próbáljuk.',
+  },
+  {
+    title: 'Megosztjuk a tudásunkat',
+    body: 'Szakmai előadóként, társszerzőként, és akkreditált workshopokkal is igyekszünk átadni a tudásunkat az érdeklődő szakmabelieknek. (A Semmelweis Egyetemen a jövő gyógytornászai az egyetemi képzésükön többek között a mi anyagunkból is tanulnak.)',
+  },
+  {
+    title: 'Tartós eredményeket adunk',
+    body: 'Nem csak a tüneteket kezeljük. Megtaláljuk a probléma gyökerét, együtt dolgozunk a kezelésén, és utána pontosan tudni fogod, mit tegyél, hogy épen és egészségesen tartsd a kezed (vagy amidet kezeltük).',
+  },
+]
+
+/** „Miben segíthetünk?" — a három szolgáltatási ág rövid alakja. */
+const ROLUNK_SZOLGALTATASOK: readonly SzolgaltatasSor[] = [
+  {
+    title: 'Rendelői kezelések – személyesen',
+    body: 'Akut sérülések, műtét utáni állapotok és krónikus fájdalmak esetén a mozgásterápia a gyógyulás alappillére. Gyógytornával, manuálterápiával és egy sor kiegészítő terápiával várunk.',
+    label: 'Tovább a kezelésekre',
+    url: '/szolgaltatasok',
+  },
+  {
+    title: 'Otthoni program – online',
+    body: 'Ha a kézfájdalom enyhítésére szeretnél egy bárhol, bármikor végezhető megoldást, akkor egy átfogó programmal is tudunk segíteni.',
+    label: 'Tovább a kurzusokra',
+    url: '/kurzusok',
+  },
+  {
+    title: 'Szakmai képzések – kollégáknak',
+    body: 'Akkreditált tantermi kézkurzus a kéz, a csukló- és könyökízület rehabilitációs lehetőségeiről gyógytornászoknak, erőnléti- és szakági edzőknek és orvosoknak.',
+    label: 'Tovább a képzésre',
+    url: 'https://probodystudio.hu/kez-workshop/',
+    newTab: true,
+  },
+]
+
+/**
+ * Partnerek és a két teljes szakmai önéletrajz.
+ *
+ * A szekciósorban is EZ a csoport kerül a szabad szöveges blokkba: a ~70
+ * tételes CV-hez való `accordion` blokk (darabszámos fejlécekkel) még nem
+ * létezik, a `faq` blokk pedig nem használható rá (abból FAQPage strukturált
+ * adat készül). Így a blokkosítás egyetlen betűt sem veszít el.
+ */
+const rolunkReferenciaNodes = (): BlockNode[] => [
+  heading('h2', 'Partnereink'),
+  para(
+    'Magyar Sportrehabilitációs Egyesület, ProBody Stúdió, Aurora Medical, Dynamic Tape®, TUDATEST, PhysioWatch, WIBBI, Halm Optika, dr. pharm. Kocsis Kristóf, Csillik Árpád, NISHI STUDIO pilates, BodyGPS, Magic Smile, Be Fit With Ben, OrtoCare, Pille Fizioterápia.',
+  ),
+  heading('h2', 'Kocsis Kata szakmai önéletrajz'),
+  para('Gyógytornász, sportrehabilitációs tréner, gyógy- és sportmasszőr'),
+  heading('h3', 'Tanulmányok'),
+  bulletList([
+    'Pécsi Tudományegyetem Egészségtudományi Kar, Ápolás és Betegellátás alapképzési szak, Gyógytornász szakirány',
+    'Minerva Érettségizettek Szakközépiskolája – Gyógy- és sportmasszőr (54-726-01)',
+  ]),
+  heading('h3', 'Tanfolyamok, továbbképzések, konferenciák'),
+  bulletList([
+    'Ezerarcú hypermobilitás a gyógytornász praxisban (2026) – BodyGPS',
+    'Orfit alapanyagokból készült kéz- és felsővégtag rögzítők (2025) – Tóth Jordán Zsolt, OrtoCare',
+    'Aspetar World Conference 2025 – Doha, Katar',
+    'ATP Challenger Physio Education Program (2024) – International Tennis Performance Association',
+    'Hegkezelés és hegtudatos életmód (2024) – La Matriarcha',
+    'II. Fizioterápiás Tematikus Nap – A krónikus non-specifikus derékfájdalom (2024) – PTE ETK',
+    'Az izomsérülések diagnosztikája és rehabilitációja – Varró Tina, Probody Academy',
+    'Management of Distal Radius Fractures following ORIF surgery from 6 weeks (2024) – Kate Thorn, CHT (USA), AHTA',
+    'Early Management of Distal Radius Fractures following ORIF surgery (2024) – Kate Thorn, CHT (USA), AHTA',
+    'Extensor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
+    'Flexor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
+    "De Quervain's Tenosynovitis (2024) – Kate Thorn, CHT (USA), AHTA",
+    'Carpal Tunnel Syndrome (2024) – Loren Szmiga, Manual Therapist, CHT',
+    'Trigger Finger (2024) – Loren Szmiga, Manual Therapist, CHT',
+    'Functional Anatomy of the Hand (2024) – Daphne Xuan, MPT',
+    'A nagy térd kurzus (2024) – Varró Tina, Probody Academy',
+    'Az elülső keresztszalag-pótlást követő rehabilitációs program (2023) – Varró Tina, Probody Academy',
+    'Gyorsaságfejlesztés a XXI. században (2022) – Magyar Edzők Társasága',
+    'Innovating in Health Care (2022) – Harvard Medical School',
+    'Human Anatomy: Musculoskeletal Cases (2022) – Harvard Medical School',
+    'PK1 FPH – Integrált manuálterápia a modernkori testtartási zavarok kezelésében (2022) – MGYFT',
+    'Bevezetés a Biomechanikai-Dinamikus Taping Módszertanába (2022) – Dynamic Tape® Magyarország',
+    'Neuroplaszticitás és mozgásterápia (2022) – Feövenyessy Medical Fitness Akadémia',
+    'Practical Improvement Science in Health Care (2021–2022) – Harvard Medical School',
+    'Regeneráció a versenyidőszakban (2022) – Magyar Edzők Társasága',
+    'Sportfizioterápia (Sportrehabilitáció) (2022) – Varró Tina, Maximum Performance',
+    'A porckárosodás kezelésének új lehetőségei (2022) – Magyar Edzők Társasága',
+    'Mulligan-koncepció I. modul (2021) – Mulligan Koncepció Magyarország',
+    'Barvincsenko-féle lágyrész-manuálterápia I. – A gerinc és a medence (2021) – Holisztikus Medicina Alapítvány',
+    'Az önsorsrontás pszichológiája (2021) – Jog és Pszichológia',
+    'Kismama kinesiotape (2021) – Perfect Movement Mozgásközpont',
+    'McKenzie „B” kurzus (2021) – Magyarországi McKenzie Intézet',
+    'SMR (self myofascial release) a sport- és mozgásszervi rehabilitációban (2020) – Balance Medical Fitness Akadémia',
+    'McKenzie „A” kurzus (2020) – Magyarországi McKenzie Intézet',
+    'NRX® – Dinamikus ízületstabilizálás és korrekció (2020) – Balance Medical Fitness Akadémia',
+    'Flossing terápia a mozgásszervi problémák és sportsérülések rehabilitációjában (2018) – Balance Medical Fitness Akadémia',
+    'Kinesiology taping / Sport taping képzés (2018) – Balance Medical Fitness Akadémia',
+    'Svédmasszázs (2015) – OKTÁV Továbbképző Központ',
+  ]),
+  heading('h3', 'Publikációk'),
+  bulletList([
+    'Kocsis, K., Szalay, B., Békési, Á., Király, B. (2022). Thoracalis gerincszakasz elváltozásai és az impingement szindróma összevetése a különböző korosztályokban játszó röplabdások körében. Fizioterápia, 31(2), 3–10.',
+    'Kocsis, K., Ács, P., Boncz, I., Molics, B., Király, B. (2022). Comparison between thoracic spine deformities and impingement syndrome among volleyball players in different age groups. Value in Health Journal, POSB337.',
+  ]),
+  heading('h3', 'Konferenciák, előadások'),
+  bulletList([
+    'Magyar Sportrehabilitációs Konferencia (2025, Budapest): Műtőasztaltól a kezdőötösig – egy NBI-es kosárlabdázó esettanulmánya',
+    'Sportrehabilitációs tréner képzés: Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe – akkreditált kurzus, 12 kreditpont (SZTK-A-33553/2024) – instruktor (2024, 2025, 2026, Budapest)',
+    'ProBody Stúdió sportrehabilitációs tréner képzés: Gerinc anatómia és vizsgálat – instruktor (2024, 2025, 2026, Budapest)',
+    'ProBody Stúdió sportrehabilitációs tréner képzés: Könyök-, csukló- és kézízületek érintettségei sportolói szemszögből – instruktor (2023, 2024, Budapest)',
+    'A Magyar Kézsebész Társaság 29. kongresszusa: Kézsebészeti skill tréning – instruktor (2023, Székesfehérvár)',
+    'Akkreditált Oftex kurzus: Ínvarratok és határterületek a kézsebészeti ellátásban – instruktor (2023, Budapest)',
+    'ISPOR konferencia: Comparison between Thoracic Spine Deformities and Impingement Syndrome Among Volleyball Players (2020, Milánó; 2021, Koppenhága)',
+  ]),
+  heading('h3', 'Média-megjelenések'),
+  bulletList([
+    'Kézsérülés, műtét, fájdalom után: őrizd meg kezed egészségét! (2025) – Secret Medical Podcast',
+    'Űzzük el a stresszt! (2025) – Nők Lapja Évszakok',
+    'Mi fán terem az ínhüvelygyulladás? (2025/37) – Nők Lapja',
+    'Az irodai munka az új extrém sport? A kéz is dolgozik (2024/47) – Nők Lapja',
+    'Mitől lesz a banyapúp? (2024/8) – Nők Lapja',
+    'Mozgás korra szabva (2023/45) – Nők Lapja',
+    'Hogy ami egészséges, öröm is legyen (2023/9) – Képmás magazin',
+    'A henger az új csodaszer? (2023/35) – Nők Lapja',
+    'Sport korra szabva (2023/4) – Nők Lapja Egészség Különszám',
+    'Ne vegyük félvállról! (2023/14) – Nők Lapja',
+    'Fájdalom az ujjakban – A nyeregízületi porckopás (2022) – Szimpatika magazin',
+    'A derékfájdalom ront a legtöbbet az életminőségen (2021) – Házipatika.com',
+    'Derékfájdalom: akár fertőzés is okozhatja a panaszokat! (2021) – Egészség Kalauz',
+    'Karc FM – Kortalan műsor (2021): gyógytornász-szerepvállalás',
+  ]),
+  heading('h2', 'Kiss Kata szakmai önéletrajz'),
+  para('Gyógytornász, manuálterapeuta, sportrehabilitációs tréner'),
+  heading('h3', 'Tanulmányok'),
+  bulletList([
+    'Semmelweis Egyetem Egészségtudományi Kar, Ápolás és Betegellátás alapképzési szak – Gyógytornász szakirány',
+    'Holisztikus Medicina Alapítvány – Barvicsenko-féle manuálterapeuta képzés (manuális medicina elméleti és gyakorlati képzése)',
+  ]),
+  heading('h3', 'Tanfolyamok, továbbképzések, konferenciák'),
+  bulletList([
+    'Tendon Transfer Training (2026) – Hand Therapy Academy',
+    'Wrist Pain in the Combative Athlete 1–2. (2026) – Ian Gatt, Inspire Institute of Sport',
+    'Ezerarcú hypermobilitás a gyógytornász praxisban (2026) – BodyGPS',
+    'Orfit alapanyagokból készült kéz- és felsővégtag rögzítők (2025) – Tóth Jordán Zsolt, OrtoCare',
+    'Say It Better: Essential Skills for Designing Effective Presentations for Healthcare Professionals (2025) – Aspetar, Doha',
+    'Artificial Intelligence (AI) in Sports Medicine Workshop (2025) – Aspetar, Doha',
+    'Aspetar World Conference 2025 – Doha, Katar',
+    'Ulnar Sided Wrist Pain (2025) – Hand Therapy Academy',
+    'The Painful Shoulder (2025) – Adam Meakins',
+    'ATP Challenger Physio Education Program (2024) – International Tennis Performance Association',
+    'II. Fizioterápiás Tematikus Nap – A krónikus non-specifikus derékfájdalom (2024) – PTE ETK',
+    'Management of Distal Radius Fractures following ORIF surgery from 6 weeks (2024) – Kate Thorn, CHT (USA), AHTA',
+    'Early Management of Distal Radius Fractures following ORIF surgery (2024) – Kate Thorn, CHT (USA), AHTA',
+    'Extensor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
+    'Flexor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
+    "De Quervain's Tenosynovitis (2024) – Kate Thorn, CHT (USA), AHTA",
+    'Carpal Tunnel Syndrome (2024) – Loren Szmiga, Manual Therapist, CHT',
+    'Trigger Finger (2024) – Loren Szmiga, Manual Therapist, CHT',
+    'Functional Anatomy of the Hand (2024) – Daphne Xuan, MPT',
+    'Állkapocsízületi diszfunkciók fizioterápiája (2023) – MGYFT',
+    'Ergon IASTM eszközös lágyrészmobilizáció (2022) – Ergon IASTM Technique Hungary',
+    'Tumorpáciensek ellátása fasciaterápiákkal (2022) – Oriolus-med',
+    'Human Anatomy: Musculoskeletal Cases (2022) – Harvard Medical School',
+    'Sportrehabilitációs tréner képzés 1–2. szint (2022) – Maximum Performance',
+    'Neuroplaszticitás és mozgásterápia (2022) – Feövenyessy Medical Fitness Akadémia',
+    'Dinamikus manuálterápia I–II. (2021–2022) – Holisztikus Medicina Alapítvány',
+    'Fascia: elmélet és kezelési technikák (2021) – Balande Med Academy',
+    'Kinezio- és sporttaping (2021) – Balance Med Academy',
+    'Flossing a sportrehabilitációban (2021) – Balance Med Academy',
+    'Köpölyözés a sportprevencióban és a rehabilitációban (2021) – Balance Med Academy',
+    'Dynamic Tape: Bevezetés a Biomechanika-Dinamikus Taping Módszertanába (2019) – Dynamic Tape® Magyarország',
+  ]),
+  heading('h3', 'Konferenciák, előadások'),
+  bulletList([
+    'ProBody Stúdió: Rigid tape és funkcionális kötözések a sportrehabilitációban – instruktor (2026, Budapest)',
+    'Magyar Sportrehabilitációs Konferencia (2025, Budapest): Ulnáris oldali csuklófájdalmak – a csukló „derékfájása”',
+    'Sportrehabilitációs tréner képzés: Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe – akkreditált kurzus, 12 kreditpont (SZTK-A-33553/2024) – instruktor (2024, 2025, 2026, Budapest)',
+    'ProBody Stúdió sportrehabilitációs tréner képzés: Gerinc anatómia és vizsgálat – instruktor (2024, 2025, 2026, Budapest)',
+    'A lumbális és thoracalis gerinc manuális kezelési technikái Filippo Mechellivel – tolmács (2024, Budapest)',
+    'A Magyar Kézsebész Társaság 29. kongresszusa: Kézsebészeti skill tréning – instruktor (2023, Székesfehérvár)',
+    'Akkreditált Oftex kurzus: Ínvarratok és határterületek a kézsebészeti ellátásban – instruktor (2023, Budapest)',
+    'Gyógyító mezítlábazás – Nők Lapja (2023/34)',
+  ]),
+]
 
 const rolunkContent = (): RichTextContent =>
   richText([
-    para('– és igazából neked is. Akinek nem fáj a keze, talán bele sem gondol, hogy szinte minden ébren töltött percben használjuk a kezünket valamire.'),
-    para(
-      'Ha pedig azért vagy itt, mert megoldást keresel valamilyen húzódásra, sérülésre vagy idegi-, ízületi fájdalomra, akkor pontosan tudod:',
-    ),
-    heading('h2', '…ez nem „csak egy kéz”'),
-    para(
-      'Ez a te összekötő kapcsod a világgal: ezzel dolgozol, alkotsz, simogatsz, bátorítasz, gyógyítasz, táplálsz, és mindent ezzel mozgatsz.',
-    ),
-    para(
-      'Így egy sérülés vagy fájdalom kihat az önállóságodra, a munkádra, a hobbidra, de még a legapróbb hétköznapi mozdulataidra is. Ezért olyan fontos, hogy a kezed megkapja azt a törődést és szakértői segítséget, amire szüksége van.',
-    ),
-    heading('h2', 'Amikor már napi szinten problémát okoz a fájdalom'),
-    para(
-      'Tudjuk, milyen kiszolgáltatott érzés az, amikor megsérül az ember keze, vagy a túlerőltetés miatt gyullad be egy ízület vagy ideg. Főleg, amikor nem hogy nem múlik a fájdalom, de egyre erősebb lesz…',
-    ),
-    para(
-      'Minden nehezebb ilyenkor: aggódsz, hogy meddig fogod tudni így végezni a munkádat, vagy sportolóként azon stresszelsz, hogy ki kell-e hagynod versenyeket.',
-    ),
-    para('Ha te is szeretnéd, hogy végre…'),
-    bulletList([
-      'megszabadulj a fájdalomtól,',
-      'szabadon használhasd újra a kezed anélkül, hogy vigyáznod kellene vele,',
-      'visszatérjen bele az erő, és ugyanúgy használhasd, mint régen,',
-      'ne kelljen attól tartanod, hogy mi lesz, ha romlik a helyzet,',
-    ]),
-    para('…akkor a legjobb helyen vagy, és szívesen segítünk.'),
+    ...rolunkBevezetoNodes(),
     heading('h2', 'Megérdemled a profi törődést'),
-    para(
-      'Kocsis Kata és Kiss Kata vagyunk, a KINETICARE alapítói. Gyógytornász, manuálterapeuta, sportrehabilitációs tréner végzettséggel, de az évek során egyre inkább a kézrehabilitáció került nálunk a fókuszba.',
-    ),
-    para(
-      'A klinikán és utána a saját rendelőnkben is egyre szembetűnőbb volt, hogy milyen sokan jönnek hozzánk a kéz valamelyik részének a problémájával.',
-    ),
-    para(
-      'Úgyhogy egyre jobban beleástuk magunkat a témába: a külföldi továbbképzésektől a boncolásokon és műtéteken át a legújabb kezelési technikákig mindent igyekszünk felkutatni, amit a kéz anatómiájáról és rehabilitációjáról tudni érdemes, hogy a pácienseinknek átfogó, profi segítséget nyújthassunk.',
-    ),
-    para(
-      'Büszkék vagyunk rá, hogy válogatott sportolók, olimpikonok, kismamák és irodai dolgozók, de még a társszakmákban dolgozók is (és persze sokan mások) hozzánk fordulnak, ha megoldást szeretnének.',
-    ),
-    para(
-      'Szakmai képzéseket és workshopokat is tartunk a témában, és emellett a Magyar Sportrehabilitációs Egyesület és a Magyar Gyógytornász-Fizioterapeuták Társaságának munkájában is részt veszünk.',
-    ),
-    para(
-      'Hiszünk abban, hogy a megfelelő technikákkal helyrehozhatók a sérülések, sokszor akár a műtétek is elkerülhetőek, és hogy a te kezed is megérdemli a profi törődést.',
-    ),
-    para(
-      'Akár kezelésre jössz hozzánk, akár az otthon végezhető gyakorlatainkkal „kezeled” magad, a cél ugyanaz: segítünk megszabadulni a kézfájdalmaiktól, hogy újra élvezhesd a munkát, a sportot és a hétköznapi teendőket.',
-    ),
-    heading('h2', 'Kocsis Kata'),
-    para('Gyógytornász, sportrehabilitációs tréner, gyógymasszőr – telefon: +36 30 169 2263'),
-    heading('h2', 'Kiss Kata'),
-    para('Gyógytornász, manuálterapeuta, sportrehabilitációs tréner – telefon: +36 20 357 3493'),
-    heading('h2', 'Vélemények'),
-    heading('h3', '„Már az első alkalom után lecsökkent a fájdalom.”'),
-    quote(
-      '2024. szeptemberében kerültem Kocsis Katához, amiért örökre hálás leszek. Mérhetetlen könyökfájdalmam volt a bal kezemben, és társult hozzá egy hüvelykujj-panasz is. Alapos vizsgálat után elmagyarázta, mi a probléma, és megkezdte a kezelést. A kedves mosolya és zseniális szakmai tudása felbecsülhetetlen! Már az első kezelés mérföldkő volt, hiszen tudtam használni a kezem, és elmúlt a fájdalom. Ajánlani? IGEN, de inkább kötelezővé tenném mindenkinek, akinek kézpanasza van az élete bármely szakaszában.',
-    ),
-    para('– Varró Barbara, Nagy Sportágválasztó ügyvezető'),
-    quote(
-      'Kata minden újonnan jövő kihívást egy megoldandó feladatként kezel, és látszik rajta az elhivatottság a szakmája iránt. Így volt ez legutóbb a síelésre való felkészítéssel is, a mozgásformához szükséges erősítő feladatokat végeztük. A gyakorlatsorok végrehajtását mindig kellő szigorral és odafigyeléssel ellenőrzi – ez az a precízitás és hozzáállás, amit a páciensek később meghálálnak. Az erőfeszítéseidet mindig dicsérő szavak követik, neki pedig az a legnagyobb dicséret, ha az óra végén mosolyogva, jóleső fáradtsággal, de panaszmentesen lépsz ki az ajtón.',
-    ),
-    para('– Takács Mátyás, építészmérnök'),
+    ...ROLUNK_BEMUTATKOZAS.map((text) => para(text)),
+    ...rolunkSzakemberNodes(),
+    ...rolunkVelemenyNodes(),
     heading('h2', 'Amiben mások vagyunk'),
-    heading('h3', '1. A kéz a specialitásunk'),
-    para(
-      'Úgy fogyasztjuk a kézrehabilitációval kapcsolatos legújabb szakmai anyagokat és technikákat, mint a legizgalmasabb sorozatot: mindig jön az újabb „epizód”, amiért teljes lelkesedéssel rajongunk, és azonnal ki is próbáljuk.',
-    ),
-    heading('h3', '2. Megosztjuk a tudásunkat'),
-    para(
-      'Szakmai előadóként, társszerzőként, és akkreditált workshopokkal is igyekszünk átadni a tudásunkat az érdeklődő szakmabelieknek. (A Semmelweis Egyetemen a jövő gyógytornászai az egyetemi képzésükön többek között a mi anyagunkból is tanulnak.)',
-    ),
-    heading('h3', '3. Tartós eredményeket adunk'),
-    para(
-      'Nem csak a tüneteket kezeljük. Megtaláljuk a probléma gyökerét, együtt dolgozunk a kezelésén, és utána pontosan tudni fogod, mit tegyél, hogy épen és egészségesen tartsd a kezed (vagy amidet kezeltük).',
-    ),
+    ...ROLUNK_MEGKULONBOZTETOK.flatMap((item, index) => [
+      heading('h3', `${index + 1}. ${item.title}`),
+      para(item.body),
+    ]),
     heading('h2', 'Miben segíthetünk?'),
-    heading('h3', 'Rendelői kezelések – személyesen'),
-    para(
-      'Akut sérülések, műtét utáni állapotok és krónikus fájdalmak esetén a mozgásterápia a gyógyulás alappillére. Gyógytornával, manuálterápiával és egy sor kiegészítő terápiával várunk.',
-    ),
-    cta('/szolgaltatasok', 'Tovább a kezelésekre'),
-    heading('h3', 'Otthoni program – online'),
-    para(
-      'Ha a kézfájdalom enyhítésére szeretnél egy bárhol, bármikor végezhető megoldást, akkor egy átfogó programmal is tudunk segíteni.',
-    ),
-    cta('/kurzusok', 'Tovább a kurzusokra'),
-    heading('h3', 'Szakmai képzések – kollégáknak'),
-    para(
-      'Akkreditált tantermi kézkurzus a kéz, a csukló- és könyökízület rehabilitációs lehetőségeiről gyógytornászoknak, erőnléti- és szakági edzőknek és orvosoknak.',
-    ),
-    cta('https://probodystudio.hu/kez-workshop/', 'Tovább a képzésre', true),
-    heading('h2', 'Partnereink'),
-    para(
-      'Magyar Sportrehabilitációs Egyesület, ProBody Stúdió, Aurora Medical, Dynamic Tape®, TUDATEST, PhysioWatch, WIBBI, Halm Optika, dr. pharm. Kocsis Kristóf, Csillik Árpád, NISHI STUDIO pilates, BodyGPS, Magic Smile, Be Fit With Ben, OrtoCare, Pille Fizioterápia.',
-    ),
-    heading('h2', 'Kocsis Kata szakmai önéletrajz'),
-    para('Gyógytornász, sportrehabilitációs tréner, gyógy- és sportmasszőr'),
-    heading('h3', 'Tanulmányok'),
-    bulletList([
-      'Pécsi Tudományegyetem Egészségtudományi Kar, Ápolás és Betegellátás alapképzési szak, Gyógytornász szakirány',
-      'Minerva Érettségizettek Szakközépiskolája – Gyógy- és sportmasszőr (54-726-01)',
+    ...ROLUNK_SZOLGALTATASOK.flatMap((item) => [
+      heading('h3', item.title),
+      para(item.body),
+      cta(item.url, item.label, item.newTab),
     ]),
-    heading('h3', 'Tanfolyamok, továbbképzések, konferenciák'),
-    bulletList([
-      'Ezerarcú hypermobilitás a gyógytornász praxisban (2026) – BodyGPS',
-      'Orfit alapanyagokból készült kéz- és felsővégtag rögzítők (2025) – Tóth Jordán Zsolt, OrtoCare',
-      'Aspetar World Conference 2025 – Doha, Katar',
-      'ATP Challenger Physio Education Program (2024) – International Tennis Performance Association',
-      'Hegkezelés és hegtudatos életmód (2024) – La Matriarcha',
-      'II. Fizioterápiás Tematikus Nap – A krónikus non-specifikus derékfájdalom (2024) – PTE ETK',
-      'Az izomsérülések diagnosztikája és rehabilitációja – Varró Tina, Probody Academy',
-      'Management of Distal Radius Fractures following ORIF surgery from 6 weeks (2024) – Kate Thorn, CHT (USA), AHTA',
-      'Early Management of Distal Radius Fractures following ORIF surgery (2024) – Kate Thorn, CHT (USA), AHTA',
-      'Extensor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
-      'Flexor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
-      "De Quervain's Tenosynovitis (2024) – Kate Thorn, CHT (USA), AHTA",
-      'Carpal Tunnel Syndrome (2024) – Loren Szmiga, Manual Therapist, CHT',
-      'Trigger Finger (2024) – Loren Szmiga, Manual Therapist, CHT',
-      'Functional Anatomy of the Hand (2024) – Daphne Xuan, MPT',
-      'A nagy térd kurzus (2024) – Varró Tina, Probody Academy',
-      'Az elülső keresztszalag-pótlást követő rehabilitációs program (2023) – Varró Tina, Probody Academy',
-      'Gyorsaságfejlesztés a XXI. században (2022) – Magyar Edzők Társasága',
-      'Innovating in Health Care (2022) – Harvard Medical School',
-      'Human Anatomy: Musculoskeletal Cases (2022) – Harvard Medical School',
-      'PK1 FPH – Integrált manuálterápia a modernkori testtartási zavarok kezelésében (2022) – MGYFT',
-      'Bevezetés a Biomechanikai-Dinamikus Taping Módszertanába (2022) – Dynamic Tape® Magyarország',
-      'Neuroplaszticitás és mozgásterápia (2022) – Feövenyessy Medical Fitness Akadémia',
-      'Practical Improvement Science in Health Care (2021–2022) – Harvard Medical School',
-      'Regeneráció a versenyidőszakban (2022) – Magyar Edzők Társasága',
-      'Sportfizioterápia (Sportrehabilitáció) (2022) – Varró Tina, Maximum Performance',
-      'A porckárosodás kezelésének új lehetőségei (2022) – Magyar Edzők Társasága',
-      'Mulligan-koncepció I. modul (2021) – Mulligan Koncepció Magyarország',
-      'Barvincsenko-féle lágyrész-manuálterápia I. – A gerinc és a medence (2021) – Holisztikus Medicina Alapítvány',
-      'Az önsorsrontás pszichológiája (2021) – Jog és Pszichológia',
-      'Kismama kinesiotape (2021) – Perfect Movement Mozgásközpont',
-      'McKenzie „B” kurzus (2021) – Magyarországi McKenzie Intézet',
-      'SMR (self myofascial release) a sport- és mozgásszervi rehabilitációban (2020) – Balance Medical Fitness Akadémia',
-      'McKenzie „A” kurzus (2020) – Magyarországi McKenzie Intézet',
-      'NRX® – Dinamikus ízületstabilizálás és korrekció (2020) – Balance Medical Fitness Akadémia',
-      'Flossing terápia a mozgásszervi problémák és sportsérülések rehabilitációjában (2018) – Balance Medical Fitness Akadémia',
-      'Kinesiology taping / Sport taping képzés (2018) – Balance Medical Fitness Akadémia',
-      'Svédmasszázs (2015) – OKTÁV Továbbképző Központ',
-    ]),
-    heading('h3', 'Publikációk'),
-    bulletList([
-      'Kocsis, K., Szalay, B., Békési, Á., Király, B. (2022). Thoracalis gerincszakasz elváltozásai és az impingement szindróma összevetése a különböző korosztályokban játszó röplabdások körében. Fizioterápia, 31(2), 3–10.',
-      'Kocsis, K., Ács, P., Boncz, I., Molics, B., Király, B. (2022). Comparison between thoracic spine deformities and impingement syndrome among volleyball players in different age groups. Value in Health Journal, POSB337.',
-    ]),
-    heading('h3', 'Konferenciák, előadások'),
-    bulletList([
-      'Magyar Sportrehabilitációs Konferencia (2025, Budapest): Műtőasztaltól a kezdőötösig – egy NBI-es kosárlabdázó esettanulmánya',
-      'Sportrehabilitációs tréner képzés: Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe – akkreditált kurzus, 12 kreditpont (SZTK-A-33553/2024) – instruktor (2024, 2025, 2026, Budapest)',
-      'ProBody Stúdió sportrehabilitációs tréner képzés: Gerinc anatómia és vizsgálat – instruktor (2024, 2025, 2026, Budapest)',
-      'ProBody Stúdió sportrehabilitációs tréner képzés: Könyök-, csukló- és kézízületek érintettségei sportolói szemszögből – instruktor (2023, 2024, Budapest)',
-      'A Magyar Kézsebész Társaság 29. kongresszusa: Kézsebészeti skill tréning – instruktor (2023, Székesfehérvár)',
-      'Akkreditált Oftex kurzus: Ínvarratok és határterületek a kézsebészeti ellátásban – instruktor (2023, Budapest)',
-      'ISPOR konferencia: Comparison between Thoracic Spine Deformities and Impingement Syndrome Among Volleyball Players (2020, Milánó; 2021, Koppenhága)',
-    ]),
-    heading('h3', 'Média-megjelenések'),
-    bulletList([
-      'Kézsérülés, műtét, fájdalom után: őrizd meg kezed egészségét! (2025) – Secret Medical Podcast',
-      'Űzzük el a stresszt! (2025) – Nők Lapja Évszakok',
-      'Mi fán terem az ínhüvelygyulladás? (2025/37) – Nők Lapja',
-      'Az irodai munka az új extrém sport? A kéz is dolgozik (2024/47) – Nők Lapja',
-      'Mitől lesz a banyapúp? (2024/8) – Nők Lapja',
-      'Mozgás korra szabva (2023/45) – Nők Lapja',
-      'Hogy ami egészséges, öröm is legyen (2023/9) – Képmás magazin',
-      'A henger az új csodaszer? (2023/35) – Nők Lapja',
-      'Sport korra szabva (2023/4) – Nők Lapja Egészség Különszám',
-      'Ne vegyük félvállról! (2023/14) – Nők Lapja',
-      'Fájdalom az ujjakban – A nyeregízületi porckopás (2022) – Szimpatika magazin',
-      'A derékfájdalom ront a legtöbbet az életminőségen (2021) – Házipatika.com',
-      'Derékfájdalom: akár fertőzés is okozhatja a panaszokat! (2021) – Egészség Kalauz',
-      'Karc FM – Kortalan műsor (2021): gyógytornász-szerepvállalás',
-    ]),
-    heading('h2', 'Kiss Kata szakmai önéletrajz'),
-    para('Gyógytornász, manuálterapeuta, sportrehabilitációs tréner'),
-    heading('h3', 'Tanulmányok'),
-    bulletList([
-      'Semmelweis Egyetem Egészségtudományi Kar, Ápolás és Betegellátás alapképzési szak – Gyógytornász szakirány',
-      'Holisztikus Medicina Alapítvány – Barvicsenko-féle manuálterapeuta képzés (manuális medicina elméleti és gyakorlati képzése)',
-    ]),
-    heading('h3', 'Tanfolyamok, továbbképzések, konferenciák'),
-    bulletList([
-      'Tendon Transfer Training (2026) – Hand Therapy Academy',
-      'Wrist Pain in the Combative Athlete 1–2. (2026) – Ian Gatt, Inspire Institute of Sport',
-      'Ezerarcú hypermobilitás a gyógytornász praxisban (2026) – BodyGPS',
-      'Orfit alapanyagokból készült kéz- és felsővégtag rögzítők (2025) – Tóth Jordán Zsolt, OrtoCare',
-      'Say It Better: Essential Skills for Designing Effective Presentations for Healthcare Professionals (2025) – Aspetar, Doha',
-      'Artificial Intelligence (AI) in Sports Medicine Workshop (2025) – Aspetar, Doha',
-      'Aspetar World Conference 2025 – Doha, Katar',
-      'Ulnar Sided Wrist Pain (2025) – Hand Therapy Academy',
-      'The Painful Shoulder (2025) – Adam Meakins',
-      'ATP Challenger Physio Education Program (2024) – International Tennis Performance Association',
-      'II. Fizioterápiás Tematikus Nap – A krónikus non-specifikus derékfájdalom (2024) – PTE ETK',
-      'Management of Distal Radius Fractures following ORIF surgery from 6 weeks (2024) – Kate Thorn, CHT (USA), AHTA',
-      'Early Management of Distal Radius Fractures following ORIF surgery (2024) – Kate Thorn, CHT (USA), AHTA',
-      'Extensor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
-      'Flexor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
-      "De Quervain's Tenosynovitis (2024) – Kate Thorn, CHT (USA), AHTA",
-      'Carpal Tunnel Syndrome (2024) – Loren Szmiga, Manual Therapist, CHT',
-      'Trigger Finger (2024) – Loren Szmiga, Manual Therapist, CHT',
-      'Functional Anatomy of the Hand (2024) – Daphne Xuan, MPT',
-      'Állkapocsízületi diszfunkciók fizioterápiája (2023) – MGYFT',
-      'Ergon IASTM eszközös lágyrészmobilizáció (2022) – Ergon IASTM Technique Hungary',
-      'Tumorpáciensek ellátása fasciaterápiákkal (2022) – Oriolus-med',
-      'Human Anatomy: Musculoskeletal Cases (2022) – Harvard Medical School',
-      'Sportrehabilitációs tréner képzés 1–2. szint (2022) – Maximum Performance',
-      'Neuroplaszticitás és mozgásterápia (2022) – Feövenyessy Medical Fitness Akadémia',
-      'Dinamikus manuálterápia I–II. (2021–2022) – Holisztikus Medicina Alapítvány',
-      'Fascia: elmélet és kezelési technikák (2021) – Balande Med Academy',
-      'Kinezio- és sporttaping (2021) – Balance Med Academy',
-      'Flossing a sportrehabilitációban (2021) – Balance Med Academy',
-      'Köpölyözés a sportprevencióban és a rehabilitációban (2021) – Balance Med Academy',
-      'Dynamic Tape: Bevezetés a Biomechanika-Dinamikus Taping Módszertanába (2019) – Dynamic Tape® Magyarország',
-    ]),
-    heading('h3', 'Konferenciák, előadások'),
-    bulletList([
-      'ProBody Stúdió: Rigid tape és funkcionális kötözések a sportrehabilitációban – instruktor (2026, Budapest)',
-      'Magyar Sportrehabilitációs Konferencia (2025, Budapest): Ulnáris oldali csuklófájdalmak – a csukló „derékfájása”',
-      'Sportrehabilitációs tréner képzés: Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe – akkreditált kurzus, 12 kreditpont (SZTK-A-33553/2024) – instruktor (2024, 2025, 2026, Budapest)',
-      'ProBody Stúdió sportrehabilitációs tréner képzés: Gerinc anatómia és vizsgálat – instruktor (2024, 2025, 2026, Budapest)',
-      'A lumbális és thoracalis gerinc manuális kezelési technikái Filippo Mechellivel – tolmács (2024, Budapest)',
-      'A Magyar Kézsebész Társaság 29. kongresszusa: Kézsebészeti skill tréning – instruktor (2023, Székesfehérvár)',
-      'Akkreditált Oftex kurzus: Ínvarratok és határterületek a kézsebészeti ellátásban – instruktor (2023, Budapest)',
-      'Gyógyító mezítlábazás – Nők Lapja (2023/34)',
-    ]),
+    ...rolunkReferenciaNodes(),
   ])
 
+// ---------------------------------------------------------------------------
+// SZEKCIÓSOROK (Pages.layout) — a /rolunk és a /szolgaltatasok blokkosítása.
+//
+// MIÉRT: a `Pages.layout` blokk-mező eddig csak a kezdőlapon élt, a két belső
+// oldal egyetlen 720px-es hasábban, 92 karakteres sorokkal, „minden egymás
+// alatt" adta a teljes tartalmát (docs/ux-belso-oldalak-kutatas.md P3, P5 és a
+// 4. fejezet oldal-auditja: mindkét oldal P0). A route-javítás után a
+// szekciósor renderelődik — ez a függvénypár tölti fel EGYSZER a szerkeszthető
+// alap-szekciósort. Utána minden az adminé: szöveg, sorrend, háttér, elrejtés.
+//
+// A SZABÁLYOK, AMIK A SORRENDET ÉS A FORMÁT ADJÁK:
+//  - B3.1 — rácsba/kártyába csak PÁRHUZAMOS tartalom kerül (a három
+//    szolgáltatási ág, a három megkülönböztető állítás); folyó szöveg marad
+//    egy hasábban (richText blokk, mértékkel — lásd styles/content.css).
+//  - 5.2 (NN/g „About Us" 4 szintje) — a /rolunk sorrendje: szkennelhető
+//    összefoglaló → hitel számokkal → miben mások vagyunk → miben segítünk →
+//    külső bizonyíték (sajtó) → részletes szakmai háttér → vélemények.
+//  - 5.3 — a /szolgaltatasok a három ágat EGY szekcióban, azonos mezőrenddel
+//    hasonlítja össze, alatta a rendelői részletek és az árlista.
+//  - B6.5 — egy oldalon EGY elsődleges CTA: mindkét lapon a fizetős kurzusra
+//    vivő záró CTA-sáv gombja az egyetlen `primary` (az időpontkérés és a
+//    partneroldal szöveglink/sor-hivatkozás súllyal szerepel).
+//  - B2.2 — a sávok (fehér ↔ világoskék) váltogatása jelöli a közös régiókat.
+//
+// AMI NEM FÉR BELE ebbe a körbe (a blokk-katalógus hiánya miatt, lásd
+// docs/tartalom-leltar-regi-oldal.md 4. szakasz): fotós szakértő-kártya
+// (`teamMembers`), összecsukható CV (`accordion`), táblázatos árlista
+// (`priceList`), kattintható helyszínek (`locations`). Amíg ezek nincsenek, az
+// érintett tartalom a szabad szöveges (richText) blokkban él — így egyetlen
+// betű sem vész el a blokkosítással.
+// ---------------------------------------------------------------------------
+
+/** A szekciósorok futásidejű kép-hivatkozásai (Media id-k). */
+interface OldalLayoutMedia {
+  /** A /rolunk `about` szekciójának fotója. */
+  rolunkFoto?: number
+  /** A /szolgaltatasok `services` táblájának fotója. */
+  szolgaltatasokKep?: number
+  /** A sajtó-logósor logói — ezeket a KEZDŐLAPI seed tölti fel (HOME_IMAGES). */
+  sajtoLogok?: readonly number[]
+}
+
+/**
+ * A /rolunk alap-szekciósora.
+ *
+ * Kép nélkül (`buildRolunkLayout()`) is teljes értékű: a fotó és a logósor
+ * futásidejű Media id-kre hivatkozik, ezek hiányában az adott szekció kép
+ * nélkül épül fel, a logósor pedig egyszerűen kimarad.
+ */
+const buildRolunkLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['layout']> => {
+  const sajtoLogok = media.sajtoLogok ?? []
+  return [
+    // 1. réteg — a lap bevezetője folyó szövegként (a mértéket a .kc-richtext
+    // adja: 34rem ≈ 75 karakter, B1.1).
+    {
+      blockType: 'richText',
+      content: richText(rolunkBevezetoNodes()),
+      sectionSettings: { visible: true, hatter: 'feher' },
+    },
+
+    // 2. réteg — bemutatkozás + hitel SZÁMOKKAL. A számok VALÓS, dokumentált
+    // adatok: a „10+ év" és az „1000+ páciens" a kezdőlapon is ez (a régi oldal
+    // minden előfordulásban 1000+-t állít), a 12 kreditpont és az akkreditációs
+    // szám a képzés adata, a két egyesületi tagság a lap saját szövegéből jön.
+    {
+      blockType: 'about',
+      eyebrow: 'Rólunk',
+      title: 'Megérdemled a profi törődést',
+      paragraphs: ROLUNK_BEMUTATKOZAS.map((text, index) => ({
+        text,
+        emphasized: index === 0,
+      })),
+      feature: {
+        label: 'Szakmai egyesületi tagság',
+        note: 'A Magyar Sportrehabilitációs Egyesület és a Magyar Gyógytornász-Fizioterapeuták Társaságának munkájában is részt veszünk.',
+      },
+      photo: media.rolunkFoto,
+      stats: [
+        { value: '10+', label: 'év szakmai tapasztalat' },
+        { value: '1000+', label: 'elégedett páciens' },
+        { value: '12', label: 'kreditpont — akkreditált képzés (SZTK-A-33553/2024)' },
+        { value: '2', label: 'szakmai egyesületi tagság' },
+      ],
+      sectionSettings: { visible: true, anchorId: 'rolunk', hatter: 'tint' },
+    },
+
+    // Külső, ellenőrizhető bizonyíték (B6.6): a médiamegjelenések logói,
+    // közvetlenül a hitel-számok után. A logókat a KEZDŐLAPI seed tölti fel; ha
+    // még egy sincs a Médiatárban, a szekció kimarad (üres logósort nem teszünk
+    // ki). A háttere ezért szándékosan ugyanaz, mint az utána következő
+    // szekcióé: így a sáv hiánya nem borítja fel a fehér ↔ világoskék ritmust.
+    ...(sajtoLogok.length > 0
+      ? [
+          {
+            blockType: 'pressLogos' as const,
+            heading: 'Ismerhetsz minket innen',
+            logos: sajtoLogok.map((image) => ({ image })),
+            sectionSettings: { visible: true, hatter: 'feher' as const },
+          },
+        ]
+      : []),
+
+    // Három párhuzamos állítás → kártyarács (B3.1). A sorszámot a megjelenítés
+    // adja, ezért a címekben nincs benne.
+    {
+      blockType: 'usps',
+      title: 'Amiben mások vagyunk',
+      cards: ROLUNK_MEGKULONBOZTETOK.map((item) => ({ title: item.title, body: item.body })),
+      sectionSettings: { visible: true, hatter: 'feher' },
+    },
+
+    // A három szolgáltatási ág — sor-hivatkozásokkal (nem gombbal): a lap
+    // egyetlen elsődleges CTA-ja a záró sáv (B6.5).
+    {
+      blockType: 'services',
+      eyebrow: 'Szolgáltatásaink',
+      title: 'Miben segíthetünk?',
+      rows: ROLUNK_SZOLGALTATASOK.map((item, index) => ({
+        number: String(index + 1).padStart(2, '0'),
+        title: item.title,
+        body: item.body,
+        felirat: item.label,
+        url: item.url,
+        ujAblakban: item.newTab === true,
+      })),
+      sectionSettings: { visible: true, anchorId: 'szolgaltatasaink', hatter: 'tint' },
+    },
+
+    // Részletes szakmai háttér: a két szakember elérhetősége, a partnerek és a
+    // teljes önéletrajzok. Amíg nincs `accordion` blokk, ez szabad szöveg —
+    // a bizonyíték MENNYISÉGE maga a bizalmi jelzés, ezért nem rövidítjük.
+    // A hosszú, listás olvasnivaló a papír-alap sávban marad (a legnyugodtabb
+    // olvasási felület); a mértékét a .kc-richtext adja.
+    {
+      blockType: 'richText',
+      content: richText([...rolunkSzakemberNodes(), ...rolunkReferenciaNodes()]),
+      sectionSettings: { visible: true, anchorId: 'szakmai-hatter', hatter: 'feher' },
+    },
+
+    // Vélemények — adatvezérelt (Tartalom → Vélemények, kiemelt tételek).
+    {
+      blockType: 'testimonials',
+      eyebrow: 'Vélemények',
+      heading: 'Pácienseink mondták',
+      maxItems: 3,
+      sectionSettings: { visible: true, anchorId: 'velemenyek', hatter: 'tint' },
+    },
+
+    // A lap EGYETLEN elsődleges CTA-ja: a fizetős kurzus (üzleti cél-sorrend,
+    // értékesítési UX-skill 1. pont).
+    {
+      blockType: 'ctaBanner',
+      title: 'Kezdd el otthon, a saját tempódban',
+      text: 'Ha nem tudsz eljutni hozzánk a rendelőbe, az otthoni kézrehabilitációs programunkkal bárhol, bármikor gyakorolhatsz.',
+      cta: { felirat: 'Megnézem a kurzusokat', url: '/kurzusok', ujAblakban: false },
+      sectionSettings: { visible: true, hatter: 'feher' },
+    },
+  ]
+}
+
+/**
+ * A /szolgaltatasok alap-szekciósora.
+ *
+ * A lap feladata a DÖNTÉS támogatása („melyik út való nekem?"), ezért a három
+ * ág egyetlen szekcióban, azonos mezőrenddel áll egymás mellett (5.3, B4.1), a
+ * részletek és az árlista pedig alatta.
+ */
+const buildSzolgaltatasokLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['layout']> => [
+  // Bevezető — a probléma és a kivezető út.
+  {
+    blockType: 'richText',
+    content: richText(szolgaltatasokBevezetoNodes()),
+    sectionSettings: { visible: true, hatter: 'feher' },
+  },
+
+  // A három ág egymás mellett, azonos sorrendű mezőkkel (kinek való → hol →
+  // ár), sor-hivatkozásokkal. A külső partneroldal ugyanolyan súlyú
+  // sor-hivatkozást kap, mint a másik kettő — gombot nem (B6.5).
+  {
+    blockType: 'services',
+    eyebrow: 'Szolgáltatásaink',
+    title: 'Válaszd ki, hogyan segíthetünk neked a legjobban',
+    image: media.szolgaltatasokKep,
+    rows: SZOLGALTATASI_AGAK.map((item, index) => ({
+      number: String(index + 1).padStart(2, '0'),
+      title: item.title,
+      body: item.body,
+      felirat: item.label,
+      url: item.url,
+      ujAblakban: item.newTab === true,
+    })),
+    sectionSettings: { visible: true, anchorId: 'szolgaltatasaink', hatter: 'tint' },
+  },
+
+  // Rendelői részletek + árlista egy közös régióban (B2.2). Az időpontkérés
+  // itt szöveglink, nem gomb — a lap elsődleges CTA-ja a záró sáv (B6.5).
+  {
+    blockType: 'richText',
+    content: richText([...rendeloiKezelesekNodes(), ...arlistaNodes('szoveglink')]),
+    sectionSettings: { visible: true, anchorId: 'arlista', hatter: 'feher' },
+  },
+
+  // Három párhuzamos érv → kártyarács (B3.1).
+  {
+    blockType: 'usps',
+    title: 'Ezért fogod imádni',
+    cards: SZOLGALTATASOK_ERVEK.map((item) => ({ title: item.title, body: item.body })),
+    sectionSettings: { visible: true, hatter: 'tint' },
+  },
+
+  // Vélemények — adatvezérelt.
+  {
+    blockType: 'testimonials',
+    eyebrow: 'Vélemények',
+    heading: 'Pácienseink mondták',
+    maxItems: 3,
+    sectionSettings: { visible: true, anchorId: 'velemenyek', hatter: 'feher' },
+  },
+
+  // A lap EGYETLEN elsődleges CTA-ja: a fizetős kurzus.
+  {
+    blockType: 'ctaBanner',
+    title: 'Kezdd el otthon, a saját tempódban',
+    text: 'Az otthoni programunkkal a saját tempódban haladhatsz, bárhol, bármikor — a gyakorlatokat kézrehabilitációs gyógytornászok állították össze.',
+    cta: { felirat: 'Megnézem a kurzusokat', url: '/kurzusok', ujAblakban: false },
+    sectionSettings: { visible: true, hatter: 'tint' },
+  },
+]
 // ---------------------------------------------------------------------------
 // Termékleírások — a régi sales-oldalak (kezrehab.md, kezrelax.md) szövegéből.
 // ---------------------------------------------------------------------------
@@ -1081,6 +1509,63 @@ const upsertPage = async (payload: Payload, input: PageInput): Promise<number | 
   })
   naploLetrehozas(payload, cimke)
   return created.id
+}
+
+/**
+ * Az oldal SZEKCIÓSORÁNAK (Pages.layout) idempotens feltöltése.
+ *
+ * A védő-minta a kezdőlapé (src/lib/home-seed.ts `ensureHomeLayout`), és itt
+ * még szigorúbb: a script a MEGLÉVŐ szekciósort SOHA nem írja felül — sem a
+ * LEGACY_OVERWRITE kapuval, sem anélkül. Ok: a szekciósor a szerkesztő munkája
+ * (Pages → Szekciók), amit a lányok az adminban raktak össze; a tulajdonosi
+ * elvárás szerint a feltöltés EGYSZERI, utána minden tartalom az adminé.
+ *
+ * Három eset:
+ *  - nincs ilyen oldal → kihagyás (az oldalt az `upsertPage` hozza létre; a
+ *    próbafutásban ez természetes, hiszen ott semmi nem íródik),
+ *  - van, de ÜRES a szekciósora → megkapja az alap-szekciósort,
+ *  - van szekciósora → ÉRINTETLEN marad.
+ */
+const ensurePageLayout = async (
+  payload: Payload,
+  slug: string,
+  layout: NonNullable<Page['layout']>,
+): Promise<void> => {
+  const cimke = `oldal-szekciósor: ${slug} (${layout.length} szekció)`
+  const existing = await payload.find({
+    collection: 'pages',
+    where: { slug: { equals: slug } },
+    limit: 1,
+    overrideAccess: true,
+  })
+  const page = existing.docs[0]
+  if (page === undefined) {
+    naploKihagyas(
+      payload,
+      cimke,
+      DRY_RUN
+        ? 'az oldal a próbafutásban még nem létezik — éles futáskor előbb létrejön, és megkapja a szekciósort'
+        : 'az oldal nem található',
+    )
+    return
+  }
+  if (Array.isArray(page.layout) && page.layout.length > 0) {
+    naploKihagyas(
+      payload,
+      cimke,
+      'az oldalnak MÁR VAN szekciósora — az szerkesztői munka, a script sosem írja felül (a szekciókat az adminban lehet átrendezni, átírni vagy elrejteni)',
+    )
+    return
+  }
+  if (!DRY_RUN) {
+    await payload.update({
+      collection: 'pages',
+      id: page.id,
+      data: { layout },
+      overrideAccess: true,
+    })
+  }
+  naploLetrehozas(payload, cimke)
 }
 
 interface ProductInput {
@@ -1501,6 +1986,27 @@ async function restoreLegacyContent(): Promise<void> {
       'Rendelői gyógytorna és manuálterápia Budapesten (50 perc 18 000 Ft, 20 perc 10 000 Ft), otthoni kézrehabilitációs program és akkreditált szakmai képzések.',
   })
 
+  // --- Szekciósorok: /rolunk és /szolgaltatasok --------------------------------
+  // A két belső oldal blokkosítása (docs/ux-belso-oldalak-kutatas.md P3/P5 és
+  // 5.2/5.3). EGYSZERI feltöltés: meglévő szekciósort a script sosem ír felül,
+  // a feltöltés után minden szöveg és sorrend az adminban szerkeszthető.
+  const sajtoLogok = await findMediaIds(payload, SAJTO_LOGO_FAJLOK)
+  if (sajtoLogok.length === 0) {
+    payload.logger.info(
+      'Legacy: sajtó-logó egyet sem találtam a Médiatárban (ezeket a `npm run seed` tölti fel) — a /rolunk logósora kimarad a szekciósorból.',
+    )
+  }
+  await ensurePageLayout(
+    payload,
+    'rolunk',
+    buildRolunkLayout({ rolunkFoto: mediaId('680a69d078306_Katakfeherbenhattal.png'), sajtoLogok }),
+  )
+  await ensurePageLayout(
+    payload,
+    'szolgaltatasok',
+    buildSzolgaltatasokLayout({ szolgaltatasokKep: mediaId('67b2668feae66_Kezeleskek.png') }),
+  )
+
   // --- Termékkategória ---------------------------------------------------------
   const productCategoryId = await ensureProductCategory(payload)
 
@@ -1613,11 +2119,32 @@ async function restoreLegacyContent(): Promise<void> {
   payload.logger.info('Legacy: kész — a régi kineticare.hu tartalma visszaépítve.')
 }
 
-restoreLegacyContent()
-  .then(() => {
-    process.exit(0)
-  })
-  .catch((error) => {
-    console.error('Legacy: hiba történt.', error)
-    process.exit(1)
-  })
+/**
+ * A szekciósor-építők és a hozzájuk tartozó oldaltartalom — TESZTELHETŐSÉG
+ * miatt exportálva. Adatbázis nélkül asszertálható, hogy a szekciósor csak
+ * katalógusbeli blokkot használ, és hogy a blokkosítás semmit nem veszít el a
+ * rich-text változathoz képest.
+ */
+export {
+  buildRolunkLayout,
+  buildSzolgaltatasokLayout,
+  kezdolapContent,
+  rolunkContent,
+  szolgaltatasokContent,
+}
+
+/**
+ * Indítás-kapu (a seed.ts mintája): a visszaépítés CSAK közvetlen futtatáskor
+ * indul el (npm run seed:legacy). Importálva — például a szekciósort ellenőrző
+ * tesztből — a modul mellékhatás nélkül töltődik be, adatbázis-kapcsolat nélkül.
+ */
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  restoreLegacyContent()
+    .then(() => {
+      process.exit(0)
+    })
+    .catch((error) => {
+      console.error('Legacy: hiba történt.', error)
+      process.exit(1)
+    })
+}

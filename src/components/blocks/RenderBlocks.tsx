@@ -1,5 +1,4 @@
 import type { Page, Post, Product, Testimonial } from '../../payload-types'
-import { coursePriceBadgeKind } from '../../lib/courses'
 import { RichText } from '../lexical/RichText'
 import { hasLexicalContent } from '../lexical/serialize'
 import { CourseCards, isPaidProduct } from '../content/home/CourseCards'
@@ -18,6 +17,7 @@ import { FilmHero } from './FilmHero'
 import { PressLogos } from './PressLogos'
 import { Services } from './Services'
 import { States } from './States'
+import { TeamMembers } from './TeamMembers'
 import { Usps } from './Usps'
 import { Welcome } from './Welcome'
 
@@ -27,8 +27,8 @@ import { Welcome } from './Welcome'
  * A Pages `layout` mezőjének blokkjait rendereli a szerkesztő által beállított
  * sorrendben. Két blokkfajtát köt össze egyetlen listában:
  *  - az új, Higgsfield-kinézetű blokkok (FilmHero, Welcome, Usps, States,
- *    Services, About, PressLogos, FaqBlock, CtaBanner) a teljes blokkot kapják
- *    és maguk kezelik a szekció-beállításaikat,
+ *    Services, About, PressLogos, TeamMembers, FaqBlock, CtaBanner) a teljes
+ *    blokkot kapják és maguk kezelik a szekció-beállításaikat,
  *  - az adatvezérelt / örökölt szekciók (credsStrip, courseCards, freeSos,
  *    howItWorks, testimonials, knowledge, richText) a meglévő kezdőlapi
  *    komponensekre képződnek le — a blokk mezői opcionális felülírásként
@@ -86,14 +86,11 @@ export interface RenderBlocksProps {
 
 export function RenderBlocks({ layout, products, posts, testimonials }: RenderBlocksProps) {
   const visibleProducts = products.filter(isPubliclyVisibleProduct)
-  const paidProducts = visibleProducts.filter(isPaidProduct)
-  // A courseCards rács másodlagos sávja csak a TUDATOSAN ingyenes terméket
-  // kapja (priceInHUFEnabled: false) — a félrekonfigurált rekordot (ár-pipa BE,
-  // ÜRES ár) se árral, se „Ingyenes"-sel nem hirdetjük, lásd courses.ts.
+  // A courseCards rácsba KIZÁRÓLAG fizetős termék kerül; az ingyenes
+  // lead-magnet helye a freeSos blokk (kezdőlap-audit, 2026-08-15: a kettős
+  // megjelenés duplikáció volt — lásd CourseCards fejléce).
   // A freeSos blokk egyetlen lead-magnetre van tervezve, viselkedése változatlan.
-  const freeProducts = visibleProducts.filter(
-    (product) => coursePriceBadgeKind(product) === 'free',
-  )
+  const paidProducts = visibleProducts.filter(isPaidProduct)
   const freeProduct = visibleProducts.find((product) => !isPaidProduct(product)) ?? null
 
   // Az adatvezérelt szekciók beépített alap-horgonya (kurzusok, ingyenes,
@@ -115,7 +112,7 @@ export function RenderBlocks({ layout, products, posts, testimonials }: RenderBl
         return (
           <BlockSwitch
             key={key}
-            {...{ block, isRepeat, paidProducts, freeProducts, freeProduct, posts, testimonials }}
+            {...{ block, isRepeat, paidProducts, freeProduct, posts, testimonials }}
           />
         )
       })}
@@ -127,7 +124,6 @@ function BlockSwitch({
   block,
   isRepeat,
   paidProducts,
-  freeProducts,
   freeProduct,
   posts,
   testimonials,
@@ -136,7 +132,6 @@ function BlockSwitch({
   /** A típus ismételt példánya-e a lapon — az alap-horgony csak az elsőé. */
   isRepeat: boolean
   paidProducts: Product[]
-  freeProducts: Product[]
   freeProduct: Product | null
   posts: Post[]
   testimonials: Testimonial[]
@@ -156,6 +151,8 @@ function BlockSwitch({
       return <About block={block} />
     case 'pressLogos':
       return <PressLogos block={block} />
+    case 'teamMembers':
+      return <TeamMembers block={block} />
     case 'faq':
       return <FaqBlock block={block} />
     case 'ctaBanner':
@@ -179,11 +176,12 @@ function BlockSwitch({
       const { id, variant } = sectionProps(block)
       return (
         <CourseCards
+          ctaLabel={block.ctaLabel ?? undefined}
+          eyebrow={block.eyebrow ?? undefined}
           heading={block.heading ?? undefined}
           id={id ?? (isRepeat ? `kurzusok-${block.id ?? 'ismetelt'}` : undefined)}
           lead={block.lead ?? undefined}
           products={paidProducts}
-          secondaryProducts={freeProducts}
           variant={variant}
         />
       )

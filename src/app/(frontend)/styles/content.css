@@ -175,8 +175,13 @@
   color: var(--kc-color-text);
 }
 
+/* A hero bevezetője az NN/g „About Us"-hierarchia 1. rétege: szkennelhető
+   összefoglaló, ezért a KÉNYELMES mértéket kapja (B1.1: 30rem ≈ 66 karakter a
+   törzsméreten, a nagyobb lead-méreten ennél is kevesebb). Korlát nélkül a
+   720px-es szűk konténerben is 92 karakteres sorok futottak. */
 .kc-page-hero__lead {
   margin: 0;
+  max-width: var(--kc-measure-comfort);
   font-size: var(--kc-text-lg);
   line-height: var(--kc-leading-body);
   color: var(--kc-color-text-muted);
@@ -192,6 +197,35 @@
   display: block;
   width: 100%;
   height: auto;
+}
+
+/* ---- CMS-oldal szekciósorral (belső oldal) -------------------------------
+   ÁLPADLÓ-TILALOM (docs/ux-belso-oldalak-kutatas.md B2.4): belső oldalon nem
+   állhat teljes képernyős (100dvh) tábla-szekció úgy, hogy alatta még lényegi
+   tartalom van — az NN/g „Illusion of Completeness" vizsgálatában 8-ból 6
+   felhasználó nem vette észre, hogy a lap görgethető. A kezdőlapon a
+   tábla-viselkedés TUDATOS, és a kutatás kifejezetten meghagyja („a kezdőlapi
+   kc-board viselkedést ez nem érinti"), ezért a korlátozás CSAK erre az
+   oldaltípusra szól.
+
+   A megoldás nem a tábla eltörlése, hanem a magasság MÉRSÉKLÉSE 78dvh-ra: a
+   szekció megtartja a bőkezű szegélyét, a tipográfiáját és a belső
+   százalék-geometriáját (a Services fotója és sorlistája a tábla magasságának
+   arányában áll), a következő szekció felső ~22dvh-ja viszont belóg a hajtás
+   fölé — pontosan az a jelzés, amit a kutatás kér. A `--band` sávok eleve
+   természetes magasságúak, 900px alatt pedig nincs tábla-viselkedés. */
+@media (min-width: 900px) {
+  .kc-cms-page .kc-section.kc-board:not(.kc-board--band) {
+    min-height: 78dvh;
+  }
+}
+
+/* 2K felett a tábla a board-arányt tartja (ui.css) — a belső oldalon ugyanez,
+   a mérsékelt magassággal. */
+@media (min-width: 2000px) {
+  .kc-cms-page .kc-section.kc-board:not(.kc-board--band) {
+    min-height: min(78dvh, calc(var(--kc-board-max) * var(--kc-board-ratio)));
+  }
 }
 
 .kc-post-hero__categories {
@@ -482,6 +516,21 @@
 .kc-richtext blockquote,
 .kc-richtext figure {
   margin: var(--kc-space-4) 0;
+}
+
+/* MÉRTÉK (sorhossz) — docs/ux-belso-oldalak-kutatas.md B1.1/B1.3, P2.
+   A `.kc-richtext`-nek eddig SEHOL nem volt szélesség-korlátja: a széles
+   (1120px-es) konténerben álló kurzus-leírás mért sorhossza 148 karakter volt,
+   a szűk (720px-es) CMS-oldalaké 92 — a skill 4. pontja 45–75-öt ír elő, a
+   WCAG 1.4.8 (AAA) 80-nál zár. A korlát a FOLYÓSZÖVEGET viszi (bekezdés,
+   felsorolás, idézet), nem a konténert (B1.4), ezért a kép (`__figure`), a
+   videó (`__video`) és a szekció maga teljes szélességű maradhat.
+   Ellenőrzés: a bekezdés számított szélessége ≤ 545px 1440px-es nézetablakon. */
+.kc-richtext p,
+.kc-richtext ul,
+.kc-richtext ol,
+.kc-richtext blockquote {
+  max-width: var(--kc-measure);
 }
 
 .kc-richtext h2,

@@ -37,7 +37,20 @@ export const LEGACY_IMAGES: readonly LegacyImage[] = [
   },
   { file: '67b3c6e9e315f_KocsisKatakozeli.png', alt: 'Kocsis Kata gyógytornász portré' },
   { file: '67c07def59ac2_KissKataelegans.png', alt: 'Kiss Kata gyógytornász portré' },
-  { file: '682a121babe80_IMG_7573.jpeg', alt: 'Kiss Kata és Kocsis Kata munka közben' },
+  /*
+   * ALT-JAVÍTÁS (docs/grafikai-leltar-regi-oldal.md 3.3, 2. pont): a korábbi
+   * „Kiss Kata és Kocsis Kata munka közben" HIBÁS volt — a képen EGYETLEN
+   * személy, Kocsis Kata van. A képleírás a képernyőolvasónak a kép TÉNYLEGES
+   * tartalmát mondja; két nevet említeni egy szóló portrén félrevezető.
+   *
+   * FIGYELEM: az `ensureMedia` (src/scripts/restore-legacy-content.ts) meglévő
+   * médiát SOSEM ír felül, ezért ez a javítás csak FRISS betöltésre hat — a már
+   * feltöltött éles rekord alt-ját a Médiatárban kell egyszer átírni.
+   */
+  {
+    file: '682a121babe80_IMG_7573.jpeg',
+    alt: 'Kocsis Kata gyógytornász, a Kineticare alapítója',
+  },
   { file: '6883e93d26513_GaramiGabor.png', alt: 'Garami Gábor zenész, műsorvezető – vélemény' },
   { file: '682c8a154f5ba_IMG_0039.jpeg', alt: 'Páciens-vélemény portréfotó' },
   {

@@ -7,11 +7,14 @@ import { sectionSettings } from './section-settings'
  *
  * ADATVEZÉRELT blokk: a kártyák tartalmát NEM itt írod. A kurzusok igazságforrása
  * a Webshop → Kurzusok: amit ott létrehozol és közzéteszel, az automatikusan
- * megjelenik ebben a szekcióban (ár, borító, rövid leírás onnan jön). Így a
- * kezdőlap sosem tud „elszakadni" a valós kínálattól (terv 2. pont zárása).
+ * megjelenik ebben a szekcióban (ár, borító, rövid leírás, kiemelt előnyök
+ * onnan jönnek). Így a kezdőlap sosem tud „elszakadni" a valós kínálattól
+ * (terv 2. pont zárása).
  *
- * Ezért itt CSAK megjelenítési mezők vannak: a szekció felirata és bevezetője.
- * Ha nincs közzétett fizetős kurzus, a szekció egyszerűen elmarad.
+ * Ezért itt CSAK megjelenítési mezők vannak: a szekció feliratai és a kártyák
+ * gombfelirata. A tulajdonosi kikötés (2026-08-15) szerint a kártyán és a
+ * szekcióban MINDEN szöveg adminból szerkeszthető — a kódban maradó szövegek
+ * kizárólag fallbackek. Ha nincs közzétett fizetős kurzus, a szekció elmarad.
  */
 export const courseCards: Block = {
   slug: 'courseCards',
@@ -25,12 +28,20 @@ export const courseCards: Block = {
   },
   fields: [
     {
+      name: 'eyebrow',
+      type: 'text',
+      label: 'Felvezető sor',
+      admin: {
+        description:
+          'A cím fölötti rövid, nagybetűs felirat. Nem kötelező — üresen a beépített felirat marad („Kurzusok").',
+      },
+    },
+    {
       name: 'heading',
       type: 'text',
       label: 'Szekció címe',
       admin: {
-        description:
-          'Nem kötelező. Ha üresen hagyod, a beépített cím marad („Így tudunk neked segíteni").',
+        description: 'Nem kötelező. Ha üresen hagyod, a beépített cím marad („Kurzusaink").',
       },
     },
     {
@@ -39,6 +50,15 @@ export const courseCards: Block = {
       label: 'Bevezető szöveg',
       admin: {
         description: 'A cím alatti 1–2 mondat a kártyák előtt. Nem kötelező.',
+      },
+    },
+    {
+      name: 'ctaLabel',
+      type: 'text',
+      label: 'Gombfelirat a kártyákon',
+      admin: {
+        description:
+          'A kurzuskártyák alján megjelenő gomb felirata. Nem kötelező — üresen a beépített felirat marad („Megnézem a programot”). A gomb dekoratív: maga a KÁRTYA a link.',
       },
     },
     sectionSettings(),

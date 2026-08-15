@@ -1,0 +1,305 @@
+import type { Payload } from 'payload'
+
+/**
+ * A FEJLÉC-NAVIGÁCIÓ alapstruktúrája — idempotens seed.
+ *
+ * Miért kell: a `menus` collection és a `buildNavTree` (src/lib/menu-tree.ts)
+ * két szintet RÉGÓTA tud, de a TARTALOM hiányzott — a bővülő oldal aloldalai
+ * (rendelői kezelések, szakmai képzés, ingyenes SOS anyag) sehonnan nem voltak
+ * elérhetők, a Tudástár (/blog) pedig egyáltalán nem szerepelt a menüben
+ * (UX-skill M7: a tudástár másodlagos, de LÉTEZNIE kell egy útnak odáig).
+ *
+ * SZERKESZTŐI ELSŐBBSÉG. A modul a repó seed-konvencióját követi
+ * (src/scripts/seed.ts `ensureMenuItem`, src/lib/newsletter/form.ts
+ * `ensureNewsletterForm`): a dedup-kulcs a `label` + a szülő, és meglévő sort
+ * SOHA nem ír felül. Ha a szerkesztő átírta a feliratot, a sorrendet vagy a
+ * célt, a seed újrafuttatása nem nyúl hozzá; ha kivette a „Látható" pipát, a
+ * sor megmarad (`visible: false`) és a dedup megtalálja, tehát a seed nem
+ * hozza vissza a menübe.
+ *
+ * A „Kurzusok" NEM ebben a fában van: az értékesítés fő útja kód-szintű
+ * akciógomb a fejléc jobb szélén (src/components/layout/Header.tsx), hogy ne
+ * függjön a CMS-menü tartalmától — lásd docs/ertekesitesi-ux-skill.md 3. pont.
+ *
+ * A modul TISZTA részét (`buildNavigationMenuPlan`) a menu-seed.test.ts
+ * adatbázis nélkül ellenőrzi; a Payload-ot érintő rész csak írásra van.
+ */
+
+/** A „Szolgáltatások" gyökér-menüpont céloldala (pages.slug). */
+export const SERVICES_PAGE_SLUG = 'szolgaltatasok'
+
+/** A szolgáltatás-oldal útvonala — tartalék, ha a CMS-oldal nem található. */
+export const SERVICES_PAGE_PATH = `/${SERVICES_PAGE_SLUG}`
+
+/**
+ * A rendelői kezelések lapon belüli horgonya.
+ *
+ * A rendelői kezeléseknek MA nincs önálló oldala: a tartalom a
+ * `/szolgaltatasok` oldal egyik szakasza. A horgony ezért előremutató —
+ * amint önálló oldal készül, elég ezt az egy konstanst átírni (és a
+ * menüpontot a szerkesztő is átállíthatja az adminban).
+ */
+export const CLINIC_TREATMENTS_PATH = `${SERVICES_PAGE_PATH}#rendeloi`
+
+/** A ProBody Stúdióval közös, akkreditált szakmai képzés (külső oldal). */
+export const PROFESSIONAL_TRAINING_URL = 'https://probodystudio.hu/kez-workshop/'
+
+/** Az ingyenes SOS lead-magnet kurzus azonosítója (products.sku = megjelenő név). */
+export const SOS_COURSE_SKU = 'SOS Kézrelax villámkurzus'
+
+/**
+ * Az SOS kurzus RÉGI, id-alapú útvonala — tartalék, ha a termék `sku` alapján
+ * nem található (pl. a szerkesztő átnevezte). A /kurzusok/[slug] route a
+ * numerikus szegmenst tartósan a kanonikus címre irányítja
+ * (src/lib/course-url.ts), tehát a link ilyenkor is célba ér.
+ */
+export const SOS_COURSE_FALLBACK_PATH = '/kurzusok/2'
+
+/** A Tudástár (blog) gyűjtőoldalának útvonala. */
+export const KNOWLEDGE_BASE_PATH = '/blog'
+
+export type MenuSeedType = 'page' | 'post' | 'url' | 'product'
+
+export type MenuSeedRelation = {
+  relationTo: 'pages' | 'posts' | 'products'
+  value: number
+}
+
+export interface MenuSeedNode {
+  label: string
+  type: MenuSeedType
+  order: number
+  url?: string
+  ref?: MenuSeedRelation
+  openInNewTab?: boolean
+  children: MenuSeedNode[]
+}
+
+/** A terv felépítéséhez feloldott célok (a hiányzó id-k tartalék-ágra váltanak). */
+export interface MenuSeedContext {
+  /** A `szolgaltatasok` CMS-oldal id-je, ha létezik. */
+  servicesPageId?: number
+  /** Az ingyenes SOS kurzus termék-id-je, ha létezik. */
+  sosCourseId?: number
+}
+
+/**
+ * A gyökér-menüpontok SORRENDJE.
+ *
+ * Az éles menü a legacy-visszatöltésből örökölte a számozást (Szolgáltatások 4,
+ * Rólunk 5, Kapcsolat 6 — src/scripts/restore-legacy-content.ts). A Tudástár
+ * ezért 5-öt kap: a `buildNavTree` azonos `order` esetén magyar szerint,
+ * címke alapján rendez („Rólunk" < „Tudástár"), így a sáv sorrendje
+ * Szolgáltatások → Rólunk → Tudástár → Kapcsolat lesz. A tudástár tehát a
+ * kapcsolatfelvétel elé, de a szakmai/bemutatkozó pontok mögé kerül —
+ * pontosan az UX-skill M7 súlyozása.
+ */
+export const SERVICES_MENU_ORDER = 4
+export const KNOWLEDGE_BASE_MENU_ORDER = 5
+
+/**
+ * A cél-menüstruktúra — TISZTA függvény, adatbázis nélkül tesztelhető.
+ *
+ * A visszaadott fa legfeljebb 2 szintű (a `menus` beforeValidate ennél
+ * mélyebbet nem is engedne — src/lib/menu-validation.ts).
+ */
+export function buildNavigationMenuPlan(context: MenuSeedContext = {}): MenuSeedNode[] {
+  const services: MenuSeedNode =
+    context.servicesPageId !== undefined
+      ? {
+          label: 'Szolgáltatások',
+          type: 'page',
+          ref: { relationTo: 'pages', value: context.servicesPageId },
+          order: SERVICES_MENU_ORDER,
+          children: [],
+        }
+      : {
+          label: 'Szolgáltatások',
+          type: 'url',
+          url: SERVICES_PAGE_PATH,
+          order: SERVICES_MENU_ORDER,
+          children: [],
+        }
+
+  const sosCourse: MenuSeedNode =
+    context.sosCourseId !== undefined
+      ? {
+          label: 'SOS KézRelax',
+          type: 'product',
+          ref: { relationTo: 'products', value: context.sosCourseId },
+          order: 2,
+          children: [],
+        }
+      : {
+          label: 'SOS KézRelax',
+          type: 'url',
+          url: SOS_COURSE_FALLBACK_PATH,
+          order: 2,
+          children: [],
+        }
+
+  services.children = [
+    {
+      label: 'Rendelői kezelések',
+      type: 'url',
+      url: CLINIC_TREATMENTS_PATH,
+      order: 0,
+      children: [],
+    },
+    {
+      label: 'Szakmai képzés',
+      type: 'url',
+      url: PROFESSIONAL_TRAINING_URL,
+      // Külső oldalra visz: új lapon nyílik, hogy a látogató ne veszítse el a
+      // Kineticare munkamenetét (a NavAnchor ilyenkor rel="noopener noreferrer"-t ad).
+      openInNewTab: true,
+      order: 1,
+      children: [],
+    },
+    sosCourse,
+  ]
+
+  return [
+    services,
+    {
+      label: 'Tudástár',
+      type: 'url',
+      url: KNOWLEDGE_BASE_PATH,
+      order: KNOWLEDGE_BASE_MENU_ORDER,
+      children: [],
+    },
+  ]
+}
+
+export interface MenuSeedSummary {
+  /** A létrehozott menüpontok feliratai (dry-run esetén: létrehozandók). */
+  created: string[]
+  /** A már létező, ezért ÉRINTETLENÜL hagyott menüpontok feliratai. */
+  skipped: string[]
+}
+
+/** A cél-dokumentumok feloldása a tervhez (hiányzó cél → tartalék-ág). */
+async function resolveMenuSeedContext(payload: Payload): Promise<MenuSeedContext> {
+  const context: MenuSeedContext = {}
+
+  const pages = await payload.find({
+    collection: 'pages',
+    where: { slug: { equals: SERVICES_PAGE_SLUG } },
+    limit: 1,
+    depth: 0,
+    overrideAccess: true,
+  })
+  const servicesPageId = pages.docs[0]?.id
+  if (typeof servicesPageId === 'number') {
+    context.servicesPageId = servicesPageId
+  }
+
+  const products = await payload.find({
+    collection: 'products',
+    where: { sku: { equals: SOS_COURSE_SKU } },
+    limit: 1,
+    depth: 0,
+    overrideAccess: true,
+  })
+  const sosCourseId = products.docs[0]?.id
+  if (typeof sosCourseId === 'number') {
+    context.sosCourseId = sosCourseId
+  }
+
+  return context
+}
+
+/**
+ * Egy menüpont biztosítása. A dedup-kulcs a `label` + a szülő (gyökérnél:
+ * „nincs szülő") — pontosan úgy, ahogy a seed.ts és a legacy-visszatöltés
+ * teszi, hogy a három seed-út egymás sorait is felismerje, és ne duplikáljon.
+ *
+ * @returns a menüpont id-je; `undefined`, ha próbafutásban lett volna létrehozva
+ */
+async function ensureMenuNode(
+  payload: Payload,
+  node: MenuSeedNode,
+  parentId: number | undefined,
+  summary: MenuSeedSummary,
+  dryRun: boolean,
+): Promise<number | undefined> {
+  const existing = await payload.find({
+    collection: 'menus',
+    where: {
+      and: [
+        { label: { equals: node.label } },
+        parentId !== undefined ? { parent: { equals: parentId } } : { parent: { exists: false } },
+      ],
+    },
+    limit: 1,
+    depth: 0,
+    overrideAccess: true,
+  })
+
+  const found = existing.docs[0]
+  if (found) {
+    summary.skipped.push(node.label)
+    payload.logger.info(`Menü-seed: „${node.label}" már létezik — érintetlenül hagyva.`)
+    return found.id
+  }
+
+  summary.created.push(node.label)
+  if (dryRun) {
+    payload.logger.info(`Menü-seed (PRÓBAFUTÁS): „${node.label}" létrehozandó.`)
+    return undefined
+  }
+
+  const created = await payload.create({
+    collection: 'menus',
+    data: {
+      label: node.label,
+      type: node.type,
+      order: node.order,
+      visible: true,
+      openInNewTab: node.openInNewTab === true,
+      ...(node.url !== undefined ? { url: node.url } : {}),
+      ...(node.ref !== undefined ? { ref: node.ref } : {}),
+      ...(parentId !== undefined ? { parent: parentId } : {}),
+    },
+    overrideAccess: true,
+  })
+  payload.logger.info(`Menü-seed: „${node.label}" létrehozva.`)
+  return created.id
+}
+
+/**
+ * A menüstruktúra idempotens biztosítása.
+ *
+ * Többször futtatva sem duplikál és nem ír felül semmit: minden menüpontot a
+ * felirata (+ a szülője) alapján keres meg, és csak a HIÁNYZÓKAT hozza létre.
+ *
+ * @param options.dryRun ha igaz, semmit nem ír az adatbázisba — csak összesít
+ */
+export async function ensureNavigationMenu(
+  payload: Payload,
+  options: { dryRun?: boolean } = {},
+): Promise<MenuSeedSummary> {
+  const dryRun = options.dryRun === true
+  const summary: MenuSeedSummary = { created: [], skipped: [] }
+  const plan = buildNavigationMenuPlan(await resolveMenuSeedContext(payload))
+
+  for (const root of plan) {
+    const rootId = await ensureMenuNode(payload, root, undefined, summary, dryRun)
+    if (root.children.length === 0) {
+      continue
+    }
+    if (rootId === undefined) {
+      // Csak próbafutásban fordulhat elő (a szülő még nem létezik): a
+      // gyermekeket nem tudjuk a szülőhöz kötni, ezért nem is állítunk róluk.
+      payload.logger.info(
+        `Menü-seed (PRÓBAFUTÁS): a(z) „${root.label}" almenüpontjai csak éles futáskor értékelhetők.`,
+      )
+      continue
+    }
+    for (const child of root.children) {
+      await ensureMenuNode(payload, child, rootId, summary, dryRun)
+    }
+  }
+
+  return summary
+}

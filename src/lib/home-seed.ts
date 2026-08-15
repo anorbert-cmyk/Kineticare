@@ -281,10 +281,13 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
   },
 
   // M3 — Kurzuskártyák. Adatvezérelt: a kártyák a Webshop → Kurzusok közül
-  // jönnek, itt csak a felvezető szöveg él.
+  // jönnek (cím, előnyök, ár, borító), itt csak a felvezető szöveg él.
+  // A cím SZÁNDÉKOSAN nem „Így tudunk neked segíteni": az ütközött a lentebbi
+  // Szolgáltatások szekció „Így tudunk segíteni" címével (kezdőlap-audit,
+  // 2026-08-15) — a szekció a megvásárolható kínálatot nevezi meg.
   {
     blockType: 'courseCards',
-    heading: 'Így tudunk neked segíteni',
+    heading: 'Kurzusaink',
     lead: 'Online kézrehabilitációs kurzusaink lépésről lépésre vezetnek végig az otthoni felépülésen.',
     sectionSettings: { visible: true, anchorId: 'kurzusok', hatter: 'feher' },
   },
