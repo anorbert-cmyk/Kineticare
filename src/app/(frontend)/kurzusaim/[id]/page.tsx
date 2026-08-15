@@ -4,14 +4,12 @@ import { getPayload } from 'payload'
 import { headers } from 'next/headers'
 import { cache } from 'react'
 
-import { Container } from '@/components/ui/Container'
-import { Section } from '@/components/ui/Section'
 import { CoursePlayer } from '@/components/account/CoursePlayer'
 import { logger } from '@/lib/logger'
 import { accessExpiredMessage } from '@/lib/course-access'
 import { resolveSingleCourseAccess } from '@/lib/course-access-lookup'
 import { fetchWatchedRefs } from '@/lib/course-progress/lookup'
-import { toPlayerVideos } from '@/lib/course-player-videos'
+import { buildCurriculum } from '@/lib/curriculum/curriculum'
 import { courseTitle, hasUserPurchased, parseCourseIdParam } from '@/lib/courses'
 import type { Product, User } from '@/payload-types'
 
@@ -100,9 +98,22 @@ async function getWatchedRefs(userId: number, productId: number): Promise<string
 }
 
 /**
- * /kurzusaim/[id] — a kurzus lejátszóoldala (epizódlista + Bunny Stream
- * player, tokenes embed a T-032 végpontról, token-frissítés a lejárat előtt
- * 5 perccel).
+ * /kurzusaim/[id] — a kurzus lejátszóoldala.
+ *
+ * ═══ MIÉRT ITT ÉPÜL A TANANYAG ═══
+ * A lejátszó bemenete a TANANYAG-MODELL (`buildCurriculum`), nem a nyers
+ * `videos`/`modules` mezőpár. A modell a szerveren áll össze, mert
+ * - a `hasAccess: false` ág ITT szűri ki a Bunny-GUID-okat, tehát a fizetős
+ *   tartalom azonosítói hozzáférés nélkül BE SEM KERÜLNEK az RSC-payloadba
+ *   (S2/b) — ezt a kliensre bízni nem lehet, ott már késő;
+ * - a mellékletek media-relációja `depth: 2`-vel populálva érkezik, a kliens
+ *   pedig kész, letölthető URL-eket kap, nem nyers azonosítókat;
+ * - így a szerkezet-értelmezés EGYETLEN helyen történik, és a lejátszó, a
+ *   jegykiadás és a haladás-jelölés nem tudhatja máshogy, mi a kurzus tartalma.
+ *
+ * Az oldal SZÁNDÉKOSAN nem `Section`/`Container` közé kerül: a lejátszó
+ * kétpaneles, a viewport magasságához igazodó elrendezés, aminek a saját
+ * geometriája a player.css-ben él.
  */
 export default async function KurzusaimPlayerPage({ params }: KurzusaimPlayerPageProps) {
   const { id } = await params
@@ -126,25 +137,19 @@ export default async function KurzusaimPlayerPage({ params }: KurzusaimPlayerPag
   const hasAccess = purchased && expiredMessage === null
   // Haladás csak akkor kell, ha a vevő ténylegesen nézheti a kurzust.
   const watchedRefs = hasAccess ? await getWatchedRefs(user.id, product.id) : []
+  const curriculum = buildCurriculum(product, hasAccess)
 
   return (
-    <Section>
-      <Container>
-        <CoursePlayer
-          expiredMessage={expiredMessage}
-          product={{
-            id: product.id,
-            slug: product.slug ?? null,
-            title: courseTitle(product),
-            // S2/b: a Bunny-GUID csak élő hozzáféréssel megy ki az
-            // RSC-payloadba. A szabály és az indoklása egy helyen él, tesztelve:
-            // src/lib/course-player-videos.ts.
-            videos: toPlayerVideos(product, hasAccess),
-          }}
-          hasAccess={hasAccess}
-          watchedRefs={watchedRefs}
-        />
-      </Container>
-    </Section>
+    <CoursePlayer
+      curriculum={curriculum}
+      expiredMessage={expiredMessage}
+      hasAccess={hasAccess}
+      product={{
+        id: product.id,
+        slug: product.slug ?? null,
+        title: courseTitle(product),
+      }}
+      watchedRefs={watchedRefs}
+    />
   )
 }

@@ -440,6 +440,24 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
     // A két szerkezet egyesítése a src/lib/curriculum/curriculum.ts-ben él.
     courseModulesField,
     {
+      // Kurzus-haladás panel: „ki kezdte el, ki nem, és hány százaléknál tart".
+      // UI-mező, NEM tárol adatot → nincs séma-változás, migrációt nem igényel
+      // (a users.grantPurchasePanel és az orders.refundPanel mintája).
+      //
+      // Az adatot a GET /api/admin/course-progress végpont adja (staff+owner),
+      // és a KÖZÖS summarizeCurriculum-mal számol — így az adminban és a
+      // vásárló felületén definíció szerint UGYANAZ a szám áll. Ha a kettő
+      // eltérne, a szerkesztő egyik számban sem bízna meg többé.
+      name: 'courseProgressPanel',
+      type: 'ui',
+      label: 'Kurzus-haladás',
+      admin: {
+        components: {
+          Field: '/components/admin/CourseProgressPanel#CourseProgressPanel',
+        },
+      },
+    },
+    {
       name: 'videos',
       type: 'array',
       label: 'Videók (régi, fejezet nélküli lista)',

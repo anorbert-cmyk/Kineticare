@@ -1,1 +1,873 @@
-/* Lejátszó — a fájlt a lejátszó-ügynök tölti fel. */
+/**
+ * KURZUS-LEJÁTSZÓ — a fizetős tananyag felülete
+ * (src/components/account/CoursePlayer.tsx + components/account/player/*).
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * GEOMETRIA — MIÉRT CSS-VÁLTOZÓKBÓL
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A lapon KÉT sticky sáv ül egymás alatt: a globális fejléc
+ * (`--kc-header-height`, layout.css) és a lejátszó saját kurzus-fejléce
+ * (`--kc-player-header-h`). Ha ezek magassága szétszórtan, kézzel lenne
+ * beírva, a rail sticky-topja és a fókusz görgetési margója óhatatlanul
+ * elcsúszna tőlük — a WCAG 2.2 „Focus Not Obscured" (2.4.11) pedig pontosan
+ * ezt tiltja: a sticky sáv NEM takarhatja el a fókuszált elemet. Ezért a
+ * lejátszó fejlécének magassága EGY változó, és belőle SZÁRMAZIK
+ *   - a rail `position: sticky` teteje,
+ *   - a rail maximális magassága,
+ *   - a `scroll-margin-top` a fókuszálható elemeken.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * KONTRASZT-JEGYZŐKÖNYV (WCAG 2.2 AA — a tokens.css számolt értékeiből)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *   ink (#10243e) a paper lapon (#f6f9fc) ....... 14,79:1  ✓
+ *   ink a fehér railen (#ffffff) ................ 15,63:1  ✓
+ *   ink az aktív sor tintjén (#e6f0f8) .......... 13,53:1  ✓
+ *   ink-soft (#33495f) a fehéren ................  9,30:1  ✓  (meta, hossz)
+ *   ink-soft a tinten ...........................  8,05:1  ✓
+ *   accent-deep (#2f6e9f) a fehéren .............  5,45:1  ✓  (linkek)
+ *   fehér az accent-deep primer gombon ..........  5,45:1  ✓
+ *   danger (#b3261e) a danger-surface-en ........  AA      ✓  (hibaüzenet)
+ *   success (#166534) a success-surface-en ......  AA      ✓  (befejezés-sáv)
+ * Az `accent` (#3d78aa) a hűvös felületeken 4,5:1 ALATT van, ezért itt
+ * KIZÁRÓLAG dekoráció (aktív sor csíkja, keret) — szöveget sosem visz.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * SZABÁLYOK, AMIK ALÓL NINCS KIVÉTEL
+ * ═══════════════════════════════════════════════════════════════════════════
+ * - Nyers hex érték nincs: minden szín a tokens.css szerep-tokenjeiről jön.
+ * - Elemre írt px/rem betűméret nincs: kizárólag `--kc-text-*` lépcsők
+ *   (docs/ertekesitesi-ux-skill.md, 4. pont).
+ * - Érintési célfelület ≥ 44 px minden kattintható elemen (WCAG 2.2 2.5.8).
+ * - `100dvh`, sosem `100vh`: a mobil böngésző-króm be-/kicsúszásakor a `vh`
+ *   értéke nem követi a TÉNYLEGES viewportot, és a teljes képernyős panel
+ *   alja a króm alá csúszna.
+ */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   0. CSAK KÉPERNYŐOLVASÓNAK
+   ══════════════════════════════════════════════════════════════════════════
+   A base.css `.kc-visually-hidden`-jével azonos technika, a lejátszó saját,
+   rövidebb nevén — a rail sorai sűrűn használják. A `clip-path` a modern,
+   a `clip` a régi böngészőknek szól; a `white-space: nowrap` megakadályozza,
+   hogy az 1px-es dobozban a szöveg összetöredezzen és a felolvasás elromoljon. */
+.kc-sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   1. GYÖKÉR ÉS GEOMETRIA
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.kc-player {
+  /* A kurzus-fejléc magassága: mobilon 56px, asztalin 64px (a specifikáció
+     felső korlátja). MINDEN ebből származó érték ezt olvassa. */
+  --kc-player-header-h: 3.5rem;
+  --kc-player-rail-w: 20rem; /* 320px — a 300–360px sávban */
+  --kc-player-gap: var(--kc-space-5);
+  /* A fókuszált elem SOSEM kerülhet a két sticky sáv alá. */
+  --kc-player-focus-offset: calc(
+    var(--kc-header-height) + var(--kc-player-header-h) + var(--kc-space-3)
+  );
+
+  display: block;
+  background-color: var(--kc-color-bg);
+  color: var(--kc-color-text);
+}
+
+/* A lejátszóban minden görgetési cél a sticky sávok ALATT álljon meg. */
+.kc-player :is(h1, h2, h3, a, button, [tabindex]) {
+  scroll-margin-top: var(--kc-player-focus-offset);
+}
+
+@media (min-width: 1024px) {
+  .kc-player {
+    --kc-player-header-h: 4rem; /* 64px */
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   2. STICKY KURZUS-FEJLÉC
+   ══════════════════════════════════════════════════════════════════════════
+   NEM animált és NEM rejtőzködik: a görgetésre eltűnő fejléc a visszatéréskor
+   „hol vagyok?" bizonytalanságot okoz, és a haladás-sáv pont akkor tűnne el,
+   amikor a vevő a lecke végén dönt a következő lépésről. A háttér EXPLICIT
+   (nem áttetsző): alatta a videó és a rail gördül el, áttetszőségnél a
+   kontraszt a legrosszabb esetre méretezhetetlen lenne. */
+.kc-player__header {
+  position: sticky;
+  top: var(--kc-header-height);
+  z-index: 20;
+  background-color: var(--kc-color-surface-raised);
+  border-block-end: 1px solid var(--kc-color-border);
+}
+
+.kc-player__header-row {
+  display: flex;
+  align-items: center;
+  gap: var(--kc-space-3);
+  min-block-size: calc(var(--kc-player-header-h) - 0.25rem);
+  padding-inline: var(--kc-container-gutter);
+  max-inline-size: 90rem;
+  margin-inline: auto;
+}
+
+.kc-player__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kc-space-1);
+  flex: none;
+  min-block-size: 44px;
+  padding-inline-end: var(--kc-space-2);
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-medium);
+  color: var(--kc-color-primary);
+  text-decoration: none;
+}
+
+.kc-player__back:hover {
+  text-decoration: underline;
+}
+
+.kc-player__course-title {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  margin: 0;
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-base);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-color-text);
+  /* Egy sorba fér, akármilyen hosszú a kurzuscím — a teljes cím a
+     <title>-ben és a kurzusoldalon úgyis ott van. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kc-player__progress-text {
+  flex: none;
+  margin: 0;
+  font-size: var(--kc-text-sm);
+  color: var(--kc-color-text-muted);
+  white-space: nowrap;
+}
+
+/* A haladás-sáv a fejléc ALSÓ ÉLÉN ül — a `--sm` változat 4px magas, keret
+   nélkül, tehát vizuálisan a sáv záróvonala, nem külön komponens. */
+.kc-player__progress-bar {
+  display: block;
+}
+
+/* A tananyag-panelt nyitó gomb CSAK mobilon létezik (lásd a 7. szakaszt). */
+.kc-player__rail-toggle {
+  display: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   3. KÉTPANELES ELRENDEZÉS
+   ══════════════════════════════════════════════════════════════════════════
+   Mobilon egy hasáb (a rail modális panelre vált), 1024px felett kéthasábos
+   rács. A rail a rácsban az ELSŐ oszlop, a DOM-ban viszont a MÁSODIK elem:
+   ezt `grid-column` rendezi el, ami — a `flex: order`-rel ellentétben — itt
+   nem szakítja el a fókusz-sorrendet a vizuálistól, mert a rail önálló,
+   navigációs landmark; a tartalmi sorrend (videó → cím → akció → szöveg)
+   mindkét nézetben egyforma marad. */
+.kc-player__layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--kc-player-gap);
+  max-inline-size: 90rem;
+  margin-inline: auto;
+  padding-inline: var(--kc-container-gutter);
+  padding-block: var(--kc-space-5);
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .kc-player__layout {
+    grid-template-columns: minmax(18.75rem, var(--kc-player-rail-w)) minmax(0, 1fr);
+    gap: var(--kc-space-6);
+  }
+
+  .kc-player__stage {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .kc-player__rail-panel {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   4. SZÍNPAD
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.kc-player__stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-4);
+  min-inline-size: 0;
+  /* Hogy az alsó akciósáv (sticky bottom) a viewport aljára tudjon simulni,
+     a színpadnak le kell érnie odáig — különben a sáv a saját, rövid
+     dobozának alján ragadna, valahol a lap közepén. */
+  min-block-size: calc(100dvh - var(--kc-header-height) - var(--kc-player-header-h));
+}
+
+/* ---- Befejezési visszajelzés --------------------------------------------
+   Visszafogott, elutasítás NÉLKÜLI sáv: nincs bezáró „×", mert nincs mit
+   elutasítani, és nincs konfetti sem — az ünneplés-animáció a mozgásra
+   érzékeny felhasználóknál rosszullétet okozhat, a `prefers-reduced-motion`
+   pedig csak az átmenetet kapcsolná ki, a villogást nem. */
+.kc-player__done-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--kc-space-2) var(--kc-space-4);
+  margin: 0;
+  padding: var(--kc-space-3) var(--kc-space-4);
+  border: 1px solid var(--kc-color-success);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-success-surface);
+  color: var(--kc-color-success);
+  font-size: var(--kc-text-sm);
+}
+
+.kc-player__done-banner a {
+  color: var(--kc-color-success);
+  font-weight: var(--kc-font-weight-medium);
+}
+
+/* ---- Videó --------------------------------------------------------------- */
+
+.kc-player__media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  inline-size: 100%;
+  overflow: hidden;
+  border-radius: var(--kc-radius-lg);
+  background-color: var(--kc-color-surface-dark);
+}
+
+.kc-player__frame {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  border: 0;
+}
+
+/* A betöltés-jelzés és a hibaüzenet a videó helyén, középen. A sötét
+   felületen a szöveg fehér (15,63:1) illetve halvány akcent (8,49:1). */
+.kc-player__media-note,
+.kc-player__media-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--kc-space-3);
+  margin: 0;
+  padding: var(--kc-space-5);
+  text-align: center;
+  font-size: var(--kc-text-sm);
+  color: var(--kc-color-on-dark);
+}
+
+.kc-player__media-note {
+  color: var(--kc-color-on-dark-muted);
+}
+
+/* A sötét felületen a fókuszgyűrű fehérre vált (az accent-deep ott 2,87:1). */
+.kc-player__media :focus-visible {
+  outline-color: var(--kc-color-focus-on-dark);
+}
+
+/* ---- Lecke-fej ----------------------------------------------------------- */
+
+.kc-player__lesson-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-2);
+}
+
+.kc-player__lesson-title {
+  margin: 0;
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-2xl);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-color-text);
+}
+
+/* A cím programozottan fókuszálható (tabIndex -1), hogy lecke-váltáskor a
+   képernyőolvasó odakerüljön. A fókuszgyűrűt NEM tüntetjük el: a billentyűzetes
+   felhasználó lássa, hová került. */
+.kc-player__lesson-title:focus-visible {
+  outline: 2px solid var(--kc-color-focus);
+  outline-offset: 4px;
+}
+
+.kc-player__lesson-meta {
+  margin: 0;
+  font-size: var(--kc-text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--kc-color-text-muted);
+}
+
+.kc-player__lesson-summary {
+  margin: 0;
+  max-inline-size: 70ch;
+  font-size: var(--kc-text-base);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-color-text-muted);
+}
+
+/* ---- Jelölés-hiba -------------------------------------------------------- */
+
+.kc-player__mark-error {
+  margin: 0;
+  padding: var(--kc-space-3) var(--kc-space-4);
+  border: 1px solid var(--kc-color-danger);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-danger-surface);
+  color: var(--kc-color-danger);
+  font-size: var(--kc-text-sm);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   5. ALSÓ AKCIÓSÁV
+   ══════════════════════════════════════════════════════════════════════════
+   `position: sticky; bottom: 0`: a sáv a viewport alján marad, amíg a színpad
+   látszik — tehát a hosszú szöveges leckéken is végig kéznél van, de NEM
+   `fixed`, így nem úszik rá idegen tartalomra és nyomtatásban sem ragad be. */
+.kc-player-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kc-space-3);
+  /* SZÁNDÉKOSAN nincs `margin-block-start: auto`: az a színpad teljes szabad
+     helyét a sáv ELÉ tolná, és a DOM-ban utána álló lecke-törzs a hajtás alá
+     csúszna. Sticky sávnál erre nincs is szükség — a `bottom: 0` addig tartja
+     a viewport alján, amíg a színpad alja el nem éri, tehát a törzs utolsó
+     sora a görgetés végén szabadon látszik. */
+  padding-block: var(--kc-space-3);
+  background-color: var(--kc-color-bg);
+  border-block-start: 1px solid var(--kc-color-border);
+}
+
+.kc-player-actions__spacer {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .kc-player-actions__spacer {
+    display: block;
+  }
+}
+
+.kc-player-actions__previous,
+.kc-player-actions__primary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kc-space-2);
+  min-block-size: 44px;
+  padding: var(--kc-space-2) var(--kc-space-4);
+  border-radius: var(--kc-radius-md);
+  font-family: inherit;
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-medium);
+  cursor: pointer;
+  text-align: start;
+}
+
+.kc-player-actions__previous {
+  border: 1px solid var(--kc-color-border-strong);
+  background-color: transparent;
+  color: var(--kc-color-text);
+}
+
+.kc-player-actions__previous:hover {
+  background-color: var(--kc-color-surface-tint);
+}
+
+.kc-player-actions__primary {
+  flex: 1 1 auto;
+  justify-content: space-between;
+  max-inline-size: 32rem;
+  margin-inline-start: auto;
+  border: 1px solid var(--kc-color-primary);
+  background-color: var(--kc-color-primary);
+  color: var(--kc-color-on-primary);
+}
+
+.kc-player-actions__primary:hover:not(:disabled) {
+  background-color: var(--kc-color-primary-hover);
+  border-color: var(--kc-color-primary-hover);
+}
+
+/* A „minden lecke kész" nem cselekvés, hanem VISSZAJELZÉS: letiltott, siker-
+   színű, nyíl nélküli. Nem szürke „nem működik" gomb — a különbség fontos. */
+.kc-player-actions__primary--done,
+.kc-player-actions__primary:disabled {
+  cursor: default;
+  border-color: var(--kc-color-border-strong);
+  background-color: var(--kc-color-surface-raised);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-player-actions__primary--done {
+  border-color: var(--kc-color-success);
+  color: var(--kc-color-success);
+  background-color: var(--kc-color-success-surface);
+}
+
+.kc-player-actions__primary-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-inline-size: 0;
+}
+
+/* A modulhatár felvezető sora — apró, halvány, és sosem egyedül hordoz
+   információt (az `aria-label` a gombon tartalmazza). */
+.kc-player-actions__hint {
+  font-size: var(--kc-text-2xs);
+  font-weight: var(--kc-font-weight-normal);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.kc-player-actions__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   6. CURRICULUM-RAIL
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.kc-player__rail-panel {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  border: 1px solid var(--kc-color-border);
+  border-radius: var(--kc-radius-lg);
+  background-color: var(--kc-color-surface-raised);
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+  .kc-player__rail-panel {
+    position: sticky;
+    top: calc(var(--kc-header-height) + var(--kc-player-header-h) + var(--kc-space-4));
+    max-block-size: calc(
+      100dvh - var(--kc-header-height) - var(--kc-player-header-h) - var(--kc-space-7)
+    );
+  }
+}
+
+.kc-player__rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kc-space-3);
+  padding: var(--kc-space-3) var(--kc-space-4);
+  border-block-end: 1px solid var(--kc-color-border);
+  background-color: var(--kc-color-surface-raised);
+}
+
+.kc-player__rail-title {
+  margin: 0;
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-base);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-color-text);
+}
+
+/* A bezáró gomb csak a mobil modálison látszik (lásd a 7. szakaszt). */
+.kc-player__rail-close {
+  display: none;
+}
+
+.kc-player-rail {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1 1 auto;
+}
+
+.kc-player-rail__modules,
+.kc-player-rail__lessons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kc-player-rail__module + .kc-player-rail__module {
+  border-block-start: 1px solid var(--kc-color-border);
+}
+
+.kc-player-rail__module-heading {
+  margin: 0;
+  font-size: var(--kc-text-base);
+}
+
+/* A TELJES fejléc a gomb (nem csak a chevron): a nagy célfelület a
+   legfontosabb kényelmi részlete egy sűrű tananyag-listának. */
+.kc-player-rail__module-button {
+  display: flex;
+  inline-size: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kc-space-3);
+  min-block-size: 48px;
+  padding: var(--kc-space-3) var(--kc-space-4);
+  border: 0;
+  background-color: transparent;
+  font-family: var(--kc-font-body);
+  font-size: var(--kc-text-sm);
+  font-weight: var(--kc-font-weight-bold);
+  color: var(--kc-color-text);
+  text-align: start;
+  cursor: pointer;
+}
+
+.kc-player-rail__module-button:hover {
+  background-color: var(--kc-color-surface-tint);
+}
+
+.kc-player-rail__module-title {
+  min-inline-size: 0;
+}
+
+.kc-player-rail__module-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kc-space-2);
+  flex: none;
+  font-weight: var(--kc-font-weight-normal);
+  font-size: var(--kc-text-xs);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-player-rail__module-check {
+  color: var(--kc-color-success);
+  font-size: var(--kc-text-lg);
+}
+
+.kc-player-rail__chevron {
+  font-size: var(--kc-text-lg);
+  color: var(--kc-color-text-muted);
+  transition: transform var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-player-rail__module-button[aria-expanded='true'] .kc-player-rail__chevron {
+  transform: rotate(180deg);
+}
+
+.kc-player-rail__module-summary {
+  margin: 0;
+  padding: 0 var(--kc-space-4) var(--kc-space-2);
+  font-size: var(--kc-text-xs);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-player-rail__panel[hidden] {
+  display: none;
+}
+
+/* ---- Lecke-sor ----------------------------------------------------------- */
+
+.kc-player-rail__lesson-button {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--kc-space-2);
+  inline-size: 100%;
+  /* WCAG 2.2 2.5.8 — az érintési célfelület legalább 44px magas. */
+  min-block-size: 44px;
+  padding: var(--kc-space-2) var(--kc-space-4);
+  /* Az aktív csík HELYE minden soron le van foglalva, hogy a kijelölés ne
+     tologassa a szöveget (a 3px-es ugrálás listában feltűnő és fárasztó). */
+  border: 0;
+  border-inline-start: 3px solid transparent;
+  background-color: transparent;
+  font-family: var(--kc-font-body);
+  font-size: var(--kc-text-sm);
+  line-height: var(--kc-leading-tight);
+  color: var(--kc-color-text);
+  text-align: start;
+  cursor: pointer;
+}
+
+.kc-player-rail__lesson-button:hover:not(:disabled) {
+  background-color: var(--kc-color-surface-tint);
+}
+
+/* Az AKTÍV lecke háromféleképpen is jelölt: akcentcsík (alak), félkövér
+   (súly) és `aria-current` (szemantika). A szín SOSEM egyedüli jelölő
+   (WCAG 1.4.1). */
+.kc-player-rail__lesson-button--active {
+  border-inline-start-color: var(--kc-color-accent);
+  background-color: var(--kc-color-surface-tint);
+  font-weight: var(--kc-font-weight-bold);
+}
+
+.kc-player-rail__lesson-button:disabled {
+  cursor: default;
+  color: var(--kc-color-text-muted);
+}
+
+.kc-player-rail__lesson-status {
+  flex: none;
+  /* 20–24px közötti jelölő: a --kc-text-2xl lépcső 1em-je ~25px felett lenne,
+     a --kc-text-xl viszont pontosan a sávba esik. */
+  font-size: var(--kc-text-xl);
+  color: var(--kc-color-border-strong);
+}
+
+.kc-player-rail__lesson-button--done .kc-player-rail__lesson-status {
+  color: var(--kc-color-success);
+}
+
+.kc-player-rail__lesson-kind,
+.kc-player-rail__lesson-attachment {
+  flex: none;
+  font-size: var(--kc-text-lg);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-player-rail__lesson-title {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.kc-player-rail__lesson-meta {
+  flex: none;
+  font-size: var(--kc-text-xs);
+  font-weight: var(--kc-font-weight-normal);
+  color: var(--kc-color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   7. MOBIL — A TANANYAG MODÁLIS PANELKÉNT
+   ══════════════════════════════════════════════════════════════════════════
+   1024px alatt a rail NEM foglalja a képernyő felét: a fejléc gombja nyitja,
+   teljes magasságú `role="dialog"` panelként. A fókusz-csapdát, az Escape-et
+   és a fókusz visszaadását a komponens intézi; itt a MEGJELENÉS szabályai
+   élnek — látható „×" (≥ 44×44px), a háttér nem görög, és `100dvh`. */
+@media (max-width: 1023.98px) {
+  .kc-player__rail-toggle {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    min-block-size: 44px;
+    padding-inline: var(--kc-space-3);
+    border: 1px solid var(--kc-color-border-strong);
+    border-radius: var(--kc-radius-full);
+    background-color: var(--kc-color-surface-raised);
+    font-family: var(--kc-font-body);
+    font-size: var(--kc-text-xs);
+    font-weight: var(--kc-font-weight-medium);
+    color: var(--kc-color-text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  /* A haladás szövege a szűk sávban a gombra bízza a számokat. */
+  .kc-player__progress-text {
+    display: none;
+  }
+
+  .kc-player__scrim {
+    position: fixed;
+    inset: 0;
+    /* A globális fejléc z-indexe 50 — a modális réteg FÖLÉ kell kerüljön,
+       különben a sáv átüt a panelen, és a „modális" ígéret hazugság lenne. */
+    z-index: 55;
+    /* A fátyol SZÓ SZERINT a mobil navigációé (layout.css
+       `.kc-nav-mobile__overlay`): ugyanaz az ink-alapú, 50%-os márka-sötét,
+       hogy a két teljes képernyős réteg ugyanúgy viselkedjen. Nincs rá
+       szerep-token, mert nem felület, hanem takarás. */
+    background-color: rgb(16 36 62 / 0.5);
+  }
+
+  .kc-player__rail-panel {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: 0;
+    z-index: 60;
+    inline-size: min(22rem, 92vw);
+    block-size: 100dvh;
+    max-block-size: 100dvh;
+    border: 0;
+    border-inline-end: 1px solid var(--kc-color-border);
+    border-radius: 0;
+    /* Zárt állapotban NEM csak láthatatlan: kikerül a fókusz- és a
+       felolvasási sorrendből is. */
+    display: none;
+  }
+
+  .kc-player__rail-panel--open {
+    display: flex;
+  }
+
+  .kc-player__rail-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    inline-size: 44px;
+    block-size: 44px;
+    border: 1px solid var(--kc-color-border-strong);
+    border-radius: var(--kc-radius-full);
+    background-color: var(--kc-color-surface-raised);
+    font-size: var(--kc-text-lg);
+    color: var(--kc-color-text);
+    cursor: pointer;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   8. LECKE-TÖRZS (szöveg, link, mellékletek)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.kc-player-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-5);
+  padding-block-end: var(--kc-space-6);
+}
+
+.kc-player-body__text {
+  max-inline-size: 70ch; /* 45–75 karakteres sorhossz — UX-skill 4. pont. */
+}
+
+.kc-player-body__link-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--kc-space-3);
+  padding: var(--kc-space-4);
+  border: 1px solid var(--kc-color-border);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-surface-raised);
+}
+
+.kc-player-body__link-text {
+  margin: 0;
+  max-inline-size: 60ch;
+  font-size: var(--kc-text-sm);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-player-body__attachments-title {
+  margin: 0 0 var(--kc-space-3);
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-lg);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-color-text);
+}
+
+.kc-player-body__attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kc-player-body__attachment-link,
+.kc-player-body__attachment-missing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kc-space-2);
+  min-block-size: 44px;
+  padding-inline: var(--kc-space-3);
+  border: 1px solid var(--kc-color-border);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-surface-raised);
+  font-size: var(--kc-text-sm);
+}
+
+.kc-player-body__attachment-link {
+  color: var(--kc-color-primary);
+  text-decoration: none;
+}
+
+.kc-player-body__attachment-link:hover {
+  border-color: var(--kc-color-primary);
+  text-decoration: underline;
+}
+
+.kc-player-body__attachment-missing {
+  color: var(--kc-color-text-muted);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   9. KAPUZOTT ÁLLAPOTOK (nincs hozzáférés / még nincs tananyag)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.kc-player-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--kc-space-4);
+  /* A kapuzott nézet nincs `Container`-ben (a lejátszó saját geometriájú),
+     ezért a tartalom-szélességet és az oldal-margót itt kell megadni —
+     különben keskeny kijelzőn a kártya a képernyő széléhez érne. */
+  inline-size: calc(100% - 2 * var(--kc-container-gutter));
+  max-inline-size: var(--kc-container-narrow);
+  margin: var(--kc-space-7) auto;
+}
+
+.kc-player-gate__title {
+  margin: 0;
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-2xl);
+  line-height: var(--kc-leading-heading);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   10. IKONOK ÉS MOZGÁS
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.kc-player-icon {
+  flex: none;
+  /* Az ikonok a SZÖVEGSZÍNT öröklik (`currentColor`), így a kontraszt egyetlen
+     helyen dől el — a szövegével együtt. */
+  inline-size: 1em;
+  block-size: 1em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kc-player-rail__chevron {
+    transition: none;
+  }
+}

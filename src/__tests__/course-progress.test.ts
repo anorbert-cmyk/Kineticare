@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { Payload } from 'payload'
 import { describe, expect, it, vi } from 'vitest'
 
-import { CourseList } from '../components/account/CourseList'
 import { CoursePlayer } from '../components/account/CoursePlayer'
 import { ACCESS_EXPIRED_TITLE } from '../lib/course-access'
 import {
@@ -24,6 +23,7 @@ import {
   watchedRefsByProduct,
 } from '../lib/course-progress/progress'
 import { createMarkWatchedHandler } from '../lib/course-progress/route-handler'
+import { buildCurriculum } from '../lib/curriculum/curriculum'
 import {
   RATE_LIMIT_MESSAGE,
   RATE_LIMIT_RULES,
@@ -620,70 +620,61 @@ describe('markVideoWatched (kliens) — a szerződés kliens-oldala', () => {
 })
 
 describe('Kurzus-haladás a felületen', () => {
-  const playerVideos = [
-    { id: VIDEO_REF_1, title: '1. lecke', streamAssetId: ASSET_1, status: 'ready' as const },
-    { id: VIDEO_REF_2, title: '2. lecke', streamAssetId: ASSET_2, status: 'ready' as const },
-  ]
+  /**
+   * A lejátszó bemenete a TANANYAG-MODELL lett (`buildCurriculum`) a nyers
+   * `videos` tömb helyett, és a felirat is a modell közös szövegét használja
+   * („X/Y lecke kész"), hogy a listán, a lejátszóban és az adminban definíció
+   * szerint ugyanaz a szám álljon. A haladás SZABÁLYAI (orphan ref, nevező)
+   * változatlanok — ezt őrzi az alábbi két eset.
+   */
+  const playerCurriculum = buildCurriculum(
+    {
+      modules: [],
+      videos: [
+        { id: VIDEO_REF_1, title: '1. lecke', streamAssetId: ASSET_1, status: 'ready' },
+        { id: VIDEO_REF_2, title: '2. lecke', streamAssetId: ASSET_2, status: 'ready' },
+      ],
+    },
+    true,
+  )
 
-  it('a lejátszó fejlécében látszik az „X/Y videó megnézve", és a megnézett epizód jelölve van', () => {
+  it('a lejátszó fejlécében látszik az „X/Y lecke kész", és a kész lecke jelölve van', () => {
     const html = renderToStaticMarkup(
       createElement(CoursePlayer, {
-        product: { id: PRODUCT_ID, title: 'Kézrehab alapkurzus', videos: playerVideos },
+        product: { id: PRODUCT_ID, title: 'Kézrehab alapkurzus' },
+        curriculum: playerCurriculum,
         hasAccess: true,
         watchedRefs: [VIDEO_REF_1],
       }),
     )
 
-    expect(html).toContain('1/2 videó megnézve')
-    expect(html).toContain('Megnézve')
-    expect(html).toContain('Megjelölöm megnézettnek')
+    expect(html).toContain('1/2 lecke kész')
+    // A rail sorai SZÍNTŐL FÜGGETLENÜL is közlik az állapotot (WCAG 1.4.1).
+    expect(html).toContain('Befejezve')
+    expect(html).toContain('Nem kezdett')
   })
 
   it('orphan ref a lejátszóban sem torzít (a törölt videóra mutató jelölés nem számít)', () => {
     const html = renderToStaticMarkup(
       createElement(CoursePlayer, {
-        product: { id: PRODUCT_ID, title: 'Kézrehab alapkurzus', videos: playerVideos },
+        product: { id: PRODUCT_ID, title: 'Kézrehab alapkurzus' },
+        curriculum: playerCurriculum,
         hasAccess: true,
         watchedRefs: [VIDEO_REF_1, 'mar-torolt-video'],
       }),
     )
 
-    expect(html).toContain('1/2 videó megnézve')
+    expect(html).toContain('1/2 lecke kész')
     expect(html).not.toContain('2/2')
   })
 
-  it('a kurzuslistán megjelenik a visszafogott haladás-sor', () => {
-    const html = renderToStaticMarkup(
-      createElement(CourseList, {
-        products: [{ id: PRODUCT_ID, sku: 'Kézrehab alapkurzus' } as Product],
-        progressByProductId: {
-          [PRODUCT_ID]: summarizeCourseProgress(playerVideos, [VIDEO_REF_1]),
-        },
-      }),
-    )
-
-    expect(html).toContain('1/2 megnézve')
-    expect(html).toContain('kc-course-progress')
-  })
-
-  it('lejárt hozzáférésnél a lista a lejárat-üzenetet mutatja, haladás-sort nem', () => {
-    const html = renderToStaticMarkup(
-      createElement(CourseList, {
-        products: [{ id: PRODUCT_ID, sku: 'Kézrehab alapkurzus' } as Product],
-        accessByProductId: {
-          [PRODUCT_ID]: {
-            hasAccess: false,
-            expiryLabel: null,
-            expiredMessage: `${ACCESS_EXPIRED_TITLE} …`,
-          },
-        },
-        progressByProductId: {
-          [PRODUCT_ID]: summarizeCourseProgress(playerVideos, [VIDEO_REF_1]),
-        },
-      }),
-    )
-
-    expect(html).toContain(ACCESS_EXPIRED_TITLE)
-    expect(html).not.toContain('1/2 megnézve')
-  })
+  /**
+   * A KURZUSAIM-LISTA két korábbi őre (haladás-sor a kártyán, illetve lejárt
+   * hozzáférésnél a lejárat-üzenet haladás-sor helyett) átköltözött a
+   * src/__tests__/course-list-ui.test.ts fájlba. Ok: a lista haladás-forrása a
+   * `summarizeCourseProgress` (nyers `videos` tömb) helyett a TANANYAG-MODELL
+   * lett (`buildCurriculum` + `summarizeCurriculum`), hogy a listán és a
+   * lejátszóban definíció szerint ugyanaz a szám álljon. Az itt maradt blokk a
+   * lejátszó felületét őrzi.
+   */
 })

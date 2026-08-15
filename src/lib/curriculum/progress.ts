@@ -71,10 +71,10 @@ export function summarizeCurriculum(
   let resumeLesson: CurriculumLesson | null = null
   let firstPlayable: CurriculumLesson | null = null
 
-  for (const module of curriculum.modules) {
+  for (const kurzusModul of curriculum.modules) {
     let moduleTotal = 0
     let moduleCompleted = 0
-    for (const lesson of module.lessons) {
+    for (const lesson of kurzusModul.lessons) {
       if (!lesson.playable) {
         continue
       }

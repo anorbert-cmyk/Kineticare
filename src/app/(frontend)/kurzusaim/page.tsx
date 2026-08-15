@@ -6,10 +6,17 @@ import { headers } from 'next/headers'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { CourseList } from '@/components/account/CourseList'
+import {
+  buildCourseCardView,
+  courseListSummary,
+  type CourseCardView,
+} from '@/components/account/course-list-order'
 import { toCourseAccessView, type CourseAccessView } from '@/lib/course-access'
 import { resolveCourseAccessForUser } from '@/lib/course-access-lookup'
 import { fetchWatchedRefs } from '@/lib/course-progress/lookup'
-import { summarizeCourseProgress, type CourseProgressSummary } from '@/lib/course-progress/progress'
+import { buildCurriculum } from '@/lib/curriculum/curriculum'
+import { courseHref } from '@/lib/course-url'
+import { courseCover, courseTitle } from '@/lib/courses'
 import { logger } from '@/lib/logger'
 import type { Product, User } from '@/payload-types'
 
@@ -56,47 +63,77 @@ async function getAccessViews(
 }
 
 /**
- * Kurzusonkénti haladás-összegzés (E1) — „3/7 megnézve".
+ * A késznek jelölt leckék refjei kurzusonként.
  *
- * A számítás a JELENLEGI videólistához mér: az időközben törölt videóra mutató
- * (orphan) haladás-sor nem számít bele, a videó nélküli kurzus pedig a
- * „Még nincs videó" feliratot kapja (nincs osztás nullával). Hiba esetén üres
- * térkép — a lista ilyenkor haladás-sor nélkül, a mai módon jelenik meg.
+ * FAIL-OPEN: a `fetchWatchedRefs` maga is üres térképpel tér vissza lekérdezési
+ * hibánál; ez a burkoló a `getPayload` hibáját fogja el ugyanígy. A haladás
+ * jelzése kényelmi funkció — egy adatbázis-akadás miatt a vevő ne veszítse el a
+ * kurzuslistáját: ilyenkor minden kurzus „el nem kezdett"-ként jelenik meg, és a
+ * következő oldalletöltés helyreteszi.
  */
-async function getProgressSummaries(
+async function getWatchedRefs(
   userId: number,
   products: Product[],
-): Promise<Record<number, CourseProgressSummary>> {
-  const summaries: Record<number, CourseProgressSummary> = {}
+): Promise<Map<number, Set<string>>> {
   if (products.length === 0) {
-    return summaries
+    return new Map()
   }
   try {
     const payload = await getPayload({ config })
-    const watchedByProduct = await fetchWatchedRefs({
+    return await fetchWatchedRefs({
       payload,
       userId,
       productIds: products.map((product) => product.id),
       logger,
     })
-    for (const product of products) {
-      summaries[product.id] = summarizeCourseProgress(
-        product.videos,
-        watchedByProduct.get(product.id) ?? [],
-      )
-    }
   } catch (error) {
     logger.warn('kurzusaim: a kurzus-haladás betöltése sikertelen', {
       userId,
       error: error instanceof Error ? error.message : String(error),
     })
+    return new Map()
   }
-  return summaries
 }
 
 /**
- * /kurzusaim — a megvett kurzusok listája (users.purchases alapján), a
- * hozzáférés lejáratával és a videó-haladással együtt.
+ * A kártya-nézetek összeállítása — a szerveren, EGY helyen.
+ *
+ * A haladás forrása KIZÁRÓLAG a tananyag-modell (`buildCurriculum` +
+ * `summarizeCurriculum`), ugyanaz, amiből a lejátszó dolgozik: így a listán és a
+ * lejátszóban definíció szerint ugyanaz a szám áll.
+ *
+ * A kártya CÉLJA a hozzáféréstől függ: élő hozzáférésnél a védett lejátszó
+ * (azonosító alapján), lejárt hozzáférésnél a NYILVÁNOS kurzusoldal (slug
+ * alapján) — a lejátszó ilyenkor úgysem indulna el, a stream-token 403-at ad.
+ */
+function buildCards(
+  products: Product[],
+  accessByProductId: Record<number, CourseAccessView>,
+  watchedByProduct: Map<number, Set<string>>,
+): CourseCardView[] {
+  return products.map((product) => {
+    const access = accessByProductId[product.id]
+    // Hiányzó hozzáférés-bejegyzés = korlátlan hozzáférés (a lekérdezés
+    // fail-open ága is ide fut be).
+    const hasAccess = access?.hasAccess !== false
+    return buildCourseCardView({
+      productId: product.id,
+      title: courseTitle(product),
+      href: hasAccess ? `/kurzusaim/${product.id}` : courseHref(product),
+      cover: courseCover(product),
+      curriculum: buildCurriculum(product, hasAccess),
+      watchedRefs: watchedByProduct.get(product.id) ?? [],
+      hasAccess,
+      expiryLabel: access?.expiryLabel ?? null,
+      expiredMessage: access?.expiredMessage ?? null,
+    })
+  })
+}
+
+/**
+ * /kurzusaim — a belépés utáni ELSŐ képernyő: a megvett kurzusok
+ * (`users.purchases`) állapot-kártyái, a hozzáférés lejáratával (A1) és a
+ * tananyag-alapú haladással.
  */
 export default async function KurzusaimPage() {
   const user = await getCurrentUser()
@@ -110,17 +147,20 @@ export default async function KurzusaimPage() {
     .filter((entry): entry is Product => entry !== null)
 
   const accessByProductId = await getAccessViews(user.id, products)
-  const progressByProductId = await getProgressSummaries(user.id, products)
+  const watchedByProduct = await getWatchedRefs(user.id, products)
+  const cards = buildCards(products, accessByProductId, watchedByProduct)
+  // Egyetlen kurzusnál az összegzés nem mond semmit, amit a kártya ne mondana
+  // el — ott a fejléc a puszta címre szorítkozik.
+  const summary = courseListSummary(cards)
 
   return (
     <Section>
       <Container>
-        <h1>Kurzusaim</h1>
-        <CourseList
-          accessByProductId={accessByProductId}
-          products={products}
-          progressByProductId={progressByProductId}
-        />
+        <header className="kc-mycourses__header">
+          <h1 className="kc-mycourses__heading">Kurzusaim</h1>
+          {summary === null ? null : <p className="kc-mycourses__summary-line">{summary}</p>}
+        </header>
+        <CourseList cards={cards} />
       </Container>
     </Section>
   )
