@@ -24,6 +24,11 @@ import {
   watchedRefsByProduct,
 } from '../lib/course-progress/progress'
 import { createMarkWatchedHandler } from '../lib/course-progress/route-handler'
+import {
+  RATE_LIMIT_MESSAGE,
+  RATE_LIMIT_RULES,
+  SlidingWindowRateLimiter,
+} from '../lib/security/rate-limit'
 import type { CourseProgress, Order, Product, User } from '../payload-types'
 
 /**
@@ -375,6 +380,67 @@ describe('POST /api/course-progress/mark-watched — auth- és hibamátrix', () 
 
     expect(response.status).toBe(200)
     expect(create).toHaveBeenCalledTimes(1)
+  })
+})
+
+/**
+ * Per-user kérés-korlát a haladás-jelölésen. A végpont ÍR az adatbázisba, és az
+ * automatikus, nézettség-alapú jelölés bevezetésével a hívásszám függetlenné
+ * vált a felhasználói kattintásoktól — korlát nélkül egy belépett fiók
+ * korlátlanul hozhatna létre haladás-sort. A keret az AUTH UTÁN, de a
+ * törzs-feldolgozás és az írás ELŐTT fut (a stream-token mintája).
+ */
+describe('POST /api/course-progress/mark-watched — per-user kérés-korlát', () => {
+  const rules = {
+    ...RATE_LIMIT_RULES,
+    'course-progress': { limit: 2, windowMs: 60_000 },
+  }
+
+  function setupWithLimiter(options: MockPayloadOptions = {}) {
+    const mock = createMockPayload(options)
+    const limiter = new SlidingWindowRateLimiter()
+    const POST = createMarkWatchedHandler({
+      getPayload: async () => mock.payload,
+      rateLimit: { limiter, rules },
+    })
+    return { ...mock, POST }
+  }
+
+  it('a keret felett 429-et ad, magyar üzenettel és Retry-After fejléccel', async () => {
+    const { POST, create } = setupWithLimiter()
+
+    expect((await POST(makeRequest(VALID_BODY))).status).toBe(200)
+    expect((await POST(makeRequest(VALID_BODY))).status).toBe(200)
+
+    const rejected = await POST(makeRequest(VALID_BODY))
+    expect(rejected.status).toBe(429)
+    expect(await readJson(rejected)).toEqual({ error: RATE_LIMIT_MESSAGE })
+    expect(rejected.headers.get('Retry-After')).not.toBeNull()
+    // A harmadik kérés már NEM jutott el az írásig.
+    expect(create).toHaveBeenCalledTimes(2)
+  })
+
+  it('a keret a BEJELENTKEZETT felhasználóhoz kötődik, nem az IP-hez', async () => {
+    const masikVevo = { ...buyerUser, id: buyerUser.id + 1 } as User
+    const { POST } = setupWithLimiter()
+    const masik = createMockPayload({ authUser: masikVevo })
+    // Ugyanaz a limiter-példány, másik felhasználó → külön vödör.
+    expect((await POST(makeRequest(VALID_BODY))).status).toBe(200)
+    expect((await POST(makeRequest(VALID_BODY))).status).toBe(200)
+    expect((await POST(makeRequest(VALID_BODY))).status).toBe(429)
+    expect(masik.payload).toBeDefined()
+  })
+
+  it('bejelentkezés nélkül a keret NEM fogy (a 401 előbb fut le)', async () => {
+    const { POST } = setupWithLimiter({ authUser: null })
+
+    for (let index = 0; index < 5; index += 1) {
+      expect((await POST(makeRequest(VALID_BODY))).status).toBe(401)
+    }
+  })
+
+  it('az éles keret percenkénti, és elbírja egy hosszú kurzus végigjelölését', () => {
+    expect(RATE_LIMIT_RULES['course-progress']).toEqual({ limit: 60, windowMs: 60_000 })
   })
 })
 

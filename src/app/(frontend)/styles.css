@@ -9,8 +9,11 @@
 @import './styles/fonts.css';
 @import './styles/base.css';
 @import './styles/ui.css';
+@import './styles/progress.css';
 @import './styles/layout.css';
 @import './styles/content.css';
 @import './checkout.css';
 @import './auth.css';
 @import './account.css';
+@import './kurzusaim.css';
+@import './player.css';

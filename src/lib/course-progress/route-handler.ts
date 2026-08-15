@@ -3,6 +3,11 @@ import type { Payload } from 'payload'
 import type { User } from '../../payload-types'
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
+import {
+  checkUserRateLimit,
+  rateLimitHeaders,
+  type CheckRequestRateLimitOptions,
+} from '../security/rate-limit'
 import { CourseProgressError, markVideoWatched } from './mark-watched'
 
 /**
@@ -29,6 +34,8 @@ import { CourseProgressError, markVideoWatched } from './mark-watched'
  */
 export interface CourseProgressHandlerDeps {
   getPayload: () => Promise<Payload>
+  /** Kérés-korlátozó felülírása (teszthez); alapból a közös, folyamaton belüli számláló. */
+  rateLimit?: CheckRequestRateLimitOptions
 }
 
 export function createMarkWatchedHandler(
@@ -46,6 +53,23 @@ export function createMarkWatchedHandler(
         return Response.json(
           { error: 'A haladás rögzítéséhez bejelentkezés szükséges.' },
           { status: 401 },
+        )
+      }
+
+      // Per-user keret az AUTH UTÁN, de a törzs-feldolgozás és a DB-írás ELŐTT
+      // (a stream-token mintája). Az alany a bejelentkezett felhasználó, nem az
+      // IP: a végpont hitelesített, és minden hívása haladás-sort hozhat létre.
+      const rejection = checkUserRateLimit({
+        request,
+        routeClass: 'course-progress',
+        userId: user.id,
+        ...(deps.rateLimit ? { options: deps.rateLimit } : {}),
+      })
+      if (rejection) {
+        log.warn('kurzus-haladás: kérés-korlát elérve', { userId: user.id })
+        return Response.json(
+          { error: rejection.message },
+          { status: 429, headers: rateLimitHeaders(rejection) },
         )
       }
 

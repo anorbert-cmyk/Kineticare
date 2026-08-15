@@ -17,7 +17,8 @@
     "test": "vitest run",
     "seed": "tsx src/scripts/seed.ts",
     "grant:purchase": "tsx src/scripts/grant-purchase.ts",
-    "seed:legacy": "tsx src/scripts/restore-legacy-content.ts"
+    "seed:legacy": "tsx src/scripts/restore-legacy-content.ts",
+    "kurzus:videok-modulba": "tsx src/scripts/videok-modulba.ts"
   },
   "dependencies": {
     "@payloadcms/db-postgres": "3.86.0",
