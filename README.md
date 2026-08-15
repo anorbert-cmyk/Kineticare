@@ -57,6 +57,7 @@ kizárólag a kezdőlap szekciósorát és a landing tartalmi képeit tölti be
 | Megrendelői igények | `docs/megrendeloi-igeny-specifikacio.txt`, `docs/igeny-valtozas-pontok.md` |
 | W3-indítási specifikáció | `docs/w3-inditas-specifikacio.md` |
 | Deploy (Railway) | `docs/deploy-railway.md` + `railway.json` |
+| Adatbázis-mentés és visszaállítás | `docs/adatbazis-mentes.md` (`npm run backup:db`) |
 | Barion sandbox | `docs/barion-sandbox-setup.md` |
 | E2E-futtatás | `docs/e2e-staging-runbook.md` |
 | UX-hierarchia-audit | `docs/ux-hierarchia-audit.md` |
