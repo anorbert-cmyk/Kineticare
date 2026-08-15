@@ -152,4 +152,92 @@ describe('form-submissions beforeValidate bekötés a végleges configban (K2)',
     const result = await hook(hookArgs(data, 'update'))
     expect(result).toBe(data)
   })
+
+  // --- C9: ŰRLAPONKÉNTI szerződés-választás --------------------------------
+  //
+  // Ugyanaz a hooklánc szolgálja ki a „Kapcsolat" és a lábléc „Hírlevél"
+  // űrlapját, de a beküldés sémája más. A besorolás az űrlap CÍMÉBŐL jön (a
+  // `data.form` azonosítón át), NEM a beküldött mezők alakjából — így a kliens
+  // nem választhatja meg magának a lazább szabályt.
+  //
+  // Adatbázis nincs: a `req.payload.findByID` injektált csonk, ami a
+  // form-lekérdezésre a címet adja vissza. Hálózat egyetlen ágon sem indul.
+
+  /** Hook-argumentum injektált Payload-csonkkal (form-cím + context). */
+  const hookArgsWithForm = (
+    data: unknown,
+    formTitle: string | Error,
+    context: Record<string, unknown> = {},
+  ) =>
+    ({
+      data,
+      operation: 'create',
+      req: {
+        context,
+        payload: {
+          findByID: async () => {
+            if (formTitle instanceof Error) {
+              throw formTitle
+            }
+            return { id: 2, title: formTitle }
+          },
+        },
+      },
+    }) as unknown as Parameters<CollectionBeforeValidateHook>[0]
+
+  const newsletterData = (consent = 'true') => ({
+    form: '2',
+    submissionData: [
+      { field: 'email', value: 'anna@pelda.hu' },
+      { field: 'consentNewsletter', value: consent },
+    ],
+  })
+
+  it('„Hírlevél" űrlap: a hírlevél-szerződés fut (nem kér nevet/tárgyat/üzenetet)', async () => {
+    const hook = await wiredValidator()
+    const data = newsletterData()
+    const result = await hook(hookArgsWithForm(data, 'Hírlevél'))
+    expect(result).toBe(data)
+  })
+
+  it('„Hírlevél" űrlap: hozzájárulás nélkül APIError (400), magyar üzenettel', async () => {
+    const hook = await wiredValidator()
+    const error = await hook(hookArgsWithForm(newsletterData('false'), 'Hírlevél')).then(
+      () => null,
+      (caught: unknown) => caught,
+    )
+    expect(error).toBeInstanceOf(APIError)
+    expect((error as APIError).status).toBe(400)
+    expect((error as APIError).message).toContain('hozzájárulás')
+  })
+
+  it('a besorolás a req.context-be kerül (ebből tudja az afterChange, hogy ne küldjön staff-értesítőt)', async () => {
+    const hook = await wiredValidator()
+    const context: Record<string, unknown> = {}
+    await hook(hookArgsWithForm(newsletterData(), 'Hírlevél', context))
+    expect(context.kineticareFormKind).toBe('newsletter')
+
+    const contactContext: Record<string, unknown> = {}
+    await hook(
+      hookArgsWithForm(
+        { form: '1', submissionData: validSubmissionData() },
+        'Kapcsolat',
+        contactContext,
+      ),
+    )
+    expect(contactContext.kineticareFormKind).toBe('contact')
+  })
+
+  it('ismeretlen/feloldhatatlan űrlapnál a SZIGORÚBB kapcsolat-szerződés fut', async () => {
+    const hook = await wiredValidator()
+    // A form-lekérdezés hibája (pl. törölt űrlap) nem lazíthat a szabályokon.
+    const error = await hook(
+      hookArgsWithForm(newsletterData(), new Error('nincs ilyen űrlap')),
+    ).then(
+      () => null,
+      (caught: unknown) => caught,
+    )
+    expect(error).toBeInstanceOf(APIError)
+    expect((error as APIError).message).toContain('neved')
+  })
 })
