@@ -130,8 +130,12 @@ const lessonFields: Field[] = [
     },
     admin: {
       condition: showForVideo,
+      // A zsargon („GUID", „library") az admin UX-audit szerint a kurzusfeltöltés
+      // leggyakoribb elakadási pontja volt: a szerkesztő nem tudta, MELYIK
+      // értéket kell a Bunny felületéről kimásolni — és rossz érték mellett a
+      // videó némán nem indul el.
       description:
-        'A Bunny Stream videó GUID-ja — a VÉDETT libraryből, a Bunny felületén a videó adatlapján található. Kézzel másolandó be.',
+        'A videó azonosítója. A Bunny felületén nyisd meg a videót, és másold ki a „Video ID” mezőt (hosszú, kötőjeles kód). A fizetős kurzusvideók a VÉDETT videótárban vannak (csak vásárlás után nézhetők), az ingyenes előzetesek a nyilvánosban.',
     },
   },
   {
@@ -206,8 +210,16 @@ const lessonFields: Field[] = [
 ]
 
 /**
- * A `products.modules` mező. Az `initCollapsed` szándékos: egy 27 leckés
- * kurzusnál a nyitott állapot kezelhetetlen szerkesztői felületet adna.
+ * A `products.modules` mező.
+ *
+ * Az `initCollapsed` szándékos: egy 27 leckés kurzusnál a nyitott állapot
+ * kezelhetetlen szerkesztői felületet adna. Az összecsukás viszont CSAK
+ * beszédes sorfelirattal működik — enélkül (az admin UX-audit mérése szerint) a
+ * hét modul nyolc teljesen egyforma, „Modul 01…08" feliratú szürke csík volt, és
+ * a szerkesztő egyesével nyitogatta ki őket, hogy megtalálja a keresettet.
+ * Ezért kap a modul- és a lecke-sor is `RowLabel`-t: a felirat a CÍM (a leckék
+ * számával, illetve a lecke típusával és lejátszhatóságával).
+ * A feliratképzés tiszta logikája: src/components/admin/curriculum-row-label.ts.
  */
 export const courseModulesField: ArrayField = {
   name: 'modules',
@@ -219,6 +231,9 @@ export const courseModulesField: ArrayField = {
   },
   admin: {
     initCollapsed: true,
+    components: {
+      RowLabel: '/components/admin/CurriculumRowLabels#ModuleRowLabel',
+    },
     description:
       'A kurzus tananyaga fejezetekre bontva. A vásárló ebben a sorrendben látja a leckéket. Ha üresen hagyod, a lenti „Videók” lista jelenik meg egyetlen fejezetként.',
   },
@@ -250,6 +265,9 @@ export const courseModulesField: ArrayField = {
       },
       admin: {
         initCollapsed: true,
+        components: {
+          RowLabel: '/components/admin/CurriculumRowLabels#LessonRowLabel',
+        },
       },
       fields: lessonFields,
     },

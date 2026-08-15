@@ -226,3 +226,165 @@ export function ringGeometry(percent: number, radius = 12): RingGeometry {
   const dash = (circumference * safe) / 100
   return { radius, circumference, dash, gap: circumference - dash }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * LISTA-KORLÁT, ÉLŐ VISSZAJELZÉS, CSV-EXPORT
+ *
+ * Mindhárom az admin UX-audit MÉRT megállapításaira válaszol:
+ *  - a panel korlátlanul rajzolta ki a hallgatókat: 305 beiratkozottnál a panel
+ *    17 126 px magas lett (≈19 képernyő) — az űrlap gyakorlatilag használhatatlan;
+ *  - a szűrés mellett NEM volt darabszám-visszajelzés, tehát a „ki nem kezdte
+ *    még el" kérdésre (a munkatársak legfontosabb kérdése) kézzel kellett volna
+ *    300 sort megszámolni;
+ *  - nem volt exportálás, tehát az emlékeztető-küldéshez egy HTML-táblázatból
+ *    kellett volna e-mail-címeket kimásolni — vagyis a felület helyett Excelbe
+ *    menekülnének, és onnantól az adat elavul.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Alapból ennyi sor látszik; a többi gombnyomásra jön. */
+export const STUDENT_PAGE_SIZE = 25
+
+/** Egy „továbbiak" kattintás ennyi sorral bővíti a listát. */
+export const STUDENT_PAGE_STEP = 50
+
+/**
+ * A szűrő/kereső melletti élő visszajelzés szövege.
+ *
+ * SOSEM hallgat: ha a lista korlátozott, azt is kimondja, hány sor van összesen.
+ */
+export function visibleCountLabel(shown: number, matching: number, total: number): string {
+  if (matching === total) {
+    return shown < matching
+      ? `${String(total)} hallgatóból ${String(shown)} látszik`
+      : `${String(total)} hallgató`
+  }
+  const talalat = `${String(total)} hallgatóból ${String(matching)} felel meg a szűrésnek`
+  return shown < matching ? `${talalat} — ebből ${String(shown)} látszik` : talalat
+}
+
+/**
+ * A „Következő lecke" oszlop értéke.
+ *
+ * A régi fejléc („Aktuális lecke") ellentmondott a mellette álló „Nem kezdte el"
+ * címkének: aki még el sem indult, annál is leckecím állt, mintha ott tartana.
+ * A „következő" mindhárom állapotra igaz — a nem-kezdte sornál viszont ki is
+ * mondjuk, hogy ez még csak a kezdőpont.
+ */
+export function nextLessonLabel(student: {
+  status: CourseStudentStatus
+  currentLessonTitle: string | null
+}): string {
+  if (student.currentLessonTitle === null) {
+    return '—'
+  }
+  if (student.status === 'nem-kezdte') {
+    return `Itt fog kezdeni: ${student.currentLessonTitle}`
+  }
+  return student.currentLessonTitle
+}
+
+/**
+ * A lemorzsolódás-cella szövege.
+ *
+ * A régi „—" KÉT különböző dolgot jelentett: „ez az első lecke, nincs mihez
+ * hasonlítani" ÉS „nem volt veszteség" — a modulhatárokon ez olvashatatlanná
+ * tette a tölcsért. A kettő most szétválik, és a NÖVEKEDÉS is látszik ahelyett,
+ * hogy 0-ra vágnánk.
+ */
+export function dropOffLabel(
+  index: number,
+  completedCount: number,
+  previousCompletedCount: number | null,
+): string {
+  if (index === 0 || previousCompletedCount === null) {
+    return '(kezdés)'
+  }
+  const valtozas = completedCount - previousCompletedCount
+  if (valtozas === 0) {
+    return '0 fő'
+  }
+  return valtozas < 0 ? `−${String(-valtozas)} fő` : `+${String(valtozas)} fő`
+}
+
+/**
+ * A „Fejezet" oszlop értéke: a modulcím CSAK a modul első során jelenik meg.
+ *
+ * Enélkül egy hatleckés modulnál hatszor egymás alatt állt ugyanaz a hosszú
+ * cím, és a szem nem talált fogódzót a leckék között.
+ */
+export function moduleColumnLabel(moduleTitle: string, previousModuleTitle: string | null): string {
+  return moduleTitle === previousModuleTitle ? '' : moduleTitle
+}
+
+/** Egy CSV-mező idézőjelezése (Excel-kompatibilis: a `"` duplázva). */
+function csvField(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`
+}
+
+/**
+ * A LÁTHATÓ (szűrt és rendezett) hallgatók CSV-je.
+ *
+ * Két részlet nem elhagyható, különben a magyar Excel elrontja a fájlt:
+ *  - UTF-8 BOM, enélkül az ékezetek összetörnek,
+ *  - PONTOSVESSZŐ elválasztó, enélkül minden sor egyetlen cellába kerül.
+ * A sorvég CRLF — ez a CSV (RFC 4180) és az Excel elvárása is.
+ */
+export function studentsCsv(
+  students: readonly CourseStudentProgress[],
+  options: { totalLessons: number },
+): string {
+  const fejlec = [
+    'Név',
+    'E-mail',
+    'Állapot',
+    'Elvégzett leckék',
+    'Összes lecke',
+    'Haladás (%)',
+    'Utolsó aktivitás',
+    'Következő lecke',
+  ]
+  const sorok = students.map((student) =>
+    [
+      student.name ?? '',
+      student.email,
+      statusLabel(student.status),
+      String(student.completed),
+      String(student.total === 0 ? options.totalLessons : student.total),
+      String(student.percent),
+      student.lastActivityAt ?? '',
+      nextLessonLabel(student),
+    ]
+      .map(csvField)
+      .join(';'),
+  )
+  return `﻿${[fejlec.map(csvField).join(';'), ...sorok].join('\r\n')}\r\n`
+}
+
+/**
+ * A letöltött fájl neve: a kurzus nevével és a dátummal, hogy több export
+ * között is el lehessen igazodni.
+ *
+ * ═══ MIÉRT ÉKEZET NÉLKÜL ═══
+ * A fájlnév SZÁNDÉKOSAN ékezetmentes. Böngészőben MÉRVE (Chromium): ha egy
+ * blob-letöltés `download` attribútuma nem ASCII karaktert tartalmaz, a böngésző
+ * NÉMÁN eldobja az egész nevet, és „download" néven menti a fájlt — a
+ * „Kéztorna-otthon-haladas-2026-08-15.csv" helyett. A fájl tartalma ettől
+ * helyes marad, tehát a hiba egységteszttel nem is látszik.
+ * Az ékezetek ezért ASCII-párjukra íródnak át (é→e, ő→o…), a fájlrendszereken
+ * problémás karakterek pedig kiesnek. A CSV TARTALMÁBAN természetesen
+ * változatlanul maradnak az ékezetek (az UTF-8 BOM gondoskodik róla).
+ */
+export function csvFileName(courseTitle: string, isoDate: string): string {
+  const tiszta = courseTitle
+    // Unicode-bontás: az ékezet külön kombináló jellé válik, amit eldobunk.
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    // Ami az átírás után sem ASCII (pl. emodzsi), az sem maradhat a névben.
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/[\\/:*?"<>|]+/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+  const nev = tiszta.length > 0 ? tiszta : 'kurzus'
+  const datum = /^\d{4}-\d{2}-\d{2}/.exec(isoDate)?.[0] ?? 'datum-nelkul'
+  return `${nev}-haladas-${datum}.csv`
+}

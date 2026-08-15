@@ -3,11 +3,17 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   ariaSortValue,
+  csvFileName,
+  dropOffLabel,
   filterStudents,
   formatRelativeHungarian,
+  moduleColumnLabel,
+  nextLessonLabel,
   ringGeometry,
   sortStudents,
   statusLabel,
+  studentsCsv,
+  visibleCountLabel,
 } from '../components/admin/course-progress-view'
 import {
   createCourseProgressHandler,
@@ -863,5 +869,189 @@ describe('course-progress-view — relatív idő és ring-geometria', () => {
     expect(ringGeometry(-10).dash).toBe(0)
     expect(ringGeometry(500).dash).toBeCloseTo(ringGeometry(100).circumference)
     expect(ringGeometry(Number.NaN).dash).toBe(0)
+  })
+})
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * A PANEL UX-JAVÍTÁSAI — az admin UX-audit MÉRT megállapításaira.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+function diak(
+  overrides: Partial<CourseStudentProgress> & { userId: number },
+): CourseStudentProgress {
+  return {
+    name: `Hallgató ${String(overrides.userId)}`,
+    email: `u${String(overrides.userId)}@example.test`,
+    completed: 0,
+    total: 4,
+    percent: 0,
+    status: 'nem-kezdte',
+    lastActivityAt: null,
+    currentLessonTitle: 'Első lecke',
+    enrolledAt: null,
+    ...overrides,
+  }
+}
+
+describe('visibleCountLabel — élő visszajelzés a szűrésről', () => {
+  /**
+   * A mért hiba: szűrés mellett SEMMILYEN darabszám nem jelent meg, tehát a
+   * „ki nem kezdte még el" kérdésre (a munkatársak legfontosabb kérdése)
+   * 305 sort kellett volna kézzel megszámolni.
+   */
+  it('szűrés nélkül, korlát nélkül csak a létszámot mondja', () => {
+    expect(visibleCountLabel(12, 12, 12)).toBe('12 hallgató')
+  })
+
+  it('KORLÁTOZOTT listánál kimondja, hány sor látszik', () => {
+    expect(visibleCountLabel(25, 305, 305)).toBe('305 hallgatóból 25 látszik')
+  })
+
+  it('szűrésnél a TALÁLATOK számát mondja', () => {
+    expect(visibleCountLabel(41, 41, 305)).toBe('305 hallgatóból 41 felel meg a szűrésnek')
+  })
+
+  it('szűrés ÉS korlát együtt is egyértelmű', () => {
+    expect(visibleCountLabel(25, 41, 305)).toBe(
+      '305 hallgatóból 41 felel meg a szűrésnek — ebből 25 látszik',
+    )
+  })
+
+  it('nulla találatnál sem törik el', () => {
+    expect(visibleCountLabel(0, 0, 305)).toBe('305 hallgatóból 0 felel meg a szűrésnek')
+  })
+})
+
+describe('nextLessonLabel — „Következő lecke" oszlop', () => {
+  /**
+   * A mért ellentmondás: az „Aktuális lecke" fejléc mellett a „Nem kezdte el"
+   * állapotú soron is leckecím állt, mintha a hallgató ott tartana.
+   */
+  it('a NEM KEZDTE EL soron kimondja, hogy ez még csak a kezdőpont', () => {
+    expect(
+      nextLessonLabel({ status: 'nem-kezdte', currentLessonTitle: 'Fontos tudnivalók' }),
+    ).toBe('Itt fog kezdeni: Fontos tudnivalók')
+  })
+
+  it('folyamatban lévőnél a lecke címe áll', () => {
+    expect(nextLessonLabel({ status: 'folyamatban', currentLessonTitle: 'Harmadik lecke' })).toBe(
+      'Harmadik lecke',
+    )
+  })
+
+  it('befejezettnél nincs következő lecke', () => {
+    expect(nextLessonLabel({ status: 'befejezte', currentLessonTitle: null })).toBe('—')
+  })
+})
+
+describe('dropOffLabel — a lemorzsolódás-oszlop', () => {
+  /**
+   * A mért félrevezetés: a „—" KÉT dolgot jelentett („ez az első lecke" ÉS
+   * „nem volt veszteség"), a növekedést pedig 0-ra vágta a kód — így a
+   * modulhatárokon a tölcsér olvashatatlan volt (3/305 után 221/305, jelzés nélkül).
+   */
+  it('az ELSŐ leckét külön jelöli — nincs mihez hasonlítani', () => {
+    expect(dropOffLabel(0, 305, null)).toBe('(kezdés)')
+  })
+
+  it('a nulla veszteség NEM ugyanaz, mint a kezdés', () => {
+    expect(dropOffLabel(3, 200, 200)).toBe('0 fő')
+  })
+
+  it('a veszteséget negatív előjellel mutatja', () => {
+    expect(dropOffLabel(2, 180, 200)).toBe('−20 fő')
+  })
+
+  it('a NÖVEKEDÉS is látszik (a modulhatárok így értelmezhetők)', () => {
+    expect(dropOffLabel(6, 221, 3)).toBe('+218 fő')
+  })
+})
+
+describe('moduleColumnLabel — a fejezetcím ismétlődése', () => {
+  it('a modul ELSŐ során jelenik meg', () => {
+    expect(moduleColumnLabel('4. ELŐZD MEG A BAJT', null)).toBe('4. ELŐZD MEG A BAJT')
+    expect(moduleColumnLabel('4. ELŐZD MEG A BAJT', '3. GYAKORLATOK')).toBe('4. ELŐZD MEG A BAJT')
+  })
+
+  it('a modulon BELÜL nem ismétlődik', () => {
+    expect(moduleColumnLabel('4. ELŐZD MEG A BAJT', '4. ELŐZD MEG A BAJT')).toBe('')
+  })
+})
+
+describe('studentsCsv / csvFileName — exportálás', () => {
+  const diakok = [
+    diak({
+      userId: 1,
+      name: 'Kovács "Anna"',
+      completed: 2,
+      percent: 50,
+      status: 'folyamatban',
+      lastActivityAt: '2026-08-11T08:00:00.000Z',
+      currentLessonTitle: 'Harmadik lecke',
+    }),
+    diak({ userId: 2, name: null }),
+  ]
+
+  /**
+   * A magyar Excel két dolgon bukik el: BOM nélkül összetöri az ékezeteket,
+   * vesszős elválasztónál pedig minden sort EGY cellába tömörít.
+   */
+  it('UTF-8 BOM-mal kezdődik és PONTOSVESSZŐVEL tagol', () => {
+    const csv = studentsCsv(diakok, { totalLessons: 4 })
+    expect(csv.startsWith('﻿')).toBe(true)
+    expect(csv.split('\r\n')[0]).toBe(
+      '﻿"Név";"E-mail";"Állapot";"Elvégzett leckék";"Összes lecke";"Haladás (%)";"Utolsó aktivitás";"Következő lecke"',
+    )
+  })
+
+  it('az idézőjelet a mezőben megduplázza (nem töri el a sort)', () => {
+    const csv = studentsCsv(diakok, { totalLessons: 4 })
+    expect(csv).toContain('"Kovács ""Anna"""')
+  })
+
+  it('a hiányzó nevet üres mezőként viszi, nem „null"-ként', () => {
+    const sorok = studentsCsv(diakok, { totalLessons: 4 }).split('\r\n')
+    expect(sorok[2].startsWith('"";')).toBe(true)
+    expect(sorok[2]).not.toContain('null')
+  })
+
+  it('a sorok CRLF-fel zárulnak (RFC 4180 / Excel)', () => {
+    expect(studentsCsv(diakok, { totalLessons: 4 }).endsWith('\r\n')).toBe(true)
+  })
+
+  it('üres listánál is szabályos, fejléces fájl születik', () => {
+    const csv = studentsCsv([], { totalLessons: 4 })
+    expect(csv.split('\r\n').filter((sor) => sor.length > 0)).toHaveLength(1)
+  })
+
+  it('a fájlnév a kurzus nevét és a dátumot hordozza', () => {
+    expect(csvFileName('Keztorna otthon', '2026-08-15T12:00:00.000Z')).toBe(
+      'Keztorna-otthon-haladas-2026-08-15.csv',
+    )
+  })
+
+  /**
+   * BÖNGÉSZŐBEN MÉRT hiba: a Chromium NÉMÁN eldobja a `download` attribútum
+   * teljes értékét, ha az nem ASCII — a fájl „download" néven mentődik. A
+   * tartalom közben helyes marad, tehát egységteszttel ez nem látszott: ezért
+   * őrizzük itt, ASCII-ra írt névvel.
+   */
+  it('a fájlnév ÉKEZETMENTES (különben a böngésző eldobja az egész nevet)', () => {
+    expect(csvFileName('Kéztorna otthon — 8 hetes', '2026-08-15T12:00:00.000Z')).toBe(
+      'Keztorna-otthon-8-hetes-haladas-2026-08-15.csv',
+    )
+    expect(csvFileName('Őszi tréning', '2026-08-15T12:00:00.000Z')).toBe(
+      'Oszi-trening-haladas-2026-08-15.csv',
+    )
+  })
+
+  it('a fájlnévből kiesik minden fájlrendszer-tiltott és nem ASCII karakter', () => {
+    expect(csvFileName('Kurzus/2: "próba"? 🎉', '2026-08-15T12:00:00.000Z')).toBe(
+      'Kurzus2-proba-haladas-2026-08-15.csv',
+    )
+  })
+
+  it('üres kurzusnév és hibás dátum mellett sem lesz értelmetlen fájlnév', () => {
+    expect(csvFileName('   ', '')).toBe('kurzus-haladas-datum-nelkul.csv')
   })
 })

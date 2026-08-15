@@ -12,13 +12,21 @@ import type {
 } from '../../lib/admin/course-progress-stats'
 import {
   ariaSortValue,
+  csvFileName,
+  dropOffLabel,
   filterStudents,
   formatRelativeHungarian,
+  moduleColumnLabel,
+  nextLessonLabel,
   ringGeometry,
   sortStudents,
   statusChipColors,
   statusLabel,
+  studentsCsv,
+  visibleCountLabel,
   STATUS_FILTER_OPTIONS,
+  STUDENT_PAGE_SIZE,
+  STUDENT_PAGE_STEP,
   type SortDirection,
   type StudentSortKey,
   type StudentStatusFilter,
@@ -58,6 +66,9 @@ import {
 
 const REQUEST_TIMEOUT_MS = 30_000
 
+/** Ennyi idő után engedjük el a CSV blob-URL-jét (lásd a `downloadCsv` mérését). */
+const CSV_URL_RELEASE_MS = 1_000
+
 const GENERIC_ERROR = 'A kurzus-haladás most nem tölthető be. Kérjük, próbáld újra később.'
 const NETWORK_ERROR = 'Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot, és próbáld újra.'
 const EMPTY_STATE = 'Ehhez a kurzushoz még senki nem kapott hozzáférést.'
@@ -69,6 +80,8 @@ interface CourseProgressData {
   totals: CourseProgressTotals
   lessons: CourseLessonDropOff[]
   notice: string | null
+  product: { title: string }
+  meta: { generatedAt: string; totalLessons: number }
 }
 
 /** A szerver magyar hibaüzenete a válasz-törzsből ({ error: string }). */
@@ -161,6 +174,27 @@ function readCourseProgress(body: unknown): CourseProgressData | null {
     },
     lessons,
     notice: readText(record.notice),
+    product: {
+      title:
+        readText(
+          (typeof record.product === 'object' && record.product !== null
+            ? (record.product as Record<string, unknown>).title
+            : null),
+        ) ?? 'kurzus',
+    },
+    meta: {
+      generatedAt:
+        readText(
+          typeof record.meta === 'object' && record.meta !== null
+            ? (record.meta as Record<string, unknown>).generatedAt
+            : null,
+        ) ?? '',
+      totalLessons: readNumber(
+        typeof record.meta === 'object' && record.meta !== null
+          ? (record.meta as Record<string, unknown>).totalLessons
+          : null,
+      ),
+    },
   }
 }
 
@@ -296,6 +330,12 @@ export function CourseProgressPanel() {
   const [query, setQuery] = useState('')
   const [sortKey, setSortKey] = useState<StudentSortKey>('haladas')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  /**
+   * Hány sor látszik. A korlát azért kell, mert az admin UX-audit 305
+   * beiratkozottnál 17 126 px magas panelt mért — a szűrő és a kereső viszont
+   * VÉGIG a teljes halmazon dolgozik, tehát semmi nem vész el.
+   */
+  const [visibleLimit, setVisibleLimit] = useState(STUDENT_PAGE_SIZE)
 
   const productId = typeof id === 'number' || typeof id === 'string' ? String(id) : null
 
@@ -380,7 +420,7 @@ export function CourseProgressPanel() {
     )
   }
 
-  const visibleStudents =
+  const matchingStudents =
     data === null
       ? []
       : sortStudents(
@@ -388,6 +428,37 @@ export function CourseProgressPanel() {
           sortKey,
           sortDirection,
         )
+  const visibleStudents = matchingStudents.slice(0, visibleLimit)
+
+  /**
+   * A LÁTHATÓ (szűrt és rendezett) sorok letöltése táblázatba.
+   *
+   * Az export a SZŰRT teljes halmazt viszi, nem csak a kirajzolt szeletet: a
+   * „ki nem kezdte még el" lista így egyetlen kattintással megvan, akkor is, ha
+   * a táblázatban épp 25 sor látszik belőle.
+   */
+  const downloadCsv = (): void => {
+    if (data === null) {
+      return
+    }
+    const csv = studentsCsv(matchingStudents, { totalLessons: data.meta.totalLessons })
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = csvFileName(data.product.title, data.meta.generatedAt)
+    document.body.appendChild(link)
+    link.click()
+    // A takarítás KÉSLELTETVE — mind a link eltávolítása, mind a blob-URL
+    // elengedése. Böngészőben mérve: ha a horgony azonnal kikerül a DOM-ból (és
+    // az objektum-URL azonnal visszavonódik), a letöltés ugyan elindul és a
+    // tartalom is jó, de a böngésző ELVESZÍTI a fájlnevet — „download" lesz a
+    // javasolt név a „Kéztorna-otthon-haladas-2026-08-15.csv" helyett.
+    window.setTimeout(() => {
+      link.remove()
+      URL.revokeObjectURL(url)
+    }, CSV_URL_RELEASE_MS)
+  }
 
   return (
     <div className="field-type" style={panelStyle}>
@@ -431,6 +502,13 @@ export function CourseProgressPanel() {
           <div style={cardsStyle}>
             <StatCard label="Beiratkozott" value={String(data.totals.enrolled)} />
             <StatCard label="Elkezdte" value={String(data.totals.started)} />
+            {/*
+              A megrendelő SZÓ SZERINTI kérdése: „ki indította el a kurzust, KI
+              MÉG NEM". A szám eddig is megvolt a szerveren (totals.notStarted),
+              a panel be is olvasta — csak sosem jelenítette meg, tehát a
+              munkatársnak 300 sort kellett volna kézzel megszámolnia.
+            */}
+            <StatCard label="Nem kezdte el" value={String(data.totals.notStarted)} />
             <StatCard label="Befejezte" value={String(data.totals.completed)} />
             <StatCard label="Átlagos haladás" value={`${String(data.totals.averagePercent)}%`} />
           </div>
@@ -454,7 +532,10 @@ export function CourseProgressPanel() {
                   </label>
                   <select
                     id="kineticare-progress-status"
-                    onChange={(event) => setStatusFilter(event.target.value as StudentStatusFilter)}
+                    onChange={(event) => {
+                      setStatusFilter(event.target.value as StudentStatusFilter)
+                      setVisibleLimit(STUDENT_PAGE_SIZE)
+                    }}
                     value={statusFilter}
                   >
                     {STATUS_FILTER_OPTIONS.map((option) => (
@@ -470,13 +551,37 @@ export function CourseProgressPanel() {
                   </label>
                   <input
                     id="kineticare-progress-search"
-                    onChange={(event) => setQuery(event.target.value)}
+                    onChange={(event) => {
+                      setQuery(event.target.value)
+                      setVisibleLimit(STUDENT_PAGE_SIZE)
+                    }}
                     placeholder="Pl. Kovács vagy kovacs@"
                     type="search"
                     value={query}
                   />
                 </div>
+                <Button
+                  buttonStyle="secondary"
+                  disabled={matchingStudents.length === 0}
+                  onClick={downloadCsv}
+                  size="small"
+                >
+                  Letöltés táblázatba (CSV)
+                </Button>
               </div>
+
+              {/*
+                Élő visszajelzés a szűrés eredményéről. `role="status"`, hogy a
+                képernyőolvasó is hallja — szűrés után enélkül nem derülne ki,
+                hány találat van.
+              */}
+              <p role="status" style={{ ...noteStyle, marginBottom: 'calc(var(--base) * 0.25)' }}>
+                {visibleCountLabel(
+                  visibleStudents.length,
+                  matchingStudents.length,
+                  data.students.length,
+                )}
+              </p>
 
               <div style={tableWrapStyle}>
                 <table aria-label="A kurzushoz hozzáférő hallgatók haladása" style={tableStyle}>
@@ -528,7 +633,7 @@ export function CourseProgressPanel() {
                         </button>
                       </th>
                       <th scope="col" style={headCellStyle}>
-                        Aktuális lecke
+                        Következő lecke
                       </th>
                     </tr>
                   </thead>
@@ -575,7 +680,7 @@ export function CourseProgressPanel() {
                               <time dateTime={student.lastActivityAt ?? undefined}>{relative}</time>
                             )}
                           </td>
-                          <td style={cellStyle}>{student.currentLessonTitle ?? '—'}</td>
+                          <td style={cellStyle}>{nextLessonLabel(student)}</td>
                         </tr>
                       )
                     })}
@@ -584,6 +689,18 @@ export function CourseProgressPanel() {
               </div>
 
               {visibleStudents.length === 0 ? <p style={noteStyle}>{NO_MATCH}</p> : null}
+
+              {matchingStudents.length > visibleStudents.length ? (
+                <div style={rowStyle}>
+                  <Button
+                    buttonStyle="secondary"
+                    onClick={() => setVisibleLimit(visibleLimit + STUDENT_PAGE_STEP)}
+                    size="medium"
+                  >
+                    {`További ${String(Math.min(STUDENT_PAGE_STEP, matchingStudents.length - visibleStudents.length))} hallgató megjelenítése`}
+                  </Button>
+                </div>
+              ) : null}
 
               {data.lessons.length > 0 ? (
                 <details style={rowStyle}>
@@ -610,20 +727,27 @@ export function CourseProgressPanel() {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.lessons.map((lesson) => (
-                          <tr key={lesson.lessonRef}>
-                            <td style={cellStyle}>{lesson.moduleTitle}</td>
-                            <td style={cellStyle}>{lesson.title}</td>
-                            <td style={cellStyle}>
-                              {`${String(lesson.completedCount)}/${String(data.totals.enrolled)}`}
-                            </td>
-                            <td style={cellStyle}>
-                              {lesson.dropOffFromPrevious === 0
-                                ? '—'
-                                : `−${String(lesson.dropOffFromPrevious)} fő`}
-                            </td>
-                          </tr>
-                        ))}
+                        {data.lessons.map((lesson, index) => {
+                          const elozo = index === 0 ? null : data.lessons[index - 1]
+                          return (
+                            <tr key={lesson.lessonRef}>
+                              <td style={cellStyle}>
+                                {moduleColumnLabel(lesson.moduleTitle, elozo?.moduleTitle ?? null)}
+                              </td>
+                              <td style={cellStyle}>{lesson.title}</td>
+                              <td style={cellStyle}>
+                                {`${String(lesson.completedCount)}/${String(data.totals.enrolled)}`}
+                              </td>
+                              <td style={cellStyle}>
+                                {dropOffLabel(
+                                  index,
+                                  lesson.completedCount,
+                                  elozo?.completedCount ?? null,
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
