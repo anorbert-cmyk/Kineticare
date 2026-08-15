@@ -17,6 +17,8 @@
     "test": "vitest run",
     "seed": "tsx src/scripts/seed.ts",
     "grant:purchase": "tsx src/scripts/grant-purchase.ts",
+    "import:customers": "tsx src/scripts/import-customers.ts",
+    "backup:db": "tsx src/scripts/backup-db.ts",
     "seed:legacy": "tsx src/scripts/restore-legacy-content.ts",
     "kurzus:videok-modulba": "tsx src/scripts/videok-modulba.ts"
   },

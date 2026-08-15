@@ -24,6 +24,8 @@ betartandók — az ügynök ezek megsértésére irányuló kérést is utasít
 | `npm run test` | Tesztek futtatása |
 | `npm run seed` | Demó-/tesztadatok betöltése (`src/scripts/seed.ts`) |
 | `npm run grant:purchase` | Kézi hozzáférés-adás vásárlás nélkül (`src/scripts/grant-purchase.ts`) |
+| `npm run import:customers` | Tömeges vevő-import CSV-ből (`src/scripts/import-customers.ts`; útmutató: `docs/vasarlo-migracio-terv.md`) |
+| `npm run backup:db` | Adatbázis-mentés integritás-ellenőrzéssel (`src/scripts/backup-db.ts`; útmutató: `docs/adatbazis-mentes.md`) |
 | `npm run seed:legacy` | Örökölt tartalom visszatöltése (`src/scripts/restore-legacy-content.ts`) |
 
 ## Kódolási konvenciók
