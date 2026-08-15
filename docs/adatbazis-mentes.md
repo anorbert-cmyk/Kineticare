@@ -19,6 +19,15 @@ csak a `payload migrate` újrafuttatásával állt helyre; tartalom akkor még n
 volt benne. Éles adat mellett ugyanez adatvesztés lett volna, és **nem volt
 mentés, amiből vissza lehetett volna állni**.
 
+> **2026-08-15-i frissítés:** az incidens gyökéroka kiderült — a régi
+> `Postgres` szolgáltatásnak **egyáltalán nem volt kötete**, az adat a
+> konténer múlandó fájlrendszerén élt. Az éles adatbázis ezért átköltözött a
+> **`Postgres-c8Rg`** szolgáltatásba (Railway hivatalos `postgres-ssl:18`
+> template, kötettel a `/var/lib/postgresql/data` alatt); a Kineticare
+> `DATABASE_URI`-ja `${{Postgres-c8Rg.DATABASE_URL}}` referencia. A régi
+> `Postgres` szolgáltatás **érintetlen tartalékként megmaradt — tilos
+> újraindítani vagy redeployolni**, mert kötet híján azzal törlődne.
+
 Az adatbázisban ma valódi, nehezen pótolható üzleti adat van: vevők,
 jelszó-hash-ek, rendelések, kifizetés-állapotok, számlaszámok és
 kurzus-haladás. Ezek egy része (rendelés–Barion–számla lánc) utólag nem
@@ -49,7 +58,7 @@ Backups*, *Volumes → Point-in-Time Recovery*.
    Railway-fiók elvesztését is.
 
 Ez a dokumentum a 3. réteget írja le, mert az van a repó kezében. Az 1. és 2.
-réteg bekapcsolását külön, a Railway felületén kell elvégezni (Postgres
+réteg bekapcsolását külön, a Railway felületén kell elvégezni (`Postgres-c8Rg`
 szolgáltatás → **Backups** fül).
 
 ---
@@ -90,7 +99,7 @@ körnek):
                  ┌──────────────────────────────┐
   ütemezett      │ .github/workflows/           │   napi 02:17 UTC
   (offsite)      │   db-backup.yml              │ + kézi indítás
-                 │  postgres:16-alpine image    │
+                 │  postgres:18-alpine image    │
                  └──────────────┬───────────────┘
                                 │ pg_dump --format=custom
                                 ▼
@@ -154,10 +163,10 @@ nélkül.
 - **Ha a `DATABASE_URI` secret nincs beállítva, a job ZÖLDEN, magyarázó
   üzenettel kilép.** Ez szándékos: a piros futások leszoktatnák a csapatot a
   riasztásokról, mielőtt a secret felkerül.
-- A `pg_dump` a **hivatalos `postgres:16-alpine` image-ből** fut, nem a runner
+- A `pg_dump` a **hivatalos `postgres:18-alpine` image-ből** fut, nem a runner
   apt-csomagjából. Két oka van: (1) a kliens főverziója nem lehet kisebb a
   szerverénél, és az image-tag ezt egy sorban, láthatóan rögzíti — az éles
-  Postgres-szolgáltatás is `postgres:16-alpine`; (2) a mentés így nem függ a
+  `Postgres-c8Rg` szolgáltatás `postgres-ssl:18` (PostgreSQL 18); (2) a mentés így nem függ a
   repó npm-telepítésétől: ha a build eltörik, a mentés attól még fut.
 - A mentés ugyanazt az integritás-ellenőrzést kapja (`pg_restore --list`);
   bukásnál a fájl törlődik és a job piros.
@@ -165,21 +174,24 @@ nélkül.
 - A `DATABASE_URI` kizárólag `env:`-ként megy a lépésbe és a konténerbe; az
   értéke sosem kerül parancssorba, echo-ba vagy logba.
 
-> **Ha a Railway Postgres főverziót vált** (ma `postgres:16-alpine`), a
-> workflow `PG_IMAGE` értékét is emelni kell — különben a `pg_dump` „server
-> version mismatch"-csel áll le. Ez hangos hiba, nem néma kimaradás.
+> **Ha a Railway Postgres főverziót vált** (ma `postgres-ssl:18`, a workflow
+> `PG_IMAGE`-e `postgres:18-alpine`), a workflow `PG_IMAGE` értékét is emelni
+> kell — különben a `pg_dump` „server version mismatch"-csel áll le. Ez hangos
+> hiba, nem néma kimaradás.
 
 ---
 
 ## 5. Élesítés
 
-1. **Railway → Postgres szolgáltatás → Backups fül:** kapcsold be a **napi**
-   (és ha kell, heti) kötet-mentést. Ez az első védelmi vonal, egy kattintás.
-   Megfontolandó a **PITR** bekapcsolása is — az ablak csak a bekapcsolás
-   utáni első alap-mentéstől indul, tehát előre kell.
-2. **A publikus kapcsolati string kikeresése:** Railway → Postgres →
+1. **Railway → `Postgres-c8Rg` szolgáltatás → Backups fül:** kapcsold be a
+   **napi** (és ha kell, heti) kötet-mentést. Ez az első védelmi vonal, egy
+   kattintás. Megfontolandó a **PITR** bekapcsolása is — az ablak csak a
+   bekapcsolás utáni első alap-mentéstől indul, tehát előre kell (a
+   `postgres-ssl` template-tel kompatibilis). **A régi `Postgres`
+   szolgáltatáson NINCS mit bekapcsolni: nincs kötete — hozzányúlni tilos.**
+2. **A publikus kapcsolati string kikeresése:** Railway → `Postgres-c8Rg` →
    *Variables* → `DATABASE_PUBLIC_URL`. **Fontos:** a GitHub-runner nem éri el
-   a Railway privát hálózatát (`postgres.railway.internal`), ezért a belső
+   a Railway privát hálózatát (`postgres-c8rg.railway.internal`), ezért a belső
    `DATABASE_URI` itt nem használható. A publikus proxyn keresztüli forgalom
    egressként számlázódik — ez a napi mentés ára.
 3. **GitHub → Settings → Secrets and variables → Actions → New repository

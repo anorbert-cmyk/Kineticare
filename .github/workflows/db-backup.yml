@@ -11,8 +11,9 @@
 # HOGYAN: a mentést a hivatalos `postgres` docker image pg_dump-ja készíti,
 # NEM a runner apt-csomagja. Két oka van:
 #   1. a kliens FŐVERZIÓJA nem lehet kisebb a szerverénél — az image tagjével
-#      ez egy sorban, láthatóan van rögzítve (ma: postgres:16-alpine, mert az
-#      éles Postgres-szolgáltatás is postgres:16-alpine);
+#      ez egy sorban, láthatóan van rögzítve (ma: postgres:18-alpine, mert az
+#      éles Postgres-szolgáltatás a Railway postgres-ssl:18 template-je,
+#      azaz PostgreSQL 18);
 #   2. a mentés így nem függ a repó npm-telepítésétől — ha a build eltörik,
 #      a mentés attól még fut.
 #
@@ -22,10 +23,10 @@
 # változó-behelyettesítést használ, tehát a jelszó speciális karakterei sem
 # esnek át shell-értelmezésen.
 #
-# A SECRET ÉRTÉKE a PUBLIKUS kapcsolati string legyen (Railway → Postgres →
-# Variables → DATABASE_PUBLIC_URL), mert a GitHub-runner nem éri el a Railway
-# privát hálózatát (`postgres.railway.internal`). Ez TCP-proxy-egresst
-# számláz — ez a napi mentés ára.
+# A SECRET ÉRTÉKE a PUBLIKUS kapcsolati string legyen (Railway →
+# Postgres-c8Rg → Variables → DATABASE_PUBLIC_URL), mert a GitHub-runner nem
+# éri el a Railway privát hálózatát (`postgres-c8rg.railway.internal`). Ez
+# TCP-proxy-egresst számláz — ez a napi mentés ára.
 # ============================================================================
 
 name: DB mentés
@@ -49,10 +50,10 @@ permissions:
   contents: read
 
 env:
-  # Az éles Postgres-szolgáltatás image-e (Railway → Postgres → Settings →
-  # Source). Ha ott főverziót emelnek, EZT IS emelni kell, különben a
-  # pg_dump „server version mismatch"-csel áll le.
-  PG_IMAGE: postgres:16-alpine
+  # Az éles Postgres-szolgáltatás főverziója (Railway → Postgres-c8Rg →
+  # Settings → Source: postgres-ssl:18). Ha ott főverziót emelnek, EZT IS
+  # emelni kell, különben a pg_dump „server version mismatch"-csel áll le.
+  PG_IMAGE: postgres:18-alpine
 
 jobs:
   backup:

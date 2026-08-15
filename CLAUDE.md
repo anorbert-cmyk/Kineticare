@@ -106,9 +106,15 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
    beállításában is, különben a fájl csak dokumentáció marad.
 3. **A Postgres-szolgáltatás újraindítása kiürítheti az adatbázist.** Egy
    redeploy `initdb`-t futtatott és a kötet üresen jött vissza — a séma csak a
-   `payload migrate` újrafutásával állt helyre. **Mentés jelenleg nincs**
-   (feladatlista C14). Éles adat mellett a Postgres újraindítása tilos
-   mentés nélkül.
+   `payload migrate` újrafutásával állt helyre. **2026-08-15-i frissítés — a
+   gyökérok: a régi `Postgres` szolgáltatásnak NEM VOLT kötete**, az adat a
+   konténer múlandó fájlrendszerén élt. Az éles DB azóta a **`Postgres-c8Rg`**
+   szolgáltatásban fut (hivatalos `postgres-ssl:18` template, kötettel), a
+   Kineticare `DATABASE_URI`-ja `${{Postgres-c8Rg.DATABASE_URL}}` referencia.
+   A régi `Postgres` szolgáltatás fagyasztott tartalék: **újraindítani,
+   redeployolni, átkonfigurálni TILOS** — kötet híján bármelyik törli a
+   tartalmát. Offsite mentés: `db-backup.yml` (C14, a `DATABASE_URI`
+   GitHub-secret beállítása után él).
 4. **Deploy-hibák, amiket már láttunk:**
    - `git clone failed with exit 128` a `SNAPSHOT_CODE` fázisban → a deployt
      **rövidített commit-SHA-val** indították. SHA nélkül (a branch HEAD-jére)
