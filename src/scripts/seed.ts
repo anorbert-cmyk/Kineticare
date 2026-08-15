@@ -11,7 +11,9 @@
  * (csak az owner létrehozásakor).
  *
  * A script két nagy lépésből áll:
- *  1. demó-tartalom (owner, kategóriák, oldal, bejegyzés, termék, menüfa),
+ *  1. demó-tartalom (owner, kategóriák, oldal, bejegyzés, termék, menüfa) — a
+ *     menüfa végén a VALÓS navigációs struktúra is (src/lib/menu-seed.ts),
+ *     amely élesben a `npm run seed:menu` scripttel futtatható önállóan,
  *  2. a KEZDŐLAP szekció-rendszere (docs/szekcio-rendszer-terv.md 6. pont):
  *     a landing tartalmi képei a Médiatárba, majd a `kezdolap` oldal `layout`
  *     mezőjébe a terv 4. pontja szerinti alap-szekciósor, a landing VALÓS
@@ -38,6 +40,7 @@ import {
   type HomeMediaIds,
 } from '../lib/home-seed'
 import { ensureMediaFiles } from '../lib/media-restore'
+import { ensureNavigationMenu } from '../lib/menu-seed'
 import { ensureNewsletterForm } from '../lib/newsletter/form'
 import { validatePasswordStrength } from '../lib/security/password-policy'
 import config from '../payload.config'
@@ -373,6 +376,12 @@ async function seed(): Promise<void> {
       order: 3,
     })
   }
+
+  // A VALÓS menüstruktúra (Szolgáltatások + almenü, Tudástár) — ugyanaz a
+  // label+parent dedup, mint fent, ezért a fenti demó-menüpontokat nem
+  // duplikálja és nem írja felül. Élesben ugyanez a lépés a `npm run seed:menu`
+  // scripttel futtatható önállóan (src/lib/menu-seed.ts).
+  await ensureNavigationMenu(payload)
 
   // --- Kezdőlapi képek + alap-szekciósor -------------------------------------
   await restoreMediaFilesBestEffort(payload)

@@ -21,6 +21,7 @@
     "import:customers": "tsx src/scripts/import-customers.ts",
     "backup:db": "tsx src/scripts/backup-db.ts",
     "seed:legacy": "tsx src/scripts/restore-legacy-content.ts",
+    "seed:menu": "tsx src/scripts/seed-menu.ts",
     "kurzus:videok-modulba": "tsx src/scripts/videok-modulba.ts"
   },
   "dependencies": {
