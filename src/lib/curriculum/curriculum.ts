@@ -66,6 +66,12 @@ export interface CurriculumLesson {
    */
   streamAssetId: string | null
   durationSec: number | null
+  /**
+   * A videó feldolgozottsága — a `playable` már tartalmazza a döntést, de a
+   * jegykiadás ebből tudja megkülönböztetni a „még készül" (409) és a
+   * „hibás adat" (503) esetet, a felület pedig ebből mutat „Hamarosan" jelzést.
+   */
+  status: 'processing' | 'ready' | 'error' | null
   /** Külső link célja (csak `link` típusnál). */
   url: string | null
   /** A lecke szövege (Lexical) — `null`, ha nincs. */
@@ -120,6 +126,15 @@ function normalizeLessonKind(value: unknown): LessonKind {
 /** Pozitív, véges hossz másodpercben; minden más → null. */
 function normalizeDuration(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+}
+
+const LESSON_STATUSES = ['processing', 'ready', 'error'] as const
+
+/** Ismert videó-állapot, vagy null (nem videó / hiányzó mező). */
+function normalizeStatus(value: unknown): 'processing' | 'ready' | 'error' | null {
+  return LESSON_STATUSES.includes(value as (typeof LESSON_STATUSES)[number])
+    ? (value as (typeof LESSON_STATUSES)[number])
+    : null
 }
 
 /**
@@ -248,6 +263,7 @@ function toLesson(
     // RSC-payloadba). A lejátszhatóság ettől függetlenül a nyers adatból dől el.
     streamAssetId: options.hasAccess && kind === 'video' ? rawStreamAssetId : null,
     durationSec: normalizeDuration(source.durationSec),
+    status: normalizeStatus(source.status),
     url: kind === 'link' ? trimmedOrNull(source.url) : null,
     content: normalizeContent(source.content),
     attachments: normalizeAttachments(source.attachments),
@@ -339,7 +355,40 @@ export function findLessonByRef(curriculum: Curriculum, ref: string): Curriculum
   return curriculum.lessons.find((lesson) => lesson.ref === needle) ?? null
 }
 
+/**
+ * Lecke keresése a STABIL ref VAGY a Bunny-GUID alapján.
+ *
+ * A jegykiadás szerződése (src/lib/stream/contract.ts) mindkét alakot elfogadja
+ * — a kliens a `streamVideoRef()`-et küldi (sor-id, ennek hiányában GUID), de a
+ * végpont a GUID-ot közvetlenül is elfogadta, és ezt a viselkedést nem szabad
+ * elvenni. A haladás-jelölés SZÁNDÉKOSAN nem ezt használja: ott kizárólag a
+ * `ref` fogadható el, mert a `course-progress.videoRef` névtér egységes.
+ */
+export function findLessonByRefOrAsset(
+  curriculum: Curriculum,
+  needle: string,
+): CurriculumLesson | null {
+  const trimmed = needle.trim()
+  if (trimmed.length === 0) {
+    return null
+  }
+  return (
+    curriculum.lessons.find(
+      (lesson) => lesson.ref === trimmed || lesson.streamAssetId === trimmed,
+    ) ?? null
+  )
+}
+
 /** Csak az elindítható leckék (a haladás nevezője és a lejátszási sorrend). */
 export function playableLessons(curriculum: Curriculum): CurriculumLesson[] {
   return curriculum.lessons.filter((lesson) => lesson.playable)
+}
+
+/**
+ * Az első elindítható VIDEÓ-lecke — a lejátszási jegy alapértelmezett célpontja,
+ * ha a kérés nem nevez meg leckét. Szándékosan csak videó: szöveges leckéhez és
+ * linkhez nincs értelmezhető Bunny-jegy.
+ */
+export function firstPlayableVideoLesson(curriculum: Curriculum): CurriculumLesson | null {
+  return curriculum.lessons.find((lesson) => lesson.kind === 'video' && lesson.playable) ?? null
 }

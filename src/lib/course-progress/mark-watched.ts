@@ -4,8 +4,8 @@ import type { CourseProgress, Product, User } from '../../payload-types'
 import { accessExpiredMessage } from '../course-access'
 import { resolveSingleCourseAccess } from '../course-access-lookup'
 import { hasUserPurchased } from '../courses'
+import { buildCurriculum, findLessonByRef } from '../curriculum/curriculum'
 import { logger as rootLogger, type Logger } from '../logger'
-import { streamVideoRef } from '../stream/contract'
 import type { MarkWatchedResponseBody } from './contract'
 
 /**
@@ -105,13 +105,22 @@ function parseVideoRef(raw: unknown): string {
 }
 
 /**
- * A videoRef csak akkor fogadható el, ha a termék `videos` tömbjében VAN olyan
- * sor, amelynek a `streamVideoRef()`-je pontosan ez. Így a haladás sosem
- * mutathat idegen (vagy kitalált) videóra.
+ * A videoRef csak akkor fogadható el, ha a termék TANANYAGÁBAN (modulok →
+ * leckék, vagy a régi, lapos videólista) VAN olyan lecke, amelynek a stabil
+ * refje pontosan ez. Így a haladás sosem mutathat idegen (vagy kitalált)
+ * leckére.
+ *
+ * A keresés SZÁNDÉKOSAN kizárólag a `ref`-re illeszt (a Bunny-GUID-ra nem, még
+ * akkor sem, ha a sornak van saját id-ja): a `course-progress.videoRef` névtér
+ * egységes, és a két alak egyidejű elfogadása ugyanahhoz a leckéhez két
+ * különböző haladás-sort engedne létrejönni.
+ *
+ * A NEM elindítható lecke (pl. feldolgozás alatti videó) jelölése továbbra is
+ * megengedett — ez a korábbi viselkedés —, a haladás-számításba viszont nem
+ * számít bele (src/lib/curriculum/progress.ts).
  */
-function videoBelongsToProduct(product: Product, videoRef: string): boolean {
-  const videos = Array.isArray(product.videos) ? product.videos : []
-  return videos.some((video) => streamVideoRef(video) === videoRef)
+function lessonBelongsToProduct(product: Product, videoRef: string): boolean {
+  return findLessonByRef(buildCurriculum(product, true), videoRef) !== null
 }
 
 /** A meglévő haladás-sor `watchedAt` értéke ISO-alakban (hibás érték → most). */
@@ -211,7 +220,7 @@ export async function markVideoWatched(
   }
 
   // 5) A videoRef ehhez a kurzushoz tartozik-e (stabil azonosító, sosem sorszám).
-  if (!videoBelongsToProduct(product, videoRef)) {
+  if (!lessonBelongsToProduct(product, videoRef)) {
     log.warn('kurzus-haladás: ismeretlen videó-azonosító a kurzuson', {
       userId: input.user.id,
       productId,
