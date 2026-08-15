@@ -3,6 +3,12 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 
+import {
+  trackCourseCompleted,
+  trackCourseStarted,
+  trackLessonCompleted,
+  trackModuleCompleted,
+} from '@/lib/analytics/course-events'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { ProgressBar } from '@/components/ui/Progress'
@@ -14,6 +20,8 @@ import { summarizeCurriculum } from '@/lib/curriculum/progress'
 import { streamIframeSrc } from '@/lib/stream/contract'
 import { fetchStreamToken } from '@/lib/stream-token-client'
 
+import { eventsForLessonCompletion } from './player/analytics'
+import { useWatchTracking } from './player/useWatchTracking'
 import { CurriculumRail } from './player/CurriculumRail'
 import { LessonBody } from './player/LessonBody'
 import { PlayerActions } from './player/PlayerActions'
@@ -231,6 +239,8 @@ export function CoursePlayer({
   /** A mobil panelt megnyitó gomb — záráskor IDE tér vissza a fókusz. */
   const railToggleRef = useRef<HTMLButtonElement | null>(null)
   const railPanelRef = useRef<HTMLDivElement | null>(null)
+  /** A Bunny-lejátszó iframe-je — a nézettség-követő híd erre iratkozik fel. */
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
 
   const storageKey = useMemo(() => moduleStateKey(product.id), [product.id])
   const idPrefix = useMemo(() => `kc-player-${product.id}`, [product.id])
@@ -294,16 +304,50 @@ export function CoursePlayer({
         return
       }
 
+      const lesson = findLessonByRef(curriculum, lessonRef)
+      const before = summarizeCurriculum(curriculum, watched)
+      const after = summarizeCurriculum(curriculum, new Set(watched).add(lessonRef))
+
       if (announce) {
-        const lesson = findLessonByRef(curriculum, lessonRef)
-        const summary = summarizeCurriculum(curriculum, new Set(watched).add(lessonRef))
         setAnnouncement(
           completionAnnouncement({
             lessonTitle: lesson?.title ?? 'A lecke',
-            completed: summary.completed,
-            total: summary.total,
+            completed: after.completed,
+            total: after.total,
           }),
         )
+      }
+
+      // Tanulási funnel (PostHog). A küldők hozzájárulás nélkül csendben
+      // no-opok, ezért itt nincs külön consent-kapu. A mérföldkövek az
+      // ÁTMENETRE szólnak, nem az állapotra — enélkül minden oldalbetöltés
+      // újraküldené a „course_completed"-et (./player/analytics.ts).
+      if (lesson !== null) {
+        trackLessonCompleted({
+          courseId: product.id,
+          lessonRef,
+          lessonKind: lesson.kind,
+          moduleIndex: lesson.moduleIndex,
+          percent: after.percent,
+        })
+        const milestones = eventsForLessonCompletion({
+          before,
+          after,
+          moduleIndex: lesson.moduleIndex,
+        })
+        if (milestones.courseStarted) {
+          trackCourseStarted({ courseId: product.id })
+        }
+        if (milestones.completedModuleIndex !== null) {
+          trackModuleCompleted({
+            courseId: product.id,
+            moduleIndex: milestones.completedModuleIndex,
+            percent: after.percent,
+          })
+        }
+        if (milestones.courseCompleted) {
+          trackCourseCompleted({ courseId: product.id, lessonCount: after.total })
+        }
       }
     },
     [curriculum, pending, product.id, watched],
@@ -346,6 +390,21 @@ export function CoursePlayer({
     }
     return bindLessonProgress(stableReport) ?? undefined
   }, [bindLessonProgress, stableReport])
+
+  /**
+   * AUTOMATIKUS nézettség-követés a Bunny-lejátszóból (hibrid jelölés). A híd,
+   * a 90%-os küszöb és a szkippelés-ellenes intervallum-számítás a
+   * ./player/useWatchTracking.ts-ben él; a DÖNTÉST és a szerverhívást
+   * változatlanul a fenti `reportLessonProgress` hozza meg, tehát az
+   * automatikus és a kézi jelölés ugyanazt az utat járja.
+   */
+  useWatchTracking({
+    durationSec: activeLesson?.durationSec ?? null,
+    iframeRef,
+    iframeSrc: state.kind === 'playing' ? state.loadedSrc : null,
+    lessonRef: state.kind === 'playing' ? state.lessonRef : null,
+    report: stableReport,
+  })
 
   const loadLesson = useCallback<LoadLesson>(
     async (lessonRef, isRefresh = false) => {
@@ -702,6 +761,7 @@ export function CoursePlayer({
                   allowFullScreen
                   className="kc-player__frame"
                   key={playingSrc}
+                  ref={iframeRef}
                   src={playingSrc}
                   title={`${product.title} — ${activeLesson.title}`}
                 />
