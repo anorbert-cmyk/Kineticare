@@ -224,6 +224,28 @@
   --kc-container-narrow: 720px; /* legacy "small" tartalom-szélesség */
   --kc-container-gutter: var(--kc-space-5); /* mobil oldal-margó */
 
+  /* ---- Mérték (sorhossz) --------------------------------------------------
+     A skill 4. pontja 45–75 karakteres törzs-sorhosszt ír elő; a mérték ezért
+     nem elemre írt egyedi érték, hanem KÖZÖS token — ugyanaz a logika, mint a
+     fontméreteknél (docs/ux-belso-oldalak-kutatas.md B1.3).
+
+     MIÉRT rem és NEM ch: a `ch` (a „0" glif szélessége) a repó betűjén és
+     magyar szövegen 0,60em, az átlagos karakter viszont csak 0,4542em — vagyis
+     1ch ≈ 1,32 tényleges karakter (fontTools/hmtx mérés a Nunito Sans wght 400
+     példányán, n = 5 981 karakter; a kutatás 0. fejezete). A `ch`-ban írt érték
+     tehát ~32%-kal HOSSZABB sort ad, mint amit a szám sugall: a `68ch` nem 68,
+     hanem ~90 karakter. Ezért a mérték rem-ben él (B1.2).
+
+       --kc-measure ......... 34rem = 544px ≈ 75 karakter — a sáv FELSŐ határa,
+                              egyben a WCAG 1.4.8 (AAA) 80-as plafonja alatt,
+       --kc-measure-comfort . 30rem = 480px ≈ 66 karakter — a kényelmes cél
+                              (rövid bevezetők, lead-bekezdések).
+
+     A korlát a SZÖVEGRE vonatkozik, nem a lapra (B1.4): a szekció és a kép
+     maradhat teljes szélességű, a benne futó bekezdés nem. */
+  --kc-measure: 34rem;
+  --kc-measure-comfort: 30rem;
+
   /* ---- Tábla-geometria (board) --------------------------------------------
      A kezdőlap tábla-szekciói a higgsfield-tükör board-mesterét reprodukálják
      (higgsfield-site/app/src/kineticare.css 48–63. és 222–227. sor). A tábla
