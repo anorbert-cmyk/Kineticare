@@ -249,3 +249,18 @@ Minden kódolási munkánál ez az alapbeállítás, külön kérés nélkül:
    után szabad bármit.
 5. Semmi nem fogadható el pusztán azért, mert egy ügynök állítja — a mérés és
    a reprodukció többet ér a véleménynél.
+6. **A vezető ORKESZTRÁTORKÉNT dolgozik: minden feladatot alaposan megtervez.**
+   Nem kap ügynök munkát addig, amíg a terv nincs kész — mi a cél, milyen
+   részfeladatokra bomlik, melyik ügynök melyiket kapja, mi a tiszta
+   fájl-tulajdonlás (hogy ne írjanak egymásra, lásd a 16. üzemeltetési
+   tanulságot), és mi az elfogadási feltétel.
+7. **MINDIG teljes körű ügynök-csapat indul, Opus-ügynökökből.** Nem egyetlen
+   ügynök, hanem a feladathoz szabott csapat: felderítés, kutatás,
+   megvalósítás, ellenőrzés — mindegyik a saját szakterületén. A csapat
+   összetételét a vezető állítja össze a feladat természete szerint. (A
+   párhuzamossági korlát ~2 egyidejű ügynök, a többi sorban áll — lásd a 17.
+   üzemeltetési tanulságot; ez tervezési adat, nem elakadás.)
+8. **Ismétlődő hibánál a vezető ÁTVESZI a feladatot.** Ha egy ügynök többször
+   elbukik ugyanazon, vagy a megoldás nem áll össze, a vezető nem indít újabb
+   kört vaktában: maga oldja meg. A cél a működő eredmény, nem a delegálás
+   fenntartása.
