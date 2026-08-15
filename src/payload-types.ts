@@ -1370,7 +1370,87 @@ export interface Product {
    */
   previewVideoStreamId?: string | null;
   /**
-   * A kurzus videói — a vásárlók ezeket nézhetik meg.
+   * A kurzus tananyaga fejezetekre bontva. A vásárló ebben a sorrendben látja a leckéket. Ha üresen hagyod, a lenti „Videók” lista jelenik meg egyetlen fejezetként.
+   */
+  modules?:
+    | {
+        /**
+         * Pl. „1. ALAPOK — Így kezdj neki”.
+         */
+        title: string;
+        /**
+         * Egy mondat a fejezetről a tananyag-listában. Nem kötelező.
+         */
+        summary?: string | null;
+        lessons?:
+          | {
+              /**
+               * Ez jelenik meg a tananyag-listában, pl. „Ismerd meg a kezed”.
+               */
+              title: string;
+              /**
+               * Videó = Bunny Stream felvétel. Szöveges lecke = csak írott anyag és/vagy letölthető fájl. Külső link = máshová vezet (pl. Facebook-csoport).
+               */
+              kind: 'video' | 'szoveg' | 'link';
+              /**
+               * 1–2 mondat a lecke alatt. Nem kötelező.
+               */
+              summary?: string | null;
+              /**
+               * A Bunny Stream videó GUID-ja — a VÉDETT libraryből, a Bunny felületén a videó adatlapján található. Kézzel másolandó be.
+               */
+              streamAssetId?: string | null;
+              /**
+               * A videó hossza másodpercben. A lejátszási jegy kiállításához KÖTELEZŐ — nélküle a videó nem indul el.
+               */
+              durationSec?: number | null;
+              /**
+               * Nincs feltöltő-automatizmus, ezért KÉZZEL kell „Kész”-re állítani, miután a Bunny végzett a feldolgozással — csak a Kész állapotú videó játszható le és számít bele a haladásba.
+               */
+              status?: ('processing' | 'ready' | 'error') | null;
+              /**
+               * Teljes webcím (https://…), ahová a lecke gombja visz.
+               */
+              url?: string | null;
+              /**
+               * A lecke alatt megjelenő írott anyag — videós leckénél jegyzet vagy gyakorlásleírás is lehet. Nem kötelező.
+               */
+              content?: {
+                root: {
+                  type: string;
+                  children: {
+                    type: any;
+                    version: number;
+                    [k: string]: unknown;
+                  }[];
+                  direction: ('ltr' | 'rtl') | null;
+                  format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+                  indent: number;
+                  version: number;
+                };
+                [k: string]: unknown;
+              } | null;
+              /**
+               * PDF, kép vagy egyéb segédlet a leckéhez. Bármelyik lecketípushoz adható.
+               */
+              attachments?:
+                | {
+                    /**
+                     * Ha üresen hagyod, a fájl neve jelenik meg.
+                     */
+                    label?: string | null;
+                    file: number | Media;
+                    id?: string | null;
+                  }[]
+                | null;
+              id?: string | null;
+            }[]
+          | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * A kurzus fejezetek nélküli videólistája. ÚJ kurzushoz a fenti „Tananyag (modulok)” mezőt használd — ez a lista csak akkor jelenik meg a vásárlónak, ha nincs egyetlen modul sem. A már itt lévő videókat nem kell átmozgatni: azok változatlanul működnek.
    */
   videos?:
     | {
@@ -2859,6 +2939,33 @@ export interface ProductsSelect<T extends boolean = true> {
   category?: T;
   audience?: T;
   previewVideoStreamId?: T;
+  modules?:
+    | T
+    | {
+        title?: T;
+        summary?: T;
+        lessons?:
+          | T
+          | {
+              title?: T;
+              kind?: T;
+              summary?: T;
+              streamAssetId?: T;
+              durationSec?: T;
+              status?: T;
+              url?: T;
+              content?: T;
+              attachments?:
+                | T
+                | {
+                    label?: T;
+                    file?: T;
+                    id?: T;
+                  };
+              id?: T;
+            };
+        id?: T;
+      };
   videos?:
     | T
     | {

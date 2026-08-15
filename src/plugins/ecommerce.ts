@@ -12,6 +12,7 @@ import {
   isOwnerFieldAccess,
   streamAssetReadAccess,
 } from '../access'
+import { courseModulesField } from '../fields/course-modules'
 import { courseSlugField } from '../fields/course-slug'
 import { orderIntegrityBeforeChange } from '../lib/order-integrity'
 import { withoutPluginPaymentEndpoints } from '../lib/payments/barion-adapter'
@@ -433,16 +434,22 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
           'Az ingyenes előzetes Bunny videó GUID-ja — a PUBLIKUS (jegy nélküli) libraryből, a Bunny felületén a videó adatlapján található. Ha nem tudod, hagyd üresen.',
       },
     },
+    // A kurzus tananyaga fejezetekre bontva (modulok → leckék). A mező
+    // szándékosan a régi, lapos `videos` lista ELŐTT áll: az új kurzusokat itt
+    // kell összeállítani, a `videos` már csak a korábbi tartalom hordozója.
+    // A két szerkezet egyesítése a src/lib/curriculum/curriculum.ts-ben él.
+    courseModulesField,
     {
       name: 'videos',
       type: 'array',
-      label: 'Videók',
+      label: 'Videók (régi, fejezet nélküli lista)',
       labels: {
         singular: 'Videó',
         plural: 'Videók',
       },
       admin: {
-        description: 'A kurzus videói — a vásárlók ezeket nézhetik meg.',
+        description:
+          'A kurzus fejezetek nélküli videólistája. ÚJ kurzushoz a fenti „Tananyag (modulok)” mezőt használd — ez a lista csak akkor jelenik meg a vásárlónak, ha nincs egyetlen modul sem. A már itt lévő videókat nem kell átmozgatni: azok változatlanul működnek.',
       },
       fields: [
         {
