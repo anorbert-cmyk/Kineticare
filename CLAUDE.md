@@ -210,3 +210,24 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
     `initdb` rootként nem indul): a socket-könyvtárnak `pgrun`-írhatónak kell
     lennie (`-k <dir>`), és a scratchpad SZÜLŐ könyvtáraira is kell `o+x`
     bejárási jog, különben a `pg_ctl` „Permission denied"-dal áll le.
+
+## Munkamodell — vezető + Opus-ügynökök (tulajdonosi alapbeállítás, 2026-08-15)
+
+Minden kódolási munkánál ez az alapbeállítás, külön kérés nélkül:
+
+1. **A vezető modell tervez és ellenőriz.** A fennmaradó feladatok átnézése, a
+   megoldások aprólékos kitalálása és a feladatkiírás a vezető dolga. A kiírás
+   részletes: cél, érintett fájlok, elfogadási feltételek, tilalmak,
+   ellenőrzési mód.
+2. **A munkát Opus-ügynökök végzik**, mindegyik a saját szakterületének
+   profija. Addig dolgoznak, amíg a kiírás minden pontja kész.
+3. **Az ügynök, ha valamiben nem biztos:** előbb kutat (internet, hivatalos
+   dokumentáció, a repó kódja); ha a kérdés ezek után is valódi döntést
+   igényel, NEM találgat — megáll, és a kérdést visszaküldi a vezetőnek.
+4. **Minden elkészült munka visszamegy a vezetőnek ellenőrzésre**: strukturált
+   beszámoló (mit csinált, fájllista, hogyan ellenőrizte, nyitott kérdések).
+   A vezető maga is ellenőriz (tesztfuttatás, diff-átnézés, ahol lehet,
+   empirikus/böngészős próba). KÉSZNEK jelenteni csak a vezető jóváhagyása
+   után szabad bármit.
+5. Semmi nem fogadható el pusztán azért, mert egy ügynök állítja — a mérés és
+   a reprodukció többet ér a véleménynél.
