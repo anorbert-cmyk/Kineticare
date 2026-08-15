@@ -3,8 +3,13 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { HomeView } from '../components/content/HomeView'
-import { isPaidProduct } from '../components/content/home/CourseCards'
-import { isPubliclyVisibleProduct } from '../components/content/ProductCard'
+import { DEFAULT_HEADING, isPaidProduct } from '../components/content/home/CourseCards'
+import {
+  accessDurationLabel,
+  cardHighlightTexts,
+  DEFAULT_CTA_LABEL,
+  isPubliclyVisibleProduct,
+} from '../components/content/ProductCard'
 import { formatPostDate } from '../components/content/PostCard'
 import { PostView, visibleRelatedPosts } from '../components/content/PostView'
 import { PUBLISHED_WHERE } from '../lib/cms'
@@ -234,7 +239,18 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(html).toContain('href="/kurzusok/1"')
   })
 
-  it('M3/M4: az ingyenes termék a kurzus-rácsban is látszik, de MÁSODLAGOS súllyal és a fizetős UTÁN', () => {
+  /**
+   * K2-ŐR (a kezdőlap-audit 2026-08-15-i döntése).
+   *
+   * Az ingyenes lead-magnet PONTOSAN EGY helyen jelenik meg a kezdőlapon: a
+   * saját FreeSos sávjában. 2026-08-15-ig a kurzus-rácsban is ott állt egy
+   * „másodlagos" kártyával — közvetlenül a FreeSos sáv FÖLÖTT —, vagyis
+   * ugyanaz a termék kétszer, egymás mellett; a hero másodlagos CTA-jával
+   * (#ingyenes) együtt háromszor az első négy szekcióban. Ez a duplikáció az
+   * UX-skill M4/K2 tilalmába ütközött („az ingyenes ne uralja el az oldalt").
+   * Az őr azt fogja meg, ha a másodlagos kártya bármikor visszaszivárogna.
+   */
+  it('M3/M4 K2-őr: az ingyenes termék CSAK az SOS-sávban jelenik meg, a kurzus-rácsban nem', () => {
     const html = render(
       createElement(HomeView, {
         home: null,
@@ -246,26 +262,19 @@ describe('HomeView (kezdőlap-render)', () => {
       }),
     )
     const coursesSection = html.slice(html.indexOf('id="kurzusok"'), html.indexOf('id="ingyenes"'))
-    // Mindkét kurzus a rácsban van (a tulajdonos 2026-08-15-i kérése: a
-    // „Kurzusok" szekció mind a kettőről szól).
+    // A rácsban KIZÁRÓLAG a fizetős kurzus áll.
     expect(coursesSection).toContain('href="/kurzusok/1"')
-    expect(coursesSection).toContain('href="/kurzusok/7"')
-    // K2-őr: a fizetős MEGELŐZI az ingyenest, és csak az ingyenes kártya kapja
-    // a visszafogott stílust — így a lead-magnet nem nyomhatja el az ajánlatot.
-    expect(coursesSection.indexOf('href="/kurzusok/1"')).toBeLessThan(
-      coursesSection.indexOf('href="/kurzusok/7"'),
-    )
-    const secondaryCount = coursesSection.split('kc-product-card--secondary').length - 1
-    expect(secondaryCount).toBe(1)
-    // Az ingyenes kártya „Ingyenes"-ként címkézett (nem üres lábbal áll).
-    expect(coursesSection).toContain('Ingyenes')
+    expect(coursesSection).not.toContain('href="/kurzusok/7"')
+    expect(coursesSection).not.toContain('SOS Kézrelax villámkurzus')
+    // A megszűnt másodlagos kártya nyoma sem maradhat (prop, CSS, markup).
+    expect(html).not.toContain('kc-product-card--secondary')
     // Az SOS-sáv a lead-magnet saját, részletesebb megjelenése — megmarad.
     const sosSection = html.slice(html.indexOf('id="ingyenes"'))
     expect(sosSection).toContain('SOS Kézrelax villámkurzus')
     expect(sosSection).toContain('href="/kurzusok/7"')
   })
 
-  it('M3-őr: az ár-pipa BE + ÜRES ár (konfigurációs hiba) kártyája sem árat, sem „Ingyenes"-t nem mutat', () => {
+  it('M3-őr: az ár-pipa BE + ÜRES ár (konfigurációs hiba) nem kerül a fizetős rácsba', () => {
     const html = render(
       createElement(HomeView, {
         home: null,
@@ -277,8 +286,118 @@ describe('HomeView (kezdőlap-render)', () => {
       }),
     )
     const coursesSection = html.slice(html.indexOf('id="kurzusok"'), html.indexOf('id="ingyenes"'))
-    // A hibás rekord NEM ingyenes: sem másodlagos kártyát, sem címkét nem kap.
-    expect(coursesSection).not.toContain('kc-product-card--secondary')
+    // A hibás rekord nem fizetős (nincs ára) → a rácsban nem hirdetjük, és
+    // „Ingyenes" címkét sem kaphat (az konfigurációs hibát takarna el).
+    expect(coursesSection).not.toContain('href="/kurzusok/9"')
+    expect(coursesSection).not.toContain('Félrekonfigurált kurzus')
+  })
+
+  /**
+   * A KÁRTYA MINT „MINI-BUYBOX" (a vezető 2026-08-15-i design-briefje).
+   *
+   * A kártyának a döntéshez szükséges információt kell hoznia — nem csak
+   * címet és árat. A mezők sorrendje MINDEN kártyán azonos (célközönség →
+   * cím → pipás előnyök → leírás → ár + hozzáférés → CTA), mert a homogén
+   * tételeket csak így lehet kártyáról kártyára összevetni
+   * (docs/ux-belso-oldalak-kutatas.md B4.1).
+   */
+  it('M3 mini-buybox: a kártya a CMS-adatokból hozza az előnyöket, a hozzáférést, az árat és a CTA-t', () => {
+    const html = render(
+      createElement(HomeView, {
+        home: null,
+        products: [
+          product({
+            id: 1,
+            sku: 'Otthoni KézRehab Program',
+            accessDurationDays: 365,
+            audience: 'laikus',
+            cardHighlights: [
+              { id: 'h1', text: '4 modulnyi videóanyag' },
+              { id: 'h2', text: '50+ videós gyakorlat' },
+              { id: 'h3', text: '5 perces miniblokkok' },
+              // A 4. sor már nem fér ki (a mező maxRows: 3 plafonja).
+              { id: 'h4', text: 'Ez a sor már nem jelenhet meg' },
+            ],
+          }),
+        ],
+        posts: [],
+      }),
+    )
+    const coursesSection = html.slice(html.indexOf('id="kurzusok"'), html.indexOf('id="ingyenes"'))
+    expect(coursesSection).toContain('4 modulnyi videóanyag')
+    expect(coursesSection).toContain('50+ videós gyakorlat')
+    expect(coursesSection).toContain('5 perces miniblokkok')
+    expect(coursesSection).not.toContain('Ez a sor már nem jelenhet meg')
+    // Célközönség-címke, hozzáférés-sor, ár és a dekoratív CTA.
+    expect(coursesSection).toContain('Otthoni gyakorlóknak')
+    expect(coursesSection).toContain('365 napos hozzáférés')
+    expect(normalizeNbsp(coursesSection)).toContain('19 990 Ft')
+    expect(coursesSection).toContain(DEFAULT_CTA_LABEL)
+    // A kártya EGÉSZE a link: benne beágyazott gomb/link nem lehet, a CTA
+    // aria-hidden dekoráció (a korábbi nyíl-CTA mintája).
+    const cardStart = coursesSection.indexOf('kc-product-card__link')
+    const card = coursesSection.slice(cardStart)
+    expect(card.slice(0, card.indexOf('</article>'))).not.toContain('<button')
+    expect(coursesSection).toContain('aria-hidden="true" class="kc-product-card__cta"')
+  })
+
+  it('M3 mini-buybox: hiányzó CMS-mezőknél a kártya csendben elhagyja a sorokat (nincs kitalált állítás)', () => {
+    const html = render(
+      createElement(HomeView, {
+        home: null,
+        // Se előny-sor, se hozzáférés-hossz: ezekről a kártya NEM állít semmit.
+        products: [product({ id: 1, sku: 'Csupasz kurzus', accessDurationDays: null, cardHighlights: [] })],
+        posts: [],
+      }),
+    )
+    const coursesSection = html.slice(html.indexOf('id="kurzusok"'), html.indexOf('id="ingyenes"'))
+    expect(coursesSection).not.toContain('kc-product-card__highlights')
+    expect(coursesSection).not.toContain('kc-product-card__access')
+    // Az „örökös/korlátlan hozzáférés" ígéretét a kártya sosem találja ki:
+    // a régi oldal épp ezen a ponton mondott háromfélét (docs/regi-oldal-valaszok.md).
+    expect(coursesSection).not.toContain('hozzáférés')
+    // Az ár és a CTA viszont ilyenkor is kint van (M3: név + ÁR + CTA).
+    expect(normalizeNbsp(coursesSection)).toContain('19 990 Ft')
+    expect(coursesSection).toContain(DEFAULT_CTA_LABEL)
+  })
+
+  it('cardHighlightTexts: trimmel, üres sort kihagy, és legfeljebb 3 sort ad', () => {
+    expect(
+      cardHighlightTexts({
+        cardHighlights: [
+          { id: 'a', text: '  Első  ' },
+          { id: 'b', text: '   ' },
+          { id: 'c', text: 'Második' },
+          { id: 'd', text: 'Harmadik' },
+          { id: 'e', text: 'Negyedik' },
+        ],
+      } as unknown as Product),
+    ).toEqual(['Első', 'Második', 'Harmadik'])
+    expect(cardHighlightTexts({ cardHighlights: null } as unknown as Product)).toEqual([])
+  })
+
+  it('accessDurationLabel: csak pozitív, véges napszámot ír ki (üres/0/negatív → nincs állítás)', () => {
+    expect(accessDurationLabel({ accessDurationDays: 365 })).toBe('365 napos hozzáférés')
+    expect(accessDurationLabel({ accessDurationDays: 1 })).toBe('1 napos hozzáférés')
+    expect(accessDurationLabel({ accessDurationDays: null })).toBeNull()
+    expect(accessDurationLabel({ accessDurationDays: 0 })).toBeNull()
+    expect(accessDurationLabel({ accessDurationDays: -30 })).toBeNull()
+    expect(accessDurationLabel({ accessDurationDays: Number.NaN })).toBeNull()
+    expect(accessDurationLabel({ accessDurationDays: Number.POSITIVE_INFINITY })).toBeNull()
+  })
+
+  /**
+   * A szekció-fallback CÍME nem ütközhet a kezdőlap többi címsorával. A
+   * korábbi „Így tudunk neked segíteni" gyakorlatilag azonos volt a
+   * Szolgáltatások blokk „Így tudunk segíteni" címével (kezdőlap-audit).
+   */
+  it('M3 fallback-cím: nem a Szolgáltatások szekció „segítős" címét ismétli', () => {
+    expect(DEFAULT_HEADING).not.toContain('segít')
+    const html = render(
+      createElement(HomeView, { home: null, products: [product({ id: 1 })], posts: [] }),
+    )
+    expect(html).toContain(DEFAULT_HEADING)
+    expect(html).not.toContain('Így tudunk neked segíteni')
   })
 
   it('M4 SOS-sáv: ingyenes termék nélkül is megjelenik, fallbackben a kurzuslistára mutat', () => {

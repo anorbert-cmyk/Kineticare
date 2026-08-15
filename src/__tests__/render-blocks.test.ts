@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { pageBlockSlugs } from '../blocks'
 import { RenderBlocks } from '../components/blocks/RenderBlocks'
 import { HomeView } from '../components/content/HomeView'
+import { DEFAULT_HEADING } from '../components/content/home/CourseCards'
 import { buildHomeLayout } from '../scripts/seed'
 import type { Page, Post, Product, Testimonial } from '../payload-types'
 
@@ -139,7 +140,7 @@ describe('HomeView layout-elágazás', () => {
     // statikus GYIK-cím, kurzuskártya-szekció.
     expect(html).not.toContain('Gyógytornász és manuálterapeuta szakmai háttér')
     expect(html).not.toContain('Gyakran ismételt kérdések')
-    expect(html).not.toContain('Így tudunk neked segíteni')
+    expect(html).not.toContain(DEFAULT_HEADING)
   })
 
   it('kitöltött layoutnál a statikus FAQPage JSON-LD nem duplikálódik', () => {
@@ -160,7 +161,7 @@ describe('HomeView layout-elágazás', () => {
       }),
     )
     expect(html).toContain('Gyógytornász és manuálterapeuta szakmai háttér')
-    expect(html).toContain('Így tudunk neked segíteni')
+    expect(html).toContain(DEFAULT_HEADING)
     expect(html).toContain('"@type":"FAQPage"')
   })
 })
@@ -221,6 +222,41 @@ describe('RenderBlocks', () => {
     expect(html).toContain('Kéztorna alapok')
     // Az alap-horgony megmarad (a sticky nav /#kurzusok linkje erre épül).
     expect(html).toContain('id="kurzusok"')
+  })
+
+  /**
+   * Tulajdonosi kikötés (2026-08-15): a kurzus-szekcióban MINDEN szöveg
+   * adminból szerkeszthető, a kódban maradó szöveg csak fallback lehet.
+   */
+  it('courseCards: a felvezető sor és a kártya-gombfelirat is a blokkból írható felül', () => {
+    const html = renderBlocks(
+      layoutOf({
+        blockType: 'courseCards',
+        id: 'cc2',
+        eyebrow: 'Saját felvezető',
+        ctaLabel: 'Saját gombfelirat',
+        sectionSettings: {},
+      }),
+      { products: [product({ id: 1 })] },
+    )
+    expect(html).toContain('Saját felvezető')
+    expect(html).toContain('Saját gombfelirat')
+    expect(html).toContain(DEFAULT_HEADING) // a cím marad a beépített fallback
+  })
+
+  it('courseCards: az ingyenes termék nem kerül a rácsba (K2 — a lead-magnet helye a freeSos blokk)', () => {
+    const html = renderBlocks(
+      layoutOf({ blockType: 'courseCards', id: 'cc3', sectionSettings: {} }),
+      {
+        products: [
+          product({ id: 1, sku: 'Fizetős kurzus' }),
+          product({ id: 7, sku: 'Ingyenes SOS', priceInHUF: null, priceInHUFEnabled: false }),
+        ],
+      },
+    )
+    expect(html).toContain('Fizetős kurzus')
+    expect(html).not.toContain('Ingyenes SOS')
+    expect(html).not.toContain('kc-product-card--secondary')
   })
 
   it('howItWorks: a blokk lépései felülírják a beépítetteket', () => {

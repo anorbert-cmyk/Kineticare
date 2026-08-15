@@ -458,13 +458,21 @@ export interface BlockCredsStrip {
  */
 export interface BlockCourseCards {
   /**
-   * Nem kötelező. Ha üresen hagyod, a beépített cím marad („Így tudunk neked segíteni").
+   * A cím fölötti rövid, nagybetűs felirat. Nem kötelező — üresen a beépített felirat marad („Kurzusok").
+   */
+  eyebrow?: string | null;
+  /**
+   * Nem kötelező. Ha üresen hagyod, a beépített cím marad („Kurzusaink").
    */
   heading?: string | null;
   /**
    * A cím alatti 1–2 mondat a kártyák előtt. Nem kötelező.
    */
   lead?: string | null;
+  /**
+   * A kurzuskártyák alján megjelenő gomb felirata. Nem kötelező — üresen a beépített felirat marad („Megnézem a programot”). A gomb dekoratív: maga a KÁRTYA a link.
+   */
+  ctaLabel?: string | null;
   /**
    * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
    */
@@ -1428,6 +1436,18 @@ export interface Product {
    * 1–3 mondat. A kurzuskártyákon és a kezdőlapon ez látszik.
    */
   shortDescription?: string | null;
+  /**
+   * Legfeljebb 3 rövid, pipával jelölt állítás a kezdőlapi kurzuskártyán (pl. „50+ videós gyakorlat”). Tényszerű, ellenőrizhető állítást írj — ígéretet ne. Ha üresen hagyod, a kártyán egyszerűen nem jelenik meg ez a rész.
+   */
+  cardHighlights?:
+    | {
+        /**
+         * Egy tömör állítás, legfeljebb 80 karakter — a kártyán egy sor.
+         */
+        text: string;
+        id?: string | null;
+      }[]
+    | null;
   /**
    * A kurzus oldalán megjelenő teljes szöveg.
    */
@@ -2621,8 +2641,10 @@ export interface BlockCredsStripSelect<T extends boolean = true> {
  * via the `definition` "BlockCourseCards_select".
  */
 export interface BlockCourseCardsSelect<T extends boolean = true> {
+  eyebrow?: T;
   heading?: T;
   lead?: T;
+  ctaLabel?: T;
   sectionSettings?:
     | T
     | {
@@ -3083,6 +3105,12 @@ export interface ProductsSelect<T extends boolean = true> {
   displayTitle?: T;
   slug?: T;
   shortDescription?: T;
+  cardHighlights?:
+    | T
+    | {
+        text?: T;
+        id?: T;
+      };
   longDescription?: T;
   coverImage?: T;
   gallery?:
