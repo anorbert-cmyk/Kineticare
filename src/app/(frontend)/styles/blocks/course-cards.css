@@ -112,6 +112,23 @@
   transform: translateX(0.2rem);
 }
 
+/* ---- Másodlagos (ingyenes) kurzuskártya ---------------------------------
+ * Az UX-skill M4/K2: a lead-magnet ugyanabban a rácsban állhat, de NEM
+ * nyomhatja el a fizetős ajánlatot. A visszafogás kizárólag a KÁRNYÍT és a
+ * hátteret érinti — a SZÖVEG színe és mérete változatlan, tehát a WCAG AA
+ * kontraszt ugyanaz marad, mint az elsődleges kártyán. (Halványított szöveg
+ * itt tilos lenne: az rontaná a kontrasztot.)
+ */
+.kc-product-card--secondary {
+  background: var(--kc-color-surface-tint);
+  border-style: dashed;
+}
+
+/* A nyíl-akcentus is visszafogottabb, de a fókusz/hover visszajelzés megmarad. */
+.kc-product-card--secondary .kc-product-card__arrow {
+  color: var(--kc-color-text-muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .kc-course-cards__link span,
   .kc-product-card .kc-product-card__cover img,

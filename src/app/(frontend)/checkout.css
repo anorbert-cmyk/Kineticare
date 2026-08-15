@@ -103,6 +103,9 @@
   font-weight: var(--kc-font-weight-bold);
 }
 
+/* A vendég-blokk (e-mail + név) ugyanazt a kártya-tipográfiát viszi, mint a
+   számlázási és az elállási blokk — a pénztár címsor-hierarchiája nem változik. */
+.kc-checkout-guest h2,
 .kc-checkout-billing h2,
 .kc-checkout-waiver h2 {
   margin: 0 0 var(--kc-space-4);

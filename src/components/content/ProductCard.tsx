@@ -1,8 +1,9 @@
 import Link from 'next/link'
 
 import { courseHref } from '../../lib/course-url'
-import { courseTitle } from '../../lib/courses'
+import { coursePriceBadgeKind, courseTitle } from '../../lib/courses'
 import type { Product } from '../../payload-types'
+import { Badge } from '../ui/Badge'
 import { Card } from '../ui/Card'
 import { PriceTag } from '../ui/PriceTag'
 import { MediaImage } from './MediaImage'
@@ -38,6 +39,13 @@ export interface ProductCardProps {
     | 'priceInHUFEnabled'
     | 'status'
   >
+  /**
+   * Vizuális súly. A `secondary` a lead-magnet (ingyenes) kártyáé: ugyanaz a
+   * szerkezet, visszafogottabb keret és háttér — az UX-skill M4/K2 pontja
+   * szerint az ingyenes ajánlat NEM nyomhatja el a fizetőst, de ugyanabban a
+   * blokkban helye van (docs/ertekesitesi-ux-skill.md).
+   */
+  tone?: 'primary' | 'secondary'
 }
 
 /** Publikusan megjeleníthető-e a termék (draft/archived sosem). */
@@ -45,18 +53,23 @@ export function isPubliclyVisibleProduct(product: { status?: string | null }): b
   return product.status === 'published'
 }
 
-export function ProductCard({ product }: ProductCardProps) {
+export function ProductCard({ product, tone = 'primary' }: ProductCardProps) {
   if (!isPubliclyVisibleProduct(product)) {
     return null
   }
 
   const title = courseTitle(product)
-  const showPrice = product.priceInHUFEnabled === true && typeof product.priceInHUF === 'number'
+  // Egy igazságforrás a kurzusoldallal: a 'none' eset (ár-pipa BE, de az ár
+  // ÜRES) szándékosan SEM árat, SEM „Ingyenes"-t nem mutat — az konfigurációs
+  // hiba, és a címke a kártyán is megtévesztő lenne (lásd courses.ts).
+  const priceBadge = coursePriceBadgeKind(product)
   const coverMedia =
     product.coverImage && typeof product.coverImage === 'object' ? product.coverImage : null
+  const className =
+    tone === 'secondary' ? 'kc-product-card kc-product-card--secondary' : 'kc-product-card'
 
   return (
-    <Card as="article" className="kc-product-card" interactive padded={false}>
+    <Card as="article" className={className} interactive padded={false}>
       <Link className="kc-product-card__link" href={courseHref(product)}>
         {coverMedia ? (
           <span className="kc-product-card__cover">
@@ -69,9 +82,14 @@ export function ProductCard({ product }: ProductCardProps) {
             <span className="kc-product-card__description">{product.shortDescription}</span>
           ) : null}
           <span className="kc-product-card__foot">
-            {showPrice ? (
+            {priceBadge === 'price' ? (
               <span className="kc-product-card__price">
                 <PriceTag label="Ár:" priceHuf={product.priceInHUF as number} />
+              </span>
+            ) : null}
+            {priceBadge === 'free' ? (
+              <span className="kc-product-card__price">
+                <Badge tone="success">Ingyenes</Badge>
               </span>
             ) : null}
             {/* A kártya EGÉSZE a kurzus-oldalra vivő link, ezért a CTA dekoratív

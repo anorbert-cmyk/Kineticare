@@ -4,6 +4,7 @@ import type { Order, User } from '../../payload-types'
 import { withAdvisoryLock } from '../advisory-lock'
 import type { BarionPaymentStateResponse, OrderPaymentState } from '../barion'
 import type { Logger } from '../logger'
+import { resolveOrderCustomer, type OrderCustomerResolution } from './resolve-order-customer'
 
 /**
  * Barion-állapot → rendelés-állapotgép KÖZÖS MAGJA (T-022/T-0xx-W4-02).
@@ -16,6 +17,8 @@ import type { Logger } from '../logger'
  *
  * Átmenet-szabályok (mind idempotens):
  * - paid: order payment_pending/created → paid (már paid → no-op, NEM hiba),
+ *   FIÓK-FELOLDÁS (vendég-vásárlásnál: az e-mail alapján megtalált vagy
+ *   létrehozott fiók a rendeléshez kötve — resolve-order-customer.ts), majd
  *   purchases-beírás a users-re (már megvan → no-op). Más kiinduló státuszból
  *   (cancelled/refunded/payment_failed) TILOS — 'rejected' + naplózott riasztás.
  *   ELŐFELTÉTEL: az ÖSSZEG-ASSERT (lásd lentebb) is teljesül.
@@ -78,6 +81,12 @@ export interface BarionTransitionResult {
   /** true KIZÁRÓLAG friss paid-átmenetnél — az onOrderPaid mellékhatás triggere. */
   transitionedToPaid?: boolean
   purchasesGranted?: number
+  /**
+   * A rendeléshez feloldott fiók (paid ágon). Ebből dől el a visszaigazoló
+   * levél változata: jelszó-beállító link (most létrehozott / még jelszó
+   * nélküli fiók) vagy belépés-hivatkozás (meglévő, működő fiók).
+   */
+  customer?: OrderCustomerResolution
 }
 
 /** A rendelés végösszege a szerver-oldali snapshotból (más forrás nem elfogadható). */
@@ -385,6 +394,21 @@ async function applyBarionStateTransitionLocked(
     return { action: 'rejected', reason: 'total-mismatch' }
   }
 
+  /**
+   * FIÓK-FELOLDÁS — a hozzáférés-beírás előfeltétele. Vendég-vásárlásnál a
+   * rendelés `customer` nélkül jött létre: itt dől el (az e-mail alapján,
+   * idempotensen), melyik fiók kapja a kurzust, és a rendelés is ekkor
+   * kötődik hozzá. Bejelentkezett vásárlásnál ez csak a fiók beolvasása.
+   *
+   * A SORREND szándékos: az ÖSSZEG-ASSERT UTÁN fut, tehát fedezet nélküli vagy
+   * hamis fizetésre fiók sem jön létre. A K5 dupla-fizetés-őr viszont már a
+   * feloldott fiókkal dolgozik — vendég-rendelésre is érvényes marad.
+   */
+  const customer = await resolveOrderCustomer({ payload, order, log })
+  // A helyi példány elavult (a customer mezőt épp most írtuk ki), a
+  // jogosultság-beírás viszont ebből olvassa a vevőt.
+  const orderWithCustomer: Order = { ...order, customer: customer.userId }
+
   const alreadyPaid = order.status === 'paid'
   if (!alreadyPaid) {
     // K5 DUPLA-FIZETÉS BLOKK: ha ugyanannak a vevő+termék párnak MÁS rendelése
@@ -392,18 +416,16 @@ async function applyBarionStateTransitionLocked(
     // blokkolás + riasztás, manuális rendezés (visszatérítés) szükséges. A
     // segéd és az indoklás: hasPaidOrderFor (lásd fentebb). A MÁR paid
     // rendelés no-op ága szándékosan NEM érintett: az idempotens
-    // jogosultság-javítás továbbra is futhat.
-    const customerRef = order.customer
-    const customerId =
-      typeof customerRef === 'object' && customerRef !== null ? customerRef.id : customerRef
+    // jogosultság-javítás továbbra is futhat. A vevő a FELOLDOTT fiók —
+    // vendég-vásárlásnál is (a rendelésen ott még nem volt customer, tehát az
+    // őr enélkül némán kimaradna éppen az új, vendég-úton).
+    const customerId = customer.userId
     if (
-      customerId !== null &&
-      customerId !== undefined &&
-      (await hasPaidOrderFor(payload, {
+      await hasPaidOrderFor(payload, {
         customerId,
         productIds: orderProductIds(order),
         excludeOrderId: order.id,
-      }))
+      })
     ) {
       log.error(
         'RIASZTÁS: a vevő+termék párhoz már létezik MÁS paid rendelés — a második paid-átmenet BLOKKOLVA, manuális ellenőrzés/visszatérítés szükséges',
@@ -426,11 +448,12 @@ async function applyBarionStateTransitionLocked(
   }
 
   // Purchases-beírás mindig idempotens (már paid rendelésnél is kijavítja az esetleges hiányt).
-  const grant = await grantPurchases(payload, order, log)
+  const grant = await grantPurchases(payload, orderWithCustomer, log)
   return {
     action: 'paid',
     duplicate: alreadyPaid,
     transitionedToPaid: !alreadyPaid,
     purchasesGranted: grant.granted,
+    customer,
   }
 }

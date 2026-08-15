@@ -184,6 +184,50 @@ const grantFreeCoursesAfterLogin: CollectionAfterLoginHook = async ({ req, user 
   return user
 }
 
+/**
+ * A „jelszó-beállítás függőben" jelző TÖRLÉSE az első sikeres belépéskor.
+ *
+ * MIT JELENT A JELZŐ: a rendszer által létrehozott fiókokon (vendég-vásárlás
+ * fiók-feloldása, vásárló-import) a vevő MÉG NEM választott jelszót — a
+ * kezdőjelszó véletlen és eldobható. A jelzőből tudja a fizetés utáni levél,
+ * hogy jelszó-beállító linket kell küldenie, nem „lépj be a fiókodba" szöveget.
+ *
+ * MIÉRT ÉPP A BELÉPÉSNÉL TÖRÖLJÜK: a sikeres bejelentkezés a BIZONYÍTÉK arra,
+ * hogy a vevőnek működő jelszava van. Ez a jelszó-visszaállítás útját is lefedi:
+ * a Payload `resetPasswordOperation`-je a jelszócsere után lefuttatja az
+ * afterLogin hookokat (a beforeChange láncot NEM), tehát az aktiváló linkkel
+ * beállított jelszó is ide fut be. Külön reset-oldali huzalozás így nem kell.
+ *
+ * BEST-EFFORT: a jelző törlésének hibája SOSEM törheti a bejelentkezést — hiba
+ * esetén csak naplózunk; a legrosszabb következmény, hogy egy későbbi vásárlás
+ * levelében fölöslegesen szerepel a jelszó-beállító link (a link a saját
+ * címére megy, tehát ez nem jogosultsági kockázat).
+ *
+ * A `req` TOVÁBBADÁSA KÖTELEZŐ (a grantFreeCoursesBestEffort tanulsága): enélkül
+ * a beágyazott update új tranzakcióban futna, és a login-tranzakció által már
+ * írt sorra ön-blokkoló deadlockot okozna.
+ */
+const clearPasswordSetupPendingAfterLogin: CollectionAfterLoginHook = async ({ req, user }) => {
+  if ((user as Pick<User, 'passwordSetupPending'>).passwordSetupPending !== true) {
+    return user
+  }
+  try {
+    await req.payload.update({
+      collection: 'users',
+      id: user.id,
+      data: { passwordSetupPending: false },
+      req,
+      overrideAccess: true,
+    })
+  } catch (error) {
+    logger.warn('a „jelszó-beállítás függőben" jelző törlése sikertelen (best-effort)', {
+      userId: user.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+  return user
+}
+
 export const Users: CollectionConfig = {
   slug: 'users',
   labels: {
@@ -323,6 +367,36 @@ export const Users: CollectionConfig = {
         readOnly: true,
       },
     },
+    {
+      /**
+       * „A vevő még nem választott jelszót" jelző — a RENDSZER által létrehozott
+       * fiókokon igaz (vendég-vásárlás fiók-feloldása, vásárló-import), minden
+       * más fiókon hamis (a regisztráló maga adja meg a jelszavát).
+       *
+       * MIRE KELL: a fizetés utáni levél ebből dönti el, hogy jelszó-beállító
+       * linket küldjön-e, vagy a belépésre irányítson. Enélkül a másodszor
+       * (szintén vendégként) vásárló, még nem aktivált vevő „lépj be a
+       * fiókodba" levelet kapna egy olyan fiókhoz, amihez nincs jelszava.
+       *
+       * ÍRÁS: kizárólag rendszerfolyamat (a mező create/update access-e zárt, a
+       * beírás `overrideAccess: true`-val megy — a `purchases` mintája). A jelző
+       * az első sikeres belépéskor magától törlődik (afterLogin hook), és a
+       * jelszó-visszaállítás útja is ide fut be.
+       */
+      name: 'passwordSetupPending',
+      type: 'checkbox',
+      defaultValue: false,
+      label: 'Jelszó-beállítás függőben',
+      access: {
+        create: () => false,
+        update: () => false,
+      },
+      admin: {
+        readOnly: true,
+        description:
+          'A fiókot a rendszer hozta létre (vendég-vásárlás vagy import), és a vevő még nem állított be saját jelszót. Az első belépéskor magától törlődik.',
+      },
+    },
   ],
   hooks: {
     beforeChange: [promoteFirstUserToOwner, enforcePasswordPolicy],
@@ -332,7 +406,7 @@ export const Users: CollectionConfig = {
     // reprodukálva; részletes indoklás: src/lib/course-progress/cleanup.ts.
     beforeDelete: [deleteCourseProgressOnParentDelete('user')],
     afterChange: [grantFreeCoursesAfterCreate],
-    afterLogin: [grantFreeCoursesAfterLogin],
+    afterLogin: [grantFreeCoursesAfterLogin, clearPasswordSetupPendingAfterLogin],
     afterError: [logFailedLogin],
   },
 }

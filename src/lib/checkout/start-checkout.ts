@@ -10,6 +10,13 @@ import {
   type BillingFieldError,
   type NormalizedBilling,
 } from './billing'
+import {
+  GUEST_SUMMARY_MISSING,
+  guestSummaryMessage,
+  validateGuest,
+  type GuestFieldError,
+  type NormalizedGuest,
+} from './guest'
 
 /**
  * Checkout-start szolgáltatás (T-021) — a POST /api/checkout/start végpont
@@ -18,9 +25,9 @@ import {
  *
  * A pénzügyi főlánc első láncszeme:
  *  1. input-validáció (productId, quantity, opcionális kliens-ár, waiver,
- *     SZÁMLÁZÁSI ADATOK) — a számlázási mezők ellenőrzése itt is kötelező,
- *     mert a kliens megkerülhető, és hiányos vevőadattal a fizetés lemenne, a
- *     számla viszont soha nem állna ki,
+ *     SZÁMLÁZÁSI ADATOK + vendégnél az AZONOSÍTÓ ADATOK) — a számlázási mezők
+ *     ellenőrzése itt is kötelező, mert a kliens megkerülhető, és hiányos
+ *     vevőadattal a fizetés lemenne, a számla viszont soha nem állna ki,
  *  2. termék- és státuszellenőrzés (archived/draft nem megvásárolható),
  *  3. ADVISORY-ZÁR alatt (S2): duplavásárlás-blokk (paid vagy aktív
  *     payment_pending → 409) ÉS a rendelés létrehozása — a kettő együtt egy
@@ -36,6 +43,15 @@ import {
  *
  * A rendelés `paid`-re állítása NEM itt történik: az kizárólag a
  * Barion-callback-útvonal (T-022) joga (T-063).
+ *
+ * VENDÉG-VÁSÁRLÁS (tulajdonosi döntés, 2026-08-15). A pénztár bejelentkezés
+ * NÉLKÜL is indítható: ilyenkor az `input.guest` (e-mail + név) azonosítja a
+ * vevőt, a rendelés `customer` mező NÉLKÜL, de kitöltött `customerEmail`-lel
+ * jön létre. A fiók a FIZETÉS UTÁN dől el (létrehozás vagy megtalálás az
+ * e-mail alapján, idempotensen — src/lib/order-status/resolve-order-customer.ts).
+ * Bejelentkezett munkamenetnél MINDEN a régi: az `input.guest` figyelmen kívül
+ * marad (a kérés törzse megkerülhető, tehát idegen e-mailre szóló rendelést
+ * sosem hozhat létre), a rendelés a munkamenet felhasználójához kötődik.
  *
  * SZÁMLÁZÁSI SZERZŐDÉS — EGYÁGÚ: a `billing` KÖTELEZŐ, profil-tartalék nincs.
  * Korábban a mező elhagyása a felhasználó tárolt profiljára esett vissza; ez
@@ -76,11 +92,22 @@ export interface CheckoutStartInput {
    * (Az indoklás a fájl fejlécének „SZÁMLÁZÁSI SZERZŐDÉS" bekezdésében.)
    */
   billing?: unknown
+  /**
+   * VENDÉG-VÁSÁRLÓ azonosító adatai (`{ email, name }`) — kizárólag
+   * bejelentkezés NÉLKÜL van szerepe, és akkor KÖTELEZŐ. Bejelentkezett
+   * munkamenetnél a mezőt SZÁNDÉKOSAN figyelmen kívül hagyjuk: a kérés törzse
+   * megkerülhető, tehát belépve senki nem rendelhet idegen e-mail-címre.
+   */
+  guest?: unknown
 }
 
 export interface CheckoutStartOptions {
   payload: Payload
-  user: User
+  /**
+   * A bejelentkezett vásárló. `null`/`undefined` = VENDÉG-vásárlás: a vevőt az
+   * `input.guest` (e-mail + név) azonosítja.
+   */
+  user?: User | null
   input: CheckoutStartInput
   /** A kliens IP-címe (proxy-fejlécekből feloldva) — a rendelésen rögzítjük. */
   ipAddress?: string
@@ -109,6 +136,8 @@ interface ParsedInput {
   quantity: number
   priceHuf?: number
   billing: NormalizedBilling
+  /** Vendég-vásárlásnál a validált e-mail + név; bejelentkezve null. */
+  guest: NormalizedGuest | null
 }
 
 /**
@@ -125,7 +154,14 @@ function billingErrorMessage(errors: readonly BillingFieldError[]): string {
   return (details.includes(summary) ? details : [summary, ...details]).join(' ')
 }
 
-function parseInput(input: CheckoutStartInput): ParsedInput {
+/** Ugyanaz a szerkezet a vendég-mezőkre (e-mail + név). */
+function guestErrorMessage(errors: readonly GuestFieldError[]): string {
+  const details = errors.map((item) => item.message)
+  const summary = guestSummaryMessage(errors)
+  return (details.includes(summary) ? details : [summary, ...details]).join(' ')
+}
+
+function parseInput(input: CheckoutStartInput, hasSession: boolean): ParsedInput {
   const rawId = input.productId
   const productId =
     typeof rawId === 'number' ? rawId : typeof rawId === 'string' ? Number(rawId) : Number.NaN
@@ -176,11 +212,24 @@ function parseInput(input: CheckoutStartInput): ParsedInput {
     throw new CheckoutError(400, billingErrorMessage(billingResult.errors))
   }
 
+  /**
+   * VENDÉG-AZONOSÍTÁS. Bejelentkezve a munkamenet az igazság — a törzsben
+   * küldött `guest` mezőt ilyenkor SEM olvassuk (különben egy belépett vevő
+   * idegen e-mail-címre szóló rendelést hozhatna létre). Bejelentkezés nélkül
+   * viszont az e-mail + név KÖTELEZŐ: ez az egyetlen kapocs a fizetés és a
+   * vevő között (a hozzáférés és a jelszó-beállító link is ide megy).
+   */
+  const guest = hasSession ? null : validateGuest(input.guest)
+  if (guest !== null && !guest.ok) {
+    throw new CheckoutError(400, guestErrorMessage(guest.errors))
+  }
+
   return {
     productId,
     quantity,
     ...(priceHuf !== undefined ? { priceHuf } : {}),
     billing: billingResult.value,
+    guest: guest === null ? null : guest.value,
   }
 }
 
@@ -234,16 +283,30 @@ function assertPurchasable(product: Product, log: Logger, priceHuf?: number): vo
   }
 }
 
+/**
+ * A duplavásárlás-blokk SZŰRŐJE: a vevőt vagy a fiókja (bejelentkezve), vagy az
+ * e-mail-címe (vendégként) azonosítja a rendeléseken.
+ */
+type DuplicateScope =
+  | { kind: 'customer'; userId: number }
+  | { kind: 'email'; email: string }
+
+function duplicateScopeWhere(scope: DuplicateScope, productId: number): Record<string, unknown> {
+  return {
+    ...(scope.kind === 'customer'
+      ? { customer: { equals: scope.userId } }
+      : { customerEmail: { equals: scope.email } }),
+    'items.product': { equals: productId },
+  }
+}
+
 /** Duplavásárlás-blokk: paid rendelés vagy AKTÍV (nem lejárt) payment_pending → 409. */
 async function assertNoDuplicatePurchase(
   payload: Payload,
-  userId: number,
+  scope: DuplicateScope,
   productId: number,
 ): Promise<void> {
-  const baseWhere = {
-    customer: { equals: userId },
-    'items.product': { equals: productId },
-  }
+  const baseWhere = duplicateScopeWhere(scope, productId)
 
   const paidOrders = await payload.find({
     collection: 'orders',
@@ -325,6 +388,21 @@ function isOrderNumberConflict(error: unknown): boolean {
 }
 
 /**
+ * A rendelés VEVŐJE — a munkamenet felhasználója vagy a vendég-adatok.
+ *
+ * A `customerId` vendégnél SZÁNDÉKOSAN null: a rendelés fiók nélkül jön létre,
+ * a fiók a fizetés UTÁN dől el. Az `existingUserId` viszont már itt is
+ * feloldódhat (ha az e-mailhez tartozik fiók) — kizárólag a
+ * duplavásárlás-ellenőrzéshez és a zárkulcshoz, KÖTÉS NÉLKÜL.
+ */
+interface CheckoutBuyer {
+  customerId: number | null
+  existingUserId: number | null
+  email: string
+  name: string | null
+}
+
+/**
  * Vevő-snapshot a rendelésre (számlázási/audit célokra).
  *
  * A számlázási mezők forrása a VALIDÁLT `billing` — vagyis az, amit a hívó
@@ -336,13 +414,15 @@ function isOrderNumberConflict(error: unknown): boolean {
  * sémaváltozás és migráció nélkül alakítható.
  */
 function buildCustomerSnapshot(
-  user: User,
+  buyer: CheckoutBuyer,
   billing: NormalizedBilling,
 ): Record<string, unknown> {
   return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
+    // Vendég-vásárlásnál még nincs fiók — a `null` itt tényállítás, nem hiány:
+    // a fizetés utáni fiók-feloldás az `email` mezőből dolgozik.
+    id: buyer.customerId,
+    email: buyer.email,
+    name: buyer.name,
     billingName: billing.name,
     billingZip: billing.zip,
     billingCity: billing.city,
@@ -353,13 +433,83 @@ function buildCustomerSnapshot(
 }
 
 /**
+ * Az e-mail-címhez tartozó MEGLÉVŐ fiók azonosítója (vendég-vásárláshoz).
+ *
+ * MIÉRT KELL MÁR ITT, a fizetés előtt: enélkül a saját fiókjából kijelentkezve
+ * vásárló vevő MÉGEGYSZER megvehetné a már megvett kurzust — a dupla fizetést
+ * ilyenkor a paid-átmenet K5-őre (`hasPaidOrderFor`) fogná meg, DE ott már
+ * levonták a pénzt: a rendelés blokkolva marad, és kézi visszatérítés kell.
+ * Sokkal jobb a vásárlás ELŐTT, magyar üzenettel elutasítani.
+ *
+ * A hiba NEM végzetes: ha a lekérdezés elszáll, a checkout mehet tovább (a
+ * fiók-kötés úgyis a fizetés után dől el), csak a kényelmi ellenőrzés marad ki.
+ */
+async function findExistingUserIdByEmail(
+  payload: Payload,
+  email: string,
+  log: Logger,
+): Promise<number | null> {
+  try {
+    const { docs } = await payload.find({
+      collection: 'users',
+      where: { email: { equals: email } },
+      limit: 1,
+      depth: 0,
+      pagination: false,
+      overrideAccess: true,
+    })
+    const id = docs[0]?.id
+    return typeof id === 'number' ? id : null
+  } catch (error) {
+    log.warn('checkout-start: a vendég e-mailhez tartozó fiók keresése sikertelen (a checkout folytatódik)', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
+}
+
+/**
+ * A VEVŐ feloldása. Bejelentkezve a munkamenet felhasználója az igazság;
+ * vendégként a validált e-mail + név, `customerId` NÉLKÜL — a fiók a fizetés
+ * után dől el.
+ */
+async function resolveBuyer(
+  payload: Payload,
+  user: User | null,
+  guest: NormalizedGuest | null,
+  log: Logger,
+): Promise<CheckoutBuyer> {
+  if (user !== null) {
+    return {
+      customerId: user.id,
+      existingUserId: user.id,
+      email: (user.email ?? '').trim().toLowerCase(),
+      name: user.name ?? null,
+    }
+  }
+  if (guest === null) {
+    // VÉDŐHÁLÓ: ide nem juthatunk (a parseInput bejelentkezés nélkül kötelezővé
+    // teszi és validálja a vendég-adatokat) — de ha egy későbbi átalakítás
+    // mégis kinyitná ezt az utat, a vevő azonosítás NÉLKÜL nem fizethet.
+    throw new CheckoutError(400, GUEST_SUMMARY_MISSING)
+  }
+  return {
+    customerId: null,
+    existingUserId: await findExistingUserIdByEmail(payload, guest.email, log),
+    email: guest.email,
+    name: guest.name,
+  }
+}
+
+/**
  * A checkout-start teljes folyamata. Hiba esetén CheckoutError-t dob
  * (a Barion-hibaágakban a rendelést `payment_failed`-re állítja).
  */
 export async function startCheckout(options: CheckoutStartOptions): Promise<CheckoutStartResult> {
-  const { payload, user } = options
+  const { payload } = options
+  const user = options.user ?? null
   const log = options.logger ?? logger
-  const { productId, quantity, priceHuf, billing } = parseInput(options.input)
+  const { productId, quantity, priceHuf, billing, guest } = parseInput(options.input, user !== null)
 
   // A terméket a PUBLIKÁLT sorral olvassuk (draft nélkül) — így a checkout,
   // az ár-snapshot hook (src/lib/order-integrity.ts) és a storefront ugyanazzal
@@ -381,6 +531,8 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
   }
   assertPurchasable(product, log, priceHuf)
 
+  const buyer = await resolveBuyer(payload, user, guest, log)
+
   // Rendelés létrehozása: az árakat és a rendelésszámot az orders
   // beforeChange-hookja tölti szerver-oldali (DB) forrásból — a kliens
   // sem árat, sem snapshotot nem adhat meg (a mezők access-e is zárt).
@@ -389,14 +541,17 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
     (await payload.create({
       collection: 'orders',
       data: {
-        customer: user.id,
-        customerEmail: user.email ?? null,
+        // Vendégnél a mező KIMARAD (nincs fiók, amihez kötni lehetne); a
+        // kapcsolat ilyenkor a customerEmail, amiből a paid-átmenet oldja fel
+        // (vagy hozza létre) a fiókot.
+        ...(buyer.customerId !== null ? { customer: buyer.customerId } : {}),
+        customerEmail: buyer.email,
         status: 'payment_pending',
         currency: 'HUF',
         items: [{ product: productId, quantity }],
         consentWithdrawalWaiver: true,
         consentWithdrawalWaiverAt: nowIso,
-        customerSnapshot: buildCustomerSnapshot(user, billing),
+        customerSnapshot: buildCustomerSnapshot(buyer, billing),
         ...(options.ipAddress ? { ipAddress: options.ipAddress } : {}),
       },
       overrideAccess: true,
@@ -408,12 +563,32 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
    * felhasználó–termék páronkénti advisory-zár alatt (processzek között is
    * soros). A zár a legszűkebb hatókörre szól, hogy a párhuzamos, MÁS terméket
    * vagy MÁS vevőt érintő checkout ne várakozzon.
+   *
+   * A ZÁRKULCS vendégnél a MEGLÉVŐ fiók azonosítója (ha van), különben az
+   * e-mail-cím — így ugyanaz a vevő akkor is egy sorban marad, ha az egyik
+   * fülön belépve, a másikon vendégként indít fizetést.
    */
+  const lockKey =
+    buyer.existingUserId !== null
+      ? `checkout:${buyer.existingUserId}:${productId}`
+      : `checkout:guest:${buyer.email}:${productId}`
+
   const order = await withAdvisoryLock(
     payload,
-    `checkout:${user.id}:${productId}`,
+    lockKey,
     async () => {
-      await assertNoDuplicatePurchase(payload, user.id, productId)
+      if (buyer.existingUserId !== null) {
+        await assertNoDuplicatePurchase(
+          payload,
+          { kind: 'customer', userId: buyer.existingUserId },
+          productId,
+        )
+      }
+      // Vendégnél a fiókhoz még nem kötött (customer nélküli) rendeléseket is
+      // meg kell nézni — azokat kizárólag az e-mail azonosítja.
+      if (buyer.customerId === null) {
+        await assertNoDuplicatePurchase(payload, { kind: 'email', email: buyer.email }, productId)
+      }
 
       let lastConflict: unknown
       for (let attempt = 1; attempt <= ORDER_NUMBER_CONFLICT_MAX_ATTEMPTS; attempt += 1) {
@@ -427,7 +602,7 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
           log.warn('checkout-start: rendelésszám-ütközés (23505) — újrapróbálás', {
             attempt,
             maxAttempts: ORDER_NUMBER_CONFLICT_MAX_ATTEMPTS,
-            userId: user.id,
+            userId: buyer.customerId,
             productId,
           })
           // Jitteres visszavárás: az ütköző tranzakciók azonnali újrapróbálása
@@ -440,7 +615,7 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
 
       log.error('checkout-start: a rendelésszám-ütközés újrapróbálásai kimerültek', {
         attempts: ORDER_NUMBER_CONFLICT_MAX_ATTEMPTS,
-        userId: user.id,
+        userId: buyer.customerId,
         productId,
         error: lastConflict instanceof Error ? lastConflict.message : String(lastConflict),
       })
@@ -504,8 +679,8 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
       paymentRequestId: orderNumber,
       redirectUrl: `${serverUrl}/fizetes/koszonom`,
       callbackUrl: `${serverUrl}/api/barion/callback`,
-      payerHint: user.email ?? undefined,
-      cardHolderNameHint: user.name ?? undefined,
+      payerHint: buyer.email || undefined,
+      cardHolderNameHint: buyer.name ?? undefined,
       transactions: [
         {
           posTransactionId: `${orderNumber}-1`,
@@ -563,7 +738,10 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
   log.info('checkout-start: fizetés elindítva', {
     orderId: order.id,
     orderNumber,
-    userId: user.id,
+    userId: buyer.customerId,
+    // Vendég-vásárlásnál a rendelés (még) nem kötődik fiókhoz — ez a napló
+    // egyetlen, e-mail-cím nélküli jelzése róla.
+    guestCheckout: buyer.customerId === null,
     productId,
     totalHuf,
     // A számlázási adat SZEMÉLYES adat — sem a mezői, sem származtatott

@@ -474,7 +474,10 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
     photo: media['katak-team.jpg'],
     stats: [
       { value: '10+', label: 'év szakmai tapasztalat' },
-      { value: '5000+', label: 'elégedett páciens' },
+      // A régi oldal minden előfordulásban „1000+"-t állít (mélyfeltárás,
+      // docs/regi-oldal-valaszok.md) — az „5000+" sehonnan nem volt igazolható,
+      // a tulajdonos 2026-08-15-én hagyta jóvá a javítást.
+      { value: '1000+', label: 'elégedett páciens' },
       { value: '1', label: 'közös cél: az Ön mozgásszabadsága' },
     ],
     sectionSettings: { visible: true, hatter: 'feher' },

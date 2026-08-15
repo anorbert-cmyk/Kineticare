@@ -21,6 +21,14 @@ import { CheckoutError, startCheckout, type CheckoutStartInput } from './start-c
  * Folyamat: IP-alapú kérés-korlát (A2) → auth (payload.auth) → JSON-parse →
  * startCheckout szolgáltatás → { orderNumber, gatewayUrl }. Hibaágak: magyar
  * felhasználói üzenet + technikai hiba naplózva requestId-vel.
+ *
+ * VENDÉG-VÁSÁRLÁS (tulajdonosi döntés, 2026-08-15): a végpont bejelentkezés
+ * NÉLKÜL is hívható — ilyenkor a törzs `guest` blokkja (e-mail + név)
+ * azonosítja a vevőt, és a hiánya 400-zal (nem 401-gyel) hasal el. A korábbi
+ * feltétel nélküli 401 megszűnt; a végpont továbbra is IP-alapú
+ * kérés-korlátozás mögött áll, a rendelés árait pedig végig a szerver adja.
+ * Bejelentkezett munkamenetnél SEMMI nem változik: a rendelés a munkamenet
+ * felhasználójához kötődik, a törzs `guest` mezője figyelmen kívül marad.
  */
 export interface CheckoutStartHandlerDeps {
   getPayload: () => Promise<Payload>
@@ -49,15 +57,10 @@ export function createCheckoutStartHandler(
     try {
       const payload = await deps.getPayload()
 
-      // Nincs guest checkout: a végpont bejelentkezett (customer/staff/owner)
-      // felhasználóhoz kötött.
+      // A munkamenet feloldása. Bejelentkezve a felhasználó az igazság;
+      // vendégként `null` megy tovább, és a szolgáltatás a törzs `guest`
+      // blokkjából azonosítja a vevőt (hiánya → 400, magyar üzenettel).
       const { user } = await payload.auth({ headers: request.headers })
-      if (!user) {
-        return NextResponse.json(
-          { error: 'A fizetés indításához bejelentkezés szükséges.' },
-          { status: 401 },
-        )
-      }
 
       let body: unknown
       try {
@@ -71,7 +74,7 @@ export function createCheckoutStartHandler(
 
       const result = await startCheckout({
         payload,
-        user,
+        user: user ?? null,
         input: (body ?? {}) as CheckoutStartInput,
         ipAddress: resolveClientIp(request.headers),
         logger: log,

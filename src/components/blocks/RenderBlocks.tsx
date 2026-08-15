@@ -1,4 +1,5 @@
 import type { Page, Post, Product, Testimonial } from '../../payload-types'
+import { coursePriceBadgeKind } from '../../lib/courses'
 import { RichText } from '../lexical/RichText'
 import { hasLexicalContent } from '../lexical/serialize'
 import { CourseCards, isPaidProduct } from '../content/home/CourseCards'
@@ -86,6 +87,13 @@ export interface RenderBlocksProps {
 export function RenderBlocks({ layout, products, posts, testimonials }: RenderBlocksProps) {
   const visibleProducts = products.filter(isPubliclyVisibleProduct)
   const paidProducts = visibleProducts.filter(isPaidProduct)
+  // A courseCards rács másodlagos sávja csak a TUDATOSAN ingyenes terméket
+  // kapja (priceInHUFEnabled: false) — a félrekonfigurált rekordot (ár-pipa BE,
+  // ÜRES ár) se árral, se „Ingyenes"-sel nem hirdetjük, lásd courses.ts.
+  // A freeSos blokk egyetlen lead-magnetre van tervezve, viselkedése változatlan.
+  const freeProducts = visibleProducts.filter(
+    (product) => coursePriceBadgeKind(product) === 'free',
+  )
   const freeProduct = visibleProducts.find((product) => !isPaidProduct(product)) ?? null
 
   // Az adatvezérelt szekciók beépített alap-horgonya (kurzusok, ingyenes,
@@ -107,7 +115,7 @@ export function RenderBlocks({ layout, products, posts, testimonials }: RenderBl
         return (
           <BlockSwitch
             key={key}
-            {...{ block, isRepeat, paidProducts, freeProduct, posts, testimonials }}
+            {...{ block, isRepeat, paidProducts, freeProducts, freeProduct, posts, testimonials }}
           />
         )
       })}
@@ -119,6 +127,7 @@ function BlockSwitch({
   block,
   isRepeat,
   paidProducts,
+  freeProducts,
   freeProduct,
   posts,
   testimonials,
@@ -127,6 +136,7 @@ function BlockSwitch({
   /** A típus ismételt példánya-e a lapon — az alap-horgony csak az elsőé. */
   isRepeat: boolean
   paidProducts: Product[]
+  freeProducts: Product[]
   freeProduct: Product | null
   posts: Post[]
   testimonials: Testimonial[]
@@ -173,6 +183,7 @@ function BlockSwitch({
           id={id ?? (isRepeat ? `kurzusok-${block.id ?? 'ismetelt'}` : undefined)}
           lead={block.lead ?? undefined}
           products={paidProducts}
+          secondaryProducts={freeProducts}
           variant={variant}
         />
       )

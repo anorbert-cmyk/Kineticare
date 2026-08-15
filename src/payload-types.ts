@@ -1272,6 +1272,10 @@ export interface User {
    */
   taxNumber?: string | null;
   lastLoginAt?: string | null;
+  /**
+   * A fiókot a rendszer hozta létre (vendég-vásárlás vagy import), és a vevő még nem állított be saját jelszót. Az első belépéskor magától törlődik.
+   */
+  passwordSetupPending?: boolean | null;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -3277,6 +3281,7 @@ export interface UsersSelect<T extends boolean = true> {
   billingStreet?: T;
   taxNumber?: T;
   lastLoginAt?: T;
+  passwordSetupPending?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;
