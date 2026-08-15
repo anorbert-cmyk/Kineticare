@@ -43,11 +43,32 @@ export const POSTHOG_API_HOST = '/ingest'
 export { CONSENT_EVENT, CONSENT_GRANTED, CONSENT_STORAGE_KEY }
 export { CONSENT_DENIED } from './consent'
 
-/** Üzleti esemény-nevek EGY helyen — a funnel-riportok ezekre épülnek. */
+/**
+ * Üzleti esemény-nevek EGY helyen — a funnel-riportok ezekre épülnek.
+ *
+ * KÉT funnel él egymás után:
+ *  1. ÉRTÉKESÍTÉSI: $pageview(/) → course_viewed → checkout_started →
+ *     purchase_confirmed  (docs/ertekesitesi-ux-skill.md 5. pont)
+ *  2. TANULÁSI (a vásárlás UTÁN): course_started → lesson_completed* →
+ *     module_completed* → course_completed
+ * A második azért kell, mert a megrendelői kérdés („hányan kezdték el, hányan
+ * fejezték be") két, egymástól független forrásból is megválaszolható: az
+ * adatbázisból (admin haladás-nézet, pontos, de csak pillanatkép) és a
+ * PostHogból (időbeli lefutás, lemorzsolódás, kohorszok). A kettő ugyanazokat
+ * a fogalmakat használja, hogy a számok összevethetők legyenek.
+ *
+ * SZEMÉLYES ADAT NEM MEHET az esemény-tulajdonságokba (a logger redact-listája
+ * a naplóra véd, a PostHog-hívásra nem): kurzus- és lecke-azonosító igen,
+ * e-mail, név, IP SOHA.
+ */
 export const ANALYTICS_EVENTS = {
   courseViewed: 'course_viewed',
   checkoutStarted: 'checkout_started',
   purchaseConfirmed: 'purchase_confirmed',
+  courseStarted: 'course_started',
+  lessonCompleted: 'lesson_completed',
+  moduleCompleted: 'module_completed',
+  courseCompleted: 'course_completed',
 } as const
 export type AnalyticsEventName = (typeof ANALYTICS_EVENTS)[keyof typeof ANALYTICS_EVENTS]
 
