@@ -4,22 +4,20 @@ import { BUNNY_STREAM_IFRAME_SOURCE } from '../security/csp'
  * MINIMÁLIS player.js KLIENS a Bunny Stream iframe-lejátszóhoz — külső
  * függőség nélkül, tiszta `postMessage`-dzsel.
  *
- * ═══ MIÉRT NEM A HIVATALOS SCRIPTET HASZNÁLJUK ═══
- * A Bunny a hivatalos player.js könyvtárat az
- * `//assets.mediadelivery.net/playerjs/player-0.1.0.min.js` címen szolgálja ki,
- * és a dokumentációja ennek a betöltését javasolja. NÁLUNK EZ NEM JÁRHATÓ ÚT:
- * a Content-Security-Policy `script-src` direktívája (src/lib/security/csp.ts)
- * KIZÁRÓLAG a saját origint, a Turnstile-t és — beállított azonosító mellett —
- * a gtag.js-t engedi; az `assets.mediadelivery.net` NINCS a listán. A CSP
- * lazítása egy külső script-host felvételével biztonsági REGRESSZIÓ lenne
- * (a videó-szolgáltató scriptje ugyanabban a dokumentumban futna, mint a
- * fizetési és fiók-felület), ezért a `script-src` szándékosan marad szűk.
+ * ═══ MIKOR FUT EZ, ÉS MIKOR A HIVATALOS SCRIPT ═══
+ * Az ELSŐDLEGES út a Bunny HIVATALOS player.js könyvtára
+ * (./playerjs-loader.ts): rögzített verzióról, integritás-hash-sel töltjük, a
+ * `script-src` pedig — tulajdonosi döntéssel — engedi az
+ * `assets.mediadelivery.net` hosztot (src/lib/security/csp.ts).
+ * EZ A MODUL A TARTALÉK: akkor lép működésbe, ha a hivatalos könyvtár NEM
+ * töltődik be (hálózati hiba, integritás-eltérés, blokkoló bővítmény).
  *
- * Amire viszont szükségünk van, az megvan: a `frame-src` engedélyezi az
- * `iframe.mediadelivery.net`-et (csp.ts), tehát maga a beágyazott lejátszó
- * működik — és a player.js protokoll NEM igényel semmilyen letöltött kódot: ez
- * egy egyszerű, JSON-alapú `postMessage`-üzenetváltás a szülő oldal és az
- * iframe között. Ezt írja meg ez a modul, kb. száz sorban.
+ * Nem vészmegoldás: a player.js protokoll NEM igényel letöltött kódot — ez egy
+ * egyszerű, JSON-alapú `postMessage`-üzenetváltás a szülő oldal és az iframe
+ * között, a `frame-src` pedig amúgy is engedi az `iframe.mediadelivery.net`-et.
+ * A modul konstansait (`context`, `version`, a `listener`-visszhang szemantikája
+ * és a `timeupdate` payload alakja) a Bunny által TÉNYLEGESEN kiszolgált
+ * `player-0.1.0.min.js` fájllal soronként egyeztettük — bájtra egyeznek.
  *
  * ═══ A PROTOKOLL (forrás) ═══
  * Specifikáció: embedly/player.js — SPEC.rst
@@ -62,6 +60,17 @@ import { BUNNY_STREAM_IFRAME_SOURCE } from '../security/csp'
  *
  * A kimenő üzenetek célorigin-ként is a pontos Bunny-origint kapják (soha nem
  * `"*"`), így az üzenet nem szivárog ki egy közben átirányított iframe-be.
+ *
+ * ═══ REJTETT FÜGGÉS: A REFERRER ═══
+ * A Bunny-oldali fogadó a SZÜLŐ origint a `document.referrer`-ből számolja, és
+ * minden más originű üzenetet eldob. Ez azt jelenti, hogy a lejátszónak MEG KELL
+ * KAPNIA a mi originünket referrerként — enélkül MINDEN feliratkozásunkat
+ * visszautasítja, némán. Ma ez teljesül: a `next.config.ts`
+ * `Referrer-Policy: strict-origin-when-cross-origin` fejlécet küld, és az
+ * iframe-en NINCS szigorítóbb `referrerpolicy` attribútum.
+ * EZÉRT: a fejléc `no-referrer`/`same-origin`-ra szigorítása — bármilyen jó
+ * szándékú „biztonsági javítás" — KIKAPCSOLJA az automatikus haladás-jelölést.
+ * A függést a src/__tests__/playerjs-client.test.ts regressziós tesztje őrzi.
  *
  * A modult a src/__tests__/playerjs-client.test.ts fedi.
  */
@@ -111,9 +120,16 @@ export interface PlayerJsFrameWindow {
 /**
  * Az iframe minimális felülete. A valódi `HTMLIFrameElement` megfelel neki,
  * de a teszt is tud könnyű helyettesítőt adni.
+ *
+ * A `load` eseményre azért iratkozunk fel, mert a feliratkozásunk CSAK akkor ér
+ * célba, ha a keretben már a Bunny dokumentuma fut (lásd a `subscribe`
+ * ismétlését lentebb). Az `addEventListener` opcionális: a régi tesztek és a
+ * DOM nélküli környezetek így változatlanul működnek.
  */
 export interface PlayerJsFrame {
   readonly contentWindow: PlayerJsFrameWindow | null
+  addEventListener?(type: 'load', listener: () => void): void
+  removeEventListener?(type: 'load', listener: () => void): void
 }
 
 export interface BunnyPlayerBridgeOptions {
@@ -139,8 +155,34 @@ export interface BunnyPlayerBridge {
   dispose(): void
 }
 
-/** Az általunk figyelt események — csak ennyi kell a haladás-jelöléshez. */
-const SUBSCRIBED_EVENTS = ['timeupdate', 'ended'] as const
+/**
+ * Az általunk figyelt események.
+ *
+ * A `ready` SZÁNDÉKOSAN benne van, pedig a spec szerint a lejátszó kéretlenül is
+ * elküldi: nem építhetünk arra, hogy a Bunny éles lejátszója valóban broadcastol
+ * — ha csak a rá FELIRATKOZÓKNAK küldi, a feliratkozás nélkül soha nem tudnánk
+ * meg, mikor lehet a többi eseményre feliratkozni. A dupla `ready` ártalmatlan:
+ * a kezelője idempotens (újrafeliratkozás + `onReady`).
+ */
+const SUBSCRIBED_EVENTS = ['ready', 'timeupdate', 'ended'] as const
+
+/**
+ * Két feliratkozási kísérlet között ennyi idő telik el.
+ *
+ * MIÉRT KELL EGYÁLTALÁN ISMÉTELNI: a híd a lecke betöltésével EGYSZERRE épül fel,
+ * ilyenkor az iframe még `about:blank`-en áll, tehát a pontos célorigint megkövetelő
+ * `postMessage` NÉMÁN elvész — mérve: a keret ilyenkor NULLA üzenetet kap. Enélkül az
+ * egész automatikus haladás-jelölés a lejátszó kéretlen `ready` broadcastjára lenne
+ * felfüggesztve, ami egy KÜLSŐ szolgáltató nem dokumentált viselkedése.
+ */
+export const SUBSCRIBE_RETRY_INTERVAL_MS = 750
+
+/**
+ * Legfeljebb ennyi ismétlés (≈15 másodperc). Efölött a lejátszó vagy nem is
+ * player.js-képes, vagy a keret sosem töltődött be — a további üzenetküldés
+ * csak zaj lenne. A vevő ilyenkor a kézi gombbal jelöl, ami végig ott van.
+ */
+export const SUBSCRIBE_MAX_ATTEMPTS = 20
 
 interface PlayerJsEventMessage {
   readonly event: string
@@ -227,13 +269,23 @@ function resolveHostWindow(explicit?: PlayerJsHostWindow): PlayerJsHostWindow | 
 /**
  * player.js híd a Bunny-lejátszó iframe-hez.
  *
- * A híd a létrehozáskor AZONNAL feliratkozik a `message` eseményre, és
- * megpróbálja elküldeni a `addEventListener` kéréseket. Ez utóbbi „vaklövés":
- * ha az iframe még nem töltődött be, a lejátszó eldobja — ezért a `ready`
- * esemény megérkezésekor MÉGEGYSZER elküldjük. Az esetleges kettős
- * feliratkozás ártalmatlan: a `timeupdate` a megnézett-intervallumok
- * összefésülése miatt idempotens, a `ended` pedig egy már késznek jelölt leckét
- * jelöl készre újra.
+ * ═══ A FELIRATKOZÁS HÁROM ÚTJA (mind a három kell) ═══
+ * A híd a létrehozáskor azonnal feliratkozik a `message` eseményre, és elküldi a
+ * `addEventListener` kéréseket. Ez a legelső küldés azonban „vaklövés": a híd a
+ * lecke betöltésével egyszerre épül, ilyenkor a keret még `about:blank`-en áll,
+ * és a pontos célorigint megkövetelő `postMessage` NÉMÁN elvész. Ezért:
+ *  1. az iframe `load` eseményére ÚJRA feliratkozunk (ekkor már a Bunny
+ *     dokumentuma fut a keretben),
+ *  2. a `ready` esemény megérkezésekor is újra (ez a spec szerinti út),
+ *  3. és amíg a kerettől EGYETLEN érvényes player.js üzenetet sem kaptunk,
+ *     `SUBSCRIBE_RETRY_INTERVAL_MS`-enként újrapróbáljuk, legfeljebb
+ *     `SUBSCRIBE_MAX_ATTEMPTS`-szer.
+ * A három út közül BÁRMELYIK elég; az első beérkező üzenet leállítja az
+ * ismétlést. Erre a redundanciára azért van szükség, mert egyik út sem a mi
+ * kezünkben van: mindegyik egy külső szolgáltató lejátszójának a viselkedésén
+ * múlik. A többszörös feliratkozás ártalmatlan: a `timeupdate` a megnézett
+ * intervallumok összefésülése miatt idempotens, az `ended` pedig egy már
+ * késznek jelölt leckét jelöl készre újra.
  *
  * @returns `dispose()` — a komponens unmountjánál KÖTELEZŐ meghívni.
  */
@@ -297,6 +349,52 @@ export function createBunnyPlayerBridge(options: BunnyPlayerBridgeOptions): Bunn
     }
   }
 
+  /**
+   * Igaz, amint a kerettől ÉRVÉNYES player.js üzenetet kaptunk. Ez az egyetlen
+   * megbízható jel arra, hogy a feliratkozás célba ért — a `postMessage` maga
+   * nem nyugtázott.
+   */
+  let hallottukAKeretet = false
+  let ujraprobaTimer: ReturnType<typeof setTimeout> | null = null
+  let probalkozasok = 0
+
+  const ismetlestLeallit = (): void => {
+    if (ujraprobaTimer !== null) {
+      clearTimeout(ujraprobaTimer)
+      ujraprobaTimer = null
+    }
+  }
+
+  /** Korlátos ismétlés — csak addig, amíg a keret meg nem szólal. */
+  const ismetlestUtemez = (): void => {
+    if (
+      disposed ||
+      hallottukAKeretet ||
+      ujraprobaTimer !== null ||
+      probalkozasok >= SUBSCRIBE_MAX_ATTEMPTS ||
+      typeof setTimeout !== 'function'
+    ) {
+      return
+    }
+    probalkozasok += 1
+    ujraprobaTimer = setTimeout(() => {
+      ujraprobaTimer = null
+      if (disposed || hallottukAKeretet) {
+        return
+      }
+      subscribe()
+      ismetlestUtemez()
+    }, SUBSCRIBE_RETRY_INTERVAL_MS)
+  }
+
+  /** Az iframe betöltődött: a keretben MÁR a lejátszó fut, most ér célba a kérés. */
+  const handleFrameLoad = (): void => {
+    if (disposed) {
+      return
+    }
+    subscribe()
+  }
+
   const handleMessage = (event: PlayerJsMessageEvent): void => {
     try {
       if (disposed) {
@@ -323,6 +421,12 @@ export function createBunnyPlayerBridge(options: BunnyPlayerBridgeOptions): Bunn
       if (message === null) {
         return
       }
+
+      // A keret megszólalt: a feliratkozás célba ért, az ismétlés fölösleges.
+      // BÁRMELYIK érvényes player.js üzenet elég jelnek — akkor is, ha az adott
+      // eseménnyel nem foglalkozunk (play, pause, seeked…).
+      hallottukAKeretet = true
+      ismetlestLeallit()
 
       // 2. A `listener` visszhang: ha meg van adva és NEM a miénk, az üzenet egy
       // másik feliratkozónak szól. A `ready` kivétel — azt a lejátszó magától,
@@ -381,7 +485,15 @@ export function createBunnyPlayerBridge(options: BunnyPlayerBridgeOptions): Bunn
   }
 
   hostWindow.addEventListener('message', handleMessage)
+  // A keret `load`-ja a legmegbízhatóbb jel; ha az elem nem támogatja (teszt,
+  // DOM nélküli környezet), az ismétlés akkor is elviszi a feliratkozást.
+  try {
+    iframe.addEventListener?.('load', handleFrameLoad)
+  } catch (error) {
+    reportError(error)
+  }
   subscribe()
+  ismetlestUtemez()
 
   return {
     dispose(): void {
@@ -389,8 +501,14 @@ export function createBunnyPlayerBridge(options: BunnyPlayerBridgeOptions): Bunn
         return
       }
       disposed = true
+      ismetlestLeallit()
       try {
         hostWindow.removeEventListener('message', handleMessage)
+      } catch (error) {
+        reportError(error)
+      }
+      try {
+        iframe.removeEventListener?.('load', handleFrameLoad)
       } catch (error) {
         reportError(error)
       }

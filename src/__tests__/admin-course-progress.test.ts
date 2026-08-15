@@ -13,6 +13,7 @@ import {
   createCourseProgressHandler,
   ENROLLMENT_MAX,
   ENROLLMENT_PAGE_SIZE,
+  PROGRESS_MAX,
 } from '../lib/admin/course-progress-handler'
 import {
   buildCourseProgressStats,
@@ -310,6 +311,8 @@ interface MockOptions {
   productExists?: boolean
   users?: Array<{ id: number; email: string; name?: string | null }>
   progress?: Array<{ user: number; videoRef: string; watchedAt: string }>
+  /** Ennyi leckéből álljon a próbakurzus (alapértelmezés: a 4 leckés demó). */
+  lessonCount?: number
 }
 
 /**
@@ -325,21 +328,64 @@ function createMockPayload(options: MockOptions = {}) {
     { user: 1, videoRef: 'l1', watchedAt: '2026-08-10T08:00:00.000Z' },
     { user: 1, videoRef: 'l2', watchedAt: '2026-08-11T08:00:00.000Z' },
   ]
-  const product = {
-    id: 42,
-    displayTitle: 'Kéztorna otthon',
-    sku: 'DEMO-001',
-    modules: [
-      {
-        title: '1. fejezet',
-        lessons: [lesson('l1', 'Első lecke'), lesson('l2', 'Második lecke')],
-      },
-      { title: '2. fejezet', lessons: [lesson('l3', 'Harmadik lecke'), lesson('l4', 'Negyedik lecke')] },
-    ],
-    videos: null,
-  }
+  const product =
+    options.lessonCount === undefined
+      ? {
+          id: 42,
+          displayTitle: 'Kéztorna otthon',
+          sku: 'DEMO-001',
+          modules: [
+            {
+              title: '1. fejezet',
+              lessons: [lesson('l1', 'Első lecke'), lesson('l2', 'Második lecke')],
+            },
+            {
+              title: '2. fejezet',
+              lessons: [lesson('l3', 'Harmadik lecke'), lesson('l4', 'Negyedik lecke')],
+            },
+          ],
+          videos: null,
+        }
+      : {
+          id: 42,
+          displayTitle: 'Kéztorna otthon',
+          sku: 'DEMO-001',
+          modules: [
+            {
+              title: '1. fejezet',
+              lessons: Array.from({ length: options.lessonCount }, (_, index) =>
+                lesson(`l${String(index + 1)}`, `${String(index + 1)}. lecke`),
+              ),
+            },
+          ],
+          videos: null,
+        }
 
-  const calls: Array<{ collection: string; page?: number; limit?: number }> = []
+  const calls: Array<{
+    collection: string
+    page?: number
+    limit?: number
+    sort?: string | string[]
+  }> = []
+
+  /** A `sort` mező érvényesítése a mockolt haladás-sorokon (stabil rendezés). */
+  const sortolt = (
+    rows: Array<{ user: number; videoRef: string; watchedAt: string }>,
+    sort: string | string[] | undefined,
+  ) => {
+    const mezok = Array.isArray(sort) ? sort : sort === undefined ? [] : [sort]
+    if (!mezok.includes('user')) {
+      return rows
+    }
+    return rows
+      .map((entry, index) => ({ entry, index }))
+      .sort((left, right) =>
+        left.entry.user === right.entry.user
+          ? left.index - right.index
+          : left.entry.user - right.entry.user,
+      )
+      .map(({ entry }) => entry)
+  }
 
   const page = <T,>(rows: T[], pageNumber = 1, limit = 10) => {
     const start = (pageNumber - 1) * limit
@@ -356,8 +402,19 @@ function createMockPayload(options: MockOptions = {}) {
       user:
         options.authUser === undefined ? { id: 1, role: 'owner' } : options.authUser,
     })),
-    find: vi.fn(async (args: { collection: string; page?: number; limit?: number }) => {
-      calls.push({ collection: args.collection, page: args.page, limit: args.limit })
+    find: vi.fn(
+      async (args: {
+        collection: string
+        page?: number
+        limit?: number
+        sort?: string | string[]
+      }) => {
+      calls.push({
+        collection: args.collection,
+        page: args.page,
+        limit: args.limit,
+        sort: args.sort,
+      })
       if (args.collection === 'products') {
         return (options.productExists ?? true)
           ? { docs: [product], totalDocs: 1, hasNextPage: false }
@@ -367,10 +424,14 @@ function createMockPayload(options: MockOptions = {}) {
         return page(users, args.page, args.limit)
       }
       if (args.collection === 'course-progress') {
-        return page(progress, args.page, args.limit)
+        // A mock TISZTELETBEN TARTJA a rendezést — enélkül a csonkolási teszt
+        // épp azt a viselkedést nem tudná ellenőrizni, ami a javítás lényege.
+        const sorted = sortolt(progress, args.sort)
+        return page(sorted, args.page, args.limit)
       }
       return { docs: [], totalDocs: 0, hasNextPage: false }
-    }),
+      },
+    ),
   }
 
   return { payload: payload as unknown as Payload, calls }
@@ -480,7 +541,7 @@ describe('GET /api/admin/course-progress — 200 válasz', () => {
     })
     expect(body.students[1]).toMatchObject({ userId: 2, percent: 0, status: 'nem-kezdte' })
     expect(body.lessons).toHaveLength(4)
-    expect(body.meta.enrollments).toEqual({ returned: 2, total: 2, truncated: false })
+    expect(body.meta.enrollments).toEqual({ returned: 2, total: 2, truncated: false, omitted: 0 })
     expect(body.notice).toBeNull()
   })
 
@@ -517,6 +578,7 @@ describe('GET /api/admin/course-progress — 200 válasz', () => {
       returned: manyUsers.length,
       total: manyUsers.length,
       truncated: false,
+      omitted: 0,
     })
     // Explicit limit MINDEN lekérdezésen — sosem az alapértelmezett 10.
     expect(calls.filter((call) => call.collection === 'users')).toHaveLength(2)
@@ -543,6 +605,7 @@ describe('GET /api/admin/course-progress — 200 válasz', () => {
       returned: ENROLLMENT_MAX,
       total: manyUsers.length,
       truncated: true,
+      omitted: 0,
     })
     expect(body.notice).toContain('csonkolt')
   })
@@ -563,6 +626,124 @@ describe('GET /api/admin/course-progress — 200 válasz', () => {
 
     expect(body.meta.enrollments.truncated).toBe(false)
     expect(body.notice).toBeNull()
+  })
+})
+
+/**
+ * ═══ A CSONKOLÁS NEM ADHAT HAMIS SZÁZALÉKOT ═══
+ *
+ * A bizonytalansági audit VALÓS adaton mérte: a két lapozott olvasás egymástól
+ * függetlenül vágódott el, ezért egy LISTÁZOTT diák haladás-sorai kieshettek a
+ * beolvasott ablakból. 2405 beiratkozott / 31035 haladás-sor mellett a
+ * visszaadott 2000 diákból 960-nak érdemben alacsonyabb százalék jelent meg a
+ * valóságnál (egy vevőnek 25 elvégzett leckéből 10 látszott: 38%). A `notice`
+ * csak annyit mondott, hogy „a lista csonkolt" — a soronkénti számok
+ * tényszerűnek látszottak.
+ *
+ * A javítás után a haladás-olvasás FELHASZNÁLÓ szerint rendez, tehát a korlát
+ * user-határon vág; az esetleg félbevágott diák és a fölötte lévők KIMARADNAK a
+ * listából. Amit a panel mutat, az hiánytalan.
+ */
+describe('GET /api/admin/course-progress — csonkolás és HELYES százalékok', () => {
+  /** 20 leckés kurzus, `hallgatok` fővel, MINDENKI végigcsinálta. */
+  function teljesenElvegezte(hallgatok: number, leckek: number) {
+    const users = Array.from({ length: hallgatok }, (_, index) => ({
+      id: index + 1,
+      email: `u${String(index + 1)}@example.test`,
+      name: `Hallgató ${String(index + 1)}`,
+    }))
+    // A sorok LECKE szerint csoportosítva születnek — ez modellezi a valóságot
+    // (a beszúrási sorrend időrendi, nem felhasználónkénti).
+    const progress: Array<{ user: number; videoRef: string; watchedAt: string }> = []
+    for (let lessonIndex = 1; lessonIndex <= leckek; lessonIndex += 1) {
+      for (const user of users) {
+        progress.push({
+          user: user.id,
+          videoRef: `l${String(lessonIndex)}`,
+          watchedAt: '2026-08-01T10:00:00.000Z',
+        })
+      }
+    }
+    return { users, progress }
+  }
+
+  it('a haladás-olvasás FELHASZNÁLÓ szerint rendez (ez teszi user-határon vághatóvá)', async () => {
+    const { handler, calls } = handlerFor()
+    await handler(getRequest())
+
+    const progressCalls = calls.filter((call) => call.collection === 'course-progress')
+    expect(progressCalls.length).toBeGreaterThan(0)
+    for (const call of progressCalls) {
+      expect(call.sort).toEqual(['user', 'id'])
+    }
+  })
+
+  it('csonkolásnál EGYETLEN megjelenített diák százaléka sem alulmért', async () => {
+    const { users, progress } = teljesenElvegezte(1500, 20)
+    expect(progress.length).toBeGreaterThan(PROGRESS_MAX)
+
+    const { handler } = handlerFor({ users, progress, lessonCount: 20 })
+    const response = await handler(getRequest())
+    const body = (await response.json()) as {
+      students: CourseStudentProgress[]
+      totals: { enrolled: number; completed: number }
+      meta: {
+        totalLessons: number
+        enrollments: { returned: number; total: number | null; truncated: boolean; omitted: number }
+        progressRows: { returned: number; truncated: boolean }
+      }
+      notice: string | null
+    }
+
+    expect(response.status).toBe(200)
+    expect(body.meta.totalLessons).toBe(20)
+    expect(body.meta.progressRows.truncated).toBe(true)
+
+    // EZ a lényeg: aki szerepel a listában, annál a szám IGAZ — mindenki 100%.
+    expect(body.students.length).toBeGreaterThan(0)
+    for (const student of body.students) {
+      expect(student.percent).toBe(100)
+      expect(student.completed).toBe(20)
+      expect(student.status).toBe('befejezte')
+    }
+    expect(body.totals.completed).toBe(body.students.length)
+
+    // A kimaradt diákokat a válasz KIMONDJA — nem hallgatja el, és nem is
+    // mutat róluk hamis (0%-os vagy alulmért) sort.
+    expect(body.meta.enrollments.omitted).toBeGreaterThan(0)
+    expect(body.meta.enrollments.returned).toBe(body.students.length)
+    expect(body.meta.enrollments.returned + body.meta.enrollments.omitted).toBe(users.length)
+    expect(body.notice).toContain('kimaradt')
+  })
+
+  it('a kimaradó diákok a NAGYOBB azonosítójúak (a lista eleje teljes)', async () => {
+    const { users, progress } = teljesenElvegezte(1500, 20)
+    const { handler } = handlerFor({ users, progress, lessonCount: 20 })
+
+    const body = (await (await handler(getRequest())).json()) as {
+      students: CourseStudentProgress[]
+    }
+
+    const azonositok = body.students.map((student) => student.userId)
+    expect(azonositok[0]).toBe(1)
+    // Folytonos, hézagmentes tartomány 1-től — nem „lyukas" minta.
+    expect(azonositok).toEqual(azonositok.map((_, index) => index + 1))
+  })
+
+  it('csonkolás NÉLKÜL semmi nem marad ki (a javítás nem szűkít feleslegesen)', async () => {
+    const { users, progress } = teljesenElvegezte(50, 20)
+    const { handler } = handlerFor({ users, progress, lessonCount: 20 })
+
+    const body = (await (await handler(getRequest())).json()) as {
+      students: CourseStudentProgress[]
+      meta: { enrollments: { omitted: number; truncated: boolean } }
+      notice: string | null
+    }
+
+    expect(body.students).toHaveLength(50)
+    expect(body.meta.enrollments.omitted).toBe(0)
+    expect(body.notice).toBeNull()
+    expect(body.students.every((student) => student.percent === 100)).toBe(true)
   })
 })
 

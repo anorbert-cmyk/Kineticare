@@ -241,6 +241,12 @@ export function CoursePlayer({
   const railPanelRef = useRef<HTMLDivElement | null>(null)
   /** A Bunny-lejátszó iframe-je — a nézettség-követő híd erre iratkozik fel. */
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  /**
+   * A késznek jelölt (és az épp mentés alatt lévő) leckék SZINKRON pillanatképe.
+   * Lásd a `markWatched` fejkommentjét: ez a duplikált szerverhívás és a
+   * duplikált funnel-esemény szerkezeti védelme.
+   */
+  const keszLeckekRef = useRef<ReadonlySet<string>>(new Set(initialRefs))
 
   const storageKey = useMemo(() => moduleStateKey(product.id), [product.id])
   const idPrefix = useMemo(() => `kc-player-${product.id}`, [product.id])
@@ -271,15 +277,36 @@ export function CoursePlayer({
    * Optimista jelölés: a pipa azonnal látszik, a szerverhívás hibája esetén
    * visszagördül, és látható, magyar `role="alert"` üzenet jelenik meg.
    *
+   * ═══ MIÉRT REF A DUPLIKÁCIÓ-VÉDELEM, ÉS NEM ÁLLAPOT ═══
+   * A védelem korábban a `watched` és a `pending` ÁLLAPOTOT olvasta. Az
+   * állapot viszont a callback LEZÁRÁSÁBÓL jön, ami két renderelés között
+   * elavul: a `timeupdate` sűrűn érkezik, és a küszöböt átlépő két esemény
+   * ugyanazzal az elavult lezárással futhat le. Élesben MÉRVE: gyors
+   * eseményütem mellett EGY leckére NÉGY `mark-watched` kérés ment ki. Minden
+   * duplikátum újra lefuttatta az analitika-blokkot is, tehát a
+   * „kurzusonként egyszer" mérföldkövek (course_started, course_completed)
+   * többször is kimehettek — pont az a funnel torzult, amiért készült.
+   *
+   * A ref SZINKRON, renderelés nélkül frissül, ezért az azonos körben induló
+   * második hívás már látja az elsőt. Ez a ref egyben a haladás EGYETLEN
+   * IGAZSÁGFORRÁSA a mérföldkövekhez: a `before`/`after` pillanatképet még a
+   * hálózati hívás ELŐTT, szinkronban vesszük — így az sem csúszhat el.
+   *
    * @param announce mondja-e el az élő régió a sikert. NAVIGÁCIÓVAL járó
    *   jelölésnél `false`: ott a fókusz az új lecke címére ugrik, és a kettő
    *   egymásra beszélne.
    */
   const markWatched = useCallback(
     async (lessonRef: string, announce: boolean) => {
-      if (watched.has(lessonRef) || pending.has(lessonRef)) {
+      // SZERKEZETI zár: a ref már tartalmazza a késznek jelölt és az épp
+      // mentés alatt lévő leckéket is.
+      if (keszLeckekRef.current.has(lessonRef)) {
         return
       }
+      const elotte = summarizeCurriculum(curriculum, keszLeckekRef.current)
+      keszLeckekRef.current = new Set(keszLeckekRef.current).add(lessonRef)
+      const utana = summarizeCurriculum(curriculum, keszLeckekRef.current)
+
       setMarkError(null)
       setPending((current) => new Set(current).add(lessonRef))
       // FUNKCIONÁLIS frissítés: két, egymást átfedő jelölés (pl. az automatikus
@@ -295,6 +322,10 @@ export function CoursePlayer({
       })
 
       if (result.kind !== 'ok') {
+        // A zárat is oldjuk: a vevő újrapróbálhatja a jelölést.
+        const vissza = new Set(keszLeckekRef.current)
+        vissza.delete(lessonRef)
+        keszLeckekRef.current = vissza
         setWatched((current) => {
           const next = new Set(current)
           next.delete(lessonRef)
@@ -305,8 +336,8 @@ export function CoursePlayer({
       }
 
       const lesson = findLessonByRef(curriculum, lessonRef)
-      const before = summarizeCurriculum(curriculum, watched)
-      const after = summarizeCurriculum(curriculum, new Set(watched).add(lessonRef))
+      const before = elotte
+      const after = utana
 
       if (announce) {
         setAnnouncement(
@@ -350,7 +381,7 @@ export function CoursePlayer({
         }
       }
     },
-    [curriculum, pending, product.id, watched],
+    [curriculum, product.id],
   )
 
   /**
@@ -364,11 +395,13 @@ export function CoursePlayer({
    */
   const reportLessonProgress = useCallback<LessonProgressReporter>(
     (lessonRef, watchedRatio) => {
-      if (shouldAutoMarkWatched(watchedRatio, watched.has(lessonRef))) {
+      // A ref, nem az állapot: a `timeupdate` sűrűbben érkezik, mint ahogy a
+      // React újrarendel, tehát az állapot itt elavult lenne.
+      if (shouldAutoMarkWatched(watchedRatio, keszLeckekRef.current.has(lessonRef))) {
         void markWatched(lessonRef, false)
       }
     },
-    [markWatched, watched],
+    [markWatched],
   )
   /**
    * A jelentés-visszahívás STABIL példánya: a feliratkozó (a jövőbeli player.js

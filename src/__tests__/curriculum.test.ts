@@ -378,7 +378,18 @@ describe('buildCurriculum — mellékletek és szöveg', () => {
     ])
   })
 
-  it('populálatlan (nyers azonosítós) melléklet kimarad — nincs mit letölteni', () => {
+  /**
+   * A lejátszó (LessonBody.tsx) kifejezetten kezeli a fájl nélküli mellékletet:
+   * „a fájl feltöltése folyamatban" jelzést ír ki rá, azzal az indoklással, hogy
+   * „a néma eltüntetés a szerkesztőnek is elrejtené a hibát". A modell viszont
+   * korábban PONT ezt tette: a fájl nélküli sort eldobta, tehát a lejátszó ága
+   * elérhetetlen volt, és a komment az ellenkezőjét írta le a valóságnak.
+   *
+   * Az állapot ÉLESBEN előállítható: a melléklet idegen kulcsa
+   * `ON DELETE SET NULL`, tehát egy médiafájl törlése a Médiatárból pontosan
+   * ilyen, fájl nélküli melléklet-sort hagy maga után.
+   */
+  it('a FÁJL NÉLKÜLI melléklet MEGMARAD (a törölt médiafájl ne tűnjön el némán)', () => {
     const curriculum = buildCurriculum(
       product({
         modules: [
@@ -389,7 +400,39 @@ describe('buildCurriculum — mellékletek és szöveg', () => {
               lessonRow({
                 id: 'l1',
                 title: 'Lecke',
-                attachments: [{ id: 'a1', label: 'Segédlet', file: 7 }],
+                attachments: [
+                  // Nyers azonosító (depth: 0), illetve TÖRÖLT médiafájl (null).
+                  { id: 'a1', label: 'Segédlet', file: 7 },
+                  { id: 'a2', label: 'Gyakorlatlap', file: null },
+                ],
+              } as Partial<LessonRow> & { id: string; title: string }),
+            ],
+          }),
+        ],
+      }),
+      true,
+    )
+    expect(curriculum.lessons[0]?.attachments).toEqual([
+      { label: 'Segédlet', url: null },
+      { label: 'Gyakorlatlap', url: null },
+    ])
+  })
+
+  it('a NÉV NÉLKÜLI, fájl nélküli melléklet kimarad — nincs mit mutatni', () => {
+    const curriculum = buildCurriculum(
+      product({
+        modules: [
+          moduleRow({
+            id: 'm1',
+            title: 'Modul',
+            lessons: [
+              lessonRow({
+                id: 'l1',
+                title: 'Lecke',
+                attachments: [
+                  { id: 'a1', label: null, file: null },
+                  { id: 'a2', label: '   ', file: 7 },
+                ],
               } as Partial<LessonRow> & { id: string; title: string }),
             ],
           }),

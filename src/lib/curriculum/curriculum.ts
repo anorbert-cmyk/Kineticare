@@ -173,13 +173,20 @@ function normalizeAttachment(raw: unknown): CurriculumAttachment | null {
   }
   const entry = raw as { label?: unknown; file?: unknown }
   const file = entry.file
-  // depth: 0 esetén a reláció nyers azonosító — ilyenkor nincs mit letölteni.
+  const sajatCimke = trimmedOrNull(entry.label)
+  // A reláció NEM populált objektum. Két oka lehet:
+  //  - depth: 0 lekérdezés (nyers azonosító) — ilyenkor sincs mit letölteni,
+  //  - a médiafájlt TÖRÖLTÉK a Médiatárból: az idegen kulcs `ON DELETE SET NULL`,
+  //    tehát a melléklet-sor megmarad, de fájl nélkül.
+  // A sor ilyenkor is MEGMARAD, ha van neve: a néma eltüntetés a szerkesztő elől
+  // is elrejtené a hibát (a lejátszó „a fájl feltöltése folyamatban" jelzést ír
+  // ki rá — LessonBody.tsx). Név nélkül viszont nincs mit mutatni.
   if (typeof file !== 'object' || file === null) {
-    return null
+    return sajatCimke === null ? null : { label: sajatCimke, url: null }
   }
   const media = file as { url?: unknown; filename?: unknown }
   const url = trimmedOrNull(media.url)
-  const label = trimmedOrNull(entry.label) ?? trimmedOrNull(media.filename)
+  const label = sajatCimke ?? trimmedOrNull(media.filename)
   if (label === null && url === null) {
     return null
   }

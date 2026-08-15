@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { BUNNY_STREAM_IFRAME_SOURCE } from '../lib/security/csp'
@@ -5,6 +7,8 @@ import {
   createBunnyPlayerBridge,
   PLAYER_JS_CONTEXT,
   PLAYER_JS_VERSION,
+  SUBSCRIBE_MAX_ATTEMPTS,
+  SUBSCRIBE_RETRY_INTERVAL_MS,
   type PlayerJsFrame,
   type PlayerJsHostWindow,
   type PlayerJsMessageEvent,
@@ -70,6 +74,39 @@ function createFakeFrame(): FakeFrame {
     },
   }
   return { frame: { contentWindow }, contentWindow, posted }
+}
+
+interface FakeFrameWithLoad extends FakeFrame {
+  /** Az iframe `load` eseményének kiváltása. */
+  fireLoad(): void
+  loadListenerCount(): number
+}
+
+/** Iframe, amely a `load` eseményt is támogatja (mint a valódi DOM-elem). */
+function createFakeFrameWithLoad(): FakeFrameWithLoad {
+  const base = createFakeFrame()
+  const listeners = new Set<() => void>()
+  const frame: PlayerJsFrame = {
+    contentWindow: base.contentWindow as { postMessage(m: string, o: string): void },
+    addEventListener(_type, listener) {
+      listeners.add(listener)
+    },
+    removeEventListener(_type, listener) {
+      listeners.delete(listener)
+    },
+  }
+  return {
+    ...base,
+    frame,
+    fireLoad() {
+      for (const listener of [...listeners]) {
+        listener()
+      }
+    },
+    loadListenerCount() {
+      return listeners.size
+    },
+  }
 }
 
 /** Egy player.js esemény-üzenet a spec alakjában. */
@@ -200,25 +237,29 @@ describe('createBunnyPlayerBridge — origin-szűrés (biztonsági alap)', () =>
 })
 
 describe('createBunnyPlayerBridge — kimenő üzenetek', () => {
-  it('létrehozáskor feliratkozik a timeupdate és ended eseményre, a PONTOS originre', () => {
+  it('létrehozáskor feliratkozik a ready, timeupdate és ended eseményre, a PONTOS originre', () => {
     const host = createFakeHostWindow()
     vi.stubGlobal('window', host)
     const { frame, posted } = createFakeFrame()
 
-    createBunnyPlayerBridge({ iframe: frame })
+    const bridge = createBunnyPlayerBridge({ iframe: frame })
 
-    expect(posted).toHaveLength(2)
+    expect(posted).toHaveLength(3)
     for (const entry of posted) {
       expect(entry.targetOrigin).toBe(BUNNY_STREAM_IFRAME_SOURCE)
     }
     const values = posted.map((entry) => JSON.parse(entry.message) as Record<string, unknown>)
-    expect(values.map((value) => value.value)).toEqual(['timeupdate', 'ended'])
+    // A `ready` NEM hagyható el: nem építhetünk arra, hogy a Bunny éles
+    // lejátszója valóban kéretlenül broadcastol — ha csak a feliratkozóknak
+    // küldi, nélküle SOHA nem tudnánk meg, mikor élesíthetjük a többit.
+    expect(values.map((value) => value.value)).toEqual(['ready', 'timeupdate', 'ended'])
     for (const value of values) {
       expect(value.context).toBe(PLAYER_JS_CONTEXT)
       expect(value.version).toBe(PLAYER_JS_VERSION)
       expect(value.method).toBe('addEventListener')
       expect(typeof value.listener).toBe('string')
     }
+    bridge.dispose()
   })
 
   it('a ready esemény után ÚJRA feliratkozik (az iframe addigra biztosan él)', () => {
@@ -227,16 +268,17 @@ describe('createBunnyPlayerBridge — kimenő üzenetek', () => {
     const { frame, posted } = createFakeFrame()
     const onReady = vi.fn()
 
-    createBunnyPlayerBridge({ iframe: frame, onReady })
-    expect(posted).toHaveLength(2)
+    const bridge = createBunnyPlayerBridge({ iframe: frame, onReady })
+    expect(posted).toHaveLength(3)
 
     host.dispatch({
       origin: BUNNY_STREAM_IFRAME_SOURCE,
       data: playerEvent('ready', { src: 'https://iframe.mediadelivery.net/embed/1/abc' }),
     })
 
-    expect(posted).toHaveLength(4)
+    expect(posted).toHaveLength(6)
     expect(onReady).toHaveBeenCalledTimes(1)
+    bridge.dispose()
   })
 
   it('contentWindow nélküli iframe esetén nem dob és nem küld', () => {
@@ -564,5 +606,186 @@ describe('createBunnyPlayerBridge — window nélküli környezet', () => {
     host.dispatch({ origin: BUNNY_STREAM_IFRAME_SOURCE, data: playerEvent('ended') })
 
     expect(onEnded).toHaveBeenCalledTimes(1)
+  })
+})
+
+/**
+ * ═══ A LEGKRITIKUSABB VISELKEDÉS: A FELIRATKOZÁS CÉLBA ÉRÉSE ═══
+ *
+ * Az audit végpontól-végpontig, VALÓDI cross-origin `postMessage`-dzsel
+ * bizonyította, hogy a híd LÉTREHOZÁSAKOR küldött feliratkozás SOHA nem ér
+ * célba: a lecke betöltésekor az iframe még `about:blank`-en áll, és a pontos
+ * célorigint megkövetelő üzenet némán elvész. A javítás előtt ezért az EGÉSZ
+ * automatikus haladás-jelölés egyetlen, dokumentálatlan külső viselkedésen
+ * függött: azon, hogy a Bunny lejátszója kéretlenül broadcastolja a `ready`-t.
+ *
+ * Az alábbi tesztek azt őrzik, hogy TÖBB, egymástól független út vezet a
+ * feliratkozáshoz — mert egyik sem a mi kezünkben van.
+ */
+describe('createBunnyPlayerBridge — a feliratkozás garantáltan célba ér', () => {
+  it('az iframe `load` eseményére ÚJRA feliratkozik (a vaklövés elveszhet)', () => {
+    const host = createFakeHostWindow()
+    const teszt = createFakeFrameWithLoad()
+
+    const bridge = createBunnyPlayerBridge({ iframe: teszt.frame, hostWindow: host })
+    expect(teszt.posted).toHaveLength(3)
+
+    // A keret betöltődött: MOST már a Bunny dokumentuma fut benne.
+    teszt.fireLoad()
+
+    expect(teszt.posted).toHaveLength(6)
+    const values = teszt.posted
+      .slice(3)
+      .map((entry) => (JSON.parse(entry.message) as { value?: unknown }).value)
+    expect(values).toEqual(['ready', 'timeupdate', 'ended'])
+    bridge.dispose()
+  })
+
+  it('a `load` feliratkozás dispose-nál megszűnik (nem szivárog listener)', () => {
+    const host = createFakeHostWindow()
+    const teszt = createFakeFrameWithLoad()
+
+    const bridge = createBunnyPlayerBridge({ iframe: teszt.frame, hostWindow: host })
+    expect(teszt.loadListenerCount()).toBe(1)
+
+    bridge.dispose()
+    expect(teszt.loadListenerCount()).toBe(0)
+
+    // A dispose UTÁNI load már semmit nem küldhet.
+    const eddig = teszt.posted.length
+    teszt.fireLoad()
+    expect(teszt.posted).toHaveLength(eddig)
+  })
+
+  it('amíg a keret NÉMA, korlátos ismétléssel újrapróbálja a feliratkozást', () => {
+    vi.useFakeTimers()
+    try {
+      const host = createFakeHostWindow()
+      const { frame, posted } = createFakeFrame()
+
+      const bridge = createBunnyPlayerBridge({ iframe: frame, hostWindow: host })
+      expect(posted).toHaveLength(3)
+
+      vi.advanceTimersByTime(SUBSCRIBE_RETRY_INTERVAL_MS)
+      expect(posted).toHaveLength(6)
+
+      vi.advanceTimersByTime(SUBSCRIBE_RETRY_INTERVAL_MS * 3)
+      expect(posted).toHaveLength(15)
+
+      bridge.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('az ELSŐ érvényes üzenet leállítja az ismétlést (nem zajongunk feleslegesen)', () => {
+    vi.useFakeTimers()
+    try {
+      const host = createFakeHostWindow()
+      const { frame, posted } = createFakeFrame()
+
+      const bridge = createBunnyPlayerBridge({ iframe: frame, hostWindow: host })
+      vi.advanceTimersByTime(SUBSCRIBE_RETRY_INTERVAL_MS)
+      expect(posted).toHaveLength(6)
+
+      // A keret megszólal — mindegy, milyen eseménnyel.
+      host.dispatch({
+        origin: BUNNY_STREAM_IFRAME_SOURCE,
+        data: playerEvent('play'),
+      })
+      const megszolalasUtan = posted.length
+
+      vi.advanceTimersByTime(SUBSCRIBE_RETRY_INTERVAL_MS * 10)
+      expect(posted).toHaveLength(megszolalasUtan)
+
+      bridge.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('IDEGEN originű üzenet NEM állítja le az ismétlést (nem hamisítható ki)', () => {
+    vi.useFakeTimers()
+    try {
+      const host = createFakeHostWindow()
+      const { frame, posted } = createFakeFrame()
+
+      const bridge = createBunnyPlayerBridge({ iframe: frame, hostWindow: host })
+
+      host.dispatch({ origin: 'https://tamado.example', data: playerEvent('ready') })
+
+      vi.advanceTimersByTime(SUBSCRIBE_RETRY_INTERVAL_MS)
+      expect(posted).toHaveLength(6)
+
+      bridge.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('legfeljebb SUBSCRIBE_MAX_ATTEMPTS ismétlés után feladja (nem pörög örökké)', () => {
+    vi.useFakeTimers()
+    try {
+      const host = createFakeHostWindow()
+      const { frame, posted } = createFakeFrame()
+
+      const bridge = createBunnyPlayerBridge({ iframe: frame, hostWindow: host })
+
+      // Jóval túl a korláton.
+      vi.advanceTimersByTime(SUBSCRIBE_RETRY_INTERVAL_MS * (SUBSCRIBE_MAX_ATTEMPTS + 50))
+
+      // 1 induló + SUBSCRIBE_MAX_ATTEMPTS ismétlés, egyenként 3 üzenettel.
+      expect(posted).toHaveLength(3 * (SUBSCRIBE_MAX_ATTEMPTS + 1))
+
+      bridge.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('dispose után SEMMILYEN további üzenet nem megy ki', () => {
+    vi.useFakeTimers()
+    try {
+      const host = createFakeHostWindow()
+      const { frame, posted } = createFakeFrame()
+
+      const bridge = createBunnyPlayerBridge({ iframe: frame, hostWindow: host })
+      bridge.dispose()
+      const eddig = posted.length
+
+      vi.advanceTimersByTime(SUBSCRIBE_RETRY_INTERVAL_MS * 10)
+      expect(posted).toHaveLength(eddig)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+/**
+ * A Bunny-oldali fogadó a szülő origint a `document.referrer`-ből számolja, és
+ * minden más originű üzenetet ELDOB. Ez egy KIMONDATLAN függés a saját
+ * biztonsági fejlécünkön: ha valaki a `Referrer-Policy`-t `no-referrer`-re
+ * szigorítja (ami első ránézésre javításnak látszik), a lejátszó üres origint
+ * lát, és MINDEN feliratkozásunkat visszautasítja — némán, hibaüzenet nélkül.
+ *
+ * Ez a teszt azért van, hogy a szigorítás ITT bukjon el, ne élesben.
+ */
+describe('a Bunny-fogadó referrer-függése', () => {
+  const config = readFileSync(new URL('../../next.config.ts', import.meta.url), 'utf8')
+
+  it('a Referrer-Policy átadja az originünket a lejátszónak', () => {
+    const match = /'Referrer-Policy',\s*value:\s*'([^']+)'/.exec(config)
+    expect(match).not.toBeNull()
+    const policy = match?.[1] ?? ''
+    // Ezek a házirendek MEGTARTJÁK az origint kereszt-originű kérésnél is.
+    expect(['strict-origin-when-cross-origin', 'strict-origin', 'origin', 'no-referrer-when-downgrade', 'unsafe-url']).toContain(policy)
+  })
+
+  it('a lejátszó iframe-je nem szigorít tovább saját referrerPolicy-val', () => {
+    const player = readFileSync(
+      new URL('../components/account/CoursePlayer.tsx', import.meta.url),
+      'utf8',
+    )
+    expect(player).not.toMatch(/referrerPolicy/i)
   })
 })

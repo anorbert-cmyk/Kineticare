@@ -49,6 +49,23 @@ import {
  * SZÁNDÉKOSAN nem használjuk. Ha a korlát tényleg fog, azt a válasz `meta`
  * mezője és a `notice` magyar szövege KIMONDJA — a csonkolást sosem hallgatjuk el.
  *
+ * ═══ MIÉRT USER SZERINT RENDEZ A HALADÁS-OLVASÁS ═══
+ * A két olvasás korábban EGYMÁSTÓL FÜGGETLENÜL vágódott el: a beiratkozottak a
+ * saját korlátjuknál, a haladás-sorok (beszúrási sorrendben) a magukénál. Egy
+ * LISTÁZOTT diák haladás-sorai így kieshettek a beolvasott ablakból, és a panel
+ * nem kevesebb adatot mutatott, hanem HAMIS SZÁMOT: mérve, 2405 beiratkozott
+ * mellett a 2000 listázott diákból 960-nak érdemben alacsonyabb százalék
+ * jelent meg (egy konkrét vevőnek 25 elvégzett leckéből 10 látszott, 38%).
+ * A rossz szám rosszabb, mint a hiányzó szám: a munkatárs eszerint keresi meg a
+ * „lemaradó" vevőt, aki valójában végigcsinálta a kurzust.
+ *
+ * A javítás: a haladás-sorok `['user','id']` szerint rendezve olvasódnak be
+ * (a rendezést valós Payload+Postgres ellen ellenőriztük), tehát a felső korlát
+ * FELHASZNÁLÓ-HATÁRON vág. Az utolsó, esetleg félbevágott felhasználó sorait
+ * eldobjuk, és a listából kimarad minden diák, akinek az adata a beolvasott
+ * ablakon kívülre esne. Amit a panel MUTAT, az így mindig HIÁNYTALAN; ami
+ * kimaradt, azt a `meta.enrollments.omitted` és a magyar `notice` kimondja.
+ *
  * ═══ VÁLASZ-SZERZŐDÉS ═══
  * - 200: { product, totals, students, lessons, meta, notice }
  * - 400: hiányzó vagy érvénytelen productId
@@ -168,7 +185,18 @@ function productLabel(product: { id: number; displayTitle?: unknown; sku?: unkno
 /** A válasz `meta` blokkja — a beolvasás mérete és a csonkolás ténye. */
 interface CourseProgressMeta {
   generatedAt: string
-  enrollments: { returned: number; total: number | null; truncated: boolean }
+  enrollments: {
+    /** Ennyi diák szerepel az összesítésben (HIÁNYTALAN adattal). */
+    returned: number
+    total: number | null
+    truncated: boolean
+    /**
+     * Ennyi beiratkozottat SZÁNDÉKOSAN hagytunk ki: a haladás-soraik a
+     * beolvasott ablakon kívülre estek volna, tehát csak HAMIS (alulmért)
+     * százalékot tudnánk róluk mutatni.
+     */
+    omitted: number
+  }
   progressRows: { returned: number; total: number | null; truncated: boolean }
   /** A kurzus elindítható leckéinek száma — a nevező. */
   totalLessons: number
@@ -282,6 +310,9 @@ export function createCourseProgressHandler(
       // A kurzus MINDEN haladás-sora. Nem szűrünk a beiratkozottak azonosítóira:
       // egy több ezer elemű `in` feltétel drágább lenne, az összesítő pedig
       // amúgy is eldobja a nem beiratkozottak sorait.
+      // A rendezés FELHASZNÁLÓ szerint megy (lásd a fejkommentet): így a felső
+      // korlát user-határon vág, nem egy diák sorainak a közepén. A másodlagos
+      // `id` a lapok közti determinisztikus sorrendhez kell.
       const progressPage = await readAllPages<{
         user?: unknown
         videoRef?: unknown
@@ -294,7 +325,7 @@ export function createCourseProgressHandler(
             depth: 0,
             limit,
             page,
-            sort: 'id',
+            sort: ['user', 'id'],
           }),
         PROGRESS_PAGE_SIZE,
         PROGRESS_MAX,
@@ -314,13 +345,41 @@ export function createCourseProgressHandler(
         })
       }
 
-      const stats = buildCourseProgressStats({ curriculum, enrollments, progressRows })
+      /**
+       * Csonkolásnál az UTOLSÓ felhasználó sorai félbevághatók, tehát róla csak
+       * alulmért — vagyis HAMIS — százalékot tudnánk mutatni. Az ő sorait
+       * eldobjuk, és innentől minden nagyobb azonosítójú diák kimarad a
+       * listából. Inkább hiányozzon egy sor, mint hogy rossz szám kerüljön elé.
+       */
+      let hianyosTolUserId: number | null = null
+      if (progressPage.truncated && progressRows.length > 0) {
+        hianyosTolUserId = progressRows[progressRows.length - 1].userId
+        while (
+          progressRows.length > 0 &&
+          progressRows[progressRows.length - 1].userId === hianyosTolUserId
+        ) {
+          progressRows.pop()
+        }
+      }
+
+      const teljesEnrollments =
+        hianyosTolUserId === null
+          ? enrollments
+          : enrollments.filter((entry) => entry.userId < hianyosTolUserId)
+      const kihagyottDiakok = enrollments.length - teljesEnrollments.length
+
+      const stats = buildCourseProgressStats({
+        curriculum,
+        enrollments: teljesEnrollments,
+        progressRows,
+      })
 
       const truncated = enrollmentPage.truncated || progressPage.truncated
       if (truncated) {
         log.warn('course-progress: a válasz csonkolt (elért felső korlát)', {
           productId,
-          enrollmentsReturned: enrollments.length,
+          enrollmentsReturned: teljesEnrollments.length,
+          enrollmentsOmitted: kihagyottDiakok,
           enrollmentsTruncated: enrollmentPage.truncated,
           progressRowsReturned: progressRows.length,
           progressRowsTruncated: progressPage.truncated,
@@ -333,9 +392,10 @@ export function createCourseProgressHandler(
         meta: {
           generatedAt: new Date().toISOString(),
           enrollments: {
-            returned: enrollments.length,
+            returned: teljesEnrollments.length,
             total: enrollmentPage.totalDocs,
             truncated: enrollmentPage.truncated,
+            omitted: kihagyottDiakok,
           },
           progressRows: {
             returned: progressRows.length,
@@ -345,8 +405,14 @@ export function createCourseProgressHandler(
           totalLessons: curriculum.lessons.filter((lesson) => lesson.playable).length,
           legacyCurriculum: curriculum.legacy,
         },
+        // A szöveg SOSEM hallgatja el a csonkolást, és külön kimondja, ha
+        // diákok maradtak ki: a megjelenített számok viszont MINDIG teljesek.
         notice: truncated
-          ? `A kurzusnak a megjeleníthetőnél több adata van, ezért a lista csonkolt (legfeljebb ${String(ENROLLMENT_MAX)} beiratkozott és ${String(PROGRESS_MAX)} haladás-sor). Az összesítés csak a betöltött adatokra vonatkozik.`
+          ? `A kurzusnak a megjeleníthetőnél több adata van, ezért a lista csonkolt (legfeljebb ${String(ENROLLMENT_MAX)} beiratkozott és ${String(PROGRESS_MAX)} haladás-sor).${
+              kihagyottDiakok > 0
+                ? ` ${String(kihagyottDiakok)} hallgató kimaradt a listából, mert róluk csak hiányos — így félrevezető — haladás látszana.`
+                : ''
+            } A megjelenített hallgatók adatai teljesek.`
           : null,
       }
 

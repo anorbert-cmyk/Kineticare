@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -516,5 +518,46 @@ describe('CoursePlayer — kapuzott állapotok', () => {
     expect(action?.disabled).toBe(true)
     // …miközben az első leckén továbbra is van értelmes következő lépés.
     expect(primaryAction(curriculum, 'l1', done)?.kind).toBe('advance')
+  })
+})
+
+/**
+ * ═══ A DUPLIKÁLT JELÖLÉS SZERKEZETI VÉDELME ═══
+ *
+ * A jelölés duplikáció-védelme korábban a `watched` és a `pending` ÁLLAPOTOT
+ * olvasta, ami a callback lezárásából jön, és két renderelés között elavul.
+ * Élesben mérve: gyors `timeupdate`-ütem mellett EGY leckére NÉGY
+ * `mark-watched` kérés ment ki, és minden duplikátum újra lefuttatta a
+ * funnel-blokkot — a „kurzusonként egyszer" mérföldkövek (course_started,
+ * course_completed) többször is kimehettek.
+ *
+ * A repóban nincs DOM-alapú komponensteszt-készlet (a tesztek szándékosan
+ * tiszta függvényeket fednek), ezért ezt a szerkezeti tulajdonságot
+ * FORRÁSSZINTEN őrizzük. A teszt kifejezetten arra való, hogy egy jövőbeli
+ * „egyszerűsítés" — a ref visszacserélése állapotra — ITT bukjon el.
+ */
+describe('markWatched — a duplikáció-védelem szerkezeti', () => {
+  const source = readFileSync(
+    new URL('../components/account/CoursePlayer.tsx', import.meta.url),
+    'utf8',
+  )
+
+  it('a zár SZINKRON refet olvas, nem renderelés-függő állapotot', () => {
+    expect(source).toMatch(/if \(keszLeckekRef\.current\.has\(lessonRef\)\) \{\s*\n\s*return/)
+    // A régi, elavuló lezárásra épülő alak nem térhet vissza.
+    expect(source).not.toMatch(/watched\.has\(lessonRef\) \|\| pending\.has\(lessonRef\)/)
+  })
+
+  it('az automatikus jelölés is a refet nézi (a timeupdate sűrűbb a renderelésnél)', () => {
+    expect(source).toMatch(/shouldAutoMarkWatched\(watchedRatio, keszLeckekRef\.current\.has/)
+  })
+
+  it('a mérföldkő-pillanatkép a hálózati hívás ELŐTT, szinkronban készül', () => {
+    const markWatchedIndex = source.indexOf('const markWatched = useCallback(')
+    expect(markWatchedIndex).toBeGreaterThan(-1)
+    const elotteIndex = source.indexOf('const elotte = summarizeCurriculum(', markWatchedIndex)
+    const awaitIndex = source.indexOf('await markVideoWatched(', markWatchedIndex)
+    expect(elotteIndex).toBeGreaterThan(-1)
+    expect(awaitIndex).toBeGreaterThan(elotteIndex)
   })
 })

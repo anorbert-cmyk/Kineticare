@@ -44,6 +44,28 @@
  * A 2 másodperces küszöb mellett a visszafelé „megnyert" néhány tized
  * másodperc mérési hibán belül van.
  *
+ * ═══ MIÉRT ADAPTÍV A KÜSZÖB ═══
+ * A fenti 2 másodperc egy FELTEVÉS a lejátszóról: azt köti ki, hogy a
+ * `timeupdate` sűrűbben érkezik ennél. A Bunny dokumentációja az esemény
+ * ALAKJÁT rögzíti, a GYAKORISÁGÁT nem — és a lejátszó a mi kódunkon KÍVÜL van.
+ * Ha valaha ritkábban tüzelne (throttle, HLS-lejátszó, energiatakarékos mód,
+ * háttérfül), akkor a fix küszöb mellett MINDEN normál lejátszási lépés
+ * „tekerésnek" minősülne, minden intervallum nulla hosszú pont lenne, az arány
+ * tartósan 0 maradna — és a lecke SOHA nem jelölődne készre magától. Néma,
+ * naplózatlan bukás, pontosan az a hiba, amit az automatika megszüntetni hivatott.
+ *
+ * Ezért a küszöb ALSÓ KORLÁT, nem fix érték: a követő menet közben megtanulja a
+ * lejátszó TÉNYLEGES lépésközét (a pozitív különbségek MEDIÁNJA — ez akkor is
+ * megbízható, ha a minták közé tekerés keveredik), és ennek a
+ * `ADAPTIVE_GAP_FACTOR`-szorosát engedi, legfeljebb `MAX_ADAPTIVE_GAP_SEC`-ig.
+ * A felső korlát fontos: enélkül egy sűrű tekerés-sorozat fölhúzhatná a küszöböt
+ * odáig, hogy a szkippelés-ellenes védelem kiürül.
+ *
+ * A tanuláshoz minta kell, a mintavétel viszont nem kerülhet az első
+ * másodpercek rovására, ezért az első `ADAPTIVE_WARMUP_SAMPLES` időpont egy
+ * PUFFERBE megy, és csak a küszöb kiszámítása után, VISSZAMENŐLEG kerül
+ * feldolgozásra — így a videó eleje nem esik ki a mérésből.
+ *
  * ═══ ÖSSZEFÉSÜLÉS (merge) ═══
  * Az intervallumok minden lekérdezéskor összefésülődnek. Két oka van:
  *  1. az arány CSAK így pontos — az újranézett szakasz nem duplázhat
@@ -80,8 +102,52 @@ export const WATCHED_COMPLETION_RATIO = 0.9
 /**
  * Ekkora ugrásig számít folyamatosnak a lejátszás (másodperc). Efölött
  * tekerésnek minősül, és új intervallum kezdődik.
+ *
+ * Ez ALSÓ KORLÁT: a követő ennél megengedőbb lehet, ha a lejátszó ritkábban
+ * küld `timeupdate`-et (lásd a fejkomment „adaptív küszöb" szakaszát).
  */
 export const DEFAULT_MAX_CONTINUITY_GAP_SEC = 2
+
+/**
+ * A megtanult lépésköz ennyiszerese számít még folyamatosnak.
+ *
+ * 1,5 azért jó: a lejátszók ütemezése ingadozik (egy-egy esemény késhet), de
+ * egy VALÓDI tekerés jellemzően nagyságrenddel nagyobbat ugrik ennél, tehát a
+ * szkippelés-ellenes védelem érintetlen marad.
+ */
+export const ADAPTIVE_GAP_FACTOR = 1.5
+
+/**
+ * A megtanult küszöb SOHA nem lehet ennél nagyobb.
+ *
+ * Enélkül egy sűrű tekerés-sorozat fölhúzhatná a küszöböt odáig, hogy a
+ * csúszka-rángatás is „folyamatos lejátszásnak" számítson — vagyis pont a
+ * kijátszás elleni fő védelem ürülne ki.
+ */
+export const MAX_ADAPTIVE_GAP_SEC = 15
+
+/**
+ * Ekkora ugrás fölött a különbség biztosan NEM lejátszási lépésköz, ezért a
+ * tanulásba sem számít bele (a medián így nem torzul a nagy tekerésektől).
+ */
+export const ADAPTIVE_SAMPLE_CAP_SEC = 30
+
+/**
+ * Ennyi időpontot pufferelünk, mielőtt az első küszöböt kiszámítjuk. Öt
+ * különbség már elég stabil mediánt ad, és ennyi minta még a leglassabb
+ * ütemezésnél is pár másodperc alatt összejön.
+ */
+export const ADAPTIVE_WARMUP_SAMPLES = 6
+
+/**
+ * Ennyi legutóbbi lépésközből számoljuk a mediánt.
+ *
+ * Az ablak mérete kompromisszum: nagyobb ablak stabilabb mediánt ad, de lassabban
+ * követi a lejátszó ütemének VÁLTOZÁSÁT (pl. háttérfülre váltás), és az átállás
+ * ideje alatt a lépések tekerésnek látszanak. Nyolc minta még robusztus a
+ * kilógó értékekre, és az átállás is néhány lépés alatt megtörténik.
+ */
+const ADAPTIVE_WINDOW = 8
 
 /**
  * Lebegőpontos tűrés a küszöb-összehasonlításhoz.
@@ -182,10 +248,18 @@ export function isWatchedComplete(
 }
 
 export interface WatchTrackerOptions {
-  /** Ekkora ugrásig folyamatos a lejátszás. Alapértelmezés: 2 másodperc. */
+  /**
+   * A folytonossági küszöb ALSÓ korlátja másodpercben. Alapértelmezés: 2.
+   * A követő ennél megengedőbb lehet, ha a lejátszó ritkábban küld eseményt.
+   */
   maxContinuityGapSec?: number
   /** A készre jelölés küszöbe 0 és 1 között. Alapértelmezés: 0,9. */
   completionRatio?: number
+  /**
+   * Kikapcsolja a küszöb menet közbeni tanulását. Csak akkor kell, ha a hívó
+   * SZIGORÚAN a megadott küszöbhöz akar ragaszkodni (pl. célzott teszt).
+   */
+  adaptiveGap?: boolean
 }
 
 export interface WatchTracker {
@@ -207,13 +281,99 @@ export interface WatchTracker {
   coverage(): number
   /** Elérte-e a küszöböt. Ismeretlen hossznál MINDIG false. */
   isComplete(): boolean
+  /**
+   * A JELENLEG érvényes folytonossági küszöb másodpercben — a megtanult
+   * lépésközzel együtt. Diagnosztikai célú: ezt olvasva látszik, hogy a
+   * lejátszó ütemezéséhez igazodott-e a követő.
+   */
+  continuityGapSec(): number
   /** Teljes nullázás (pl. leckeváltásnál, hogy az előző lecke ne szivárogjon át). */
   reset(): void
+}
+
+/** Rendezett minta mediánja. Üres bemenetnél null. */
+function median(values: readonly number[]): number | null {
+  if (values.length === 0) {
+    return null
+  }
+  const sorted = [...values].sort((left, right) => left - right)
+  const middle = Math.floor(sorted.length / 2)
+  if (sorted.length % 2 === 1) {
+    return sorted[middle]
+  }
+  return (sorted[middle - 1] + sorted[middle]) / 2
 }
 
 interface MutableInterval {
   start: number
   end: number
+}
+
+/**
+ * Időpont-sorozat szakaszokra bontása egy ADOTT folytonossági küszöbbel —
+ * tiszta függvény, állapot nélkül.
+ *
+ * A bemelegítési puffer ÁTMENETI (nem véglegesített) kiértékeléséhez kell: a
+ * lejátszó minden eseménynél lekérdezi az arányt, és ez a lekérdezés NEM
+ * véglegesítheti a puffert, különben a tanulás soha nem kapna mintát.
+ */
+function szakaszokra(samples: readonly number[], gap: number): WatchInterval[] {
+  const result: MutableInterval[] = []
+  let open: MutableInterval | null = null
+  let cursor: number | null = null
+  for (const seconds of samples) {
+    if (open === null || cursor === null) {
+      open = { start: seconds, end: seconds }
+      cursor = seconds
+      continue
+    }
+    if (Math.abs(seconds - cursor) <= gap) {
+      if (seconds > open.end) {
+        open.end = seconds
+      }
+      if (seconds < open.start) {
+        open.start = seconds
+      }
+    } else {
+      result.push(open)
+      open = { start: seconds, end: seconds }
+    }
+    cursor = seconds
+  }
+  if (open !== null) {
+    result.push(open)
+  }
+  return result
+}
+
+/**
+ * A megtanult küszöb lépésköz-mintákból. `null`, ha még kevés a minta ahhoz,
+ * hogy a medián értelmes legyen.
+ */
+function tanultKuszob(lepeskozok: readonly number[], alapKuszob: number): number | null {
+  if (lepeskozok.length < 3) {
+    return null
+  }
+  const tipikus = median(lepeskozok)
+  if (tipikus === null) {
+    return null
+  }
+  return Math.min(
+    Math.max(alapKuszob, tipikus * ADAPTIVE_GAP_FACTOR),
+    Math.max(alapKuszob, MAX_ADAPTIVE_GAP_SEC),
+  )
+}
+
+/** A minták egymást követő, ÉSSZERŰ nagyságú (tanításra alkalmas) különbségei. */
+function tanithatoLepeskozok(samples: readonly number[]): number[] {
+  const result: number[] = []
+  for (let index = 1; index < samples.length; index += 1) {
+    const delta = samples[index] - samples[index - 1]
+    if (delta > 0 && delta <= ADAPTIVE_SAMPLE_CAP_SEC) {
+      result.push(delta)
+    }
+  }
+  return result
 }
 
 /**
@@ -230,12 +390,13 @@ export function createWatchTracker(
   durationSec?: number | null,
   options?: WatchTrackerOptions,
 ): WatchTracker {
-  const maxGap =
+  const alapKuszob =
     typeof options?.maxContinuityGapSec === 'number' &&
     Number.isFinite(options.maxContinuityGapSec) &&
     options.maxContinuityGapSec >= 0
       ? options.maxContinuityGapSec
       : DEFAULT_MAX_CONTINUITY_GAP_SEC
+  const tanul = options?.adaptiveGap !== false
   const completionRatio =
     typeof options?.completionRatio === 'number' &&
     Number.isFinite(options.completionRatio) &&
@@ -251,8 +412,93 @@ export function createWatchTracker(
   /** A legutóbb rögzített időpont — a folytonosság EHHEZ mérődik, nem az intervallum végéhez. */
   let cursor: number | null = null
 
-  const snapshot = (): WatchInterval[] =>
-    open === null ? [...closed] : [...closed, { start: open.start, end: open.end }]
+  /** A jelenleg érvényes küszöb — a tanulás ezt emelheti, az alap alá SOHA. */
+  let aktualisKuszob = alapKuszob
+  /** A legutóbbi, ésszerű nagyságú lépésközök (a medián alapja). */
+  let lepeskozok: number[] = []
+  /** A bemelegítési puffer: még nem feldolgozott, de érvényes időpontok. */
+  let bemelegites: number[] = []
+  /** Igaz, amint a puffer feldolgozásra került (utána közvetlenül dolgozunk). */
+  let bemelegitesLezarva = !tanul
+
+  /** Egy időpont feldolgozása a JELENLEG érvényes küszöbbel. */
+  const feldolgoz = (seconds: number): void => {
+    if (open === null || cursor === null) {
+      open = { start: seconds, end: seconds }
+      cursor = seconds
+      return
+    }
+
+    const gap = seconds - cursor
+    if (Math.abs(gap) <= aktualisKuszob) {
+      // Folyamatos lejátszás (vagy a lejátszó időbélyegének remegése).
+      if (seconds > open.end) {
+        open.end = seconds
+      }
+      if (seconds < open.start) {
+        open.start = seconds
+      }
+    } else {
+      // TEKERÉS: a nyitott szakasz lezárul, az átugrott rész NEM számít bele.
+      closed.push(open)
+      open = { start: seconds, end: seconds }
+    }
+    cursor = seconds
+  }
+
+  /** Egy lépésköz beszámítása a tanulásba, majd a küszöb újraszámítása. */
+  const tanulLepeskozt = (delta: number): void => {
+    if (!tanul || !(delta > 0) || delta > ADAPTIVE_SAMPLE_CAP_SEC) {
+      return
+    }
+    lepeskozok.push(delta)
+    if (lepeskozok.length > ADAPTIVE_WINDOW) {
+      lepeskozok = lepeskozok.slice(-ADAPTIVE_WINDOW)
+    }
+    aktualisKuszob = tanultKuszob(lepeskozok, alapKuszob) ?? aktualisKuszob
+  }
+
+  /**
+   * A bemelegítési puffer VÉGLEGESÍTÉSE: előbb megtanuljuk a lépésközt az
+   * összes pufferelt mintából, és csak UTÁNA szegmentálunk — így a videó eleje
+   * ugyanazzal a küszöbbel értékelődik, mint a többi része.
+   *
+   * Ezt KIZÁRÓLAG a `record` hívja, amikor a puffer betelt. Egy lekérdezés
+   * (coverage/intervals) SOHA — a lejátszó minden eseménynél lekérdezi az
+   * arányt, tehát a lekérdezés-vezérelt véglegesítés kinyírná a tanulást.
+   */
+  const bemelegitestLezar = (): void => {
+    if (bemelegitesLezarva) {
+      return
+    }
+    bemelegitesLezarva = true
+    for (const delta of tanithatoLepeskozok(bemelegites)) {
+      tanulLepeskozt(delta)
+    }
+    for (const seconds of bemelegites) {
+      feldolgoz(seconds)
+    }
+    bemelegites = []
+  }
+
+  /**
+   * Pillanatkép a megnézett szakaszokról. Bemelegítés alatt a puffer ÁTMENETI
+   * kiértékelésével — a legjobb pillanatnyi becsléssel, de véglegesítés nélkül.
+   */
+  const snapshot = (): WatchInterval[] => {
+    if (!bemelegitesLezarva) {
+      return szakaszokra(bemelegites, atmenetiKuszob())
+    }
+    return open === null ? [...closed] : [...closed, { start: open.start, end: open.end }]
+  }
+
+  /** A bemelegítés alatt érvényes, még nem véglegesített küszöb-becslés. */
+  function atmenetiKuszob(): number {
+    if (!tanul) {
+      return alapKuszob
+    }
+    return tanultKuszob(tanithatoLepeskozok(bemelegites), alapKuszob) ?? alapKuszob
+  }
 
   return {
     record(seconds: number): void {
@@ -262,27 +508,18 @@ export function createWatchTracker(
         return
       }
 
-      if (open === null || cursor === null) {
-        open = { start: seconds, end: seconds }
-        cursor = seconds
+      if (!bemelegitesLezarva) {
+        bemelegites.push(seconds)
+        if (bemelegites.length >= ADAPTIVE_WARMUP_SAMPLES) {
+          bemelegitestLezar()
+        }
         return
       }
 
-      const gap = seconds - cursor
-      if (Math.abs(gap) <= maxGap) {
-        // Folyamatos lejátszás (vagy a lejátszó időbélyegének remegése).
-        if (seconds > open.end) {
-          open.end = seconds
-        }
-        if (seconds < open.start) {
-          open.start = seconds
-        }
-      } else {
-        // TEKERÉS: a nyitott szakasz lezárul, az átugrott rész NEM számít bele.
-        closed.push(open)
-        open = { start: seconds, end: seconds }
+      if (cursor !== null) {
+        tanulLepeskozt(seconds - cursor)
       }
-      cursor = seconds
+      feldolgoz(seconds)
     },
 
     setDuration(value: number | null | undefined): void {
@@ -291,6 +528,10 @@ export function createWatchTracker(
 
     durationSec(): number | null {
       return duration
+    },
+
+    continuityGapSec(): number {
+      return bemelegitesLezarva ? aktualisKuszob : atmenetiKuszob()
     },
 
     intervals(): WatchInterval[] {
@@ -316,6 +557,10 @@ export function createWatchTracker(
       closed = []
       open = null
       cursor = null
+      lepeskozok = []
+      bemelegites = []
+      aktualisKuszob = alapKuszob
+      bemelegitesLezarva = !tanul
     },
   }
 }

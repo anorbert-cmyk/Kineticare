@@ -4,6 +4,7 @@ import {
   createWatchTracker,
   DEFAULT_MAX_CONTINUITY_GAP_SEC,
   isWatchedComplete,
+  MAX_ADAPTIVE_GAP_SEC,
   mergeWatchIntervals,
   WATCHED_COMPLETION_RATIO,
   watchedRatio,
@@ -343,5 +344,190 @@ describe('createWatchTracker — határesetek', () => {
     const tracker = createWatchTracker(100, { completionRatio: 0.5 })
     emit(tracker.record, 0, 50)
     expect(tracker.isComplete()).toBe(true)
+  })
+})
+
+/**
+ * ═══ AZ ADAPTÍV KÜSZÖB — A NÉMA BUKÁS ELLEN ═══
+ *
+ * A fix, 2 másodperces küszöb egy FELTEVÉS volt a Bunny lejátszójáról: hogy a
+ * `timeupdate` sűrűbben érkezik ennél. A Bunny dokumentációja az esemény
+ * ALAKJÁT rögzíti, a gyakoriságát nem. Ha a lejátszó ritkábban tüzelne, a fix
+ * küszöb mellett minden lépés „tekerésnek" minősülne, az arány tartósan 0
+ * maradna, és a lecke SOHA nem jelölődne készre magától — hibaüzenet nélkül.
+ *
+ * Az itteni tesztek EZT a bukást reprodukálják, és azt őrzik, hogy a tanulás
+ * megszünteti — anélkül, hogy a szkippelés elleni védelem kiürülne.
+ */
+describe('createWatchTracker — adaptív folytonossági küszöb', () => {
+  it('RITKA (5 mp-enkénti) timeupdate mellett is végigméri a videót', () => {
+    const tracker = createWatchTracker(100)
+    // A lejátszó 5 másodpercenként tüzel — a régi, fix 2 mp-es küszöbnél EZ
+    // volt a néma bukás: minden lépés tekerésnek látszott.
+    for (let seconds = 0; seconds <= 100; seconds += 5) {
+      tracker.record(seconds)
+    }
+    expect(tracker.coverage()).toBeCloseTo(1, 6)
+    expect(tracker.isComplete()).toBe(true)
+  })
+
+  it('a régi, FIX küszöb ugyanezen az adaton 0-t adna (a hiba reprodukciója)', () => {
+    const fix = createWatchTracker(100, { adaptiveGap: false })
+    for (let seconds = 0; seconds <= 100; seconds += 5) {
+      fix.record(seconds)
+    }
+    // Minden minta önálló, nulla hosszú pont → semmi nem számít megnézettnek.
+    expect(fix.watchedSeconds()).toBe(0)
+    expect(fix.isComplete()).toBe(false)
+  })
+
+  it('a videó ELEJE sem vész el a tanulás alatt (visszamenőleges feldolgozás)', () => {
+    const tracker = createWatchTracker(100)
+    for (let seconds = 0; seconds <= 40; seconds += 5) {
+      tracker.record(seconds)
+    }
+    // A legelső mintától kezdve minden benne van, nem csak a bemelegítés után.
+    expect(tracker.intervals()).toEqual([{ start: 0, end: 40 }])
+  })
+
+  it('a megtanult küszöb a lépésköz 1,5-szerese, az alap alá SOHA nem megy', () => {
+    const suru = createWatchTracker(100)
+    for (let seconds = 0; seconds <= 5; seconds += 0.25) {
+      suru.record(seconds)
+    }
+    // 0,25 × 1,5 = 0,375 — de az alsó korlát 2, tehát az marad.
+    expect(suru.continuityGapSec()).toBe(DEFAULT_MAX_CONTINUITY_GAP_SEC)
+
+    const ritka = createWatchTracker(100)
+    for (let seconds = 0; seconds <= 60; seconds += 4) {
+      ritka.record(seconds)
+    }
+    expect(ritka.continuityGapSec()).toBeCloseTo(6, 6)
+  })
+
+  it('a küszöb SOHA nem lépi túl a felső korlátot (a szkippelés-védelem marad)', () => {
+    const tracker = createWatchTracker(1000)
+    // Szélsőségesen ritka minta: 25 másodpercenként.
+    for (let seconds = 0; seconds <= 500; seconds += 25) {
+      tracker.record(seconds)
+    }
+    expect(tracker.continuityGapSec()).toBe(MAX_ADAPTIVE_GAP_SEC)
+  })
+
+  it('RITKA mintavétel mellett is megbukik a csúszka végére rántása', () => {
+    const tracker = createWatchTracker(600)
+    // Nézés 5 mp-es ütemben az első percben…
+    for (let seconds = 0; seconds <= 60; seconds += 5) {
+      tracker.record(seconds)
+    }
+    // …majd rántás a videó végére.
+    tracker.record(595)
+    tracker.record(600)
+    expect(tracker.coverage()).toBeLessThan(0.2)
+    expect(tracker.isComplete()).toBe(false)
+  })
+
+  it('a NAGY tekerés a tanulást sem torzítja (kimarad a mintából)', () => {
+    const tracker = createWatchTracker(1000)
+    for (let seconds = 0; seconds <= 30; seconds += 3) {
+      tracker.record(seconds)
+    }
+    const kuszobTekeresElott = tracker.continuityGapSec()
+
+    // Óriási ugrás — ez nem lépésköz, tehát nem taníthat.
+    tracker.record(900)
+    tracker.record(903)
+    expect(tracker.continuityGapSec()).toBeCloseTo(kuszobTekeresElott, 6)
+  })
+
+  it('a lassulás/gyorsulás követhető: a küszöb az ÚJ ütemhez igazodik', () => {
+    const tracker = createWatchTracker(600)
+    for (let seconds = 0; seconds <= 30; seconds += 1) {
+      tracker.record(seconds)
+    }
+    expect(tracker.continuityGapSec()).toBe(DEFAULT_MAX_CONTINUITY_GAP_SEC)
+    expect(tracker.intervals()).toEqual([{ start: 0, end: 30 }])
+
+    // A lejátszó menet közben ritkábbra vált (pl. háttérfülre került a lap).
+    for (let seconds = 36; seconds <= 240; seconds += 6) {
+      tracker.record(seconds)
+    }
+    expect(tracker.continuityGapSec()).toBeCloseTo(9, 6)
+
+    // Az ÁTÁLLÁS néhány lépésbe kerül: amíg a medián át nem billen, a nagyobb
+    // lépések tekerésnek látszanak. Ez KORLÁTOS (legfeljebb fél tanulóablak),
+    // és utána a mérés hiánytalan — a lecke vége egyetlen, folytonos szakasz.
+    const utolso = tracker.intervals().at(-1)
+    expect(utolso?.end).toBe(240)
+    expect((utolso?.end ?? 0) - (utolso?.start ?? 0)).toBeGreaterThanOrEqual(120)
+    // Az átállás vesztesége az egész leckéhez képest is kicsi marad.
+    expect(tracker.watchedSeconds()).toBeGreaterThan(180)
+  })
+
+  it('a reset a MEGTANULT küszöböt is nullázza (nem szivárog át a következő leckére)', () => {
+    const tracker = createWatchTracker(600)
+    for (let seconds = 0; seconds <= 60; seconds += 5) {
+      tracker.record(seconds)
+    }
+    expect(tracker.continuityGapSec()).toBeGreaterThan(DEFAULT_MAX_CONTINUITY_GAP_SEC)
+
+    tracker.reset()
+    expect(tracker.continuityGapSec()).toBe(DEFAULT_MAX_CONTINUITY_GAP_SEC)
+    expect(tracker.intervals()).toEqual([])
+  })
+
+  it('az adaptiveGap: false SZIGORÚAN a megadott küszöbhöz ragaszkodik', () => {
+    const tracker = createWatchTracker(100, { maxContinuityGapSec: 3, adaptiveGap: false })
+    for (let seconds = 0; seconds <= 50; seconds += 5) {
+      tracker.record(seconds)
+    }
+    expect(tracker.continuityGapSec()).toBe(3)
+    expect(tracker.watchedSeconds()).toBe(0)
+  })
+
+  it('KEVÉS minta (1-2 lépésköz) még nem tanít — a küszöb az alap marad', () => {
+    const tracker = createWatchTracker(100)
+    tracker.record(0)
+    tracker.record(8)
+    expect(tracker.continuityGapSec()).toBe(DEFAULT_MAX_CONTINUITY_GAP_SEC)
+    expect(tracker.intervals()).toEqual([
+      { start: 0, end: 0 },
+      { start: 8, end: 8 },
+    ])
+  })
+})
+
+/**
+ * A követőt a lejátszó MINDEN eseménynél lekérdezi (useWatchTracking: record →
+ * coverage → jelentés). Egy korábbi változatban ez a lekérdezés véglegesítette
+ * a bemelegítési puffert, és így pont a tanulást nyírta ki — a hiba a
+ * modulteszteken nem, csak a hívási minta reprodukálásával látszik.
+ */
+describe('createWatchTracker — a lejátszó valódi hívási mintája', () => {
+  it('a MINDEN lépés utáni lekérdezés NEM rontja el a tanulást', () => {
+    const tracker = createWatchTracker(100)
+    const aranyok: number[] = []
+    for (let seconds = 0; seconds <= 100; seconds += 5) {
+      tracker.setDuration(100)
+      tracker.record(seconds)
+      // Pontosan ezt teszi a lejátszó: minden eseménynél lekérdez.
+      aranyok.push(tracker.coverage())
+    }
+    expect(tracker.coverage()).toBeCloseTo(1, 6)
+    expect(tracker.isComplete()).toBe(true)
+    // Az arány monoton nő — a vevő nem lát visszaeső százalékot.
+    for (let index = 1; index < aranyok.length; index += 1) {
+      expect(aranyok[index]).toBeGreaterThanOrEqual(aranyok[index - 1])
+    }
+  })
+
+  it('bemelegítés közben is ÉRTELMES arányt ad (nem 0-ról ugrik)', () => {
+    const tracker = createWatchTracker(100)
+    tracker.record(0)
+    tracker.record(5)
+    tracker.record(10)
+    tracker.record(15)
+    // Négy minta, három lépésköz → a becslés már él, még véglegesítés előtt.
+    expect(tracker.coverage()).toBeCloseTo(0.15, 6)
   })
 })
