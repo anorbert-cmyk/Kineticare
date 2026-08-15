@@ -16,6 +16,7 @@
     "generate:types": "payload generate:types",
     "test": "vitest run",
     "seed": "tsx src/scripts/seed.ts",
+    "seed:demo": "tsx src/scripts/demo-seed.ts",
     "grant:purchase": "tsx src/scripts/grant-purchase.ts",
     "import:customers": "tsx src/scripts/import-customers.ts",
     "backup:db": "tsx src/scripts/backup-db.ts",
