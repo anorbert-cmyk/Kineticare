@@ -7,6 +7,7 @@ import {
 } from '../lib/security/password-policy'
 import { createLogger } from '../lib/logger'
 import { resolveClientIp } from '../lib/client-ip'
+import { deleteCourseProgressOnParentDelete } from '../lib/course-progress/cleanup'
 import { grantFreeCoursesToUser } from '../lib/free-course-grant'
 import {
   APIError,
@@ -325,6 +326,11 @@ export const Users: CollectionConfig = {
   ],
   hooks: {
     beforeChange: [promoteFirstUserToOwner, enforcePasswordPolicy],
+    // A haladás-sorok takarítása a törlés ELŐTT. Enélkül a Postgres elhasal
+    // (course_progress.user_id NOT NULL + ON DELETE SET NULL), és a felhasználó
+    // NEM TÖRÖLHETŐ — GDPR-törlési kérésnél is. Helyben, valós adatbázis ellen
+    // reprodukálva; részletes indoklás: src/lib/course-progress/cleanup.ts.
+    beforeDelete: [deleteCourseProgressOnParentDelete('user')],
     afterChange: [grantFreeCoursesAfterCreate],
     afterLogin: [grantFreeCoursesAfterLogin],
     afterError: [logFailedLogin],

@@ -408,6 +408,23 @@ Amit tudni érdemes:
 - Ha egy egész korábbi állapotot akarsz vissza: **Verziók** fül →
   **A verzió visszaállítása**.
 
+### Kurzusnál: a „Megjelenés a weboldalon" mező
+
+A **kurzusoknál** (Webshop → Kurzusok) a közzététel **két lépés**, és ez a
+leggyakoribb buktató:
+
+1. a **„Módosítások közzététele"** gomb a **szerkesztői változatot** élesíti
+   (ez az, amiről a lap tetején az „Állapot" felirat szól);
+2. a kurzus **akkor jelenik meg a weboldalon**, ha az oldalsávban a
+   **„Megjelenés a weboldalon"** mező értéke **„Közzétéve"**.
+
+Ha a kurzus nem látszik, a lap tetején **narancssárga sáv** figyelmeztet rá, és
+megmondja, mi a teendő. Ezt a mezőt **csak a tulajdonos** tudja átállítani —
+munkatársként a sáv szövege szerint kérd meg rá.
+
+> A sáv **zöld**, ha a kurzus látszik. Ha narancssárgát látsz, a kurzus a
+> vásárlók számára nem létezik, akkor is, ha a lap tetején „Közzétett" áll.
+
 ---
 
 ## 12. A kurzus tananyaga — modulok és leckék
@@ -424,17 +441,37 @@ lejátszóban lát: bal oldalon a fejezetek, bennük a leckék, mellette a vide�
   ebben a sorrendben halad, és az „Előző / Következő” is ezt követi.
 - Modult és leckét a **fogantyúnál fogva át tudsz húzni** — így rendezed át
   őket.
+- Az összecsukott soron **a cím látszik**, nem sorszám: a modulnál a cím és a
+  leckék száma („1. ALAPOK — Így kezdj neki (3 lecke)"), a leckénél a cím és a
+  típus („Bemelegítés · Videó"). Ha egy videó még nincs „Kész" állapotban, a
+  soron ott áll: **„· még nem játszható"** — így a csukott listán is azonnal
+  látod, mi nem indulna el a vásárlónál. A cím nélküli sor
+  **„(névtelen modul)"** / **„(névtelen lecke)"** jelzést kap.
 
 ### Háromféle lecke
 
 | Típus | Mikor használd | Mit kell kitölteni |
 | --- | --- | --- |
-| **Videó** | Bunny Stream felvétel | Videó azonosítója (GUID), Hossz (másodperc), Videó állapota |
+| **Videó** | Bunny Stream felvétel | Videó azonosítója, Hossz (másodperc), Videó állapota |
 | **Szöveges lecke** | Csak írott anyag és/vagy letölthető fájl | Lecke szövege és/vagy Letölthető anyagok |
 | **Külső link** | Máshová vezet (pl. Facebook-csoport) | Külső webcím |
 
 Mindhárom típushoz adhatsz **rövid összefoglalót**, **lecke szöveget** és
 **letölthető anyagokat** (PDF, kép, segédlet).
+
+### Hol találom a videó azonosítóját?
+
+A Bunny felületén nyisd meg a videót, és másold ki a **„Video ID"** mezőt — egy
+hosszú, kötőjeles kód. Ez kerül a lecke **„Videó azonosítója"** mezőjébe.
+
+- A **fizetős kurzusvideók** a **védett videótárban** vannak: ezeket csak az
+  nézheti meg, aki megvásárolta a kurzust.
+- Az **ingyenes előzetesek** a **nyilvános videótárba** kerülnek — azokat
+  bárki megnézheti vásárlás nélkül is. Az előzetes azonosítója a kurzus
+  **„Bemutató videó azonosítója"** mezőjébe megy, nem a leckéhez.
+
+Ha rossz tárból másolod ki az azonosítót, a videó **némán nem indul el** — ez a
+leggyakoribb hiba a kurzusfeltöltésnél.
 
 ### Videós leckénél erre figyelj
 
@@ -449,9 +486,10 @@ Mindhárom típushoz adhatsz **rövid összefoglalót**, **lecke szöveget** és
 
 ### Ha egy régi kurzusnak még „Videók” listája van
 
-A kurzus alján van egy **„Videók (régi, fejezet nélküli lista)”** mező. Ez a
-korábbi, fejezetek nélküli felépítés. Amíg nincs egyetlen modul sem, a vásárló
-ezt a listát látja — tehát **nem kell hozzányúlnod, minden működik**.
+A kurzus alján van egy **„Videók (régi…)"** mező. Ez a korábbi, fejezetek
+nélküli felépítés. Amíg nincs egyetlen modul sem, a vásárló ezt a listát látja —
+tehát **nem kell hozzányúlnod, minden működik**. Új kurzuson ez a mező **meg sem
+jelenik**, tehát nem tudod véletlenül rossz helyre felvinni a leckéket.
 
 > ⚠️ **Ha fejezetekre akarod bontani, NE vidd fel kézzel újra a videókat!**
 > Az újonnan felvett lecke új belső azonosítót kap, a már megnézett videókról
@@ -468,6 +506,34 @@ ezt a listát látja — tehát **nem kell hozzányúlnod, minden működik**.
   „Feldolgozás alatt” videó nem.
 - A **Kurzusaim** oldalon a kártyán a „Folytatás” gomb pontosan arra a leckére
   visz, ahol abbahagyta.
+
+### Ki hol tart? — a Kurzus-haladás panel
+
+A kurzus szerkesztőlapjának **alján** találod a **Kurzus-haladás** panelt.
+Nem tölt magától (hogy a lap gyors maradjon): nyomd meg a **„Haladás
+betöltése"** gombot.
+
+Amit mutat:
+
+- **öt kártya**: Beiratkozott · Elkezdte · **Nem kezdte el** · Befejezte ·
+  Átlagos haladás;
+- **hallgatónkénti táblázat**: név, e-mail, állapot, kis kördiagram a
+  százalékkal, utolsó aktivitás és a **következő lecke**;
+- **Leckénkénti lemorzsolódás** (lenyitható): melyik leckénél veszíted el a
+  nézőket. A „(kezdés)" az első leckét jelöli, a „−12 fő" tényleges veszteséget,
+  a „+218 fő" pedig azt, hogy oda többen jutottak el (jellemzően modulhatáron).
+
+Praktikák:
+
+- A táblázat alapból **25 sort** mutat; lejjebb a **„További … hallgató
+  megjelenítése"** gombbal bővítheted. A **szűrő és a kereső mindig a teljes
+  létszámon dolgozik**, tehát a szűrés akkor is pontos, ha nem látszik minden sor.
+- A szűrő fölött ott áll, hány hallgatóból hány felel meg a szűrésnek — a
+  „ki nem kezdte még el" listához állítsd az **Állapot** szűrőt
+  **„Nem kezdte el"**-re, és a szám azonnal látszik.
+- A **„Letöltés táblázatba (CSV)"** gomb a **szűrt** listát menti le (Excelben
+  ékezethelyesen nyílik). Így egy kattintással megvan azoknak az e-mail-címe,
+  akiknek emlékeztetőt küldenél.
 
 ---
 

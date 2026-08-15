@@ -13,6 +13,7 @@ import {
   streamAssetReadAccess,
 } from '../access'
 import { courseModulesField } from '../fields/course-modules'
+import { deleteCourseProgressOnParentDelete } from '../lib/course-progress/cleanup'
 import { courseSlugField } from '../fields/course-slug'
 import { orderIntegrityBeforeChange } from '../lib/order-integrity'
 import { withoutPluginPaymentEndpoints } from '../lib/payments/barion-adapter'
@@ -325,6 +326,17 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
   access: {
     ...defaultCollection.access,
     readVersions: isAdmin,
+  },
+  hooks: {
+    ...defaultCollection.hooks,
+    // A kurzus törlésekor a haladás-sorok takarítása. Ugyanaz a séma-ellentmondás,
+    // mint a felhasználónál: course_progress.product_id NOT NULL, az idegen kulcs
+    // viszont ON DELETE SET NULL — takarítás nélkül a törlés Postgres-hibával áll
+    // le. Indoklás: src/lib/course-progress/cleanup.ts.
+    beforeDelete: [
+      ...(defaultCollection.hooks?.beforeDelete ?? []),
+      deleteCourseProgressOnParentDelete('product'),
+    ],
   },
   admin: {
     ...defaultCollection.admin,
