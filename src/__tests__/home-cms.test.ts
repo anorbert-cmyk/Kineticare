@@ -234,7 +234,7 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(html).toContain('href="/kurzusok/1"')
   })
 
-  it('M3/M4: az ingyenes termék NEM a fizetős kártyák között, hanem a visszafogott SOS-sávban jelenik meg', () => {
+  it('M3/M4: az ingyenes termék a kurzus-rácsban is látszik, de MÁSODLAGOS súllyal és a fizetős UTÁN', () => {
     const html = render(
       createElement(HomeView, {
         home: null,
@@ -245,15 +245,40 @@ describe('HomeView (kezdőlap-render)', () => {
         posts: [],
       }),
     )
-    // A fizetős kártya-szekció (id="kurzusok") csak a fizetős terméket linkeli.
     const coursesSection = html.slice(html.indexOf('id="kurzusok"'), html.indexOf('id="ingyenes"'))
+    // Mindkét kurzus a rácsban van (a tulajdonos 2026-08-15-i kérése: a
+    // „Kurzusok" szekció mind a kettőről szól).
     expect(coursesSection).toContain('href="/kurzusok/1"')
-    expect(coursesSection).not.toContain('href="/kurzusok/7"')
-    // Az ingyenes termék a másodlagos súlyú SOS-sávban (id="ingyenes"), „Ingyenes" jelöléssel.
+    expect(coursesSection).toContain('href="/kurzusok/7"')
+    // K2-őr: a fizetős MEGELŐZI az ingyenest, és csak az ingyenes kártya kapja
+    // a visszafogott stílust — így a lead-magnet nem nyomhatja el az ajánlatot.
+    expect(coursesSection.indexOf('href="/kurzusok/1"')).toBeLessThan(
+      coursesSection.indexOf('href="/kurzusok/7"'),
+    )
+    const secondaryCount = coursesSection.split('kc-product-card--secondary').length - 1
+    expect(secondaryCount).toBe(1)
+    // Az ingyenes kártya „Ingyenes"-ként címkézett (nem üres lábbal áll).
+    expect(coursesSection).toContain('Ingyenes')
+    // Az SOS-sáv a lead-magnet saját, részletesebb megjelenése — megmarad.
     const sosSection = html.slice(html.indexOf('id="ingyenes"'))
     expect(sosSection).toContain('SOS Kézrelax villámkurzus')
-    expect(sosSection).toContain('Ingyenes')
     expect(sosSection).toContain('href="/kurzusok/7"')
+  })
+
+  it('M3-őr: az ár-pipa BE + ÜRES ár (konfigurációs hiba) kártyája sem árat, sem „Ingyenes"-t nem mutat', () => {
+    const html = render(
+      createElement(HomeView, {
+        home: null,
+        products: [
+          product({ id: 1, sku: 'Fizetős kurzus' }),
+          product({ id: 9, sku: 'Félrekonfigurált kurzus', priceInHUF: null, priceInHUFEnabled: true }),
+        ],
+        posts: [],
+      }),
+    )
+    const coursesSection = html.slice(html.indexOf('id="kurzusok"'), html.indexOf('id="ingyenes"'))
+    // A hibás rekord NEM ingyenes: sem másodlagos kártyát, sem címkét nem kap.
+    expect(coursesSection).not.toContain('kc-product-card--secondary')
   })
 
   it('M4 SOS-sáv: ingyenes termék nélkül is megjelenik, fallbackben a kurzuslistára mutat', () => {

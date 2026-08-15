@@ -1,4 +1,5 @@
 import type { Page, Post, Product, Testimonial } from '../../payload-types'
+import { coursePriceBadgeKind } from '../../lib/courses'
 import { faqPageJsonLd, organizationJsonLd } from '../../lib/seo'
 import { HERO_VIDEO_STREAM_ID } from '../../lib/hero-video'
 import { RenderBlocks } from '../blocks/RenderBlocks'
@@ -115,6 +116,15 @@ export function HomeView({ home, products, posts, testimonials = [] }: HomeViewP
 
   const visibleProducts = products.filter(isPubliclyVisibleProduct)
   const paidProducts = visibleProducts.filter(isPaidProduct)
+  // A rács másodlagos sávjába csak a TUDATOSAN ingyenes termék kerül
+  // (priceInHUFEnabled: false). A félrekonfigurált rekord — ár-pipa BE, de az
+  // ár ÜRES — se árat, se „Ingyenes"-t nem kaphat (courses.ts), ezért a
+  // kiemelt rácsban sem hirdetjük; a /kurzusok listán továbbra is ott van.
+  const freeProducts = visibleProducts.filter(
+    (product) => coursePriceBadgeKind(product) === 'free',
+  )
+  // A FreeSos szekció egyetlen lead-magnetre van tervezve; a viselkedése
+  // változatlan marad.
   const freeProduct = visibleProducts.find((product) => !isPaidProduct(product)) ?? null
   const visiblePosts = posts.filter((post) => post.status === 'published' && post.slug)
 
@@ -135,7 +145,7 @@ export function HomeView({ home, products, posts, testimonials = [] }: HomeViewP
 
       <CredentialsStrip />
 
-      <CourseCards products={paidProducts} />
+      <CourseCards products={paidProducts} secondaryProducts={freeProducts} />
 
       <FreeSos freeProduct={freeProduct} />
 
