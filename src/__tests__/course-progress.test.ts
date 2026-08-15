@@ -10,6 +10,7 @@ import {
   markVideoWatched as markVideoWatchedFromClient,
 } from '../lib/course-progress/client'
 import { MARK_WATCHED_PATH, parseMarkWatchedResponseBody } from '../lib/course-progress/contract'
+import { MAX_BODY_BYTES } from '../lib/course-progress/route-handler'
 import {
   COURSE_NOT_FOUND_MESSAGE,
   INVALID_BODY_MESSAGE,
@@ -403,7 +404,9 @@ describe('POST /api/course-progress/mark-watched — per-user kérés-korlát', 
       getPayload: async () => mock.payload,
       rateLimit: { limiter, rules },
     })
-    return { ...mock, POST }
+    // A limiter is kimegy: a per-user vödrözés teszteléséhez egy MÁSIK
+    // felhasználó handlerének UGYANEZT a limiter-példányt kell kapnia.
+    return { ...mock, POST, limiter }
   }
 
   it('a keret felett 429-et ad, magyar üzenettel és Retry-After fejléccel', async () => {
@@ -420,15 +423,33 @@ describe('POST /api/course-progress/mark-watched — per-user kérés-korlát', 
     expect(create).toHaveBeenCalledTimes(2)
   })
 
+  /**
+   * A code review fogta meg: a teszt korábbi változata SOSEM küldött kérést a
+   * második felhasználóként (a mock-payloadjához nem készült handler), tehát a
+   * per-user vödrözést egyáltalán nem ellenőrizte — a záró assert triviálisan
+   * igaz volt. Most a KÖZÖS limiter-példányon két külön felhasználó fut:
+   * az első kimeríti a keretét, a másodiknak érintetlen keretének kell lennie.
+   */
   it('a keret a BEJELENTKEZETT felhasználóhoz kötődik, nem az IP-hez', async () => {
     const masikVevo = { ...buyerUser, id: buyerUser.id + 1 } as User
-    const { POST } = setupWithLimiter()
-    const masik = createMockPayload({ authUser: masikVevo })
-    // Ugyanaz a limiter-példány, másik felhasználó → külön vödör.
-    expect((await POST(makeRequest(VALID_BODY))).status).toBe(200)
-    expect((await POST(makeRequest(VALID_BODY))).status).toBe(200)
-    expect((await POST(makeRequest(VALID_BODY))).status).toBe(429)
-    expect(masik.payload).toBeDefined()
+    const elso = setupWithLimiter()
+    const masikMock = createMockPayload({ authUser: masikVevo })
+    const masikPOST = createMarkWatchedHandler({
+      getPayload: async () => masikMock.payload,
+      rateLimit: { limiter: elso.limiter, rules },
+    })
+
+    // Az első vevő kimeríti a saját keretét (2/perc) — AZONOS IP-fejlécekkel.
+    expect((await elso.POST(makeRequest(VALID_BODY))).status).toBe(200)
+    expect((await elso.POST(makeRequest(VALID_BODY))).status).toBe(200)
+    expect((await elso.POST(makeRequest(VALID_BODY))).status).toBe(429)
+
+    // A MÁSIK felhasználó UGYANAZON a limiteren, ugyanarról az „IP-ről" indul:
+    // ha a kulcs az IP volna, itt azonnal 429-et kapna. A felhasználói kulcs
+    // miatt érintetlen a kerete.
+    expect((await masikPOST(makeRequest(VALID_BODY))).status).toBe(200)
+    expect((await masikPOST(makeRequest(VALID_BODY))).status).toBe(200)
+    expect((await masikPOST(makeRequest(VALID_BODY))).status).toBe(429)
   })
 
   it('bejelentkezés nélkül a keret NEM fogy (a 401 előbb fut le)', async () => {
@@ -677,4 +698,63 @@ describe('Kurzus-haladás a felületen', () => {
    * lejátszóban definíció szerint ugyanaz a szám álljon. Az itt maradt blokk a
    * lejátszó felületét őrzi.
    */
+})
+
+/**
+ * ═══ A KÉRÉS-TÖRZS MÉRETKORLÁTJA ═══
+ *
+ * A code review mérte: a handler korábban korlát nélkül olvasta be a teljes
+ * törzset (`request.text()`), még a vásárlás-ellenőrzés előtt. A jogos törzs
+ * két rövid mező — minden, ami a 4 KiB fölé megy, visszaélés vagy hiba, és
+ * 413-mal fordul vissza anélkül, hogy a memóriába kerülne.
+ */
+describe('POST mark-watched — a törzs méretkorlátja', () => {
+  it('a korlát fölötti törzs 413-at kap, és az írásig el sem jut', async () => {
+    const { POST, create } = setup()
+    const response = await POST(
+      makeRequest({
+        productId: String(PRODUCT_ID),
+        videoRef: VIDEO_REF_1,
+        szemet: 'x'.repeat(MAX_BODY_BYTES * 4),
+      }),
+    )
+
+    expect(response.status).toBe(413)
+    expect(await readJson(response)).toEqual({ error: 'A kérés törzse túl nagy.' })
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('a HAZUG content-length fejléc sem véd: a tényleges méret dönt', async () => {
+    const { POST, create } = setup()
+    const oriasi = JSON.stringify({
+      productId: String(PRODUCT_ID),
+      videoRef: VIDEO_REF_1,
+      szemet: 'x'.repeat(MAX_BODY_BYTES * 4),
+    })
+    // Az undici a Request-konstruktornál a tényleges törzsből számol, ezért a
+    // hamis fejléces esethez kézzel gyártott streamet adunk.
+    const request = new Request('http://localhost:3000/api/course-progress/mark-watched', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'content-length': '10' },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(oriasi))
+          controller.close()
+        },
+      }),
+      // @ts-expect-error -- a duplex az undici stream-body követelménye, a lib
+      // típusaiból viszont hiányzik.
+      duplex: 'half',
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(413)
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('a normál (rövid) törzs változatlanul 200-at kap', async () => {
+    const { POST } = setup()
+    const response = await POST(makeRequest(VALID_BODY))
+    expect(response.status).toBe(200)
+  })
 })

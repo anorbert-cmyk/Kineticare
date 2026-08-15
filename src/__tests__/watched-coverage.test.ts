@@ -531,3 +531,93 @@ describe('createWatchTracker — a lejátszó valódi hívási mintája', () => 
     expect(tracker.coverage()).toBeCloseTo(0.15, 6)
   })
 })
+
+/**
+ * ═══ A FALIÓRA-SZABÁLY — A TANULÁS-KIJÁTSZÁS ELLEN ═══
+ *
+ * A code review bizonyította (reprodukcióval): a küszöb-tanulás pusztán a
+ * média-időbélyegekből kijátszható volt — kitartó, egyenletes ugrásokkal a
+ * medián felhúzható a 15 mp-es felső korlátig, onnantól a tekerés „folyamatos
+ * lejátszásnak" számított, és a videó a tényleges megnézése nélkül is késznek
+ * jelölődött. A falióra a becsületes döntő: valódi lejátszásnál a média-idő nem
+ * haladhat gyorsabban, mint az eltelt valós idő × a lejátszási sebesség.
+ */
+describe('createWatchTracker — falióra-szabály (a tanulás nem játszható ki)', () => {
+  it('a GYORS tekerés-sorozat falióra mellett NEM kap lefedettséget', () => {
+    const tracker = createWatchTracker(600)
+    // A támadó 200 ms-onként ugrik 14 másodpercet — a régi kód ebből tanulta
+    // meg a 15 mp-es küszöböt, és teljes lefedettséget adott.
+    let wall = 0
+    for (let seconds = 0; seconds <= 600; seconds += 14) {
+      tracker.record(seconds, wall)
+      wall += 200
+    }
+    expect(tracker.coverage()).toBeLessThan(0.05)
+    expect(tracker.isComplete()).toBe(false)
+    // A tekerés-delta a tanulásba sem számít: a küszöb az alapon marad.
+    expect(tracker.continuityGapSec()).toBe(DEFAULT_MAX_CONTINUITY_GAP_SEC)
+  })
+
+  it('a LASSÚ, valós idejű lejátszás falióra mellett változatlanul mér', () => {
+    const tracker = createWatchTracker(100)
+    // 5 mp médialépés 5000 ms falióránként = pontosan 1× sebesség.
+    let wall = 0
+    for (let seconds = 0; seconds <= 100; seconds += 5) {
+      tracker.record(seconds, wall)
+      wall += 5000
+    }
+    expect(tracker.coverage()).toBeCloseTo(1, 6)
+    expect(tracker.isComplete()).toBe(true)
+  })
+
+  it('a 2×-es sebességű nézés NEM bukik el a falióra-szabályon', () => {
+    const tracker = createWatchTracker(100)
+    // 2 mp média / 1000 ms fal = 2× — a megengedett 2,5-ös plafonon belül.
+    let wall = 0
+    for (let seconds = 0; seconds <= 100; seconds += 2) {
+      tracker.record(seconds, wall)
+      wall += 1000
+    }
+    expect(tracker.isComplete()).toBe(true)
+  })
+
+  it('falióra NÉLKÜL a viselkedés a korábbi marad (régi hívók, tesztek)', () => {
+    const tracker = createWatchTracker(100)
+    for (let seconds = 0; seconds <= 100; seconds += 5) {
+      tracker.record(seconds)
+    }
+    expect(tracker.isComplete()).toBe(true)
+  })
+
+  it('a BEMELEGÍTÉS alatt érkező tekerés-sorozat sem tanít és nem is fed', () => {
+    const tracker = createWatchTracker(600)
+    // Már az első hat minta is rángatás: a warmup-tanulásnak is szűrnie kell.
+    let wall = 0
+    for (let index = 0; index < 6; index += 1) {
+      tracker.record(index * 20, wall)
+      wall += 100
+    }
+    expect(tracker.continuityGapSec()).toBe(DEFAULT_MAX_CONTINUITY_GAP_SEC)
+    expect(tracker.watchedSeconds()).toBe(0)
+  })
+
+  it('a visszafelé járó falióra nem büntet (hibás mérés nem vehet el jogos időt)', () => {
+    const tracker = createWatchTracker(100)
+    const orak = [0, 1000, 500, 1500, 2500, 3500, 4500, 5500]
+    for (let index = 0; index < orak.length; index += 1) {
+      tracker.record(index, orak[index])
+    }
+    expect(tracker.intervals()).toEqual([{ start: 0, end: orak.length - 1 }])
+  })
+
+  it('a reset a falióra-állapotot is nullázza', () => {
+    const tracker = createWatchTracker(100)
+    tracker.record(0, 0)
+    tracker.record(1, 500)
+    tracker.reset()
+    // Új lecke: az előző falióra nem szivároghat át — az első minta után nagy
+    // média-ugrás jön, de előzmény nélkül nincs mihez mérni.
+    tracker.record(50, 600)
+    expect(tracker.intervals()).toEqual([{ start: 50, end: 50 }])
+  })
+})

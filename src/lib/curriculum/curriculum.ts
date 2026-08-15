@@ -271,9 +271,15 @@ function toLesson(
     streamAssetId: options.hasAccess && kind === 'video' ? rawStreamAssetId : null,
     durationSec: normalizeDuration(source.durationSec),
     status: normalizeStatus(source.status),
-    url: kind === 'link' ? trimmedOrNull(source.url) : null,
-    content: normalizeContent(source.content),
-    attachments: normalizeAttachments(source.attachments),
+    // A FIZETŐS TARTALOM TÖBBI HORDOZÓJA IS hozzáférés-függő. A code review
+    // mérte: korábban csak a GUID volt kapuzva, a szöveges lecke teljes
+    // tartalma, a külső link célcíme és a mellékletek letöltési URL-jei
+    // hozzáférés nélkül is bekerültek a modellbe — vagyis kiszivárogtak volna
+    // mindenhová, ahová a modell eljut. A hozzáférés nélküli nézetnek a CÍM, a
+    // típus és az összefoglaló elég (azok marketing-célra valók).
+    url: options.hasAccess && kind === 'link' ? trimmedOrNull(source.url) : null,
+    content: options.hasAccess ? normalizeContent(source.content) : null,
+    attachments: options.hasAccess ? normalizeAttachments(source.attachments) : [],
     playable: isLessonPlayable(kind, rawStreamAssetId, source.status),
     flatIndex: options.counters.flatIndex,
     indexInModule: options.indexInModule,

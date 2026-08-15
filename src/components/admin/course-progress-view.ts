@@ -180,8 +180,15 @@ export function sortStudents(
       return sign * byName(a, b)
     }
     if (key === 'aktivitas') {
-      const diff = activityMs(a) - activityMs(b)
-      return diff === 0 ? byName(a, b) : sign * diff
+      // KÉT aktivitás nélküli hallgatónál a −Infinity − −Infinity = NaN volna,
+      // ami a sort() komparátorából visszaadva NEM determinisztikus sorrendet
+      // ad (code review-találat). Az egyenlőség ezért explicit ág.
+      const aMs = activityMs(a)
+      const bMs = activityMs(b)
+      if (aMs === bMs) {
+        return byName(a, b)
+      }
+      return sign * (aMs < bMs ? -1 : 1)
     }
     const diff = a.percent - b.percent
     return diff === 0 ? byName(a, b) : sign * diff
@@ -318,7 +325,14 @@ export function moduleColumnLabel(moduleTitle: string, previousModuleTitle: stri
 
 /** Egy CSV-mező idézőjelezése (Excel-kompatibilis: a `"` duplázva). */
 function csvField(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`
+  // FORMULA-INJEKCIÓ elleni védelem (code review-találat): a hallgató a saját
+  // nevét szabadon állítja, és az Excel/LibreOffice a `=`, `+`, `-`, `@`
+  // kezdetű cellát KÉPLETKÉNT futtatja — egy `=HYPERLINK(...)` névvel a
+  // munkatárs gépén nyílna meg támadói tartalom. Az aposztróf-előtag az
+  // ajánlott (OWASP) semlegesítés: a cella szövegként jelenik meg.
+  const veszelyes = /^[=+\-@\t\r]/.test(value)
+  const safe = veszelyes ? `'${value}` : value
+  return `"${safe.replace(/"/g, '""')}"`
 }
 
 /**

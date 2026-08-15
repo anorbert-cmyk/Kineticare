@@ -574,3 +574,77 @@ describe('summarizeCurriculum — folytatás', () => {
     expect(summarizeCurriculum(curriculum, ['l1', 'l2', 'l3', 'l5']).resumeLesson?.ref).toBe('l1')
   })
 })
+
+/**
+ * ═══ A FIZETŐS TARTALOM MINDEN HORDOZÓJA HOZZÁFÉRÉS-FÜGGŐ ═══
+ *
+ * A code review mérte: korábban csak a Bunny-GUID volt kapuzva, a szöveges
+ * lecke teljes tartalma, a külső link célcíme és a mellékletek letöltési
+ * URL-jei hozzáférés NÉLKÜL is bekerültek a modellbe — vagyis kiszivárogtak
+ * mindenhová, ahová a modell eljut (RSC-payload, admin válasz). Ezek a tesztek
+ * a bezárt rést őrzik.
+ */
+describe('buildCurriculum — hozzáférés nélkül a tartalom nem szivárog', () => {
+  const fizetosTermek = () =>
+    product({
+      modules: [
+        moduleRow({
+          id: 'm1',
+          title: 'Modul',
+          lessons: [
+            lessonRow({
+              id: 'l1',
+              title: 'Szöveges lecke',
+              kind: 'szoveg',
+              content: {
+                root: {
+                  children: [
+                    {
+                      children: [{ text: 'A fizetős tananyag teljes szövege', type: 'text', version: 1 }],
+                      type: 'paragraph',
+                      version: 1,
+                    },
+                  ],
+                  direction: null,
+                  format: '',
+                  indent: 0,
+                  type: 'root',
+                  version: 1,
+                },
+              },
+              attachments: [
+                { id: 'a1', label: 'Segédlet', file: { id: 1, url: '/media/titkos.pdf', filename: 'titkos.pdf' } },
+              ],
+            } as unknown as Partial<LessonRow> & { id: string; title: string }),
+            lessonRow({
+              id: 'l2',
+              title: 'Link lecke',
+              kind: 'link',
+              url: 'https://facebook.com/titkos-csoport',
+            } as Partial<LessonRow> & { id: string; title: string }),
+          ],
+        }),
+      ],
+    })
+
+  it('hasAccess: false → nincs content, url és attachment a modellben', () => {
+    const curriculum = buildCurriculum(fizetosTermek(), false)
+    for (const lesson of curriculum.lessons) {
+      expect(lesson.content).toBeNull()
+      expect(lesson.url).toBeNull()
+      expect(lesson.attachments).toEqual([])
+      expect(lesson.streamAssetId).toBeNull()
+    }
+    // A cím és az összefoglaló marad: az a marketing-nézethez kell.
+    expect(curriculum.lessons[0]?.title).toBe('Szöveges lecke')
+  })
+
+  it('hasAccess: true → a tartalom hiánytalanul megvan', () => {
+    const curriculum = buildCurriculum(fizetosTermek(), true)
+    expect(curriculum.lessons[0]?.content).not.toBeNull()
+    expect(curriculum.lessons[0]?.attachments).toEqual([
+      { label: 'Segédlet', url: '/media/titkos.pdf' },
+    ])
+    expect(curriculum.lessons[1]?.url).toBe('https://facebook.com/titkos-csoport')
+  })
+})

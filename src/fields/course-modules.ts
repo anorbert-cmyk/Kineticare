@@ -164,6 +164,15 @@ const lessonFields: Field[] = [
     name: 'url',
     type: 'text',
     label: 'Külső webcím',
+    // A code review mérte: a lecke-almezők közül korábban csak a Bunny-GUID
+    // volt védett, miközben a külső link, a szöveges tananyag és a mellékletek
+    // UGYANÚGY a fizetős tartalom hordozói — a nyilvános GET /api/products
+    // kiadta volna őket nem vásárlónak. Ugyanaz a MEGLÉVŐ szabály védi mindet
+    // (streamAssetReadAccess, VÁLTOZATLANUL újrahasznosítva): staff/owner
+    // mindig, vevő csak megvett kurzusnál, anonim soha.
+    access: {
+      read: streamAssetReadAccess,
+    },
     admin: {
       condition: showForLink,
       description: 'Teljes webcím (https://…), ahová a lecke gombja visz.',
@@ -173,6 +182,9 @@ const lessonFields: Field[] = [
     name: 'content',
     type: 'richText',
     label: 'Lecke szövege',
+    access: {
+      read: streamAssetReadAccess,
+    },
     admin: {
       description:
         'A lecke alatt megjelenő írott anyag — videós leckénél jegyzet vagy gyakorlásleírás is lehet. Nem kötelező.',
@@ -185,6 +197,9 @@ const lessonFields: Field[] = [
     labels: {
       singular: 'Melléklet',
       plural: 'Mellékletek',
+    },
+    access: {
+      read: streamAssetReadAccess,
     },
     admin: {
       description: 'PDF, kép vagy egyéb segédlet a leckéhez. Bármelyik lecketípushoz adható.',

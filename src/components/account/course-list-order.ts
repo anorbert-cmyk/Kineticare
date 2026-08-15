@@ -245,14 +245,19 @@ export interface CourseCardInput {
 
 /** Egy kurzus kész, kirajzolható kártya-nézete. */
 export function buildCourseCardView(input: CourseCardInput): CourseCardView {
-  const progress = summarizeCurriculum(input.curriculum, input.watchedRefs)
+  // A deklarált típus EGYSZER bejárható iterátort is megenged, a függvény
+  // viszont kétszer olvassa (haladás + hátralévő idő) — a code review mérte,
+  // hogy generátor-bemenetnél a második bejárás üres, és a hátralévő idő
+  // hamisan a teljes kurzuszhosszra ugrik. Ezért PONTOSAN EGYSZER járjuk be.
+  const watchedRefs = [...input.watchedRefs]
+  const progress = summarizeCurriculum(input.curriculum, watchedRefs)
   const status = resolveCourseCardStatus({
     hasAccess: input.hasAccess,
     started: progress.started,
     complete: progress.complete,
   })
   const remainingSec =
-    status === 'expired' ? null : remainingSeconds(input.curriculum.lessons, input.watchedRefs)
+    status === 'expired' ? null : remainingSeconds(input.curriculum.lessons, watchedRefs)
 
   return {
     productId: input.productId,

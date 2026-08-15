@@ -25,6 +25,12 @@ export interface ProgressBarProps {
    * Ha hiányzik, a százalék hangzik el.
    */
   valueText?: string
+  /**
+   * A folyamatjelző HOZZÁFÉRHETŐ NEVE — mit mér ez a sáv („Kéztorna otthon —
+   * haladás”). Név nélkül több kártyás listában a felolvasott érték
+   * („67 százalék”) nem köthető kurzushoz (code review-találat).
+   */
+  label?: string
   /** Vékonyabb változat a kurzus-fejléc alsó élére. */
   size?: 'sm' | 'md'
   className?: string
@@ -37,13 +43,14 @@ const clampPercent = (value: number): number => {
   return Math.min(100, Math.max(0, Math.round(value)))
 }
 
-export function ProgressBar({ className, percent, size = 'md', valueText }: ProgressBarProps) {
+export function ProgressBar({ className, label, percent, size = 'md', valueText }: ProgressBarProps) {
   const value = clampPercent(percent)
   const classes = ['kc-progress-bar', size === 'sm' ? 'kc-progress-bar--sm' : null, className]
     .filter(Boolean)
     .join(' ')
   return (
     <div
+      aria-label={label}
       aria-valuemax={100}
       aria-valuemin={0}
       aria-valuenow={value}

@@ -95,6 +95,7 @@ function CourseCard({ card }: { card: CourseCardView }) {
           {card.showProgress ? (
             <ProgressBar
               className="kc-mycourse__bar"
+              label={`${card.title} — haladás`}
               percent={card.percent}
               valueText={card.progressValueText}
             />

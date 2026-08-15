@@ -144,6 +144,12 @@ export interface CoursePlayerProps {
 /** A token-frissítés a lejárat előtt ennyivel korábban (másodperc). */
 const TOKEN_REFRESH_BEFORE_EXPIRY_SEC = 300 // 5 perc
 
+/**
+ * Ennyi sikertelen mentés után az AUTOMATIKUS jelölés feladja az adott leckét.
+ * A kézi gomb korlátlan marad — a vevő a látható hibaüzenetből tudja, mi van.
+ */
+export const MAX_AUTO_MARK_ATTEMPTS = 3
+
 type PlayerState =
   | { kind: 'idle' }
   | { kind: 'loading'; lessonRef: string }
@@ -247,6 +253,20 @@ export function CoursePlayer({
    * duplikált funnel-esemény szerkezeti védelme.
    */
   const keszLeckekRef = useRef<ReadonlySet<string>>(new Set(initialRefs))
+  /**
+   * A SIKERESEN mentett leckék könyvelése — kizárólag a mérföldkő-pillanatképek
+   * forrása. Szándékosan külön a `keszLeckekRef`-től: az optimista zár
+   * visszagördülhet, ez viszont csak sikernél lép előre, így a funnel-átmenet
+   * sosem számolódik bukott jelölésből (lásd a `markWatched` fejkommentjét).
+   */
+  const analitikaRef = useRef<ReadonlySet<string>>(new Set(initialRefs))
+  /**
+   * Sikertelen jelölési kísérletek leckénként. Az AUTOMATIKUS jelölés
+   * `MAX_AUTO_MARK_ATTEMPTS` bukás után leáll az adott leckére — a code review
+   * mérte, hogy enélkül a rollback + a következő `timeupdate` végtelen
+   * kérés-hurkot ad tartósan hibázó szervernél. A kézi gombot nem korlátozza.
+   */
+  const autoJelolesHibakRef = useRef(new Map<string, number>())
 
   const storageKey = useMemo(() => moduleStateKey(product.id), [product.id])
   const idPrefix = useMemo(() => `kc-player-${product.id}`, [product.id])
@@ -288,9 +308,17 @@ export function CoursePlayer({
    * többször is kimehettek — pont az a funnel torzult, amiért készült.
    *
    * A ref SZINKRON, renderelés nélkül frissül, ezért az azonos körben induló
-   * második hívás már látja az elsőt. Ez a ref egyben a haladás EGYETLEN
-   * IGAZSÁGFORRÁSA a mérföldkövekhez: a `before`/`after` pillanatképet még a
-   * hálózati hívás ELŐTT, szinkronban vesszük — így az sem csúszhat el.
+   * második hívás már látja az elsőt.
+   *
+   * ═══ A MÉRFÖLDKŐ-PILLANATKÉP A SIKER PILLANATÁBAN KÉSZÜL ═══
+   * A `before`/`after` pillanatkép korábban a hálózati hívás ELŐTT, az
+   * OPTIMISTA zárból készült. A code review mérte a rést: két párhuzamos
+   * jelölésnél az egyik megbukhat és visszagördülhet, a másik pillanatképében
+   * viszont a bukott lecke benne ragadt — a bejelentés és a funnel hamis
+   * számot vitt. Ezért külön könyvelés van: az `analitikaRef` KIZÁRÓLAG
+   * sikeres mentés után lép előre, és a pillanatkép a siker-ágban, ebből a
+   * refből készül. A siker-folytatások a JS-szálon egymás után futnak, tehát
+   * mindegyik látja az előzőek eredményét — a sorrend nem csúszhat el.
    *
    * @param announce mondja-e el az élő régió a sikert. NAVIGÁCIÓVAL járó
    *   jelölésnél `false`: ott a fókusz az új lecke címére ugrik, és a kettő
@@ -303,9 +331,7 @@ export function CoursePlayer({
       if (keszLeckekRef.current.has(lessonRef)) {
         return
       }
-      const elotte = summarizeCurriculum(curriculum, keszLeckekRef.current)
       keszLeckekRef.current = new Set(keszLeckekRef.current).add(lessonRef)
-      const utana = summarizeCurriculum(curriculum, keszLeckekRef.current)
 
       setMarkError(null)
       setPending((current) => new Set(current).add(lessonRef))
@@ -322,7 +348,13 @@ export function CoursePlayer({
       })
 
       if (result.kind !== 'ok') {
-        // A zárat is oldjuk: a vevő újrapróbálhatja a jelölést.
+        // A zárat is oldjuk: a vevő újrapróbálhatja a jelölést. A hibaszámláló
+        // az AUTOMATIKUS újrapróbálkozást fékezi (lásd reportLessonProgress) —
+        // a kézi gombot nem.
+        autoJelolesHibakRef.current.set(
+          lessonRef,
+          (autoJelolesHibakRef.current.get(lessonRef) ?? 0) + 1,
+        )
         const vissza = new Set(keszLeckekRef.current)
         vissza.delete(lessonRef)
         keszLeckekRef.current = vissza
@@ -335,9 +367,17 @@ export function CoursePlayer({
         return
       }
 
+      autoJelolesHibakRef.current.delete(lessonRef)
+
+      // Ha egy párhuzamos hívás már sikerre vitte ugyanezt a leckét, a
+      // bejelentés és a funnel nem futhat le még egyszer.
+      if (analitikaRef.current.has(lessonRef)) {
+        return
+      }
       const lesson = findLessonByRef(curriculum, lessonRef)
-      const before = elotte
-      const after = utana
+      const before = summarizeCurriculum(curriculum, analitikaRef.current)
+      analitikaRef.current = new Set(analitikaRef.current).add(lessonRef)
+      const after = summarizeCurriculum(curriculum, analitikaRef.current)
 
       if (announce) {
         setAnnouncement(
@@ -397,6 +437,12 @@ export function CoursePlayer({
     (lessonRef, watchedRatio) => {
       // A ref, nem az állapot: a `timeupdate` sűrűbben érkezik, mint ahogy a
       // React újrarendel, tehát az állapot itt elavult lenne.
+      // A hibaszámláló-kapu a végtelen újrapróbálkozást zárja: tartósan hibázó
+      // szervernél az automatika feladja, a kézi gomb (és a látható hibaüzenet)
+      // viszont végig ott marad a vevőnek.
+      if ((autoJelolesHibakRef.current.get(lessonRef) ?? 0) >= MAX_AUTO_MARK_ATTEMPTS) {
+        return
+      }
       if (shouldAutoMarkWatched(watchedRatio, keszLeckekRef.current.has(lessonRef))) {
         void markWatched(lessonRef, false)
       }
@@ -546,7 +592,16 @@ export function CoursePlayer({
     if (hasAccess && activeRef !== null && state.kind === 'idle') {
       void loadLesson(activeRef)
     }
-    return clearRefreshTimer
+    return () => {
+      // Unmountkor a REPÜLŐBEN lévő token-válasz is érvénytelen. A code review
+      // mérte: enélkül a válasz a leszerelés UTÁN új frissítő-időzítőt ütemez,
+      // amit már semmi nem töröl, és a sikeres frissítés örökké újraütemez —
+      // a háttérben percenként token-kérések mennek egy nem létező lejátszónak.
+      // A generáció-növelés pontosan azt a kaput zárja, amit a lecke-váltás is
+      // használ: a kései válasz eldobódik, időzítő fel sem áll.
+      loadGenerationRef.current += 1
+      clearRefreshTimer()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAccess])
 
@@ -792,6 +847,7 @@ export function CoursePlayer({
         </div>
         <ProgressBar
           className="kc-player__progress-bar"
+          label="A kurzus haladása"
           percent={progress.percent}
           size="sm"
           valueText={progressValueText}

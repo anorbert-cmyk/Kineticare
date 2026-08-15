@@ -146,6 +146,45 @@ async function futtat(): Promise<void> {
     return
   }
 
+  // A fenti őr a PUBLIKÁLT változatot nézi — a products-on viszont autosave-es
+  // piszkozatok élnek, és a code review valós Payload+Postgres ellen
+  // reprodukálta: a szerkesztő NEM PUBLIKÁLT moduljai a publikált változatból
+  // nem látszanak, a script írása pedig kiütné őket. Ezért a PISZKOZATOT is
+  // ellenőrizzük, és bármilyen nem publikált szerkesztésnél megállunk.
+  const piszkozat = await payload
+    .findByID({
+      collection: 'products',
+      id: kurzus.id,
+      depth: 0,
+      overrideAccess: true,
+      draft: true,
+    })
+    .catch(() => null)
+  const piszkozatModulok = Array.isArray(piszkozat?.modules) ? piszkozat.modules : []
+  if (piszkozatModulok.length > 0) {
+    logger.error(
+      'A kurzus PISZKOZATÁBAN már vannak tananyag-modulok (nem publikált szerkesztés). A script nem írhatja felül: előbb publikáld vagy dobd el a piszkozatot az adminban, és futtasd újra.',
+      { productId: kurzus.id, piszkozatModulokSzama: piszkozatModulok.length },
+    )
+    process.exitCode = 1
+    return
+  }
+  const publikaltFrissitve = typeof kurzus.updatedAt === 'string' ? kurzus.updatedAt : null
+  const piszkozatFrissitve =
+    typeof piszkozat?.updatedAt === 'string' ? piszkozat.updatedAt : null
+  if (
+    publikaltFrissitve !== null &&
+    piszkozatFrissitve !== null &&
+    piszkozatFrissitve > publikaltFrissitve
+  ) {
+    logger.error(
+      'A kurzusnak a publikáltnál FRISSEBB, nem publikált piszkozata van — a script írása elveszítené a szerkesztő mentetlen munkáját. Publikáld vagy dobd el a piszkozatot, és futtasd újra.',
+      { productId: kurzus.id, publikalt: publikaltFrissitve, piszkozat: piszkozatFrissitve },
+    )
+    process.exitCode = 1
+    return
+  }
+
   const videos = Array.isArray(kurzus.videos) ? kurzus.videos : []
   if (videos.length === 0) {
     logger.info('A kurzusnak nincs átemelendő videója — nincs teendő.', { productId: kurzus.id })

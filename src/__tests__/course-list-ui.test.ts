@@ -441,8 +441,16 @@ describe('CourseList — megjelenítés', () => {
 
     expect(html).toContain('<details')
     expect(html).toContain('Befejezett kurzusok (1)')
-    // A `<details>` alapból CSUKVA nyílik meg — nincs `open` jelző.
-    expect(html).not.toContain('<details class="kc-mycourses__collapsible kc-mycourses__group" open')
+    // A `<details>` alapból CSUKVA nyílik meg — nincs `open` jelző. A code
+    // review fogta meg a korábbi őrt: egy pontos-substring assert csak az
+    // attribútumok AKKORI sorrendjénél fogott volna, tehát az `open`
+    // visszakerülése más prop-sorrenddel némán átcsúszik rajta. Ezért a teszt
+    // a TAG-eket vizsgálja: egyik <details> nyitótag sem tartalmazhat `open`-t.
+    const detailsTagek = html.match(/<details\b[^>]*>/g) ?? []
+    expect(detailsTagek.length).toBeGreaterThan(0)
+    for (const tag of detailsTagek) {
+      expect(tag).not.toMatch(/\bopen\b/)
+    }
   })
 
   it('a lejárt hozzáférésűek saját, megnevezett szekcióba kerülnek', () => {

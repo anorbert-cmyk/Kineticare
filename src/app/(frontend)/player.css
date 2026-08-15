@@ -424,15 +424,17 @@
   color: var(--kc-color-on-primary);
 }
 
-.kc-player-actions__primary:hover:not(:disabled) {
+.kc-player-actions__primary:hover:not(.kc-player-actions__primary--inactive) {
   background-color: var(--kc-color-primary-hover);
   border-color: var(--kc-color-primary-hover);
 }
 
 /* A „minden lecke kész" nem cselekvés, hanem VISSZAJELZÉS: letiltott, siker-
-   színű, nyíl nélküli. Nem szürke „nem működik" gomb — a különbség fontos. */
+   színű, nyíl nélküli. Nem szürke „nem működik" gomb — a különbség fontos.
+   A letiltást `aria-disabled` + kattintás-kapu adja (nem `disabled`), hogy a
+   billentyűzet-fókusz ne essen le a gombról a mentés pillanatában. */
 .kc-player-actions__primary--done,
-.kc-player-actions__primary:disabled {
+.kc-player-actions__primary--inactive {
   cursor: default;
   border-color: var(--kc-color-border-strong);
   background-color: var(--kc-color-surface-raised);

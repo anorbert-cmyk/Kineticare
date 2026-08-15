@@ -124,7 +124,7 @@ describe('previousAction — nincs letiltott gomb', () => {
   it('a felirat a CÉL leckét nevezi meg', () => {
     expect(previousAction(curriculum, 'l4')).toEqual({
       label: 'Előző: Olvasnivaló',
-      ariaLabel: 'Előző lecke: Olvasnivaló',
+      ariaLabel: 'Előző: Olvasnivaló (előző lecke)',
       targetRef: 'l3',
     })
   })
@@ -552,12 +552,25 @@ describe('markWatched — a duplikáció-védelem szerkezeti', () => {
     expect(source).toMatch(/shouldAutoMarkWatched\(watchedRatio, keszLeckekRef\.current\.has/)
   })
 
-  it('a mérföldkő-pillanatkép a hálózati hívás ELŐTT, szinkronban készül', () => {
+  /**
+   * A mérföldkő-pillanatkép a SIKER-ágban, a csak sikernél előrelépő
+   * `analitikaRef`-ből készül. A code review mérte a korábbi (hívás előtti,
+   * optimista zárból vett) pillanatkép hibáját: párhuzamos jelöléseknél a
+   * megbukó társ benne ragadt a másik hívás pillanatképében.
+   */
+  it('a mérföldkő-pillanatkép a SIKER-ágban, az analitika-refből készül', () => {
     const markWatchedIndex = source.indexOf('const markWatched = useCallback(')
     expect(markWatchedIndex).toBeGreaterThan(-1)
-    const elotteIndex = source.indexOf('const elotte = summarizeCurriculum(', markWatchedIndex)
     const awaitIndex = source.indexOf('await markVideoWatched(', markWatchedIndex)
-    expect(elotteIndex).toBeGreaterThan(-1)
-    expect(awaitIndex).toBeGreaterThan(elotteIndex)
+    const beforeIndex = source.indexOf(
+      'const before = summarizeCurriculum(curriculum, analitikaRef.current)',
+      markWatchedIndex,
+    )
+    expect(awaitIndex).toBeGreaterThan(-1)
+    // A pillanatkép a hálózati hívás UTÁN (a siker-ágban) készül…
+    expect(beforeIndex).toBeGreaterThan(awaitIndex)
+    // …és az analitika-könyvelés kizárólag ott lép előre.
+    const advanceCount = source.split('analitikaRef.current = ').length - 1
+    expect(advanceCount).toBe(1)
   })
 })

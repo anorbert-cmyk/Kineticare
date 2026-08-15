@@ -123,7 +123,10 @@ export function previousAction(
   }
   return {
     label: `Előző: ${previous.title}`,
-    ariaLabel: `Előző lecke: ${previous.title}`,
+    // A hozzáférhető név a LÁTHATÓ felirattal kezdődik (WCAG 2.5.3 Label in
+    // Name): a hangvezérlés a látható szöveget mondja ki, és annak benne kell
+    // lennie a névben. A „lecke" pontosítás a felirat UTÁN áll.
+    ariaLabel: `Előző: ${previous.title} (előző lecke)`,
     targetRef: previous.ref,
   }
 }
@@ -169,14 +172,44 @@ export function primaryAction(
       }
     }
     if (!isWatched) {
-      return {
-        kind: 'complete-course',
-        label: 'Kurzus befejezése',
-        moduleHint: null,
-        ariaLabel: `Kurzus befejezése — ${current.title} megjelölése késznek`,
-        marksWatched: true,
-        targetRef: null,
-        disabled: false,
+      /**
+       * A „Kurzus befejezése" ígéret CSAK akkor igaz, ha az utolsó lecke
+       * megjelölésével tényleg minden kész lesz. A code review mérte az
+       * ellenkező esetet: a railből az utolsó leckére előreugorva a gomb
+       * „Kurzus befejezése"-t ígért, kattintásra megjelölte a leckét, de a
+       * kurzus NEM lett kész, navigáció nem történt, és a fókusz a helyén
+       * ragadt egy megváltozott feliratú gombon. Ha van még hiányzó lecke, a
+       * gomb jelöl ÉS a hiányzó munkához visz — pontosan azt mondja, amit tesz.
+       */
+      const mindenMasKesz = sequence.every(
+        (lesson) => lesson.ref === current.ref || watched.has(lesson.ref),
+      )
+      if (mindenMasKesz) {
+        return {
+          kind: 'complete-course',
+          label: 'Kurzus befejezése',
+          moduleHint: null,
+          ariaLabel: `Kurzus befejezése — ${current.title} megjelölése késznek`,
+          marksWatched: true,
+          targetRef: null,
+          disabled: false,
+        }
+      }
+      const elsoHianyzo = sequence.find(
+        (lesson) => lesson.ref !== current.ref && !watched.has(lesson.ref),
+      )
+      if (elsoHianyzo !== undefined) {
+        const hianyzoModulCime = moduleTitleOf(curriculum, elsoHianyzo)
+        const label = `Kész, tovább: ${elsoHianyzo.title}`
+        return {
+          kind: 'complete-and-advance',
+          label,
+          moduleHint: hianyzoModulCime === null ? null : `Modul: ${hianyzoModulCime}`,
+          ariaLabel: hianyzoModulCime === null ? label : `${label} (${hianyzoModulCime})`,
+          marksWatched: true,
+          targetRef: elsoHianyzo.ref,
+          disabled: false,
+        }
       }
     }
 

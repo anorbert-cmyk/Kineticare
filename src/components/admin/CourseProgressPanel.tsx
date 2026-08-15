@@ -205,6 +205,22 @@ const panelStyle: CSSProperties = {
   padding: 'calc(var(--base) * 0.75)',
 }
 
+/**
+ * Csak képernyőolvasónak szóló tartalom (a Payload adminban nincs sr-only
+ * segédosztály, ezért a szokásos clip-minta inline).
+ */
+const srOnlyStyle: CSSProperties = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+}
+
 const noteStyle: CSSProperties = {
   color: 'var(--theme-elevation-650)',
   margin: 0,
@@ -463,6 +479,12 @@ export function CourseProgressPanel() {
   return (
     <div className="field-type" style={panelStyle}>
       <h4 style={{ marginTop: 0 }}>Kurzus-haladás</h4>
+      {/* MINDIG a DOM-ban lévő élő régió: a képernyőolvasó csak így figyeli. */}
+      <p aria-live="polite" role="status" style={srOnlyStyle}>
+        {data === null
+          ? ''
+          : visibleCountLabel(visibleStudents.length, matchingStudents.length, data.students.length)}
+      </p>
       <p style={noteStyle}>
         Ki kapott hozzáférést, ki kezdte el, és hol tart. A százalék ugyanabból a számításból
         jön, amit a vevő is lát a lejátszóban.
@@ -571,11 +593,13 @@ export function CourseProgressPanel() {
               </div>
 
               {/*
-                Élő visszajelzés a szűrés eredményéről. `role="status"`, hogy a
-                képernyőolvasó is hallja — szűrés után enélkül nem derülne ki,
-                hány találat van.
+                Látható visszajelzés a szűrés eredményéről. Az ÉLŐ (felolvasott)
+                párja a panel tetején, mindig jelen lévő rejtett régió — a
+                feltételesen beillesztett élő régiót a képernyőolvasó jellemzően
+                nem veszi észre, mert a beillesztés pillanatában még nincs mit
+                figyelnie (code review-találat).
               */}
-              <p role="status" style={{ ...noteStyle, marginBottom: 'calc(var(--base) * 0.25)' }}>
+              <p style={{ ...noteStyle, marginBottom: 'calc(var(--base) * 0.25)' }}>
                 {visibleCountLabel(
                   visibleStudents.length,
                   matchingStudents.length,

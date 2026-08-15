@@ -133,6 +133,33 @@ export const MAX_ADAPTIVE_GAP_SEC = 15
 export const ADAPTIVE_SAMPLE_CAP_SEC = 30
 
 /**
+ * A megengedett legnagyobb lejátszási sebesség a FALIÓRÁHOZ képest.
+ *
+ * ═══ MIÉRT EZ A KIJÁTSZÁS ELLENI FŐ VÉDELEM ═══
+ * A code review bizonyította: a küszöb-tanulás pusztán a MÉDIA-időbélyegekből
+ * kijátszható — kitartó, egyenletes (~14 mp-es) ugrásokkal a medián felhúzható
+ * a felső korlátig, és onnantól a tekerés „folyamatos lejátszásnak" számít.
+ * A média-idő önmagában nem tudja megkülönböztetni a ritkán jelentő lejátszót a
+ * sűrűn tekerő nézőtől. A FALIÓRA igen: valódi lejátszásnál a média-idő nem
+ * haladhat gyorsabban, mint az eltelt valós idő szorozva a lejátszási
+ * sebességgel. A Bunny lejátszója legfeljebb 2×-est kínál; a 2,5 ráhagyás az
+ * ütemezés-ingadozást fedi. Ami ennél gyorsabb, az tekerés — függetlenül attól,
+ * mit tanult meg addig a küszöb —, és a tanulásba sem számít bele.
+ *
+ * Következmény: csalni legfeljebb a valós idő ~1/2,5-ed része alatt lehet
+ * „végignézni" egy videót — vagyis a csalás nem gyorsabb, mint a videót 2×-es
+ * sebességen ténylegesen lejátszani, amit amúgy is megengedünk.
+ */
+export const MAX_PLAYBACK_RATE = 2.5
+
+/**
+ * Ráhagyás a falióra-szabályhoz másodpercben — az esemény-ütemezés és az
+ * időbélyeg-kerekítés ingadozását fedi, hogy a jogos lejátszás sose bukjon el
+ * rajta.
+ */
+export const WALL_CLOCK_SLACK_SEC = 1.5
+
+/**
  * Ennyi időpontot pufferelünk, mielőtt az első küszöböt kiszámítjuk. Öt
  * különbség már elég stabil mediánt ad, és ennyi minta még a leglassabb
  * ütemezésnél is pár másodperc alatt összejön.
@@ -263,8 +290,15 @@ export interface WatchTrackerOptions {
 }
 
 export interface WatchTracker {
-  /** Egy `timeupdate` időpont rögzítése. Érvénytelen értéket csendben eldob. */
-  record(seconds: number): void
+  /**
+   * Egy `timeupdate` időpont rögzítése. Érvénytelen értéket csendben eldob.
+   *
+   * @param wallClockMs a rögzítés FALIÓRA-időbélyege (pl. `performance.now()`).
+   *   Ha a hívó megadja, a követő érvényesíti a falióra-szabályt: a valós
+   *   időnél gyorsabb média-előrehaladás tekerésnek számít, a megtanult
+   *   küszöbtől függetlenül. Nélküle a viselkedés tisztán média-idő alapú.
+   */
+  record(seconds: number, wallClockMs?: number): void
   /**
    * A videó hosszának (utólagos) beállítása. A lejátszó gyakran csak a `ready`
    * vagy az első `timeupdate` esemény után tudja a hosszt, ezért a követő
@@ -309,36 +343,65 @@ interface MutableInterval {
   end: number
 }
 
+/** Egy rögzített minta: média-időpont + (ha ismert) falióra-időbélyeg. */
+interface Minta {
+  readonly s: number
+  readonly w: number | null
+}
+
 /**
- * Időpont-sorozat szakaszokra bontása egy ADOTT folytonossági küszöbbel —
- * tiszta függvény, állapot nélkül.
+ * A FALIÓRA-SZABÁLY: a média-előrehaladás nem lehet gyorsabb, mint az eltelt
+ * valós idő × a megengedett lejátszási sebesség (+ ráhagyás). Ami gyorsabb, az
+ * tekerés — a megtanult küszöbtől FÜGGETLENÜL, és a tanulásba sem számít bele.
+ *
+ * Falióra-adat nélkül (régi hívók, tesztek) a szabály nem él — ilyenkor a
+ * viselkedés a korábbi, tisztán média-idő alapú marad.
+ */
+function faliOraSzerintTekeres(mediaDelta: number, elozoW: number | null, mostaniW: number | null): boolean {
+  if (elozoW === null || mostaniW === null) {
+    return false
+  }
+  const eltEltSec = (mostaniW - elozoW) / 1000
+  // Visszafelé járó vagy értelmetlen óra: nem büntetünk hibás mérés alapján.
+  if (!Number.isFinite(eltEltSec) || eltEltSec < 0) {
+    return false
+  }
+  return mediaDelta > eltEltSec * MAX_PLAYBACK_RATE + WALL_CLOCK_SLACK_SEC
+}
+
+/**
+ * Minta-sorozat szakaszokra bontása egy ADOTT folytonossági küszöbbel —
+ * tiszta függvény, állapot nélkül. A falióra-szabályt is érvényesíti.
  *
  * A bemelegítési puffer ÁTMENETI (nem véglegesített) kiértékeléséhez kell: a
  * lejátszó minden eseménynél lekérdezi az arányt, és ez a lekérdezés NEM
  * véglegesítheti a puffert, különben a tanulás soha nem kapna mintát.
  */
-function szakaszokra(samples: readonly number[], gap: number): WatchInterval[] {
+function szakaszokra(samples: readonly Minta[], gap: number): WatchInterval[] {
   const result: MutableInterval[] = []
   let open: MutableInterval | null = null
-  let cursor: number | null = null
-  for (const seconds of samples) {
-    if (open === null || cursor === null) {
-      open = { start: seconds, end: seconds }
-      cursor = seconds
+  let elozo: Minta | null = null
+  for (const minta of samples) {
+    if (open === null || elozo === null) {
+      open = { start: minta.s, end: minta.s }
+      elozo = minta
       continue
     }
-    if (Math.abs(seconds - cursor) <= gap) {
-      if (seconds > open.end) {
-        open.end = seconds
+    const delta = minta.s - elozo.s
+    const folyamatos =
+      Math.abs(delta) <= gap && !faliOraSzerintTekeres(delta, elozo.w, minta.w)
+    if (folyamatos) {
+      if (minta.s > open.end) {
+        open.end = minta.s
       }
-      if (seconds < open.start) {
-        open.start = seconds
+      if (minta.s < open.start) {
+        open.start = minta.s
       }
     } else {
       result.push(open)
-      open = { start: seconds, end: seconds }
+      open = { start: minta.s, end: minta.s }
     }
-    cursor = seconds
+    elozo = minta
   }
   if (open !== null) {
     result.push(open)
@@ -364,12 +427,20 @@ function tanultKuszob(lepeskozok: readonly number[], alapKuszob: number): number
   )
 }
 
-/** A minták egymást követő, ÉSSZERŰ nagyságú (tanításra alkalmas) különbségei. */
-function tanithatoLepeskozok(samples: readonly number[]): number[] {
+/**
+ * A minták egymást követő, ÉSSZERŰ nagyságú (tanításra alkalmas) különbségei.
+ * A falióra-szabályt megbukó delta NEM taníthat: pontosan ez zárja ki, hogy a
+ * tekerés-sorozat felhúzza a küszöböt (code review-találat).
+ */
+function tanithatoLepeskozok(samples: readonly Minta[]): number[] {
   const result: number[] = []
   for (let index = 1; index < samples.length; index += 1) {
-    const delta = samples[index] - samples[index - 1]
-    if (delta > 0 && delta <= ADAPTIVE_SAMPLE_CAP_SEC) {
+    const delta = samples[index].s - samples[index - 1].s
+    if (
+      delta > 0 &&
+      delta <= ADAPTIVE_SAMPLE_CAP_SEC &&
+      !faliOraSzerintTekeres(delta, samples[index - 1].w, samples[index].w)
+    ) {
       result.push(delta)
     }
   }
@@ -411,18 +482,25 @@ export function createWatchTracker(
   let open: MutableInterval | null = null
   /** A legutóbb rögzített időpont — a folytonosság EHHEZ mérődik, nem az intervallum végéhez. */
   let cursor: number | null = null
+  /** A legutóbbi minta falióra-időbélyege (ha a hívó adott). */
+  let utolsoFaliOra: number | null = null
 
   /** A jelenleg érvényes küszöb — a tanulás ezt emelheti, az alap alá SOHA. */
   let aktualisKuszob = alapKuszob
   /** A legutóbbi, ésszerű nagyságú lépésközök (a medián alapja). */
   let lepeskozok: number[] = []
-  /** A bemelegítési puffer: még nem feldolgozott, de érvényes időpontok. */
-  let bemelegites: number[] = []
+  /** A bemelegítési puffer: még nem feldolgozott, de érvényes minták. */
+  let bemelegites: Minta[] = []
   /** Igaz, amint a puffer feldolgozásra került (utána közvetlenül dolgozunk). */
   let bemelegitesLezarva = !tanul
 
-  /** Egy időpont feldolgozása a JELENLEG érvényes küszöbbel. */
-  const feldolgoz = (seconds: number): void => {
+  /**
+   * Egy időpont feldolgozása a JELENLEG érvényes küszöbbel.
+   *
+   * @param kenyszerTekeres igaz, ha a falióra-szabály már tekerésnek ítélte —
+   *   ilyenkor a megtanult küszöb sem mentheti fel.
+   */
+  const feldolgoz = (seconds: number, kenyszerTekeres: boolean): void => {
     if (open === null || cursor === null) {
       open = { start: seconds, end: seconds }
       cursor = seconds
@@ -430,7 +508,7 @@ export function createWatchTracker(
     }
 
     const gap = seconds - cursor
-    if (Math.abs(gap) <= aktualisKuszob) {
+    if (!kenyszerTekeres && Math.abs(gap) <= aktualisKuszob) {
       // Folyamatos lejátszás (vagy a lejátszó időbélyegének remegése).
       if (seconds > open.end) {
         open.end = seconds
@@ -475,8 +553,13 @@ export function createWatchTracker(
     for (const delta of tanithatoLepeskozok(bemelegites)) {
       tanulLepeskozt(delta)
     }
-    for (const seconds of bemelegites) {
-      feldolgoz(seconds)
+    let elozo: Minta | null = null
+    for (const minta of bemelegites) {
+      const kenyszer =
+        elozo === null ? false : faliOraSzerintTekeres(minta.s - elozo.s, elozo.w, minta.w)
+      feldolgoz(minta.s, kenyszer)
+      utolsoFaliOra = minta.w
+      elozo = minta
     }
     bemelegites = []
   }
@@ -501,25 +584,32 @@ export function createWatchTracker(
   }
 
   return {
-    record(seconds: number): void {
+    record(seconds: number, wallClockMs?: number): void {
       // A lejátszóból jövő érték nem megbízható: NaN, végtelen és negatív
       // időpont sosem kerülhet be (negatív `currentTime` nem létezik).
       if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) {
         return
       }
+      const faliOra =
+        typeof wallClockMs === 'number' && Number.isFinite(wallClockMs) ? wallClockMs : null
 
       if (!bemelegitesLezarva) {
-        bemelegites.push(seconds)
+        bemelegites.push({ s: seconds, w: faliOra })
         if (bemelegites.length >= ADAPTIVE_WARMUP_SAMPLES) {
           bemelegitestLezar()
         }
         return
       }
 
-      if (cursor !== null) {
+      // A falióra-szabály ELŐBB dönt, mint a megtanult küszöb: a valós időnél
+      // gyorsabb média-előrehaladás tekerés, és nem is taníthat.
+      const kenyszerTekeres =
+        cursor !== null && faliOraSzerintTekeres(seconds - cursor, utolsoFaliOra, faliOra)
+      if (cursor !== null && !kenyszerTekeres) {
         tanulLepeskozt(seconds - cursor)
       }
-      feldolgoz(seconds)
+      feldolgoz(seconds, kenyszerTekeres)
+      utolsoFaliOra = faliOra
     },
 
     setDuration(value: number | null | undefined): void {
@@ -557,6 +647,7 @@ export function createWatchTracker(
       closed = []
       open = null
       cursor = null
+      utolsoFaliOra = null
       lepeskozok = []
       bemelegites = []
       aktualisKuszob = alapKuszob
