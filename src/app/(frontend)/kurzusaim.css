@@ -1,0 +1,254 @@
+/**
+ * „Kurzusaim" — a belépés utáni első képernyő (lista).
+ *
+ * Ez a lap a kurzusaim-scope SAJÁT rétege: kizárólag a közös tokeneket
+ * (var(--kc-*)) és a meglévő primitívek osztályait (kc-card, kc-button,
+ * kc-progress-*) használja. Nyers hexa érték és elemre írt betűméret NINCS —
+ * minden méret a tipográfiai skáláról, illetve a 4px-es térköz-rácsról jön
+ * (UX-skill 4. pont).
+ *
+ * A `kc-course-card` / `kc-course-grid` osztályokat SZÁNDÉKOSAN nem használjuk:
+ * azok a NYILVÁNOS katalógus kártyái (src/app/(frontend)/kurzusok/kurzusok.css),
+ * és ott más az anatómia (ár + „Megveszem"). A vevői lista állapot-kártyája
+ * saját névtérben (`kc-mycourse*`) él, hogy a két felület egymástól függetlenül
+ * fejlődhessen.
+ *
+ * ═══ KONTRASZT-JEGYZŐKÖNYV (WCAG 2.2 AA) ═══
+ * A kártya a FEHÉR, megemelt felületen ül (--kc-color-surface-raised), a lap
+ * maga paper hátterű (--kc-color-bg, #f6f9fc). Számolt arányok (a forrásuk a
+ * tokens.css, illetve a progress.css jegyzőkönyve):
+ *
+ *   kurzuscím · ink (#10243e)        a kártyán (fehér) ....... 15,63:1  AA/AAA ✓
+ *   szekciócím · ink                 a lapon (#f6f9fc) ....... 14,79:1  AA/AAA ✓
+ *   mikro-meta · ink-soft (#33495f)  a kártyán ...............  9,30:1  AA/AAA ✓
+ *   lejárat-üzenet · warning         a kártyán ...............  5,93:1  AA ✓
+ *     (#8a5a00 — ugyanaz a szerep és szín, mint az account.css A1-sorában)
+ *   elsődleges gomb · fehér          accent-deep kitöltésen ...  5,45:1  AA ✓
+ *   másodlagos gomb · ink            a kártyán (2px keret) ... 15,63:1  AA/AAA ✓
+ *   haladás-kör kitöltése            a sínen (grafika) .......  3,60:1  1.4.11 ✓
+ *   kör-tok kerete · hairline-strong a kártyán (UI-határ) ....  4,13:1  ✓
+ *
+ * A haladás-kör a BÉLYEGKÉPEN áll, ahol a mögöttes szín kiszámíthatatlan (a
+ * borító tetszőleges fotó lehet). Ezért a kör NEM közvetlenül a képre kerül,
+ * hanem egy tömör, fehér, 1px-es kerettel határolt tokba — így a fenti arányok
+ * a képtől függetlenül érvényesek. Ez a WCAG „legrosszabb eset" szabályának
+ * alkalmazása (UX-skill 3. pont, áttetsző háttér).
+ *
+ * ═══ ÉRINTÉSI CÉLPONTOK ═══
+ * A kártya EGYETLEN interaktív eleme a CTA-gomb: a `.kc-button` közös
+ * min-height-ja 2,75rem (44px), a gomb pedig teljes kártyaszélességű — a 44×44
+ * px-es minimum tehát mindkét irányban teljesül. Az összecsukó `summary`
+ * ugyanezt a 2,75rem-es minimumot kapja.
+ */
+
+/* ---- Oldal-fejléc -------------------------------------------------------- */
+
+.kc-mycourses__header {
+  margin-bottom: var(--kc-space-6);
+}
+
+.kc-mycourses__heading {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-3xl);
+  line-height: var(--kc-leading-heading);
+  margin: 0;
+}
+
+/* „3 kurzus · 1 folyamatban · 1 befejezve" — tájékozódási pont, nem dísz.
+   Egyetlen kurzusnál a szerver el sem küldi (course-list-order.ts). */
+.kc-mycourses__summary-line {
+  margin: var(--kc-space-2) 0 0;
+  color: var(--kc-color-text-muted);
+  font-size: var(--kc-text-sm);
+}
+
+/* ---- Csoportok ----------------------------------------------------------- */
+
+.kc-mycourses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-6);
+}
+
+.kc-mycourses__group-title {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-xl);
+  line-height: var(--kc-leading-heading);
+  margin: 0 0 var(--kc-space-4);
+}
+
+/* A `<details>` natív összecsukása: nulla JavaScript, hidratálás előtt is
+   működik. A szekciócím a `summary`-ben él, ezért ott a saját margója zavarna. */
+.kc-mycourses__collapsible {
+  border-top: 1px solid var(--kc-color-border);
+  padding-top: var(--kc-space-4);
+}
+
+.kc-mycourses__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--kc-space-3);
+  min-block-size: 2.75rem;
+  padding: var(--kc-space-2) var(--kc-space-1);
+  border-radius: var(--kc-radius-md);
+  cursor: pointer;
+  /* A natív háromszög helyett saját, forgó jelölő (lásd ::before) — így a
+     nyitott/csukott állapot minden böngészőben AZONOSAN néz ki. */
+  list-style: none;
+}
+
+.kc-mycourses__summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Az állapotjelző chevron: currentColor (ink), tehát a fenti 14,79:1 érvényes
+   rá is. Csukva jobbra, nyitva lefelé mutat. */
+.kc-mycourses__summary::before {
+  content: '';
+  flex: none;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-mycourses__collapsible[open] > .kc-mycourses__summary::before {
+  transform: rotate(45deg);
+}
+
+.kc-mycourses__summary .kc-mycourses__group-title {
+  margin: 0;
+  font-size: var(--kc-text-lg);
+}
+
+.kc-mycourses__collapsible[open] > .kc-mycourses__summary {
+  margin-bottom: var(--kc-space-4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kc-mycourses__summary::before {
+    transition: none;
+  }
+}
+
+/* ---- Kártyarács ---------------------------------------------------------- */
+
+/* auto-fill + minmax: a rács annyi oszlopot nyit, amennyi 280px-es kártya
+   elfér. A `min()` azért kell, hogy 320px alatti kijelzőn se lógjon ki a
+   kártya a konténerből (a 280px-es minimum ilyenkor a rendelkezésre álló
+   szélességre csökken) — mobilon így garantáltan EGY oszlop marad. */
+.kc-mycourses__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: var(--kc-space-5);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kc-mycourses__item {
+  display: flex; /* a kártya nyúljon ki a sor magasságára */
+}
+
+/* ---- Kurzus-kártya ------------------------------------------------------- */
+
+/* A `position: relative` a CTA `::after`-kiterjesztésének horgonya: ettől lesz
+   a TELJES kártya kattintható, miközben egyetlen fókuszálható elem van benne. */
+.kc-mycourse {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  inline-size: 100%;
+  overflow: hidden;
+}
+
+.kc-mycourse__media {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  background-color: var(--kc-color-surface-tint);
+}
+
+.kc-mycourse__media img {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.kc-mycourse__media-placeholder {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+/* Lejárt hozzáférés: a borító visszafogottabb, hogy a kártya ne versenyezzen a
+   még elérhető kurzusokkal. A SZÖVEG kontrasztja érintetlen — csak a kép
+   halványul, információt nem hordoz. */
+.kc-mycourse--expired .kc-mycourse__media img {
+  opacity: 0.55;
+}
+
+/* A haladás-kör tokja: tömör fehér korong 1px-es kerettel, a bélyegkép jobb
+   alsó sarkában (lásd a fejléc kontraszt-jegyzőkönyvét). */
+.kc-mycourse__ring {
+  position: absolute;
+  inset-block-end: var(--kc-space-2);
+  inset-inline-end: var(--kc-space-2);
+  display: flex;
+  padding: var(--kc-space-1);
+  border: 1px solid var(--kc-color-border-strong);
+  border-radius: var(--kc-radius-full);
+  background-color: var(--kc-color-surface-raised);
+}
+
+.kc-mycourse__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--kc-space-2);
+  padding: var(--kc-space-4);
+}
+
+.kc-mycourse__title {
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-text-lg);
+  line-height: var(--kc-leading-heading);
+  margin: 0;
+}
+
+/* Mikro-meta: „12/18 lecke · kb. 42 perc van hátra". Egy sor, egy pillantás. */
+.kc-mycourse__meta {
+  margin: 0;
+  color: var(--kc-color-text-muted);
+  font-size: var(--kc-text-sm);
+}
+
+.kc-mycourse__bar {
+  margin-block: var(--kc-space-1);
+}
+
+/* Az A1 lejárat-sorok stílusa a közös `.kc-course-access` (account.css) — itt
+   csak a kártya ritmusához igazítjuk a térközt. */
+.kc-mycourse .kc-course-access {
+  margin: 0;
+}
+
+/* A gomb a kártya aljára tapad (`margin-top: auto`), így az eltérő hosszúságú
+   címek mellett is EGY vonalban állnak a rács kártyáin. */
+.kc-mycourse__cta {
+  inline-size: 100%;
+  margin-block-start: auto;
+}
+
+/* A kattintható kártya: a link kiterjesztése, NEM külön onClick a kártyán.
+   Így a fókuszrend nem duplikálódik, és a link linkként viselkedik (középső
+   gombbal új lapon nyílik, a böngésző kiírja a célt a státuszsorba). */
+.kc-mycourse__cta::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--kc-radius-lg); /* a kártya lekerekítése */
+}
