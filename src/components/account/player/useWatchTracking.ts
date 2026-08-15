@@ -3,8 +3,8 @@
 import { useEffect, useRef } from 'react'
 
 import { createBunnyPlayerBridge } from '../../../lib/stream/playerjs-client'
+import { loadBunnyPlayerJs, type PlayerJsLibraryPlayer } from '../../../lib/stream/playerjs-loader'
 import { createWatchTracker } from '../../../lib/stream/watched-coverage'
-import { logger } from '../../../lib/logger'
 
 /**
  * AUTOMATIKUS „megnézett" jelölés a Bunny-lejátszó tényleges nézettsége alapján.
@@ -16,37 +16,45 @@ import { logger } from '../../../lib/logger'
  * Ezért HIBRID a megoldás: a lecke akkor jelölődik késznek magától, ha a videó
  * legalább 90%-a TÉNYLEGESEN lement — a kézi gomb mellette végig megmarad.
  *
- * ═══ MIÉRT NEM A BUNNY SCRIPTJE ═══
- * A hivatalos player.js scriptet a CSP `script-src` direktívája nem engedi
- * betölteni (src/lib/security/csp.ts), és a CSP lazítása biztonsági regresszió
- * lenne. Ezért a protokollt saját, függőség nélküli postMessage-kliens beszéli
- * (src/lib/stream/playerjs-client.ts), szigorú origin-ellenőrzéssel.
+ * ═══ KÉT ÚT, HÁROM RÉTEG ═══
+ * 1. ELSŐDLEGES: a Bunny HIVATALOS player.js könyvtára (./playerjs-loader.ts),
+ *    rögzített verzióról, integritás-hash-sel. Ez a Bunny által dokumentált út.
+ * 2. TARTALÉK: ha a könyvtár nem töltődik be (hálózati hiba, integritás-hiba,
+ *    blokkoló böngésző-bővítmény), a saját, függőség nélküli postMessage-hidunk
+ *    veszi át (./playerjs-client.ts). A protokoll-konstansaink bájtra egyeznek
+ *    a Bunny által szállított fájléval (`VERSION: "0.0.11"`,
+ *    `CONTEXT: "player.js"`), tehát ez egyenértékű út, nem vészmegoldás.
+ * 3. VÉGSŐ TARTALÉK (kódot nem igényel): ha EGYIK sem szólal meg, a vevő a
+ *    lejátszó elsődleges gombjával („Kész, tovább") jelöli késznek a leckét —
+ *    pontosan úgy, ahogy a mai platformon. Élesben lemérve: a haladás így is
+ *    rögzül, a kurzus végigvihető.
+ * A két esemény-út SOSEM fut egyszerre: a tartalék csak akkor épül fel, ha a
+ * hivatalos betöltés elbukott.
  *
  * ═══ MIÉRT NEM SZÁMÍT A SZKIPPELÉS ═══
  * A követő MEGNÉZETT INTERVALLUMOKAT tart nyilván, nem a legnagyobb elért
- * időpontot: aki a videó végére teker, 2 másodpercnyi nézettséget kap, nem
+ * időpontot: aki a videó végére teker, néhány másodpercnyi nézettséget kap, nem
  * 100%-ot (src/lib/stream/watched-coverage.ts).
  *
  * ═══ ÉLETCIKLUS ═══
  * Az `iframeSrc` minden EXPLICIT lecke-betöltésnél változik (a token-frissítés
- * SZÁNDÉKOSAN nem cseréli — az újramount pozícióvesztéssel járna), ezért a híd
- * és a követő is ehhez a kulcshoz kötődik: lecke-váltáskor a régi híd
- * leiratkozik, és ÚJ, nullázott követő indul. Így az előző lecke nézettsége
- * nem szivároghat át a következőre.
+ * SZÁNDÉKOSAN nem cseréli — az újramount pozícióvesztéssel járna), ezért a
+ * követő ehhez a kulcshoz kötődik: lecke-váltáskor a régi feliratkozás
+ * megszűnik, és ÚJ, nullázott követő indul. Így az előző lecke nézettsége nem
+ * szivároghat át a következőre.
  *
- * A jelentés a `report` visszahíváson megy vissza a lejátszóba; a küszöb-döntést
- * és a tényleges szerverhívást ott, EGY helyen hozza meg a
- * `shouldAutoMarkWatched` + `markWatched` páros — az automatikus és a kézi
- * jelölés így definíció szerint ugyanazt az utat járja.
+ * A DÖNTÉST és a szerverhívást nem ez a modul hozza: a `report` visszahíváson
+ * jelentünk a lejátszónak, ott dől el a küszöb (`shouldAutoMarkWatched`) és ott
+ * fut a jelölés — UGYANAZ az út, amit a kézi gomb hív.
  */
 export interface WatchTrackingInput {
-  /** Az iframe elem — a híd ennek a contentWindow-jára küld üzenetet. */
+  /** Az iframe elem — erre iratkozik fel a hivatalos könyvtár és a tartalék híd is. */
   iframeRef: React.RefObject<HTMLIFrameElement | null>
   /** Az iframe által BETÖLTÖTT embed-URL; változása = új lecke indult. */
   iframeSrc: string | null
   /** A JELENLEG lejátszott lecke stabil refje. */
   lessonRef: string | null
-  /** A lecke CMS-ben rögzített hossza (a Bunny is küld hosszt — az pontosabb). */
+  /** A lecke CMS-ben rögzített hossza (a lejátszótól kapott hossz pontosabb). */
   durationSec: number | null
   /** Jelentés a lejátszónak: hányad része ment le a leckének (0–1). */
   report: (lessonRef: string, watchedRatio: number) => void
@@ -73,40 +81,86 @@ export function useWatchTracking({
     }
 
     const tracker = createWatchTracker(durationSec)
+    let eldobva = false
     let utoljaraJelentett = -1
+    let tartalekHid: { dispose(): void } | null = null
+    let hivatalosPlayer: PlayerJsLibraryPlayer | null = null
 
-    const bridge = createBunnyPlayerBridge({
-      iframe,
-      onTimeUpdate: ({ seconds, duration }) => {
-        // A lejátszótól kapott hossz pontosabb, mint a CMS-ben rögzített:
-        // az utóbbi elgépelhető, és a jegy élettartamát is az hajtja.
-        tracker.setDuration(duration ?? durationSec)
-        tracker.record(seconds)
-        const arany = tracker.coverage()
-        // Csak ÉRDEMI változásnál jelentünk (1 százalékpont): a `timeupdate`
-        // másodpercenként többször is érkezhet, a lejátszó állapotát pedig nem
-        // akarjuk fölöslegesen újraszámoltatni.
-        if (arany - utoljaraJelentett >= 0.01 || arany >= 1) {
-          utoljaraJelentett = arany
-          reportRef.current(lessonRef, arany)
-        }
-      },
-      onEnded: () => {
-        // A videó végigfutott: a lefedettség ilyenkor is a MÉRT érték marad
-        // (aki átugrott szakaszokat, nem kap 100%-ot) — de a jelentés
-        // mindenképp megtörténik, hogy a küszöb elérése ne múljon egy
-        // elmaradt utolsó `timeupdate`-en.
+    /** Egy időpont rögzítése és — érdemi változásnál — jelentés a lejátszónak. */
+    const rogzit = (seconds: number, duration: number | null): void => {
+      if (eldobva) {
+        return
+      }
+      tracker.setDuration(duration ?? durationSec)
+      tracker.record(seconds)
+      const arany = tracker.coverage()
+      // A `timeupdate` másodpercenként többször is érkezhet; csak 1
+      // százalékpontonként (és a 100%-nál) terheljük a lejátszó állapotát.
+      if (arany - utoljaraJelentett >= 0.01 || arany >= 1) {
+        utoljaraJelentett = arany
+        reportRef.current(lessonRef, arany)
+      }
+    }
+
+    /** A videó vége: a MÉRT arányt jelentjük (a szkippelt rész nem számít bele). */
+    const vegetErt = (): void => {
+      if (!eldobva) {
         reportRef.current(lessonRef, tracker.coverage())
-      },
-      onError: (error) => {
-        logger.debug('lejátszó: player.js üzenet feldolgozása sikertelen', {
-          error: error instanceof Error ? error.message : String(error),
-        })
-      },
-    })
+      }
+    }
+
+    /** A saját postMessage-híd felépítése — csak ha a hivatalos út elbukott. */
+    const tartalekraValt = (): void => {
+      if (eldobva || tartalekHid !== null) {
+        return
+      }
+      tartalekHid = createBunnyPlayerBridge({
+        iframe,
+        onTimeUpdate: ({ seconds, duration }) => rogzit(seconds, duration),
+        onEnded: vegetErt,
+        // Csendes: egy hibás üzenet nem akaszthatja meg a lejátszást.
+        onError: () => {},
+      })
+    }
+
+    void loadBunnyPlayerJs()
+      .then((library) => {
+        if (eldobva) {
+          return
+        }
+        if (library === null) {
+          tartalekraValt()
+          return
+        }
+        try {
+          const player = new library.Player(iframe)
+          player.on('timeupdate', (data) => {
+            const seconds = typeof data.seconds === 'number' ? data.seconds : Number.NaN
+            const duration = typeof data.duration === 'number' ? data.duration : null
+            rogzit(seconds, duration)
+          })
+          player.on('ended', vegetErt)
+          hivatalosPlayer = player
+        } catch {
+          // A könyvtár váratlan alakja sem viheti el a lejátszást.
+          tartalekraValt()
+        }
+      })
+      .catch(() => {
+        tartalekraValt()
+      })
 
     return () => {
-      bridge.dispose()
+      eldobva = true
+      tartalekHid?.dispose()
+      // A player.js `off`-ja opcionális a könyvtár verziójától függően; ha
+      // nincs, az `eldobva` kapu akkor is elnémítja a kései eseményeket.
+      try {
+        hivatalosPlayer?.off?.('timeupdate')
+        hivatalosPlayer?.off?.('ended')
+      } catch {
+        // A leiratkozás hibája nem érdekes: a kapu már zárva.
+      }
       tracker.reset()
     }
     // Az `iframeSrc` a lecke-váltás kulcsa: a token-frissítés NEM változtatja,
