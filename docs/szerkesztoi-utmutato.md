@@ -42,9 +42,9 @@ felül a leggyakrabban használt, alul a legritkábban kellő dolgokkal:
 | --- | --- | --- |
 | **Tartalom** | Képek, Oldalak, Blogbejegyzések, Kategóriák, Vélemények | Igen — ez a napi munkád. |
 | **Navigáció** | Menüpontok | Igen — az oldal tetején látszó menü. |
-| **Webshop** | Kurzusok, Rendelések, Kosarak, Tranzakciók | Csak nézegetni. Lásd a 12. pontot. |
+| **Webshop** | Kurzusok, Rendelések, Kosarak, Tranzakciók | A kurzus tananyagát itt állítod össze (12. pont); a rendelésekhez ne nyúlj (13. pont). |
 | **Űrlapok** | Űrlapok, Űrlapbeküldések | A kapcsolati űrlap és a beérkezett üzenetek. |
-| **Felhasználók** | Felhasználók | Csak óvatosan. Lásd a 12. pontot. |
+| **Felhasználók** | Felhasználók | Csak óvatosan. Lásd a 13. pontot. |
 | **Rendszer** | Rendszeresemények, Műveletnapló | Nem a tiéd — csak technikai napló. |
 
 Egy csoportra kattintva megkapod a listát (pl. az összes blogbejegyzést). A lista
@@ -408,9 +408,136 @@ Amit tudni érdemes:
 - Ha egy egész korábbi állapotot akarsz vissza: **Verziók** fül →
   **A verzió visszaállítása**.
 
+### Kurzusnál: a „Megjelenés a weboldalon" mező
+
+A **kurzusoknál** (Webshop → Kurzusok) a közzététel **két lépés**, és ez a
+leggyakoribb buktató:
+
+1. a **„Módosítások közzététele"** gomb a **szerkesztői változatot** élesíti
+   (ez az, amiről a lap tetején az „Állapot" felirat szól);
+2. a kurzus **akkor jelenik meg a weboldalon**, ha az oldalsávban a
+   **„Megjelenés a weboldalon"** mező értéke **„Közzétéve"**.
+
+Ha a kurzus nem látszik, a lap tetején **narancssárga sáv** figyelmeztet rá, és
+megmondja, mi a teendő. Ezt a mezőt **csak a tulajdonos** tudja átállítani —
+munkatársként a sáv szövege szerint kérd meg rá.
+
+> A sáv **zöld**, ha a kurzus látszik. Ha narancssárgát látsz, a kurzus a
+> vásárlók számára nem létezik, akkor is, ha a lap tetején „Közzétett" áll.
+
 ---
 
-## 12. Amihez ne nyúlj
+## 12. A kurzus tananyaga — modulok és leckék
+
+A kurzus tartalmát a **Webshop → Kurzusok** alatt, a kurzus szerkesztőlapján
+állítod össze, a **Tananyag (modulok)** mezőben. Ez az, amit a vásárló a
+lejátszóban lát: bal oldalon a fejezetek, bennük a leckék, mellette a videó.
+
+### Felépítés
+
+- Egy **modul** = egy fejezet (pl. „1. ALAPOK — Így kezdj neki”). Van címe és
+  egy nem kötelező rövid leírása.
+- Egy modulban tetszőleges számú **lecke** van. A sorrend számít: a vásárló
+  ebben a sorrendben halad, és az „Előző / Következő” is ezt követi.
+- Modult és leckét a **fogantyúnál fogva át tudsz húzni** — így rendezed át
+  őket.
+- Az összecsukott soron **a cím látszik**, nem sorszám: a modulnál a cím és a
+  leckék száma („1. ALAPOK — Így kezdj neki (3 lecke)"), a leckénél a cím és a
+  típus („Bemelegítés · Videó"). Ha egy videó még nincs „Kész" állapotban, a
+  soron ott áll: **„· még nem játszható"** — így a csukott listán is azonnal
+  látod, mi nem indulna el a vásárlónál. A cím nélküli sor
+  **„(névtelen modul)"** / **„(névtelen lecke)"** jelzést kap.
+
+### Háromféle lecke
+
+| Típus | Mikor használd | Mit kell kitölteni |
+| --- | --- | --- |
+| **Videó** | Bunny Stream felvétel | Videó azonosítója, Hossz (másodperc), Videó állapota |
+| **Szöveges lecke** | Csak írott anyag és/vagy letölthető fájl | Lecke szövege és/vagy Letölthető anyagok |
+| **Külső link** | Máshová vezet (pl. Facebook-csoport) | Külső webcím |
+
+Mindhárom típushoz adhatsz **rövid összefoglalót**, **lecke szöveget** és
+**letölthető anyagokat** (PDF, kép, segédlet).
+
+### Hol találom a videó azonosítóját?
+
+A Bunny felületén nyisd meg a videót, és másold ki a **„Video ID"** mezőt — egy
+hosszú, kötőjeles kód. Ez kerül a lecke **„Videó azonosítója"** mezőjébe.
+
+- A **fizetős kurzusvideók** a **védett videótárban** vannak: ezeket csak az
+  nézheti meg, aki megvásárolta a kurzust.
+- Az **ingyenes előzetesek** a **nyilvános videótárba** kerülnek — azokat
+  bárki megnézheti vásárlás nélkül is. Az előzetes azonosítója a kurzus
+  **„Bemutató videó azonosítója"** mezőjébe megy, nem a leckéhez.
+
+Ha rossz tárból másolod ki az azonosítót, a videó **némán nem indul el** — ez a
+leggyakoribb hiba a kurzusfeltöltésnél.
+
+### Videós leckénél erre figyelj
+
+- A **Hossz (másodperc)** kitöltése **kötelező**. Enélkül a videó nem indul el a
+  vásárlónál — a lejátszási jegy nem állítható ki nélküle.
+- A **Videó állapota** alapból „Feldolgozás alatt”. Amíg nem állítod
+  **„Kész”**-re, a lecke a lejátszóban „Hamarosan” jelzéssel, letiltva jelenik
+  meg, és **nem számít bele a haladásba** sem. Ez szándékos: nem várjuk el a
+  vásárlótól, hogy megnézzen valamit, amit nem tud elindítani.
+- A feltöltés nem automatikus: miután a Bunny végzett a feldolgozással, **kézzel
+  kell** „Kész”-re állítani.
+
+### Ha egy régi kurzusnak még „Videók” listája van
+
+A kurzus alján van egy **„Videók (régi…)"** mező. Ez a korábbi, fejezetek
+nélküli felépítés. Amíg nincs egyetlen modul sem, a vásárló ezt a listát látja —
+tehát **nem kell hozzányúlnod, minden működik**. Új kurzuson ez a mező **meg sem
+jelenik**, tehát nem tudod véletlenül rossz helyre felvinni a leckéket.
+
+> ⚠️ **Ha fejezetekre akarod bontani, NE vidd fel kézzel újra a videókat!**
+> Az újonnan felvett lecke új belső azonosítót kap, a már megnézett videókról
+> tárolt haladás viszont a régire mutat — így **minden vásárló haladása
+> nullázódna**, hibaüzenet nélkül. Ehelyett szólj a fejlesztőnek: van egy
+> parancs (`npm run kurzus:videok-modulba`), ami az azonosítók megtartásával
+> emeli át a videókat egy modulba, tehát senki haladása nem vész el.
+
+### Amit a vásárló lát
+
+- A leckék mellett kis **kör** jelzi, hogy megnézte-e már. A fejezet fejlécében
+  ott a „3/7” számláló, a kurzus tetején pedig a haladás-sáv és a százalék.
+- A **haladás nevezőjébe** csak az **elindítható** leckék számítanak bele: a
+  „Feldolgozás alatt” videó nem.
+- A **Kurzusaim** oldalon a kártyán a „Folytatás” gomb pontosan arra a leckére
+  visz, ahol abbahagyta.
+
+### Ki hol tart? — a Kurzus-haladás panel
+
+A kurzus szerkesztőlapjának **alján** találod a **Kurzus-haladás** panelt.
+Nem tölt magától (hogy a lap gyors maradjon): nyomd meg a **„Haladás
+betöltése"** gombot.
+
+Amit mutat:
+
+- **öt kártya**: Beiratkozott · Elkezdte · **Nem kezdte el** · Befejezte ·
+  Átlagos haladás;
+- **hallgatónkénti táblázat**: név, e-mail, állapot, kis kördiagram a
+  százalékkal, utolsó aktivitás és a **következő lecke**;
+- **Leckénkénti lemorzsolódás** (lenyitható): melyik leckénél veszíted el a
+  nézőket. A „(kezdés)" az első leckét jelöli, a „−12 fő" tényleges veszteséget,
+  a „+218 fő" pedig azt, hogy oda többen jutottak el (jellemzően modulhatáron).
+
+Praktikák:
+
+- A táblázat alapból **25 sort** mutat; lejjebb a **„További … hallgató
+  megjelenítése"** gombbal bővítheted. A **szűrő és a kereső mindig a teljes
+  létszámon dolgozik**, tehát a szűrés akkor is pontos, ha nem látszik minden sor.
+- A szűrő fölött ott áll, hány hallgatóból hány felel meg a szűrésnek — a
+  „ki nem kezdte még el" listához állítsd az **Állapot** szűrőt
+  **„Nem kezdte el"**-re, és a szám azonnal látszik.
+- A **„Letöltés táblázatba (CSV)"** gomb a **szűrt** listát menti le (Excelben
+  ékezethelyesen nyílik). Így egy kattintással megvan azoknak az e-mail-címe,
+  akiknek emlékeztetőt küldenél.
+
+---
+
+## 13. Amihez ne nyúlj
 
 Ezek nem tiltások a tiltás kedvéért: mindegyik mögött van valami, ami a
 látogatóknak vagy a vásárlóknak fáj, ha elromlik.
@@ -446,7 +573,7 @@ látogatóknak vagy a vásárlóknak fáj, ha elromlik.
 
 ---
 
-## 13. Hibát látsz?
+## 14. Hibát látsz?
 
 Előfordul. Ilyenkor a legtöbbet azzal segítesz, ha **pontosan** leírod, mi
 történt. Küldd el ezt az öt dolgot:

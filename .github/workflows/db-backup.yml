@@ -1,0 +1,155 @@
+# ============================================================================
+# Kineticare – ütemezett adatbázis-mentés (offsite logikai dump)
+# ----------------------------------------------------------------------------
+# MIÉRT: a Railway-natív kötet-mentés (volume backup) és a PITR a Railway
+# projektjén BELÜL él — a doksi is kimondja, hogy a kötet kiürítése az összes
+# hozzá tartozó mentést törli, és a mentések nem hagyják el a platformot.
+# Ez a workflow ad egy MÁSIK szolgáltatónál (GitHub) tárolt, letölthető
+# másolatot: ez az, ami egy törölt kötetet/projektet is túlél.
+# Részletek és visszaállítási eljárás: docs/adatbazis-mentes.md
+#
+# HOGYAN: a mentést a hivatalos `postgres` docker image pg_dump-ja készíti,
+# NEM a runner apt-csomagja. Két oka van:
+#   1. a kliens FŐVERZIÓJA nem lehet kisebb a szerverénél — az image tagjével
+#      ez egy sorban, láthatóan van rögzítve (ma: postgres:16-alpine, mert az
+#      éles Postgres-szolgáltatás is postgres:16-alpine);
+#   2. a mentés így nem függ a repó npm-telepítésétől — ha a build eltörik,
+#      a mentés attól még fut.
+#
+# TITOKKEZELÉS: a DATABASE_URI kizárólag `env:`-ként megy a lépésbe és a
+# konténerbe (`--env DATABASE_URI`), az értéke sehol nem kerül parancssorba
+# (`ps`-be), echo-ba vagy logba. A konténerben futó `sh -c` idézőjelezett
+# változó-behelyettesítést használ, tehát a jelszó speciális karakterei sem
+# esnek át shell-értelmezésen.
+#
+# A SECRET ÉRTÉKE a PUBLIKUS kapcsolati string legyen (Railway → Postgres →
+# Variables → DATABASE_PUBLIC_URL), mert a GitHub-runner nem éri el a Railway
+# privát hálózatát (`postgres.railway.internal`). Ez TCP-proxy-egresst
+# számláz — ez a napi mentés ára.
+# ============================================================================
+
+name: DB mentés
+
+on:
+  # Napi mentés hajnalban (UTC). A 02:17 szándékosan nem kerek óra: a kerek
+  # időpontokban a GitHub ütemezője a legterheltebb, ott a futás akár órákat
+  # csúszhat.
+  schedule:
+    - cron: "17 2 * * *"
+  # Kézi indítás (Actions fül -> DB mentés -> Run workflow): kockázatos
+  # művelet (tömeges import, migráció, Postgres-újraindítás) ELŐTT kötelező.
+  workflow_dispatch:
+
+# Két mentés ne fusson egyszerre ugyanarra az adatbázisra.
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Az éles Postgres-szolgáltatás image-e (Railway → Postgres → Settings →
+  # Source). Ha ott főverziót emelnek, EZT IS emelni kell, különben a
+  # pg_dump „server version mismatch"-csel áll le.
+  PG_IMAGE: postgres:16-alpine
+
+jobs:
+  backup:
+    name: pg_dump + integritás-ellenőrzés + artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # A secret hiánya NEM hiba: amíg nincs beállítva, a job zölden,
+      # magyarázó üzenettel kilép — így a piros futások nem szoktatják le a
+      # csapatot a riasztásokról. Az `if-no-files-found: error` viszont
+      # gondoskodik róla, hogy egy BEÁLLÍTOTT secret melletti néma
+      # mentés-kimaradás igenis bukjon.
+      - name: A DATABASE_URI secret megléte
+        id: secret
+        env:
+          DATABASE_URI: ${{ secrets.DATABASE_URI }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URI:-}" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=A mentés kimaradt::A DATABASE_URI secret nincs beállítva, ezért nem készült mentés. Élesítés: Settings -> Secrets and variables -> Actions -> New repository secret, név: DATABASE_URI, érték: a Railway Postgres PUBLIKUS kapcsolati stringje (DATABASE_PUBLIC_URL). Lásd docs/adatbazis-mentes.md."
+            {
+              echo "### DB mentés: kimaradt"
+              echo ""
+              echo "A \`DATABASE_URI\` secret nincs beállítva, ezért nem készült mentés."
+              echo "Élesítési lépések: \`docs/adatbazis-mentes.md\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mentés készítése (pg_dump, custom formátum)
+        id: dump
+        if: steps.secret.outputs.run == 'true'
+        env:
+          DATABASE_URI: ${{ secrets.DATABASE_URI }}
+        run: |
+          set -euo pipefail
+          mkdir -p backups
+          FILE="kineticare-$(date -u +%Y%m%d-%H%M%S).dump"
+          echo "file=${FILE}" >> "$GITHUB_OUTPUT"
+          docker pull --quiet "${PG_IMAGE}"
+          # A DATABASE_URI a konténerbe környezeti változóként megy át (érték
+          # nélküli `--env`), és csak a konténeren belül, idézőjelben oldódik
+          # fel — a host parancssorában sosem jelenik meg.
+          docker run --rm \
+            --env DATABASE_URI \
+            --env "DUMP_TARGET=/backups/${FILE}" \
+            --volume "${PWD}/backups:/backups" \
+            "${PG_IMAGE}" \
+            sh -c 'pg_dump --dbname="$DATABASE_URI" --format=custom --file="$DUMP_TARGET"'
+
+      # Egy le nem ellenőrzött mentés csak hamis biztonságérzet. A
+      # `pg_restore --list` a teljes archívumot végigolvassa: csonka vagy
+      # sérült fájlon nem nullával lép ki.
+      - name: Integritás-ellenőrzés (pg_restore --list)
+        if: steps.secret.outputs.run == 'true'
+        env:
+          FILE: ${{ steps.dump.outputs.file }}
+        run: |
+          set -euo pipefail
+          STATUS=0
+          docker run --rm \
+            --volume "${PWD}/backups:/backups" \
+            "${PG_IMAGE}" \
+            pg_restore --list "/backups/${FILE}" > toc.txt || STATUS=$?
+          # A fejléc-sorok ';'-vel kezdődnek, a visszaállítható bejegyzések
+          # "<id>; ..." alakúak. Két bukási mód van: a pg_restore nem nullás
+          # kilépése (csonka/sérült fájl) és a nulla bejegyzés (üres archívum).
+          ENTRIES="$(grep -cE '^[0-9]+;' toc.txt || true)"
+          if [ "${STATUS}" -ne 0 ] || [ "${ENTRIES}" -eq 0 ]; then
+            rm -f "backups/${FILE}"
+            echo "::error title=Sérült mentés::A mentés nem állítható vissza (pg_restore --list kilépési kód: ${STATUS}, visszaállítható bejegyzés: ${ENTRIES}) — a hibás fájl törölve, nem lett feltöltve."
+            exit 1
+          fi
+          SIZE="$(du -h "backups/${FILE}" | cut -f1)"
+          {
+            echo "### DB mentés kész"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Fájl | \`${FILE}\` |"
+            echo "| Méret | ${SIZE} |"
+            echo "| Visszaállítható bejegyzés | ${ENTRIES} |"
+            echo "| Megőrzés | 30 nap (artifact) |"
+            echo ""
+            echo "Visszaállítás: \`docs/adatbazis-mentes.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Mentés feltöltése artifactként
+        if: steps.secret.outputs.run == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: kineticare-db-${{ steps.dump.outputs.file }}
+          path: backups/${{ steps.dump.outputs.file }}
+          retention-days: 30
+          # A custom formátumú dump már tömörített — az újratömörítés csak idő.
+          compression-level: 0
+          # Ha a fájl valamiért nincs meg, az BUKÁS legyen, ne néma zöld futás.
+          if-no-files-found: error

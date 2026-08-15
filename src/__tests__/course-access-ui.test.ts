@@ -2,75 +2,39 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { CourseList } from '../components/account/CourseList'
 import { CoursePlayer } from '../components/account/CoursePlayer'
-import { ACCESS_EXPIRED_TITLE, accessExpiredMessage } from '../lib/course-access'
-import type { Product } from '../payload-types'
+import { accessExpiredMessage } from '../lib/course-access'
+import { buildCurriculum } from '../lib/curriculum/curriculum'
 
 /**
- * A1 — a hozzáférés lejáratának MEGJELENÍTÉSE (kurzuslista + lejátszó).
+ * A1 — a hozzáférés lejáratának MEGJELENÍTÉSE (lejátszó).
  *
  * A szabály maga (és a lejárat számítása) az src/__tests__/course-access.test.ts
  * hatóköre; itt csak azt ellenőrizzük, hogy a kész, magyar szövegek és a
  * célhivatkozások a helyükre kerülnek.
+ *
+ * A KURZUSAIM-LISTA A1-őrei átköltöztek: a lista kártya-nézetté alakult
+ * (tananyag-alapú haladás + állapotfüggő CTA), ezért a lejárat-sor, a lejárt
+ * üzenet és a nyilvános kurzusoldalra mutató link ellenőrzése a
+ * src/__tests__/course-list-ui.test.ts „CourseList — megjelenítés" blokkjában
+ * él tovább, a lista új szerződésével.
  */
-
-const PRODUCT = {
-  id: 42,
-  sku: 'Kézrehab alapkurzus',
-  accessDurationDays: 365,
-} as Product
 
 const EXPIRED_MESSAGE = accessExpiredMessage(new Date('2027-03-04T12:00:00.000Z'))
 
-describe('CourseList — lejárati dátum a kurzusaim listán', () => {
-  it('látszik a lejárati dátum, ha van', () => {
-    const html = renderToStaticMarkup(
-      createElement(CourseList, {
-        products: [PRODUCT],
-        accessByProductId: {
-          42: {
-            hasAccess: true,
-            expiryLabel: 'Hozzáférés eddig: 2027. 03. 04.',
-            expiredMessage: null,
-          },
-        },
-      }),
-    )
-    expect(html).toContain('Hozzáférés eddig: 2027. 03. 04.')
-    expect(html).toContain('/kurzusaim/42')
-    expect(html).toContain('Tovább a lejátszáshoz')
-  })
-
-  it('korlátlan hozzáférésnél nincs lejárati sor (a mai megjelenés marad)', () => {
-    const html = renderToStaticMarkup(
-      createElement(CourseList, { products: [PRODUCT], accessByProductId: {} }),
-    )
-    expect(html).not.toContain('Hozzáférés eddig')
-    expect(html).toContain('Tovább a lejátszáshoz')
-  })
-
-  it('lejárt hozzáférésnél empatikus üzenet + a kurzus oldalára mutató link', () => {
-    const html = renderToStaticMarkup(
-      createElement(CourseList, {
-        products: [PRODUCT],
-        accessByProductId: {
-          42: { hasAccess: false, expiryLabel: null, expiredMessage: EXPIRED_MESSAGE },
-        },
-      }),
-    )
-    expect(html).toContain(ACCESS_EXPIRED_TITLE)
-    expect(html).toContain('2027. 03. 04.')
-    expect(html).toContain('/kurzusok/42')
-    expect(html).not.toContain('/kurzusaim/42')
-  })
-})
+/**
+ * A lejátszó bemenete a TANANYAG-MODELL lett (`buildCurriculum`) a nyers
+ * `videos` tömb helyett — a kapuzott (hozzáférés nélküli) ág ettől nem
+ * változott, ezért itt üres tananyag is elég.
+ */
+const EMPTY_CURRICULUM = buildCurriculum({ modules: [], videos: [] }, false)
 
 describe('CoursePlayer — lejárt hozzáférés', () => {
   it('lejárat esetén nem a „nem vetted meg" szöveget mutatja, és nem tölt be videót', () => {
     const html = renderToStaticMarkup(
       createElement(CoursePlayer, {
-        product: { id: 42, title: 'Kézrehab alapkurzus', videos: [] },
+        product: { id: 42, title: 'Kézrehab alapkurzus' },
+        curriculum: EMPTY_CURRICULUM,
         hasAccess: false,
         expiredMessage: EXPIRED_MESSAGE,
       }),
@@ -84,7 +48,8 @@ describe('CoursePlayer — lejárt hozzáférés', () => {
   it('vásárlás nélkül a korábbi üzenet marad (nem lejárat-specifikus)', () => {
     const html = renderToStaticMarkup(
       createElement(CoursePlayer, {
-        product: { id: 42, title: 'Kézrehab alapkurzus', videos: [] },
+        product: { id: 42, title: 'Kézrehab alapkurzus' },
+        curriculum: EMPTY_CURRICULUM,
         hasAccess: false,
       }),
     )

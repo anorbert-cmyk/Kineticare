@@ -152,6 +152,12 @@ export const RATE_LIMIT_RULES = {
   'checkout-start': { limit: 10, windowMs: TEN_MINUTES_MS },
   'form-submission': { limit: 5, windowMs: TEN_MINUTES_MS },
   'stream-token': { limit: 60, windowMs: ONE_MINUTE_MS },
+  // A haladás-jelölés a stream-tokennel PÁROSÍTVA fut (leckénként legfeljebb
+  // egyszer), de ÍR az adatbázisba, és az automatikus, nézettség-alapú jelölés
+  // bevezetésével a hívásszám a felhasználói kattintásoktól függetlenné vált.
+  // Ugyanaz a per-user keret, mint a jegykiadásé: egy belépett fiók így sem
+  // tud korlátlanul haladás-sort létrehozni.
+  'course-progress': { limit: 60, windowMs: ONE_MINUTE_MS },
 } as const satisfies Record<string, RateLimitRule>
 
 /**

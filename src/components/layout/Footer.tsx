@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { ConsentSettingsButton } from '../analytics/ConsentSettingsButton'
 import { Container } from '../ui/Container'
 
+import { NewsletterSignup } from './NewsletterSignup'
+
 /**
  * Lábléc — a landing `kc-footer` nyelvén (higgsfield-site/app/src/kineticare.css,
  * 880. sortól): felül egy óriás, aláhúzott serif „Kapcsolat" link, mellette a
@@ -47,6 +49,12 @@ export function Footer() {
               <p className="kc-site-footer__tagline">Kézrehabilitációs online kurzusplatform</p>
             </div>
           </div>
+          {/* C9 — hírlevél-feliratkozás. A lead-magnet a lábléc MÁSODLAGOS
+              súlyú sávjában él (UX-skill 1. és 6. pont: az ingyenes ajánlat
+              nem előzheti meg és nem nyomhatja el a fizetős kurzusokat), a
+              jogi meta-sor FÖLÖTT. Aszinkron szerver-komponens: a form-builder
+              űrlap azonosítóját maga oldja fel, és hiányában nem renderel. */}
+          <NewsletterSignup />
           <div className="kc-site-footer__meta">
             <nav aria-label="Jogi és kapcsolat">
               <ul className="kc-site-footer__legal">

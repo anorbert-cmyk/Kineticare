@@ -28,6 +28,8 @@ import { restrictLockedDocumentsAccess } from './lib/security/locked-documents-a
 import { registerBarionWebhookProcessor } from './lib/barion-callback/process-callback'
 import { validateContactSubmissionData } from './lib/contact-submission'
 import { contactStaffEmail, kineticareEmailAdapter, sendMail, usersAuthEmails } from './lib/email'
+import { NEWSLETTER_FORM_TITLE, ensureNewsletterForm } from './lib/newsletter/form'
+import { validateNewsletterSubmissionData } from './lib/newsletter/validation'
 import { logger } from './lib/logger'
 import { adminGroups } from './plugins/admin-groups'
 import { audit } from './plugins/audit'
@@ -91,6 +93,69 @@ const verifyTurnstile = async (data: unknown): Promise<unknown> => {
 }
 
 /**
+ * A nyilvános űrlapok KÉT sémája (C9). A `form-submissions` collection egyetlen
+ * hookláncot futtat, de a beküldés sémája űrlaponként más:
+ *  - `contact` — a „Kapcsolat" űrlap (név, e-mail, tárgy, üzenet, consentPrivacy);
+ *  - `newsletter` — a lábléc „Hírlevél" űrlapja (e-mail, consentNewsletter).
+ *
+ * Enélkül a hírlevél-beküldés a kapcsolat-szerződésen bukna el („Add meg a
+ * neved.") — a `src/lib/contact-submission.ts` fejléce pontosan ezt az esetet
+ * jelzi előre: több nyilvános űrlapnál a szerződést szét kell bontani.
+ */
+type FormSubmissionKind = 'contact' | 'newsletter'
+
+/** A besorolás átadása a beforeValidate → afterChange úton (Payload req.context). */
+const FORM_KIND_CONTEXT_KEY = 'kineticareFormKind'
+
+type HookRequest = Parameters<CollectionBeforeValidateHook>[0]['req']
+
+/**
+ * A beküldéshez tartozó űrlap AZONOSÍTÁSA — az űrlap CÍME alapján, a
+ * `data.form` azonosítóból feloldva.
+ *
+ * Miért nem a beküldött mezők alakjából: azt a hívó szabadon alakítja, tehát a
+ * szerveroldali szerződést a kliens választhatná meg (elég lenne a `message`
+ * mezőt elhagyni a lazább szabályokhoz). A form-id viszont a rekord része, a
+ * címet pedig az adatbázis mondja meg.
+ *
+ * Egy indexelt, egysoros olvasás, a hívó tranzakciójában (`req`). Ha nem oldható
+ * fel (hiányzó/ismeretlen form, olvasási hiba), a SZIGORÚBB `contact`
+ * szerződés marad érvényben — azaz a mai viselkedés, a hírlevél-ág pedig ilyen
+ * esetben hangosan (magyar hibaüzenettel) elutasít, nem csendben enged át.
+ */
+async function resolveFormKind(
+  req: HookRequest | undefined,
+  form: unknown,
+): Promise<FormSubmissionKind> {
+  if (typeof form !== 'string' && typeof form !== 'number') {
+    return 'contact'
+  }
+  // A hook közvetlen (teszt-)hívásakor nincs valódi `req` — ilyenkor sem
+  // dobhatunk: a szigorúbb, kapcsolat-szerződés marad.
+  if (typeof req?.payload?.findByID !== 'function') {
+    return 'contact'
+  }
+  try {
+    const doc = await req.payload.findByID({
+      // A forms collection a form-builder pluginből jön — a payload-types nem
+      // tartalmazza, ezért a slug castolt (ugyanaz a minta, mint lentebb).
+      collection: 'forms' as 'pages',
+      id: form,
+      depth: 0,
+      overrideAccess: true,
+      req,
+    })
+    const title = (doc as unknown as { title?: unknown }).title
+    return title === NEWSLETTER_FORM_TITLE ? 'newsletter' : 'contact'
+  } catch (error) {
+    logger.warn('az űrlap-beküldéshez tartozó űrlap nem azonosítható — a szigorúbb szerződés fut', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return 'contact'
+  }
+}
+
+/**
  * K2: a kapcsolat-űrlap beküldésének SZERVER-oldali mező- és consent-
  * ellenőrzése. A form-builder plugin a submissionData sorokat ellenőrzés
  * nélkül tárolja, ezért a kötelező mezőket és a consentPrivacy
@@ -109,15 +174,26 @@ const verifyTurnstile = async (data: unknown): Promise<unknown> => {
  * siteverify pedig külső hívás — a formailag hibás beküldésre felesleges
  * Turnstile-kérést nem indítunk.
  */
-const validateContactSubmission: CollectionBeforeValidateHook = ({ data, operation }) => {
+const validateContactSubmission: CollectionBeforeValidateHook = async ({
+  data,
+  operation,
+  req,
+}) => {
   if (operation !== 'create') {
     return data
   }
-  const submissionData =
-    typeof data === 'object' && data !== null
-      ? (data as Record<string, unknown>).submissionData
-      : undefined
-  const errors = validateContactSubmissionData(submissionData)
+  const record = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {}
+  const request = req as HookRequest | undefined
+  const kind = await resolveFormKind(request, record.form)
+  // A staff-értesítő (afterChange) ugyanezt a besorolást használja — a
+  // req.context-ben adjuk tovább, hogy ne kelljen még egyszer lekérdezni.
+  if (request?.context) {
+    request.context[FORM_KIND_CONTEXT_KEY] = kind
+  }
+  const errors =
+    kind === 'newsletter'
+      ? validateNewsletterSubmissionData(record.submissionData)
+      : validateContactSubmissionData(record.submissionData)
   if (errors.length > 0) {
     throw new APIError(errors.join(' '), 400)
   }
@@ -129,15 +205,28 @@ const validateContactSubmission: CollectionBeforeValidateHook = ({ data, operati
  * A címzettlista a CONTACT_STAFF_EMAILS env-ből jön (vessző-szeparált); üres
  * env = nincs értesítés, a beküldés ettől függetlenül mentődik. Best-effort:
  * az e-mail-hiba sosem rontja el a beküldést.
+ *
+ * C9: a HÍRLEVÉL-feliratkozás NEM küld staff-értesítőt. A `contact-staff`
+ * sablon a kapcsolat-üzenetre van szabva (név + üzenettörzs), feliratkozásnál
+ * üres mezőkkel menne ki, és minden feliratkozás levelet gyártana. A
+ * feliratkozások az adminban, az Űrlapbeküldések listán látszanak
+ * (docs/hirlevel.md). A besorolás a beforeValidate-ből érkezik a
+ * `req.context`-en — hiánya (elvi ág) a mai viselkedést, a küldést jelenti.
  */
 const notifyStaffOnSubmission = async ({
   doc,
   operation,
+  formKind,
 }: {
   doc: unknown
   operation: string
+  formKind: unknown
 }): Promise<unknown> => {
   if (operation !== 'create') {
+    return doc
+  }
+  if (formKind === 'newsletter') {
+    logger.debug('hírlevél-feliratkozás — staff-értesítő kihagyva')
     return doc
   }
   const recipients = (process.env.CONTACT_STAFF_EMAILS ?? '')
@@ -356,6 +445,19 @@ async function onInit(payload: Payload): Promise<void> {
   registerWebhookProcessors(payload)
   await ensureHomeBaseline(payload)
   await ensureContactForm(payload)
+  // C9: a lábléc hírlevél-űrlapja UGYANOLYAN telepítési előfeltétel, mint a
+  // Kapcsolat űrlap — a lábléc minden oldalon ott van, és seedeletlen
+  // környezetben a blokk némán kimaradna. Idempotens, meglévőt sosem ír felül.
+  // BEST-EFFORT, mint minden onInit-seedelés: a DB-hiba (pl. migráció előtti
+  // adatbázis) nem viheti el az indulást és a fenti regisztrációkat — a blokk
+  // ilyenkor kimarad, és a lábléc űrlap nélkül renderel (ez a szerződése).
+  try {
+    await ensureNewsletterForm(payload)
+  } catch (error) {
+    logger.warn('a „Hírlevél" űrlap onInit-seedelése nem sikerült — a lábléc-blokk kimarad', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
 
 export default buildConfig({
@@ -530,6 +632,52 @@ export default buildConfig({
       // nem tud beütni.
       idle_in_transaction_session_timeout: 60_000,
     },
+    // A DEV-MÓDÚ DRIZZLE SÉMA-PUSH KIKAPCSOLVA.
+    //
+    // MIT VÉD. A Payload postgres-adaptere `push !== false` esetén minden
+    // NEM-production indulásnál drizzle-push-t futtat: lehúzza az adatbázis
+    // sémáját, összeveti a kódból épült drizzle-sémával, és a különbséget
+    // AZONNAL rákényszeríti a DB-re. Ha a különbség adatvesztéssel járna,
+    // a push interaktív megerősítést kér a folyamat stdin-jén:
+    //
+    //   · You're about to delete <tábla> table with N items
+    //   DATA LOSS WARNING: Possible data loss detected if schema is pushed.
+    //   Accept warnings and push schema to database? › (y/N)
+    //
+    // Ez a prompt két irányban ártalmas:
+    //   1. NEM-INTERAKTÍV FUTÁSNÁL ÖRÖK BEFAGYÁS. Scriptben, CI-ban vagy
+    //      ügynöki futtatásban nincs, aki válaszoljon: a folyamat stdin-re
+    //      várva `ep_poll`-ban áll, időkorlát nélkül. A Payload initje ilyenkor
+    //      soha nem fejeződik be, tehát MINDEN rá váró kérés is áll (nálunk a
+    //      dev szerver `GET /admin`-ja 90 mp után is válasz nélkül volt, és a
+    //      második kérés ugyanarra az init-ígéretre torlódott fel).
+    //   2. ROSSZ ENV MELLETT ADATVESZTÉS. Ha a DATABASE_URI éles-alakú
+    //      adatbázisra mutat, és a promptra bárki (vagy egy automatizmus) 'y'-t
+    //      ad, a push valóban ELDOBJA a kódsémából hiányzó táblákat/oszlopokat.
+    //
+    // MI AZ ELVÁRT MUNKAFOLYAMAT HELYETTE. A repó migráció-first (CLAUDE.md
+    // 3. tilos zóna, a G1–G4 őrökkel; a deploy start-parancsa
+    // `npx payload migrate && npm start`). Séma-változásnál — HELYBEN IS —
+    // a sorrend:
+    //
+    //   npx payload migrate:create <beszelo_nev>   # a Payload generálja
+    //   npx payload migrate                        # helyi DB felhúzása
+    //
+    // Kézzel migrációt írni vagy meglévőt szerkeszteni tilos; a push
+    // kikapcsolásával a séma egyetlen útja a verziózott migrációs lánc marad,
+    // vagyis a helyi és az éles adatbázis ugyanazon a gyártósoron áll.
+    //
+    // MIÉRT NEM TÖR EL SEMMIT. A `push` kizárólag a `db.connect()` ágban futó
+    // séma-ERŐLTETÉST kapcsolja; a drizzle-séma FELÉPÍTÉSE a `db.init()`-ben
+    // változatlanul megtörténik, ezért a config↔snapshot (G2) és a
+    // migrációs-lánc↔snapshot (G1) őrök ugyanúgy dolgoznak.
+    //
+    // A DÖNTÉS ALAPJA: két ügynök egymástól függetlenül mérte ki a fenti
+    // befagyást (6+ perc `ep_poll` nem-interaktív futtatásban), majd egy
+    // izolált adatbázison a negatív kontroll is reprodukálta — sémától idegen,
+    // adatot tartalmazó táblával a prompt kiírásra került, és a szerver nem
+    // állt fel; `push: false` mellett ugyanaz az indulás promptmentes.
+    push: false,
   }),
   sharp,
   // T-019 lezárás: a feltölthető fájlok mérete globálisan max. 10 MB (bájtban).
@@ -622,7 +770,14 @@ export default buildConfig({
           // A sorrend számít: előbb a helyi mező-/consent-ellenőrzés (K2),
           // utána a külső Turnstile-hívás.
           beforeValidate: [validateContactSubmission, async ({ data }) => verifyTurnstile(data)],
-          afterChange: [async ({ doc, operation }) => notifyStaffOnSubmission({ doc, operation })],
+          afterChange: [
+            async ({ doc, operation, req }) =>
+              notifyStaffOnSubmission({
+                doc,
+                operation,
+                formKind: req.context[FORM_KIND_CONTEXT_KEY],
+              }),
+          ],
         },
       },
     }),

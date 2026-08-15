@@ -17,13 +17,15 @@ betartandók — az ügynök ezek megsértésére irányuló kérést is utasít
 
 | Parancs | Leírás |
 | --- | --- |
-| `npm run dev` | Fejlesztői szerver indítása |
+| `npm run dev` | Fejlesztői szerver indítása — friss/üres adatbázisnál ELŐTTE `npx payload migrate` kötelező (a dev séma-push ki van kapcsolva, lásd a 22a. üzemeltetési tanulságot) |
 | `npm run build` | Production build |
 | `npm run lint` | ESLint-ellenőrzés |
 | `npm run typecheck` | TypeScript típusellenőrzés |
 | `npm run test` | Tesztek futtatása |
 | `npm run seed` | Demó-/tesztadatok betöltése (`src/scripts/seed.ts`) |
 | `npm run grant:purchase` | Kézi hozzáférés-adás vásárlás nélkül (`src/scripts/grant-purchase.ts`) |
+| `npm run import:customers` | Tömeges vevő-import CSV-ből (`src/scripts/import-customers.ts`; útmutató: `docs/vasarlo-migracio-terv.md`) |
+| `npm run backup:db` | Adatbázis-mentés integritás-ellenőrzéssel (`src/scripts/backup-db.ts`; útmutató: `docs/adatbazis-mentes.md`) |
 | `npm run seed:legacy` | Örökölt tartalom visszatöltése (`src/scripts/restore-legacy-content.ts`) |
 
 ## Kódolási konvenciók
@@ -206,7 +208,38 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
     lefutott — így a következő commit magával viszi a bestage-elt fájlokat!).
     Használj `git commit -F -` + heredoc-ot, és commit után ellenőrizd a
     `git status`-t.
-22. **Helyi Postgres a migráció-generáláshoz** (a `pgrun` user kell, mert az
+22a. **A Payload dev-módú séma-push KI VAN KAPCSOLVA** (`push: false` a
+    postgres-adapterben, őr-teszt védi). Ok: séma-eltérésnél a push interaktív,
+    TÁBLATÖRLÉST kínáló promptot ad, amin minden nem-interaktív futás némán,
+    örökre megakad (mérve: 6+ perc ep_poll, a GET /admin sosem válaszol), rossz
+    env mellett pedig éles-alakú adatbázison törölne. Sémaváltozásnál helyben
+    is a migrációs lánc az út: `npx payload migrate:create` + `npx payload
+    migrate`. Következmény: friss adatbázisnál a `npm run dev` előtt migrate
+    kell — enélkül az admin felállni feláll, de a seed/lekérdezések hangos
+    warnnal buknak.
+
+22b. **Helyi Postgres a migráció-generáláshoz** (a `pgrun` user kell, mert az
     `initdb` rootként nem indul): a socket-könyvtárnak `pgrun`-írhatónak kell
     lennie (`-k <dir>`), és a scratchpad SZÜLŐ könyvtáraira is kell `o+x`
     bejárási jog, különben a `pg_ctl` „Permission denied"-dal áll le.
+
+## Munkamodell — vezető + Opus-ügynökök (tulajdonosi alapbeállítás, 2026-08-15)
+
+Minden kódolási munkánál ez az alapbeállítás, külön kérés nélkül:
+
+1. **A vezető modell tervez és ellenőriz.** A fennmaradó feladatok átnézése, a
+   megoldások aprólékos kitalálása és a feladatkiírás a vezető dolga. A kiírás
+   részletes: cél, érintett fájlok, elfogadási feltételek, tilalmak,
+   ellenőrzési mód.
+2. **A munkát Opus-ügynökök végzik**, mindegyik a saját szakterületének
+   profija. Addig dolgoznak, amíg a kiírás minden pontja kész.
+3. **Az ügynök, ha valamiben nem biztos:** előbb kutat (internet, hivatalos
+   dokumentáció, a repó kódja); ha a kérdés ezek után is valódi döntést
+   igényel, NEM találgat — megáll, és a kérdést visszaküldi a vezetőnek.
+4. **Minden elkészült munka visszamegy a vezetőnek ellenőrzésre**: strukturált
+   beszámoló (mit csinált, fájllista, hogyan ellenőrizte, nyitott kérdések).
+   A vezető maga is ellenőriz (tesztfuttatás, diff-átnézés, ahol lehet,
+   empirikus/böngészős próba). KÉSZNEK jelenteni csak a vezető jóváhagyása
+   után szabad bármit.
+5. Semmi nem fogadható el pusztán azért, mert egy ügynök állítja — a mérés és
+   a reprodukció többet ér a véleménynél.

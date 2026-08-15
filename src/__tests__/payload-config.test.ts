@@ -1,5 +1,6 @@
 import type { Payload } from 'payload'
 import { describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
 
 import { buildOriginAllowlist } from '../env'
 import configPromise from '../payload.config'
@@ -376,5 +377,26 @@ describe('payload.config', () => {
     }
 
     expect(on).toHaveBeenCalledWith('error', expect.any(Function))
+  })
+})
+
+
+/**
+ * ═══ A DEV-PUSH KIKAPCSOLÁSÁNAK ŐRE ═══
+ *
+ * A `push: false` a postgres-adapterben azt zárja ki, hogy a dev-módú drizzle
+ * séma-push interaktív, TÁBLATÖRLÉST kínáló promptot adjon — amin minden
+ * nem-interaktív futás (script, CI, ügynök) némán, örökre megakad (mérve:
+ * a GET /admin 90 mp után is válasz nélkül, a folyamat ep_poll-ban). A séma
+ * egyetlen útja a verziózott migrációs lánc (CLAUDE.md 3. tilos zóna).
+ *
+ * Forrás-szintű őr: ha valaki a kapcsolót eltávolítja vagy true-ra állítja,
+ * itt bukjon, ne élesben.
+ */
+describe('postgres-adapter — a dev-push kikapcsolva marad', () => {
+  it('a payload.config.ts tartalmazza a push: false kapcsolót', () => {
+    const source = readFileSync(new URL('../payload.config.ts', import.meta.url), 'utf8')
+    expect(source).toMatch(/push:\s*false/)
+    expect(source).not.toMatch(/push:\s*true/)
   })
 })

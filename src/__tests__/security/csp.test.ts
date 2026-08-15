@@ -122,10 +122,26 @@ describe('buildContentSecurityPolicy — direktívák', () => {
     expect(directive(csp, 'connect-src')).toEqual(["'self'"])
   })
 
-  it('script-src: Turnstile igen, videó-szolgáltató nem (az csak iframe)', () => {
+  /**
+   * A szabály SZŰKÜLT, nem eltűnt.
+   *
+   * Korábban a `mediadelivery.net` EGYETLEN hostja sem kaphatott script-jogot,
+   * mert a lejátszó kizárólag iframe-ként volt beágyazva. Az automatikus
+   * haladás-jelöléshez viszont a Bunny HIVATALOS player.js könyvtárát töltjük
+   * be — tudatos, emberi döntéssel (lásd a csp.ts `script-src` kommentjét és
+   * az src/lib/stream/playerjs-loader.ts fejlécét): rögzített verziójú URL-ről,
+   * integritás-hash-sel, saját postMessage-tartalékkal.
+   *
+   * Ami VÁLTOZATLANUL tilos: a lejátszó KERETÉNEK hostja
+   * (`iframe.mediadelivery.net`) és a média pull-zone (`b-cdn.net`) SOHA nem
+   * kaphat script-jogot a mi dokumentumunkban — az iframe-en belüli scriptekre
+   * a beágyazott oldal saját CSP-je vonatkozik.
+   */
+  it('script-src: Turnstile és a player.js CDN igen — az iframe- és média-host NEM', () => {
     const sources = directive(csp, 'script-src')
     expect(sources).toContain('https://challenges.cloudflare.com')
-    expect(sources.some((source) => source.includes('mediadelivery.net'))).toBe(false)
+    expect(sources).toContain('https://assets.mediadelivery.net')
+    expect(sources.some((source) => source.includes('iframe.mediadelivery.net'))).toBe(false)
     expect(sources.some((source) => source.includes('b-cdn.net'))).toBe(false)
   })
 

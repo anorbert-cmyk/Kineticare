@@ -54,7 +54,11 @@ export const CourseProgress: CollectionConfig = {
   },
   admin: {
     useAsTitle: 'videoRef',
-    defaultColumns: ['user', 'product', 'videoRef', 'watchedAt'],
+    // A 24 karakteres hex `videoRef` SZÁNDÉKOSAN kikerült az alapnézetből: az
+    // admin UX-audit szerint ez volt a lista legszélesebb oszlopa, és ember
+    // számára nulla információt hordoz (nem derül ki belőle, melyik LECKE az).
+    // A mező továbbra is elérhető: a sort megnyitva és az oszlopválasztóban is.
+    defaultColumns: ['user', 'product', 'watchedAt'],
     // Ugyanaz a csoport, ahol a kurzusok és a rendelések élnek
     // (src/plugins/ecommerce.ts → WEBSHOP_GROUP, src/plugins/admin-groups.ts).
     group: 'Webshop',
@@ -106,6 +110,10 @@ export const CourseProgress: CollectionConfig = {
       label: 'Megnézve',
       admin: {
         readOnly: true,
+        // A sor megnyitva korábban amerikai sorrendben (08/15/2026) jelent meg,
+        // miközben a listában magyarul — a hónap 1–12. napjain ez mindkét
+        // irányban értelmes, tehát félreolvasható dátumot adott.
+        date: { displayFormat: 'yyyy. MM. dd. HH:mm' },
         description: 'A megjelölés időpontja — kizárólag a szerver állítja.',
       },
     },

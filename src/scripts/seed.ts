@@ -38,6 +38,7 @@ import {
   type HomeMediaIds,
 } from '../lib/home-seed'
 import { ensureMediaFiles } from '../lib/media-restore'
+import { ensureNewsletterForm } from '../lib/newsletter/form'
 import { validatePasswordStrength } from '../lib/security/password-policy'
 import config from '../payload.config'
 
@@ -108,6 +109,10 @@ async function seed(): Promise<void> {
     const homeMediaIds = await ensureHomeImages(payload)
     await ensureHomeLayout(payload, homeMediaIds)
     await ensureHomeTestimonials(payload)
+    // A lábléc MINDEN oldalon megjelenik, ezért a „Hírlevél" űrlap telepítési
+    // előfeltétel — a szűkített (éles) hatókörben is létre kell jönnie,
+    // különben a feliratkozó-blokk élesben némán kimaradna.
+    await ensureNewsletterForm(payload)
     payload.logger.info('Seed: kész (hatókör: kezdolap).')
     return
   }
@@ -374,6 +379,12 @@ async function seed(): Promise<void> {
   const homeMediaIds = await ensureHomeImages(payload)
   await ensureHomeLayout(payload, homeMediaIds)
   await ensureHomeTestimonials(payload)
+
+  // --- Lábléc hírlevél-űrlapja (C9) ------------------------------------------
+  // A form-builder űrlap ADAT (a `forms` collection egy sora), nem séma: nincs
+  // hozzá migráció. Idempotens — meglévő űrlapot SOHA nem ír felül, mert azt a
+  // szerkesztő már átszabhatta.
+  await ensureNewsletterForm(payload)
 
   payload.logger.info('Seed: kész.')
 }

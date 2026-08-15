@@ -2,9 +2,15 @@ import type { Payload } from 'payload'
 
 import { accessExpiredMessage } from '../course-access'
 import { resolveSingleCourseAccess } from '../course-access-lookup'
+import {
+  buildCurriculum,
+  findLessonByRefOrAsset,
+  firstPlayableVideoLesson,
+  type CurriculumLesson,
+} from '../curriculum/curriculum'
 import type { Product, User } from '../../payload-types'
 import { logger as rootLogger, type Logger } from '../logger'
-import { playableStreamVideos, type StreamTokenResponseBody } from './contract'
+import type { StreamTokenResponseBody } from './contract'
 import { createStreamPlaybackToken } from './token'
 
 /**
@@ -94,27 +100,33 @@ function hasPurchased(user: User, productId: number): boolean {
   })
 }
 
-type ProductVideo = NonNullable<Product['videos']>[number]
-
 /**
- * Videó kiválasztása a termékből. videoId-val a STABIL azonosító szerinti
- * egyezés (a sor `id` mezője VAGY a streamAssetId) — sorszám szándékosan nem
- * fogadható el, mert a lejátszható videók számozása a feldolgozási állapottól
- * függően elcsúszik. videoId nélkül az első lejátszható videó (a lejátszóval
- * KÖZÖS `playableStreamVideos` szűrés szerint), végső soron az első elem —
+ * Lecke kiválasztása a termék TANANYAGÁBÓL (modulok → leckék, vagy a régi,
+ * lapos videólista — a döntést a src/lib/curriculum/curriculum.ts hozza meg,
+ * ugyanaz a modul, amit a lejátszó felülete is használ). Így a jegykiadás és a
+ * megjelenített tananyag nem tudhatja máshogy, mi a kurzus tartalma.
+ *
+ * videoId-val a STABIL azonosító szerinti egyezés (a sor `id` mezője VAGY a
+ * streamAssetId) — sorszám szándékosan nem fogadható el, mert a lejátszható
+ * leckék számozása a feldolgozási állapottól függően elcsúszik.
+ *
+ * videoId nélkül az első lejátszható VIDEÓ-lecke, végső soron az első lecke —
  * hogy a csak feldolgozás alatti videót tartalmazó kurzus a beszédesebb 409-et
  * kapja a 404 helyett.
  */
-function selectVideo(product: Product, videoId: string | undefined): ProductVideo {
-  const videos = Array.isArray(product.videos) ? product.videos : []
+function selectLesson(product: Product, videoId: string | undefined): CurriculumLesson {
+  // A szerver-oldali kiválasztás mindig teljes adattal dolgozik: a hozzáférést
+  // a hívó már ellenőrizte (1., 3. és 3/b lépés), a GUID-elrejtés csak a
+  // KLIENSNEK szánt modellre vonatkozik.
+  const curriculum = buildCurriculum(product, true)
   if (videoId !== undefined) {
-    const match = videos.find((video) => video.streamAssetId === videoId || video.id === videoId)
+    const match = findLessonByRefOrAsset(curriculum, videoId)
     if (!match) {
       throw new StreamTokenError(404, 'A kért videó nem található.')
     }
     return match
   }
-  const first = playableStreamVideos(videos)[0] ?? videos[0]
+  const first = firstPlayableVideoLesson(curriculum) ?? curriculum.lessons[0]
   if (!first) {
     throw new StreamTokenError(404, 'A kurzushoz nem tartozik lejátszható videó.')
   }
@@ -196,10 +208,22 @@ export async function issueStreamToken(
     throw new StreamTokenError(403, accessExpiredMessage(access.expiresAt))
   }
 
-  // 4) Videó kiválasztása és lejátszhatóság-ellenőrzés.
+  // 4) Lecke kiválasztása és lejátszhatóság-ellenőrzés.
   const rawVideoId = typeof input.videoId === 'string' ? input.videoId.trim() : ''
-  const video = selectVideo(product, rawVideoId.length > 0 ? rawVideoId : undefined)
-  const streamAssetId = typeof video.streamAssetId === 'string' ? video.streamAssetId.trim() : ''
+  const lesson = selectLesson(product, rawVideoId.length > 0 ? rawVideoId : undefined)
+
+  // 4/a) Csak VIDEÓ-leckéhez van értelmezhető Bunny-jegy. A szöveges leckét és
+  //      a külső linket a felület jegy nélkül nyitja meg; ha mégis ide érkezik
+  //      ilyen kérés, az hibás kliens — nem adunk rá jegyet.
+  if (lesson.kind !== 'video') {
+    log.warn('stream-token: nem videó típusú leckére érkezett jegykérés', {
+      userId: input.user.id,
+      productId,
+      lessonKind: lesson.kind,
+    })
+    throw new StreamTokenError(404, 'A kért videó nem található.')
+  }
+  const streamAssetId = lesson.streamAssetId ?? ''
   if (streamAssetId.length === 0) {
     log.error('stream-token: a videóhoz nincs streamAssetId rendelve', {
       userId: input.user.id,
@@ -207,17 +231,15 @@ export async function issueStreamToken(
     })
     throw new StreamTokenError(503, UNAVAILABLE_MESSAGE)
   }
-  if (video.status !== 'ready') {
+  if (lesson.status !== 'ready') {
     throw new StreamTokenError(
       409,
       'A videó feldolgozása még folyamatban van. Kérjük, próbáld újra később.',
     )
   }
-  if (
-    typeof video.durationSec !== 'number' ||
-    !Number.isFinite(video.durationSec) ||
-    video.durationSec < 0
-  ) {
+  // A tananyag-modell a nem pozitív hosszt már null-ra normalizálta; a jegy
+  // élettartama enélkül nem számolható ki.
+  if (lesson.durationSec === null) {
     log.error('stream-token: a videó durationSec mezője hiányzik vagy érvénytelen', {
       userId: input.user.id,
       productId,
@@ -232,7 +254,7 @@ export async function issueStreamToken(
   const signingKey = requireTokenAuthKey(log)
   const issued = createStreamPlaybackToken({
     videoId: streamAssetId,
-    durationSec: video.durationSec,
+    durationSec: lesson.durationSec,
     signingKey,
   })
   const expiresAt = new Date(issued.expires * 1000).toISOString()

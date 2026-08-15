@@ -12,6 +12,8 @@ import {
   isOwnerFieldAccess,
   streamAssetReadAccess,
 } from '../access'
+import { courseModulesField } from '../fields/course-modules'
+import { deleteCourseProgressOnParentDelete } from '../lib/course-progress/cleanup'
 import { courseSlugField } from '../fields/course-slug'
 import { orderIntegrityBeforeChange } from '../lib/order-integrity'
 import { withoutPluginPaymentEndpoints } from '../lib/payments/barion-adapter'
@@ -92,6 +94,48 @@ const withOwnerOnlyPriceAccess = (field: Field): Field => {
       ...named.access,
       create: isOwnerFieldAccess,
       update: isOwnerFieldAccess,
+    },
+  } as Field
+}
+
+/**
+ * A plugin GYÁRI mezőleírásainak emberi nyelvre írása a kurzus-szerkesztőlapon.
+ *
+ * Az admin UX-audit két konkrét zavart mért:
+ *  - Az „Ár (HUF)" alatt a plugin gyári, magyarra fordított szövege állt, amely
+ *    SZÓ SZERINT az ellenkezőjét állítja a valóságnak: „ez az ár nem lesz
+ *    felhasználva a fizetésnél" (a Kineticare-ben nincsenek változatok, ez a
+ *    fizetendő ár). A mező a lap harmadik eleme, tehát azonnal szembejön.
+ *  - A lap LEGELSŐ mezője a „Készlet" volt, 0 értékkel, magyarázat nélkül. Az
+ *    `inventory` a kódban SEHOL nem használt; egy digitális kurzusnál a
+ *    „Készlet: 0" azt sugallja, hogy elfogyott, és nem eladható.
+ *
+ * A mezőket nem távolítjuk el (a plugin sémájához tartoznak) — csak az
+ * ADMIN-megjelenítésüket javítjuk, ami sem adatra, sem sémára nincs hatással.
+ */
+const courseFieldAdminOverrides: Record<string, { description?: string; hidden?: boolean }> = {
+  inventory: { hidden: true },
+  priceInHUF: {
+    description:
+      'A kurzus bruttó ára forintban — ennyit fizet a vásárló a pénztárnál. Csak tulajdonos állíthatja.',
+  },
+  priceInHUFEnabled: {
+    description: 'Kikapcsolva a kurzus nem vásárolható meg.',
+  },
+}
+
+const withCourseFriendlyAdmin = (field: Field): Field => {
+  const named = namedField(field)
+  const override = named === null ? undefined : courseFieldAdminOverrides[named.name]
+  if (named === null || override === undefined) {
+    return field
+  }
+  return {
+    ...named,
+    admin: {
+      ...(named as { admin?: Record<string, unknown> }).admin,
+      ...(override.hidden === undefined ? {} : { hidden: override.hidden }),
+      ...(override.description === undefined ? {} : { description: override.description }),
     },
   } as Field
 }
@@ -283,6 +327,17 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
     ...defaultCollection.access,
     readVersions: isAdmin,
   },
+  hooks: {
+    ...defaultCollection.hooks,
+    // A kurzus törlésekor a haladás-sorok takarítása. Ugyanaz a séma-ellentmondás,
+    // mint a felhasználónál: course_progress.product_id NOT NULL, az idegen kulcs
+    // viszont ON DELETE SET NULL — takarítás nélkül a törlés Postgres-hibával áll
+    // le. Indoklás: src/lib/course-progress/cleanup.ts.
+    beforeDelete: [
+      ...(defaultCollection.hooks?.beforeDelete ?? []),
+      deleteCourseProgressOnParentDelete('product'),
+    ],
+  },
   admin: {
     ...defaultCollection.admin,
     useAsTitle: 'sku',
@@ -305,7 +360,26 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
     listSearchableFields: ['sku', 'displayTitle'],
   },
   fields: [
-    ...mapFieldsDeep(defaultCollection.fields, withOwnerOnlyPriceAccess),
+    {
+      /**
+       * A LEGELSŐ elem a lapon: kimondja, látszik-e a kurzus a weboldalon.
+       *
+       * Az admin UX-audit mérte, hogy a szerkesztő a felső sáv „Állapot:
+       * Közzétett" feliratának hisz, miközben a bolt a `status` mezőt nézi — a
+       * cáfolatnak ezért ugyanott kell lennie, ahol a téves üzenet.
+       */
+      name: 'courseVisibilityNotice',
+      type: 'ui',
+      admin: {
+        components: {
+          Field: '/components/admin/CourseVisibilityNotice#CourseVisibilityNotice',
+        },
+      },
+    },
+    ...mapFieldsDeep(
+      mapFieldsDeep(defaultCollection.fields, withOwnerOnlyPriceAccess),
+      withCourseFriendlyAdmin,
+    ),
     {
       // C3: a látogatónak szóló kurzuscím. A `sku` egyszerre volt eddig
       // azonosító és megjelenő név; a displayTitle ezt szétválasztja, és ez a
@@ -430,19 +504,35 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       label: 'Bemutató videó azonosítója',
       admin: {
         description:
-          'Az ingyenes előzetes Bunny videó GUID-ja — a PUBLIKUS (jegy nélküli) libraryből, a Bunny felületén a videó adatlapján található. Ha nem tudod, hagyd üresen.',
+          'Az ingyenes előzetes videójának azonosítója. A Bunny felületén nyisd meg a videót, és másold ki a „Video ID” mezőt (hosszú, kötőjeles kód). Az előzeteseket a NYILVÁNOS videótárba töltsd fel — azt bárki megnézheti vásárlás nélkül is. Ha nincs előzetes, hagyd üresen.',
       },
     },
+    // A kurzus tananyaga fejezetekre bontva (modulok → leckék). A mező
+    // szándékosan a régi, lapos `videos` lista ELŐTT áll: az új kurzusokat itt
+    // kell összeállítani, a `videos` már csak a korábbi tartalom hordozója.
+    // A két szerkezet egyesítése a src/lib/curriculum/curriculum.ts-ben él.
+    courseModulesField,
     {
       name: 'videos',
       type: 'array',
-      label: 'Videók',
+      label: 'Videók (régi, fejezet nélküli lista)',
       labels: {
         singular: 'Videó',
         plural: 'Videók',
       },
       admin: {
-        description: 'A kurzus videói — a vásárlók ezeket nézhetik meg.',
+        // CSAK a régi kurzusokon jelenik meg. Az admin UX-audit mérte, hogy ez
+        // volt a lap legnagyobb eleme (1081 px), és egy ÚJ kurzuson is
+        // megjelent, üresen: a szerkesztő két, majdnem azonos mezőt látott
+        // („Tananyag (modulok)" és „Videók"), mindkettőben „hozzáadása"
+        // gombbal, és a leírásból kellett kitalálnia, melyikbe NE tegyen
+        // semmit. Ezt a döntést a felületnek kell meghoznia helyette.
+        condition: (data: unknown) => {
+          const videos = (data as { videos?: unknown } | null)?.videos
+          return Array.isArray(videos) && videos.length > 0
+        },
+        description:
+          'A kurzus fejezetek nélküli, RÉGI videólistája — csak a korábbi kurzusokon látszik. Új leckét a fenti „Tananyag (modulok)” mezőben vegyél fel. Az itt lévő videókat nem kell átmozgatni: azok változatlanul működnek.',
       },
       fields: [
         {
@@ -496,13 +586,28 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       label: 'Hozzáférés hossza (nap)',
       admin: {
         description:
-          'Hány napig érvényes a hozzáférés vásárlás után. Üres (null) = örök hozzáférés.',
+          'Hány napig érvényes a hozzáférés vásárlás után. Hagyd üresen, ha a hozzáférés soha nem jár le.',
       },
     },
     {
       name: 'status',
       type: 'select',
-      label: 'Állapot',
+      /**
+       * A címke SZÁNDÉKOSAN nem „Állapot".
+       *
+       * Az admin UX-audit mérte: a lap tetején a Payload dokumentum-státusza
+       * áll („Állapot: Közzétett", `_status`), és a szerkesztő ANNAK hisz —
+       * miközben a bolt kizárólag EZT a mezőt nézi (src/lib/courses.ts). A
+       * normál folyamattal felvitt kurzus `_status=published`, `status=NULL`
+       * állapotban maradt, és nem jelent meg a /kurzusok oldalon, figyelmeztetés
+       * nélkül. Két, azonos nevű mező közül a láthatatlanabbik döntött.
+       * A név most kimondja, mit csinál; a szomszédos figyelmeztető sáv
+       * (CourseVisibilityNotice) pedig a lap tetején cáfolja a téves üzenetet.
+       */
+      label: 'Megjelenés a weboldalon',
+      // Alapérték, hogy a mező SOSE maradjon jelöletlen: a „Válasszon ki egy
+      // értéket" üres select volt a csapda egyik fele.
+      defaultValue: 'draft',
       // A Payload a drafts `_status` mezőnek ugyanazt az enum-nevet generálná
       // (toSnakeCase('_status') === 'status'), így az alapértelmezett névütközés
       // miatt a 'archived' érték elveszne az adatbázis-enumokból. Külön enum-név
@@ -510,12 +615,16 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       // API-mezőnév változatlanul `status` marad.
       enumName: ({ tableName }) => `enum_${tableName}_product_status`,
       options: [
-        { label: 'Piszkozat', value: 'draft' },
-        { label: 'Közzétéve', value: 'published' },
-        { label: 'Archivált', value: 'archived' },
+        { label: 'Piszkozat — még nem látszik', value: 'draft' },
+        { label: 'Közzétéve — látszik az oldalon', value: 'published' },
+        { label: 'Archivált — levéve az oldalról', value: 'archived' },
       ],
       admin: {
-        description: 'Csak a közzétett kurzus látszik az oldalon. Ezt csak tulajdonos állíthatja.',
+        // Az oldalsávban, a közzététel-gomb MELLETT a helye — nem az űrlap
+        // közepén, 3000 px-rel lejjebb, ahol az audit szerint sosem találták meg.
+        position: 'sidebar',
+        description:
+          'Ez dönti el, hogy a kurzus látszik-e a weboldalon. A lap tetején lévő „Állapot” a szerkesztői változatra vonatkozik, nem erre. Csak tulajdonos állíthatja.',
       },
       // T-011: a publikálás/archiválás (status create/update) kizárólag owneri
       // döntés — a staff draftot készíthet, de nem publikálhat.
@@ -542,6 +651,30 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       label: 'Kapcsolódó kurzusok',
       admin: {
         description: 'A kurzus oldalán ajánlott további kurzusok.',
+      },
+    },
+    {
+      // Kurzus-haladás panel: „ki kezdte el, ki nem, és hány százaléknál tart".
+      // UI-mező, NEM tárol adatot → nincs séma-változás, migrációt nem igényel
+      // (a users.grantPurchasePanel és az orders.refundPanel mintája).
+      //
+      // Az adatot a GET /api/admin/course-progress végpont adja (staff+owner),
+      // és a KÖZÖS summarizeCurriculum-mal számol — így az adminban és a
+      // vásárló felületén definíció szerint UGYANAZ a szám áll. Ha a kettő
+      // eltérne, a szerkesztő egyik számban sem bízna meg többé.
+      //
+      // A mező a lap VÉGÉN áll. Az admin UX-audit mérte, hogy az űrlap közepén
+      // ülő panel 305 beiratkozottnál 17 126 px magas lett, és ennyivel tolta
+      // lejjebb az utána következő öt SZERKESZTENDŐ mezőt — köztük épp azt,
+      // amelyik a közzétételi csapdát feloldotta volna. Kimutatás nem
+      // állhat szerkesztendő mezők útjában.
+      name: 'courseProgressPanel',
+      type: 'ui',
+      label: 'Kurzus-haladás',
+      admin: {
+        components: {
+          Field: '/components/admin/CourseProgressPanel#CourseProgressPanel',
+        },
       },
     },
   ],

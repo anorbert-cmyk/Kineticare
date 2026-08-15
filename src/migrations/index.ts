@@ -11,6 +11,8 @@ import * as migration_20260809_232121_szamlazz_attempts_seq from './20260809_232
 import * as migration_20260810_094820_szamlazz_refunds_oszlop from './20260810_094820_szamlazz_refunds_oszlop';
 import * as migration_20260810_095237_sema_drift_allapotgep_es_jobok from './20260810_095237_sema_drift_allapotgep_es_jobok';
 import * as migration_20260810_132919_job_utemezes_stats from './20260810_132919_job_utemezes_stats';
+import * as migration_20260815_084028_kurzus_tananyag_modulok from './20260815_084028_kurzus_tananyag_modulok';
+import * as migration_20260815_125333_kurzus_lathatosag_alapertek from './20260815_125333_kurzus_lathatosag_alapertek';
 
 export const migrations = [
   {
@@ -76,6 +78,16 @@ export const migrations = [
   {
     up: migration_20260810_132919_job_utemezes_stats.up,
     down: migration_20260810_132919_job_utemezes_stats.down,
-    name: '20260810_132919_job_utemezes_stats'
+    name: '20260810_132919_job_utemezes_stats',
+  },
+  {
+    up: migration_20260815_084028_kurzus_tananyag_modulok.up,
+    down: migration_20260815_084028_kurzus_tananyag_modulok.down,
+    name: '20260815_084028_kurzus_tananyag_modulok',
+  },
+  {
+    up: migration_20260815_125333_kurzus_lathatosag_alapertek.up,
+    down: migration_20260815_125333_kurzus_lathatosag_alapertek.down,
+    name: '20260815_125333_kurzus_lathatosag_alapertek'
   },
 ];

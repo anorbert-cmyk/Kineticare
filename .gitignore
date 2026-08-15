@@ -32,6 +32,11 @@
 .agents/
 skills-lock.json
 
+# Adatbázis-mentések (npm run backup:db alapértelmezett célkönyvtára).
+# A dump a TELJES adatbázist tartalmazza (személyes adat, jelszó-hash) —
+# sosem kerülhet a repóba. Lásd docs/adatbazis-mentes.md.
+/backups/
+
 # Payload upload-mappa (Media collection staticDir) — futásidejű adat, nem forrás.
 # Helyi seed-futás is ide tölt; élesben a kötet/volume tartalma, sosem verziózandó.
 /media/

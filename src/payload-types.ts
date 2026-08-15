@@ -1300,7 +1300,13 @@ export interface User {
 export interface Product {
   id: number;
   inventory?: number | null;
+  /**
+   * Kikapcsolva a kurzus nem vásárolható meg.
+   */
   priceInHUFEnabled?: boolean | null;
+  /**
+   * A kurzus bruttó ára forintban — ennyit fizet a vásárló a pénztárnál. Csak tulajdonos állíthatja.
+   */
   priceInHUF?: number | null;
   /**
    * A kurzus címe, ahogy a látogató látja (pl. „Kéztorna otthon — 8 hetes program"). Ebből készül a webcím is. Ha üresen hagyod, a lenti „Kurzus neve (azonosító)" jelenik meg.
@@ -1366,11 +1372,91 @@ export interface Product {
    */
   audience?: ('laikus' | 'szakember') | null;
   /**
-   * Az ingyenes előzetes Bunny videó GUID-ja — a PUBLIKUS (jegy nélküli) libraryből, a Bunny felületén a videó adatlapján található. Ha nem tudod, hagyd üresen.
+   * Az ingyenes előzetes videójának azonosítója. A Bunny felületén nyisd meg a videót, és másold ki a „Video ID” mezőt (hosszú, kötőjeles kód). Az előzeteseket a NYILVÁNOS videótárba töltsd fel — azt bárki megnézheti vásárlás nélkül is. Ha nincs előzetes, hagyd üresen.
    */
   previewVideoStreamId?: string | null;
   /**
-   * A kurzus videói — a vásárlók ezeket nézhetik meg.
+   * A kurzus tananyaga fejezetekre bontva. A vásárló ebben a sorrendben látja a leckéket. Ha üresen hagyod, a lenti „Videók” lista jelenik meg egyetlen fejezetként.
+   */
+  modules?:
+    | {
+        /**
+         * Pl. „1. ALAPOK — Így kezdj neki”.
+         */
+        title: string;
+        /**
+         * Egy mondat a fejezetről a tananyag-listában. Nem kötelező.
+         */
+        summary?: string | null;
+        lessons?:
+          | {
+              /**
+               * Ez jelenik meg a tananyag-listában, pl. „Ismerd meg a kezed”.
+               */
+              title: string;
+              /**
+               * Videó = Bunny Stream felvétel. Szöveges lecke = csak írott anyag és/vagy letölthető fájl. Külső link = máshová vezet (pl. Facebook-csoport).
+               */
+              kind: 'video' | 'szoveg' | 'link';
+              /**
+               * 1–2 mondat a lecke alatt. Nem kötelező.
+               */
+              summary?: string | null;
+              /**
+               * A videó azonosítója. A Bunny felületén nyisd meg a videót, és másold ki a „Video ID” mezőt (hosszú, kötőjeles kód). A fizetős kurzusvideók a VÉDETT videótárban vannak (csak vásárlás után nézhetők), az ingyenes előzetesek a nyilvánosban.
+               */
+              streamAssetId?: string | null;
+              /**
+               * A videó hossza másodpercben. A lejátszási jegy kiállításához KÖTELEZŐ — nélküle a videó nem indul el.
+               */
+              durationSec?: number | null;
+              /**
+               * Nincs feltöltő-automatizmus, ezért KÉZZEL kell „Kész”-re állítani, miután a Bunny végzett a feldolgozással — csak a Kész állapotú videó játszható le és számít bele a haladásba.
+               */
+              status?: ('processing' | 'ready' | 'error') | null;
+              /**
+               * Teljes webcím (https://…), ahová a lecke gombja visz.
+               */
+              url?: string | null;
+              /**
+               * A lecke alatt megjelenő írott anyag — videós leckénél jegyzet vagy gyakorlásleírás is lehet. Nem kötelező.
+               */
+              content?: {
+                root: {
+                  type: string;
+                  children: {
+                    type: any;
+                    version: number;
+                    [k: string]: unknown;
+                  }[];
+                  direction: ('ltr' | 'rtl') | null;
+                  format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+                  indent: number;
+                  version: number;
+                };
+                [k: string]: unknown;
+              } | null;
+              /**
+               * PDF, kép vagy egyéb segédlet a leckéhez. Bármelyik lecketípushoz adható.
+               */
+              attachments?:
+                | {
+                    /**
+                     * Ha üresen hagyod, a fájl neve jelenik meg.
+                     */
+                    label?: string | null;
+                    file: number | Media;
+                    id?: string | null;
+                  }[]
+                | null;
+              id?: string | null;
+            }[]
+          | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * A kurzus fejezetek nélküli, RÉGI videólistája — csak a korábbi kurzusokon látszik. Új leckét a fenti „Tananyag (modulok)” mezőben vegyél fel. Az itt lévő videókat nem kell átmozgatni: azok változatlanul működnek.
    */
   videos?:
     | {
@@ -1388,11 +1474,11 @@ export interface Product {
       }[]
     | null;
   /**
-   * Hány napig érvényes a hozzáférés vásárlás után. Üres (null) = örök hozzáférés.
+   * Hány napig érvényes a hozzáférés vásárlás után. Hagyd üresen, ha a hozzáférés soha nem jár le.
    */
   accessDurationDays?: number | null;
   /**
-   * Csak a közzétett kurzus látszik az oldalon. Ezt csak tulajdonos állíthatja.
+   * Ez dönti el, hogy a kurzus látszik-e a weboldalon. A lap tetején lévő „Állapot” a szerkesztői változatra vonatkozik, nem erre. Csak tulajdonos állíthatja.
    */
   status?: ('draft' | 'published' | 'archived') | null;
   /**
@@ -2859,6 +2945,33 @@ export interface ProductsSelect<T extends boolean = true> {
   category?: T;
   audience?: T;
   previewVideoStreamId?: T;
+  modules?:
+    | T
+    | {
+        title?: T;
+        summary?: T;
+        lessons?:
+          | T
+          | {
+              title?: T;
+              kind?: T;
+              summary?: T;
+              streamAssetId?: T;
+              durationSec?: T;
+              status?: T;
+              url?: T;
+              content?: T;
+              attachments?:
+                | T
+                | {
+                    label?: T;
+                    file?: T;
+                    id?: T;
+                  };
+              id?: T;
+            };
+        id?: T;
+      };
   videos?:
     | T
     | {

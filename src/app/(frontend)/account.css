@@ -110,148 +110,17 @@
   color: var(--kc-color-warning);
 }
 
-/* ---- Lejátszó ------------------------------------------------------------- */
+/* ---- A RÉGI LEJÁTSZÓ-STÍLUSOK INNEN ELKERÜLTEK ---------------------------
+   A `.kc-player*` és a `.kc-course-progress*` szabályok a fejezetekre bontott
+   tananyaghoz készült ÚJ lejátszóval együtt a `player.css`-be költöztek.
 
-.kc-player h1 {
-  margin: 0 0 var(--kc-space-5);
-}
+   MIÉRT NEM MARADHATTAK ITT: a két lap ugyanazokat az osztályneveket
+   használta, és az itteni `.kc-player__stage { aspect-ratio: 16 / 9 }` az új,
+   teljes magasságú színpadra is ráült — a 764px-es magasságból 16:9 arányban
+   1358px SZÉLESSÉG lett egy 1040px-es rácssávban, vagyis az oldal vízszintesen
+   túlcsordult, és az alsó akciósáv kilógott a képernyőről. Böngészős méréssel
+   elkapva. A `.kc-course-progress*` szabályokra pedig már egyetlen komponens
+   sem hivatkozott (a haladást a közös ProgressBar/ProgressRing rajzolja).
 
-.kc-player__layout {
-  display: grid;
-  gap: var(--kc-space-6);
-}
-
-@media (min-width: 1024px) {
-  .kc-player__layout {
-    grid-template-columns: minmax(0, 1fr) 300px;
-    align-items: start;
-  }
-}
-
-.kc-player__stage {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  background-color: var(--kc-color-surface-dark);
-  border-radius: var(--kc-radius-lg);
-  overflow: hidden;
-}
-
-.kc-player__frame {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-}
-
-.kc-player__loading,
-.kc-player__error {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--kc-space-3);
-  color: var(--kc-color-white);
-  text-align: center;
-  padding: var(--kc-space-4);
-}
-
-.kc-player__episodes h2 {
-  margin: 0 0 var(--kc-space-3);
-  font-size: var(--kc-text-lg);
-}
-
-.kc-player__episode-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.kc-player__episode {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--kc-space-3);
-  width: 100%;
-  padding: var(--kc-space-3);
-  border: 1px solid transparent;
-  border-radius: var(--kc-radius-md);
-  background: none;
-  color: var(--kc-color-text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.kc-player__episode:hover {
-  background-color: var(--kc-color-surface-tint);
-}
-
-.kc-player__episode[aria-current='true'] {
-  border-color: var(--kc-color-primary);
-  background-color: var(--kc-color-surface-tint);
-}
-
-.kc-player__episode-duration {
-  color: var(--kc-color-text-muted);
-  font-size: var(--kc-text-xs);
-}
-
-/* ---- Kurzus-haladás (E1) -------------------------------------------------
-   „X/Y videó megnézve" a lejátszó fejlécében, epizódonként jelölő gomb és a
-   megnézett állapot pipája. Méret és szín KIZÁRÓLAG a közös tokenekről
-   (UX-skill 4. pont) — új szín nem került be. A „megnézve" a meglévő
-   --kc-color-success (#166534): a kártya/lap hátterén 7,4:1, illetve 6,9:1 —
-   mindkettő az AA normál szöveg 4,5:1-es küszöbe felett. */
-
-.kc-player__progress {
-  margin: calc(-1 * var(--kc-space-4)) 0 var(--kc-space-5);
-  font-size: var(--kc-text-sm);
-  color: var(--kc-color-text-muted);
-}
-
-.kc-player__episode-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--kc-space-2);
-  margin-bottom: var(--kc-space-3);
-}
-
-.kc-player__episode-item > .kc-button {
-  margin-left: var(--kc-space-3);
-}
-
-.kc-player__episode-check {
-  margin-right: var(--kc-space-2);
-  color: var(--kc-color-success);
-}
-
-.kc-player__episode-watched {
-  margin: 0 0 0 var(--kc-space-3);
-  font-size: var(--kc-text-sm);
-  color: var(--kc-color-success);
-}
-
-.kc-player__episode-error {
-  margin: 0 0 0 var(--kc-space-3);
-  font-size: var(--kc-text-sm);
-  color: var(--kc-color-danger);
-}
-
-/* A kurzuslista visszafogott haladás-sora („3/7 megnézve"). */
-.kc-course-progress {
-  display: block;
-  margin: 0 0 var(--kc-space-3);
-  font-size: var(--kc-text-sm);
-  color: var(--kc-color-text-muted);
-}
-
-.kc-course-progress--complete {
-  color: var(--kc-color-success);
-}
-
-.kc-player--forbidden h2 {
-  margin: 0 0 var(--kc-space-3);
-}
+   A `.kc-course-access*` szabályok SZÁNDÉKOSAN maradtak fent: a hozzáférés
+   lejáratának sorát (A1) a kurzuslista ma is ezekkel jeleníti meg. */

@@ -312,7 +312,8 @@ hogy a Cloudflare-hostok már nincsenek a fejlécben, és őrzi a `blob:`,
 
 ```
 default-src 'self';
-script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com;
+script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com
+           https://assets.mediadelivery.net;
 frame-src 'self' https://iframe.mediadelivery.net
           https://www.youtube-nocookie.com https://player.vimeo.com https://challenges.cloudflare.com;
 img-src 'self' data: https://*.b-cdn.net;
@@ -348,9 +349,26 @@ Miért van benne `'unsafe-inline'` (és miért nincs `'unsafe-eval'`):
   proxyján megy (`next.config.ts` rewrites), a Barion pedig **nem** hálózati
   hívás a böngészőből, hanem teljes oldalas átirányítás — azt a CSP nem
   korlátozza. **A fizetés tehát nem törik el.**
-- A videó-szolgáltató hostja **nincs** a `script-src`-ben: a lejátszó kizárólag
-  iframe-ként van beágyazva, az iframe-en belüli scriptekre a beágyazott
-  dokumentum saját szabálya vonatkozik.
+- A lejátszó **KERETÉNEK** hostja (`iframe.mediadelivery.net`) és a média
+  pull-zone (`b-cdn.net`) **nincs** a `script-src`-ben, és nem is kerülhet oda:
+  a lejátszó iframe-ként van beágyazva, az iframe-en belüli scriptekre a
+  beágyazott dokumentum saját szabálya vonatkozik.
+- Az `assets.mediadelivery.net` viszont **2026-08-15 óta benne van** — ez a
+  Bunny player.js könyvtárának CDN-hosztja, a haladás automatikus jelöléséhez
+  (a videó ~90%-ának tényleges megnézése). Tudatos, emberi döntéssel felvett
+  engedély; a kockázat mérlegelése a `src/lib/security/csp.ts` `script-src`
+  kommentjében él. Amivel korlátozzuk:
+  - **rögzített verziójú URL** (`player-0.1.0.min.js`), nem `-latest`,
+  - **Subresource Integrity** (SHA-384) + `crossorigin="anonymous"`: a böngésző
+    kizárólag a bájtra ellenőrzött fájlt futtatja, tehát a „CDN alattunk
+    kicseréli a kódot" forgatókönyv ki van zárva,
+  - `referrerpolicy="no-referrer"`: a CDN nem tudja meg, melyik aloldalról tölt,
+  - **tartalék út**: ha a script bármi miatt nem fut le (integritás-hiba,
+    hálózat, blokkoló bővítmény), a lejátszó a saját, függőség nélküli
+    postMessage-hidunkra esik vissza (`src/lib/stream/playerjs-client.ts`), és
+    ha az sem szólal meg, a kézi „Kész, tovább" gomb rögzíti a haladást.
+  A hash frissítése (emberi átnézéssel) az
+  `src/lib/stream/playerjs-loader.ts` fejlécében leírt paranccsal.
 
 ---
 
