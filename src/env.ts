@@ -216,7 +216,10 @@ export const optionalAnalyticsEnvVars = [
  * A Barion POSKey környezetfüggő: BARION_ENVIRONMENT=prod esetén az éles
  * kulcs (BARION_POSKEY_PROD), egyébként (alapértelmezett test) a tesztkulcs
  * (BARION_POSKEY_TEST) kötelező — így stagingen nem kell éles kulcs, élesben
- * pedig nem indul az app tesztkulccsal.
+ * pedig nem indul az app tesztkulccsal. A hiányzó kulcs néven nevezve kerül a
+ * hiánylistába, tehát a `prod` környezet + hiányzó BARION_POSKEY_PROD páros
+ * beszédes indulási hibát ad (és élesben a BARION_ENVIRONMENT megléte is
+ * kötelező — lásd assertRequiredEnv).
  */
 function requiredBarionPosKeyEnv(): string {
   return process.env.BARION_ENVIRONMENT === 'prod' ? 'BARION_POSKEY_PROD' : 'BARION_POSKEY_TEST'
@@ -282,6 +285,46 @@ export function assertRequiredEnv(
   }
 
   if (isProductionRuntime()) {
+    /**
+     * BARION_ENVIRONMENT — ÉLESBEN KÖTELEZŐ.
+     *
+     * A Barion-kliens (src/lib/barion/client.ts) hiányzó változó esetén NÉMÁN a
+     * 'test' környezetre esik vissza, és a BARION_POSKEY_TEST kulcsot használja.
+     * Élesben ez azt jelentené, hogy a vásárló a Barion SANDBOXÁBAN fizet: a
+     * pénz sosem érkezik meg, a rendelés viszont — a teszt-rendszer „sikeres"
+     * válasza alapján — paid lenne, hozzáféréssel és számlával együtt. Ezt a
+     * hibát semmilyen későbbi ellenőrzés nem fogná meg, ezért az indulásnak
+     * ITT kell hangosan elakadnia.
+     */
+    if (!isEnvSet('BARION_ENVIRONMENT')) {
+      throw new Error(
+        'Az alkalmazás nem indulhat el. Éles futásban (NODE_ENV=production) a BARION_ENVIRONMENT ' +
+          "változó kötelező ('test' vagy 'prod'). Hiánya NEM ártalmatlan: a rendszer ilyenkor " +
+          'némán a Barion TESZT-környezetét használná, tehát a vásárlók fizetése sosem érkezne ' +
+          'meg. Állítsd be a változót (éles boltnál: prod) a BARION_API_URL-lel összhangban ' +
+          '(prod → https://api.barion.com), majd indítsd újra a szervert.',
+      )
+    }
+
+    /**
+     * ENABLE_JOB_WORKERS — élesben ez kapcsolja be a job-ütemezést (autoRun).
+     *
+     * Nélküle NEM fut a webhook-retry (elveszett/elhasalt Barion-callback
+     * újrapróbálása), az order-poll (a payment_pending rendelések mentőhálója)
+     * és a számla-resweep sem — a fizetés lezárása így kizárólag az első,
+     * sikeres callbackre lenne bízva. Ez nem indulás-megakasztó hiba (az app
+     * enélkül is kiszolgál), de némán sem maradhat.
+     */
+    if (process.env.ENABLE_JOB_WORKERS !== 'true') {
+      warn?.('job_workerek_kikapcsolva', {
+        reszletek:
+          'Az ENABLE_JOB_WORKERS nincs "true" értéken: élesben nem fut a webhook-retry, az ' +
+          'order-poll és a számla-resweep. Elveszett Barion-callback esetén a rendelés ' +
+          'payment_pending-ben ragadna, és a számlák sem állítódnának újra sorba. ' +
+          'Élesítés: ENABLE_JOB_WORKERS=true.',
+      })
+    }
+
     const [siteKeyEnv, secretKeyEnv] = turnstileEnvPair
     const siteSet = isEnvSet(siteKeyEnv)
     const secretSet = isEnvSet(secretKeyEnv)

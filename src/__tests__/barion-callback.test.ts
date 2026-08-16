@@ -245,12 +245,35 @@ function createScheduleCapture() {
   }
 }
 
+const CALLBACK_URL = 'https://shop.example.test/api/barion/callback'
+
+/** JSON-törzses kézbesítés (TARTALÉK csatorna — a Barion ma nem ilyet küld). */
 function makeRequest(body: unknown): Request {
-  return new Request('https://shop.example.test/api/barion/callback', {
+  return new Request(CALLBACK_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: typeof body === 'string' ? body : JSON.stringify(body),
   })
+}
+
+/**
+ * A VALÓDI Barion-kézbesítés alakja: a PaymentId a QUERY STRINGBEN érkezik
+ * (`CallbackUrl?paymentId=<guid>`), a POST-törzs pedig ÜRES.
+ */
+function makeBarionRequest(
+  paymentId: string,
+  options: { queryKey?: 'paymentId' | 'PaymentId'; body?: string } = {},
+): Request {
+  const url = `${CALLBACK_URL}?${options.queryKey ?? 'paymentId'}=${encodeURIComponent(paymentId)}`
+  return new Request(url, {
+    method: 'POST',
+    ...(options.body === undefined ? {} : { body: options.body }),
+  })
+}
+
+/** Törzs és query nélküli POST — a Barion-callback „csupasz" változata. */
+function makeEmptyRequest(): Request {
+  return new Request(CALLBACK_URL, { method: 'POST' })
 }
 
 function setup(options: MockPayloadOptions = {}) {
@@ -341,6 +364,100 @@ describe('POST /api/barion/callback — bemenet-ellenőrzés', () => {
       expect(docs).toHaveLength(1)
       expect(docs[0]?.externalId).toBe(validId)
     }
+  })
+})
+
+/**
+ * B1 — A BLOKKOLÓ, AMIT EZ A CSOPORT BIZONYÍT.
+ *
+ * A Barion a callbacket `CallbackUrl?paymentId=<guid>` alakban, ÜRES POST-
+ * törzzsel küldi. A korábbi kód `await request.json()`-nel indult: üres törzsön
+ * ez DOB, tehát MINDEN valódi callback 400-at kapott, a rendelés pedig sosem
+ * zárult le a callback-úton. Az alábbi tesztek a RÉGI kódon megbuknának.
+ */
+describe('B1 — a PaymentId a QUERY STRINGBŐL is feloldódik (valódi Barion-alak)', () => {
+  it('query stringes paymentId + ÜRES törzs → 200 accepted, és a fizetés le is zárul', async () => {
+    const { POST, docs, order, user, capture } = setup()
+    fetchMock.mockResolvedValueOnce(getStateResponse('Succeeded'))
+
+    const response = await POST(makeBarionRequest(PAYMENT_ID))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: true, status: 'accepted' })
+    expect(docs).toHaveLength(1)
+    expect(docs[0]?.externalId).toBe(PAYMENT_ID)
+
+    await capture.runAll()
+
+    expect(order?.status).toBe('paid')
+    expect(user.purchases).toEqual([42])
+    expect(docs[0]).toMatchObject({ status: 'processed', result: 'paid' })
+  })
+
+  it('a nagybetűs query-kulcs (PaymentId) is elfogadott', async () => {
+    const { POST, docs } = setup()
+
+    const response = await POST(makeBarionRequest(PAYMENT_ID, { queryKey: 'PaymentId' }))
+
+    expect(response.status).toBe(200)
+    expect(docs[0]?.externalId).toBe(PAYMENT_ID)
+  })
+
+  it('a NEM JSON törzs önmagában NEM hiba, ha a query-ben megvan az azonosító', async () => {
+    const { POST, docs } = setup()
+
+    const response = await POST(makeBarionRequest(PAYMENT_ID, { body: 'ez nem json {' }))
+
+    expect(response.status).toBe(200)
+    expect(docs[0]?.externalId).toBe(PAYMENT_ID)
+  })
+
+  it('a query ELSŐDLEGES: eltérő törzs mellett is a query-beli azonosító rögzül', async () => {
+    const { POST, docs } = setup()
+    const otherId = '99999999-8888-7777-6666-555555555555'
+
+    const response = await POST(
+      makeBarionRequest(PAYMENT_ID, { body: JSON.stringify({ PaymentId: otherId }) }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(docs[0]?.externalId).toBe(PAYMENT_ID)
+  })
+
+  it('sem query, sem törzs → 400, DB-írás és ütemezés nélkül', async () => {
+    const { POST, docs, capture } = setup()
+
+    const response = await POST(makeEmptyRequest())
+
+    expect(response.status).toBe(400)
+    expect(docs).toHaveLength(0)
+    expect(capture.tasks).toHaveLength(0)
+  })
+
+  it('nem GUID-alakú query-paraméter → 400, DB-írás és kimenő hívás nélkül', async () => {
+    const { POST, docs, capture } = setup()
+
+    for (const garbage of ['nem-egy-guid', '../../etc/passwd', 'a'.repeat(100_000)]) {
+      const response = await POST(makeBarionRequest(garbage))
+      expect(response.status, garbage).toBe(400)
+    }
+
+    expect(docs).toHaveLength(0)
+    expect(capture.tasks).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('a napló megmondja, MELYIK forrásból jött az azonosító (éles próbavásárlás bizonyítéka)', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { POST } = setup()
+
+    await POST(makeBarionRequest(PAYMENT_ID))
+    expect(logOutput(logSpy)).toContain('query')
+
+    logSpy.mockClear()
+    const { POST: POST2 } = setup()
+    await POST2(makeRequest({ PaymentId: PAYMENT_ID }))
+    expect(logOutput(logSpy)).toContain('body')
   })
 })
 
@@ -483,8 +600,85 @@ describe('(d) függő státusz — Prepared/Started', () => {
     expect(order?.status).toBe('payment_pending')
     expect(calls.update.filter((call) => call.collection === 'orders')).toHaveLength(0)
     expect(calls.update.filter((call) => call.collection === 'users')).toHaveLength(0)
-    expect(docs[0]).toMatchObject({ status: 'processed', result: 'pending_repoll' })
+    // B4: a függő kimenetel NEM VÉGLEGES — a rekord újrafeldolgozható marad
+    // (received + üres processedAt), különben a később érkező végleges státusz
+    // duplikátumként veszne el.
+    expect(docs[0]).toMatchObject({ status: 'received', result: 'pending_repoll' })
+    expect(docs[0]?.processedAt ?? null).toBeNull()
+  })
+})
+
+/**
+ * B4 — A BLOKKOLÓ, AMIT EZ A CSOPORT BIZONYÍT.
+ *
+ * A Barion MINDEN státuszváltásra UGYANAZZAL a PaymentId-vel küld callbacket.
+ * Amíg a függő (Prepared/Started) kimenetel `processed`-re zárta az eseményt, a
+ * dedup a KÖVETKEZŐ — épp a `Succeeded` — kézbesítést duplikátumként dobta el:
+ * a rendelés sosem lett paid a callback-úton. A RÉGI kódon ez a csoport
+ * megbukna (a második POST 'duplicate'-et adna, a rendelés payment_pending
+ * maradna).
+ */
+describe('B4 — függő callback UTÁN a végleges callback is feldolgozódik', () => {
+  it('#1 Prepared → #2 Succeeded (azonos PaymentId) → a rendelés paid lesz', async () => {
+    const { POST, docs, order, user, capture } = setup()
+
+    fetchMock.mockResolvedValueOnce(getStateResponse('Prepared'))
+    const first = await POST(makeBarionRequest(PAYMENT_ID))
+    expect(first.status).toBe(200)
+    await capture.runAll()
+
+    expect(order?.status).toBe('payment_pending')
+    expect(docs[0]).toMatchObject({ status: 'received', result: 'pending_repoll', attempts: 1 })
+
+    fetchMock.mockResolvedValueOnce(getStateResponse('Succeeded'))
+    const second = await POST(makeBarionRequest(PAYMENT_ID))
+    expect(second.status).toBe(200)
+    // A rekord létezik, de NEM véglegesen lezárt → újrafeldolgozás indul.
+    expect(await second.json()).toEqual({ ok: true, status: 'received' })
+    await capture.runAll()
+
+    expect(order?.status).toBe('paid')
+    expect(user.purchases).toEqual([42])
+    // Egyetlen webhook-rekord, most már VÉGLEGESEN lezárva.
+    expect(docs).toHaveLength(1)
+    expect(docs[0]).toMatchObject({ status: 'processed', result: 'paid', attempts: 2 })
     expect(typeof docs[0]?.processedAt).toBe('string')
+  })
+
+  it('a webhook-retry (processWebhook) is újra feldolgozza a függő eseményt — NEM already-processed', async () => {
+    const { POST, docs, order, capture, store, payload } = setup()
+    fetchMock.mockResolvedValueOnce(getStateResponse('Started'))
+
+    await POST(makeBarionRequest(PAYMENT_ID))
+    await capture.runAll()
+    expect(docs[0]).toMatchObject({ status: 'received', result: 'pending_repoll' })
+
+    fetchMock.mockResolvedValueOnce(getStateResponse('Succeeded'))
+    const retry = await processWebhook({
+      store,
+      provider: 'barion',
+      externalId: PAYMENT_ID,
+      handler: createBarionCallbackProcessor({ payload, store }),
+    })
+
+    expect(retry.kind).toBe('processed')
+    expect(order?.status).toBe('paid')
+    expect(docs[0]).toMatchObject({ status: 'processed', result: 'paid' })
+  })
+
+  it('a TERMINÁLIS lezárás (paid) után a következő kézbesítés változatlanul duplikátum', async () => {
+    const { POST, calls, capture } = setup()
+    fetchMock.mockResolvedValue(getStateResponse('Succeeded'))
+
+    await POST(makeBarionRequest(PAYMENT_ID))
+    await capture.runAll()
+
+    const second = await POST(makeBarionRequest(PAYMENT_ID))
+    expect(await second.json()).toEqual({ ok: true, status: 'duplicate' })
+    await capture.runAll()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(calls.update.filter((call) => call.collection === 'orders')).toHaveLength(1)
   })
 })
 

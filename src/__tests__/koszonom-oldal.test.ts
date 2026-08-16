@@ -81,6 +81,27 @@ describe('köszönőoldal (Barion-visszatérés)', () => {
   })
 
   /**
+   * A checkout `?order=<rendelésszám>` paraméterrel kéri a visszairányítást
+   * (src/lib/checkout/start-checkout.ts), a Barion pedig a SAJÁT `paymentId`
+   * paraméterét fűzi hozzá. Ha ezt nem '&'-tel, hanem '?'-lel teszi, a
+   * böngésző EGYETLEN paramétert lát: `order=KH-…?paymentId=<guid>`. A
+   * rendelésszám alakja kötött (KH-<év>-<6 jegy>), ilyen karakter nincs benne,
+   * tehát a maradék levágható — enélkül a státusz-poll szemét azonosítóval
+   * indulna, és a vevő „nincs ilyen rendelés" nézetet kapna.
+   */
+  it('a Barion által hozzáfűzött paraméter nem szennyezi a rendelésszámot', async () => {
+    expect(
+      (await renderPage({ order: 'KH-2026-000123?paymentId=11111111-2222-3333-4444-555555555555' }))
+        .orderNumber,
+    ).toBe('KH-2026-000123')
+    expect(
+      (await renderPage({ order: 'KH-2026-000123&paymentId=11111111-2222-3333-4444-555555555555' }))
+        .orderNumber,
+    ).toBe('KH-2026-000123')
+    expect((await renderPage({ order: '?paymentId=abc' })).orderNumber).toBeNull()
+  })
+
+  /**
    * A ThankYouView szerződése: a bejelentkezettség NEM bemenet. Ez azért külön
    * állítás, mert a hívó oldalt és a komponenst külön is el lehetne rontani.
    */

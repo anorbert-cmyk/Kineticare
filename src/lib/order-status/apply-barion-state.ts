@@ -16,10 +16,11 @@ import { resolveOrderCustomer, type OrderCustomerResolution } from './resolve-or
  *     callback-ek utánpollolása)
  *
  * Átmenet-szabályok (mind idempotens):
- * - paid: order payment_pending/created → paid (már paid → no-op, NEM hiba),
- *   FIÓK-FELOLDÁS (vendég-vásárlásnál: az e-mail alapján megtalált vagy
+ * - paid: FIÓK-FELOLDÁS (vendég-vásárlásnál: az e-mail alapján megtalált vagy
  *   létrehozott fiók a rendeléshez kötve — resolve-order-customer.ts), majd
- *   purchases-beírás a users-re (már megvan → no-op). Más kiinduló státuszból
+ *   purchases-beírás a users-re (már megvan → no-op), és CSAK EZUTÁN
+ *   order payment_pending/created → paid (már paid → no-op, NEM hiba). A
+ *   sorrend indoklása a paid-ágnál (K1). Más kiinduló státuszból
  *   (cancelled/refunded/payment_failed) TILOS — 'rejected' + naplózott riasztás.
  *   ELŐFELTÉTEL: az ÖSSZEG-ASSERT (lásd lentebb) is teljesül.
  * - cancelled: payment_pending → cancelled; paid felé TILOS visszaállítani
@@ -419,6 +420,9 @@ async function applyBarionStateTransitionLocked(
     // jogosultság-javítás továbbra is futhat. A vevő a FELOLDOTT fiók —
     // vendég-vásárlásnál is (a rendelésen ott még nem volt customer, tehát az
     // őr enélkül némán kimaradna éppen az új, vendég-úton).
+    //
+    // A BLOKK HELYE KÖTÖTT: MINDEN íráson (jogosultság-beírás ÉS státusz)
+    // ELŐTT kell futnia — utána már nem lenne mit megvédeni.
     const customerId = customer.userId
     if (
       await hasPaidOrderFor(payload, {
@@ -433,6 +437,33 @@ async function applyBarionStateTransitionLocked(
       )
       return { action: 'rejected', reason: 'duplicate-paid-order' }
     }
+  }
+
+  /**
+   * K1 — ÍRÁSI SORREND: a JOGOSULTSÁG ELŐBB, a `status: 'paid'` UTÁNA.
+   *
+   * ═══ A HIBA, AMIT BEZÁR ═══
+   * Fordított sorrendben egy megszakadás (grant-hiba, process-crash a két írás
+   * között) VÉGLEGESEN elnyelte a paid-átmenet mellékhatásait: a rendelés már
+   * `paid` volt, tehát az újrapróbáláskor `alreadyPaid === true` →
+   * `transitionedToPaid: false` → az onOrderPaid (számla + visszaigazoló/
+   * aktiváló e-mail) SOHA nem futott le. Vendég-vásárlónál ez azt jelentette:
+   * fizetett, van hozzáférése, de sosem kapott jelszó-beállító linket.
+   *
+   * Így viszont a megszakadás a rendelést `payment_pending`-ben hagyja, és az
+   * újrapróbálás (callback-retry vagy order-poll) FRISS paid-átmenetként
+   * pontosan egyszer küldi el a levelet. A jogosultság-beírás idempotens
+   * (grantPurchases: csak a hiányzó termékek), tehát az ismétlés ártalmatlan —
+   * a legrosszabb köztes állapot az, hogy a vevő hamarabb jut hozzáféréshez,
+   * mint ahogy a rendelés paid-re vált.
+   *
+   * Az ÖSSZEG-ASSERT és a K5 dupla-fizetés-őr továbbra is MINDEN írás ELŐTT fut.
+   */
+  const grant = await grantPurchases(payload, orderWithCustomer, log)
+
+  if (alreadyPaid) {
+    log.info('a rendelés már paid — átmenet no-op, jogosultság-ellenőrzés fut')
+  } else {
     if (order.status === 'created') {
       log.warn('created státuszú rendelés ugrik paid-re (payment_pending átugorva)')
     }
@@ -443,12 +474,8 @@ async function applyBarionStateTransitionLocked(
       overrideAccess: true,
     })
     log.info('rendelés paid-re állítva (Barion v4 verifikációval)')
-  } else {
-    log.info('a rendelés már paid — átmenet no-op, jogosultság-ellenőrzés fut')
   }
 
-  // Purchases-beírás mindig idempotens (már paid rendelésnél is kijavítja az esetleges hiányt).
-  const grant = await grantPurchases(payload, orderWithCustomer, log)
   return {
     action: 'paid',
     duplicate: alreadyPaid,

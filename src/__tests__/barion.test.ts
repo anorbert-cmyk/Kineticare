@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   BARION_DEFAULT_TIMEOUT_MS,
+  BARION_MAX_TIMEOUT_MS,
   getBarionConfig,
   type BarionClientConfig,
 } from '../lib/barion/client'
@@ -170,6 +171,67 @@ describe('getBarionConfig (env-assert)', () => {
       BARION_TIMEOUT_MS: 'nem-szam',
     } as NodeJS.ProcessEnv)
     expect(config.timeoutMs).toBe(BARION_DEFAULT_TIMEOUT_MS)
+  })
+
+  /**
+   * A timeout PLAFONJA (B3-kiegészítés): a visszatérítés a Barion-hívást
+   * rendelés-szintű advisory-zár ALATT futtatja, és a zár-tranzakció addig
+   * „idle in transaction" marad. Egy 60 mp fölé állított timeout mellett a
+   * Postgres/Railway oldali kapcsolat-bontás elvághatná a zárat úgy, hogy a
+   * hívás sorsa ismeretlen — ezért a plafon érvényesül, nem a beállított érték.
+   */
+  it('a BARION_TIMEOUT_MS-t a plafon fogja (a zár-tartomány nem nyúlhat el)', () => {
+    const config = getBarionConfig({
+      ...validEnv,
+      BARION_TIMEOUT_MS: '120000',
+    } as NodeJS.ProcessEnv)
+    expect(config.timeoutMs).toBe(BARION_MAX_TIMEOUT_MS)
+    expect(BARION_MAX_TIMEOUT_MS).toBe(30_000)
+  })
+
+  /**
+   * B3 — KÖRNYEZET ↔ API-HOSZT KONZISZTENCIA.
+   *
+   * A két érték szétcsúszása a legdrágább néma hiba: `prod` környezet +
+   * teszt-hoszt esetén a vevő valódi kártyaadattal a Barion sandboxában
+   * fizetne, a pénz sosem érkezne meg — a rendszer viszont sikeres fizetést
+   * látna. A RÉGI kódon mindkét alábbi eset ÁTMENT.
+   */
+  it('prod környezet + TESZT API-hoszt → indulási hiba (a pénz sosem érkezne meg)', () => {
+    const env = {
+      ...validEnv,
+      BARION_ENVIRONMENT: 'prod',
+      BARION_API_URL: 'https://api.test.barion.com',
+    } as NodeJS.ProcessEnv
+    expect(() => getBarionConfig(env)).toThrowError(/BARION_API_URL/)
+    expect(() => getBarionConfig(env)).toThrowError(/api\.barion\.com/)
+  })
+
+  it('test környezet + ÉLES API-hoszt → szintén indulási hiba', () => {
+    const env = {
+      ...validEnv,
+      BARION_ENVIRONMENT: 'test',
+      BARION_API_URL: 'https://api.barion.com',
+    } as NodeJS.ProcessEnv
+    expect(() => getBarionConfig(env)).toThrowError(/BARION_ENVIRONMENT/)
+  })
+
+  it('idegen hoszt (elgépelt vagy proxy-URL) sem fogadható el', () => {
+    const env = { ...validEnv, BARION_API_URL: 'https://api.barion.example' } as NodeJS.ProcessEnv
+    expect(() => getBarionConfig(env)).toThrowError(/api\.test\.barion\.com/)
+  })
+
+  it('az összeillő párok (test/prod) változatlanul átmennek', () => {
+    expect(getBarionConfig({ ...validEnv } as NodeJS.ProcessEnv).apiUrl).toBe(
+      'https://api.test.barion.com',
+    )
+    expect(
+      getBarionConfig({
+        ...validEnv,
+        BARION_ENVIRONMENT: 'prod',
+        BARION_API_URL: 'https://api.barion.com',
+      } as NodeJS.ProcessEnv).apiUrl,
+    ).toBe('https://api.barion.com')
   })
 })
 

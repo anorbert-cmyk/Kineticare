@@ -18,6 +18,11 @@ import { createStaleAwareBeforeSchedule } from '../schedule-guard'
  * - Csak regisztrált feldolgozóval (registerWebhookProcessor) rendelkező
  *   providerek eseményei futnak újra — a többi (még nem bekötött provider)
  *   érintetlen marad.
+ * - A `received` halmazba a FÜGGŐ (nem terminális, `result='pending_repoll'`)
+ *   Barion-események is beletartoznak: azok szándékosan maradnak
+ *   újrafeldolgozhatók, amíg a fizetés el nem dől (lásd
+ *   NON_TERMINAL_WEBHOOK_RESULTS az idempotency.ts-ben). Az `attempts` ezeknél
+ *   is nő, tehát a kimerülés-szűrő (K3) itt is fékez.
  * - Exponenciális backoff: a retryDelayMs szerinti várakozás letelte előtt az
  *   esemény kimarad (isRetryDue).
  * - KIMERÜLÉS (attempts >= MAX_WEBHOOK_ATTEMPTS): az esemény failed marad, és a
