@@ -15,7 +15,7 @@ import config from '../../../payload.config'
 
 export const metadata: Metadata = {
   title: 'Pénztár',
-  description: 'A vásárlás befejezése — számlázási adatok és a digitális tartalom elállási joga.',
+  description: 'A vásárlás befejezése: számlázási adatok és a digitális tartalom elállási joga.',
 }
 
 interface PenztarPageProps {

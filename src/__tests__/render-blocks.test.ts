@@ -360,8 +360,13 @@ describe('buildHomeLayout (seed alap-layout)', () => {
     // M6–M7: vélemények és tudástár csak a termékblokk UTÁN jöhetnek.
     expect(at('testimonials')).toBeGreaterThan(at('courseCards'))
     expect(at('knowledge')).toBeGreaterThan(at('courseCards'))
-    // M8: a GYIK zárja a lapot.
-    expect(order[order.length - 1]).toBe('faq')
+    // M8: a GYIK az utolsó ELLENÉRV-KEZELŐ szekció; utána már csak a záró
+    // CTA-sáv állhat, hogy a lap cselekvéssel záruljon a fizetős irányba
+    // (UX-skill 1. pont; ugyanez a minta zárja a /rolunk és /szolgaltatasok
+    // oldalt is). Több CTA-sáv gyengítené egymást, ezért pontosan EGY van.
+    expect(order[order.length - 2]).toBe('faq')
+    expect(order[order.length - 1]).toBe('ctaBanner')
+    expect(order.filter((type) => type === 'ctaBanner')).toHaveLength(1)
   })
 
   it('média nélkül is renderelhető, pontosan egy H1-gyel (UX-skill 4. pont)', () => {

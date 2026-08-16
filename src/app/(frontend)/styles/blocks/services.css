@@ -12,11 +12,18 @@
  * `.kc-board`/`.kc-board--edge` adja (styles/ui.css).
  *
  * ELTÉRÉS A TÜKÖRTŐL: ott a sor-rács fixen három sor (`repeat(3, …)`), mert a
- * landing tartalma statikus. A blokk 1–5 sort enged, ezért itt
- * `grid-auto-rows: minmax(0, 1fr)` — bármennyi sor egyenlően osztozik.
+ * landing tartalma statikus. A blokk 1–5 sort enged, ezért itt `1fr` sávok —
+ * bármennyi sor egyenlően osztozik a HELYEN, de egyik sáv sem lehet kisebb a
+ * saját tartalmánál (a `minmax(0, 1fr)` alakja épp ezt engedte meg: lásd a
+ * sorprés-tilalmat a jobb hasáb szabályainál).
  *
- * MÉRETEK: minden betűméret a skáláról (`--kc-text-*` / `--kc-text-board-*`,
- * tokens.css) — elemre írt px/rem TILOS (UX-skill 4. pont).
+ * ELTÉRÉS A TÜKÖRTŐL 2.: a bal hasáb fotója nem abszolút pozicionált, hanem a
+ * cím alatt, a normál folyamban áll (átfedés-tilalom, lásd ott).
+ *
+ * MÉRETEK: minden betűméret a HÁROM-MÉRETES skáláról (`--kc-font-l/m/s`,
+ * tokens.css) — elemre írt px/rem TILOS (UX-skill 4. pont). A tábla-cím az L
+ * lépcsőn áll; a sorok címe és szövege a törzsméreten (M), a sorok
+ * hierarchiáját a súly, a szín és a hajszálvonalas ritmus adja, nem a méret.
  *
  * AKCENT-KORLÁT (terv 3.1): a kis felső felirat, a sorszámok és a
  * sor-hivatkozás `accent-deep` (paperen 5,16:1, tinten 4,72:1 — AA felett);
@@ -74,7 +81,19 @@
   }
 }
 
-/* ---- Bal hasáb: felirat, cím, fotó --------------------------------------- */
+/* ---- Bal hasáb: felirat, cím, fotó ---------------------------------------
+   ÁTFEDÉS-TILALOM (2026-08-16, tulajdonosi hibajelzés — „a szöveg rácsúszik a
+   képre"): a fotó KORÁBBAN abszolút pozicionálva ült a hasáb alsó 70%-án, a
+   felirat és a cím pedig `z-index: 2`-vel FÖLÉ rajzolódott. A tükör rövid
+   címénél („Így tudunk segíteni") ez sosem ütközött, a /szolgaltatasok 47
+   karakteres CMS-címénél viszont a cím 525 px magas lett, és 328 px-en
+   rácsúszott a fotóra (Chromiumban mérve, 1440×900; 1920×1080-on 324 px).
+
+   A javítás nem takargatás (z-index, kisebb kép), hanem GEOMETRIAI: a hasáb
+   függőleges flex-oszlop — fent a felirat és a cím, alatta a maradék helyet
+   kitöltő fotó. A normál folyamban álló elemek definíció szerint nem érhetnek
+   egymásba, bármilyen hosszú a cím; ha a cím nagyon megnő, a fotó a 8rem-es
+   minimumáig zsugorodik, azon túl a tábla nő magasabbra. */
 
 .kc-services__lead {
   min-width: 0;
@@ -82,15 +101,14 @@
 
 @media (min-width: 900px) {
   .kc-services__lead {
-    position: relative;
+    display: flex;
+    flex-direction: column;
   }
 }
 
 .kc-services__eyebrow {
-  position: relative;
-  z-index: 2;
   margin: 0;
-  font-size: var(--kc-text-2xs);
+  font-size: var(--kc-font-s);
   font-weight: var(--kc-font-weight-medium);
   letter-spacing: var(--kc-tracking-eyebrow);
   line-height: 1.3;
@@ -109,21 +127,40 @@
 }
 
 .kc-services__title {
-  position: relative;
-  z-index: 2;
   margin: var(--kc-space-6) 0 0;
   max-width: 7.2ch;
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-board-6xl);
+  font-size: var(--kc-font-l);
   font-weight: var(--kc-font-weight-normal);
-  line-height: var(--kc-leading-board-tight);
+  line-height: var(--kc-leading-board);
   color: var(--kc-services-ink);
   text-wrap: balance;
+  /* 320 px-en a tábla-lépcsők alsó határán (3,2–4rem) egy hosszú magyar szó
+     („segíthetünk") szélesebb, mint a hasáb: a szekció `overflow: hidden`-je
+     LEVÁGTA a szó végét. Végszükség-tördeléssel a szó megtörik, de olvasható
+     marad (WCAG 1.4.10 Reflow). Rendes sortörésnél ez a szabály nem aktiválódik. */
+  overflow-wrap: break-word;
+}
+
+/* HOSSZÚ CÍM — a komponens adja a módosítót 24 karakter felett (Services.tsx,
+   `CIM_HOSSZ_HATAR`). A 7,2ch-s mérték a tükör három szavas címére van szabva:
+   47 karakteren a szavak KILÓGTAK a dobozból (mérve: 384 px doboz, 506 px
+   tartalom), és a cím 6 sorra esett szét. A fokozat a HÁROM-MÉRETES skála
+   világában (tokens.css) már csak a mértéket bővíti: a betűméret a közös L
+   lépcső marad, mert a rácsúszást a szerkezeti javítás (kép a cím ALATT, a
+   folyamban) mérettől függetlenül kizárja. */
+.kc-services__title--long {
+  max-width: 16ch;
 }
 
 /* Mobilon a fotó teljes szélességű sáv a szekció-szegélyen túlnyúlva (tükör
-   1016–1023.), asztali gépen a bal hasáb alsó 70%-át kitöltő, balra kifutó kép. */
+   1016–1023.), asztali gépen a cím alatti maradékot kitöltő, balra kifutó kép.
+   A doboz `position: relative`: a kép BENNE áll abszolút (lásd lentebb), így a
+   magassága nem függ a százalékos öröklés bizonytalanságától. Ez NEM a régi,
+   átfedést okozó pozicionálás — az a HASÁB-on ült, és a képet emelte ki a
+   folyamból; itt a doboz maga végig a folyamban marad. */
 .kc-services__media {
+  position: relative;
   display: block;
   width: calc(100% + 2 * var(--kc-section-x));
   margin: var(--kc-space-6) calc(-1 * var(--kc-section-x)) 0;
@@ -133,21 +170,23 @@
 }
 
 .kc-services__media img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: 50% 48%;
 }
 
+/* Asztali gépen a fotó a bal hasáb CÍM ALATTI maradékát tölti ki (flex-növekedés
+   a korábbi, hasábra ültetett `position: absolute` + `height: 70%` helyett), és
+   a tábla bal szegélyén kifut a képernyő széléig. */
 @media (min-width: 900px) {
   .kc-services__media {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: calc(-1 * var(--kc-board-x));
+    flex: 1 1 8rem;
     width: calc(100% + var(--kc-board-x));
-    height: 70%;
-    margin: 0;
+    min-height: 8rem;
+    margin: var(--kc-space-6) 0 0 calc(-1 * var(--kc-board-x));
     aspect-ratio: auto;
   }
 }
@@ -162,11 +201,23 @@
   list-style: none;
 }
 
+/* SORPRÉS-TILALOM (2026-08-16, tulajdonosi hibajelzés — „a lista szekciói
+   összecsúsznak, hiányzik a padding"): a lista KORÁBBAN kötött magasságot
+   (`height: min(82%, 42rem)`) kapott, a sávok pedig `minmax(0, 1fr)`-t, a sorok
+   `min-height: 0`-t — vagyis a sáv a TARTALOMNÁL kisebbre is összenyomódhatott.
+   A kezdőlap rövidebb sorszövegeivel ez épp elfért (212/224 px), a
+   /szolgaltatasok hosszabb soraival viszont nem: a tartalom 238 px lett a 224
+   px-es sávban, és az „Időpontot kérek" hivatkozás rácsúszott a következő sor
+   hajszálvonalára (Chromiumban mérve, 1440×900; 1920×1080-on 10–11 px).
+
+   A tábla ritmusa marad (a lista továbbra is a tábla ~82%-a, felső korláttal,
+   függőlegesen középre zárva), de MINIMUMKÉNT: `1fr` = `minmax(auto, 1fr)`,
+   tehát a sáv sosem kisebb a saját tartalmánál, a sor-padding pedig megmarad. */
 @media (min-width: 900px) {
   .kc-services__list {
-    height: min(82%, 42rem);
+    min-height: min(82%, 42rem);
     align-self: center;
-    grid-auto-rows: minmax(0, 1fr);
+    grid-auto-rows: 1fr;
   }
 }
 
@@ -175,7 +226,6 @@
   grid-template-columns: 2.5rem minmax(0, 1fr);
   gap: var(--kc-space-4);
   align-content: center;
-  min-height: 0;
   padding: var(--kc-space-5) 0;
   border-top: 1px solid var(--kc-services-rule);
 }
@@ -196,7 +246,7 @@
   margin: 0;
   padding-top: 0.38rem;
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-xl);
+  font-size: var(--kc-font-m);
   font-variant-numeric: tabular-nums;
   line-height: 1;
   color: var(--kc-services-accent-text);
@@ -205,7 +255,7 @@
 .kc-services__row-title {
   margin: 0 0 var(--kc-space-4);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-board-xl);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-normal);
   letter-spacing: 0.005em;
   line-height: 1.08;
@@ -216,41 +266,56 @@
 .kc-services__text {
   margin: 0;
   max-width: 52ch;
-  font-size: var(--kc-text-board-sm);
+  font-size: var(--kc-font-m);
   line-height: 1.6;
   color: var(--kc-services-muted);
   white-space: pre-line;
 }
 
 /* Tükör: `.kc-inline-link` (522–540.) — akcent-mély, 1px aláhúzás nagy
-   offsettel, hoverre ink-re vált és a nyíl elindul. */
+   offsettel, hoverre ink-re vált és a nyíl elindul.
+
+   AZ ALÁHÚZÁS CSAK A SZÖVEG ALATT FUT (2026-08-16, tulajdonosi visszajelzés).
+   A vonaldísz korábban a NYILAT is aláhúzta, mert a `text-decoration` a
+   dobozról a leszármazottakra rajzolódik, és azt gyermek-elemen NEM lehet
+   visszavonni (`text-decoration: none` a spanen hatástalan). Az egyetlen
+   megbízható megoldás ezért szerkezeti: a link maga vonaldísz nélkül áll, és
+   az aláhúzást a SZÖVEG-span viseli — a nyíl külön, dísztelen spanben él. */
 .kc-services__link {
   display: inline-flex;
   min-height: 2.75rem; /* 44px érintési célfelület (UX-skill 3. pont) */
   align-items: center;
   gap: var(--kc-space-2);
   margin-top: var(--kc-space-2);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-medium);
   color: var(--kc-services-accent-text);
+  text-decoration: none;
+  transition: color var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-services__link-text {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.4rem;
-  transition:
-    color var(--kc-motion-fast) var(--kc-ease-out),
-    text-underline-offset var(--kc-motion-fast) var(--kc-ease-out);
+  transition: text-underline-offset var(--kc-motion-fast) var(--kc-ease-out);
 }
 
-.kc-services__link span {
+.kc-services__link-arrow {
+  text-decoration: none;
   transition: transform var(--kc-motion-fast) var(--kc-ease-out);
 }
 
 .kc-services__link:hover {
   color: var(--kc-services-ink);
+  text-decoration: none;
+}
+
+.kc-services__link:hover .kc-services__link-text {
   text-underline-offset: 0.5rem;
 }
 
-.kc-services__link:hover span {
+.kc-services__link:hover .kc-services__link-arrow {
   transform: translateX(0.2rem);
 }
 
@@ -262,11 +327,12 @@
 
 @media (prefers-reduced-motion: reduce) {
   .kc-services__link,
-  .kc-services__link span {
+  .kc-services__link-text,
+  .kc-services__link-arrow {
     transition: none;
   }
 
-  .kc-services__link:hover span {
+  .kc-services__link:hover .kc-services__link-arrow {
     transform: none;
   }
 }

@@ -2,20 +2,53 @@ import { describe, expect, it } from 'vitest'
 
 import {
   KURZUS_ELONYOK,
+  REGI_ALLAPOTOK_BEVEZETO,
   REGI_KURZUS_SZEKCIO_CIM,
   REGI_PACIENS_ERTEK,
+  REGI_PRESS_FEJLEC,
+  SOS_KURZUS_SLUG,
   SZAKMAI_HATTER_HORGONY,
+  SZOLGALTATASOK_HERO_PREFIX,
   UJ_KURZUS_SZEKCIO_CIM,
   UJ_PACIENS_ERTEK,
+  alkalmazAllapotokBevezeto,
+  alkalmazJogiOldalak,
   alkalmazKezdolapJavitasok,
   alkalmazKurzusElonyok,
+  alkalmazPressLogosFejlec,
+  alkalmazRendeloiHorgony,
   alkalmazRolunkHeroKep,
+  alkalmazSosKurzusSlug,
   alkalmazSzakmaiHarmonika,
+  alkalmazSzolgaltatasokBevezeto,
+  alkalmazSzolgaltatasokHeroKep,
+  alkalmazZaroCta,
+  allapotokUjBevezeto,
   heroKepAzonosito,
+  pressLogosUjFejlec,
   rolunkSzakmaiUjBlokkok,
   stabilJson,
+  szolgaltatasokUjBevezetoBlokk,
+  zaroCtaSeedBlokk,
+  type JavitasLepes,
 } from '../scripts/apply-owner-content'
-import { rolunkSzakmaiOrokoltTartalom } from '../scripts/restore-legacy-content'
+import { buildHomeLayout } from '../lib/home-seed'
+import {
+  buildSzolgaltatasokLayout,
+  heading,
+  para,
+  richText,
+  rolunkSzakmaiOrokoltTartalom,
+  szolgaltatasokRegiBevezetoTartalom,
+} from '../scripts/restore-legacy-content'
+import { DEFAULT_HEADING as PRESS_ALAPFELIRAT } from '../components/blocks/PressLogos'
+import { buildCourseSlug } from '../lib/course-url'
+import { JOGI_OLDALAK, jogiOldalTartalom, richTextSzoveg } from '../lib/legal-content'
+import {
+  CLINIC_TREATMENTS_ANCHOR,
+  CLINIC_TREATMENTS_PATH,
+  SOS_COURSE_SKU,
+} from '../lib/menu-seed'
 import type { Media, Page, Product } from '../payload-types'
 
 /**
@@ -27,13 +60,15 @@ import type { Media, Page, Product } from '../payload-types'
  * futtató része szándékosan csak közvetlen indításkor fut le, az importálás
  * mellékhatásmentes.
  *
- * A négy mért tulajdonság:
+ * A mért tulajdonságok:
  *  (a) a szekció-cím CSAK pontos egyezésnél cserélődik,
  *  (b) az „5000+” CSAK pontos egyezésnél és CSAK a statisztika-értékben,
  *  (c) az előny-sorok CSAK üres mezőbe kerülnek be,
  *  (d) a /rolunk fejléc-képe CSAK a szóló portréról cserélődik, és a páros
  *      csapatfotó hiányában hangosan kimarad,
- *  (e) idempotencia: kétszer futtatva ugyanaz a tartalom jön ki.
+ *  (e) idempotencia: kétszer futtatva ugyanaz a tartalom jön ki,
+ *  (f) a 9–12. javítás ÚJ értékei a seed-builderekből jönnek (nem külön
+ *      literálból), és minden „szerkesztő átírta” eset csendes kihagyás.
  */
 
 type Szekciosor = NonNullable<Page['layout']>
@@ -601,5 +636,941 @@ describe('alkalmazSzakmaiHarmonika — az örökölt óriás-blokk cseréje', ()
     const lenyomat = stabilJson(bemenet)
     csere(bemenet)
     expect(stabilJson(bemenet)).toBe(lenyomat)
+  })
+})
+
+// ===========================================================================
+// 6. javítás — a három jogi oldal LÉTREHOZÁSA (felülírás soha).
+// ===========================================================================
+
+describe('alkalmazJogiOldalak', () => {
+  it('üres adatbázisban MIND A HÁROM oldalt létrehozza, közzétett állapotban', () => {
+    const eredmeny = alkalmazJogiOldalak({ letezoSlugok: [] })
+
+    expect(eredmeny.letrehozando.map((oldal) => oldal.slug)).toEqual([
+      'aszf',
+      'adatvedelem',
+      'impresszum',
+    ])
+    expect(eredmeny.kihagyasok).toHaveLength(0)
+    expect(eredmeny.modositasok).toHaveLength(3)
+
+    for (const oldal of eredmeny.letrehozando) {
+      expect(oldal.status).toBe('published')
+      expect(oldal._status).toBe('published')
+      expect(oldal.title.length).toBeGreaterThan(0)
+      expect(oldal.seoDescription.length).toBeGreaterThan(0)
+      // A tartalom a jogász szó szerinti szövege — nem üres, és a
+      // szó szerintiséget a legal-content.test.ts bizonyítja karakterre.
+      expect(oldal.content.root.children.length).toBeGreaterThan(10)
+    }
+  })
+
+  it('LÉTEZŐ webcímet SOHA nem ír felül — csendben kihagyja', () => {
+    const eredmeny = alkalmazJogiOldalak({ letezoSlugok: ['aszf', 'impresszum'] })
+
+    expect(eredmeny.letrehozando.map((oldal) => oldal.slug)).toEqual(['adatvedelem'])
+    expect(eredmeny.kihagyasok).toHaveLength(2)
+    for (const kihagyas of eredmeny.kihagyasok) {
+      expect(kihagyas.szabaly).toBe('jogi-oldalak')
+      expect(kihagyas.indok).toContain('MÁR LÉTEZIK')
+      // A jogi oldal hiánya nem üzemeltetési hiba: nem hangos kihagyás.
+      expect(kihagyas.hangos).not.toBe(true)
+    }
+  })
+
+  it('idempotens: másodszor futtatva egyetlen létrehozás sem marad', () => {
+    const elso = alkalmazJogiOldalak({ letezoSlugok: [] })
+    const masodik = alkalmazJogiOldalak({
+      letezoSlugok: elso.letrehozando.map((oldal) => oldal.slug),
+    })
+
+    expect(masodik.letrehozando).toHaveLength(0)
+    expect(masodik.modositasok).toHaveLength(0)
+    expect(masodik.kihagyasok).toHaveLength(3)
+  })
+
+  it('a jogi oldalak tartalma a legal-content modulból jön (nem másolat)', () => {
+    const eredmeny = alkalmazJogiOldalak({ letezoSlugok: [] })
+    for (const [index, oldal] of eredmeny.letrehozando.entries()) {
+      expect(richTextSzoveg(oldal.content)).toBe(
+        richTextSzoveg(jogiOldalTartalom(JOGI_OLDALAK[index])),
+      )
+    }
+  })
+})
+
+// ===========================================================================
+// 7. javítás — az SOS villámkurzus webcíme.
+// ===========================================================================
+
+describe('alkalmazSosKurzusSlug', () => {
+  it('a jóváhagyott slug PONTOSAN az, amit a mező slug-generátora adna', () => {
+    // Ha a kurzus nevéből más slug adódna, a kézzel beírt érték és a mező
+    // hookja (src/fields/course-slug.ts) szétcsúszna.
+    expect(buildCourseSlug(SOS_COURSE_SKU)).toBe(SOS_KURZUS_SLUG)
+  })
+
+  it.each([undefined, null, '', '   '])('üres mezőt (%p) kitölti', (jelenlegi) => {
+    const eredmeny = alkalmazSosKurzusSlug(jelenlegi)
+    expect(eredmeny.slug).toBe(SOS_KURZUS_SLUG)
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.kihagyasok).toHaveLength(0)
+  })
+
+  it('MEGLÉVŐ webcímet sosem ír át', () => {
+    const eredmeny = alkalmazSosKurzusSlug('sajat-webcim')
+    expect(eredmeny.slug).toBeNull()
+    expect(eredmeny.modositasok).toHaveLength(0)
+    expect(eredmeny.kihagyasok[0].indok).toContain('MÁR VAN webcíme')
+  })
+
+  it('idempotens: a már beírt slugot csendben kihagyja', () => {
+    const eredmeny = alkalmazSosKurzusSlug(SOS_KURZUS_SLUG)
+    expect(eredmeny.slug).toBeNull()
+    expect(eredmeny.kihagyasok[0].indok).toContain('MÁR')
+    expect(eredmeny.kihagyasok[0].hangos).not.toBe(true)
+  })
+})
+
+// ===========================================================================
+// 8. javítás — a rendelői szekció horgonya.
+// ===========================================================================
+
+describe('alkalmazRendeloiHorgony', () => {
+  /** Szövegblokk a megadott címsorral és horgonnyal. */
+  const szovegSzekcio = (cimsor: string, anchorId?: string | null): Szekcio =>
+    ({
+      blockType: 'richText',
+      id: `rt-${cimsor.slice(0, 6)}`,
+      content: richText([
+        heading('h3', cimsor),
+        para('Gyógytorna, manuálterápia és kiegészítő technikák.'),
+      ]),
+      sectionSettings: { visible: true, hatter: 'feher', ...(anchorId ? { anchorId } : {}) },
+    }) as Szekcio
+
+  /** A ténylegesen élő állapot: a rendelői szekció `arlista` horgonnyal. */
+  const eloSzekciosor = (): Szekciosor => [
+    kurzusSzekcio('Kurzusaink'),
+    szovegSzekcio('Rendelői kezelések – személyes terápiás megoldások', 'arlista'),
+  ]
+
+  it('az „arlista" horgonyt a menüponthoz igazítja', () => {
+    const eredmeny = alkalmazRendeloiHorgony(eloSzekciosor())
+
+    expect(eredmeny.layout).not.toBeNull()
+    expect(eredmeny.layout?.[1].sectionSettings?.anchorId).toBe(CLINIC_TREATMENTS_ANCHOR)
+    // A menü célja ezután tényleg létező horgonyra mutat.
+    expect(CLINIC_TREATMENTS_PATH.endsWith(`#${CLINIC_TREATMENTS_ANCHOR}`)).toBe(true)
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.kihagyasok).toHaveLength(0)
+    // A szekció többi beállítása változatlan.
+    const rendeloi = eredmeny.layout?.[1]
+    expect(rendeloi?.blockType).toBe('richText')
+    if (rendeloi?.blockType === 'richText') {
+      expect(rendeloi.sectionSettings?.hatter).toBe('feher')
+    }
+  })
+
+  it('horgony nélküli szekciót is felcímkéz', () => {
+    const eredmeny = alkalmazRendeloiHorgony([
+      szovegSzekcio('Rendelői kezelések – személyes terápiás megoldások'),
+    ])
+    expect(eredmeny.layout?.[0].sectionSettings?.anchorId).toBe(CLINIC_TREATMENTS_ANCHOR)
+  })
+
+  it('idempotens: a már helyes horgonyt csendben kihagyja', () => {
+    const elso = alkalmazRendeloiHorgony(eloSzekciosor())
+    const masodik = alkalmazRendeloiHorgony(elso.layout)
+
+    expect(masodik.layout).toBeNull()
+    expect(masodik.modositasok).toHaveLength(0)
+    expect(masodik.kihagyasok[0].hangos).not.toBe(true)
+    expect(masodik.kihagyasok[0].indok).toContain('MÁR')
+  })
+
+  it('a seed-builder alapállapota már helyes (nincs teendő)', () => {
+    const eredmeny = alkalmazRendeloiHorgony(buildSzolgaltatasokLayout())
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].indok).toContain('MÁR')
+  })
+
+  it('üres szekciósor: hangos kihagyás', () => {
+    expect(alkalmazRendeloiHorgony(null).kihagyasok[0].hangos).toBe(true)
+    expect(alkalmazRendeloiHorgony([]).kihagyasok[0].hangos).toBe(true)
+  })
+
+  it('nem azonosítható szekció: hangos kihagyás, írás nélkül', () => {
+    const eredmeny = alkalmazRendeloiHorgony([kurzusSzekcio('Kurzusaink')])
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('nincs olyan szövegblokk')
+  })
+
+  it('TÖBB illeszkedő szekció: hangos kihagyás, írás nélkül', () => {
+    const eredmeny = alkalmazRendeloiHorgony([
+      szovegSzekcio('Rendelői kezelések – személyes terápiás megoldások'),
+      szovegSzekcio('Rendelői kezelések – árlista'),
+    ])
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('nem egyértelmű')
+  })
+
+  it('a horgonyt MÁS blokk viseli: hangos kihagyás (ütközés-védelem)', () => {
+    const eredmeny = alkalmazRendeloiHorgony([
+      kurzusSzekcio('Kurzusaink'),
+      szovegSzekcio('Rendelői kezelések – személyes terápiás megoldások', 'arlista'),
+      szovegSzekcio('Valami más szekció', CLINIC_TREATMENTS_ANCHOR),
+    ])
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('ütközne')
+  })
+
+  it('a bemeneti szekciósort nem módosítja helyben', () => {
+    const bemenet = eloSzekciosor()
+    const lenyomat = stabilJson(bemenet)
+    alkalmazRendeloiHorgony(bemenet)
+    expect(stabilJson(bemenet)).toBe(lenyomat)
+  })
+})
+
+// ===========================================================================
+// 9. javítás — a kezdőlapi sajtó-logósor felirata.
+// ===========================================================================
+
+describe('alkalmazPressLogosFejlec', () => {
+  /** Sajtó-logósor a megadott felirattal (a `heading` szándékosan lehet null). */
+  const sajtoSzekcio = (heading: string | null): Szekcio => ({
+    blockType: 'pressLogos',
+    id: 'pl-1',
+    heading,
+    logos: [{ id: 'l1', image: 12 }],
+    sectionSettings: { visible: true, hatter: 'feher' },
+  })
+
+  const ujFejlec = pressLogosUjFejlec()
+  const csere = (layout: Page['layout']) => alkalmazPressLogosFejlec({ layout, ujFejlec })
+
+  it('az ÚJ felirat a kezdőlap seed-builderéből jön, és a komponens beépített feliratával azonos', () => {
+    // Ez a lépés 3. védőfeltételének alapja: üres mezőbe azért NEM írunk, mert
+    // a látogató a komponens fallbackjétől már az új szöveget látja.
+    expect(ujFejlec).toBe(PRESS_ALAPFELIRAT)
+    expect(ujFejlec).not.toBe(REGI_PRESS_FEJLEC)
+  })
+
+  it('pontos egyezésnél átírja a feliratot, a többi szekciót érintetlenül hagyja', () => {
+    const hero = heroSzekcio()
+    const eredmeny = csere([hero, sajtoSzekcio(REGI_PRESS_FEJLEC)])
+
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.modositasok[0].szabaly).toBe('presslogos-fejlec')
+    expect(eredmeny.modositasok[0].indok).toBeNull()
+    const blokk = eredmeny.layout?.[1]
+    expect(blokk?.blockType === 'pressLogos' ? blokk.heading : null).toBe(ujFejlec)
+    // A logók és a sávbeállítás változatlanok.
+    expect(blokk?.blockType === 'pressLogos' ? blokk.logos : null).toEqual([
+      { id: 'l1', image: 12 },
+    ])
+    expect(eredmeny.layout?.[0]).toBe(hero)
+  })
+
+  it.each([
+    ['üres szöveg', ''],
+    ['csak whitespace', '   '],
+    ['hiányzó felirat', null],
+  ])('ÜRES feliratot (%s) NEM tölt ki — a komponens fallbackje már az új szöveg', (_eset, heading) => {
+    const eredmeny = csere([sajtoSzekcio(heading)])
+
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.modositasok).toHaveLength(0)
+    expect(eredmeny.kihagyasok[0].indok).toContain('ÜRES')
+    expect(eredmeny.kihagyasok[0].hangos).not.toBe(true)
+  })
+
+  it.each([
+    ['más felirat', 'Rólunk írták'],
+    ['körbeírt whitespace', ` ${REGI_PRESS_FEJLEC} `],
+    ['kisbetűs változat', REGI_PRESS_FEJLEC.toLowerCase()],
+  ])('nem nyúl a szerkesztői felirathoz (%s)', (_eset, heading) => {
+    const eredmeny = csere([sajtoSzekcio(heading)])
+
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.modositasok).toHaveLength(0)
+    expect(eredmeny.kihagyasok[0].indok).toContain('pontos egyezésnél')
+  })
+
+  it('idempotens: a már átírt feliratot csendben kihagyja', () => {
+    const elso = csere([sajtoSzekcio(REGI_PRESS_FEJLEC)])
+    const masodik = csere(elso.layout)
+
+    expect(masodik.layout).toBeNull()
+    expect(masodik.modositasok).toHaveLength(0)
+    expect(masodik.kihagyasok[0].indok).toContain('MÁR')
+    expect(masodik.kihagyasok[0].hangos).not.toBe(true)
+  })
+
+  it('több logósornál mindegyiket külön bírálja el', () => {
+    const eredmeny = csere([
+      sajtoSzekcio(REGI_PRESS_FEJLEC),
+      sajtoSzekcio('Saját felirat'),
+      sajtoSzekcio(REGI_PRESS_FEJLEC),
+    ])
+
+    expect(eredmeny.modositasok).toHaveLength(2)
+    expect(eredmeny.kihagyasok).toHaveLength(1)
+    const feliratok = (eredmeny.layout ?? []).map((blokk) =>
+      blokk.blockType === 'pressLogos' ? blokk.heading : null,
+    )
+    expect(feliratok).toEqual([ujFejlec, 'Saját felirat', ujFejlec])
+  })
+
+  it('logósor nélküli és üres szekciósornál indokolt (nem hangos) kihagyás', () => {
+    const nincsLogosor = csere([heroSzekcio()])
+    expect(nincsLogosor.layout).toBeNull()
+    expect(nincsLogosor.kihagyasok[0].indok).toContain('nincs Sajtó-logósor')
+    expect(nincsLogosor.kihagyasok[0].hangos).not.toBe(true)
+
+    for (const layout of [undefined, null, [] as Szekciosor]) {
+      const ures = csere(layout)
+      expect(ures.layout).toBeNull()
+      expect(ures.kihagyasok[0].indok).toContain('nincs szekciósora')
+      expect(ures.kihagyasok[0].hangos).not.toBe(true)
+    }
+  })
+
+  it('hiányzó seed-érték (builder-alak változás): HANGOS kihagyás', () => {
+    const eredmeny = alkalmazPressLogosFejlec({
+      layout: [sajtoSzekcio(REGI_PRESS_FEJLEC)],
+      ujFejlec: null,
+    })
+
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('buildHomeLayout')
+  })
+
+  it('a bemeneti szekciósort nem módosítja helyben', () => {
+    const bemenet: Szekciosor = [sajtoSzekcio(REGI_PRESS_FEJLEC)]
+    const lenyomat = stabilJson(bemenet)
+    csere(bemenet)
+    expect(stabilJson(bemenet)).toBe(lenyomat)
+  })
+})
+
+// ===========================================================================
+// 10. javítás — a „Három állapot” szekció bevezetője.
+// ===========================================================================
+
+describe('alkalmazAllapotokBevezeto', () => {
+  /** Három állapot szekció a megadott bevezetővel. */
+  const allapotSzekcio = (lead: string | null): Szekcio => ({
+    blockType: 'states',
+    id: 'st-1',
+    title: 'Három állapot, egy folyamat',
+    lead,
+    cards: [{ id: 'k1', title: 'Zárt', text: 'Fájdalom, bizonytalanság.' }],
+    sectionSettings: { visible: true, hatter: 'feher' },
+  })
+
+  const ujBevezeto = allapotokUjBevezeto()
+  const csere = (layout: Page['layout']) => alkalmazAllapotokBevezeto({ layout, ujBevezeto })
+
+  it('az ÚJ bevezető a kezdőlap seed-builderéből jön, és nem a régi szöveg', () => {
+    expect(ujBevezeto).not.toBeNull()
+    expect(ujBevezeto).not.toBe(REGI_ALLAPOTOK_BEVEZETO)
+    // A szekció valódi állítása a TERÁPIA íve — így a szöveg akkor is helyes,
+    // ha a szerkesztő a címet átírja.
+    expect((ujBevezeto ?? '').toLowerCase()).toContain('terápia')
+  })
+
+  it('a régi seedelt szöveget lecseréli, a szekció többi mezőjét érintetlenül hagyja', () => {
+    const hero = heroSzekcio()
+    const eredmeny = csere([hero, allapotSzekcio(REGI_ALLAPOTOK_BEVEZETO)])
+
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.modositasok[0].szabaly).toBe('allapotok-bevezeto')
+    const blokk = eredmeny.layout?.[1]
+    expect(blokk?.blockType === 'states' ? blokk.lead : null).toBe(ujBevezeto)
+    expect(blokk?.blockType === 'states' ? blokk.title : null).toBe('Három állapot, egy folyamat')
+    expect(blokk?.blockType === 'states' ? blokk.cards : null).toEqual([
+      { id: 'k1', title: 'Zárt', text: 'Fájdalom, bizonytalanság.' },
+    ])
+    expect(eredmeny.layout?.[0]).toBe(hero)
+  })
+
+  it.each([
+    ['üres szöveg', ''],
+    ['csak whitespace', '   '],
+    ['hiányzó bevezető', null],
+  ])('ÜRES bevezetőt (%s) is kitölt — a három kép magyarázat nélkül érthetetlen', (_eset, lead) => {
+    const eredmeny = csere([allapotSzekcio(lead)])
+
+    expect(eredmeny.modositasok).toHaveLength(1)
+    const blokk = eredmeny.layout?.[0]
+    expect(blokk?.blockType === 'states' ? blokk.lead : null).toBe(ujBevezeto)
+  })
+
+  it('a szerkesztő saját bevezetőjéhez nem nyúl (csendes kihagyás)', () => {
+    const eredmeny = csere([allapotSzekcio('Saját bevezető a szekcióhoz.')])
+
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.modositasok).toHaveLength(0)
+    expect(eredmeny.kihagyasok[0].indok).toContain('a szerkesztő időközben átírta')
+    expect(eredmeny.kihagyasok[0].hangos).not.toBe(true)
+  })
+
+  it('idempotens: a már beírt új szöveget csendben kihagyja', () => {
+    const elso = csere([allapotSzekcio(REGI_ALLAPOTOK_BEVEZETO)])
+    const masodik = csere(elso.layout)
+
+    expect(masodik.layout).toBeNull()
+    expect(masodik.modositasok).toHaveLength(0)
+    expect(masodik.kihagyasok[0].indok).toContain('MÁR')
+    expect(masodik.kihagyasok[0].hangos).not.toBe(true)
+  })
+
+  it('állapot-szekció nélküli és üres szekciósornál indokolt (nem hangos) kihagyás', () => {
+    const nincsSzekcio = csere([heroSzekcio()])
+    expect(nincsSzekcio.layout).toBeNull()
+    expect(nincsSzekcio.kihagyasok[0].indok).toContain('nincs „Három állapot”')
+    expect(nincsSzekcio.kihagyasok[0].hangos).not.toBe(true)
+
+    const ures = csere([])
+    expect(ures.layout).toBeNull()
+    expect(ures.kihagyasok[0].indok).toContain('nincs szekciósora')
+  })
+
+  it('hiányzó seed-érték (builder-alak változás): HANGOS kihagyás', () => {
+    const eredmeny = alkalmazAllapotokBevezeto({
+      layout: [allapotSzekcio(REGI_ALLAPOTOK_BEVEZETO)],
+      ujBevezeto: null,
+    })
+
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('buildHomeLayout')
+  })
+
+  it('a bemeneti szekciósort nem módosítja helyben', () => {
+    const bemenet: Szekciosor = [allapotSzekcio(REGI_ALLAPOTOK_BEVEZETO)]
+    const lenyomat = stabilJson(bemenet)
+    csere(bemenet)
+    expect(stabilJson(bemenet)).toBe(lenyomat)
+  })
+})
+
+// ===========================================================================
+// 11. javítás — a kezdőlap záró CTA-sávja.
+// ===========================================================================
+
+describe('alkalmazZaroCta', () => {
+  const seedBlokk = zaroCtaSeedBlokk()
+
+  /** CTA-sáv a megadott szöveggel (a `text` szándékosan lehet üres vagy null). */
+  const ctaSzekcio = (text: string | null): Szekcio => ({
+    blockType: 'ctaBanner',
+    id: 'cta-elo',
+    title: 'Saját záró cím',
+    text,
+    cta: { felirat: 'Saját gomb', url: '/kurzusok', ujAblakban: false },
+    sectionSettings: { visible: true, hatter: 'tint' },
+  })
+
+  const csere = (layout: Page['layout']) => alkalmazZaroCta({ layout, seedBlokk })
+
+  it('a záró sáv a seed-builderből jön, tartalmas szöveggel és belső CTA-val', () => {
+    expect(seedBlokk).not.toBeNull()
+    expect(seedBlokk?.title).toBe('Kezdd el még ma')
+    expect((seedBlokk?.text ?? '').length).toBeGreaterThan(80)
+    expect(seedBlokk?.cta?.url).toBe('/kurzusok')
+  })
+
+  it('CTA-sáv nélküli lapnál a szekciósor VÉGÉRE fűzi a seed-blokkot', () => {
+    const hero = heroSzekcio()
+    const kurzusok = kurzusSzekcio('Kurzusaink')
+    const eredmeny = csere([hero, kurzusok])
+
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.modositasok[0].szabaly).toBe('zaro-cta')
+    expect(eredmeny.layout).toHaveLength(3)
+    // A meglévő szekciók BITRE változatlanok (referencia-azonosak).
+    expect(eredmeny.layout?.[0]).toBe(hero)
+    expect(eredmeny.layout?.[1]).toBe(kurzusok)
+    expect(eredmeny.layout?.[2]).toBe(seedBlokk)
+  })
+
+  it('idempotens: a hozzáfűzött sávot a második futás már nem duplázza', () => {
+    const elso = csere([heroSzekcio()])
+    const masodik = csere(elso.layout)
+
+    expect(masodik.layout).toBeNull()
+    expect(masodik.modositasok).toHaveLength(0)
+    expect(masodik.kihagyasok[0].indok).toContain('MÁR van szövege')
+    expect(masodik.kihagyasok[0].hangos).not.toBe(true)
+  })
+
+  it.each([
+    ['üres szöveg', ''],
+    ['csak whitespace', '   '],
+    ['hiányzó szöveg', null],
+  ])('meglévő, szöveg nélküli sávnál (%s) CSAK a szöveget írja be', (_eset, text) => {
+    const eredmeny = csere([heroSzekcio(), ctaSzekcio(text)])
+
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.layout).toHaveLength(2)
+    const blokk = eredmeny.layout?.[1]
+    if (blokk?.blockType !== 'ctaBanner') {
+      throw new Error('A CTA-sáv eltűnt a szekciósorból.')
+    }
+    expect(blokk.text).toBe(seedBlokk?.text)
+    // A cím, a gomb és a sávbeállítás a SZERKESZTŐÉ marad.
+    expect(blokk.title).toBe('Saját záró cím')
+    expect(blokk.cta).toEqual({ felirat: 'Saját gomb', url: '/kurzusok', ujAblakban: false })
+    expect(blokk.sectionSettings).toEqual({ visible: true, hatter: 'tint' })
+  })
+
+  it('meglévő, SZÖVEGES sávhoz nem nyúl', () => {
+    const eredmeny = csere([ctaSzekcio('Saját záró szöveg.')])
+
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.modositasok).toHaveLength(0)
+    expect(eredmeny.kihagyasok[0].indok).toContain('sosem ír felül')
+    expect(eredmeny.kihagyasok[0].hangos).not.toBe(true)
+  })
+
+  it('TÖBB CTA-sávnál nem dönt: hangos kihagyás, írás nélkül', () => {
+    const eredmeny = csere([ctaSzekcio(null), heroSzekcio(), ctaSzekcio(null)])
+
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('nem egyértelmű')
+  })
+
+  it('üres szekciósor és hiányzó seed-blokk: hangos kihagyás', () => {
+    for (const layout of [undefined, null, [] as Szekciosor]) {
+      const ures = csere(layout)
+      expect(ures.layout).toBeNull()
+      expect(ures.kihagyasok[0].hangos).toBe(true)
+      expect(ures.kihagyasok[0].indok).toContain('nincs szekciósora')
+    }
+
+    const nincsSeed = alkalmazZaroCta({ layout: [heroSzekcio()], seedBlokk: null })
+    expect(nincsSeed.layout).toBeNull()
+    expect(nincsSeed.kihagyasok[0].hangos).toBe(true)
+    expect(nincsSeed.kihagyasok[0].indok).toContain('buildHomeLayout')
+  })
+
+  it('szöveg nélküli seed-blokk: hangos kihagyás (indoklás nélküli felszólítás nem megy ki)', () => {
+    if (seedBlokk === null) {
+      throw new Error('A seed záró CTA-sávja hiányzik.')
+    }
+    const eredmeny = alkalmazZaroCta({
+      layout: [heroSzekcio()],
+      seedBlokk: { ...seedBlokk, text: '  ' },
+    })
+
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('nincs szövege')
+  })
+
+  it('a bemeneti szekciósort nem módosítja helyben', () => {
+    const bemenet: Szekciosor = [heroSzekcio(), ctaSzekcio(null)]
+    const lenyomat = stabilJson(bemenet)
+    csere(bemenet)
+    expect(stabilJson(bemenet)).toBe(lenyomat)
+  })
+})
+
+// ===========================================================================
+// 12a. javítás — a /szolgaltatasok fejléc-képének ürítése.
+// ===========================================================================
+
+describe('alkalmazSzolgaltatasokHeroKep', () => {
+  it('a rendelő-fotóra mutató mezőt üríti', () => {
+    const eredmeny = alkalmazSzolgaltatasokHeroKep({ jelenlegi: 55, regiMediaId: 55 })
+
+    expect(eredmeny.uritendo).toBe(true)
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.modositasok[0].szabaly).toBe('szolgaltatasok-hero-kep')
+    expect(eredmeny.modositasok[0].indok).toBeNull()
+    expect(eredmeny.kihagyasok).toHaveLength(0)
+  })
+
+  it('populált (depth > 0) heroImage esetén is felismeri a rendelő-fotót', () => {
+    const eredmeny = alkalmazSzolgaltatasokHeroKep({
+      jelenlegi: mediaDokumentum(55, `${SZOLGALTATASOK_HERO_PREFIX}.webp`),
+      regiMediaId: 55,
+    })
+
+    expect(eredmeny.uritendo).toBe(true)
+  })
+
+  it('MÁS képhez nem nyúl (csendes kihagyás)', () => {
+    const eredmeny = alkalmazSzolgaltatasokHeroKep({ jelenlegi: 99, regiMediaId: 55 })
+
+    expect(eredmeny.uritendo).toBe(false)
+    expect(eredmeny.modositasok).toHaveLength(0)
+    expect(eredmeny.kihagyasok[0].indok).toContain('csak pontos egyezésnél')
+    expect(eredmeny.kihagyasok[0].hangos).not.toBe(true)
+  })
+
+  it('idempotens: üres mezőn nincs mit üríteni', () => {
+    for (const jelenlegi of [null, undefined]) {
+      const eredmeny = alkalmazSzolgaltatasokHeroKep({ jelenlegi, regiMediaId: 55 })
+
+      expect(eredmeny.uritendo).toBe(false)
+      expect(eredmeny.kihagyasok[0].indok).toContain('MÁR nincs fejléc-képe')
+      expect(eredmeny.kihagyasok[0].hangos).not.toBe(true)
+    }
+  })
+
+  it('a rendelő-fotó média-rekordjának hiányában HANGOSAN hagyja ki', () => {
+    const eredmeny = alkalmazSzolgaltatasokHeroKep({ jelenlegi: 99, regiMediaId: null })
+
+    expect(eredmeny.uritendo).toBe(false)
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain(SZOLGALTATASOK_HERO_PREFIX)
+  })
+})
+
+// ===========================================================================
+// 12b. javítás — a /szolgaltatasok bevezető szekciója → üdvözlő blokk.
+// ===========================================================================
+
+describe('szolgaltatasokUjBevezetoBlokk — a régi bevezető BETŰHÍVEN az új blokkban', () => {
+  const ujBlokk = szolgaltatasokUjBevezetoBlokk()
+  const sorok = richTextSzoveg(szolgaltatasokRegiBevezetoTartalom()).split('\n')
+
+  it('a seed-builder első blokkja üdvözlő (welcome) blokk', () => {
+    expect(ujBlokk).not.toBeNull()
+    expect(buildSzolgaltatasokLayout()[0].blockType).toBe('welcome')
+  })
+
+  it('a régi bevezető MINDEN szövege megvan az új blokkban, változtatás nélkül', () => {
+    if (ujBlokk === null) {
+      throw new Error('Az üdvözlő blokk hiányzik a seed-builderből.')
+    }
+    // Az örökölt tartalom: két címsor + öt bekezdés.
+    expect(sorok).toHaveLength(7)
+
+    const felsorolas = (ujBlokk.checklist ?? []).map((tetel) => tetel.text)
+    const oldalso = (ujBlokk.sideParagraphs ?? []).map((tetel) => tetel.text)
+
+    expect(ujBlokk.title).toBe(sorok[0])
+    expect(oldalso[0]).toBe(sorok[1])
+    expect(oldalso[1]).toBe(sorok[2])
+    expect(ujBlokk.lead).toBe(sorok[3])
+    expect(felsorolas[0]).toBe(sorok[4])
+    expect(felsorolas[1]).toBe(sorok[5])
+    // A régi ZÁRÓ bekezdés két tételre bomlik (elvi rész + módszertani rész) —
+    // összefűzve byte-ra ugyanaz a mondatpár.
+    expect(`${felsorolas[2]} ${oldalso[2]}`).toBe(sorok[6])
+  })
+
+  it('a tipográfia (félkvirtmínusz és magyar idézőjelek) betűhíven marad', () => {
+    if (ujBlokk === null) {
+      throw new Error('Az üdvözlő blokk hiányzik a seed-builderből.')
+    }
+    const felsorolas = (ujBlokk.checklist ?? []).map((tetel) => tetel.text)
+    expect(ujBlokk.lead).toContain('–')
+    expect(felsorolas[0]).toContain('–')
+    expect(felsorolas[1]).toContain('„szerkezet”')
+    // Kötőjeles pótlás sehol nem csúszott be a félkvirtmínusz helyére.
+    expect(ujBlokk.lead).not.toContain(' - ')
+  })
+
+  it('pontosan EGY kiemelt oldalsó bekezdés van (a blokk admin-leírása szerint)', () => {
+    const kiemelt = (ujBlokk?.sideParagraphs ?? []).filter((tetel) => tetel.emphasized === true)
+    expect(kiemelt).toHaveLength(1)
+    expect(kiemelt[0].text).toContain('professzionális kezeléseinkkel')
+  })
+
+  it('a szekció látható, fehér sávon áll', () => {
+    expect(ujBlokk?.sectionSettings).toEqual({ visible: true, hatter: 'feher' })
+  })
+})
+
+describe('alkalmazSzolgaltatasokBevezeto', () => {
+  const ujBlokk = szolgaltatasokUjBevezetoBlokk()
+
+  /** Az örökölt (welcome előtti) bevezető blokk, ahogy a seed tárolta. */
+  const orokoltBevezeto = (): Szekcio =>
+    ({
+      blockType: 'richText',
+      id: 'bevezeto-regi',
+      content: szolgaltatasokRegiBevezetoTartalom(),
+      sectionSettings: { visible: true, hatter: 'feher' },
+    }) as Szekcio
+
+  const csere = (layout: Page['layout']) =>
+    alkalmazSzolgaltatasokBevezeto({
+      layout,
+      orokoltTartalom: szolgaltatasokRegiBevezetoTartalom(),
+      ujBlokk,
+    })
+
+  it('a seedelt örökölt blokkot üdvözlő blokkra cseréli, a többi szekciót érintetlenül hagyva', () => {
+    const utana = kurzusSzekcio('Kurzusaink')
+    const eredmeny = csere([orokoltBevezeto(), utana])
+
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.modositasok[0].szabaly).toBe('szolgaltatasok-bevezeto')
+    expect(eredmeny.kihagyasok).toHaveLength(0)
+    expect(eredmeny.layout).toHaveLength(2)
+    expect(eredmeny.layout?.[0]).toBe(ujBlokk)
+    expect(eredmeny.layout?.[1]).toBe(utana)
+  })
+
+  it('a jsonb-féle kulcs-átrendezés NEM akadályozza a cserét', () => {
+    const atrendezett = {
+      ...orokoltBevezeto(),
+      content: forditottKulcsrend(szolgaltatasokRegiBevezetoTartalom()),
+    } as Szekcio
+    const eredmeny = csere([atrendezett])
+
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.layout?.[0].blockType).toBe('welcome')
+  })
+
+  it('szerkesztő által átírt bevezetőnél csendes, indokolt kihagyás', () => {
+    const tartalom = structuredClone(szolgaltatasokRegiBevezetoTartalom()) as {
+      root: { children: unknown[] }
+    }
+    tartalom.root.children.pop()
+    const modositott = { ...orokoltBevezeto(), content: tartalom } as Szekcio
+    const eredmeny = csere([modositott])
+
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.modositasok).toHaveLength(0)
+    expect(eredmeny.kihagyasok[0].hangos).not.toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('a szerkesztő időközben átírta')
+  })
+
+  it('idempotens: ha az első blokk már üdvözlő blokk, csendes kihagyás', () => {
+    const elsoKor = csere([orokoltBevezeto(), kurzusSzekcio('Kurzusaink')])
+    expect(elsoKor.layout).not.toBeNull()
+    const masodikKor = csere(elsoKor.layout)
+
+    expect(masodikKor.layout).toBeNull()
+    expect(masodikKor.modositasok).toHaveLength(0)
+    expect(masodikKor.kihagyasok[0].hangos).not.toBe(true)
+    expect(masodikKor.kihagyasok[0].indok).toContain('MÁR üdvözlő')
+  })
+
+  it('a seed-builder alapállapotán nincs teendő (a kód-szintű alap már helyes)', () => {
+    const eredmeny = csere(buildSzolgaltatasokLayout())
+
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].indok).toContain('MÁR üdvözlő')
+  })
+
+  it('más típusú első blokk és üres szekciósor: hangos kihagyás, írás nélkül', () => {
+    const masTipus = csere([kurzusSzekcio('Kurzusaink'), orokoltBevezeto()])
+    expect(masTipus.layout).toBeNull()
+    expect(masTipus.kihagyasok[0].hangos).toBe(true)
+    expect(masTipus.kihagyasok[0].indok).toContain('nem a cserélendő richText')
+
+    for (const layout of [undefined, null, [] as Szekciosor]) {
+      const ures = csere(layout)
+      expect(ures.layout).toBeNull()
+      expect(ures.kihagyasok[0].hangos).toBe(true)
+      expect(ures.kihagyasok[0].indok).toContain('nincs szekciósora')
+    }
+  })
+
+  it('hiányzó új blokk (builder-alak változás): hangos kihagyás', () => {
+    const eredmeny = alkalmazSzolgaltatasokBevezeto({
+      layout: [orokoltBevezeto()],
+      orokoltTartalom: szolgaltatasokRegiBevezetoTartalom(),
+      ujBlokk: null,
+    })
+
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('buildSzolgaltatasokLayout')
+  })
+
+  it('a bemeneti szekciósort nem módosítja helyben', () => {
+    const bemenet: Szekciosor = [orokoltBevezeto()]
+    const lenyomat = stabilJson(bemenet)
+    csere(bemenet)
+    expect(stabilJson(bemenet)).toBe(lenyomat)
+  })
+})
+
+// ===========================================================================
+// Lánc — a futtató EGY oldalra több javítást egymás után alkalmaz.
+//
+// A script a kezdőlap szekciósorát egyetlen frissítésben írja vissza, ezért a
+// javítások LÁNCBAN futnak: mindegyik az előző eredményén dolgozik. Ez a két
+// teszt azt méri, hogy a lánc (a) mind a négy javítást elvégzi egy élő-alakú
+// szekciósoron, és (b) a MÁSODIK futásra már semmit nem módosít.
+// ===========================================================================
+
+describe('a kezdőlapi javítások lánca (1–2., 9., 10., 11.)', () => {
+  /** Az ÉLES állapot alakja: a seed-layout a javítások ELŐTTI értékekkel. */
+  const eloKezdolap = (): Szekciosor =>
+    buildHomeLayout()
+      .filter((blokk) => blokk.blockType !== 'ctaBanner')
+      .map((blokk) => {
+        if (blokk.blockType === 'courseCards') {
+          return { ...blokk, heading: REGI_KURZUS_SZEKCIO_CIM }
+        }
+        if (blokk.blockType === 'about') {
+          return {
+            ...blokk,
+            stats: (blokk.stats ?? []).map((sor) =>
+              sor.value === UJ_PACIENS_ERTEK ? { ...sor, value: REGI_PACIENS_ERTEK } : sor,
+            ),
+          }
+        }
+        if (blokk.blockType === 'pressLogos') {
+          return { ...blokk, heading: REGI_PRESS_FEJLEC }
+        }
+        if (blokk.blockType === 'states') {
+          return { ...blokk, lead: REGI_ALLAPOTOK_BEVEZETO }
+        }
+        return blokk
+      })
+
+  /** A futtató láncolása, adatbázis nélkül: layout + a lépések naplósorai. */
+  const lanc = (
+    kiindulas: Szekciosor,
+  ): { layout: Szekciosor; modositasok: JavitasLepes[]; kihagyasok: JavitasLepes[] } => {
+    const modositasok: JavitasLepes[] = []
+    const kihagyasok: JavitasLepes[] = []
+    let layout = kiindulas
+
+    const alap = alkalmazKezdolapJavitasok(layout)
+    modositasok.push(...alap.modositasok)
+    kihagyasok.push(...alap.kihagyasok)
+    layout = alap.layout
+
+    const sajto = alkalmazPressLogosFejlec({ layout, ujFejlec: pressLogosUjFejlec() })
+    modositasok.push(...sajto.modositasok)
+    kihagyasok.push(...sajto.kihagyasok)
+    if (sajto.layout !== null) {
+      layout = sajto.layout
+    }
+
+    const allapotok = alkalmazAllapotokBevezeto({ layout, ujBevezeto: allapotokUjBevezeto() })
+    modositasok.push(...allapotok.modositasok)
+    kihagyasok.push(...allapotok.kihagyasok)
+    if (allapotok.layout !== null) {
+      layout = allapotok.layout
+    }
+    const zaro = alkalmazZaroCta({ layout, seedBlokk: zaroCtaSeedBlokk() })
+    modositasok.push(...zaro.modositasok)
+    kihagyasok.push(...zaro.kihagyasok)
+    if (zaro.layout !== null) {
+      layout = zaro.layout
+    }
+
+    return { layout, modositasok, kihagyasok }
+  }
+
+  it('egy futásban mind az ÖT javítást elvégzi, egymást nem ejtve el', () => {
+    const elso = lanc(eloKezdolap())
+
+    expect(elso.modositasok.map((lepes) => lepes.szabaly).sort()).toEqual([
+      'allapotok-bevezeto',
+      'kurzus-szekcio-cim',
+      'paciens-szam',
+      'presslogos-fejlec',
+      'zaro-cta',
+    ])
+
+    const kurzusok = elso.layout.find((blokk) => blokk.blockType === 'courseCards')
+    expect(kurzusok?.blockType === 'courseCards' ? kurzusok.heading : null).toBe(
+      UJ_KURZUS_SZEKCIO_CIM,
+    )
+    const sajto = elso.layout.find((blokk) => blokk.blockType === 'pressLogos')
+    expect(sajto?.blockType === 'pressLogos' ? sajto.heading : null).toBe(pressLogosUjFejlec())
+    const allapotok = elso.layout.find((blokk) => blokk.blockType === 'states')
+    expect(allapotok?.blockType === 'states' ? allapotok.lead : null).toBe(allapotokUjBevezeto())
+    expect(elso.layout[elso.layout.length - 1].blockType).toBe('ctaBanner')
+  })
+
+  it('a MÁSODIK futás semmit nem módosít, és minden kihagyást megindokol', () => {
+    const elso = lanc(eloKezdolap())
+    const masodik = lanc(elso.layout)
+
+    expect(masodik.modositasok).toHaveLength(0)
+    expect(masodik.layout).toEqual(elso.layout)
+    expect(masodik.kihagyasok.length).toBeGreaterThan(0)
+    for (const kihagyas of masodik.kihagyasok) {
+      expect(kihagyas.indok).not.toBeNull()
+      // A második futásban egyetlen HANGOS (hiányzó előfeltétel) sor sincs.
+      expect(kihagyas.hangos).not.toBe(true)
+    }
+  })
+})
+
+describe('a /szolgaltatasok javításainak lánca (8., 12b.)', () => {
+  /** Az ÉLES állapot alakja: a seed-layout a javítások ELŐTTI értékekkel. */
+  const eloSzolgaltatasok = (): Szekciosor =>
+    buildSzolgaltatasokLayout().map((blokk, index) => {
+      if (index === 0) {
+        return {
+          blockType: 'richText',
+          id: 'bevezeto-regi',
+          content: szolgaltatasokRegiBevezetoTartalom(),
+          sectionSettings: { visible: true, hatter: 'feher' },
+        } as Szekcio
+      }
+      if (blokk.sectionSettings?.anchorId === CLINIC_TREATMENTS_ANCHOR) {
+        return { ...blokk, sectionSettings: { ...blokk.sectionSettings, anchorId: 'arlista' } }
+      }
+      return blokk
+    })
+
+  const lanc = (kiindulas: Szekciosor): { layout: Szekciosor; modositasok: JavitasLepes[] } => {
+    const modositasok: JavitasLepes[] = []
+    let layout = kiindulas
+
+    const horgony = alkalmazRendeloiHorgony(layout)
+    modositasok.push(...horgony.modositasok)
+    if (horgony.layout !== null) {
+      layout = horgony.layout
+    }
+    const bevezeto = alkalmazSzolgaltatasokBevezeto({
+      layout,
+      orokoltTartalom: szolgaltatasokRegiBevezetoTartalom(),
+      ujBlokk: szolgaltatasokUjBevezetoBlokk(),
+    })
+    modositasok.push(...bevezeto.modositasok)
+    if (bevezeto.layout !== null) {
+      layout = bevezeto.layout
+    }
+
+    return { layout, modositasok }
+  }
+
+  it('a horgony-javítás és a bevezető cseréje egy futásban, egymást nem ejtve el', () => {
+    const elso = lanc(eloSzolgaltatasok())
+
+    expect(elso.modositasok.map((lepes) => lepes.szabaly).sort()).toEqual([
+      'rendeloi-horgony',
+      'szolgaltatasok-bevezeto',
+    ])
+    expect(elso.layout[0].blockType).toBe('welcome')
+    expect(
+      elso.layout.some((blokk) => blokk.sectionSettings?.anchorId === CLINIC_TREATMENTS_ANCHOR),
+    ).toBe(true)
+    // A lánc eredménye a kód-szintű alapállapottal egyezik (a seed-builder és a
+    // javítás nem csúszhat szét).
+    expect(stabilJson(elso.layout)).toBe(stabilJson(buildSzolgaltatasokLayout()))
+  })
+
+  it('a MÁSODIK futás semmit nem módosít', () => {
+    const elso = lanc(eloSzolgaltatasok())
+    const masodik = lanc(elso.layout)
+
+    expect(masodik.modositasok).toHaveLength(0)
+    expect(masodik.layout).toEqual(elso.layout)
   })
 })

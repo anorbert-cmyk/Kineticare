@@ -40,7 +40,7 @@ import config from '../../../payload.config'
 export const metadata: Metadata = {
   title: 'Kurzusok',
   description:
-    'Kineticare online kézrehabilitációs kurzusok — otthoni gyakorlóprogramok és szakmai továbbképzések videós anyagokkal. Válaszd ki a hozzád illő kurzust, és kezdj el gyógyulni.',
+    'Kineticare online kézrehabilitációs kurzusok: otthoni gyakorlóprogramok és szakmai továbbképzések videós anyagokkal. Válaszd ki a hozzád illő kurzust, és kezdj el gyógyulni.',
 }
 
 interface KurzusokPageProps {
@@ -86,8 +86,8 @@ export default async function KurzusokPage({ searchParams }: KurzusokPageProps) 
         <header className="kc-course-list__header">
           <h1>Kurzusok</h1>
           <p className="kc-course-list__lead">
-            Online kézrehabilitációs kurzusaink segítenek otthon, a saját tempódban felépülni —
-            válogass az otthoni gyakorlóprogramok és a szakmai továbbképzések között.
+            Online kézrehabilitációs kurzusaink segítenek otthon, a saját tempódban felépülni.
+            Válogass az otthoni gyakorlóprogramok és a szakmai továbbképzések között.
           </p>
         </header>
 
@@ -130,7 +130,7 @@ export default async function KurzusokPage({ searchParams }: KurzusokPageProps) 
           <div className="kc-course-empty" role="status">
             <h2>Jelenleg nincs megjeleníthető kurzus</h2>
             <p>
-              Dolgozunk az új anyagokon — nézz vissza később, vagy iratkozz fel, hogy
+              Dolgozunk az új anyagokon. Nézz vissza később, vagy iratkozz fel, hogy
               értesítsünk az új kurzusokról.
             </p>
           </div>

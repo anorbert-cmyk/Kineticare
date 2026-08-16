@@ -6,7 +6,7 @@ import { ThankYouView } from '@/components/checkout/ThankYouView'
 
 export const metadata: Metadata = {
   title: 'Köszönjük a vásárlást',
-  description: 'A fizetésedet feldolgozzuk — hamarosan eléred a kurzust.',
+  description: 'A fizetésedet feldolgozzuk, hamarosan eléred a kurzust.',
 }
 
 interface KoszonjukPageProps {

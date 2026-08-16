@@ -1,7 +1,7 @@
-import type { CSSProperties } from 'react'
-
 import { Container } from '../../ui/Container'
 import { Section } from '../../ui/Section'
+
+import '../../../app/(frontend)/styles/blocks/faq.css'
 
 /**
  * Faq — gyakori kérdések (audit M8/K7: ellenérv-kezelés a vásárlás előtt).
@@ -10,6 +10,13 @@ import { Section } from '../../ui/Section'
  * <details>/<summary> kliens-oldali JS nélkül is működik (SSR-barát).
  * A válaszok óvatosak: műtét utáni helyzetben mindig a kezelőorvos/gyógytornász
  * jóváhagyása az irányadó — orvosi ígéretet nem teszünk.
+ *
+ * STÍLUS: a szekció a KÖZÖS GYIK-stíluslapot viseli (styles/blocks/faq.css) —
+ * ugyanazt, amit a CMS-vezérelt `faq` blokk. Korábban elemre írt inline
+ * stílusokból élt: az egy második, csendben szétcsúszó igazságforrás volt (a
+ * betűméret is így kerülhetett a közös skálán kívülre), és a nyitás-csukás
+ * átmenetet sem kaphatta meg. A lenyíló tartalom finom magasság-átmenetét a
+ * styles/motion.css adja, progresszív ráépítésként.
  */
 
 /**
@@ -22,7 +29,7 @@ export const FAQ_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
   {
     question: 'Műtét után is végezhetem a gyakorlatokat?',
     answer:
-      'A kurzusok általános rehabilitációs programok. Műtét után mindig a kezelőorvosod vagy gyógytornászod jóváhagyásával kezdj bele — ha bizonytalan vagy, írj nekünk a kapcsolat oldalon, és segítünk eligazodni.',
+      'A kurzusok általános rehabilitációs programok. Műtét után mindig a kezelőorvosod vagy gyógytornászod jóváhagyásával kezdj bele. Ha bizonytalan vagy, írj nekünk a kapcsolat oldalon, és segítünk eligazodni.',
   },
   {
     question: 'Fájdalmasak a gyakorlatok?',
@@ -32,42 +39,25 @@ export const FAQ_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
   {
     question: 'Mennyi időt vesz igénybe naponta?',
     answer:
-      'Napi 10–15 perc is elég — a rövid, rendszeres gyakorlás hozza a tartós eredményt, nem az egyszeri nagy erőfeszítés.',
+      'Napi 10–15 perc is elég: a rövid, rendszeres gyakorlás hozza a tartós eredményt, nem az egyszeri nagy erőfeszítés.',
   },
   {
     question: 'Szükségem van eszközökre a gyakorlatokhoz?',
     answer:
-      'Nem. A gyakorlatok többsége saját testsúllyal, otthon található eszközökkel végezhető — ahol bármi kell, azt a videóban jelezzük.',
+      'Nem. A gyakorlatok többsége saját testsúllyal, otthon található eszközökkel végezhető. Ahol bármi kell, azt a videóban jelezzük.',
   },
 ]
 
-const itemStyle: CSSProperties = {
-  borderBottom: '1px solid var(--kc-color-border)',
-  padding: 'var(--kc-space-4, 1rem) 0',
-}
-
-const summaryStyle: CSSProperties = {
-  cursor: 'pointer',
-  fontWeight: 'var(--kc-font-weight-bold)' as CSSProperties['fontWeight'],
-  fontSize: 'var(--kc-text-base)',
-  lineHeight: 'var(--kc-leading-heading)',
-}
-
-const answerStyle: CSSProperties = {
-  margin: 'var(--kc-space-3, 0.75rem) 0 0',
-  color: 'var(--kc-color-text-muted)',
-}
-
 export function Faq() {
   return (
-    <Section variant="default">
+    <Section className="kc-faq" variant="default">
       <Container size="narrow">
-        <h2 className="kc-section-title">Gyakori kérdések</h2>
-        <div style={{ marginTop: 'var(--kc-space-5, 1.5rem)' }}>
+        <h2 className="kc-faq__title">Gyakori kérdések</h2>
+        <div className="kc-faq__list">
           {FAQ_ITEMS.map((item) => (
-            <details key={item.question} style={itemStyle}>
-              <summary style={summaryStyle}>{item.question}</summary>
-              <p style={answerStyle}>{item.answer}</p>
+            <details className="kc-faq__item" key={item.question}>
+              <summary className="kc-faq__question">{item.question}</summary>
+              <p className="kc-faq__answer">{item.answer}</p>
             </details>
           ))}
         </div>

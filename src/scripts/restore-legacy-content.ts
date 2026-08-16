@@ -64,7 +64,11 @@
  *  - a funnel/checkout/köszönő oldalak (kezrehab-penztar, typ-*, hamarosan, oto-*)
  *    — az új oldalnak saját checkout-folyamata van (/penztar, Barion);
  *  - a kapcsolat oldal — az új oldalon dedikált /kapcsolat route űrlappal létezik;
- *  - a jogi oldalak (adatvedelem, aszf, impresszum) — külön jogi review tárgya.
+ *  - a jogi oldalak (adatvedelem, aszf, impresszum): NEM az archívumból épülnek
+ *    vissza, hanem az ügyvéd 2026-os, szó szerinti szövegéből — a tartalom a
+ *    `src/lib/legal-content.ts` modulban (+ `legal-source/*.txt`) él, a három
+ *    oldalt pedig a tulajdonosi tartalom-javító script hozza létre
+ *    (src/scripts/apply-owner-content.ts, 6. javítás), CSAK ha még nem létezik.
  */
 
 import path from 'node:path'
@@ -74,6 +78,7 @@ import { getPayload, type Payload } from 'payload'
 
 import { HOME_IMAGES } from '../lib/home-seed'
 import { LEGACY_IMAGES, LEGACY_IMAGES_DIR, type LegacyImage } from '../lib/legacy-images'
+import { CLINIC_TREATMENTS_ANCHOR } from '../lib/menu-seed'
 import config from '../payload.config'
 import type { Page, Product } from '../payload-types'
 
@@ -142,12 +147,19 @@ const felulirhato = (payload: Payload, cimke: string): boolean => {
 // ---------------------------------------------------------------------------
 // Lexical richText-építő segédfüggvények (típusosak — a payload-types
 // Page['content'] szerkezetét követik; `any` nélkül).
+//
+// A `textNode`/`paragraph`/`para`/`heading`/`bulletList`/`richText` ötös
+// EXPORTÁLT: a jogi oldalak tartalom-modulja (src/lib/legal-content.ts) a
+// jogász szó szerinti szövegét ugyanezekkel a csomópont-építőkkel fordítja
+// Lexicalra. Külön, párhuzamos építőkészlet azért nem készült, mert a Lexical
+// csomópont-alak (mezőnevek, `version`) egyetlen helyen tartható karban — két
+// másolat közül az egyik előbb-utóbb elcsúszna.
 // ---------------------------------------------------------------------------
 
-type RichTextContent = Page['content']
-type BlockNode = RichTextContent['root']['children'][number]
+export type RichTextContent = Page['content']
+export type BlockNode = RichTextContent['root']['children'][number]
 
-const textNode = (text: string, format = 0): BlockNode => ({
+export const textNode = (text: string, format = 0): BlockNode => ({
   type: 'text',
   detail: 0,
   format,
@@ -157,7 +169,7 @@ const textNode = (text: string, format = 0): BlockNode => ({
   version: 1,
 })
 
-const paragraph = (children: BlockNode[]): BlockNode => ({
+export const paragraph = (children: BlockNode[]): BlockNode => ({
   type: 'paragraph',
   children,
   direction: null,
@@ -166,9 +178,9 @@ const paragraph = (children: BlockNode[]): BlockNode => ({
   version: 1,
 })
 
-const para = (text: string): BlockNode => paragraph([textNode(text)])
+export const para = (text: string): BlockNode => paragraph([textNode(text)])
 
-const heading = (tag: 'h2' | 'h3', text: string): BlockNode => ({
+export const heading = (tag: 'h2' | 'h3', text: string): BlockNode => ({
   type: 'heading',
   tag,
   children: [textNode(text)],
@@ -192,7 +204,7 @@ const link = (url: string, label: string, newTab = false): BlockNode => ({
 const cta = (url: string, label: string, newTab = false): BlockNode =>
   paragraph([link(url, label, newTab)])
 
-const bulletList = (items: string[]): BlockNode => ({
+export const bulletList = (items: string[]): BlockNode => ({
   type: 'list',
   listType: 'bullet',
   tag: 'ul',
@@ -221,7 +233,7 @@ const quote = (text: string): BlockNode => ({
   version: 1,
 })
 
-const richText = (children: BlockNode[]): RichTextContent => ({
+export const richText = (children: BlockNode[]): RichTextContent => ({
   root: {
     type: 'root',
     children,
@@ -1119,7 +1131,10 @@ const buildRolunkLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['layo
       ? [
           {
             blockType: 'pressLogos' as const,
-            heading: 'Ismerhetsz minket innen',
+            // A felirat a kezdőlappal közös (tulajdonosi átnevezés, 2026-08-16):
+            // az igazságforrás a home-seed pressLogos blokkja — ha ott változik,
+            // az apply-owner-content 9. javítása az élő oldalakat is követi.
+            heading: 'Itt találkozhattál velünk',
             logos: sajtoLogok.map((image) => ({ image })),
             sectionSettings: { visible: true, hatter: 'feher' as const },
           },
@@ -1222,12 +1237,56 @@ const buildRolunkLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['layo
  * A lap feladata a DÖNTÉS támogatása („melyik út való nekem?"), ezért a három
  * ág egyetlen szekcióban, azonos mezőrenddel áll egymás mellett (5.3, B4.1), a
  * részletek és az árlista pedig alatta.
+ *
+ * A modul aljáról EXPORTÁLT (lásd a záró `export { … }` blokkot), hogy az élő
+ * layout horgony-javítása (src/scripts/apply-owner-content.ts) ellen
+ * tesztelhető legyen: a kód-szintű alapállapotnak MÁR a helyes horgonyt kell
+ * adnia, így a seed és a javítás nem csúszhat szét.
  */
 const buildSzolgaltatasokLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['layout']> => [
-  // Bevezető — a probléma és a kivezető út.
+  // Bevezető — a probléma és a kivezető út, ÜDVÖZLŐ (welcome) blokként.
+  //
+  // MIÉRT NEM richText: a lap teteje korábban EGYETLEN, folyó szöveges blokk
+  // volt (két h2-címsor és öt bekezdés egymás alatt) — a látogató a lap
+  // legfontosabb helyén szövegfalat kapott, tagolás és vizuális kapaszkodó
+  // nélkül. Ugyanez a tartalom a kezdőlapon már bevált szerkezetben áll
+  // (cím + felvezető, alatta pipás felsorolás és oldalsó összefoglaló), ezért
+  // a /szolgaltatasok teteje is ezt a blokkot kapja (redesign, 2026-08-16).
+  //
+  // A SZÖVEG BETŰHÍVEN a régi kineticare.hu bevezetője marad — ugyanaz, amit a
+  // `szolgaltatasokBevezetoNodes()` rich-text változata visz (az a lap
+  // `content` mezőjében tovább él): a szerkezet változik, tartalom nem vész el.
+  // A hosszú, kétállítású zárómondat kettéválik: az elvi rész a felsorolás
+  // utolsó tétele, a módszertani rész az oldalsó bekezdések záró tagja.
   {
-    blockType: 'richText',
-    content: richText(szolgaltatasokBevezetoNodes()),
+    blockType: 'welcome',
+    title: 'Fáj a kezed, csuklód, könyököd vagy vállad?',
+    lead: 'Van megoldás – ha tudod, merre indulj',
+    checklist: [
+      {
+        text: 'A legtöbb kéz-, csukló- vagy könyökprobléma megfelelő terápiával hatékonyan kezelhető – és akár a műtét is elkerülhető.',
+      },
+      {
+        text: 'Ehhez persze türelemre és kitartásra van szükség, de a test egy csodálatos „szerkezet”: ha segítünk neki, képes rendbehozni magát.',
+      },
+      {
+        text: 'A kézfájdalmak kezelésében nem hiszünk a gyors, felületes megoldásokban.',
+      },
+    ],
+    sideParagraphs: [
+      {
+        text: 'Tudjuk, hogy ez a probléma mennyire tud hátráltatni a munkában vagy a sportban, de még a hétköznapokban is.',
+        emphasized: false,
+      },
+      {
+        text: 'Ezért professzionális kezeléseinkkel és online programjainkkal abban segítünk, hogy minél gyorsabban visszanyerd a kezed erejét és mozgását – hosszú távú eredményekkel.',
+        emphasized: true,
+      },
+      {
+        text: 'A kezeléseink és programjaink a legmodernebb mozgásterápiás és manuálterápiás módszerekre épülnek, hogy segítsenek a gyökérok megszüntetésében, és a hosszú távú regenerációban.',
+        emphasized: false,
+      },
+    ],
     sectionSettings: { visible: true, hatter: 'feher' },
   },
 
@@ -1252,10 +1311,18 @@ const buildSzolgaltatasokLayout = (media: OldalLayoutMedia = {}): NonNullable<Pa
 
   // Rendelői részletek + árlista egy közös régióban (B2.2). Az időpontkérés
   // itt szöveglink, nem gomb — a lap elsődleges CTA-ja a záró sáv (B6.5).
+  //
+  // A horgony `rendeloi`, NEM `arlista`: a fejléc-menü „Rendelői kezelések"
+  // pontja a `/szolgaltatasok#rendeloi` címre visz (src/lib/menu-seed.ts
+  // CLINIC_TREATMENTS_PATH), a szekció viszont korábban `arlista` horgonyt
+  // kapott — így a menüpontra kattintva SEMMI nem történt (a böngésző nem
+  // talált ilyen id-t). A szekció a rendelői kezelésekkel KEZDŐDIK (az árlista
+  // ugyanennek a régiónak a második fele), tehát a menüpont célja pontosan ez
+  // a blokk. `arlista` horgonyra a repóban semmi nem hivatkozik.
   {
     blockType: 'richText',
     content: richText([...rendeloiKezelesekNodes(), ...arlistaNodes('szoveglink')]),
-    sectionSettings: { visible: true, anchorId: 'arlista', hatter: 'feher' },
+    sectionSettings: { visible: true, anchorId: CLINIC_TREATMENTS_ANCHOR, hatter: 'feher' },
   },
 
   // Három párhuzamos érv → kártyarács (B3.1).
@@ -2142,7 +2209,9 @@ async function restoreLegacyContent(): Promise<void> {
     excerpt:
       'Hatékony kezeléseket, otthon végezhető programokat és szakmai továbbképzéseket nyújtunk azoknak, akik biztos eredményeket szeretnének.',
     content: szolgaltatasokContent(),
-    heroImage: mediaId('67b3bd06f3936_Rendelo.png'),
+    // heroImage szándékosan NINCS (tulajdonosi redesign, 2026-08-16): a lap
+    // teteje kompakt hero + welcome-tábla, a nagy Rendelo-fotó kikerült. Az
+    // ÉLŐ oldalak mezőjét az apply-owner-content 12a. javítása üríti.
     seoTitle: 'Szolgáltatások – Kineticare',
     seoDescription:
       'Rendelői gyógytorna és manuálterápia Budapesten (50 perc 18 000 Ft, 20 perc 10 000 Ft), otthoni kézrehabilitációs program és akkreditált szakmai képzések.',
@@ -2297,6 +2366,16 @@ async function restoreLegacyContent(): Promise<void> {
 const rolunkSzakmaiOrokoltTartalom = (): RichTextContent =>
   richText([...rolunkSzakemberNodes(), ...rolunkReferenciaNodes()])
 
+/**
+ * A /szolgaltatasok lap-tetejének ÖRÖKÖLT (welcome-blokk előtti) rich-text
+ * alakja — pontosan az a tartalom, amit a 2026-08-16 előtti seed a szekciósor
+ * ELSŐ blokkjaként tett a lapra. Az apply-owner-content.ts ezzel veti össze az
+ * ÉLŐ adatbázis első blokkját: csak akkor cseréli üdvözlő (welcome) blokkra, ha
+ * a szerkesztő időközben nem nyúlt hozzá.
+ */
+const szolgaltatasokRegiBevezetoTartalom = (): RichTextContent =>
+  richText(szolgaltatasokBevezetoNodes())
+
 export {
   buildRolunkLayout,
   buildSzolgaltatasokLayout,
@@ -2304,6 +2383,7 @@ export {
   rolunkContent,
   rolunkSzakmaiOrokoltTartalom,
   szolgaltatasokContent,
+  szolgaltatasokRegiBevezetoTartalom,
 }
 
 /**

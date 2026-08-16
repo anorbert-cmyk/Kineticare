@@ -164,7 +164,7 @@
   border: 2px solid transparent;
   border-radius: var(--kc-radius-md);
   font-family: var(--kc-font-body);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-bold);
   line-height: 1.4;
   text-align: center;
@@ -253,9 +253,11 @@
   cursor: not-allowed;
 }
 
+/* A gomb felirata a törzsméreten áll (M) — a `--sm` változat CSAK a belső
+   térközt szűkíti, méretet nem vált: a három-méretes skálán a gombméret nem
+   hordoz hierarchiát, a szerepet a kitöltés (primary/secondary/ghost) közli. */
 .kc-button--sm {
   padding: var(--kc-space-2) var(--kc-space-4);
-  font-size: var(--kc-text-xs);
 }
 
 /* ---- Card ---------------------------------------------------------------
@@ -286,6 +288,17 @@
   transform: translateY(-2px);
 }
 
+/* A KÁRTYÁN belüli, osztály nélküli címsor komponens-cím, nem szekció-cím
+   („Számlázási adatok", „Adataim", „Elállási jog"): a három-méretes skálán a
+   TÖRZSMÉRETEN (M) áll, a szintjét a 700-as súly és a törzs-betű adja. A
+   `:not([class])` szűkítés szándékos — a saját osztállyal érkező kártyacímek
+   (kurzus-, poszt-kártya) a maguk szabályát viszik tovább. */
+.kc-card > :is(h2, h3, h4, h5, h6):not([class]) {
+  font-family: var(--kc-font-body);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+}
+
 /* ---- Field (Input + label + hiba) --------------------------------------- */
 .kc-field {
   display: flex;
@@ -294,7 +307,7 @@
 }
 
 .kc-field__label {
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   font-weight: var(--kc-font-weight-bold);
   color: var(--kc-color-text);
 }
@@ -312,7 +325,7 @@
   border: 1px solid var(--kc-color-border-strong);
   border-radius: var(--kc-radius-md);
   background-color: var(--kc-color-surface-raised);
-  font-size: var(--kc-text-base);
+  font-size: var(--kc-font-m);
   line-height: 1.5;
   transition:
     border-color var(--kc-motion-fast) var(--kc-ease-out),
@@ -349,7 +362,7 @@
 }
 
 .kc-field__hint {
-  font-size: var(--kc-text-xs);
+  font-size: var(--kc-font-s);
   color: var(--kc-color-text-muted);
 }
 
@@ -357,7 +370,7 @@
   display: flex;
   align-items: center;
   gap: var(--kc-space-2);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   font-weight: var(--kc-font-weight-bold);
   color: var(--kc-color-danger);
 }
@@ -369,7 +382,7 @@
   gap: var(--kc-space-1);
   padding: var(--kc-space-1) var(--kc-space-3);
   border-radius: var(--kc-radius-full);
-  font-size: var(--kc-text-xs);
+  font-size: var(--kc-font-s);
   font-weight: var(--kc-font-weight-bold);
   line-height: 1.6;
 }
@@ -406,17 +419,21 @@
   color: var(--kc-color-danger);
 }
 
-/* ---- PriceTag (HUF ár-címke) -------------------------------------------- */
+/* ---- PriceTag (HUF ár-címke) --------------------------------------------
+   A három-méretes skálán az ár a TÖRZS-méreten (M) áll, a kiemelését a
+   700-as SÚLY viszi. Ezért vált a címsor-betűről (Tenor Sans, egyetlen 400-as
+   metszet — a 700 ott szintetikus, torz vastagítás lenne) a variábilis
+   Nunito Sansra, amely 400–700 között valódi metszetet ad. A `--sm`
+   változatnak így nincs többé saját mérete: a kisebb kontextusban is
+   ugyanaz az ár-nyelv szól, csak a környezete halkabb. */
 .kc-price-tag {
   display: inline-flex;
   align-items: baseline;
   gap: var(--kc-space-2);
-  font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-xl);
+  font-family: var(--kc-font-body);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+  font-variant-numeric: tabular-nums;
   color: var(--kc-color-text);
   white-space: nowrap;
-}
-
-.kc-price-tag--sm {
-  font-size: var(--kc-text-lg);
 }

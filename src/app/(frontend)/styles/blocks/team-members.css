@@ -7,8 +7,9 @@
  * `kc-container` szélességet visel.
  *
  * MÉRETEK: minden betűméret a közös skáláról jön (UX-skill 4. pont — elemre írt
- * px/rem TILOS). A név a törzs-skála --kc-text-2xl lépcsőjén áll; a tábla-skálát
- * (--kc-text-board-*) szándékosan NEM használja, mert az a teljes képernyős
+ * px/rem TILOS). A név a törzsméreten (M) áll, a szintjét a súly és a szín adja;
+ * a szekció-cím az L lépcsőn. A megszűnt tábla-skálát nem pótolja, mert az a
+ * teljes képernyős
  * táblákhoz kalibrált, ez a szekció viszont konténer-széles.
  *
  * AKCENT-KORLÁT (tokens.css kontraszt-jegyzőkönyv): a titulus, a kapcsolati
@@ -58,7 +59,7 @@
 
 .kc-team__eyebrow {
   margin: 0;
-  font-size: var(--kc-text-2xs);
+  font-size: var(--kc-font-s);
   font-weight: var(--kc-font-weight-medium);
   letter-spacing: var(--kc-tracking-eyebrow);
   line-height: 1.3;
@@ -69,7 +70,7 @@
 .kc-team__title {
   margin: var(--kc-space-3) 0 0;
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-3xl);
+  font-size: var(--kc-font-l);
   font-weight: var(--kc-font-weight-normal);
   line-height: var(--kc-leading-heading);
   color: var(--kc-team-ink);
@@ -79,8 +80,8 @@
 .kc-team__lead {
   margin: var(--kc-space-4) 0 0;
   /* Mérték (B1): a folyószöveg sorhossza a 45–75 karakteres sávban marad. */
-  max-width: 68ch;
-  font-size: var(--kc-text-base);
+  max-width: var(--kc-measure);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-body);
   color: var(--kc-team-muted);
   white-space: pre-line;
@@ -152,7 +153,7 @@
 .kc-team__name {
   margin: 0;
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-normal);
   line-height: var(--kc-leading-heading);
   color: var(--kc-team-ink);
@@ -162,7 +163,7 @@
   margin: var(--kc-space-2) 0 0;
   padding-bottom: var(--kc-space-4);
   border-bottom: 1px solid var(--kc-team-rule);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   font-weight: var(--kc-font-weight-medium);
   line-height: 1.45;
   color: var(--kc-team-accent-text);
@@ -171,7 +172,7 @@
 .kc-team__bio {
   margin: var(--kc-space-4) 0 0;
   max-width: 46ch;
-  font-size: var(--kc-text-base);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-body);
   color: var(--kc-team-muted);
   white-space: pre-line;
@@ -193,7 +194,7 @@
   /* 44px érintési célfelület (UX-skill 3. pont). */
   min-height: 2.75rem;
   align-items: center;
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-medium);
   color: var(--kc-team-accent-text);
   text-decoration: underline;
@@ -219,7 +220,7 @@
   align-items: center;
   gap: var(--kc-space-3);
   padding: var(--kc-space-3) 0;
-  font-size: var(--kc-text-base);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-medium);
   line-height: var(--kc-leading-heading);
   color: var(--kc-team-ink);
@@ -240,7 +241,7 @@
    ezért AA-kontrasztú szövegszín (accent-deep) viszi. */
 .kc-team__cv-count {
   flex: 0 0 auto;
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   font-variant-numeric: tabular-nums;
   color: var(--kc-team-accent-text);
 }
@@ -251,7 +252,6 @@
   flex: 0 0 auto;
   width: 1ch;
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
   line-height: 1;
   text-align: center;
   color: var(--kc-team-muted);
@@ -270,7 +270,7 @@
   margin-top: var(--kc-space-2);
   /* A CV-tételek rövid, egysoros bejegyzések — a 34rem mérték itt is tartható. */
   max-width: 34rem;
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   line-height: 1.55;
   color: var(--kc-team-muted);
 }
@@ -286,7 +286,7 @@
   gap: var(--kc-space-2);
   margin-top: auto;
   padding-top: var(--kc-space-4);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-medium);
   color: var(--kc-team-accent-text);
 }

@@ -20,14 +20,20 @@ html {
   color-scheme: light;
 }
 
+/* Élsimítás: a Tenor Sans/Nunito Sans metszetek a márka hűvös, világos
+   felületein (paper #f6f9fc, fehér) alapértelmezett subpixel-simítással
+   optikailag túl vastagon ülnek. A szürkeárnyalatos simítás visszaadja a
+   metszet tervezett vonalvastagságát — mindkét motorra kiírva, mert a WebKit
+   és a Gecko külön tulajdonságot használ. */
 body {
   margin: 0;
   font-family: var(--kc-font-body);
-  font-size: var(--kc-text-base);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-body);
   color: var(--kc-color-text);
   background-color: var(--kc-color-bg);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
@@ -69,16 +75,20 @@ h6 {
   color: var(--kc-color-text);
 }
 
-h1 {
-  font-size: var(--kc-text-3xl);
-}
-
+/* HÁROM-MÉRETES SKÁLA (tokens.css): a H1 és a H2 UGYANAZT az L lépcsőt viszi
+   — a kettő megkülönböztetése elhelyezés, felvezető sor és szín dolga, nem
+   méreté. A H3-tól lefelé a törzsméret (M) áll, a szintet a címsor-betűcsalád
+   és a súly jelöli. */
+h1,
 h2 {
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-font-l);
 }
 
-h3 {
-  font-size: var(--kc-text-xl);
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--kc-font-m);
 }
 
 img,

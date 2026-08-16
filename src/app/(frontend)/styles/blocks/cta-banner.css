@@ -3,7 +3,7 @@
  *
  * A landingen a lezáró sáv az SOS-blokk volt (az a `freeSos` blokké, F3);
  * ez a szekció annak visszafogott, általános célú változata: cím + szöveg +
- * EGY gomb. Minden méret a `--kc-text-*` skáláról, minden szín a fő site
+ * EGY gomb. Minden méret a `--kc-font-l/m/s` skáláról, minden szín a fő site
  * tokenjeiről (terv 3.1). Akcent-színt a sáv nem használ, így az akcent
  * AA-korlátja itt nem érintett.
  *
@@ -37,7 +37,7 @@
 .kc-cta-banner__title {
   margin: 0;
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-font-l);
   font-weight: var(--kc-font-weight-normal);
   line-height: var(--kc-leading-heading);
   color: var(--kc-cta-ink);
@@ -47,7 +47,7 @@
 .kc-cta-banner__text {
   margin: var(--kc-space-2) 0 0;
   max-width: 60ch;
-  font-size: var(--kc-text-base);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-body);
   color: var(--kc-cta-muted);
   white-space: pre-line;

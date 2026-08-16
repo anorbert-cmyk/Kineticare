@@ -1,10 +1,11 @@
 /**
  * GYIK (FaqBlock) — szekció-stílus.
  *
- * A landingen nincs GYIK-szekció, ezért a stílus a fő site meglévő
- * kezdőlapi GYIK-jének (home/Faq.tsx inline stílusai) osztály-alapú változata,
- * a szekció-rendszer többi blokkjának ritmusával (terv 3.1: minden méret
- * tokenről, minden szín a fő site tokenjeiről).
+ * A landingen nincs GYIK-szekció, ezért a stílus a szekció-rendszer többi
+ * blokkjának ritmusát viszi (terv 3.1: minden méret tokenről, minden szín a
+ * fő site szerep-tokenjeiről). A RÖGZÍTETT kezdőlap GYIK-je (home/Faq.tsx) is
+ * EZT a lapot használja — korábban elemre írt inline stílusokból élt, ami egy
+ * második, csendben szétcsúszó igazságforrás volt.
  *
  * A nyitó/záró jelet CSS rajzolja (`::after`), tehát nem hordoz információt:
  * az összecsukott/kinyitott állapotot a natív `details`/`summary` közli a
@@ -14,23 +15,25 @@
  * Betöltés: a szekció-komponens importálja (src/components/blocks/FaqBlock.tsx).
  */
 
+/* Kontraszt (tokens.css jegyzőkönyve): ink a paperen 14,79:1 / a tinten
+   13,53:1, ink-soft a paperen 8,80:1 — mind AA/AAA. */
 .kc-faq {
-  --kc-faq-ink: var(--kc-color-navy-900);
+  --kc-faq-ink: var(--kc-color-text);
   --kc-faq-muted: var(--kc-color-text-muted);
   --kc-faq-rule: var(--kc-color-border);
 }
 
-/* Sötétkék sáv: fehér 15,7:1, blue-200 12,5:1 a navy-900 háttéren. */
+/* Sötét sáv: fehér 15,63:1, halvány akcent 8,49:1 az inken — mindkettő AA/AAA. */
 .kc-section--dark.kc-faq {
-  --kc-faq-ink: var(--kc-color-white);
-  --kc-faq-muted: var(--kc-color-blue-200);
-  --kc-faq-rule: rgb(255 255 255 / 0.35);
+  --kc-faq-ink: var(--kc-color-on-dark);
+  --kc-faq-muted: var(--kc-color-on-dark-muted);
+  --kc-faq-rule: color-mix(in srgb, var(--kc-color-on-dark) 35%, transparent);
 }
 
 .kc-faq__title {
   margin: 0 0 var(--kc-space-5);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-font-l);
   font-weight: var(--kc-font-weight-normal);
   line-height: var(--kc-leading-heading);
   color: var(--kc-faq-ink);
@@ -41,6 +44,8 @@
   border-bottom: 1px solid var(--kc-faq-rule);
 }
 
+/* A kérdés a TÖRZS-méreten (M) áll; a fejléc-szerepét a 700-as súly és az
+   ink szövegszín jelöli (a válasz halkabb és normál vastagságú). */
 .kc-faq__question {
   position: relative;
   display: flex;
@@ -48,27 +53,31 @@
   align-items: center;
   gap: var(--kc-space-4);
   padding: var(--kc-space-4) var(--kc-space-6) var(--kc-space-4) 0;
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-bold);
   line-height: var(--kc-leading-heading);
   color: var(--kc-faq-ink);
   cursor: pointer;
   /* Saját nyitó-jel a böngésző-alapértelmezett háromszög helyett. */
   list-style: none;
+  transition: color var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-faq__question:hover {
+  color: var(--kc-color-link-hover);
 }
 
 .kc-faq__question::-webkit-details-marker {
   display: none;
 }
 
-/* Dekoratív +/− jel: az állapotot a details/summary maga közli. */
+/* Dekoratív +/− jel: az állapotot a details/summary maga közli. Méretet NEM
+   ír: a summary törzsméretét (M) örökli — a jel nem tipográfiai szint. */
 .kc-faq__question::after {
   content: '+';
   position: absolute;
   top: 50%;
   right: 0;
-  font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-xl);
   line-height: 1;
   color: var(--kc-faq-muted);
   transform: translateY(-50%);
@@ -78,10 +87,12 @@
   content: '\2212';
 }
 
+/* A válasz mértéke a közös 34rem (≈75 magyar karakter) — a korábbi 68ch a
+   repó betűjén ~90 karakteres sort adott (lásd tokens.css --kc-measure). */
 .kc-faq__answer {
   margin: 0 0 var(--kc-space-5);
-  max-width: 68ch;
-  font-size: var(--kc-text-base);
+  max-width: var(--kc-measure);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-body);
   color: var(--kc-faq-muted);
   /* A válasz textarea-mező: a szerkesztő sortörései maradjanak meg. */

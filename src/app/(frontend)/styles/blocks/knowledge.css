@@ -33,17 +33,6 @@
 .kc-knowledge .kc-section-title {
   max-width: 30ch;
   margin-bottom: var(--kc-space-6);
-  font-size: var(--kc-text-3xl);
-}
-
-/* A landing inline-linkjén a nyíl hoverre elmozdul (a többit a .kc-text-link
-   adja: akcent-mély szín, 1px aláhúzás nagy offsettel, 44px célfelület). */
-.kc-knowledge__link span {
-  transition: transform var(--kc-motion-fast) var(--kc-ease-out);
-}
-
-.kc-knowledge__link:hover span {
-  transform: translateX(0.2rem);
 }
 
 /* ---- Posztkártya (a /blog listán és a kapcsolódó posztoknál is) ----------- */
@@ -85,7 +74,6 @@
 /* `margin-left: auto`: dátum nélküli poszton is a láb jobb szélén marad. */
 .kc-post-card .kc-post-card__arrow {
   margin-left: auto;
-  font-size: var(--kc-text-lg);
   line-height: 1;
   color: var(--kc-color-accent);
   transition: transform var(--kc-motion-base) var(--kc-ease-out);
@@ -97,13 +85,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .kc-knowledge__link span,
   .kc-post-card .kc-post-card__cover img,
   .kc-post-card .kc-post-card__arrow {
     transition: none;
   }
 
-  .kc-knowledge__link:hover span,
   .kc-card--interactive.kc-post-card:hover .kc-post-card__cover img,
   .kc-card--interactive.kc-post-card:focus-within .kc-post-card__cover img,
   .kc-card--interactive.kc-post-card:hover .kc-post-card__arrow,

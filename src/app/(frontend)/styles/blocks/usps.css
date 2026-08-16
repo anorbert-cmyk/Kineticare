@@ -7,7 +7,7 @@
  * szorította); a tábla-viselkedést a közös `.kc-board` adja (styles/ui.css).
  * A `kc-rise` animáció nem jött át (terv 3.5).
  *
- * A cím a tükörben a `kc-about-title` lépcsőjét viszi (--kc-text-board-5xl).
+ * A cím a közös L (cím) lépcsőn áll, mint minden szekciócím.
  *
  * AKCENT-KORLÁT (terv 3.1): a sorszám-korong SZÖVEGE `accent-deep`
  * (tint-cool háttéren 4,72:1, fehéren 5,45:1 — AA felett); a nyers `accent`
@@ -40,7 +40,7 @@
 .kc-usps__title {
   margin: 0;
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-board-5xl);
+  font-size: var(--kc-font-l);
   font-weight: var(--kc-font-weight-normal);
   letter-spacing: 0.004em;
   line-height: var(--kc-leading-board);
@@ -88,8 +88,9 @@
   justify-content: center;
   border-radius: var(--kc-radius-full);
   background-color: var(--kc-usps-badge);
-  font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-xl);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   color: var(--kc-usps-accent-text);
 }
@@ -98,14 +99,13 @@
   .kc-usps__num {
     width: 4.1rem;
     height: 4.1rem;
-    font-size: var(--kc-text-board-lg);
   }
 }
 
 .kc-usps__card-title {
   margin: 0 0 var(--kc-space-2);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-board-lg);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-normal);
   letter-spacing: 0.005em;
   line-height: 1.14;
@@ -115,8 +115,8 @@
 
 .kc-usps__text {
   margin: 0 0 var(--kc-space-2);
-  max-width: 68ch;
-  font-size: var(--kc-text-base);
+  max-width: var(--kc-measure);
+  font-size: var(--kc-font-m);
   line-height: 1.65;
   color: var(--kc-usps-muted);
   /* A mezők textarea-k: a szerkesztő sortörései maradjanak meg. */

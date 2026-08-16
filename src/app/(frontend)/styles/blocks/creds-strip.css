@@ -59,7 +59,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--kc-space-2);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   line-height: var(--kc-leading-body);
   color: var(--kc-creds-muted);
 }
@@ -71,24 +71,4 @@
   height: 0.375rem;
   border-radius: var(--kc-radius-full);
   background-color: var(--kc-creds-dot);
-}
-
-/* A landing inline-linkjén a nyíl hoverre elmozdul (a többit a .kc-text-link
-   adja: akcent-mély szín, 1px aláhúzás nagy offsettel, 44px célfelület). */
-.kc-creds__link span {
-  transition: transform var(--kc-motion-fast) var(--kc-ease-out);
-}
-
-.kc-creds__link:hover span {
-  transform: translateX(0.2rem);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .kc-creds__link span {
-    transition: none;
-  }
-
-  .kc-creds__link:hover span {
-    transform: none;
-  }
 }

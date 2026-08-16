@@ -375,7 +375,7 @@ export function factHighlights(facts: CourseFactsInput): string[] {
   if (facts.accessDurationDays !== null && facts.accessDurationDays > 0) {
     rows.push(`${facts.accessDurationDays} napos hozzáférés`)
   } else {
-    rows.push('Örökös hozzáférés — bármikor újranézheted')
+    rows.push('Örökös hozzáférés: bármikor újranézheted')
   }
   if (facts.hasPreview) {
     rows.push('Ingyenes előzetes vásárlás előtt')
@@ -410,7 +410,7 @@ export function factSteps(facts: CourseFactsInput): SalesStep[] {
   return [
     {
       title: 'Megveszed',
-      text: 'Bankkártyás fizetés a Barionon keresztül — a bankkártya adatait mi nem látjuk.',
+      text: 'Bankkártyás fizetés a Barionon keresztül. A bankkártya adatait mi nem látjuk.',
     },
     {
       title: 'Azonnal eléred',

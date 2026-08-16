@@ -14,7 +14,7 @@ import config from '../../../payload.config'
 
 export const metadata: Metadata = {
   title: 'Regisztráció',
-  description: 'Hozd létre a Kineticare fiókodat — a kurzusaid és a rendeléseid egy helyen.',
+  description: 'Hozd létre a Kineticare fiókodat: a kurzusaid és a rendeléseid egy helyen.',
 }
 
 interface RegisztracioPageProps {
@@ -53,7 +53,7 @@ export default async function RegisztracioPage({ searchParams }: RegisztracioPag
       <Container size="narrow">
         <h1>Regisztráció</h1>
         <p className="kc-auth-lead">
-          Hozd létre a fiókodat — a kurzusaid, a rendeléseid és a lejátszásaid egy helyen lesznek.
+          Hozd létre a fiókodat: a kurzusaid, a rendeléseid és a lejátszásaid egy helyen lesznek.
         </p>
         <RegisterForm returnUrl={returnUrl} />
         <p className="kc-auth-alt">

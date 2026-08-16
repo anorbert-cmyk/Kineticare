@@ -9,7 +9,6 @@ import { cache } from 'react'
 import { TrackEvent } from '@/components/analytics/TrackEvent'
 import { JsonLd } from '@/components/content/JsonLd'
 import { CourseBuybox } from '@/components/courses/CourseBuybox'
-import { CourseCtaBand } from '@/components/courses/CourseCtaBand'
 import { CourseCurriculum } from '@/components/courses/CourseCurriculum'
 import { CourseFaq } from '@/components/courses/CourseFaq'
 import { CourseFitCheck } from '@/components/courses/CourseFitCheck'
@@ -85,7 +84,14 @@ import config from '../../../../payload.config'
  *  3. SZAKASZOK mértékre fogott (34rem ≈ 75 karakter) folyószöveggel (B1.1),
  *     párhuzamos tartalom rácsban (B3.1), GYIK harmonikában (B5.1) — de ár,
  *     garancia és tananyag SOSEM harmonikában (B5.2).
- *  4. ISMÉTELT CTA minden 2. szakasz után + mobil ragadós vásárlósáv (B6.1).
+ *  4. EGYETLEN vásárlási cél a lapon: a RAGADÓS vásárlódoboz gombja
+ *     (desktopon a lap aljáig együtt utazik az olvasóval), mobilon pedig — ahol
+ *     a doboz kigörgött a képből — a ragadós alsó vásárlósáv. A tartalomban
+ *     ISMÉTELT vásárló-gomb NINCS (2026-08-16, tulajdonosi döntés): a korábbi
+ *     „minden 2. szakasz után egy sáv" + záró CTA felépítés a hosszú lapon
+ *     négy-öt egyforma gombot szórt szét, ami zajjá vált — a ragadós doboz
+ *     ugyanazt a szerepet tölti be, folyamatosan, egyetlen példányban. Ez a
+ *     fizetős ÉS az ingyenes (SOS) kurzusoldalra egyaránt így áll.
  *
  * ═══ TARTALOM-HATÁR ═══
  * Az oldal SEMMILYEN értékesítő szöveget nem hardcode-ol: minden megjelenő
@@ -194,15 +200,10 @@ function relatedProductsOf(product: Product): Product[] {
 /** A vásárlódoboz horgonya — a mobil ragadós sáv EZT figyeli. */
 const BUYBOX_ID = 'kurzus-vasarlas'
 
-/**
- * A megjelenő szakaszok leírója. A `carriesCta` azt jelenti, hogy a szakasz
- * MAGA hordoz vásárlási gombot (ilyen a garancia-sáv) — ilyenkor közvetlenül
- * utána nem kell újabb CTA-sáv.
- */
+/** A megjelenő szakaszok leírója (horgony-cél + tartalom). */
 interface PageSection {
   target: CourseJumpTarget | null
   node: ReactNode
-  carriesCta: boolean
 }
 
 export async function generateMetadata({ params }: CoursePageProps): Promise<Metadata> {
@@ -280,11 +281,11 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
   })
 
   // A CTA állapotgépe (courses.ts) — a checkout-útvonal és az árlogika
-  // VÁLTOZATLAN. Az ismételt sávok csak a ténylegesen vásárolható állapotban
-  // jelennek meg: „már megvetted" vagy „nem vásárolható" mellett egyetlen
-  // (a vásárlódobozbeli) jelzés marad, ismétlés nélkül.
+  // VÁLTOZATLAN. A mobil ragadós sáv csak a ténylegesen vásárolható
+  // állapotban jelenik meg: „már megvetted" vagy „nem vásárolható" mellett
+  // egyedül a vásárlódoboz jelzése marad.
   const cta = resolveCourseCta(product, purchased)
-  const showRepeatCta = cta.kind === 'buy' || cta.kind === 'free'
+  const showMobileBuyBar = cta.kind === 'buy' || cta.kind === 'free'
   const priceLabel =
     priceBadge === 'price' && price !== null
       ? formatPriceHuf(price)
@@ -293,24 +294,12 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
         : null
   const guaranteeLabel = sales.guarantee === null ? null : sales.guarantee.title
 
-  const ctaBand = (
-    <CourseCtaBand
-      courseTitle={title}
-      guaranteeLabel={guaranteeLabel}
-      hasPurchased={purchased}
-      priceBadge={priceBadge}
-      priceHuf={price}
-      product={product}
-    />
-  )
-
   // ── A szakaszok, dokumentum-sorrendben ────────────────────────────────────
   const sections: PageSection[] = []
 
   if (sales.body !== null) {
     sections.push({
       target: { id: 'mi-ez', label: 'Mi ez?' },
-      carriesCta: false,
       node: (
         <section aria-labelledby="mi-ez-cim" className="kc-course-section" id="mi-ez">
           <h2 className="kc-course-section__title" id="mi-ez-cim">
@@ -325,7 +314,6 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
   if (sales.steps.length > 0) {
     sections.push({
       target: { id: 'hogyan-mukodik', label: 'Hogyan működik?' },
-      carriesCta: false,
       node: (
         <CourseHowItWorks
           heading="Hogyan működik?"
@@ -340,7 +328,6 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
   if (curriculumModules.length > 0) {
     sections.push({
       target: { id: 'tananyag', label: 'Tananyag' },
-      carriesCta: false,
       node: (
         <CourseCurriculum
           heading="Tananyag"
@@ -354,12 +341,11 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
   if (sales.fitFor.length > 0 || sales.notFitFor.length > 0) {
     sections.push({
       target: { id: 'kinek-valo', label: 'Kinek való?' },
-      carriesCta: false,
       node: (
         <CourseFitCheck
           fitFor={sales.fitFor}
           fitTitle="Neked való, ha…"
-          heading="Kinek való — és kinek nem?"
+          heading="Kinek való, és kinek nem?"
           headingId="kinek-valo-cim"
           notFitFor={sales.notFitFor}
           notFitTitle="Nem javasoljuk, ha…"
@@ -371,49 +357,23 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
   if (sales.guarantee !== null) {
     sections.push({
       target: { id: 'garancia', label: 'Garancia' },
-      // A garancia a döntést támogató FŐ érv — a kutatás szerint épp utána
-      // kell gombnak következnie, ezért a sáv maga hordozza a CTA-t (B6.1).
-      carriesCta: showRepeatCta,
-      node: (
-        <CourseGuarantee guarantee={sales.guarantee} headingId="garancia-cim">
-          {showRepeatCta ? ctaBand : null}
-        </CourseGuarantee>
-      ),
+      node: <CourseGuarantee guarantee={sales.guarantee} headingId="garancia-cim" />,
     })
   }
 
   if (sales.faq.length > 0) {
     sections.push({
       target: { id: 'gyik', label: 'GYIK' },
-      carriesCta: false,
       node: <CourseFaq heading="Gyakori kérdések" headingId="gyik-cim" items={sales.faq} />,
     })
   }
 
-  // Ismételt CTA: minden 2. szakasz után, és a lap végén. A saját CTA-t
-  // hordozó szakasz (garancia) nullázza a számlálót, hogy ne kerüljön két
-  // vásárlási sáv egymás mellé.
-  const rendered: ReactNode[] = []
-  let sinceCta = 0
-  for (const [index, section] of sections.entries()) {
-    rendered.push(<Fragment key={`szakasz-${index}`}>{section.node}</Fragment>)
-    if (section.carriesCta) {
-      sinceCta = 0
-      continue
-    }
-    sinceCta += 1
-    const isLast = index === sections.length - 1
-    // A KÖVETKEZŐ szakasz saját gombja elé nem kerül újabb sáv: két vásárlási
-    // sáv egymás után már nem ismétlés, hanem zaj.
-    const nextCarriesCta = sections[index + 1]?.carriesCta === true
-    if (showRepeatCta && sinceCta >= 2 && !isLast && !nextCarriesCta) {
-      rendered.push(<Fragment key={`cta-${index}`}>{ctaBand}</Fragment>)
-      sinceCta = 0
-    }
-  }
-  if (showRepeatCta && sinceCta > 0 && sections.length > 0) {
-    rendered.push(<Fragment key="cta-zaro">{ctaBand}</Fragment>)
-  }
+  // A szakaszok dokumentum-sorrendben, KÖZBEÉKELT vásárlási sáv NÉLKÜL: a lap
+  // egyetlen vásárlási célja a ragadós vásárlódoboz (mobilon a ragadós alsó
+  // sáv) — lásd a fájl fejlécének 4. pontját.
+  const rendered = sections.map((section, index) => (
+    <Fragment key={`szakasz-${index}`}>{section.node}</Fragment>
+  ))
 
   const jumpTargets = sections
     .map((section) => section.target)
@@ -494,7 +454,7 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
                 <figure className="kc-course-media">
                   <PreviewVideo
                     streamId={product.previewVideoStreamId}
-                    title={`${title} — előzetes`}
+                    title={`${title}: előzetes`}
                   />
                   <figcaption className="kc-course-media__caption">Ingyenes előzetes</figcaption>
                 </figure>
@@ -523,7 +483,7 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
       {/* Mobil ragadós vásárlósáv: csak akkor, ha tényleg van mit indítani, és
           csak akkor látszik, ha a fő vásárlódoboz már kigörgött a képből. JS
           nélkül rejtve marad (MobileBuyBar). */}
-      {showRepeatCta && cta.href !== null ? (
+      {showMobileBuyBar && cta.href !== null ? (
         <MobileBuyBar
           anchorId={BUYBOX_ID}
           courseTitle={title}

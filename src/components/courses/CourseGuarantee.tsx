@@ -1,5 +1,3 @@
-import type { ReactNode } from 'react'
-
 import type { SalesGuarantee } from './sales-content'
 
 /**
@@ -12,16 +10,17 @@ import type { SalesGuarantee } from './sales-content'
  * eddig a 821 szavas leírás LEGALJÁN volt — a nézési idő maradék ~19%-ának
  * zónájában.
  *
- * A sáv `children`-je a megismételt vásárlási CTA: a garancia az a fő érv,
- * ami UTÁN a kutatás szerint gombnak kell következnie (B6.1).
+ * A sáv 2026-08-16-ig egy megismételt vásárlási gombot is hordozott
+ * (`children`). Az ismételt CTA-k tulajdonosi döntéssel kikerültek: a lap
+ * egyetlen vásárlási célja a ragadós vásárlódoboz, mobilon a ragadós alsó
+ * sáv. A garancia így tisztán érv marad, nem gomb-hordozó.
  */
 export interface CourseGuaranteeProps {
   guarantee: SalesGuarantee
   headingId: string
-  children?: ReactNode
 }
 
-export function CourseGuarantee({ guarantee, headingId, children }: CourseGuaranteeProps) {
+export function CourseGuarantee({ guarantee, headingId }: CourseGuaranteeProps) {
   return (
     <section aria-labelledby={headingId} className="kc-course-guarantee" id="garancia">
       <p aria-hidden="true" className="kc-course-guarantee__mark">
@@ -33,7 +32,6 @@ export function CourseGuarantee({ guarantee, headingId, children }: CourseGuaran
         </h2>
         <p className="kc-course-guarantee__text">{guarantee.text}</p>
       </div>
-      {children ? <div className="kc-course-guarantee__action">{children}</div> : null}
     </section>
   )
 }

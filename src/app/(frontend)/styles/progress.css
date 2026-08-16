@@ -81,7 +81,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--kc-text-xs);
+  font-size: var(--kc-font-s);
   font-weight: var(--kc-font-weight-bold);
   color: var(--kc-color-text);
   line-height: 1;

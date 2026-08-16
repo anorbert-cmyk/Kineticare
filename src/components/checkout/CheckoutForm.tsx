@@ -222,7 +222,7 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
           <Field
             autoComplete="name"
             error={guestErrors.name}
-            hint="Ez a fiókod neve — a számlázási név ettől eltérhet (pl. cégnév)."
+            hint="Ez a fiókod neve, a számlázási név ettől eltérhet (pl. cégnév)."
             label="Neved"
             name={GUEST_INPUT_NAME.name}
             onChange={(event) => updateGuest('name', event.target.value)}
@@ -236,8 +236,8 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
         <h2>Számlázási adatok</h2>
         <p className="kc-field__hint">
           {isGuest
-            ? 'A számla ezekkel az adatokkal készül — a rendelésre az itt megadott adat kerül.'
-            : 'A számla ezekkel az adatokkal készül. Ha a profilodban máshogy szerepelnek, itt felülírhatod őket — a rendelésre az itt megadott adat kerül.'}
+            ? 'A számla ezekkel az adatokkal készül, a rendelésre az itt megadott adat kerül.'
+            : 'A számla ezekkel az adatokkal készül. Ha a profilodban máshogy szerepelnek, itt felülírhatod őket. A rendelésre az itt megadott adat kerül.'}
         </p>
         <Field
           autoComplete="billing name"

@@ -7,9 +7,9 @@
  * blokk bőrében: src/app/(frontend)/styles/blocks/film-hero.css.
  *
  * ELTÉRÉS A TÜKÖRTŐL: a betűméretek NEM egyedi clamp()-ek, hanem a fő site
- * tipográfiai skálájának tokenjei (--kc-text-*) — az értékesítési UX-skill 4.
+ * tipográfiai skálájának tokenjei (--kc-font-l/m/s) — az értékesítési UX-skill 4.
  * pontja szerint fontméret kizárólag a közös skáláról jöhet. A címsor a
- * display-lépcsőt (--kc-text-4xl) kapja, ami egyben a hero-címsor felső
+ * L (cím) lépcsőt kapja, ami egyben a hero-címsor felső
  * korlátja; a sortáv a --kc-leading-tight (1.15), a skill 1,05–1,15-ös
  * display-sávjában. Emiatt a mobil címsor-felülírás is elmarad: a token
  * clamp()-je viewport-arányosan, folytonosan skálázódik.
@@ -111,7 +111,7 @@
   margin: 0;
   opacity: 0;
   color: var(--ss-ink);
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-tight);
   text-wrap: balance;
 }
@@ -235,7 +235,7 @@
   max-width: 30ch;
   margin: 0 0 1rem;
   color: var(--ss-accent);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -246,7 +246,7 @@
   margin: 0;
   color: var(--ss-ink);
   font: inherit;
-  font-size: var(--kc-text-4xl);
+  font-size: var(--kc-font-l);
   font-weight: 700;
   line-height: var(--kc-leading-tight);
   letter-spacing: -0.045em;
@@ -257,7 +257,7 @@
   max-width: 42ch;
   margin: 1.5rem 0 0;
   color: var(--ss-muted);
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
   line-height: 1.55;
 }
 
@@ -274,7 +274,7 @@
   padding: 0.45rem 0.7rem;
   border: 1px solid color-mix(in srgb, var(--ss-ink) 20%, transparent);
   color: var(--ss-ink);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
 }
 
 .scroll-scrub__actions {

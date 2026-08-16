@@ -223,7 +223,7 @@ describe('tényadat-tartalékok — kitalált marketingállítás nélkül', () 
     expect(factHighlights(facts)).toEqual([
       '4 modul, lépésről lépésre',
       '52 lecke a tananyagban',
-      'Örökös hozzáférés — bármikor újranézheted',
+      'Örökös hozzáférés: bármikor újranézheted',
       'Ingyenes előzetes vásárlás előtt',
     ])
     expect(factHighlights(facts).length).toBeLessThanOrEqual(MAX_HIGHLIGHTS)

@@ -15,7 +15,7 @@ import config from '../../../payload.config'
 
 export const metadata: Metadata = {
   title: 'Kosár',
-  description: 'A kosarad tartalma — ellenőrizd a tételeket, és menj tovább a fizetéshez.',
+  description: 'A kosarad tartalma: ellenőrizd a tételeket, és menj tovább a fizetéshez.',
 }
 
 interface KosarPageProps {
@@ -88,7 +88,7 @@ export default async function KosarPage({ searchParams }: KosarPageProps) {
         <h1>Kosár</h1>
         {alreadyPurchased ? (
           <div className="kc-cart-notice" role="status">
-            <p>Ezt a kurzust már megvetted — a <Link href="/kurzusaim">Kurzusaim</Link> oldalon éred el.</p>
+            <p>Ezt a kurzust már megvetted, a <Link href="/kurzusaim">Kurzusaim</Link> oldalon éred el.</p>
           </div>
         ) : null}
         <CartView initialItem={termekItem} isLoggedIn={user !== null} />

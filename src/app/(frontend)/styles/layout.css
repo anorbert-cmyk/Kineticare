@@ -14,7 +14,7 @@
  *   tint        → var(--kc-color-surface-tint)
  *   fehér („lap fölé emelt" réteg) → var(--kc-color-surface-raised)
  *   hairline    → var(--kc-color-border)
- * Nyers hexa érték itt NINCS; a méretek a --kc-text-* / --kc-space-* skáláról
+ * Nyers hexa érték itt NINCS; a méretek a --kc-font-* / --kc-space-* skáláról
  * jönnek (értékesítési UX-skill 4. pont).
  *
  * A menüSTRUKTÚRA (CMS-menüfa, „Kurzusok" CTA, mobil drawer viselkedése) NEM
@@ -189,7 +189,7 @@
   align-items: center;
   min-height: 2.75rem; /* 44px érintési cél */
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-base);
+  font-size: var(--kc-font-m);
   letter-spacing: 0.14em;
   line-height: var(--kc-leading-tight);
   white-space: nowrap;
@@ -222,14 +222,12 @@
 @media (max-width: 400px) {
   /* Szűk készüléken a ritkítás fogy, hogy a wordmark + CTA + hamburger elférjen. */
   .kc-site-header__brand {
-    font-size: var(--kc-text-sm);
     letter-spacing: 0.1em;
   }
 }
 
 @media (min-width: 900px) {
   .kc-site-header__brand {
-    font-size: var(--kc-text-lg);
     letter-spacing: 0.22em;
   }
 }
@@ -244,7 +242,7 @@
   min-height: 2.75rem;
   padding-inline: var(--kc-space-5);
   border-radius: var(--kc-radius-full);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-medium);
   letter-spacing: 0.02em;
 
@@ -269,7 +267,6 @@
 @media (max-width: 400px) {
   .kc-site-header .kc-site-header__cta {
     padding-inline: var(--kc-space-4);
-    font-size: var(--kc-text-xs);
   }
 }
 
@@ -311,7 +308,7 @@
   min-height: 2.75rem;
   padding: var(--kc-space-2) var(--kc-space-3);
   border-radius: var(--kc-radius-sm);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-medium);
   letter-spacing: 0.02em;
   color: var(--kc-header-ink);
@@ -432,7 +429,7 @@
   min-height: 2.75rem;
   padding: var(--kc-space-2) var(--kc-space-3);
   border-radius: var(--kc-radius-sm);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   color: var(--kc-color-text);
   text-decoration: none;
 }
@@ -542,7 +539,7 @@
 /* A landing feliratnyelve: ritkított verzál (vö. `.kc-eyebrow`). */
 .kc-nav-mobile__drawer-title {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-base);
+  font-size: var(--kc-font-m);
   letter-spacing: var(--kc-tracking-eyebrow);
   text-transform: uppercase;
   color: var(--kc-header-ink);
@@ -563,7 +560,7 @@
   min-height: 2.75rem; /* 44px érintési cél */
   padding: var(--kc-space-3) var(--kc-space-2);
   border-radius: var(--kc-radius-sm);
-  font-size: var(--kc-text-base);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-bold);
   letter-spacing: 0.01em;
   color: var(--kc-header-ink);
@@ -593,7 +590,7 @@
   min-height: 2.75rem; /* 44px érintési cél */
   padding: var(--kc-space-2);
   border-radius: var(--kc-radius-sm);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   color: var(--kc-color-text);
   text-decoration: none;
 }
@@ -660,7 +657,7 @@
    lépcsője — egyedi px/rem érték tilos (UX-skill 4. pont). */
 .kc-site-footer__link {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-4xl);
+  font-size: var(--kc-font-l);
   font-weight: var(--kc-font-weight-normal);
   line-height: var(--kc-leading-tight);
   color: var(--kc-footer-ink);
@@ -686,7 +683,7 @@
 /* Ritkított wordmark (`.kc-footer-mark`) — a fejléc-wordmark párja. */
 .kc-site-footer__brand {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
   letter-spacing: 0.28em;
   line-height: var(--kc-leading-tight);
   color: var(--kc-footer-ink);
@@ -699,13 +696,13 @@
 
 .kc-site-footer__tagline {
   margin-block-start: var(--kc-space-2);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   color: var(--kc-footer-muted);
 }
 
 /* ---- Hírlevél-feliratkozás a láblécben (C9) ------------------------------
    Súly: MÁSODLAGOS (UX-skill 1. és 6. pont) — a lead-magnet nem versenyezhet
-   a fizetős kurzus-blokkal, ezért a lábléc alján, a `--kc-text-lg` címsor-
+   a fizetős kurzus-blokkal, ezért a lábléc alján, a törzsméretű (M) címsor-
    lépcsővel és normál törzsmérettel él; méret CSAK a közös skáláról (egyedi
    px/rem tilos), szín kizárólag szerep-tokenből.
 
@@ -730,14 +727,14 @@
 
 .kc-newsletter__title {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-normal);
   line-height: var(--kc-leading-heading);
   color: var(--kc-footer-ink);
 }
 
 .kc-newsletter__lead {
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   line-height: var(--kc-leading-body);
   color: var(--kc-footer-muted);
 }
@@ -790,7 +787,7 @@
 }
 
 .kc-newsletter__consent-label {
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   line-height: var(--kc-leading-body);
   color: var(--kc-footer-muted);
 }
@@ -809,7 +806,7 @@
 
 /* Élő régió (role="status"): mindig a DOM-ban van, üresen NEM foglal helyet. */
 .kc-newsletter__status:not(:empty) {
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   font-weight: var(--kc-font-weight-medium);
   line-height: var(--kc-leading-body);
   color: var(--kc-footer-ink);
@@ -851,7 +848,7 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   color: var(--kc-footer-muted);
 }
 
@@ -892,7 +889,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--kc-space-1);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
 }
 
 .kc-site-footer__contact a {
@@ -900,7 +897,7 @@
 }
 
 .kc-site-footer__copy {
-  font-size: var(--kc-text-xs);
+  font-size: var(--kc-font-s);
   color: var(--kc-footer-muted);
 }
 
@@ -909,16 +906,20 @@
   text-align: center;
 }
 
+/* A hibakód FELVEZETŐ SOR, nem címsor: a kiegészítő (S) lépcsőn áll, verzállal
+   és a közös eyebrow-ritkítással — a lap címsora alatta, az L lépcsőn szól. */
 .kc-error-page__code {
-  font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-4xl);
+  font-size: var(--kc-font-s);
+  font-weight: var(--kc-font-weight-medium);
+  letter-spacing: var(--kc-tracking-eyebrow);
   line-height: var(--kc-leading-tight);
-  color: var(--kc-color-text);
+  text-transform: uppercase;
+  color: var(--kc-color-primary);
 }
 
 .kc-error-page__title {
   margin-block-start: var(--kc-space-3);
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-font-l);
 }
 
 .kc-error-page__text {

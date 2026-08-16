@@ -29,6 +29,22 @@ export interface ServicesProps {
   block: BlockServices
 }
 
+/**
+ * A tábla-cím méret-fokozatának határa KARAKTERBEN.
+ *
+ * A tükör `--kc-text-board-6xl` lépcsője (89 px @1440) és a 7,2ch-s mérték egy
+ * HÁROMSZAVAS landing-címre van kalibrálva („Így tudunk segíteni", 19 karakter).
+ * A CMS viszont tetszőleges hosszú címet enged: a /szolgaltatasok 47 karakteres
+ * címe ezen a lépcsőn 525 px magas, 6 soros blokká nőtt, és rácsúszott a tábla
+ * fotójára (Chromiumban mérve, 1440×900 — az átfedés 328 px volt).
+ *
+ * A hosszú cím ezért egy lépcsővel kisebb tábla-méretet kap (a stíluslap
+ * `--kc-text-board-4xl`-re váltja) — ÚJ méret nem keletkezik, a váltás a közös
+ * skálán belül marad (UX-skill 4. pont). A határ szándékosan a landing címe
+ * (19) fölött, de a tipikus mondat-címek (30+) alatt van.
+ */
+const CIM_HOSSZ_HATAR = 24
+
 export function Services({ block }: ServicesProps) {
   const rows = (block.rows ?? []).filter((row) => (row.title?.trim() ?? '').length > 0)
   if (rows.length === 0) {
@@ -56,7 +72,12 @@ export function Services({ block }: ServicesProps) {
           <div className="kc-services__lead">
             {eyebrow.length > 0 ? <p className="kc-services__eyebrow">{eyebrow}</p> : null}
             {title.length > 0 ? (
-              <h2 className="kc-services__title" id={headingId}>
+              <h2
+                className={`kc-services__title${
+                  title.length > CIM_HOSSZ_HATAR ? ' kc-services__title--long' : ''
+                }`}
+                id={headingId}
+              >
                 {title}
               </h2>
             ) : null}
@@ -81,9 +102,16 @@ export function Services({ block }: ServicesProps) {
             const label = row.felirat?.trim() ?? ''
             const hasLink = url.length > 0 && label.length > 0
             const isExternal = /^https?:\/\//i.test(url)
+            // A felirat és a nyíl KÜLÖN spanben áll: az aláhúzást a szöveg-span
+            // viseli, a nyíl dísztelen marad. Egy elemre rajzolt vonaldíszt a
+            // gyermek nem tud visszavonni, ezért ez szerkezeti kérdés, nem CSS-é
+            // (lásd styles/blocks/services.css `.kc-services__link`).
             const linkContent = (
               <>
-                {label} <span aria-hidden="true">→</span>
+                <span className="kc-services__link-text">{label}</span>
+                <span aria-hidden="true" className="kc-services__link-arrow">
+                  →
+                </span>
               </>
             )
             return (

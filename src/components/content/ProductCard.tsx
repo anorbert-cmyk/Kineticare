@@ -40,6 +40,14 @@ import '../../app/(frontend)/styles/blocks/course-cards.css'
  * leírás, az előnyök és az ár marad; a gombfelirat nem duplázza meg.
  * Kontraszt: minden szöveg `text`/`text-muted` fehér kártyán (15,63:1 ill.
  * 9,30:1), a CTA fehér az `accent-deep`-en (5,45:1) — lásd course-cards.css.
+ *
+ * KIEMELT (VÍZSZINTES) VÁLTOZAT — `featured` prop. A MEZŐK ÉS A SORRENDJÜK
+ * VÁLTOZATLANOK, csak az elrendezés fordul el: 900 px felett a borító balra,
+ * a tartalom (cím, előnysorok, ár, CTA) jobbra kerül, és a kártya a szekció
+ * teljes szélességét kitölti. Ez az egyetlen fizetős kurzus esete (a rács
+ * ilyenkor egyetlen, középen árválkodó kártyát mutatna — lásd CourseCards).
+ * A változat kizárólag CSS-módosító osztály: se új szöveg, se elhagyott mező,
+ * se másik akadálymentességi minta nem tartozik hozzá.
  */
 
 /** A CTA-gomb beépített felirata — a blokk `ctaLabel` mezője felülírja. */
@@ -68,6 +76,11 @@ export interface ProductCardProps {
    * Üresen a `DEFAULT_CTA_LABEL` marad.
    */
   ctaLabel?: string
+  /**
+   * Kiemelt, VÍZSZINTES elrendezés (borító balra, tartalom jobbra) 900 px
+   * felett. A tartalmi mezőkre nincs hatása — lásd a fejkommentet.
+   */
+  featured?: boolean
 }
 
 /** Publikusan megjeleníthető-e a termék (draft/archived sosem). */
@@ -140,7 +153,7 @@ function CheckIcon() {
   )
 }
 
-export function ProductCard({ product, ctaLabel }: ProductCardProps) {
+export function ProductCard({ product, ctaLabel, featured = false }: ProductCardProps) {
   if (!isPubliclyVisibleProduct(product)) {
     return null
   }
@@ -158,11 +171,24 @@ export function ProductCard({ product, ctaLabel }: ProductCardProps) {
   const cta = ctaLabel?.trim() || DEFAULT_CTA_LABEL
 
   return (
-    <Card as="article" className="kc-product-card" interactive padded={false}>
+    <Card
+      as="article"
+      className={`kc-product-card${featured ? ' kc-product-card--featured' : ''}`}
+      interactive
+      padded={false}
+    >
       <Link className="kc-product-card__link" href={courseHref(product)}>
         {coverMedia ? (
           <span className="kc-product-card__cover">
-            <MediaImage media={coverMedia} preferredSize="sm" sizes="(max-width: 720px) 100vw, 352px" />
+            {/* A kiemelt kártya borítója a szekció fél szélességét kapja, ezért
+                nagyobb forrásból (md) és nagyobb `sizes`-szal renderel. */}
+            <MediaImage
+              media={coverMedia}
+              preferredSize={featured ? 'md' : 'sm'}
+              sizes={
+                featured ? '(max-width: 900px) 100vw, 520px' : '(max-width: 720px) 100vw, 352px'
+              }
+            />
           </span>
         ) : null}
         <span className="kc-product-card__body">
