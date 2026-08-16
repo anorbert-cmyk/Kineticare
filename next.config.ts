@@ -7,6 +7,26 @@ import { buildContentSecurityPolicy } from './src/lib/security/csp'
 const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://eu.i.posthog.com'
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // A `src/app/global-not-found.tsx` KIZÁRÓLAG ezzel a kapcsolóval él —
+    // enélkül a Next figyelmen kívül hagyja a fájlt, és a nem illeszkedő
+    // URL-ekre a beépített, ANGOL nyelvű 404-lapját küldi (mérve 2026-08-16:
+    // `GET /egy/ket/harom` → „404 · This page could not be found.", keret,
+    // magyar szöveg és link nélkül).
+    //
+    // Miért nem elég a `not-found.tsx`: a Next a gyökérszintű, nem illeszkedő
+    // URL-eket csak EGYETLEN gyökér-layout mellett tudja a `not-found`-dal
+    // összerakni. Ennek a projektnek kettő van — `(frontend)` és `(payload)` —,
+    // és a hivatalos dokumentáció erre az esetre írja elő a `global-not-found`-ot:
+    // https://nextjs.org/docs/app/api-reference/file-conventions/not-found
+    //
+    // A kapcsoló kísérleti (Next 15.4 óta létezik). Következmény, ha egy jövőbeli
+    // Next-verzióban átnevezik vagy stabilizálják: a global-not-found lap némán
+    // kiesik, és visszatér az angol beépített lap. Ezt őr-teszt fogja meg
+    // (`src/__tests__/hibaoldal.test.tsx`): a teszt megköveteli, hogy a kapcsoló
+    // és a fájl EGYÜTT létezzen.
+    globalNotFound: true,
+  },
   // PostHog elsőfél-proxy: a kliens a saját domainünk /ingest útvonalát hívja,
   // a Next pedig továbbítja a PostHog EU-cloud felé (ad-blocker-ellenállás +
   // first-party süti-működés). A /ingest/static az assets-kiszolgálás (toolbar,
