@@ -3,6 +3,7 @@ import type { Payload } from 'payload'
 import type { Order, Product, User } from '../../payload-types'
 import { withAdvisoryLock } from '../advisory-lock'
 import { BARION_DEFAULT_PAYMENT_WINDOW, BarionApiError, startPayment } from '../barion'
+import { coursePriceHuf } from '../courses'
 import { logger, type Logger } from '../logger'
 import {
   billingSummaryMessage,
@@ -279,8 +280,15 @@ function assertPurchasable(product: Product, log: Logger, priceHuf?: number): vo
    * Ezért a 0 (és minden nem pozitív érték) itt HIÁNYZÓ/HIBÁS konfiguráció:
    * ugyanaz az elutasító ág, mint a hiányzó áré.
    */
+  //
+  // ═══ MIÉRT A coursePriceHuf DÖNT (és nem egy itteni feltétel) ═══
+  // Az „érvényes ár" fogalmának EGY implementációja van, a courses.ts-ben, és
+  // azt hívja a gomb-logika (resolveCourseCta → isPaidCourse), az ár-címke és
+  // ez a kapu is. Amíg a kapu saját másolatot tartott, a kettő elsodródott: a
+  // felület ajánlott egy vásárlást, amit a szerver elutasított. A másolat
+  // visszavezetése ezt a hibaosztályt szünteti meg, nem csak a mai példányát.
   const price = product.priceInHUF
-  if (product.priceInHUFEnabled !== true || typeof price !== 'number' || !(price > 0)) {
+  if (coursePriceHuf(product) === null) {
     log.warn('checkout-start: vásárlás elutasítva — a termékhez nincs érvényes ár', {
       productId: product.id,
       productStatus: product.status,

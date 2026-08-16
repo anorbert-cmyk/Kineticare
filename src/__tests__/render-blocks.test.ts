@@ -317,6 +317,45 @@ describe('RenderBlocks', () => {
     expect(html).toContain('id="velemenyek-t2"')
   })
 
+  /**
+   * A HIÁNYOSAN konfigurált termék NEM lead-magnet (2026-08-16-i átvizsgálás).
+   *
+   * A régi szűrő (`!isPaidProduct`) minden nem-fizetős terméket ingyenesnek
+   * vett: a beállítatlan ár-pipájú vagy a bepipált, de üres árú (hibás) rekord
+   * kiesett a fizetős rácsból, ÉS a FreeSos „Ingyenes" sávjába került — a
+   * szerkesztői hiba így némán ingyenes ajánlattá változott. Az új szűrő az
+   * `isFreeCourse` (szigorú `=== false`).
+   */
+  it('freeSos: a HIÁNYOSAN konfigurált termék nem lesz ingyenes lead-magnet', () => {
+    const html = renderBlocks(
+      layoutOf({ blockType: 'freeSos', id: 'f0', sectionSettings: {} }),
+      {
+        products: [
+          // ár-pipa BEÁLLÍTATLAN → sem fizetős, sem ingyenes
+          product({ id: 8, sku: 'Beárazatlan kurzus', priceInHUF: null, priceInHUFEnabled: null }),
+          // ár-pipa BE, ár ÜRES → szintén hibás konfiguráció
+          product({ id: 9, sku: 'Félrekonfigurált kurzus', priceInHUF: null, priceInHUFEnabled: true }),
+        ],
+      },
+    )
+    expect(html).not.toContain('Beárazatlan kurzus')
+    expect(html).not.toContain('Félrekonfigurált kurzus')
+    // A sáv maga megjelenik, a beépített alapszöveggel (termék nélküli ág).
+    expect(html).toContain('SOS Kézrelax')
+  })
+
+  it('freeSos: a TUDATOSAN ingyenes termék változatlanul lead-magnet marad', () => {
+    const html = renderBlocks(
+      layoutOf({ blockType: 'freeSos', id: 'f0b', sectionSettings: {} }),
+      {
+        products: [
+          product({ id: 7, sku: 'Ingyenes SOS', priceInHUF: null, priceInHUFEnabled: false }),
+        ],
+      },
+    )
+    expect(html).toContain('Ingyenes SOS')
+  })
+
   it('freeSos: blokk-cím + gomb-felülírás; termék híján is renderel', () => {
     const html = renderBlocks(
       layoutOf({

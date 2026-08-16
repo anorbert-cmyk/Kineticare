@@ -24,6 +24,7 @@
 
 import type { Payload } from 'payload'
 
+import { auditLogStore, writeAuditLog } from '../audit'
 import { maskEmail } from '../email/mask'
 import { generateInitialPassword } from '../security/initial-password'
 import type { Logger } from '../logger'
@@ -70,7 +71,23 @@ export interface ExecuteOptions {
   readonly log?: Logger
   /** Soronkénti visszajelzés a CLI-nek (a lib maga nem ír a kimenetre). */
   readonly onOutcome?: (outcome: ExecutionOutcome) => void
+  /**
+   * A RÉGI VÁSÁRLÁS IDŐPONTJÁNAK megőrzése audit-bejegyzésben (alap: be).
+   *
+   * A users kollekcióban ma nincs mező a systeme.io-beli `Date Registered`
+   * értéknek, séma-változtatás pedig migrációt igényelne — ezért az adat az
+   * `audit-logs` collectionbe kerül (tulajdonosi olvasás, módosíthatatlan
+   * napló), a beírt termékek SKU-ival együtt. Így az „mikor lett vevő"
+   * kérdés az importált hozzáférésekre visszakereshető marad.
+   *
+   * Az írás BEST-EFFORT: a napló hibája sosem bukhatja meg az importot
+   * (writeAuditLog maga nyeli el a hibát és warn-ol).
+   */
+  readonly recordLegacyPurchase?: boolean
 }
+
+/** A régi vásárlás megőrzésének audit-művelet neve (a naplóban erre lehet keresni). */
+export const LEGACY_PURCHASE_AUDIT_ACTION = 'customer-import.legacy-purchase'
 
 /** A felhasználó FRISS purchases-listája (a terv elavulhatott két futás közt). */
 async function currentPurchaseIds(payload: Payload, userId: number): Promise<number[]> {
@@ -186,6 +203,44 @@ async function appendPurchases(
 }
 
 /**
+ * A régi (systeme.io-beli) vásárlás megőrzése AUDIT-BEJEGYZÉSBEN.
+ *
+ * MIÉRT ITT: a `users` kollekcióban nincs mező a `Date Registered` értéknek, és
+ * séma-változtatás migrációt igényelne (CLAUDE.md 3. tilos zóna: migrációt csak
+ * a Payload eszközével, emberi döntés után). Az `audit-logs` viszont pontosan
+ * erre való: módosíthatatlan, tulajdonosi olvasású nyilvántartás arról, hogy
+ * KI, MIKOR, MIT kapott — a beírt SKU-kkal és a régi dátummal együtt.
+ *
+ * BEST-EFFORT: a `writeAuditLog` maga nyeli el a hibát (warn), tehát a napló
+ * bukása SOSEM bukhatja meg az importot.
+ */
+async function recordLegacyPurchase(
+  payload: Payload,
+  entry: PlanEntry,
+  outcome: ExecutionOutcome,
+): Promise<void> {
+  if (outcome.grantedSkus.length === 0 && entry.registeredAt === undefined) {
+    return
+  }
+  await writeAuditLog({
+    store: auditLogStore(payload),
+    action: LEGACY_PURCHASE_AUDIT_ACTION,
+    entityType: 'users',
+    entityId: outcome.userId ?? null,
+    after: {
+      // A forrás a CSV-import maga; a fájl a gyakorlatban a systeme.io-export,
+      // de a mező nem állít olyat, amit nem tud (generic alakú fájl is jöhet).
+      forras: 'vásárló-import (CSV)',
+      email: entry.email,
+      // A régi rendszerbeli vevővé válás időpontja (ISO-8601), ha a fájl adta.
+      regiVasarlasIdopontja: entry.registeredAt ?? null,
+      beirtSkuk: [...outcome.grantedSkus],
+      muvelet: outcome.action,
+    },
+  })
+}
+
+/**
  * A terv végrehajtása soronként.
  *
  * ÜRES users-kollekcióra nem indul el: az első felhasználó a
@@ -213,6 +268,12 @@ export async function executeImportPlan(
     let outcome: ExecutionOutcome
     try {
       outcome = await executeEntry(payload, entry, options.log)
+      // A régi rendszerbeli vásárlás időpontjának megőrzése — CSAK a ténylegesen
+      // megváltozott sorokra. Az idempotens újrafutás (`skip-complete`) így nem
+      // szemeteli tele a naplót ugyanazzal a bejegyzéssel.
+      if (options.recordLegacyPurchase !== false && outcome.action !== 'skip-complete') {
+        await recordLegacyPurchase(payload, entry, outcome)
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       outcome = { email: entry.email, action: 'failed', grantedSkus: [], error: message }

@@ -49,6 +49,11 @@ export interface PlanEntry {
   readonly unknownCourseNames: readonly string[]
   /** A CSV-sorok, amikből ez a bejegyzés összeállt (hibaüzenetekhez). */
   readonly lines: readonly number[]
+  /**
+   * A régi rendszerbeli vevővé válás időpontja (ISO-8601), ha a fájl adta.
+   * A végrehajtás ezt őrzi meg audit-bejegyzésben — lásd `execute.ts`.
+   */
+  readonly registeredAt?: string
 }
 
 export interface PlanSummary {
@@ -270,6 +275,7 @@ export async function buildImportPlan(
         missingProducts: products,
         unknownCourseNames: rowUnknown,
         lines: row.lines,
+        ...(row.registeredAt !== undefined ? { registeredAt: row.registeredAt } : {}),
       })
       continue
     }
@@ -286,6 +292,7 @@ export async function buildImportPlan(
         missingProducts: [],
         unknownCourseNames: rowUnknown,
         lines: row.lines,
+        ...(row.registeredAt !== undefined ? { registeredAt: row.registeredAt } : {}),
       })
       continue
     }
@@ -299,6 +306,7 @@ export async function buildImportPlan(
       missingProducts: missing,
       unknownCourseNames: rowUnknown,
       lines: row.lines,
+      ...(row.registeredAt !== undefined ? { registeredAt: row.registeredAt } : {}),
     })
   }
 

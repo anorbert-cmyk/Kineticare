@@ -483,7 +483,10 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
       {/* Mobil ragadós vásárlósáv: csak akkor, ha tényleg van mit indítani, és
           csak akkor látszik, ha a fő vásárlódoboz már kigörgött a képből. JS
           nélkül rejtve marad (MobileBuyBar). */}
-      {showMobileBuyBar && cta.href !== null ? (
+      {/* A `label !== null` nem formalitás: a nem cselekvő (archivált, nem
+          vásárolható) állapotoknak SZÁNDÉKOSAN nincs feliratuk (Á-3), így a
+          ragadós sáv sem kaphat hamis ígéretű gombot. */}
+      {showMobileBuyBar && cta.href !== null && cta.label !== null ? (
         <MobileBuyBar
           anchorId={BUYBOX_ID}
           courseTitle={title}

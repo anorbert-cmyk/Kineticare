@@ -232,6 +232,94 @@ Kell hozzá:
 > a `DATABASE_URI`-t és a `PAYLOAD_SECRET`-et a Payload-config onnan olvassa.
 > A `--out-links` használatához a `NEXT_PUBLIC_SERVER_URL` is kell.
 
+### 6.0.1. A systeme.io kontakt-export (címke-alapú lista)
+
+A tulajdonos által átadott export fejléce:
+
+```text
+"Email","First name","Last name","Tag","Date Registered"
+```
+
+Ez NEM kurzusnév-oszlopos alak: a `Tag` cella **vesszővel elválasztott
+címkéket** tartalmaz, és egy sorban több címke is állhat. A script magától
+felismeri ezt az alakot (a vezetéknév- és a címke-oszlop együttes jelenlétéből);
+kényszeríteni a `--format=systeme` kapcsolóval lehet.
+
+**A címkék jelentése** (a szabálytábla helye: `src/lib/customer-import/tags.ts`):
+
+| Címke | Mit jelent | Hozzáférés |
+| --- | --- | --- |
+| `SOS KézRelax vásárló` | az ingyenes SOS Kézrelax villámkurzus vásárlója | **igen** |
+| `Otthoni KézRehab vásárló` | a fizetős Otthoni KézRehab Program vásárlója | **igen** |
+| `Előjelentkezők` | érdeklődő, nem vásárolt | nem |
+| `Visszatérítés KézRelax` | visszatérített SOS Kézrelax | **kiüti** a SOS-t |
+| `Visszatérítés Kézrehab` | visszatérített Otthoni KézRehab | **kiüti** a KézRehabot |
+| üres cella | nincs címke | nem |
+| bármi más | ISMERETLEN címke | nem — figyelmeztetés a mérlegben |
+
+Két szabály, ami könnyen félremegy:
+
+- **A visszatérítés csak a SAJÁT párját üti ki.** Aki mindkét kurzust
+  megvette, de csak az egyiket téríttette vissza, a másikat megkapja.
+- **Az ismeretlen címke nem állítja meg a futást.** A vevő fiókja és a többi
+  hozzáférése elkészül, a címke pedig a mérlegben, néven nevezve megjelenik.
+  Ha kiderül, hogy mégis vásárlást jelent, két út van: felvenni a
+  szabálytáblába (kódmódosítás), vagy — ha nem vásárlás —
+  `--ignore-tag "<címke>"` kapcsolóval nem-vásárlásnak jelölni.
+
+**Név:** a két név-oszlop össze-vissza van töltve (van, ahol az egyik hordozza a
+teljes nevet, van, ahol ismétlődnek). Az összeállítás ezért: üres oszlop → a
+másik érték; azonos érték → egyszer; ha az egyik TARTALMAZZA a másikat → a
+bővebb marad; különben a kettő összefűzve, a fájl oszlopsorrendjében. Így
+egyetlen névtöredék sem vész el, és nem keletkezik duplikátum.
+
+**Dátum:** a `Date Registered` (`2025-03-04 09:30:00 (UTC+2)`) ISO-alakra
+normalizálódik, és a beírt hozzáféréssel együtt **audit-bejegyzésbe** kerül
+(admin → Rendszer → Műveletnapló, művelet: `customer-import.legacy-purchase`).
+Így visszakereshető marad, ki mikor lett vevő a régi rendszerben. Ha ugyanaz az
+e-mail több sorban szerepel, a LEGKORÁBBI dátum marad.
+
+### 6.0.2. Fájl-ellenőrzés adatbázis nélkül (`--parse-only`)
+
+A legolcsóbb első lépés: a fájl értelmezése **adatbázis-kapcsolat nélkül**.
+Kiírja a címke-mérleget (ki mit kapna), a hibás sorokat és az ismeretlen
+címkéket — írás sehol nem történik.
+
+```bash
+npx tsx src/scripts/import-customers.ts \
+  --file=kontakt-lista.csv \
+  --map "SOS KézRelax vásárló=<SKU>" \
+  --map "Otthoni KézRehab vásárló=<SKU>" \
+  --parse-only
+```
+
+### 6.0.3. A CSV átadása fájl NÉLKÜL (Railway-job)
+
+A vásárlói lista **személyes adat: a repóba nem kerülhet be.** Ha a scriptet a
+Railway-en futtatjátok, a fájl helyett egy környezeti változóban adható át,
+base64-kódolva:
+
+| Változó | Tartalom |
+| --- | --- |
+| `IMPORT_CUSTOMERS_CSV_BASE64` | a CSV-fájl teljes tartalma base64-kódolva |
+
+```bash
+# 1. kódolás a saját gépen (Linux)
+base64 -w0 kontakt-lista.csv > lista.b64      # macOS: base64 -i kontakt-lista.csv
+
+# 2. a lista.b64 tartalmát beilleszteni:
+#    Railway → a szolgáltatás → Variables → IMPORT_CUSTOMERS_CSV_BASE64
+
+# 3. a script --file NÉLKÜL fut:
+npx tsx src/scripts/import-customers.ts --map "SOS KézRelax vásárló=<SKU>" --dry-run
+```
+
+- A `--file` és a változó **együtt nem használható** (hibaüzenettel megáll):
+  mindig egyértelmű legyen, melyik listát importáljátok.
+- **A futás után a változót TÖRÖLNI kell** (Railway → Variables → a változó
+  törlése). Amíg ott van, a személyes adat a szolgáltatás konfigjában marad.
+- A script a változó tartalmát sosem írja ki és nem naplózza.
+
 ### 6.1. Első lépés: PRÓBAFUTÁS (kötelező)
 
 ```bash
@@ -268,7 +356,12 @@ npx tsx src/scripts/import-customers.ts \
 | --- | --- |
 | `--delimiter=';'` | Magyar Excelből mentett fájl (pontosvessző). `--delimiter='\t'` = tabulátor. |
 | `--email-col` / `--name-col` / `--courses-col` | Az oszlopok fejlécneve, ha az automatikus felismerés nem talál. |
-| `--map "Név=SKU"` | Ismételhető. Egy kurzusnév → egy termék. |
+| `--last-name-col` / `--registered-col` | A systeme.io vezetéknév- és dátum-oszlopa, ha a fejléc szokatlan. |
+| `--format=systeme` | A címke-alapú (systeme.io) értelmezés kényszerítése. `--format=generic` = a régi, kurzusnév-oszlopos alak. |
+| `--ignore-tag "<címke>"` | Ismételhető. A címke NEM vásárlás (hozzáférést nem ad, nem is hiba). |
+| `--refund-tag "V=K"` | Ismételhető. A `V` visszatérítés-címke kiüti a `K` vásárlás-címkét. |
+| `--map "Név=SKU"` | Ismételhető. Egy kurzusnév/címke → egy termék. |
+| `--parse-only` | Csak a fájl ellenőrzése, adatbázis-kapcsolat nélkül. |
 | `--dry-run` | Próbafutás: nulla írás. |
 | `--out-links=<út>` | Aktiválási linkek CSV-be (éles futásnál). |
 | `--invite-all` | Link ne csak az új fiókoknak, hanem minden érintett vevőnek. |
@@ -353,7 +446,9 @@ tartalmaz. (Külön körben a második generálás érvénytelenítené az első
 ### 6.5. Ellenőrzés az import után
 
 1. Az adminban nézz meg **3 mintavevőt**: van fiókjuk, a „Megvásárolt kurzusok"
-   mezőben ott a helyes kurzus, a szerepkörük `Vásárló`.
+   mezőben ott a helyes kurzus, a szerepkörük `Vásárló`. A **Felhasználók
+   listában** külön oszlop mutatja a megvásárolt kurzusokat (a kurzus címével),
+   szűrni a „Szűrők" gombbal lehet rá.
 2. Egy tesztfiókkal (saját cím) menj végig a teljes úton: link → jelszó →
    belépés → **Kurzusaim** → videó elindul.
 3. A mérleg számai stimmeljenek: `létrehozva + bővítve + kihagyva` = a fájlban
@@ -426,7 +521,9 @@ próbafutás: a terv átnézése olcsóbb, mint a takarítás.
 ## 9. Adatvédelem és titokkezelés
 
 - Az **exportfájl** és a **linkfájl** személyes adatot (és tokent) tartalmaz:
-  a repóba egyik sem kerülhet be, a kiküldés után törlendők.
+  a repóba egyik sem kerülhet be, a kiküldés után törlendők. Ha a listát
+  környezeti változóban adjátok át (`IMPORT_CUSTOMERS_CSV_BASE64`, 6.0.3.), azt
+  a futás után **törölni kell** — a base64 nem titkosítás, csak kódolás.
 - A script **nem naplóz** jelszót, tokent és aktiválási linket — a strukturált
   naplóba csak e-mail, felhasználó-azonosító, termék-azonosító és darabszám kerül.
 - A generált kezdőjelszó véletlen, sehol nem jelenik meg, és a vevő úgysem
@@ -444,8 +541,8 @@ Ezek a nyitott pontok — nélkülük az eszköz kész, de az átállás nem ind
 
 | # | Mi hiányzik | Kitől | Miért blokkoló |
 | --- | --- | --- | --- |
-| 1 | **A systeme.io-export pontos formátuma** — egy valódi (akár 3 soros, anonimizált) mintafájl a fejléccel | Katák | Ebből derül ki az elválasztó, az oszlopnevek, és hogy a kurzusok egy cellában vagy több sorban jönnek. A parser mindkettőt tudja, de a kapcsolókat előre be kell állítani. |
-| 2 | **Kurzusnév → SKU tábla** — minden systeme.io-kurzusnévhez a Kineticare-termék azonosítója | Katák | Enélkül a kurzusnevek nem leképezettként kimaradnak (a vevő fiók nélkül nem, de kurzus nélkül maradna). |
+| 1 | ~~A systeme.io-export pontos formátuma~~ → **MEGVAN** (2026-08-16): `"Email","First name","Last name","Tag","Date Registered"`, vesszős elválasztó, címke-alapú lista. A parser felismeri (6.0.1.) | Katák | Teljesítve. Új export érkezésekor egy `--parse-only` futás megmutatja, változott-e a fejléc. |
+| 2 | **Címke → SKU tábla** — melyik Kineticare-termék felel meg a `SOS KézRelax vásárló` és az `Otthoni KézRehab vásárló` címkének | Katák | Enélkül a címkék nem leképezettként kimaradnak (a vevő fiókot kapna, kurzus-hozzáférést nem). A SKU az adminban, a Kurzusok listában látszik. |
 | 3 | ~~E-mail-küldés döntése~~ → **ELDÖNTVE: Resend.** Az élesítés lépései a 10.1. pontban | üzemeltetés | A döntés megvan, de a Resend-fiók, a **domain-hitelesítés** és az API-kulcs beállítása nélkül a levél nem megy ki. |
 | 4 | **Adatbázis-mentés** (feladatlista C14) | üzemeltetés | Tömeges írás előtt kötelező visszaállítási pont. |
 | 5 | **Az átállás dátuma** és a levelek aláírása | Katák | A levélsablonok `{{datum_*}}` és aláírás-mezői. |

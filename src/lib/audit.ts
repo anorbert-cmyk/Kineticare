@@ -138,18 +138,109 @@ export async function writeAuditLog(args: WriteAuditLogArgs): Promise<boolean> {
   }
 }
 
-/** Kliens-IP kinyerése proxyzott környezetből (Cloudflare → x-forwarded-for). */
+/**
+ * ═══ KLIENS-IP KINYERÉSE PROXYZOTT KÖRNYEZETBŐL ═══
+ *
+ * Két fogyasztója van, és mindkettőnél a HAMISÍTHATÓSÁG a tét: az audit-sor
+ * `ipAddress` mezője (src/lib/checkout|refund/route-handler.ts) és a kérés-korlát
+ * kulcsa (src/lib/security/rate-limit.ts `resolveRateLimitIp`).
+ *
+ * ═══ A HIBA, AMIT BEZÁR (2026-08-16-i átvizsgálás) ═══
+ * A korábbi sorrend FELTÉTEL NÉLKÜL elfogadta a `cf-connecting-ip` fejlécet, és
+ * csak utána nézte az `x-forwarded-for`-t — abból is az ELSŐ elemet. Az éles
+ * kiszolgálás előtt viszont mérés szerint NINCS Cloudflare, tehát:
+ *  - a `cf-connecting-ip` fejlécet BÁRMELY kliens ráírhatta a kérésre, és
+ *    kérésenként más értékkel korlátlanul kerülgette a kérés-korlátot;
+ *  - az `x-forwarded-for` ELSŐ eleme szintén a kliensé: a lánc elejét ő küldi,
+ *    a megbízható (edge) proxy a sajátját a VÉGÉRE fűzi.
+ * Az IP-alapú keretek így nem értek célt, az audit-sorok IP-je pedig
+ * bizonyítékként értéktelen volt.
+ *
+ * ═══ AZ ÚJ SZABÁLY ═══
+ *  1. `cf-connecting-ip` KIZÁRÓLAG akkor, ha a `TRUST_CF_CONNECTING_IP=true`
+ *     kapcsoló be van állítva — azaz üzemeltetői döntés igazolja, hogy a
+ *     forgalom tényleg Cloudflare-en át érkezik (a CF minden kérésen felülírja
+ *     ezt a fejlécet, ezért ott a kliens nem hamisíthatja).
+ *  2. Egyébként az `x-forwarded-for` HÁTULRÓL számított, megbízható eleme: a
+ *     lánc végét a saját infrastruktúránk (Railway edge) fűzi hozzá, tehát az a
+ *     rész az, amit a kliens nem írhat felül. Hány elemet fűz hozzá, azt a
+ *     `TRUSTED_PROXY_HOP_COUNT` mondja meg (alapértelmezés: 1 — egy edge-hop).
+ *  3. Végső tartalék az `x-real-ip` (egyetlen IP-t hordoz, láncot nem).
+ *
+ * A kapcsolókat SZÁNDÉKOSAN minden híváskor olvassuk (nem modul-szintű
+ * konstansba): a scriptek és a tesztek így env-átállítás után is a friss
+ * értékkel dolgoznak, modul-újratöltés nélkül.
+ */
+
+/** A `cf-connecting-ip` elfogadásának kapcsolója (alapértelmezés: NEM bízunk benne). */
+function trustsCloudflareHeader(): boolean {
+  return process.env.TRUST_CF_CONNECTING_IP?.trim().toLowerCase() === 'true'
+}
+
+/**
+ * Hány `x-forwarded-for`-elemet fűz hozzá a SAJÁT infrastruktúránk (jobbról).
+ * Érvénytelen vagy hiányzó érték → 1. A felső korlát a véletlen elgépelés ellen
+ * véd: túl nagy hop-szám mellett a lánc elejére (a kliens által hamisítható
+ * részre) csúsznánk vissza.
+ */
+function trustedProxyHopCount(): number {
+  const raw = Number(process.env.TRUSTED_PROXY_HOP_COUNT)
+  if (!Number.isInteger(raw) || raw < 1 || raw > 8) {
+    return 1
+  }
+  return raw
+}
+
+/** Egy fejléc értéke, üres/whitespace-only értéket hiányzónak tekintve. */
+function headerValue(headers: Headers, name: string): string | undefined {
+  const value = headers.get(name)
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+/**
+ * Az `x-forwarded-for` lánc MEGBÍZHATÓ eleme: a jobbról `hops`-adik nem üres
+ * bejegyzés. Ha a lánc rövidebb, mint a hop-szám, a legbaloldalibb (tehát a
+ * rendelkezésre álló legkorábbi) elemet adjuk — az sosem „több", mint amit a
+ * proxy hozzáfűzött, tehát nem enged hamisítást, csak pontatlanabb.
+ */
+export function trustedForwardedForEntry(
+  forwarded: string | undefined,
+  hops: number,
+): string | undefined {
+  if (!forwarded) {
+    return undefined
+  }
+  const entries = forwarded
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+  if (entries.length === 0) {
+    return undefined
+  }
+  const index = Math.max(0, entries.length - hops)
+  return entries[index]
+}
+
 export function resolveClientIp(headers: Headers | undefined): string | undefined {
   if (!headers) {
     return undefined
   }
-  const cfIp = headers.get('cf-connecting-ip')
-  if (cfIp) {
-    return cfIp
+  if (trustsCloudflareHeader()) {
+    const cfIp = headerValue(headers, 'cf-connecting-ip')
+    if (cfIp) {
+      return cfIp
+    }
   }
-  const forwarded = headers.get('x-forwarded-for')
-  if (forwarded) {
-    return forwarded.split(',')[0]?.trim() || undefined
+  const trusted = trustedForwardedForEntry(
+    headerValue(headers, 'x-forwarded-for'),
+    trustedProxyHopCount(),
+  )
+  if (trusted) {
+    return trusted
   }
-  return undefined
+  return headerValue(headers, 'x-real-ip')
 }

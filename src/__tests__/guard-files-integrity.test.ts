@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest'
  *
  *  1. HIÁNYZÓ ŐRFÁJL: a vitest-include (`src/**\/*.test.ts`) egy törölt vagy
  *     átnevezett őrtesztet NÉMÁN ELNÉZ — nincs hibaüzenet, a sor zöld marad,
- *     miközben a tilos zóna őrizetlenné válik. Ezért a kilenc őrfájl LÉTEZÉSE
+ *     miközben a tilos zóna őrizetlenné válik. Ezért az őrfájlok LÉTEZÉSE
  *     külön asszertálva van (a helpers/migration-schema.ts nem .test.ts, azt
  *     az include egyáltalán nem nézné — a hiánya a G1/G2 importjaként ugyan
  *     kirobbanna, de a fájltartalmi token-vizsgálat miatt itt is őrzött).
@@ -47,6 +47,11 @@ const GUARD_FILES = [
   'helpers/migration-schema.ts',
   // A CLAUDE.md 2. tilos zónájának (fizetés/checkout) végrehajtható őre:
   'ecommerce-payments-guard.test.ts',
+  // A CLAUDE.md 1. tilos zónájának (titok) napló-oldali őre: jelszó-változó
+  // nem interpolálható naplóhívásba (2026-08-16-i átvizsgálás — a seed és a
+  // demó-seed a generált induló jelszót a naplóüzenet szövegébe illesztette,
+  // amit a kulcsnév-alapú logger-redakció nem szűr).
+  'security/seed-secret-logging.test.ts',
   // Incidens-regressziós őrök:
   'koszonom-oldal.test.ts',
   'payload-config.test.ts',
@@ -69,7 +74,7 @@ const FORBIDDEN_TOKENS = [
 ]
 
 describe('meta-őr — az őrfájlok épsége (a vitest-include némán elnézné a hiányt)', () => {
-  it('(1) mind a kilenc őrfájl létezik az src/__tests__/ alatt', () => {
+  it('(1) minden őrfájl létezik az src/__tests__/ alatt', () => {
     const missing = GUARD_FILES.filter((name) => !existsSync(join(TESTS_DIR, name)))
     expect(
       missing,

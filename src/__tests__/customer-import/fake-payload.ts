@@ -34,6 +34,14 @@ export interface FakeProduct {
   sku: string
 }
 
+/** Egy megírt audit-bejegyzés (a régi vásárlás dátumának megőrzése). */
+export interface FakeAuditLog {
+  action: string
+  entityType?: string
+  entityId?: string
+  after?: Record<string, unknown>
+}
+
 /** Egy elküldött levél a fake postaládában (a tesztek ebből olvasnak). */
 export interface FakeSentEmail {
   to: string
@@ -61,6 +69,8 @@ export interface FakeDb {
   }
   /** A kiküldött levelek — a küldés-tesztek ezt vizsgálják. */
   sentEmails: FakeSentEmail[]
+  /** A megírt audit-bejegyzések (`audit-logs` collection). */
+  auditLogs: FakeAuditLog[]
 }
 
 export function createFakeDb(overrides: Partial<FakeDb> = {}): FakeDb {
@@ -70,6 +80,7 @@ export function createFakeDb(overrides: Partial<FakeDb> = {}): FakeDb {
     nextId: 100,
     calls: { create: 0, update: 0, forgotPassword: [] },
     sentEmails: [],
+    auditLogs: [],
     ...overrides,
   }
 }
@@ -150,6 +161,19 @@ export function createFakePayload(db: FakeDb): Payload {
       totalDocs: collectionOf(args.collection).length,
     }),
     create: async (args: CreateArgs) => {
+      // Az audit-bejegyzés nem felhasználó: külön listába gyűlik, és NEM
+      // számít bele a create-hívások számlálójába (az idempotencia-tesztek
+      // a felhasználó-írásokat számolják).
+      if (args.collection === 'audit-logs') {
+        const after = args.data.after
+        db.auditLogs.push({
+          action: asString(args.data.action),
+          entityType: typeof args.data.entityType === 'string' ? args.data.entityType : undefined,
+          entityId: typeof args.data.entityId === 'string' ? args.data.entityId : undefined,
+          after: typeof after === 'object' && after !== null ? (after as Record<string, unknown>) : undefined,
+        })
+        return { id: db.nextId++ }
+      }
       db.calls.create += 1
       const email = asString(args.data.email)
       if (db.failWritesFor?.includes(email)) {

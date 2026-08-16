@@ -11,7 +11,11 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { executeImportPlan, generateInitialPassword } from '../../lib/customer-import/execute'
+import {
+  executeImportPlan,
+  generateInitialPassword,
+  LEGACY_PURCHASE_AUDIT_ACTION,
+} from '../../lib/customer-import/execute'
 import { parseCustomerCsv } from '../../lib/customer-import/parse'
 import { buildImportPlan, parseCourseMap } from '../../lib/customer-import/plan'
 import { validatePasswordStrength } from '../../lib/security/password-policy'
@@ -190,5 +194,71 @@ describe('üres users kollekció elleni védelem', () => {
     })
     await expect(executeImportPlan(payload, plan)).rejects.toThrow(/owner/)
     expect(db.calls.create).toBe(0)
+  })
+})
+
+
+/**
+ * A RÉGI VÁSÁRLÁS IDŐPONTJÁNAK megőrzése.
+ *
+ * A users kollekcióban nincs mező a systeme.io `Date Registered` értékének
+ * (séma-változtatás migrációt igényelne), ezért az adat audit-bejegyzésbe kerül
+ * — a beírt SKU-kkal együtt. A tesztek azt rögzítik, hogy az adat NEM VÉSZ EL,
+ * és hogy az idempotens újrafutás nem szemeteli tele a naplót.
+ */
+describe('régi vásárlás időpontjának megőrzése (audit)', () => {
+  const SYSTEME_CSV = [
+    '"Email","First name","Last name","Tag","Date Registered"',
+    '"uj.vasarlo@example.com","Új","Vásárló","SOS KézRelax vásárló","2024-03-01 10:00:00 (UTC+1)"',
+    '',
+  ].join('\n')
+
+  // A címke a systeme.io szabálytáblájából jön, a SKU kitalált teszt-termék.
+  const systemeMap = parseCourseMap(['SOS KézRelax vásárló=KEZ-ALAP'])
+
+  async function runSystemeImport(db: FakeDb) {
+    const payload = createFakePayload(db)
+    const plan = await buildImportPlan(payload, {
+      rows: parseCustomerCsv(SYSTEME_CSV, { format: 'systeme' }).rows,
+      courseMap: systemeMap,
+    })
+    return executeImportPlan(payload, plan)
+  }
+
+  it('a létrehozott vevőhöz audit-bejegyzés készül a régi dátummal és a SKU-val', async () => {
+    const db = seedDb()
+    await runSystemeImport(db)
+
+    expect(db.auditLogs).toHaveLength(1)
+    const entry = db.auditLogs[0]
+    expect(entry.action).toBe(LEGACY_PURCHASE_AUDIT_ACTION)
+    expect(entry.entityType).toBe('users')
+    expect(entry.after).toMatchObject({
+      forras: 'vásárló-import (CSV)',
+      email: 'uj.vasarlo@example.com',
+      regiVasarlasIdopontja: '2024-03-01T10:00:00+01:00',
+      beirtSkuk: ['KEZ-ALAP'],
+      muvelet: 'create-user',
+    })
+  })
+
+  it('az újrafuttatás NEM ír új audit-bejegyzést (a sor már kész)', async () => {
+    const db = seedDb()
+    await runSystemeImport(db)
+    await runSystemeImport(db)
+
+    expect(db.auditLogs).toHaveLength(1)
+  })
+
+  it('kikapcsolható: recordLegacyPurchase=false mellett nem készül bejegyzés', async () => {
+    const db = seedDb()
+    const payload = createFakePayload(db)
+    const plan = await buildImportPlan(payload, {
+      rows: parseCustomerCsv(SYSTEME_CSV, { format: 'systeme' }).rows,
+      courseMap: systemeMap,
+    })
+    await executeImportPlan(payload, plan, { recordLegacyPurchase: false })
+
+    expect(db.auditLogs).toEqual([])
   })
 })

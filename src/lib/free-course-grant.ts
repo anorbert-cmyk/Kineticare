@@ -15,10 +15,18 @@ import { logger as rootLogger, type Logger } from './logger'
  * regisztrációt/bejelentkezést követően (a Users collection hookjaiból hívva)
  * beírja az ÖSSZES published, ingyenes terméket a purchases-be.
  *
- * „Ingyenes" definíció: `priceInHUFEnabled` NEM true (false vagy hiányzó —
- * „ár nélküli"). A BEpipált, de ÜRES árú (hibásan konfigurált) termék NEM
- * ingyenes: azt a storefront sem címkézi „Ingyenes"-nek (coursePriceBadgeKind),
- * és a checkout sem engedi megvenni — ilyen terméket ez a grant sem ad ki.
+ * „Ingyenes" definíció: KIZÁRÓLAG `priceInHUFEnabled === false` — az egyetlen
+ * igazságforrás az `isFreeCourse` (src/lib/courses.ts), a lekérdezés annak
+ * SQL-oldali párja (`equals: false`).
+ *
+ * A SZIGORÍTÁS OKA (2026-08-16-i átvizsgálás): a lekérdezés korábban
+ * `not_equals: true` volt, ami a BEÁLLÍTATLAN (NULL) ár-pipát is ingyenesnek
+ * vette. Egy publikált, de még be nem árazott kurzust így MINDEN belépő
+ * felhasználó megkapott — miközben a storefront ugyanannak a terméknek
+ * „Megveszem" gombot mutatott, és a jogosultság az ár utólagos beállítása után
+ * is bent maradt. A beállítatlan ár-pipa nem ingyenes ajánlat, hanem javítandó
+ * konfigurációs hiba (riasztás: `reportUnpricedPublishedCourses`). Ugyanígy
+ * kimarad a BEpipált, de ÜRES árú termék is.
  *
  * Miért NEM a grantPurchase (src/lib/grant-purchase.ts) hívja termékenként:
  * annak a manuális, auditált admin-út a szerződése („manuális hozzáférés"
@@ -82,10 +90,11 @@ export async function grantFreeCoursesToUser(
     where: {
       and: [
         { status: { equals: 'published' } },
-        // Ingyenes = az ár NINCS engedélyezve (false vagy hiányzó mező). A
-        // bepipált, de áratlan (hibásan konfigurált) termék kimarad — az nem
-        // ingyenes ajánlat, hanem javítandó konfigurációs hiba.
-        { priceInHUFEnabled: { not_equals: true } },
+        // SZIGORÚ ingyenes-feltétel — az isFreeCourse (src/lib/courses.ts)
+        // SQL-oldali párja. A `not_equals: true` alak a beállítatlan (NULL)
+        // ár-pipát is beengedte; ez a hiba adta ki a be nem árazott kurzust
+        // minden belépőnek (lásd a modul fejlécét).
+        { priceInHUFEnabled: { equals: false } },
       ],
     },
     limit: FREE_PRODUCTS_QUERY_LIMIT,

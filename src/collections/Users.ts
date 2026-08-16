@@ -21,10 +21,13 @@ import {
   type PayloadRequest,
 } from 'payload'
 import {
+  canUpdateUser,
+  hasOwnerRole,
   isOwner,
   isOwnerFieldAccess,
   isSelfOrAdmin,
   isStaffOrOwner,
+  isStaffOrOwnerFieldAccess,
 } from '../access'
 import type { User } from '../payload-types'
 
@@ -94,6 +97,88 @@ const enforcePasswordPolicy: CollectionBeforeChangeHook = async ({
     throw new APIError(formatPasswordPolicyErrors(errors), 400)
   }
   return data
+}
+
+/**
+ * A felhasználónak megjelenő 403-as üzenet, ha idegen fiók hitelesítési adatát
+ * próbálná átírni. Exportált, hogy a teszt karakter-pontosan rögzíthesse.
+ */
+export const FOREIGN_CREDENTIAL_CHANGE_MESSAGE =
+  'Más felhasználó e-mail-címét vagy jelszavát csak tulajdonos módosíthatja. ' +
+  'A saját adataidat bármikor átírhatod; idegen fiókhoz kérj tulajdonosi segítséget.'
+
+/**
+ * MÁSODIK VÉDVONAL: idegen rekord jelszó- vagy e-mail-cseréje kizárólag ownernek.
+ *
+ * ═══ MIÉRT KELL A COLLECTION-ACCESS MELLÉ ═══
+ * A `canUpdateUser` where-kényszere ma már kizárja, hogy staff egy owner vagy
+ * egy másik staff rekordját írja. Ez a hook viszont NEM a szerepkörre, hanem a
+ * VÁLTOZTATÁS TERMÉSZETÉRE néz: bármely bejelentkezett felhasználó, aki nem
+ * owner, csak a SAJÁT hitelesítési adatait (jelszó, e-mail) cserélheti. Ha egy
+ * jövőbeli refaktor az access-szabályt kiszélesítené (vagy egy új admin-út
+ * megkerülné), a fiókátvétel akkor is elbukik ezen — a védelem így túléli a
+ * szabály-átszervezéseket. Ugyanezért nem a `canUpdateUser` logikáját ismétli:
+ * két, egymástól FÜGGETLEN feltétel őrzi ugyanazt a kockázatot.
+ *
+ * ═══ MIT NEM ÉRINT (mind tesztelt) ═══
+ *  - `create` — az első-felhasználó bootstrap (`promoteFirstUserToOwner`), a
+ *    nyilvános regisztráció, a vendég-vásárlás fiók-feloldása
+ *    (`resolve-order-customer.ts`) és a vásárló-import: mind create, a hook
+ *    kizárólag `update`-re fut;
+ *  - a SZERVER-OLDALI (local API, `overrideAccess: true`) hívások: ezeknél nincs
+ *    bejelentkezett `req.user`. A REST-úton bejelentkezés nélkül eleve nem lehet
+ *    usert módosítani (`canUpdateUser` látogatóra `false`), tehát a hiányzó
+ *    `req.user` itt megbízhatóan szerver-oldali futást jelent;
+ *  - a jelszó-visszaállítás („elfelejtett jelszó" → aktiváló link): a Payload
+ *    `resetPasswordOperation`-je a jelszót a beforeChange lánc MEGKERÜLÉSÉVEL
+ *    írja (csak az afterLogin hookok futnak, lásd a
+ *    `clearPasswordSetupPendingAfterLogin` indoklását);
+ *  - a felhasználó SAJÁT jelszó- és e-mail-cseréje: ilyenkor a rekord azonosítója
+ *    megegyezik a kérést indító felhasználóéval.
+ *
+ * Az e-mail-összevetés a Payload tárolási alakján (trimmelt, kisbetűs) történik,
+ * hogy a nagybetűs újraküldés (a Payload admin a teljes dokumentumot visszaküldi)
+ * ne látsszon változtatásnak.
+ */
+const blockForeignCredentialChange: CollectionBeforeChangeHook = ({
+  data,
+  originalDoc,
+  operation,
+  req,
+}) => {
+  if (operation !== 'update') {
+    return data
+  }
+  const actor = req.user
+  if (!actor) {
+    return data
+  }
+  const targetId = (originalDoc as { id?: unknown } | undefined)?.id ?? data.id
+  if (targetId !== undefined && targetId !== null && String(targetId) === String(actor.id)) {
+    return data
+  }
+  const changesPassword = typeof data.password === 'string' && data.password.length > 0
+  const currentEmail = normalizeEmail((originalDoc as { email?: unknown } | undefined)?.email)
+  const nextEmail = normalizeEmail(data.email)
+  const changesEmail = nextEmail !== undefined && nextEmail !== currentEmail
+  if (!changesPassword && !changesEmail) {
+    return data
+  }
+  if (hasOwnerRole(actor)) {
+    return data
+  }
+  logger.warn('elutasított hitelesítési-adat módosítás idegen felhasználói rekordon', {
+    actorId: actor.id,
+    actorRole: (actor as { role?: unknown }).role,
+    targetUserId: targetId,
+    mezo: changesPassword ? 'jelszó' : 'e-mail',
+  })
+  throw new APIError(FOREIGN_CREDENTIAL_CHANGE_MESSAGE, 403)
+}
+
+/** E-mail a Payload tárolási alakjában (trimmelt, kisbetűs); nem-string → undefined. */
+function normalizeEmail(value: unknown): string | undefined {
+  return typeof value === 'string' ? value.trim().toLowerCase() : undefined
 }
 
 // Az ELSŐ felhasználó owner-szerepkört kap.
@@ -237,8 +322,12 @@ export const Users: CollectionConfig = {
   admin: {
     useAsTitle: 'email',
     group: 'Felhasználók',
-    defaultColumns: ['name', 'email', 'role', 'lastLoginAt'],
-    description: 'Szerkesztők és vásárlók. A szerepkört csak tulajdonos állíthatja át.',
+    // A „ki mit vett meg" a lista alapkérdése (tulajdonosi igény, 2026-08-16):
+    // a purchases oszlop a kurzusok CÍMÉT mutatja (PurchasesCell). Szűrni a
+    // lista „Szűrők" gombjával lehet rá (relationship-mező → kurzus-választó).
+    defaultColumns: ['name', 'email', 'role', 'purchases', 'lastLoginAt'],
+    description:
+      'Szerkesztők és vásárlók. A szerepkört csak tulajdonos állíthatja át; a megvásárolt kurzusokat munkatárs és tulajdonos szerkesztheti.',
   },
   auth: {
     maxLoginAttempts: 5,
@@ -260,10 +349,13 @@ export const Users: CollectionConfig = {
     // field-access-e miatt jogemelés így sem lehetséges (minden regisztráló
     // a default 'customer' szerepkört kapja). Owner az adminból bárkit létrehozhat.
     create: () => true,
-    // Saját rekord olvasása/módosítása — staff/owner minden rekordot.
-    // A role és purchases mezők ettől függetlenül mezőszinten védettek.
+    // OLVASÁS: saját rekord, staff/owner minden rekordot (ügyfélszolgálat,
+    // rendelés-egyeztetés). A role és purchases mezők mezőszinten védettek.
     read: isSelfOrAdmin,
-    update: isSelfOrAdmin,
+    // ÍRÁS: szűkebb, mint az olvasás (legkisebb jogosultság elve) — owner
+    // mindent, staff a saját rekordját + a customer rekordokat, customer csak
+    // magát. Indoklás és a védelmi rétegek: src/access/users-update.ts.
+    update: canUpdateUser,
     // Törlés kizárólag owner.
     delete: isOwner,
     // Zárolt fiók feloldása (maxLoginAttempts után) kizárólag owner: a kulcs
@@ -305,15 +397,63 @@ export const Users: CollectionConfig = {
       relationTo: 'products',
       hasMany: true,
       label: 'Megvásárolt kurzusok',
-      // A vásárlásokat kizárólag rendszerfolyamat írja (fizetésjóváhagyás),
-      // sem az admin, sem az API nem szerkesztheti közvetlenül.
+      /**
+       * ÍRÁS: kizárólag STAFF vagy OWNER — a vevő SOHA, a saját rekordján sem.
+       *
+       * ═══ MI VÁLTOZOTT ÉS MIÉRT ═══
+       * A mező korábban `create: () => false` / `update: () => false` volt, azaz
+       * a hozzáférés-lista mezőszinten MINDENKI elől zárva állt; a vásárlásokat
+       * csak rendszerfolyamat írta (`overrideAccess: true`). Ennek az volt az
+       * ára, hogy a TULAJDONOS sem tudott az adminban hozzáférést adni vagy
+       * elvenni — pedig a visszatérítés, az elhibázott fizetés és a régi
+       * rendszerből átköltöztetett vevő javítása napi feladat. A tulajdonos
+       * kifejezett kérése (2026-08-16): az adminban mindennek látszania kell,
+       * és mindent szerkeszteni is tudnia kell.
+       *
+       * ═══ AMI NEM VÁLTOZOTT (a védelem lényege) ═══
+       *  - a VEVŐ nem írhatja: `hasStaffOrOwnerRole` a `customer` szerepkörre
+       *    hamis, tehát az önkiszolgáló jogosultság-adás (fizetés nélküli
+       *    kurzus-hozzáférés) továbbra is lehetetlen — sem az admin felületen,
+       *    sem a REST/GraphQL API-n, sem a saját rekordján;
+       *  - a LÁTOGATÓ (nem bejelentkezett) nem írhatja: a nyilvános regisztráció
+       *    (`access.create: () => true`) így sem tud purchases-t beküldeni,
+       *    mert a mező írásához bejelentkezett staff/owner kell;
+       *  - a rendszerfolyamatok (fizetésjóváhagyás, ingyenes-kurzus grant,
+       *    vásárló-import, grant-purchase végpont) változatlanul
+       *    `overrideAccess: true`-val írnak, tehát a mezőszintű szabály nem
+       *    érinti őket.
+       *
+       * Az őr-teszt mindkét irányt rögzíti: `src/__tests__/security/
+       * users-purchases-field-access.test.ts`.
+       */
       access: {
-        create: () => false,
-        update: () => false,
+        create: isStaffOrOwnerFieldAccess,
+        update: isStaffOrOwnerFieldAccess,
       },
       admin: {
         description:
-          'A felhasználó által megvásárolt kurzusok (hozzáférés). A fizetés után magától töltődik — kézzel nem szerkeszthető.',
+          'A felhasználó által megvásárolt kurzusok (hozzáférés). Fizetés után magától töltődik; ' +
+          'munkatárs és tulajdonos kézzel is hozzáadhat vagy elvehet. A vevő saját magának nem adhat hozzáférést. ' +
+          'Szűrés a listában: Szűrők → Megvásárolt kurzusok.',
+        components: {
+          // A listaoszlop a kurzus CÍMÉT mutatja (displayTitle), nem a puszta
+          // azonosítót — a gyári relationship-cella a `useAsTitle: 'sku'` miatt
+          // csak a SKU-t írná ki.
+          Cell: '/components/admin/PurchasesCell#PurchasesCell',
+        },
+      },
+    },
+    {
+      // Olvasható áttekintő a felhasználó LAPJÁN: melyik kurzust vette meg, a
+      // kurzus címével. UI-mező (nem tárol adatot → nincs séma-változás), a
+      // fenti relationship-mező marad a szerkesztés helye.
+      name: 'purchasesOverview',
+      type: 'ui',
+      label: 'Megvásárolt kurzusok (áttekintés)',
+      admin: {
+        components: {
+          Field: '/components/admin/PurchasesOverviewPanel#PurchasesOverviewPanel',
+        },
       },
     },
     {
@@ -399,7 +539,9 @@ export const Users: CollectionConfig = {
     },
   ],
   hooks: {
-    beforeChange: [promoteFirstUserToOwner, enforcePasswordPolicy],
+    // A hitelesítési-adat őr ELSŐKÉNT fut: idegen rekord jelszó-/e-mail-cseréje
+    // már a jelszó-politika és a bootstrap-hook előtt elutasításra kerül.
+    beforeChange: [blockForeignCredentialChange, promoteFirstUserToOwner, enforcePasswordPolicy],
     // A haladás-sorok takarítása a törlés ELŐTT. Enélkül a Postgres elhasal
     // (course_progress.user_id NOT NULL + ON DELETE SET NULL), és a felhasználó
     // NEM TÖRÖLHETŐ — GDPR-törlési kérésnél is. Helyben, valós adatbázis ellen

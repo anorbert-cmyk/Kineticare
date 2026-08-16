@@ -1,6 +1,7 @@
 import type { Category, Media, Product } from '../payload-types'
 
 import { formatPriceHuf } from './format-price'
+import { logger as rootLogger, type Logger } from './logger'
 
 /**
  * Kurzus-storefront üzleti logika — tiszta, DB- és Next-függés nélküli
@@ -34,6 +35,22 @@ export const MY_COURSES_PATH = '/kurzusaim'
 /** Archived termék CTA-mellékjelölése (üzleti szöveg — NE változzon hangyászaton). */
 export const ARCHIVED_COURSE_NOTE = 'Ez a kurzus jelenleg nem vásárolható.'
 
+/**
+ * NEM VÁSÁROLHATÓ (de nem archivált) termék magyarázó mondata.
+ *
+ * Ide a hiányos ár-konfigurációjú (`priceInHUFEnabled` beállítatlan, vagy
+ * bepipált ár üres értékkel) és a nem publikált termék esik. A `docs/ui-sztenderdek.md`
+ * §3.2 #16 és Á-3 szabálya szerint ilyenkor NINCS gomb, helyette magyarázó
+ * mondat áll: a letiltott „Megveszem" hamis ígéret (NN/g: „a link ígéret"), a
+ * magyarázat nélküli disabled gomb pedig a 2.7 pontot is sérti.
+ *
+ * A második mondat a GOV.UK hibaüzenet-elvét követi („mondd meg, mi történt és
+ * hogyan léphet tovább"), és a zsákutcát is feloldja (skill 5. pont). A szöveg
+ * natív magyar, E/2, gondolatjel nélkül (skill 2. pont).
+ */
+export const UNAVAILABLE_COURSE_NOTE =
+  'Ez a kurzus jelenleg nem vásárolható meg. Nézd meg a többi kurzusunkat, vagy írj nekünk, ha kérdésed van.'
+
 /** A kurzuslista kategória-szűrőjének query-param neve (/kurzusok?kategoria=<slug>). */
 export const CATEGORY_QUERY_PARAM = 'kategoria'
 
@@ -62,33 +79,141 @@ export function hasUserPurchased(
   })
 }
 
+/**
+ * ═══ AZ „INGYENES KURZUS" EGYETLEN IGAZSÁGFORRÁSA ═══
+ *
+ * Ingyenes = `priceInHUFEnabled === false`, azaz a szerkesztő TUDATOSAN kivette
+ * az ár-pipát. SZIGORÚ szabály: a beállítatlan (`null`/`undefined`) érték NEM
+ * ingyenes, hanem HIÁNYOS KONFIGURÁCIÓ.
+ *
+ * MIÉRT SZIGORÚ (a 2026-08-16-i átvizsgálás gyökéroka): korábban három helyen,
+ * háromféleképp dőlt el ugyanez a kérdés. A hozzáférés-adó lekérdezés
+ * (`free-course-grant.ts`) `not_equals: true`-val kérdezett — annak a NULL is
+ * ingyenes volt —, a gomb-felirat és az ár-címke viszont szigorú `=== false`-t
+ * használt. Egy publikált, de még be nem árazott kurzus így a látogatónak
+ * „Megveszem" gombbal FIZETŐSNEK látszott, miközben MINDEN belépő felhasználó
+ * megkapta a hozzáférést — és az ár utólagos beállítása után is bent maradt.
+ * Üzletileg bevételkiesés, a felhasználónak érthetetlen felület.
+ *
+ * Ezt a függvényt használja a gomb-logika (`resolveCourseCta`), az ár-címke
+ * (`coursePriceBadgeKind`), a kezdőlapi fizetős/ingyenes szétválasztás
+ * (`isPaidProduct`) és a hozzáférés-adó lekérdezés (`free-course-grant.ts`,
+ * `equals: false`). Új fogyasztó is KIZÁRÓLAG innen kérdezze.
+ */
+export function isFreeCourse(product: Pick<Product, 'priceInHUFEnabled'>): boolean {
+  return product.priceInHUFEnabled === false
+}
+
+/**
+ * HIÁNYOS ÁR-KONFIGURÁCIÓ: az ár-pipa se be, se ki — a szerkesztő hozzá sem
+ * nyúlt. Az ilyen termék se nem ingyenes, se nem eladható; a storefronton
+ * inaktív ár-címkét és „Megveszem" gombot kapna, a checkout viszont
+ * elutasítaná. Nem ugyanaz, mint a „pipa BE, ár ÜRES" eset (azt a
+ * `coursePriceBadgeKind` 'none' ága kezeli).
+ */
+export function hasUnsetPriceFlag(product: Pick<Product, 'priceInHUFEnabled'>): boolean {
+  return product.priceInHUFEnabled !== true && product.priceInHUFEnabled !== false
+}
+
+/**
+ * PUBLIKÁLT termékek beállítatlan ár-pipával — a szerkesztői hiba felismerése.
+ * Tiszta függvény (nem naplóz); a riasztást a `reportUnpricedPublishedCourses`
+ * írja ki.
+ */
+export function unpricedPublishedCourseIds(
+  products: Pick<Product, 'id' | 'status' | 'priceInHUFEnabled'>[],
+): number[] {
+  return products
+    .filter((product) => product.status === 'published' && hasUnsetPriceFlag(product))
+    .map((product) => product.id)
+}
+
+/**
+ * RIASZTÁS a beállítatlan ár-pipájú, PUBLIKÁLT termékekről.
+ *
+ * Miért `logger.error` és miért „RIASZTÁS:" előtag (a repó mintája — lásd
+ * `src/jobs/schedule-guard.ts`, `src/lib/szamlazz/invoice.ts`): a hibát EMBER
+ * javítja az adminban, magától nem oldódik meg, és amíg fennáll, a látogató
+ * megtévesztő felületet lát. A néma degradálás pontosan az a viselkedés, ami a
+ * tulajdonos gomb-hibáját hetekig elrejtette.
+ *
+ * A hívó a storefront termék-lekérdezése (`src/lib/cms.ts`) — ott derül ki,
+ * hogy a látogató elé kerülne a rosszul konfigurált termék. A függvény
+ * MELLÉKHATÁSA kizárólag a naplósor; a visszaadott id-lista tesztelhetővé teszi.
+ */
+export function reportUnpricedPublishedCourses(
+  products: Pick<Product, 'id' | 'status' | 'priceInHUFEnabled'>[],
+  log: Pick<Logger, 'error'> = rootLogger,
+): number[] {
+  const ids = unpricedPublishedCourseIds(products)
+  if (ids.length > 0) {
+    log.error(
+      'RIASZTÁS: publikált kurzus beállítatlan ár-pipával — a látogató „Megveszem" gombot lát, ' +
+        'a rendszer viszont sem ingyenesként, sem fizetősként nem tudja kezelni. ' +
+        'Az adminban az érintett termékeken az „Ár engedélyezve" pipát BE (ár megadásával) ' +
+        'vagy KI (tudatosan ingyenes kurzus) kell állítani.',
+      { productIds: ids },
+    )
+  }
+  return ids
+}
+
 export type CourseCtaKind = 'buy' | 'purchased' | 'archived' | 'unavailable' | 'free'
 
 export interface CourseCtaState {
   kind: CourseCtaKind
-  /** A gomb felirata (buy/archived: „Megveszem"; purchased: „Tovább a kurzusaimhoz"; free: „Ingyenes — azonnal eléred"). */
-  label: string
-  /** Link-cél; letiltott (archived/unavailable) állapotban null. */
+  /**
+   * A gomb felirata, VAGY `null`, ha egyáltalán NINCS gomb.
+   *
+   * A `null` az `archived` és az `unavailable` ágon áll: a
+   * `docs/ui-sztenderdek.md` Á-3 szabálya szerint a letiltott gomb helyett a
+   * cselekvésnek el kell tűnnie, és a `note` mondja meg, miért. A típus azért
+   * nullable, hogy a hívó ne tudjon véletlenül visszacsempészni egy hamis
+   * ígéretű („Megveszem") feliratot egy megvehetetlen termékre.
+   */
+  label: string | null
+  /** Link-cél; nem cselekvő (archived/unavailable) állapotban null. */
   href: string | null
+  /** true = a cselekvés nem végezhető el; ilyenkor `label === null` és `note !== null`. */
   disabled: boolean
-  /** Archived jelölés szövege — csak archived kind mellett értelmezett. */
+  /** A látogatónak szóló magyarázó mondat — archived/unavailable ágon kötelező. */
   note: string | null
 }
 
 /**
- * A kurzus-oldal CTA-állapotgépe:
+ * A kurzus-oldal CTA-állapotgépe.
+ *
+ * ═══ A VEZÉRELV ═══
+ * `kind === 'buy'` AKKOR ÉS CSAK AKKOR, ha a checkout kapuja (`assertPurchasable`,
+ * src/lib/checkout/start-checkout.ts) sem utasítaná el a terméket. A felület
+ * sosem ígérhet olyan cselekvést, amit a szerver garantáltan visszautasít
+ * (docs/ui-sztenderdek.md §3.2 #16; NN/g: „a link ígéret").
+ *
+ * ═══ A JAVÍTOTT HIBA (2026-08-16, gomb-inventár mérés) ═══
+ * A published ág korábban MINDEN nem-ingyenes termékre `'buy'`-t adott, tehát
+ * arra is, aminek nincs érvényes ára (`priceInHUFEnabled: true` + üres ár,
+ * illetve beállítatlan pipa). A vevő végigment a pénztáron, kitöltötte a
+ * számlázási adatait, elfogadta a jogszabályi nyilatkozatokat, és a beküldés
+ * 400-zal elhasalt: „A termékhez nem tartozik érvényes ár, így nem vásárolható
+ * meg." (`start-checkout.ts:260`). Ezért kérdezi a published ág az `isPaidCourse`-t
+ * (ÉRVÉNYES ár), nem a `!isFreeCourse`-t.
+ *
+ * ═══ AZ ÁGAK ═══
  * - bejelentkezett vevő (purchases tartalmazza) → „Tovább a kurzusaimhoz"
- *   link — archived terméknél is (a meglévő vevő tovább nézi);
- * - archived + nem vevő → a CTA INAKTÍV + ARCHIVED_COURSE_NOTE jelölés;
+ *   link, archived terméknél is (a meglévő vevő tovább nézi);
+ * - archived + nem vevő → NINCS gomb + ARCHIVED_COURSE_NOTE;
  * - published + nem vevő:
- *   - ingyenes (priceInHUFEnabled: false) → „Ingyenes — azonnal eléred"
- *     (regisztráció után purchases-be kerül, NEM a Barion-checkouton keresztül);
- *   - fizetős → „Megveszem" → checkout;
- * - minden más (draft/ismeretlen) → inaktív (a nyilvános oldal egyébként
- *   404-et ad draft termékre; ez a védekező ág).
+ *   - ingyenes (`isFreeCourse`) → „Ingyenes — azonnal eléred" (nem a
+ *     Barion-checkouton keresztül; a purchases-be a free-course-grant ír);
+ *   - érvényes árú (`isPaidCourse`) → „Megveszem" → checkout;
+ *   - se nem ingyenes, se nem érvényesen árazott (HIÁNYOS KONFIGURÁCIÓ) →
+ *     NINCS gomb + UNAVAILABLE_COURSE_NOTE (a staffnak külön RIASZTÁS megy,
+ *     lásd reportUnpricedPublishedCourses);
+ * - minden más (draft/ismeretlen státusz) → NINCS gomb + UNAVAILABLE_COURSE_NOTE
+ *   (a nyilvános oldal egyébként 404-et ad draft termékre; ez a védekező ág).
  */
 export function resolveCourseCta(
-  product: Pick<Product, 'id' | 'status' | 'priceInHUFEnabled'>,
+  product: Pick<Product, 'id' | 'status' | 'priceInHUF' | 'priceInHUFEnabled'>,
   purchased: boolean,
 ): CourseCtaState {
   if (purchased) {
@@ -103,17 +228,18 @@ export function resolveCourseCta(
   if (product.status === 'archived') {
     return {
       kind: 'archived',
-      label: 'Megveszem',
+      label: null,
       href: null,
       disabled: true,
       note: ARCHIVED_COURSE_NOTE,
     }
   }
   if (product.status === 'published') {
-    // Ingyenes kurzus (priceInHUFEnabled: false): regisztráció után azonnal
-    // elérhető, NEM a Barion-checkouton keresztül — a purchases-be a
-    // regisztráció/hozzáférés-adás flow írja (W3 5D scope).
-    if (product.priceInHUFEnabled === false) {
+    // Ingyenes kurzus: regisztráció után azonnal elérhető, NEM a
+    // Barion-checkouton keresztül — a purchases-be a hozzáférés-adás flow írja
+    // (free-course-grant.ts). Az „ingyenes" fogalom EGYETLEN forrása az
+    // isFreeCourse: a beállítatlan ár-pipa NEM ingyenes (lásd az indoklását).
+    if (isFreeCourse(product)) {
       return {
         kind: 'free',
         label: 'Ingyenes — azonnal eléred',
@@ -122,20 +248,24 @@ export function resolveCourseCta(
         note: null,
       }
     }
-    return {
-      kind: 'buy',
-      label: 'Megveszem',
-      href: checkoutHref(product.id),
-      disabled: false,
-      note: null,
+    // ÉRVÉNYES ÁR a feltétel, nem a „nem ingyenes": a hiányos konfigurációjú
+    // terméket a checkout kapuja úgyis elutasítaná (lásd a fejlécet).
+    if (isPaidCourse(product)) {
+      return {
+        kind: 'buy',
+        label: 'Megveszem',
+        href: checkoutHref(product.id),
+        disabled: false,
+        note: null,
+      }
     }
   }
   return {
     kind: 'unavailable',
-    label: 'Megveszem',
+    label: null,
     href: null,
     disabled: true,
-    note: null,
+    note: UNAVAILABLE_COURSE_NOTE,
   }
 }
 
@@ -184,9 +314,18 @@ export function coursePriceHuf(
   if (product.priceInHUFEnabled !== true) {
     return null
   }
-  return typeof product.priceInHUF === 'number' && Number.isFinite(product.priceInHUF)
-    ? product.priceInHUF
-    : null
+  if (typeof product.priceInHUF !== 'number' || !Number.isFinite(product.priceInHUF)) {
+    return null
+  }
+  // A NEM POZITÍV ár nem ár, hanem konfigurációs hiba. A 0 Ft csábító
+  // rövidítés lenne az „ingyenes"-re, de az ingyenességet KIZÁRÓLAG a
+  // priceInHUFEnabled: false fejezi ki (lásd isFreeCourse). Ha a 0-t itt
+  // érvényes árnak vennénk, a felület „Megveszem" gombot adna rá, a
+  // checkout-kapu viszont elutasítaná — pontosan az a szétcsúszás, amit a
+  // tulajdonos élő hibabejelentése után zártunk be. A kapu ugyanezt a
+  // függvényt hívja (src/lib/checkout/start-checkout.ts), tehát a kettő nem
+  // tud egymástól elsodródni.
+  return product.priceInHUF > 0 ? product.priceInHUF : null
 }
 
 /** Ár-megjelenítés a kártyákon/részleteken — az 5A formatPriceHuf közös formázója. */
@@ -215,7 +354,25 @@ export function coursePriceBadgeKind(
   if (coursePriceHuf(product) !== null) {
     return 'price'
   }
-  return product.priceInHUFEnabled === false ? 'free' : 'none'
+  // Az „ingyenes" megítélése az egyetlen igazságforrásból (isFreeCourse) jön:
+  // a beállítatlan ár-pipa 'none' (hiányos konfiguráció), nem „Ingyenes".
+  return isFreeCourse(product) ? 'free' : 'none'
+}
+
+/**
+ * FIZETŐS-e a kurzus: érvényes, megjeleníthető ára van (`coursePriceHuf`).
+ *
+ * A „fizetős" és az „ingyenes" NEM egymás tagadása — a harmadik állapot a
+ * HIÁNYOS KONFIGURÁCIÓ (beállítatlan ár-pipa, vagy bepipált ár üres értékkel),
+ * ami egyik halmazba sem tartozik. Ezért kell a kettő külön kérdés: aki a
+ * `!isPaidCourse`-t venné „ingyenes"-nek, a hibás rekordot is ingyenesként
+ * kezelné (pontosan ez tette a rosszul konfigurált terméket a kezdőlap
+ * lead-magnet sávjába).
+ */
+export function isPaidCourse(
+  product: Pick<Product, 'priceInHUF' | 'priceInHUFEnabled'>,
+): boolean {
+  return coursePriceHuf(product) !== null
 }
 
 export interface CourseCategoryOption {

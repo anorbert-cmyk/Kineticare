@@ -31,7 +31,12 @@ export interface CourseBuyboxProps {
   /** Másodlagos, alacsonyabb súlyú horgony (pl. „Kinek való?"). */
   secondaryHref: string | null
   secondaryLabel: string | null
-  product: Pick<Product, 'id' | 'status' | 'priceInHUFEnabled'>
+  /**
+   * A `priceInHUF` KÖTELEZŐ: a CourseCta állapotgépe az ÉRVÉNYES árat kérdezi
+   * (nem csak az ár-pipát), különben a hiányosan konfigurált termék olyan
+   * vásárlást kínálna, amit a checkout 400-zal elutasít.
+   */
+  product: Pick<Product, 'id' | 'status' | 'priceInHUF' | 'priceInHUFEnabled'>
   hasPurchased: boolean
 }
 

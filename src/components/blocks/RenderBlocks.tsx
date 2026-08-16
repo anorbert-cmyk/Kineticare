@@ -1,4 +1,5 @@
 import type { Page, Post, Product, Testimonial } from '../../payload-types'
+import { isFreeCourse } from '../../lib/courses'
 import { RichText } from '../lexical/RichText'
 import { hasLexicalContent } from '../lexical/serialize'
 import { CourseCards, isPaidProduct } from '../content/home/CourseCards'
@@ -92,7 +93,12 @@ export function RenderBlocks({ layout, products, posts, testimonials }: RenderBl
   // megjelenés duplikáció volt — lásd CourseCards fejléce).
   // A freeSos blokk egyetlen lead-magnetre van tervezve, viselkedése változatlan.
   const paidProducts = visibleProducts.filter(isPaidProduct)
-  const freeProduct = visibleProducts.find((product) => !isPaidProduct(product)) ?? null
+  // A lead-magnet KIZÁRÓLAG a tudatosan ingyenes termék (isFreeCourse). A
+  // korábbi `!isPaidProduct` a HIÁNYOSAN konfigurált terméket (beállítatlan
+  // ár-pipa vagy bepipált, de üres ár) is ingyenesként tette a FreeSos sávba —
+  // az a rács fizetős kártyái közül is kiesett, tehát a szerkesztői hiba némán
+  // ingyenes ajánlattá változott (2026-08-16-i átvizsgálás).
+  const freeProduct = visibleProducts.find(isFreeCourse) ?? null
 
   // Az adatvezérelt szekciók beépített alap-horgonya (kurzusok, ingyenes,
   // velemenyek) csak a típus ELSŐ példányán érvényesülhet: ha a szerkesztő

@@ -6,9 +6,12 @@
  *
  * Futtatás: npm run seed (DATABASE_URI és PAYLOAD_SECRET környezeti változókkal).
  *
- * Az owner-jelszó NEM a repóban él: a SEED_OWNER_PASSWORD környezeti változóval
- * felülírható; hiányában a script egyszeri, véletlenszerű jelszót generál és ír ki
- * (csak az owner létrehozásakor).
+ * Az owner-jelszó NEM a repóban él, és NEM kerül a naplóba: a SEED_OWNER_PASSWORD
+ * környezeti változó KÖTELEZŐ az owner létrehozásához — hiányában a script
+ * hangos, magyar hibaüzenettel leáll (generált jelszót nem készít és nem ír ki).
+ *
+ * ÉLES-VÉDELEM: a TELJES seed nem futhat éles környezetben (seedGuardErrors +
+ * assertNotLiveDatabase); a `SEED_SCOPE=kezdolap` hatókör élesben is használható.
  *
  * A script két nagy lépésből áll:
  *  1. demó-tartalom (owner, kategóriák, oldal, bejegyzés, termék, menüfa) — a
@@ -26,7 +29,6 @@
  * asszertálható — lásd a fájl végén az indítás-kaput.
  */
 
-import { randomBytes } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 
 import { getPayload, type Payload } from 'payload'
@@ -42,35 +44,160 @@ import {
 import { ensureMediaFiles } from '../lib/media-restore'
 import { ensureNavigationMenu } from '../lib/menu-seed'
 import { ensureNewsletterForm } from '../lib/newsletter/form'
-import { validatePasswordStrength } from '../lib/security/password-policy'
+import { isProductionServerUrl, serverUrlHost } from '../lib/security/live-environment'
+import {
+  formatPasswordPolicyErrors,
+  validatePasswordStrength,
+} from '../lib/security/password-policy'
 import config from '../payload.config'
 
 const OWNER_EMAIL = process.env.SEED_OWNER_EMAIL ?? 'owner@kineticare.local'
 
 /**
- * Kriptográfiailag véletlen induló jelszó (`node:crypto`).
- *
- * A korábbi `Math.random()` NEM kriptográfiai generátor: kimenete a belső
- * állapotból kikövetkeztethető, és az entrópiája a jelszó hosszától
- * függetlenül alacsony — egy seedelt telepítés owner-fiókjának jelszavához ez
- * kevés. A `randomBytes` az OS entrópiaforrásából dolgozik.
- *
- * A base64url ábécé nem garantálja mindhárom karakterosztályt, a
- * jelszó-politika (kis- és nagybetű + szám, min. 12 karakter) viszont a 2.
- * felhasználótól kezdve minden create-re lefut — ezért addig húzunk új
- * véletlent, amíg a jelöltet a politika elfogadja. (Az első felhasználónál a
- * hook átengedi, de a seed nem feltételezheti, hogy üres az adatbázis.)
+ * A hiányzó `SEED_OWNER_PASSWORD` magyar hibaüzenete. Exportált, hogy a teszt
+ * karakter-pontosan rögzíthesse (és hogy sose kerüljön bele érték).
  */
-function generateOwnerPassword(): string {
-  for (let attempt = 0; attempt < 16; attempt += 1) {
-    const candidate = randomBytes(12).toString('base64url')
-    if (validatePasswordStrength({ password: candidate, email: OWNER_EMAIL }).length === 0) {
-      return candidate
-    }
+export const MISSING_OWNER_PASSWORD_MESSAGE =
+  'A SEED_OWNER_PASSWORD környezeti változó KÖTELEZŐ az owner-felhasználó ' +
+  'létrehozásához: a jelszót a futtatókörnyezet adja meg, a script nem generál ' +
+  'és nem naplóz jelszót. Állítsd be a szolgáltatás Variables felületén (érték a ' +
+  'repóba SOHA nem kerül), majd futtasd újra a seedet.'
+
+/**
+ * Az owner-felhasználó jelszava — KIZÁRÓLAG a `SEED_OWNER_PASSWORD` környezeti
+ * változóból.
+ *
+ * ═══ MIÉRT KÖTELEZŐ (2026-08-16-i átvizsgálás) ═══
+ * Korábban a script generált egy jelszót, és azt a naplóüzenet SZÖVEGÉBE
+ * illesztve kiírta (`Seed: az owner induló jelszava: …`). A logger redakciója
+ * KULCSNÉV-alapú: az üzenetszövegbe ágyazott titkot nem szűri, tehát a
+ * tulajdonosi fiók jelszava a deploy-naplóba került — onnan pedig a
+ * log-aggregátorba és a mentésekbe is.
+ *
+ * A két lehetséges megoldás közül a KÖTELEZŐ környezeti változó az
+ * üzemeltethetőbb: az owner az ELSŐ felhasználó, tehát a „jelszó-beállításra
+ * váró" állapotból csak egy kiküldött aktiváló linkkel jutna ki — telepítéskor
+ * viszont a levélküldő még jellemzően nincs beállítva (`EMAIL_FROM`/Resend
+ * nélkül a provider no-op), így a rendszer bezárulna. A változó egyszeri,
+ * emberi beállítást igényel, és a seed idempotens: meglévő owner mellett a
+ * script hozzá sem nyúl a jelszóhoz.
+ *
+ * A politikai ellenőrzés ITT is lefut, hogy a hiba a create ELŐTT, magyar
+ * mondattal derüljön ki (a Users hookja amúgy 400-zal utasítaná el).
+ */
+function resolveOwnerPassword(): string {
+  const provided = process.env.SEED_OWNER_PASSWORD
+  if (typeof provided !== 'string' || provided.trim().length === 0) {
+    throw new Error(MISSING_OWNER_PASSWORD_MESSAGE)
   }
-  // Elvi ág: 16 próbálkozás után is politikasértő jelszó gyakorlatilag
-  // lehetetlen — csendben gyenge jelszót viszont SOSEM adunk vissza.
-  throw new Error('Nem sikerült a jelszó-politikának megfelelő owner-jelszót generálni.')
+  const errors = validatePasswordStrength({ password: provided, email: OWNER_EMAIL })
+  if (errors.length > 0) {
+    throw new Error(
+      `A SEED_OWNER_PASSWORD nem felel meg a jelszó-politikának. ${formatPasswordPolicyErrors(errors)}`,
+    )
+  }
+  return provided
+}
+
+export interface SeedGuardInput {
+  /** A `SEED_SCOPE` nyers értéke — a `kezdolap` hatókör élesben is futhat. */
+  readonly seedScope: string | undefined
+  /** A `NEXT_PUBLIC_SERVER_URL` nyers értéke. */
+  readonly serverUrl: string | undefined
+  /** A `SEED_CONFIRM_LIVE` nyers értéke — kifejezett tulajdonosi felülbírálás. */
+  readonly confirmLive: string | undefined
+}
+
+/**
+ * ÉLES-VÉDELEM a TELJES seedhez (a `demo-seed.ts` `demoGuardErrors` mintájára).
+ *
+ * A teljes seed demó-tartalmat ír: owner-felhasználót, demó-kategóriákat,
+ * demó-oldalt, demó-posztot, demó-terméket és menüfát. Éles adatbázison ez
+ * bemutató-tartalmat keverne a valódi kínálat közé — a `railway.json`
+ * start-parancsa ezért nem is hívja, de egy kézi futtatás vagy egy elgépelt
+ * konfiguráció bármikor elindíthatja.
+ *
+ * A `SEED_SCOPE=kezdolap` hatókör VÁLTOZATLANUL futhat élesben: az kizárólag a
+ * landing képeit, a kezdőlap alap-szekciósorát, a véleményeket és a hírlevél-űrlapot
+ * biztosítja, mind idempotensen, meglévő tartalom felülírása nélkül.
+ *
+ * Felülbírálás: `SEED_CONFIRM_LIVE=igen` (a repó `OWNER_CONTENT_CONFIRM=igen`
+ * mintája) — kifejezett, tudatos emberi döntés, pl. egy ÚJ éles környezet első
+ * telepítésekor.
+ *
+ * A függvény tiszta (nem olvas `process.env`-et), hogy a kapu tesztből is
+ * bizonyítható legyen. Üres tömb = a teljes seed futhat.
+ */
+export function seedGuardErrors(input: SeedGuardInput): string[] {
+  if (input.seedScope?.trim() === 'kezdolap') {
+    return []
+  }
+  if (input.confirmLive?.trim().toLowerCase() === 'igen') {
+    return []
+  }
+  if (!isProductionServerUrl(input.serverUrl)) {
+    return []
+  }
+  return [
+    `A NEXT_PUBLIC_SERVER_URL az ÉLES oldalra mutat (${serverUrlHost(input.serverUrl)}) — a TELJES ` +
+      'seed (demó-kategóriák, demó-oldal, demó-poszt, demó-termék, menüfa) ilyen ' +
+      'környezetben nem futhat, mert bemutató-tartalmat keverne a valódi kínálat közé. ' +
+      'Élesben a szűkített hatókör használható: SEED_SCOPE=kezdolap npm run seed. ' +
+      'Ha egy ÚJ éles környezet első telepítése miatt mégis a teljes seed kell, a ' +
+      'futtatás kifejezett megerősítéssel indítható: SEED_CONFIRM_LIVE=igen.',
+  ]
+}
+
+/**
+ * TARTALMI kapu: valódi vevőt vagy rendelést hordoz-e az adatbázis.
+ *
+ * A `NEXT_PUBLIC_SERVER_URL` egy rossz környezetbe másolt vagy elgépelt érték
+ * is lehet — ez az ellenőrzés magából az ADATBÓL dönt (az `assertDemoDatabase`
+ * mintája). A staff/owner felhasználókat szándékosan NEM nézzük: a fejlesztői és
+ * demó-környezetek adminjai is valódi címmel lépnek be.
+ */
+async function assertNotLiveDatabase(payload: Payload): Promise<void> {
+  const { docs: customers } = await payload.find({
+    collection: 'users',
+    where: { role: { equals: 'customer' } },
+    limit: REAL_DATA_SCAN_LIMIT,
+    depth: 0,
+    overrideAccess: true,
+  })
+  const realCustomer = customers.find((user) => !isSeedSafeEmail(user.email))
+  if (realCustomer !== undefined) {
+    throw new Error(
+      `Az adatbázisban VALÓDI vásárló van (felhasználó #${realCustomer.id}) — a teljes seed ` +
+        'elutasítva, mert demó-tartalmat írna éles adat mellé. Élesben a szűkített ' +
+        'hatókör használható: SEED_SCOPE=kezdolap npm run seed.',
+    )
+  }
+
+  const { docs: orders } = await payload.find({
+    collection: 'orders',
+    limit: REAL_DATA_SCAN_LIMIT,
+    depth: 0,
+    overrideAccess: true,
+  })
+  const realOrder = orders.find((order) => !isSeedSafeEmail(order.customerEmail))
+  if (realOrder !== undefined) {
+    throw new Error(
+      `Az adatbázisban VALÓDI rendelés van (rendelés #${realOrder.id}) — a teljes seed ` +
+        'elutasítva. Élesben a szűkített hatókör használható: SEED_SCOPE=kezdolap npm run seed.',
+    )
+  }
+}
+
+/** Egy lekérdezésben átnézett sorok felső határa a „valódi adat" kapunál. */
+const REAL_DATA_SCAN_LIMIT = 200
+
+/**
+ * Seed szempontjából ártalmatlan (nem valódi vevő) cím: a demó/teszt fiókok
+ * `@example.com` domainje. A lista szándékosan szűk — inkább álljon meg a seed
+ * feleslegesen, mint hogy éles adat mellé írjon.
+ */
+export function isSeedSafeEmail(email: string | null | undefined): boolean {
+  return typeof email === 'string' && email.trim().toLowerCase().endsWith('@example.com')
 }
 
 // A kezdőlap-alapállapot logikája a src/lib/home-seed.ts-ben él (az onInit is
@@ -99,6 +226,18 @@ async function restoreMediaFilesBestEffort(payload: Payload): Promise<void> {
 }
 
 async function seed(): Promise<void> {
+  // ÉLES-VÉDELEM — a `SEED_SCOPE=kezdolap` ág ELŐTT, de azt átengedve (a
+  // seedGuardErrors maga tér vissza üres listával arra a hatókörre).
+  // Környezeti kapu ELŐSZÖR: adatbázis-kapcsolat sem kell hozzá.
+  const guardErrors = seedGuardErrors({
+    seedScope: process.env.SEED_SCOPE,
+    serverUrl: process.env.NEXT_PUBLIC_SERVER_URL,
+    confirmLive: process.env.SEED_CONFIRM_LIVE,
+  })
+  if (guardErrors.length > 0) {
+    throw new Error(`A seed nem futhat le:\n- ${guardErrors.join('\n- ')}`)
+  }
+
   const payload = await getPayload({ config })
 
   // --- Szűkített hatókör (SEED_SCOPE=kezdolap) -------------------------------
@@ -120,6 +259,11 @@ async function seed(): Promise<void> {
     return
   }
 
+  // TARTALMI kapu: a teljes seed csak olyan adatbázison futhat, amelyen nincs
+  // valódi vevő vagy rendelés (a demoGuardErrors + assertDemoDatabase mintája:
+  // a környezeti változó tévedhet, az adat nem).
+  await assertNotLiveDatabase(payload)
+
   // --- Owner-felhasználó -----------------------------------------------------
   const existingOwner = await payload.find({
     collection: 'users',
@@ -134,7 +278,7 @@ async function seed(): Promise<void> {
     ownerId = existingOwner.docs[0].id
     payload.logger.info(`Seed: owner-felhasználó már létezik (${OWNER_EMAIL}), kihagyva.`)
   } else {
-    const password = process.env.SEED_OWNER_PASSWORD ?? generateOwnerPassword()
+    const password = resolveOwnerPassword()
 
     const owner = await payload.create({
       collection: 'users',
@@ -147,10 +291,11 @@ async function seed(): Promise<void> {
       overrideAccess: true,
     })
     ownerId = owner.id
-    payload.logger.info(`Seed: owner-felhasználó létrehozva (${OWNER_EMAIL}).`)
-    if (!process.env.SEED_OWNER_PASSWORD) {
-      payload.logger.info(`Seed: az owner induló jelszava: ${password}`)
-    }
+    // JELSZÓ SOHA NEM KERÜL A NAPLÓBA — sem kulcson, sem üzenetszövegbe ágyazva
+    // (a logger redakciója kulcsnév-alapú, üzenetszöveget nem szűr).
+    payload.logger.info(
+      `Seed: owner-felhasználó létrehozva (${OWNER_EMAIL}); a jelszó a SEED_OWNER_PASSWORD értéke.`,
+    )
   }
 
   // --- Kategóriák ------------------------------------------------------------

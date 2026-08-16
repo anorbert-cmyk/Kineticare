@@ -31,9 +31,10 @@ import type { Product } from '../payload-types'
  *  - a tananyag nyilvános nézete nem szivárogtat fizetős azonosítót (S2/b).
  */
 
-const product = { id: 42, status: 'published', priceInHUFEnabled: true } as Pick<
+/** Vásárolható (published + ÉRVÉNYES ár) termék — a CTA ezt kínálja megvételre. */
+const product = { id: 42, status: 'published', priceInHUF: 79500, priceInHUFEnabled: true } as Pick<
   Product,
-  'id' | 'status' | 'priceInHUFEnabled'
+  'id' | 'status' | 'priceInHUF' | 'priceInHUFEnabled'
 >
 
 function buybox(overrides: Record<string, unknown> = {}): string {
@@ -94,6 +95,60 @@ describe('CourseBuybox — a lap egyetlen elsődleges célja', () => {
     const none = buybox({ priceBadge: 'none', priceHuf: null })
     expect(none).not.toContain('Ingyenes')
     expect(none).not.toContain('Ft')
+  })
+
+  /**
+   * ═══ HIÁNYOS ÁR-KONFIGURÁCIÓ: NINCS GOMB, VAN MAGYARÁZAT ═══
+   *
+   * `docs/ui-sztenderdek.md` **Á-3** és **§3.2 #16**: ha a cselekvés nem
+   * végezhető el, a gomb ELTŰNIK, és magyarázó mondat áll a helyén. A korábbi
+   * kód letiltott, „Megveszem" feliratú, magyarázat NÉLKÜLI gombot adott —
+   * fókuszálhatatlan és hamis ígéret (NN/g: „a link ígéret"),
+   * `docs/gomb-inventar.md` T2.
+   *
+   * A RÉGI kódon ez a teszt megbukna: a kimenetben ott állt a „Megveszem".
+   */
+  it('nem vásárolható termék: NINCS gomb, helyette magyarázó mondat (Á-3, §3.2 #16)', () => {
+    const broken = buybox({
+      priceBadge: 'none',
+      priceHuf: null,
+      // ár-pipa BE, ár ÜRES → a checkout 400-zal utasítaná el
+      product: { id: 42, status: 'published', priceInHUF: null, priceInHUFEnabled: true },
+    })
+
+    expect(broken).not.toContain('Megveszem')
+    expect(broken).not.toContain('<button')
+    expect(broken).not.toContain('disabled')
+    expect(broken).toContain('Ez a kurzus jelenleg nem vásárolható meg.')
+    // A magyarázat a CTA-blokk jegyzet-osztályát kapja (nincs új szín/betűméret).
+    expect(broken).toContain('kc-course-cta__note')
+  })
+
+  it('beállítatlan ár-pipánál is ugyanez (a tulajdonos által jelzett élő eset)', () => {
+    const unset = buybox({
+      priceBadge: 'none',
+      priceHuf: null,
+      product: { id: 42, status: 'published', priceInHUF: null, priceInHUFEnabled: null },
+    })
+
+    expect(unset).not.toContain('Megveszem')
+    expect(unset).toContain('Ez a kurzus jelenleg nem vásárolható meg.')
+  })
+
+  it('ARCHIVÁLT terméknél sincs többé letiltott gomb, csak a jelölés', () => {
+    const archived = buybox({
+      priceBadge: 'price',
+      priceHuf: 79500,
+      product: { id: 42, status: 'archived', priceInHUF: 79500, priceInHUFEnabled: true },
+    })
+
+    expect(archived).not.toContain('Megveszem')
+    expect(archived).toContain('Ez a kurzus jelenleg nem vásárolható.')
+  })
+
+  it('a VÁSÁROLHATÓ termék gombja változatlanul megjelenik (nincs túlfogás)', () => {
+    expect(html).toContain('Megveszem')
+    expect(html).not.toContain('Ez a kurzus jelenleg nem vásárolható')
   })
 })
 

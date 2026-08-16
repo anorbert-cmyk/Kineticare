@@ -25,13 +25,22 @@ type HookArgs = {
   }
 }
 
-const promoteFirstUserToOwner = (Users.hooks?.beforeChange ?? [])[0] as unknown as (
-  args: HookArgs,
-) => Promise<Record<string, unknown>>
+/**
+ * A hookot NÉV szerint keressük ki, nem index szerint: a beforeChange lánc
+ * bővülhet (2026-08-16: a `blockForeignCredentialChange` őr került az élére),
+ * és egy indexre kötött teszt ilyenkor némán MÁS hookot mérne.
+ */
+const beforeChangeHook = (name: string): ((args: HookArgs) => Promise<Record<string, unknown>>) => {
+  const hook = (Users.hooks?.beforeChange ?? []).find((candidate) => candidate.name === name)
+  if (!hook) {
+    throw new Error(`a Users beforeChange láncában nincs '${name}' hook`)
+  }
+  return hook as unknown as (args: HookArgs) => Promise<Record<string, unknown>>
+}
 
-const enforcePasswordPolicy = (Users.hooks?.beforeChange ?? [])[1] as unknown as (
-  args: HookArgs,
-) => Promise<Record<string, unknown>>
+const promoteFirstUserToOwner = beforeChangeHook('promoteFirstUserToOwner')
+
+const enforcePasswordPolicy = beforeChangeHook('enforcePasswordPolicy')
 
 const reqWithUserCount = (totalDocs: number): HookArgs['req'] => ({
   payload: { count: async () => ({ totalDocs }) },

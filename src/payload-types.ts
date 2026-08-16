@@ -556,7 +556,7 @@ export interface BlockFreeSos {
  */
 export interface BlockPressLogos {
   /**
-   * A logók fölötti rövid szöveg (pl. „Ismerhetsz minket innen").
+   * A logók fölötti rövid szöveg. Üresen hagyva a beépített „Itt találkozhattál velünk" felirat jelenik meg.
    */
   heading?: string | null;
   /**
@@ -1432,7 +1432,7 @@ export interface Post {
   _status?: ('draft' | 'published') | null;
 }
 /**
- * Szerkesztők és vásárlók. A szerepkört csak tulajdonos állíthatja át.
+ * Szerkesztők és vásárlók. A szerepkört csak tulajdonos állíthatja át; a megvásárolt kurzusokat munkatárs és tulajdonos szerkesztheti.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "users".
@@ -1445,7 +1445,7 @@ export interface User {
    */
   role: 'owner' | 'staff' | 'customer';
   /**
-   * A felhasználó által megvásárolt kurzusok (hozzáférés). A fizetés után magától töltődik — kézzel nem szerkeszthető.
+   * A felhasználó által megvásárolt kurzusok (hozzáférés). Fizetés után magától töltődik; munkatárs és tulajdonos kézzel is hozzáadhat vagy elvehet. A vevő saját magának nem adhat hozzáférést. Szűrés a listában: Szűrők → Megvásárolt kurzusok.
    */
   purchases?: (number | Product)[] | null;
   billingName?: string | null;

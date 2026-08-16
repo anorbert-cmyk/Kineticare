@@ -30,6 +30,8 @@ import { ModuleRowLabel as ModuleRowLabel_1ae3bdfcb2f2552e78505f80c9b85768 } fro
 import { CourseProgressPanel as CourseProgressPanel_845dc8fb8bc09ce445f441a2d473205a } from '../../../components/admin/CourseProgressPanel'
 import { OrderItemsCell as OrderItemsCell_2c6d79b4079205291accce4c0768f7ee } from '../../../components/admin/OrderItemsCell'
 import { RefundPanel as RefundPanel_3023d898ecda64dc966986d07a3332f3 } from '../../../components/admin/RefundPanel'
+import { PurchasesCell as PurchasesCell_7a2290ab482114115d46c087318ddccd } from '../../../components/admin/PurchasesCell'
+import { PurchasesOverviewPanel as PurchasesOverviewPanel_be42bab410342143f760b0e24f201ac8 } from '../../../components/admin/PurchasesOverviewPanel'
 import { GrantPurchasePanel as GrantPurchasePanel_20de7d9cfe7b60454d34835b4d120a81 } from '../../../components/admin/GrantPurchasePanel'
 import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc'
 
@@ -67,6 +69,8 @@ export const importMap = {
   "/components/admin/CourseProgressPanel#CourseProgressPanel": CourseProgressPanel_845dc8fb8bc09ce445f441a2d473205a,
   "/components/admin/OrderItemsCell#OrderItemsCell": OrderItemsCell_2c6d79b4079205291accce4c0768f7ee,
   "/components/admin/RefundPanel#RefundPanel": RefundPanel_3023d898ecda64dc966986d07a3332f3,
+  "/components/admin/PurchasesCell#PurchasesCell": PurchasesCell_7a2290ab482114115d46c087318ddccd,
+  "/components/admin/PurchasesOverviewPanel#PurchasesOverviewPanel": PurchasesOverviewPanel_be42bab410342143f760b0e24f201ac8,
   "/components/admin/GrantPurchasePanel#GrantPurchasePanel": GrantPurchasePanel_20de7d9cfe7b60454d34835b4d120a81,
   "@payloadcms/next/rsc#CollectionCards": CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1
 }

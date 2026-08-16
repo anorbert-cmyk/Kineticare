@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import type { Product } from '../../../payload-types'
+import { isPaidCourse } from '../../../lib/courses'
 import { Container } from '../../ui/Container'
 import { Section } from '../../ui/Section'
 import { ProductCard } from '../ProductCard'
@@ -72,12 +73,21 @@ export function usesFeaturedCard(productCount: number): boolean {
   return productCount === 1
 }
 
-/** Fizetős-e a termék (az ár-megjelenítés szabályával azonos feltétel). */
+/**
+ * Fizetős-e a termék — az ÁR-MEGJELENÍTÉS szabályával azonos feltétel, egyetlen
+ * forrásból (`isPaidCourse`, src/lib/courses.ts). A viselkedés változatlan
+ * (érvényes ár = fizetős); a közös forrás azt zárja ki, hogy a kezdőlap és a
+ * kurzusoldal ítélete szétcsússzon.
+ *
+ * FIGYELEM: a `!isPaidProduct` NEM jelent „ingyenes"-t — a hiányosan
+ * konfigurált termék egyik halmazba sem tartozik. Ingyenességre az
+ * `isFreeCourse` a helyes kérdés.
+ */
 export function isPaidProduct(product: {
   priceInHUFEnabled?: boolean | null
   priceInHUF?: number | null
 }): boolean {
-  return product.priceInHUFEnabled === true && typeof product.priceInHUF === 'number'
+  return isPaidCourse(product as Pick<Product, 'priceInHUF' | 'priceInHUFEnabled'>)
 }
 
 export interface CourseCardsProps {
