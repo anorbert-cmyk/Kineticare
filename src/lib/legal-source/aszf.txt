@@ -119,7 +119,7 @@ Bírósági eljárást kezdeményezhet a Fogyasztó. A bíróságok elérhetős�
 
 # Adatvédelmi és süti tájékoztató
 
-Adatkezelési tájékoztatónkat az alábbi linken érheti el: [xxx]
+Adatkezelési tájékoztatónkat az alábbi linken érheti el: https://www.kineticare.hu/adatvedelem
 
 # Vegyes rendelkezések
 

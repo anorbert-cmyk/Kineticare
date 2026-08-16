@@ -36,8 +36,12 @@ A projekt saját, már meglévő kutatásai kötelező olvasmányok, és a hivat
   Ez a tulajdonos kifejezett, ismételt kérése.
 - **A CTA cselekvést ír le, nem ígéretet**: ige + tárgy, egyes szám második személy.
 - **Ugyanaz a cselekvés = ugyanaz a szó, mindenhol** (WCAG 3.2.4, konzisztens azonosítás).
-  Új gombfelirat kitalálása előtt nézd meg a `docs/gomb-inventar.md` CTA-szótárát; ha nincs
-  benne, oda is vedd fel.
+  A CTA-szótár EGYETLEN normatív helye a `docs/ui-sztenderdek.md` **§3.2** (a tulajdonos
+  2026-08-16-i döntése, miután két doksi is magát nevezte szótárnak). Új gombfelirat
+  kitalálása előtt ott nézd meg, hogy létezik-e már a cselekvésre felirat; ha nincs, oda
+  vedd fel, forrással. A `docs/gomb-inventar.md` ehhez képest **leltár**: azt írja le,
+  élőben melyik felület melyik feliratot használja, és hol tér el a §3.2-től — döntést nem
+  hoz, csak eltérést mutat ki.
 - **A felirat legyen igaz.** Ingyenes terméken „Megveszem" felirat: hazugság és hiba. A
   „mit kap érte" és a „mibe kerül" kérdésre a gomb közelében kell válasz.
 
