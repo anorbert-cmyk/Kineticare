@@ -33,6 +33,14 @@
  *     benne, mert a Média collection webp-re konvertál (src/collections/
  *     Media.ts), így a kiterjesztés környezetenként eltér (.jpg/.jpeg/.webp).
  *     Csere KIZÁRÓLAG akkor, ha a mező tényleg a szóló portréra mutat.
+ *  5. A /rolunk szakmai hátterének harmonikába szervezése: az örökölt,
+ *     egyetlen óriás richText blokk (két teljes önéletrajz, több képernyőnyi
+ *     görgetés) helyére a seed-builder ÚJ szerkezete kerül — rövid, mindig
+ *     látható rész (elérhetőség + partnerek) + nyitható-csukható `accordion`
+ *     blokk (tulajdonosi kérés, 2026-08-16). Csere KIZÁRÓLAG akkor, ha az élő
+ *     blokk tartalma byte-ra a seedelt örökölt tartalom (kulcs-sorrendtől
+ *     független összevetés a jsonb miatt) — szerkesztői módosítás esetén a
+ *     blokk érintetlen marad.
  *
  * ═══ KAPU ═══
  * Alapértelmezésben PRÓBAFUTÁS (dry-run): a script mindent kiszámol és
@@ -65,6 +73,10 @@ import { HOME_PAGE_SLUG } from '../lib/content-slugs'
 import { logger } from '../lib/logger'
 import config from '../payload.config'
 import type { Page, Product } from '../payload-types'
+// Mellékhatás-mentes import (a legacy-script futtatás-kapuval védett): a
+// szakmai-háttér csere a seed-builderből veszi az ÚJ blokkokat, és az örökölt
+// tartalommal veti össze az élő blokkot.
+import { buildRolunkLayout, rolunkSzakmaiOrokoltTartalom } from './restore-legacy-content'
 
 // ---------------------------------------------------------------------------
 // A jóváhagyott értékek — a három javítás igazságforrása.
@@ -121,7 +133,11 @@ type ElonySorok = NonNullable<Product['cardHighlights']>
 
 /** Melyik jóváhagyott javítás adta a naplósort. */
 export type JavitasSzabaly =
-  'kurzus-szekcio-cim' | 'paciens-szam' | 'kurzus-elonyok' | 'rolunk-hero-kep'
+  | 'kurzus-szekcio-cim'
+  | 'paciens-szam'
+  | 'kurzus-elonyok'
+  | 'rolunk-hero-kep'
+  | 'szakmai-harmonika'
 
 /** Egy elvégzett módosítás vagy egy indokolt kihagyás gépileg is vizsgálható leírása. */
 export interface JavitasLepes {
@@ -427,6 +443,157 @@ export const alkalmazRolunkHeroKep = (input: {
 }
 
 // ---------------------------------------------------------------------------
+// 5. javítás — a /rolunk szakmai háttere: örökölt óriás-blokk → rövid rész +
+// harmonika (`accordion` blokk).
+// ---------------------------------------------------------------------------
+
+/** A szakmai háttér szekció horgonya — a régi és az új blokk is ezt viseli. */
+export const SZAKMAI_HATTER_HORGONY = 'szakmai-hatter'
+
+/**
+ * Kulcs-sorrendtől független JSON-alak mély összevetéshez.
+ *
+ * MIÉRT KELL: a rich-text tartalom Postgresben `jsonb` oszlopban él, ami a
+ * kulcsok sorrendjét NEM őrzi meg — a visszaolvasott objektum ezért
+ * `JSON.stringify`-jal hamisan különbözhetne a kódból generált változattól.
+ * A tömbök sorrendje (a tényleges tartalom) változatlan marad, azt az
+ * összevetés figyeli.
+ */
+export const stabilJson = (ertek: unknown): string => {
+  if (Array.isArray(ertek)) {
+    return `[${ertek.map(stabilJson).join(',')}]`
+  }
+  if (ertek !== null && typeof ertek === 'object') {
+    const kulcsok = Object.keys(ertek as Record<string, unknown>).sort()
+    return `{${kulcsok
+      .map((kulcs) => `${JSON.stringify(kulcs)}:${stabilJson((ertek as Record<string, unknown>)[kulcs])}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(ertek) ?? 'null'
+}
+
+/** A szakmai háttér cseréjének eredménye. */
+export interface SzakmaiHarmonikaAtalakitas {
+  /** Az ÚJ szekciósor, vagy `null`, ha nem szabad írni. */
+  layout: Szekciosor | null
+  modositasok: JavitasLepes[]
+  kihagyasok: JavitasLepes[]
+}
+
+/**
+ * Az ÚJ két blokk (rövid, mindig látható rész + harmonika) kinyerése a
+ * seed-builderből — így a csere pontosan azt a szerkezetet hozza létre, amit
+ * egy friss adatbázisban a seed építene. A builder alakjának megváltozása
+ * esetén `null`-t adunk, és a futtató hangosan kihagy.
+ */
+export const rolunkSzakmaiUjBlokkok = (): {
+  rovid: Szekciosor[number] | null
+  harmonika: Szekciosor[number] | null
+} => {
+  const layout = buildRolunkLayout()
+  const harmonikaIndex = layout.findIndex(
+    (blokk) =>
+      blokk.blockType === 'accordion' &&
+      blokk.sectionSettings?.anchorId === SZAKMAI_HATTER_HORGONY,
+  )
+  if (harmonikaIndex < 1) {
+    return { rovid: null, harmonika: null }
+  }
+  const elozo = layout[harmonikaIndex - 1]
+  return {
+    rovid: elozo.blockType === 'richText' ? elozo : null,
+    harmonika: layout[harmonikaIndex],
+  }
+}
+
+/**
+ * A /rolunk szekciósorában az ÖRÖKÖLT szakmai-háttér blokk (egyetlen óriás
+ * richText a `szakmai-hatter` horgonyon) cseréje a rövid richText + harmonika
+ * párra.
+ *
+ * VÉDŐFELTÉTELEK:
+ *  - csak a `szakmai-hatter` horgonyú, `richText` típusú blokkot cseréljük;
+ *  - azt is CSAK akkor, ha a tartalma byte-ra a seedelt örökölt tartalom
+ *    (kulcs-sorrendtől független összevetés, lásd `stabilJson`) — ha a
+ *    szerkesztő időközben átírta, a blokk érintetlen marad;
+ *  - ha a horgonyon már `accordion` blokk áll, nincs teendő (idempotencia);
+ *  - minden más eset hangos kihagyás (hiányzó előfeltétel).
+ */
+export const alkalmazSzakmaiHarmonika = (input: {
+  layout: Page['layout']
+  /** A seedelt örökölt blokk elvárt rich-text tartalma. */
+  orokoltTartalom: unknown
+  ujRovidBlokk: Szekciosor[number] | null
+  ujHarmonikaBlokk: Szekciosor[number] | null
+}): SzakmaiHarmonikaAtalakitas => {
+  const { layout, orokoltTartalom, ujRovidBlokk, ujHarmonikaBlokk } = input
+  const uzenet = 'A /rolunk szakmai hátterének harmonikába szervezése'
+
+  const kihagyas = (indok: string, hangos = false): SzakmaiHarmonikaAtalakitas => ({
+    layout: null,
+    modositasok: [],
+    kihagyasok: [{ szabaly: 'szakmai-harmonika', uzenet, indok, hangos }],
+  })
+
+  if (ujRovidBlokk === null || ujHarmonikaBlokk === null) {
+    return kihagyas(
+      'a seed-builder (buildRolunkLayout) nem a várt rövid richText + harmonika párt adta vissza — a kód és a csere-logika szétcsúszott, kézi átnézés kell',
+      true,
+    )
+  }
+
+  if (!Array.isArray(layout) || layout.length === 0) {
+    return kihagyas('a Rólunk oldalnak nincs szekciósora — nincs mit harmonikába szervezni', true)
+  }
+
+  const horgonyIndex = layout.findIndex(
+    (blokk) => blokk.sectionSettings?.anchorId === SZAKMAI_HATTER_HORGONY,
+  )
+  if (horgonyIndex === -1) {
+    return kihagyas(
+      `a szekciósorban nincs „${SZAKMAI_HATTER_HORGONY}” horgonyú blokk — a szakmai háttér szekció hiányzik vagy más horgonyt kapott`,
+      true,
+    )
+  }
+
+  const regiBlokk = layout[horgonyIndex]
+  if (regiBlokk.blockType === 'accordion') {
+    return kihagyas('a szakmai háttér MÁR harmonika (accordion) blokk — nincs teendő')
+  }
+  if (regiBlokk.blockType !== 'richText') {
+    return kihagyas(
+      `a „${SZAKMAI_HATTER_HORGONY}” horgonyú blokk típusa „${regiBlokk.blockType}”, nem a cserélendő richText — kézi átnézés kell`,
+      true,
+    )
+  }
+
+  if (stabilJson(regiBlokk.content) !== stabilJson(orokoltTartalom)) {
+    return kihagyas(
+      'a szakmai-háttér blokk tartalma eltér a seedelt örökölttől — a szerkesztő időközben átírta, a script nem nyúl hozzá (a harmonikát az adminban, kézzel érdemes bevezetni)',
+    )
+  }
+
+  const ujLayout: Szekciosor = [
+    ...layout.slice(0, horgonyIndex),
+    ujRovidBlokk,
+    ujHarmonikaBlokk,
+    ...layout.slice(horgonyIndex + 1),
+  ]
+
+  return {
+    layout: ujLayout,
+    modositasok: [
+      {
+        szabaly: 'szakmai-harmonika',
+        uzenet: `${uzenet}: az örökölt óriás richText blokk (${horgonyIndex + 1}. szekció) → rövid, mindig látható rész (elérhetőség + partnerek) + nyitható-csukható önéletrajz-harmonika`,
+        indok: null,
+      },
+    ],
+    kihagyasok: [],
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Futtatás — a tiszta átalakításokat köti az adatbázishoz.
 // ---------------------------------------------------------------------------
 
@@ -612,7 +779,7 @@ async function futtat(): Promise<void> {
     }
   }
 
-  // --- 4. javítás: a /rolunk fejléc-képe ------------------------------------
+  // --- 4–5. javítás: a /rolunk fejléc-képe és szakmai háttere ---------------
   const rolunkTalalat = await payload.find({
     collection: 'pages',
     where: { slug: { equals: ROLUNK_SLUG } },
@@ -624,7 +791,7 @@ async function futtat(): Promise<void> {
 
   if (rolunk === undefined) {
     logger.error(
-      `Tartalom-javítás: nem található a Rólunk oldal (Pages, webcím: „${ROLUNK_SLUG}”) — a fejléc-kép cseréje kimaradt.`,
+      `Tartalom-javítás: nem található a Rólunk oldal (Pages, webcím: „${ROLUNK_SLUG}”) — a fejléc-kép cseréje és a szakmai háttér harmonikába szervezése kimaradt.`,
     )
     hiba = true
   } else {
@@ -644,11 +811,33 @@ async function futtat(): Promise<void> {
     modositasokSzama += eredmeny.modositasok.length
     kihagyasokSzama += eredmeny.kihagyasok.length
 
-    if (eredmeny.heroImage !== null && !dryRun) {
+    // --- 5. javítás: a szakmai háttér harmonikába -----------------------------
+    const ujBlokkok = rolunkSzakmaiUjBlokkok()
+    const harmonika = alkalmazSzakmaiHarmonika({
+      layout: rolunk.layout,
+      orokoltTartalom: rolunkSzakmaiOrokoltTartalom(),
+      ujRovidBlokk: ujBlokkok.rovid,
+      ujHarmonikaBlokk: ujBlokkok.harmonika,
+    })
+    naplozdLepeseket(harmonika, dryRun)
+    modositasokSzama += harmonika.modositasok.length
+    kihagyasokSzama += harmonika.kihagyasok.length
+
+    // A két javítás EGY frissítésben megy ki (a heroImage és a layout külön
+    // mező, nem ütköznek), így egyetlen piszkozat-ellenőrzés elég.
+    const irando: { heroImage?: number; layout?: Szekciosor } = {}
+    if (eredmeny.heroImage !== null) {
+      irando.heroImage = eredmeny.heroImage
+    }
+    if (harmonika.layout !== null) {
+      irando.layout = harmonika.layout
+    }
+
+    if (Object.keys(irando).length > 0 && !dryRun) {
       await payload.update({
         collection: 'pages',
         id: rolunk.id,
-        data: { heroImage: eredmeny.heroImage },
+        data: irando,
         depth: 0,
         overrideAccess: true,
       })

@@ -75,6 +75,38 @@ const redirectToGateway = (gatewayUrl: string): void => {
   window.location.href = gatewayUrl
 }
 
+/**
+ * A beküldési hiba élő régiója — az űrlap tetején.
+ *
+ * MINDIG renderelődik (üresen is), nem csak hibakor: a dinamikusan BESZÚRT
+ * aria-live régiót több képernyőolvasó megbízhatatlanul jelenti be, a már
+ * meglévő régió tartalomváltozását viszont igen.
+ *
+ * A `data-visible` ezért NEM a létezést kapcsolja, csak a MEGJELENÉST: üres
+ * állapotban a checkout.css a `.kc-visually-hidden` technikájával tünteti el a
+ * dobozt (keret, háttér, magasság és a flex-rés is elmarad), miközben az elem
+ * és vele az élő régió a DOM-ban marad. `display: none` TILOS rá — az
+ * elnémítaná a bejelentést. Az attribútum azért az `error !== null` állapotból
+ * jön és nem a CSS `:empty` szelektorából, mert így determinisztikus és a
+ * markupon tesztelhető.
+ *
+ * KÜLÖN KOMPONENS, szándékosan: a hiba a `CheckoutForm` belső state-je, amit
+ * DOM nélkül (jsdom nincs telepítve) nem lehet beállítani — így viszont
+ * mindkét állapot renderelhető és asszertálható.
+ */
+export function CheckoutErrorRegion({ error }: { error: string | null }) {
+  return (
+    <div
+      aria-live="assertive"
+      className="kc-checkout-form__error"
+      data-visible={error !== null ? 'true' : 'false'}
+      role="alert"
+    >
+      {error}
+    </div>
+  )
+}
+
 export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormProps) {
   const [waiverStart, setWaiverStart] = useState(false)
   const [waiverLoss, setWaiverLoss] = useState(false)
@@ -151,15 +183,10 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
         UTÁN, a lap alján jelent meg, tehát mobilon a beküldés után a
         felhasználó semmit nem látott. A fókusz emellett az első hibás mezőre
         ugrik, így a hiba akkor is előkerül, ha a doboz a képernyőn kívül esne.
-
-        Az élő régió MINDIG renderelődik (üresen is), nem csak hibakor: a
-        dinamikusan BESZÚRT aria-live régiót több képernyőolvasó
-        megbízhatatlanul jelenti be, a már meglévő régió tartalomváltozását
-        viszont igen.
+        Az élő régió szerződését (mindig a DOM-ban, üresen vizuálisan nyomtalan)
+        a CheckoutErrorRegion fejkommentje írja le.
       */}
-      <div aria-live="assertive" className="kc-checkout-form__error" role="alert">
-        {error}
-      </div>
+      <CheckoutErrorRegion error={error} />
 
       <Card className="kc-checkout-summary">
         <div className="kc-checkout-summary__row">

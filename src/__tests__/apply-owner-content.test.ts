@@ -4,13 +4,18 @@ import {
   KURZUS_ELONYOK,
   REGI_KURZUS_SZEKCIO_CIM,
   REGI_PACIENS_ERTEK,
+  SZAKMAI_HATTER_HORGONY,
   UJ_KURZUS_SZEKCIO_CIM,
   UJ_PACIENS_ERTEK,
   alkalmazKezdolapJavitasok,
   alkalmazKurzusElonyok,
   alkalmazRolunkHeroKep,
+  alkalmazSzakmaiHarmonika,
   heroKepAzonosito,
+  rolunkSzakmaiUjBlokkok,
+  stabilJson,
 } from '../scripts/apply-owner-content'
+import { rolunkSzakmaiOrokoltTartalom } from '../scripts/restore-legacy-content'
 import type { Media, Page, Product } from '../payload-types'
 
 /**
@@ -448,5 +453,153 @@ describe('idempotencia — kétszer futtatva ugyanaz jön ki', () => {
     expect(masodik.kihagyasok).toHaveLength(1)
     expect(masodik.kihagyasok[0].hangos).toBe(false)
     expect(masodik.kihagyasok[0].indok).toContain('MÁR a páros csapatfotó')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 5. javítás — a szakmai háttér harmonikába szervezése
+// ---------------------------------------------------------------------------
+
+/** Kulcs-sorrend megfordítása rekurzívan — a jsonb-átrendezés szimulálása. */
+const forditottKulcsrend = (ertek: unknown): unknown => {
+  if (Array.isArray(ertek)) {
+    return ertek.map(forditottKulcsrend)
+  }
+  if (ertek !== null && typeof ertek === 'object') {
+    const forras = ertek as Record<string, unknown>
+    const eredmeny: Record<string, unknown> = {}
+    for (const kulcs of Object.keys(forras).reverse()) {
+      eredmeny[kulcs] = forditottKulcsrend(forras[kulcs])
+    }
+    return eredmeny
+  }
+  return ertek
+}
+
+/** Az örökölt (harmonika előtti) szakmai-háttér blokk, ahogy a seed tárolta. */
+const orokoltSzakmaiBlokk = (): Szekcio =>
+  ({
+    blockType: 'richText',
+    id: 'szakmai-regi',
+    content: rolunkSzakmaiOrokoltTartalom(),
+    sectionSettings: { visible: true, anchorId: SZAKMAI_HATTER_HORGONY, hatter: 'feher' },
+  }) as Szekcio
+
+describe('stabilJson — kulcs-sorrendtől független összevetés', () => {
+  it('a kulcssorrend átrendezése nem változtat az alakon', () => {
+    const tartalom = rolunkSzakmaiOrokoltTartalom()
+    expect(stabilJson(forditottKulcsrend(tartalom))).toBe(stabilJson(tartalom))
+  })
+
+  it('a tényleges tartalom (tömbsorrend, szöveg) különbsége kimutatható', () => {
+    expect(stabilJson([1, 2])).not.toBe(stabilJson([2, 1]))
+    expect(stabilJson({ a: 'x' })).not.toBe(stabilJson({ a: 'y' }))
+  })
+})
+
+describe('rolunkSzakmaiUjBlokkok — az új blokkpár a seed-builderből', () => {
+  it('visszaadja a rövid richText + harmonika párt', () => {
+    const { rovid, harmonika } = rolunkSzakmaiUjBlokkok()
+    expect(rovid?.blockType).toBe('richText')
+    expect(harmonika?.blockType).toBe('accordion')
+    expect(harmonika?.sectionSettings?.anchorId).toBe(SZAKMAI_HATTER_HORGONY)
+  })
+})
+
+describe('alkalmazSzakmaiHarmonika — az örökölt óriás-blokk cseréje', () => {
+  const ujak = rolunkSzakmaiUjBlokkok()
+
+  const csere = (layout: Page['layout']) =>
+    alkalmazSzakmaiHarmonika({
+      layout,
+      orokoltTartalom: rolunkSzakmaiOrokoltTartalom(),
+      ujRovidBlokk: ujak.rovid,
+      ujHarmonikaBlokk: ujak.harmonika,
+    })
+
+  it('a seedelt örökölt blokkot a rövid + harmonika párra cseréli, a többi blokk referencia-azonos marad', () => {
+    const elotte: Szekcio = kurzusSzekcio('Valami más cím')
+    const utana: Szekcio = { blockType: 'ctaBanner', id: 'cta-1', title: 'Zárás' } as Szekcio
+    const eredmeny = csere([elotte, orokoltSzakmaiBlokk(), utana])
+
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.kihagyasok).toHaveLength(0)
+    expect(eredmeny.layout).not.toBeNull()
+    expect(eredmeny.layout).toHaveLength(4)
+    expect(eredmeny.layout?.[0]).toBe(elotte)
+    expect(eredmeny.layout?.[1].blockType).toBe('richText')
+    expect(eredmeny.layout?.[2].blockType).toBe('accordion')
+    expect(eredmeny.layout?.[2].sectionSettings?.anchorId).toBe(SZAKMAI_HATTER_HORGONY)
+    expect(eredmeny.layout?.[3]).toBe(utana)
+  })
+
+  it('a jsonb-féle kulcs-átrendezés NEM akadályozza a cserét', () => {
+    const atrendezett = {
+      ...orokoltSzakmaiBlokk(),
+      content: forditottKulcsrend(rolunkSzakmaiOrokoltTartalom()),
+    } as Szekcio
+    const eredmeny = csere([atrendezett])
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.layout).toHaveLength(2)
+  })
+
+  it('szerkesztő által átírt tartalomnál csendes, indokolt kihagyás', () => {
+    const tartalom = structuredClone(rolunkSzakmaiOrokoltTartalom()) as { root: { children: unknown[] } }
+    tartalom.root.children.pop()
+    const modositott = { ...orokoltSzakmaiBlokk(), content: tartalom } as Szekcio
+    const eredmeny = csere([modositott])
+
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.modositasok).toHaveLength(0)
+    expect(eredmeny.kihagyasok).toHaveLength(1)
+    expect(eredmeny.kihagyasok[0].hangos).not.toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('a szerkesztő időközben átírta')
+  })
+
+  it('idempotencia: ha a horgonyon már accordion áll, csendes kihagyás', () => {
+    const elsoKor = csere([orokoltSzakmaiBlokk()])
+    expect(elsoKor.layout).not.toBeNull()
+    const masodikKor = csere(elsoKor.layout)
+
+    expect(masodikKor.layout).toBeNull()
+    expect(masodikKor.modositasok).toHaveLength(0)
+    expect(masodikKor.kihagyasok).toHaveLength(1)
+    expect(masodikKor.kihagyasok[0].hangos).not.toBe(true)
+    expect(masodikKor.kihagyasok[0].indok).toContain('MÁR harmonika')
+  })
+
+  it('hiányzó horgony és nem-richText blokk: hangos kihagyás', () => {
+    const horgonyNelkul = csere([kurzusSzekcio('Cím')])
+    expect(horgonyNelkul.layout).toBeNull()
+    expect(horgonyNelkul.kihagyasok[0].hangos).toBe(true)
+
+    const masTipus = {
+      blockType: 'ctaBanner',
+      id: 'cta-x',
+      title: 'X',
+      sectionSettings: { visible: true, anchorId: SZAKMAI_HATTER_HORGONY },
+    } as Szekcio
+    const rosszTipus = csere([masTipus])
+    expect(rosszTipus.layout).toBeNull()
+    expect(rosszTipus.kihagyasok[0].hangos).toBe(true)
+  })
+
+  it('hiányzó új blokkpár (builder-alak változás): hangos kihagyás', () => {
+    const eredmeny = alkalmazSzakmaiHarmonika({
+      layout: [orokoltSzakmaiBlokk()],
+      orokoltTartalom: rolunkSzakmaiOrokoltTartalom(),
+      ujRovidBlokk: null,
+      ujHarmonikaBlokk: ujak.harmonika,
+    })
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('buildRolunkLayout')
+  })
+
+  it('a bemeneti szekciósort nem módosítja helyben', () => {
+    const bemenet = [orokoltSzakmaiBlokk()]
+    const lenyomat = stabilJson(bemenet)
+    csere(bemenet)
+    expect(stabilJson(bemenet)).toBe(lenyomat)
   })
 })

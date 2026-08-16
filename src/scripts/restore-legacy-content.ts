@@ -290,6 +290,29 @@ const SAJTO_LOGO_FAJLOK: readonly string[] = HOME_IMAGES.filter((kep) =>
  * fájl egyszerűen kimarad a listából (a hivatkozó szekció ilyenkor elmarad) —
  * a script emiatt sosem áll meg.
  */
+/**
+ * A /rolunk fejlécképe — a PÁROS csapatfotó (tulajdonosi kérés, 2026-08-16).
+ *
+ * Korábban a szóló portré (`682a121babe80_IMG_7573.jpeg`) állt a lap tetején,
+ * ami csak Kocsis Katát mutatja — a lap viszont MINDKÉT alapítóról szól.
+ *
+ * FIGYELEM: ez a fájl NEM a legacy archívum része, hanem a KEZDŐLAPI seed
+ * képei közt él (`src/lib/home-seed.ts`, HOME_IMAGES). Ezért a `mediaId()`
+ * (ami csak a LEGACY_IMAGES-ből feltöltötteket ismeri) NEM oldja fel — a
+ * sajtó-logók mintáját követve a Médiatárban KERESSÜK meg, feltöltés nélkül.
+ */
+const ROLUNK_HERO_FAJL = 'katak-team.jpg'
+
+/**
+ * EGY meglévő média-elem id-je fájlnév alapján — FELTÖLTÉS NÉLKÜL.
+ *
+ * A `findMediaIds` egyelemű alakja: ugyanaz a kiterjesztés nélküli alapnév-
+ * dedup, és nem található fájlnál `undefined` (a hivatkozó mező ilyenkor
+ * egyszerűen kimarad).
+ */
+const findMediaId = async (payload: Payload, file: string): Promise<number | undefined> =>
+  (await findMediaIds(payload, [file]))[0]
+
 const findMediaIds = async (payload: Payload, files: readonly string[]): Promise<number[]> => {
   const ids: number[] = []
   for (const file of files) {
@@ -670,10 +693,9 @@ const ROLUNK_BEMUTATKOZAS: readonly string[] = [
 /**
  * A két alapító neve, titulusa és telefonszáma.
  *
- * Ez a rész a szekciósorban is kell (a `teamMembers` fotós szakértő-kártya
- * blokk még nem létezik — docs/tartalom-leltar-regi-oldal.md 4. szakasz),
- * ezért a szekciósor szabad szöveges blokkja EZT a csoportot használja: a két
- * telefonszám így nem vész el a blokkosítással.
+ * Ez a rész a szekciósorban is kell: a szakmai háttér RÖVID, mindig látható
+ * blokkja EZT a csoportot használja (a partnerek sorával együtt), így a két
+ * telefonszám nem vész el a blokkosítással — és nem kerül lenyitó mögé sem.
  */
 const rolunkSzakemberNodes = (): BlockNode[] => [
   heading('h2', 'Kocsis Kata'),
@@ -737,149 +759,246 @@ const ROLUNK_SZOLGALTATASOK: readonly SzolgaltatasSor[] = [
 ]
 
 /**
- * Partnerek és a két teljes szakmai önéletrajz.
+ * Partnerek — a lap külső, ellenőrizhető referencia-sora.
  *
- * A szekciósorban is EZ a csoport kerül a szabad szöveges blokkba: a ~70
- * tételes CV-hez való `accordion` blokk (darabszámos fejlécekkel) még nem
- * létezik, a `faq` blokk pedig nem használható rá (abból FAQPage strukturált
- * adat készül). Így a blokkosítás egyetlen betűt sem veszít el.
+ * Rövid, ezért MINDIG látható marad (nem kerül lenyitó mögé): a szekciósorban a
+ * szabad szöveges blokkban él, az elérhetőségekkel együtt.
+ */
+const ROLUNK_PARTNEREK =
+  'Magyar Sportrehabilitációs Egyesület, ProBody Stúdió, Aurora Medical, Dynamic Tape®, TUDATEST, PhysioWatch, WIBBI, Halm Optika, dr. pharm. Kocsis Kristóf, Csillik Árpád, NISHI STUDIO pilates, BodyGPS, Magic Smile, Be Fit With Ben, OrtoCare, Pille Fizioterápia.'
+
+/** Egy szakmai lista az önéletrajzon belül (tanulmányok, tanfolyamok, …). */
+interface SzakmaiLista {
+  /** A lista címe az önéletrajzban (h3). */
+  heading: string
+  /**
+   * A tétel EGYES SZÁMÚ, rövid megnevezése a harmonika-fejléc kivonatához
+   * (pl. „tanfolyam" → „39 tanfolyam"). Ahol hiányzik, a lista kimarad a
+   * kivonatból — a kivonat egysoros marad, nem sorolja fel az összes listát.
+   */
+  rovidCimke?: string
+  items: readonly string[]
+}
+
+/** Egy szakember teljes szakmai önéletrajza. */
+interface SzakmaiOneletrajz {
+  nev: string
+  titulus: string
+  listak: readonly SzakmaiLista[]
+}
+
+/**
+ * A két teljes szakmai önéletrajz — STRUKTURÁLTAN, egyetlen forrásból.
+ *
+ * MIÉRT NEM KÉSZ NODE-LISTA (ez volt korábban): a tartalom KÉT alakban kell.
+ *  - a rich-text oldaltartalomban (`rolunkContent`) folyó szövegként, h2/h3
+ *    címsorokkal — ezt a `rolunkReferenciaNodes()` építi belőle vissza,
+ *  - a szekciósorban a `accordion` blokk tételeiként, nyitható-csukható
+ *    formában, a fejlécben DARABSZÁMMAL.
+ * A darabszámot így nem kell külön mezőbe írni: a `cvOsszefoglalo` a TÉNYLEGES
+ * sorokból számolja (a teamMembers CV-harmonikájának mintája), tehát sosem tud
+ * elcsúszni a listától. A rejtés önmagában eltüntetné a bizonyíték
+ * MENNYISÉGÉT, ami maga a bizalmi jelzés (ux-belso-oldalak-kutatas.md 5.2).
+ */
+const ROLUNK_ONELETRAJZOK: readonly SzakmaiOneletrajz[] = [
+  {
+    nev: 'Kocsis Kata',
+    titulus: 'Gyógytornász, sportrehabilitációs tréner, gyógy- és sportmasszőr',
+    listak: [
+      {
+        heading: 'Tanulmányok',
+        items: [
+          'Pécsi Tudományegyetem Egészségtudományi Kar, Ápolás és Betegellátás alapképzési szak, Gyógytornász szakirány',
+          'Minerva Érettségizettek Szakközépiskolája – Gyógy- és sportmasszőr (54-726-01)',
+        ],
+      },
+      {
+        heading: 'Tanfolyamok, továbbképzések, konferenciák',
+        rovidCimke: 'tanfolyam',
+        items: [
+          'Ezerarcú hypermobilitás a gyógytornász praxisban (2026) – BodyGPS',
+          'Orfit alapanyagokból készült kéz- és felsővégtag rögzítők (2025) – Tóth Jordán Zsolt, OrtoCare',
+          'Aspetar World Conference 2025 – Doha, Katar',
+          'ATP Challenger Physio Education Program (2024) – International Tennis Performance Association',
+          'Hegkezelés és hegtudatos életmód (2024) – La Matriarcha',
+          'II. Fizioterápiás Tematikus Nap – A krónikus non-specifikus derékfájdalom (2024) – PTE ETK',
+          'Az izomsérülések diagnosztikája és rehabilitációja – Varró Tina, Probody Academy',
+          'Management of Distal Radius Fractures following ORIF surgery from 6 weeks (2024) – Kate Thorn, CHT (USA), AHTA',
+          'Early Management of Distal Radius Fractures following ORIF surgery (2024) – Kate Thorn, CHT (USA), AHTA',
+          'Extensor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
+          'Flexor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
+          "De Quervain's Tenosynovitis (2024) – Kate Thorn, CHT (USA), AHTA",
+          'Carpal Tunnel Syndrome (2024) – Loren Szmiga, Manual Therapist, CHT',
+          'Trigger Finger (2024) – Loren Szmiga, Manual Therapist, CHT',
+          'Functional Anatomy of the Hand (2024) – Daphne Xuan, MPT',
+          'A nagy térd kurzus (2024) – Varró Tina, Probody Academy',
+          'Az elülső keresztszalag-pótlást követő rehabilitációs program (2023) – Varró Tina, Probody Academy',
+          'Gyorsaságfejlesztés a XXI. században (2022) – Magyar Edzők Társasága',
+          'Innovating in Health Care (2022) – Harvard Medical School',
+          'Human Anatomy: Musculoskeletal Cases (2022) – Harvard Medical School',
+          'PK1 FPH – Integrált manuálterápia a modernkori testtartási zavarok kezelésében (2022) – MGYFT',
+          'Bevezetés a Biomechanikai-Dinamikus Taping Módszertanába (2022) – Dynamic Tape® Magyarország',
+          'Neuroplaszticitás és mozgásterápia (2022) – Feövenyessy Medical Fitness Akadémia',
+          'Practical Improvement Science in Health Care (2021–2022) – Harvard Medical School',
+          'Regeneráció a versenyidőszakban (2022) – Magyar Edzők Társasága',
+          'Sportfizioterápia (Sportrehabilitáció) (2022) – Varró Tina, Maximum Performance',
+          'A porckárosodás kezelésének új lehetőségei (2022) – Magyar Edzők Társasága',
+          'Mulligan-koncepció I. modul (2021) – Mulligan Koncepció Magyarország',
+          'Barvincsenko-féle lágyrész-manuálterápia I. – A gerinc és a medence (2021) – Holisztikus Medicina Alapítvány',
+          'Az önsorsrontás pszichológiája (2021) – Jog és Pszichológia',
+          'Kismama kinesiotape (2021) – Perfect Movement Mozgásközpont',
+          'McKenzie „B” kurzus (2021) – Magyarországi McKenzie Intézet',
+          'SMR (self myofascial release) a sport- és mozgásszervi rehabilitációban (2020) – Balance Medical Fitness Akadémia',
+          'McKenzie „A” kurzus (2020) – Magyarországi McKenzie Intézet',
+          'NRX® – Dinamikus ízületstabilizálás és korrekció (2020) – Balance Medical Fitness Akadémia',
+          'Flossing terápia a mozgásszervi problémák és sportsérülések rehabilitációjában (2018) – Balance Medical Fitness Akadémia',
+          'Kinesiology taping / Sport taping képzés (2018) – Balance Medical Fitness Akadémia',
+          'Svédmasszázs (2015) – OKTÁV Továbbképző Központ',
+        ],
+      },
+      {
+        heading: 'Publikációk',
+        rovidCimke: 'publikáció',
+        items: [
+          'Kocsis, K., Szalay, B., Békési, Á., Király, B. (2022). Thoracalis gerincszakasz elváltozásai és az impingement szindróma összevetése a különböző korosztályokban játszó röplabdások körében. Fizioterápia, 31(2), 3–10.',
+          'Kocsis, K., Ács, P., Boncz, I., Molics, B., Király, B. (2022). Comparison between thoracic spine deformities and impingement syndrome among volleyball players in different age groups. Value in Health Journal, POSB337.',
+        ],
+      },
+      {
+        heading: 'Konferenciák, előadások',
+        rovidCimke: 'konferencia',
+        items: [
+          'Magyar Sportrehabilitációs Konferencia (2025, Budapest): Műtőasztaltól a kezdőötösig – egy NBI-es kosárlabdázó esettanulmánya',
+          'Sportrehabilitációs tréner képzés: Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe – akkreditált kurzus, 12 kreditpont (SZTK-A-33553/2024) – instruktor (2024, 2025, 2026, Budapest)',
+          'ProBody Stúdió sportrehabilitációs tréner képzés: Gerinc anatómia és vizsgálat – instruktor (2024, 2025, 2026, Budapest)',
+          'ProBody Stúdió sportrehabilitációs tréner képzés: Könyök-, csukló- és kézízületek érintettségei sportolói szemszögből – instruktor (2023, 2024, Budapest)',
+          'A Magyar Kézsebész Társaság 29. kongresszusa: Kézsebészeti skill tréning – instruktor (2023, Székesfehérvár)',
+          'Akkreditált Oftex kurzus: Ínvarratok és határterületek a kézsebészeti ellátásban – instruktor (2023, Budapest)',
+          'ISPOR konferencia: Comparison between Thoracic Spine Deformities and Impingement Syndrome Among Volleyball Players (2020, Milánó; 2021, Koppenhága)',
+        ],
+      },
+      {
+        heading: 'Média-megjelenések',
+        rovidCimke: 'médiamegjelenés',
+        items: [
+          'Kézsérülés, műtét, fájdalom után: őrizd meg kezed egészségét! (2025) – Secret Medical Podcast',
+          'Űzzük el a stresszt! (2025) – Nők Lapja Évszakok',
+          'Mi fán terem az ínhüvelygyulladás? (2025/37) – Nők Lapja',
+          'Az irodai munka az új extrém sport? A kéz is dolgozik (2024/47) – Nők Lapja',
+          'Mitől lesz a banyapúp? (2024/8) – Nők Lapja',
+          'Mozgás korra szabva (2023/45) – Nők Lapja',
+          'Hogy ami egészséges, öröm is legyen (2023/9) – Képmás magazin',
+          'A henger az új csodaszer? (2023/35) – Nők Lapja',
+          'Sport korra szabva (2023/4) – Nők Lapja Egészség Különszám',
+          'Ne vegyük félvállról! (2023/14) – Nők Lapja',
+          'Fájdalom az ujjakban – A nyeregízületi porckopás (2022) – Szimpatika magazin',
+          'A derékfájdalom ront a legtöbbet az életminőségen (2021) – Házipatika.com',
+          'Derékfájdalom: akár fertőzés is okozhatja a panaszokat! (2021) – Egészség Kalauz',
+          'Karc FM – Kortalan műsor (2021): gyógytornász-szerepvállalás',
+        ],
+      },
+    ],
+  },
+  {
+    nev: 'Kiss Kata',
+    titulus: 'Gyógytornász, manuálterapeuta, sportrehabilitációs tréner',
+    listak: [
+      {
+        heading: 'Tanulmányok',
+        items: [
+          'Semmelweis Egyetem Egészségtudományi Kar, Ápolás és Betegellátás alapképzési szak – Gyógytornász szakirány',
+          'Holisztikus Medicina Alapítvány – Barvicsenko-féle manuálterapeuta képzés (manuális medicina elméleti és gyakorlati képzése)',
+        ],
+      },
+      {
+        heading: 'Tanfolyamok, továbbképzések, konferenciák',
+        rovidCimke: 'tanfolyam',
+        items: [
+          'Tendon Transfer Training (2026) – Hand Therapy Academy',
+          'Wrist Pain in the Combative Athlete 1–2. (2026) – Ian Gatt, Inspire Institute of Sport',
+          'Ezerarcú hypermobilitás a gyógytornász praxisban (2026) – BodyGPS',
+          'Orfit alapanyagokból készült kéz- és felsővégtag rögzítők (2025) – Tóth Jordán Zsolt, OrtoCare',
+          'Say It Better: Essential Skills for Designing Effective Presentations for Healthcare Professionals (2025) – Aspetar, Doha',
+          'Artificial Intelligence (AI) in Sports Medicine Workshop (2025) – Aspetar, Doha',
+          'Aspetar World Conference 2025 – Doha, Katar',
+          'Ulnar Sided Wrist Pain (2025) – Hand Therapy Academy',
+          'The Painful Shoulder (2025) – Adam Meakins',
+          'ATP Challenger Physio Education Program (2024) – International Tennis Performance Association',
+          'II. Fizioterápiás Tematikus Nap – A krónikus non-specifikus derékfájdalom (2024) – PTE ETK',
+          'Management of Distal Radius Fractures following ORIF surgery from 6 weeks (2024) – Kate Thorn, CHT (USA), AHTA',
+          'Early Management of Distal Radius Fractures following ORIF surgery (2024) – Kate Thorn, CHT (USA), AHTA',
+          'Extensor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
+          'Flexor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
+          "De Quervain's Tenosynovitis (2024) – Kate Thorn, CHT (USA), AHTA",
+          'Carpal Tunnel Syndrome (2024) – Loren Szmiga, Manual Therapist, CHT',
+          'Trigger Finger (2024) – Loren Szmiga, Manual Therapist, CHT',
+          'Functional Anatomy of the Hand (2024) – Daphne Xuan, MPT',
+          'Állkapocsízületi diszfunkciók fizioterápiája (2023) – MGYFT',
+          'Ergon IASTM eszközös lágyrészmobilizáció (2022) – Ergon IASTM Technique Hungary',
+          'Tumorpáciensek ellátása fasciaterápiákkal (2022) – Oriolus-med',
+          'Human Anatomy: Musculoskeletal Cases (2022) – Harvard Medical School',
+          'Sportrehabilitációs tréner képzés 1–2. szint (2022) – Maximum Performance',
+          'Neuroplaszticitás és mozgásterápia (2022) – Feövenyessy Medical Fitness Akadémia',
+          'Dinamikus manuálterápia I–II. (2021–2022) – Holisztikus Medicina Alapítvány',
+          'Fascia: elmélet és kezelési technikák (2021) – Balande Med Academy',
+          'Kinezio- és sporttaping (2021) – Balance Med Academy',
+          'Flossing a sportrehabilitációban (2021) – Balance Med Academy',
+          'Köpölyözés a sportprevencióban és a rehabilitációban (2021) – Balance Med Academy',
+          'Dynamic Tape: Bevezetés a Biomechanika-Dinamikus Taping Módszertanába (2019) – Dynamic Tape® Magyarország',
+        ],
+      },
+      {
+        heading: 'Konferenciák, előadások',
+        rovidCimke: 'konferencia',
+        items: [
+          'ProBody Stúdió: Rigid tape és funkcionális kötözések a sportrehabilitációban – instruktor (2026, Budapest)',
+          'Magyar Sportrehabilitációs Konferencia (2025, Budapest): Ulnáris oldali csuklófájdalmak – a csukló „derékfájása”',
+          'Sportrehabilitációs tréner képzés: Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe – akkreditált kurzus, 12 kreditpont (SZTK-A-33553/2024) – instruktor (2024, 2025, 2026, Budapest)',
+          'ProBody Stúdió sportrehabilitációs tréner képzés: Gerinc anatómia és vizsgálat – instruktor (2024, 2025, 2026, Budapest)',
+          'A lumbális és thoracalis gerinc manuális kezelési technikái Filippo Mechellivel – tolmács (2024, Budapest)',
+          'A Magyar Kézsebész Társaság 29. kongresszusa: Kézsebészeti skill tréning – instruktor (2023, Székesfehérvár)',
+          'Akkreditált Oftex kurzus: Ínvarratok és határterületek a kézsebészeti ellátásban – instruktor (2023, Budapest)',
+          'Gyógyító mezítlábazás – Nők Lapja (2023/34)',
+        ],
+      },
+    ],
+  },
+]
+
+/** Egy önéletrajz TÖRZSE rich-text csomópontokként (a név-címsor nélkül). */
+const oneletrajzNodes = (cv: SzakmaiOneletrajz): BlockNode[] => [
+  para(cv.titulus),
+  ...cv.listak.flatMap((lista) => [heading('h3', lista.heading), bulletList([...lista.items])]),
+]
+
+/**
+ * A harmonika-fejléc kivonata a TÉNYLEGES sorokból (pl. „39 tanfolyam ·
+ * 7 konferencia · 14 médiamegjelenés").
+ *
+ * Csak a `rovidCimke`-vel ellátott listák kerülnek bele, hogy a kivonat egy
+ * sorban maradjon; a darabszám mindig a tömb hossza, tehát a lista bővítésekor
+ * magától nő — a szerkesztőnek nincs mit külön karbantartania.
+ */
+const cvOsszefoglalo = (cv: SzakmaiOneletrajz): string =>
+  cv.listak
+    .filter((lista) => lista.rovidCimke !== undefined && lista.items.length > 0)
+    .map((lista) => `${lista.items.length} ${lista.rovidCimke}`)
+    .join(' · ')
+
+/**
+ * Partnerek és a két teljes szakmai önéletrajz — a rich-text oldaltartalom ága.
+ *
+ * A szekciósorban ugyanez a tartalom KÉT blokkra bomlik (rövid, mindig látható
+ * rész + `accordion` harmonika) — lásd `buildRolunkLayout`. Itt, a folyó
+ * szöveges változatban minden nyitva marad, mert a rich-text ág nem tud
+ * nyitható szekciót.
  */
 const rolunkReferenciaNodes = (): BlockNode[] => [
   heading('h2', 'Partnereink'),
-  para(
-    'Magyar Sportrehabilitációs Egyesület, ProBody Stúdió, Aurora Medical, Dynamic Tape®, TUDATEST, PhysioWatch, WIBBI, Halm Optika, dr. pharm. Kocsis Kristóf, Csillik Árpád, NISHI STUDIO pilates, BodyGPS, Magic Smile, Be Fit With Ben, OrtoCare, Pille Fizioterápia.',
-  ),
-  heading('h2', 'Kocsis Kata szakmai önéletrajz'),
-  para('Gyógytornász, sportrehabilitációs tréner, gyógy- és sportmasszőr'),
-  heading('h3', 'Tanulmányok'),
-  bulletList([
-    'Pécsi Tudományegyetem Egészségtudományi Kar, Ápolás és Betegellátás alapképzési szak, Gyógytornász szakirány',
-    'Minerva Érettségizettek Szakközépiskolája – Gyógy- és sportmasszőr (54-726-01)',
-  ]),
-  heading('h3', 'Tanfolyamok, továbbképzések, konferenciák'),
-  bulletList([
-    'Ezerarcú hypermobilitás a gyógytornász praxisban (2026) – BodyGPS',
-    'Orfit alapanyagokból készült kéz- és felsővégtag rögzítők (2025) – Tóth Jordán Zsolt, OrtoCare',
-    'Aspetar World Conference 2025 – Doha, Katar',
-    'ATP Challenger Physio Education Program (2024) – International Tennis Performance Association',
-    'Hegkezelés és hegtudatos életmód (2024) – La Matriarcha',
-    'II. Fizioterápiás Tematikus Nap – A krónikus non-specifikus derékfájdalom (2024) – PTE ETK',
-    'Az izomsérülések diagnosztikája és rehabilitációja – Varró Tina, Probody Academy',
-    'Management of Distal Radius Fractures following ORIF surgery from 6 weeks (2024) – Kate Thorn, CHT (USA), AHTA',
-    'Early Management of Distal Radius Fractures following ORIF surgery (2024) – Kate Thorn, CHT (USA), AHTA',
-    'Extensor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
-    'Flexor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
-    "De Quervain's Tenosynovitis (2024) – Kate Thorn, CHT (USA), AHTA",
-    'Carpal Tunnel Syndrome (2024) – Loren Szmiga, Manual Therapist, CHT',
-    'Trigger Finger (2024) – Loren Szmiga, Manual Therapist, CHT',
-    'Functional Anatomy of the Hand (2024) – Daphne Xuan, MPT',
-    'A nagy térd kurzus (2024) – Varró Tina, Probody Academy',
-    'Az elülső keresztszalag-pótlást követő rehabilitációs program (2023) – Varró Tina, Probody Academy',
-    'Gyorsaságfejlesztés a XXI. században (2022) – Magyar Edzők Társasága',
-    'Innovating in Health Care (2022) – Harvard Medical School',
-    'Human Anatomy: Musculoskeletal Cases (2022) – Harvard Medical School',
-    'PK1 FPH – Integrált manuálterápia a modernkori testtartási zavarok kezelésében (2022) – MGYFT',
-    'Bevezetés a Biomechanikai-Dinamikus Taping Módszertanába (2022) – Dynamic Tape® Magyarország',
-    'Neuroplaszticitás és mozgásterápia (2022) – Feövenyessy Medical Fitness Akadémia',
-    'Practical Improvement Science in Health Care (2021–2022) – Harvard Medical School',
-    'Regeneráció a versenyidőszakban (2022) – Magyar Edzők Társasága',
-    'Sportfizioterápia (Sportrehabilitáció) (2022) – Varró Tina, Maximum Performance',
-    'A porckárosodás kezelésének új lehetőségei (2022) – Magyar Edzők Társasága',
-    'Mulligan-koncepció I. modul (2021) – Mulligan Koncepció Magyarország',
-    'Barvincsenko-féle lágyrész-manuálterápia I. – A gerinc és a medence (2021) – Holisztikus Medicina Alapítvány',
-    'Az önsorsrontás pszichológiája (2021) – Jog és Pszichológia',
-    'Kismama kinesiotape (2021) – Perfect Movement Mozgásközpont',
-    'McKenzie „B” kurzus (2021) – Magyarországi McKenzie Intézet',
-    'SMR (self myofascial release) a sport- és mozgásszervi rehabilitációban (2020) – Balance Medical Fitness Akadémia',
-    'McKenzie „A” kurzus (2020) – Magyarországi McKenzie Intézet',
-    'NRX® – Dinamikus ízületstabilizálás és korrekció (2020) – Balance Medical Fitness Akadémia',
-    'Flossing terápia a mozgásszervi problémák és sportsérülések rehabilitációjában (2018) – Balance Medical Fitness Akadémia',
-    'Kinesiology taping / Sport taping képzés (2018) – Balance Medical Fitness Akadémia',
-    'Svédmasszázs (2015) – OKTÁV Továbbképző Központ',
-  ]),
-  heading('h3', 'Publikációk'),
-  bulletList([
-    'Kocsis, K., Szalay, B., Békési, Á., Király, B. (2022). Thoracalis gerincszakasz elváltozásai és az impingement szindróma összevetése a különböző korosztályokban játszó röplabdások körében. Fizioterápia, 31(2), 3–10.',
-    'Kocsis, K., Ács, P., Boncz, I., Molics, B., Király, B. (2022). Comparison between thoracic spine deformities and impingement syndrome among volleyball players in different age groups. Value in Health Journal, POSB337.',
-  ]),
-  heading('h3', 'Konferenciák, előadások'),
-  bulletList([
-    'Magyar Sportrehabilitációs Konferencia (2025, Budapest): Műtőasztaltól a kezdőötösig – egy NBI-es kosárlabdázó esettanulmánya',
-    'Sportrehabilitációs tréner képzés: Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe – akkreditált kurzus, 12 kreditpont (SZTK-A-33553/2024) – instruktor (2024, 2025, 2026, Budapest)',
-    'ProBody Stúdió sportrehabilitációs tréner képzés: Gerinc anatómia és vizsgálat – instruktor (2024, 2025, 2026, Budapest)',
-    'ProBody Stúdió sportrehabilitációs tréner képzés: Könyök-, csukló- és kézízületek érintettségei sportolói szemszögből – instruktor (2023, 2024, Budapest)',
-    'A Magyar Kézsebész Társaság 29. kongresszusa: Kézsebészeti skill tréning – instruktor (2023, Székesfehérvár)',
-    'Akkreditált Oftex kurzus: Ínvarratok és határterületek a kézsebészeti ellátásban – instruktor (2023, Budapest)',
-    'ISPOR konferencia: Comparison between Thoracic Spine Deformities and Impingement Syndrome Among Volleyball Players (2020, Milánó; 2021, Koppenhága)',
-  ]),
-  heading('h3', 'Média-megjelenések'),
-  bulletList([
-    'Kézsérülés, műtét, fájdalom után: őrizd meg kezed egészségét! (2025) – Secret Medical Podcast',
-    'Űzzük el a stresszt! (2025) – Nők Lapja Évszakok',
-    'Mi fán terem az ínhüvelygyulladás? (2025/37) – Nők Lapja',
-    'Az irodai munka az új extrém sport? A kéz is dolgozik (2024/47) – Nők Lapja',
-    'Mitől lesz a banyapúp? (2024/8) – Nők Lapja',
-    'Mozgás korra szabva (2023/45) – Nők Lapja',
-    'Hogy ami egészséges, öröm is legyen (2023/9) – Képmás magazin',
-    'A henger az új csodaszer? (2023/35) – Nők Lapja',
-    'Sport korra szabva (2023/4) – Nők Lapja Egészség Különszám',
-    'Ne vegyük félvállról! (2023/14) – Nők Lapja',
-    'Fájdalom az ujjakban – A nyeregízületi porckopás (2022) – Szimpatika magazin',
-    'A derékfájdalom ront a legtöbbet az életminőségen (2021) – Házipatika.com',
-    'Derékfájdalom: akár fertőzés is okozhatja a panaszokat! (2021) – Egészség Kalauz',
-    'Karc FM – Kortalan műsor (2021): gyógytornász-szerepvállalás',
-  ]),
-  heading('h2', 'Kiss Kata szakmai önéletrajz'),
-  para('Gyógytornász, manuálterapeuta, sportrehabilitációs tréner'),
-  heading('h3', 'Tanulmányok'),
-  bulletList([
-    'Semmelweis Egyetem Egészségtudományi Kar, Ápolás és Betegellátás alapképzési szak – Gyógytornász szakirány',
-    'Holisztikus Medicina Alapítvány – Barvicsenko-féle manuálterapeuta képzés (manuális medicina elméleti és gyakorlati képzése)',
-  ]),
-  heading('h3', 'Tanfolyamok, továbbképzések, konferenciák'),
-  bulletList([
-    'Tendon Transfer Training (2026) – Hand Therapy Academy',
-    'Wrist Pain in the Combative Athlete 1–2. (2026) – Ian Gatt, Inspire Institute of Sport',
-    'Ezerarcú hypermobilitás a gyógytornász praxisban (2026) – BodyGPS',
-    'Orfit alapanyagokból készült kéz- és felsővégtag rögzítők (2025) – Tóth Jordán Zsolt, OrtoCare',
-    'Say It Better: Essential Skills for Designing Effective Presentations for Healthcare Professionals (2025) – Aspetar, Doha',
-    'Artificial Intelligence (AI) in Sports Medicine Workshop (2025) – Aspetar, Doha',
-    'Aspetar World Conference 2025 – Doha, Katar',
-    'Ulnar Sided Wrist Pain (2025) – Hand Therapy Academy',
-    'The Painful Shoulder (2025) – Adam Meakins',
-    'ATP Challenger Physio Education Program (2024) – International Tennis Performance Association',
-    'II. Fizioterápiás Tematikus Nap – A krónikus non-specifikus derékfájdalom (2024) – PTE ETK',
-    'Management of Distal Radius Fractures following ORIF surgery from 6 weeks (2024) – Kate Thorn, CHT (USA), AHTA',
-    'Early Management of Distal Radius Fractures following ORIF surgery (2024) – Kate Thorn, CHT (USA), AHTA',
-    'Extensor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
-    'Flexor Tendon Injury Management (2024) – Kate Thorn, CHT (USA), AHTA',
-    "De Quervain's Tenosynovitis (2024) – Kate Thorn, CHT (USA), AHTA",
-    'Carpal Tunnel Syndrome (2024) – Loren Szmiga, Manual Therapist, CHT',
-    'Trigger Finger (2024) – Loren Szmiga, Manual Therapist, CHT',
-    'Functional Anatomy of the Hand (2024) – Daphne Xuan, MPT',
-    'Állkapocsízületi diszfunkciók fizioterápiája (2023) – MGYFT',
-    'Ergon IASTM eszközös lágyrészmobilizáció (2022) – Ergon IASTM Technique Hungary',
-    'Tumorpáciensek ellátása fasciaterápiákkal (2022) – Oriolus-med',
-    'Human Anatomy: Musculoskeletal Cases (2022) – Harvard Medical School',
-    'Sportrehabilitációs tréner képzés 1–2. szint (2022) – Maximum Performance',
-    'Neuroplaszticitás és mozgásterápia (2022) – Feövenyessy Medical Fitness Akadémia',
-    'Dinamikus manuálterápia I–II. (2021–2022) – Holisztikus Medicina Alapítvány',
-    'Fascia: elmélet és kezelési technikák (2021) – Balande Med Academy',
-    'Kinezio- és sporttaping (2021) – Balance Med Academy',
-    'Flossing a sportrehabilitációban (2021) – Balance Med Academy',
-    'Köpölyözés a sportprevencióban és a rehabilitációban (2021) – Balance Med Academy',
-    'Dynamic Tape: Bevezetés a Biomechanika-Dinamikus Taping Módszertanába (2019) – Dynamic Tape® Magyarország',
-  ]),
-  heading('h3', 'Konferenciák, előadások'),
-  bulletList([
-    'ProBody Stúdió: Rigid tape és funkcionális kötözések a sportrehabilitációban – instruktor (2026, Budapest)',
-    'Magyar Sportrehabilitációs Konferencia (2025, Budapest): Ulnáris oldali csuklófájdalmak – a csukló „derékfájása”',
-    'Sportrehabilitációs tréner képzés: Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe – akkreditált kurzus, 12 kreditpont (SZTK-A-33553/2024) – instruktor (2024, 2025, 2026, Budapest)',
-    'ProBody Stúdió sportrehabilitációs tréner képzés: Gerinc anatómia és vizsgálat – instruktor (2024, 2025, 2026, Budapest)',
-    'A lumbális és thoracalis gerinc manuális kezelési technikái Filippo Mechellivel – tolmács (2024, Budapest)',
-    'A Magyar Kézsebész Társaság 29. kongresszusa: Kézsebészeti skill tréning – instruktor (2023, Székesfehérvár)',
-    'Akkreditált Oftex kurzus: Ínvarratok és határterületek a kézsebészeti ellátásban – instruktor (2023, Budapest)',
-    'Gyógyító mezítlábazás – Nők Lapja (2023/34)',
+  para(ROLUNK_PARTNEREK),
+  ...ROLUNK_ONELETRAJZOK.flatMap((cv) => [
+    heading('h2', `${cv.nev} szakmai önéletrajz`),
+    ...oneletrajzNodes(cv),
   ]),
 ]
 
@@ -929,11 +1048,12 @@ const rolunkContent = (): RichTextContent =>
 //  - B2.2 — a sávok (fehér ↔ világoskék) váltogatása jelöli a közös régiókat.
 //
 // AMI NEM FÉR BELE ebbe a körbe (a blokk-katalógus hiánya miatt, lásd
-// docs/tartalom-leltar-regi-oldal.md 4. szakasz): fotós szakértő-kártya
-// (`teamMembers`), összecsukható CV (`accordion`), táblázatos árlista
+// docs/tartalom-leltar-regi-oldal.md 4. szakasz): táblázatos árlista
 // (`priceList`), kattintható helyszínek (`locations`). Amíg ezek nincsenek, az
 // érintett tartalom a szabad szöveges (richText) blokkban él — így egyetlen
-// betű sem vész el a blokkosítással.
+// betű sem vész el a blokkosítással. A korábban itt hiányolt összecsukható CV
+// (`accordion`) 2026-08-16 óta LÉTEZIK: a /rolunk részletes szakmai háttere
+// ezért már harmonikában áll (lásd `buildRolunkLayout`).
 // ---------------------------------------------------------------------------
 
 /** A szekciósorok futásidejű kép-hivatkozásai (Media id-k). */
@@ -1032,14 +1152,46 @@ const buildRolunkLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['layo
       sectionSettings: { visible: true, anchorId: 'szolgaltatasaink', hatter: 'tint' },
     },
 
-    // Részletes szakmai háttér: a két szakember elérhetősége, a partnerek és a
-    // teljes önéletrajzok. Amíg nincs `accordion` blokk, ez szabad szöveg —
-    // a bizonyíték MENNYISÉGE maga a bizalmi jelzés, ezért nem rövidítjük.
-    // A hosszú, listás olvasnivaló a papír-alap sávban marad (a legnyugodtabb
-    // olvasási felület); a mértékét a .kc-richtext adja.
+    // Szakmai háttér, 1. rész — a RÖVID, MINDIG LÁTHATÓ tartalom: a két
+    // szakember elérhetősége és a partnerek sora. Ezek elolvasása másodpercek,
+    // és a telefonszám a lap egyik kapcsolatfelvételi útja (üzleti cél-sorrend
+    // 3. pontja) — lenyitó mögé rejteni hiba lenne.
     {
       blockType: 'richText',
-      content: richText([...rolunkSzakemberNodes(), ...rolunkReferenciaNodes()]),
+      content: richText([
+        ...rolunkSzakemberNodes(),
+        heading('h2', 'Partnereink'),
+        para(ROLUNK_PARTNEREK),
+      ]),
+      sectionSettings: { visible: true, hatter: 'feher' },
+    },
+
+    // Szakmai háttér, 2. rész — a HOSSZÚ listás olvasnivaló harmonikában.
+    //
+    // MIÉRT: a két teljes önéletrajz (tanulmányok, ~70 tanfolyam, publikációk,
+    // konferenciák, médiamegjelenések) folyó szövegként több képernyőnyi
+    // görgetés volt a lap alsó felében — a tulajdonos kérése, hogy legyen
+    // nyitható-csukható. A bizonyíték MENNYISÉGE viszont maga a bizalmi jelzés,
+    // ezért nem rövidítjük: a darabszám a fejlécben, csukott állapotban is
+    // látszik (`cvOsszefoglalo`, a TÉNYLEGES sorokból számolva).
+    //
+    // GOV.UK-szabály (értékesítési UX-skill): árat, garanciát és elsődleges
+    // CTA-t sosem rejtünk lenyitó mögé — itt MÁSODLAGOS, referencia-jellegű
+    // szakmai életútról van szó, ez mehet.
+    //
+    // A háttere szándékosan ugyanaz („feher"), mint az előző blokké: a két
+    // szekció EGY régiót alkot (B2.2 — a sávváltás a közös régiókat jelöli),
+    // a horgony (`szakmai-hatter`) pedig a részletes részre mutat.
+    {
+      blockType: 'accordion',
+      eyebrow: 'Szakmai háttér',
+      title: 'Részletes szakmai háttér',
+      lead: 'A teljes szakmai életutunk — tanulmányok, továbbképzések, publikációk, előadások és médiamegjelenések. Nyisd ki, amelyik érdekel.',
+      items: ROLUNK_ONELETRAJZOK.map((cv) => ({
+        cim: `${cv.nev} — szakmai önéletrajz`,
+        osszefoglalo: cvOsszefoglalo(cv),
+        tartalom: richText(oneletrajzNodes(cv)),
+      })),
       sectionSettings: { visible: true, anchorId: 'szakmai-hatter', hatter: 'feher' },
     },
 
@@ -1961,13 +2113,23 @@ async function restoreLegacyContent(): Promise<void> {
   })
 
   // --- Oldal: rolunk ---------------------------------------------------------
+  // A fejléckép a PÁROS csapatfotó (lásd ROLUNK_HERO_FAJL). A fájlt a KEZDŐLAPI
+  // seed tölti fel, ez a script csak megkeresi; ha még nincs a Médiatárban, a
+  // `heroImage` kimarad az adatokból — ilyenkor a meglévő fejléckép marad, és a
+  // napló megmondja, mit kell futtatni.
+  const rolunkHeroKep = await findMediaId(payload, ROLUNK_HERO_FAJL)
+  if (rolunkHeroKep === undefined) {
+    payload.logger.warn(
+      `Legacy: a /rolunk fejlécképe (${ROLUNK_HERO_FAJL}) nincs a Médiatárban — ezt a kezdőlapi seed tölti fel (npm run seed). A fejléckép most ÉRINTETLEN marad.`,
+    )
+  }
   await upsertPage(payload, {
     slug: 'rolunk',
     title: 'A kéz a mindenünk',
     excerpt:
       'Kocsis Kata és Kiss Kata vagyunk, a KINETICARE alapítói – gyógytornászok, manuálterapeuták és sportrehabilitációs trénerek, évek óta elsősorban a kéz rehabilitációjával foglalkozunk.',
     content: rolunkContent(),
-    heroImage: mediaId('682a121babe80_IMG_7573.jpeg'),
+    heroImage: rolunkHeroKep,
     seoTitle: 'Rólunk – Kineticare',
     seoDescription:
       'Kocsis Kata kézrehabilitációs gyógytornász-fizioterapeuta, Kiss Kata kézrehabilitációs gyógytornász-fizioterapeuta és manuálterapeuta – szakmai háttér, vélemények, média-megjelenések.',
@@ -2125,11 +2287,22 @@ async function restoreLegacyContent(): Promise<void> {
  * katalógusbeli blokkot használ, és hogy a blokkosítás semmit nem veszít el a
  * rich-text változathoz képest.
  */
+/**
+ * A /rolunk szakmai hátterének ÖRÖKÖLT (harmonika előtti) rich-text alakja —
+ * pontosan az a tartalom, amit a 2026-08-16 előtti seed egyetlen richText
+ * blokként tett a szekciósorba. Az apply-owner-content.ts ezzel veti össze az
+ * ÉLŐ adatbázis blokkját: csak akkor cseréli harmonikára, ha a szerkesztő
+ * időközben nem nyúlt hozzá.
+ */
+const rolunkSzakmaiOrokoltTartalom = (): RichTextContent =>
+  richText([...rolunkSzakemberNodes(), ...rolunkReferenciaNodes()])
+
 export {
   buildRolunkLayout,
   buildSzolgaltatasokLayout,
   kezdolapContent,
   rolunkContent,
+  rolunkSzakmaiOrokoltTartalom,
   szolgaltatasokContent,
 }
 

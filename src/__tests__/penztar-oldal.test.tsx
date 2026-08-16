@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
 import { createElement, Fragment, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getPayload } from 'payload'
 
-import { CheckoutForm } from '../components/checkout/CheckoutForm'
+import { CheckoutErrorRegion, CheckoutForm } from '../components/checkout/CheckoutForm'
 import type { Product, User } from '../payload-types'
 
 /**
@@ -181,5 +184,70 @@ describe('/penztar — vendég-vásárlás (nincs bejelentkezés)', () => {
 
     expect(html).not.toContain('id="kc-field-guestEmail"')
     expect(html).toContain('id="kc-field-billingName"')
+  })
+})
+
+/**
+ * ÜRES PIROS HIBADOBOZ (tulajdonosi hibajelentés, 2026-08-16).
+ *
+ * ═══ A HIBA, AMIT BEZÁR ═══
+ * Az élő hibarégió szándékosan MINDIG a DOM-ban van (a dinamikusan beszúrt
+ * aria-live régiót több képernyőolvasó nem jelenti be) — a stíluslap viszont
+ * üresen is piros keretet, piros hátteret és belső margót adott neki, így a
+ * „Pénztár" cím alatt egy üres piros sáv ült.
+ *
+ * A javítás szerződése: a régió MARAD (nincs `display: none`, ami elnémítaná),
+ * de üres állapotban `data-visible="false"`, és a CSS ilyenkor mindent lenulláz.
+ */
+describe('/penztar — a hiba-élőrégió megjelenése', () => {
+  function renderErrorRegion(error: string | null): string {
+    return renderMarkup(createElement(CheckoutErrorRegion, { error }))
+  }
+
+  it('hiba NÉLKÜL a régió a DOM-ban marad, de data-visible="false"', () => {
+    const html = renderErrorRegion(null)
+
+    expect(html).toContain('class="kc-checkout-form__error"')
+    expect(html).toContain('data-visible="false"')
+    expect(html).toContain('aria-live="assertive"')
+    expect(html).toContain('role="alert"')
+    // Az élő régió üresen is létezik — enélkül a későbbi hiba bejelentése
+    // megbízhatatlan lenne (ezért nem feltételes a renderelése).
+    expect(html).not.toBe('')
+  })
+
+  it('beállított hibánál data-visible="true", és a szöveg látszik', () => {
+    const html = renderErrorRegion('A fizetés indítása nem sikerült.')
+
+    expect(html).toContain('data-visible="true"')
+    expect(html).toContain('A fizetés indítása nem sikerült.')
+  })
+
+  it('a pénztár-oldal induló markupjában is „false" az állapot (hiba nélkül indul)', async () => {
+    mockPayloadBehavior(publishedProduct)
+
+    const html = renderMarkup(await renderPenztar({ termek: '42' }))
+
+    expect(html).toContain('data-visible="false"')
+    expect(html).not.toContain('data-visible="true"')
+  })
+
+  it('a CSS az üres állapotot lenullázza — keret, háttér és hely nélkül, de NEM display:none', () => {
+    const css = readFileSync(
+      fileURLToPath(new URL('../app/(frontend)/checkout.css', import.meta.url)),
+      'utf8',
+    )
+    const rule = css.slice(css.indexOf(".kc-checkout-form__error[data-visible='false']"))
+    expect(rule, 'nincs üres-állapot szabály a hibarégióra').not.toBe('')
+    const body = rule.slice(0, rule.indexOf('}'))
+
+    expect(body).toContain('border: 0')
+    expect(body).toContain('background-color: transparent')
+    expect(body).toContain('padding: 0')
+    // A `position: absolute` veszi ki az elemet a flex-folyamból is, különben a
+    // `.kc-checkout-form` gap-je üres rést hagyna a helyén.
+    expect(body).toContain('position: absolute')
+    // display:none elnémítaná az élő régiót — ezért TILOS.
+    expect(body).not.toContain('display: none')
   })
 })

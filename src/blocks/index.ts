@@ -1,6 +1,7 @@
 import type { Block } from 'payload'
 
 import { about } from './about'
+import { accordion } from './accordion'
 import { courseCards } from './course-cards'
 import { credsStrip } from './creds-strip'
 import { ctaBanner } from './cta-banner'
@@ -26,8 +27,10 @@ import { welcome } from './welcome'
  * kinézet-blokkok), hogy a laikus szerkesztő fentről lefelé haladva építhessen
  * kezdőlapot. Az utolsó két blokk (szabad szöveg, CTA-sáv) nem kötődik
  * kezdőlapi pozícióhoz, ezért külön admin-csoportba kerül. Ugyanebbe a
- * csoportba tartozik a szakértő-kártya (teamMembers) is: elsősorban a /rolunk
- * oldal páros bemutatkozása, de nem kötődik kezdőlapi sorrendhez.
+ * csoportba tartozik a szakértő-kártya (teamMembers) és a nyitható szekció
+ * (accordion) is: mindkettő elsősorban belső oldalak tartalmához való (a
+ * /rolunk páros bemutatkozása, illetve a hosszú szakmai életút), de egyik sem
+ * kötődik kezdőlapi sorrendhez.
  *
  * FONTOS: a tényleges megjelenési sorrendet mindig a szerkesztő állítja be a
  * Pages → Szekciók mezőben (fogd-és-vidd) — ez a lista csak felkínálja őket.
@@ -48,6 +51,7 @@ export const pageBlocks: Block[] = [
   knowledge,
   faq,
   teamMembers,
+  accordion,
   richText,
   ctaBanner,
 ]
@@ -57,6 +61,7 @@ export const pageBlockSlugs: string[] = pageBlocks.map((block) => block.slug)
 
 export {
   about,
+  accordion,
   courseCards,
   credsStrip,
   ctaBanner,
