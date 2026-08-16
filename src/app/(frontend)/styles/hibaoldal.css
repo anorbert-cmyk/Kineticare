@@ -1,0 +1,170 @@
+/**
+ * Hibaoldalak (nem található / váratlan hiba) — a `layout.css` meglévő
+ * `.kc-error-page` alapjára épülő KIEGÉSZÍTŐ réteg.
+ *
+ * Miért külön fájl: a `.kc-error-page`, `__code`, `__title`, `__text`,
+ * `__actions` szabályok a `layout.css`-ben élnek és változatlanok maradnak;
+ * ide csak az ÚJ elemek (ellenőrző-lista, cél-lista, kapcsolat-sor, a
+ * layout nélküli global-not-found kerete) kerülnek.
+ *
+ * BETŰMÉRET: ebben a fájlban SZÁNDÉKOSAN nincs egyetlen `font-size`
+ * deklaráció sem. A méretet a szemantikus elem (h1 / p / li) örökli a
+ * base.css-től, így a lap automatikusan követi a tipográfiai skálát, és a
+ * skála-őr tesztje sem sérülhet.
+ *
+ * MÉRT ÉRTÉKEK (Chromium, 2026-08-16, a mérés a jelentésben):
+ *  - szövegkontraszt: ink (#10243e) a paper (#f6f9fc) fölött 14,79:1,
+ *    ink-soft (#33495f) ugyanott 8,80:1 — WCAG 2.2 · 1.4.3 (≥ 4,5:1) ✓
+ *    https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html
+ *  - cél-link keret: hairline-strong (#6b7f94) a paperen 3,91:1 —
+ *    WCAG 2.2 · 1.4.11 Non-text Contrast (≥ 3:1) ✓
+ *    https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html
+ *  - érintőcél: a cél-linkek min-height 44px — WCAG 2.2 · 2.5.8 küszöbe
+ *    24×24 CSS px, a projekt célja 44×44
+ *    https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
+ *  - sorhossz: a szöveges blokkok `--kc-measure-comfort` (30rem) szélesek,
+ *    magyar szöveggel mérve 45–85 karakter között
+ *  - 320px-en nincs vízszintes görgetés (WCAG 2.2 · 1.4.10 Reflow)
+ *    https://www.w3.org/WAI/WCAG22/Understanding/reflow.html
+ */
+
+/* MÉRT JAVÍTÁS: a `narrow` konténer (720px) egy sorba engedte a nyitómondatot,
+   ami 1280px-es viewporton 89 karakter lett — a 45–85 karakteres sáv fölött
+   (termektervezes skill 3. pont; a hosszú sor visszaugrási hibát okoz az
+   olvasásban). A mérték ezért itt is a kényelmes 30rem. A szabály a
+   layout.css-beli `.kc-error-page__text`-et EGÉSZÍTI KI (azonos specifikusság,
+   későbbi @import), a többi tulajdonságát nem bántja. */
+.kc-error-page__text {
+  margin-inline: auto;
+  max-width: var(--kc-measure-comfort);
+}
+
+/* A törzsszöveg BALRA zárt, a lap közepére állítva: a GOV.UK „page not found"
+   mintája folyószövegként, balra zártan adja az ellenőrző mondatokat, mert a
+   középre zárt többsoros szöveg minden sornál új belépési pontot kényszerít az
+   olvasóra. https://design-system.service.gov.uk/patterns/page-not-found-pages/ */
+.kc-error-page__checks {
+  margin-block: var(--kc-space-5);
+  margin-inline: auto;
+  max-width: var(--kc-measure-comfort);
+  padding-inline-start: var(--kc-space-5);
+  text-align: start;
+  color: var(--kc-color-text-muted);
+}
+
+.kc-error-page__checks > li + li {
+  margin-block-start: var(--kc-space-2);
+}
+
+.kc-error-page__destinations {
+  margin-block-start: var(--kc-space-7);
+  text-align: start;
+}
+
+.kc-error-page__destinations-title {
+  margin-block-end: var(--kc-space-3);
+  font-weight: var(--kc-font-weight-medium);
+  text-align: center;
+}
+
+.kc-error-page__dest-list {
+  display: grid;
+  gap: var(--kc-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 600px felett két hasáb: négy cél így egy képernyőn, görgetés nélkül látszik.
+   Alatta egymás alatt — a 320px-es viewporton is teljes szélességben. */
+@media (min-width: 600px) {
+  .kc-error-page__dest-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* A teljes kártya kattintható: nagyobb célfelület ugyanannyi helyen
+   (WCAG 2.2 · 2.5.8). A keret AZONOSÍTÓ határ, ezért `border-strong`
+   (≥ 3:1), nem a dekoratív hajszálvonal. */
+.kc-error-page__dest-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-1);
+  min-height: 2.75rem; /* 44px */
+  height: 100%;
+  padding: var(--kc-space-4);
+  border: 1px solid var(--kc-color-border-strong);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-surface-raised);
+  color: var(--kc-color-text);
+  text-decoration: none;
+  transition:
+    border-color var(--kc-motion-base) var(--kc-ease-out),
+    background-color var(--kc-motion-base) var(--kc-ease-out);
+}
+
+.kc-error-page__dest-link:hover {
+  border-color: var(--kc-color-primary);
+  background-color: var(--kc-color-surface-tint);
+}
+
+.kc-error-page__dest-label {
+  font-weight: var(--kc-font-weight-medium);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.kc-error-page__dest-hint {
+  color: var(--kc-color-text-muted);
+}
+
+.kc-error-page__contact {
+  margin-block-start: var(--kc-space-6);
+  margin-inline: auto;
+  max-width: var(--kc-measure-comfort);
+  color: var(--kc-color-text-muted);
+}
+
+/* MÉRT JAVÍTÁS: a mondatba ágyazott e-mail-link doboza 132×22 px volt, tehát a
+   24×24-es küszöb alatt. A WCAG 2.2 · 2.5.8 „Inline" kivétele ugyan mentené (a
+   cél mondatban áll), de a projekt szabálya MÉRT dobozt kér, ezért a link
+   inline-block lesz, 24px minimális magassággal. A sor magasságát ez nem
+   változtatja meg, mert a bekezdés sortávja már 1,67. */
+.kc-error-page__contact a {
+  display: inline-block;
+  min-height: 1.5rem; /* 24px */
+  /* A mondatba ágyazott link NEM csak színnel különbözhet a környező
+     szövegtől (WCAG 2.2 · 1.4.1 Use of Color):
+     https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html
+     Mérve: a link (ink, #10243e) és a körülötte álló halvány szöveg
+     (ink-soft, #33495f) egymáshoz képest csak 1,68:1 — az aláhúzás nélkül
+     észrevehetetlen volna. */
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/* Az `aria-live` régiónak a frissítés ELŐTT is a DOM-ban kell állnia, különben
+   a képernyőolvasó nem jelenti be a változást. Üresen viszont ne foglaljon
+   helyet: így nem lökődik el a lap alja, amikor megjelenik a szöveg. */
+.kc-error-page__contact:empty {
+  margin: 0;
+}
+
+/* ---- A global-not-found EGYSZERŰSÍTETT kerete -------------------------------
+   Az a lap layout nélkül renderel (lásd src/app/global-not-found.tsx), ezért a
+   láblécnek nincs `__grid`/`__top` szerkezete: csak a jogi sor áll benne. */
+.kc-error-frame__legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kc-space-3) var(--kc-space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kc-error-frame__legal a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem; /* 44px érintőcél a jogi sorban is */
+  color: var(--kc-color-text-muted);
+}

@@ -36,6 +36,13 @@
   --kc-team-accent-text: var(--kc-color-primary);
   --kc-team-card-bg: var(--kc-color-surface-raised);
   --kc-team-frame: var(--kc-color-surface-tint);
+  /* Bejelentkezés-réteg: a hívás-felület kerete, telt állapota és az azon
+     olvasható szöveg. Világos sávon accent-deep (fehér kártyán 5,45:1 — a
+     nem-szöveges 3:1-es küszöb duplája, telt állapotban fehér szöveggel
+     ugyanaz az 5,45:1). */
+  --kc-team-action-line: var(--kc-color-primary);
+  --kc-team-action-fill: var(--kc-color-primary);
+  --kc-team-action-on-fill: var(--kc-color-on-primary);
 }
 
 /* Tint sávon a kártya továbbra is a lap FÖLÉ emelt fehér felület; a képkeret
@@ -53,6 +60,12 @@
   --kc-team-accent-text: var(--kc-color-on-dark-muted);
   --kc-team-card-bg: color-mix(in srgb, var(--kc-color-on-dark) 8%, transparent);
   --kc-team-frame: color-mix(in srgb, var(--kc-color-on-dark) 12%, transparent);
+  /* A kártya felülete a sötét sávon #23354d-re világosodik (ink + 8% fehér).
+     Ezen a fehér keret/szöveg 12,36:1, telt állapotban a fehér kitöltésen az
+     ink 15,63:1 — mindkettő AA/AAA. */
+  --kc-team-action-line: var(--kc-color-on-dark);
+  --kc-team-action-fill: var(--kc-color-on-dark);
+  --kc-team-action-on-fill: var(--kc-color-surface-dark);
 }
 
 /* ---- Szekció-fej --------------------------------------------------------- */
@@ -112,12 +125,26 @@
   /* Magyar tördelés a keskeny hasábban (B3.4). */
   hyphens: auto;
   overflow-wrap: anywhere;
+  transition: border-color var(--kc-motion-base) var(--kc-ease-out);
+}
+
+/* A kártya a fókuszra ugyanúgy reagál, mint az egérre: a billentyűzetes
+   látogató is látja, MELYIK szakembernél tart (a fókuszgyűrűt a globális
+   :focus-visible adja, ez csak a kártya-kerethez ad hozzá). */
+.kc-team__card:hover,
+.kc-team__card:focus-within {
+  border-color: var(--kc-team-action-line);
 }
 
 /* ---- Portré --------------------------------------------------------------
    Mindkét portré AZONOS képarányú keretet kap, hogy a páros ne csússzon el.
    A fejméret-egyezést a kivágásnak kell hoznia (grafikai leltár 3.3/4.) — a
-   keret ezt nem tudja pótolni, csak nem rontja el. */
+   keret ezt nem tudja pótolni, csak nem rontja el.
+
+   A portré nem dekoráció: a valódi munkatárs arcát az NN/g fotó-kutatásában
+   10%-kal hosszabban nézték, mint amennyit a mellette álló életrajzot olvasták
+   (https://www.nngroup.com/articles/photos-as-web-content/). Ezért kapja a
+   kártya TELJES szélességét, nem egy apró kör-bélyeget. */
 
 .kc-team__figure {
   margin: 0;
@@ -137,7 +164,8 @@
   transition: transform var(--kc-motion-base) var(--kc-ease-out);
 }
 
-.kc-team__card:hover .kc-team__figure img {
+.kc-team__card:hover .kc-team__figure img,
+.kc-team__card:focus-within .kc-team__figure img {
   transform: scale(1.02);
 }
 
@@ -178,23 +206,120 @@
   white-space: pre-line;
 }
 
-/* ---- Kapcsolat ----------------------------------------------------------- */
+/* ---- Bejelentkezés (hívás, elérhetőség, e-mail) --------------------------
+   A telefonszám korábban apró szöveglink volt a titulus alatt — lábjegyzet,
+   nem cselekvés. Az NN/g hitelesség-kutatásának 2. tényezője (Upfront
+   Disclosure) szerint a kapcsolati adatnak ott kell látszania, ahol a látogató
+   dönt (https://www.nngroup.com/articles/trustworthy-design/), ezért kap saját,
+   teljes szélességű felületet.
 
-.kc-team__contact {
+   MIÉRT NEM TÖMÖR ELSŐDLEGES GOMB. A telt akcent-kitöltés a lap EGYETLEN
+   elsődleges (vásárlási) cselekvésének a nyelve; két szakemberrel két ilyen
+   felület keletkezne, és a lapon már áll egy elsődleges CTA-sáv. A hívás ezért
+   2px-es keretes, „kifordítható" felület: térben ugyanolyan hangsúlyos, súlyban
+   egy lépcsővel a vásárlás alatt (ui.css `kc-button--secondary` logikája). */
+
+/* Az `auto` felső margó a kártya ALJÁRA húzza a bejelentkezés-réteget: a két
+   szakember bemutatkozása eltérő hosszú (mérve: 3 és 4 sor 1440 px-en), és
+   enélkül a két hívás-felület elcsúszna egymáshoz képest — a 50–50-es páros
+   pont attól páros, hogy a két cselekvés EGY vonalban áll. */
+.kc-team__booking {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--kc-space-2) var(--kc-space-5);
-  margin: var(--kc-space-4) 0 0;
-  padding: 0;
-  list-style: none;
+  flex-direction: column;
+  gap: var(--kc-space-2);
+  margin-top: auto;
+  padding-top: var(--kc-space-5);
 }
 
-.kc-team__contact-item a {
+/* FAJSÚLY-MEGJEGYZÉS (mérve, 2026-08-16): a hívás-felület szabályai
+   SZÁNDÉKOSAN két osztállyal íródnak (`.kc-team .kc-team__call`). A ui.css
+   sötét sávra vonatkozó `.kc-section--dark a` / `:hover` szabálya két
+   osztály + egy pszeudo-osztály, tehát erősebb, mint az egyosztályos alak:
+   egyosztályos hover mellett a szám a fehér kitöltésen halvány akcentre
+   váltott, és a kontraszt 1,84:1-re esett (mérve Chromiumban, pixelből). Két
+   osztállyal a saját szabály nyer, és a telt állapotban 15,63:1 marad. */
+.kc-team .kc-team__call {
+  display: flex;
+  /* 56px: a WCAG 2.2 2.5.8 (AA) 24×24 CSS px-es minimumának több mint duplája,
+     és a repó saját 44px-es célértéke fölött van. A szélesség a kártyáé, tehát
+     a hüvelykujjnak nem kell célozni. */
+  min-height: 3.5rem;
+  align-items: center;
+  gap: var(--kc-space-3);
+  padding: var(--kc-space-3) var(--kc-space-4);
+  border: 2px solid var(--kc-team-action-line);
+  border-radius: var(--kc-radius-md);
+  color: var(--kc-team-ink);
+  text-decoration: none;
+  transition:
+    background-color var(--kc-motion-fast) var(--kc-ease-out),
+    border-color var(--kc-motion-fast) var(--kc-ease-out),
+    color var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-team .kc-team__call:hover {
+  background-color: var(--kc-team-action-fill);
+  border-color: var(--kc-team-action-fill);
+  color: var(--kc-team-action-on-fill);
+}
+
+/* A felirat a telt állapotban is együtt mozog a számmal (különben az
+   accent-deep felirat az accent-deep kitöltésen olvashatatlan lenne). */
+.kc-team .kc-team__call:hover .kc-team__call-label {
+  color: var(--kc-team-action-on-fill);
+}
+
+/* A szám a link SAJÁT színét örökli — a sötét sávon a ui.css horgony-szabálya
+   különben felülírná (lásd a fenti fajsúly-megjegyzést). */
+.kc-team .kc-team__call .kc-team__call-number {
+  color: inherit;
+}
+
+.kc-team__call-icon {
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.kc-team__call-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.kc-team__call-label {
+  font-size: var(--kc-font-s);
+  font-weight: var(--kc-font-weight-medium);
+  line-height: 1.3;
+  color: var(--kc-team-accent-text);
+  transition: color var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+/* A szám EGY sorban marad (a kártya `overflow-wrap: anywhere` szabálya
+   egyébként a számcsoportok közt is törne), és táblázatos számjegyekkel áll,
+   hogy a két kártya számai egymás alatt egyforma ritmusúak legyenek. */
+.kc-team__call-number {
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.kc-team__availability {
+  margin: 0;
+  font-size: var(--kc-font-s);
+  line-height: 1.5;
+  color: var(--kc-team-muted);
+}
+
+.kc-team__email {
   display: inline-flex;
   /* 44px érintési célfelület (UX-skill 3. pont). */
   min-height: 2.75rem;
   align-items: center;
-  font-size: var(--kc-font-m);
+  align-self: flex-start;
+  font-size: var(--kc-font-s);
   font-weight: var(--kc-font-weight-medium);
   color: var(--kc-team-accent-text);
   text-decoration: underline;
@@ -291,9 +416,45 @@
   color: var(--kc-team-accent-text);
 }
 
+/* Ha van bejelentkezés-réteg, AZ viszi az `auto` margót — két `auto` margó
+   szétosztaná a szabad helyet, és egyik sor sem állna egy vonalban. */
+.kc-team__booking ~ .kc-team__link {
+  margin-top: 0;
+}
+
 .kc-team__link:hover {
   text-decoration: underline;
   text-underline-offset: 0.2em;
+}
+
+/* ---- Írásos időpontkérés (szekció-láb) -----------------------------------
+   A hívás mellé aszinkron út: az NN/g egészségügyi út-kutatásában a válaszadók
+   többsége kerüli a telefonálást, mert az gyakran válasz nélkül marad
+   (https://www.nngroup.com/articles/healthcare-customer-journeys/). A kártyák
+   ALATT áll, tehát nem versenyez a hívással, de nem is rejtőzik el. */
+
+.kc-team__booking-note {
+  margin: var(--kc-space-6) 0 0;
+  padding-top: var(--kc-space-5);
+  border-top: 1px solid var(--kc-team-rule);
+  text-align: center;
+}
+
+.kc-team__booking-link {
+  display: inline-flex;
+  /* 44px érintési célfelület. */
+  min-height: 2.75rem;
+  align-items: center;
+  gap: var(--kc-space-2);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-medium);
+  color: var(--kc-team-accent-text);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+
+.kc-team__booking-link:hover {
+  text-underline-offset: 0.4em;
 }
 
 /* ---- 900px felett: a szekció-fej is mértékre fogva -----------------------
@@ -316,7 +477,18 @@
     transition: none;
   }
 
-  .kc-team__card:hover .kc-team__figure img {
+  .kc-team__card:hover .kc-team__figure img,
+  .kc-team__card:focus-within .kc-team__figure img {
     transform: none;
+  }
+
+  .kc-team__card,
+  .kc-team__call,
+  .kc-team__call-label {
+    transition: none;
+  }
+
+  .kc-team__booking-link:hover {
+    text-underline-offset: 0.3em;
   }
 }

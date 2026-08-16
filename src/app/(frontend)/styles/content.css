@@ -577,6 +577,16 @@
 .kc-richtext ol,
 .kc-richtext blockquote {
   max-width: var(--kc-measure);
+  /* HOSSZÚ, TÖRDELHETETLEN SZÓ (WCAG 2.2, 1.4.10 Reflow — C33 technika:
+     „Allowing for Reflow with Long URLs and Strings of Text",
+     https://www.w3.org/WAI/WCAG22/Techniques/css/C33).
+     A jogi oldalak szövege kiírt webcímeket tartalmaz; a leghosszabb 74
+     karakter (a fogyasztóvédelmi békéltető testületek listája). 320 és 390 px
+     széles nézetablakon ez a szó nem fért a hasábba, és a DOKUMENTUM kapott
+     vízszintes görgetést: mérve /aszf-en 320 px-es nézetablakban a dokumentum
+     578 px, 390 px-esben 580 px széles volt. A `break-word` csak akkor tör
+     szót, ha az önmagában sem fér ki — a rendes magyar sortörést nem érinti. */
+  overflow-wrap: break-word;
 }
 
 /* A folyószöveg címsorai a három-méretes skálán:
@@ -597,7 +607,20 @@
   color: var(--kc-color-text);
 }
 
+/* A SZAKASZCÍM FÖLÖTTI TÉRKÖZ (2026-08-16, mérve).
+   A három-méretes skálán a folyószöveg-H2 a `--kc-text-2xl`-ről (1440 px-en
+   31,2 px) az L lépcsőre (46,4 px) került, a fölötte lévő térköz viszont
+   maradt 32 px: a cím fölötti hely a saját méretének 1,03-szorosáról
+   0,69-szeresére esett. Az ÁSZF-en mérve ez 13 szakaszcímet jelent, amelyek
+   mindegyike 32 px-re állt az előző bekezdéstől, miközben két bekezdés között
+   16 px van — a szakaszhatár alig kétszer erősebb jelzés, mint egy
+   bekezdéshatár, egy 15 896 px hosszú lapon.
+   A javítás TÉRKÖZ, nem betűméret: a cím fölé 48 px kerül (a saját méretének
+   1,03-szorosa, a bekezdésköz háromszorosa), alatta marad a szűkebb 12 px —
+   a közelség-elv szerint a cím ahhoz tapad, amit BEVEZET. A h3–h6 (M lépcső,
+   18 px) marad a 32 px-en: ott a térköz a betűméret 1,8-szerese. */
 .kc-richtext h2 {
+  margin-top: var(--kc-space-7);
   font-family: var(--kc-font-heading);
   font-weight: var(--kc-font-weight-normal);
   font-size: var(--kc-font-l);
@@ -728,6 +751,15 @@
   width: 100%;
   height: 100%;
   border: 0;
+}
+
+/* A beágyazott lejátszó FÓKUSZÁLHATÓ (iframe), és sötét (ink) konténeren ül:
+   a globális accent-deep gyűrű itt csak 2,87:1 lenne. Fehérre váltva 15,63:1 —
+   ugyanaz a felülírás, mint a `.kc-section--dark`-on és a lejátszó
+   `.kc-player__media` felületén (G-K3 őr: minden sötét felület definiál
+   fókusz-felülírást). */
+.kc-richtext__video :focus-visible {
+  outline-color: var(--kc-color-focus-on-dark);
 }
 
 /* ==== B2 — Piszkozat-előnézet sáv ========================================

@@ -55,8 +55,12 @@ export function HeroVideo({ streamId, posterUrl, className }: HeroVideoProps) {
         width: '100%',
         aspectRatio: '16 / 9',
         overflow: 'hidden',
-        borderRadius: 'var(--kc-radius-lg, 12px)',
-        backgroundColor: 'var(--kc-tint, #ebf7ff)',
+        borderRadius: 'var(--kc-radius-lg)',
+        /* A háttér korábban a landing NEM LÉTEZŐ tokennevére hivatkozott
+           (kc-tint), ezért mindig a mellé írt legacy hexa fallbackre esett
+           vissza. A szerep-token: --kc-color-surface-tint (#e6f0f8). A G-K1 őr
+           (src/__tests__/gomb-kontraszt.test.ts) ezt a hibafajtát zárja ki. */
+        backgroundColor: 'var(--kc-color-surface-tint)',
       }}
     >
       {poster === null ? null : (

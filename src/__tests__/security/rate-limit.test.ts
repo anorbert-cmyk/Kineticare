@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   checkForgotPasswordEmailRateLimit,
@@ -48,12 +48,70 @@ function makeRequest(
   return new Request(url, { method: init.method ?? 'POST', headers })
 }
 
+/**
+ * ═══ IP-KINYERÉS — SZÁNDÉKOS VISELKEDÉSVÁLTOZÁS (2026-08-16) ═══
+ *
+ * Régen: a `cf-connecting-ip` feltétel nélkül nyert, utána az `x-forwarded-for`
+ * ELSŐ eleme számított. Az éles kiszolgálás előtt viszont nincs Cloudflare —
+ * mindkét érték a KLIENSTŐL jött, tehát kérésenként hamisítható volt, és az
+ * IP-alapú keret nem ért célt.
+ *
+ * Most: a `cf-connecting-ip` csak `TRUST_CF_CONNECTING_IP=true` mellett
+ * számít; egyébként az `x-forwarded-for` HÁTULRÓL vett, megbízható eleme
+ * (a láncot a saját edge-proxynk a végére fűzi). Indoklás: src/lib/audit.ts.
+ */
 describe('resolveRateLimitIp — IP-kinyerés proxy mögül', () => {
-  it('több-IP-s x-forwarded-for lánc: az ELSŐ elem a kliens IP-je', () => {
+  afterEach(() => {
+    delete process.env.TRUST_CF_CONNECTING_IP
+    delete process.env.TRUSTED_PROXY_HOP_COUNT
+  })
+
+  it('több-IP-s x-forwarded-for lánc: a MEGBÍZHATÓ (jobbról első) elem számít', () => {
+    // A lánc elejét a kliens küldi, a végét a saját edge-proxynk fűzi hozzá.
     const headers = new Headers({
       'x-forwarded-for': '203.0.113.7, 70.41.3.18, 150.172.238.178',
     })
-    expect(resolveRateLimitIp(headers)).toBe('203.0.113.7')
+    expect(resolveRateLimitIp(headers)).toBe('150.172.238.178')
+  })
+
+  it('a kliens által hamisított lánc-eleje NEM befolyásolja a keret kulcsát', () => {
+    // Két kérés, két KÜLÖNBÖZŐ hamisított előtaggal, ugyanarról a valódi IP-ről:
+    // a kulcsnak azonosnak kell lennie, különben a korlát megkerülhető.
+    const first = resolveRateLimitIp(
+      new Headers({ 'x-forwarded-for': '1.1.1.1, 198.51.100.5' }),
+    )
+    const second = resolveRateLimitIp(
+      new Headers({ 'x-forwarded-for': '2.2.2.2, 198.51.100.5' }),
+    )
+    expect(first).toBe('198.51.100.5')
+    expect(second).toBe(first)
+  })
+
+  it('a hop-szám állítható (TRUSTED_PROXY_HOP_COUNT)', () => {
+    process.env.TRUSTED_PROXY_HOP_COUNT = '2'
+    const headers = new Headers({ 'x-forwarded-for': '1.1.1.1, 198.51.100.5, 10.0.0.9' })
+    expect(resolveRateLimitIp(headers)).toBe('198.51.100.5')
+  })
+
+  it('érvénytelen hop-szám → alapértelmezés (1 hop), nem dob', () => {
+    for (const value of ['0', '-3', 'sok', '', '99']) {
+      process.env.TRUSTED_PROXY_HOP_COUNT = value
+      expect(
+        resolveRateLimitIp(new Headers({ 'x-forwarded-for': '1.1.1.1, 198.51.100.5' })),
+        value,
+      ).toBe('198.51.100.5')
+    }
+  })
+
+  it('a lánc rövidebb a hop-számnál → a legkorábbi elérhető elem (nem dob)', () => {
+    process.env.TRUSTED_PROXY_HOP_COUNT = '3'
+    expect(resolveRateLimitIp(new Headers({ 'x-forwarded-for': '198.51.100.5' }))).toBe(
+      '198.51.100.5',
+    )
+  })
+
+  it('x-real-ip a végső tartalék, ha nincs x-forwarded-for', () => {
+    expect(resolveRateLimitIp(new Headers({ 'x-real-ip': '203.0.113.9' }))).toBe('203.0.113.9')
   })
 
   it('egyelemű lánc körüli whitespace-t levágja', () => {
@@ -74,12 +132,35 @@ describe('resolveRateLimitIp — IP-kinyerés proxy mögül', () => {
     expect(resolveRateLimitIp(undefined)).toBe(UNKNOWN_IP_KEY)
   })
 
-  it('a cf-connecting-ip erősebb az x-forwarded-for-nál (a Cloudflare felülírja)', () => {
+  it('a cf-connecting-ip fejléc ALAPBÓL FIGYELMEN KÍVÜL marad (nincs Cloudflare az éles előtt)', () => {
+    // A régi kódon ez a teszt '203.0.113.9'-et várt: a kliens által ráírt
+    // fejléc nyert, tehát kérésenként új keretet lehetett szerezni.
     const headers = new Headers({
-      'cf-connecting-ip': '203.0.113.9',
+      'cf-connecting-ip': '9.9.9.9',
       'x-forwarded-for': '10.0.0.1, 203.0.113.9',
     })
     expect(resolveRateLimitIp(headers)).toBe('203.0.113.9')
+  })
+
+  it('a cf-connecting-ip CSAK kifejezett kapcsolóval (TRUST_CF_CONNECTING_IP=true) számít', () => {
+    process.env.TRUST_CF_CONNECTING_IP = 'true'
+    const headers = new Headers({
+      'cf-connecting-ip': '9.9.9.9',
+      'x-forwarded-for': '10.0.0.1, 203.0.113.9',
+    })
+    expect(resolveRateLimitIp(headers)).toBe('9.9.9.9')
+  })
+
+  it('a kapcsoló bármely más értéke nem bizalom („truthy" vizsgálat nincs)', () => {
+    for (const value of ['1', 'igen', 'yes', 'TRUE ', '']) {
+      process.env.TRUST_CF_CONNECTING_IP = value
+      const headers = new Headers({
+        'cf-connecting-ip': '9.9.9.9',
+        'x-forwarded-for': '203.0.113.9',
+      })
+      const expected = value.trim().toLowerCase() === 'true' ? '9.9.9.9' : '203.0.113.9'
+      expect(resolveRateLimitIp(headers), value).toBe(expected)
+    }
   })
 
   it('IPv6-cím kisbetűsítve, egységes kulcsként', () => {

@@ -24,8 +24,11 @@
 # misc
 .DS_Store
 
-# ügynök-munkakönyvtár (worktree-k, munkamenet-szintű skillek) — sosem verziózandó
-.claude/
+# ügynök-munkakönyvtár (worktree-k, munkamenet-szintű állapot) — sosem verziózandó.
+# KIVÉTEL a `.claude/skills/`: a projekt-skillek a repó részei (a tulajdonos
+# 2026-08-16-i döntése), különben minden új munkamenetben elvesznének.
+.claude/*
+!.claude/skills/
 
 # ügynök-eszközök, amiket külső telepítő tesz a repó gyökerébe (npx skills add).
 # Munkamenetenként/gépenként eltérnek, nem a projekt kódja.

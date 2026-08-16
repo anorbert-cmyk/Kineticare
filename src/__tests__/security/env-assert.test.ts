@@ -52,6 +52,20 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
+/**
+ * Éles futás beállítása a Turnstile-tesztekhez.
+ *
+ * A `BARION_ENVIRONMENT` és az `ENABLE_JOB_WORKERS` élesben külön szabályt kap
+ * (B3 / job-worker-riasztás, lentebb saját describe-okban vizsgálva) — itt
+ * ezért expliciten „rendben lévő" értékre állítjuk őket, hogy ezek a tesztek
+ * KIZÁRÓLAG a Turnstile-páron bukhassanak el.
+ */
+function stubProductionRuntime(): void {
+  vi.stubEnv('NODE_ENV', 'production')
+  vi.stubEnv('BARION_ENVIRONMENT', 'test')
+  vi.stubEnv('ENABLE_JOB_WORKERS', 'true')
+}
+
 describe('assertRequiredEnv — minden környezetben kötelező kulcsok', () => {
   it('hiánytalan környezetben nem dob', () => {
     vi.stubEnv('NODE_ENV', 'test')
@@ -92,7 +106,7 @@ describe('assertRequiredEnv — Turnstile-kulcspár konzisztenciája', () => {
   })
 
   it('PRODUCTION: csak site key (secret nélkül) → nem indul, néven nevezett magyar hibával', () => {
-    vi.stubEnv('NODE_ENV', 'production')
+    stubProductionRuntime()
     vi.stubEnv(SITE_KEY_ENV, DUMMY_ENV_VALUE)
 
     expect(() => assertRequiredEnv()).toThrowError(/TURNSTILE_SITE_KEY/)
@@ -100,14 +114,14 @@ describe('assertRequiredEnv — Turnstile-kulcspár konzisztenciája', () => {
   })
 
   it('PRODUCTION: csak secret (site key nélkül) → nem indul', () => {
-    vi.stubEnv('NODE_ENV', 'production')
+    stubProductionRuntime()
     vi.stubEnv(SECRET_KEY_ENV, DUMMY_ENV_VALUE)
 
     expect(() => assertRequiredEnv()).toThrowError(/TURNSTILE_SECRET_KEY/)
   })
 
   it('PRODUCTION: az üres/whitespace érték is hiánynak számít a párellenőrzésben', () => {
-    vi.stubEnv('NODE_ENV', 'production')
+    stubProductionRuntime()
     vi.stubEnv(SITE_KEY_ENV, DUMMY_ENV_VALUE)
     vi.stubEnv(SECRET_KEY_ENV, '   ')
 
@@ -115,7 +129,7 @@ describe('assertRequiredEnv — Turnstile-kulcspár konzisztenciája', () => {
   })
 
   it('PRODUCTION: egyik kulcs sincs → elindul, de warn-riasztás megy a hívónak', () => {
-    vi.stubEnv('NODE_ENV', 'production')
+    stubProductionRuntime()
     const warn = vi.fn()
 
     expect(() => assertRequiredEnv(warn)).not.toThrow()
@@ -124,13 +138,13 @@ describe('assertRequiredEnv — Turnstile-kulcspár konzisztenciája', () => {
   })
 
   it('PRODUCTION: egyik kulcs sincs és nincs warn-callback → akkor sem dob', () => {
-    vi.stubEnv('NODE_ENV', 'production')
+    stubProductionRuntime()
 
     expect(() => assertRequiredEnv()).not.toThrow()
   })
 
   it('PRODUCTION: mindkét kulcs kitöltve → elindul, warn nélkül', () => {
-    vi.stubEnv('NODE_ENV', 'production')
+    stubProductionRuntime()
     vi.stubEnv(SITE_KEY_ENV, DUMMY_ENV_VALUE)
     vi.stubEnv(SECRET_KEY_ENV, DUMMY_ENV_VALUE)
     const warn = vi.fn()
@@ -219,6 +233,111 @@ describe('assertRequiredEnv — környezetfüggő Barion POSKey (változatlan vi
     vi.stubEnv('BARION_ENVIRONMENT', 'prod')
 
     expect(() => assertRequiredEnv()).toThrowError(/BARION_POSKEY_PROD/)
+  })
+})
+
+/**
+ * B3 — a BARION_ENVIRONMENT ÉLESBEN KÖTELEZŐ.
+ *
+ * ═══ A HIBA, AMIT BEZÁR ═══
+ * A változó hiányában a Barion-kliens NÉMÁN a 'test' környezetre esik vissza,
+ * és a BARION_POSKEY_TEST kulcsot használja. Élesben ez azt jelentené, hogy a
+ * vásárló a Barion SANDBOXÁBAN fizet: a pénz sosem érkezik meg, a rendelés
+ * viszont a „sikeres" teszt-válasz alapján paid lenne — hozzáféréssel és
+ * számlával együtt. A RÉGI kódon az app ilyen konfigurációval csendben elindult.
+ */
+describe('assertRequiredEnv — BARION_ENVIRONMENT élesben kötelező (B3)', () => {
+  it('PRODUCTION + hiányzó BARION_ENVIRONMENT → nem indul, néven nevezett magyar hibával', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('ENABLE_JOB_WORKERS', 'true')
+
+    expect(() => assertRequiredEnv()).toThrowError(/BARION_ENVIRONMENT/)
+    expect(() => assertRequiredEnv()).toThrowError(/nem indulhat el/)
+  })
+
+  it('PRODUCTION + üres/whitespace érték is hiánynak számít', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('ENABLE_JOB_WORKERS', 'true')
+    vi.stubEnv('BARION_ENVIRONMENT', '   ')
+
+    expect(() => assertRequiredEnv()).toThrowError(/BARION_ENVIRONMENT/)
+  })
+
+  it("PRODUCTION + 'prod' beállítás, de hiányzó éles POSKey → beszédes indulási hiba", () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('ENABLE_JOB_WORKERS', 'true')
+    vi.stubEnv('BARION_ENVIRONMENT', 'prod')
+    vi.stubEnv('BARION_POSKEY_PROD', undefined)
+
+    expect(() => assertRequiredEnv()).toThrowError(/BARION_POSKEY_PROD/)
+    expect(() => assertRequiredEnv()).toThrowError(/nem indulhat el/)
+  })
+
+  it("PRODUCTION + 'prod' + éles POSKey → elindul", () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('ENABLE_JOB_WORKERS', 'true')
+    vi.stubEnv('BARION_ENVIRONMENT', 'prod')
+    vi.stubEnv('BARION_POSKEY_PROD', DUMMY_ENV_VALUE)
+
+    expect(() => assertRequiredEnv()).not.toThrow()
+  })
+
+  it('NEM production: a hiányzó BARION_ENVIRONMENT változatlanul rendben (helyi fejlesztés)', () => {
+    for (const nodeEnv of ['development', 'test']) {
+      vi.stubEnv('NODE_ENV', nodeEnv)
+      expect(() => assertRequiredEnv(), nodeEnv).not.toThrow()
+    }
+  })
+})
+
+/**
+ * ENABLE_JOB_WORKERS — élesben ez kapcsolja be a job-ütemezést (autoRun).
+ * Nélküle nem fut a webhook-retry (elveszett callback újrapróbálása), az
+ * order-poll (a payment_pending rendelések mentőhálója) és a számla-resweep
+ * sem. Ez nem indulás-megakasztó hiba, de némán sem maradhat.
+ */
+describe('assertRequiredEnv — ENABLE_JOB_WORKERS élesben (warn)', () => {
+  it('PRODUCTION + nincs bekapcsolva → warn-riasztás megy a hívónak (de elindul)', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('BARION_ENVIRONMENT', 'test')
+    vi.stubEnv('ENABLE_JOB_WORKERS', undefined)
+    const warn = vi.fn()
+
+    expect(() => assertRequiredEnv(warn)).not.toThrow()
+    const keys = warn.mock.calls.map((call) => call[0])
+    expect(keys).toContain('job_workerek_kikapcsolva')
+  })
+
+  it("PRODUCTION + 'false' (elgépelt bekapcsolás) → szintén riaszt", () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('BARION_ENVIRONMENT', 'test')
+    vi.stubEnv('ENABLE_JOB_WORKERS', 'false')
+    const warn = vi.fn()
+
+    assertRequiredEnv(warn)
+
+    expect(warn.mock.calls.map((call) => call[0])).toContain('job_workerek_kikapcsolva')
+  })
+
+  it("PRODUCTION + 'true' → nincs job-worker riasztás", () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('BARION_ENVIRONMENT', 'test')
+    vi.stubEnv('ENABLE_JOB_WORKERS', 'true')
+    const warn = vi.fn()
+
+    assertRequiredEnv(warn)
+
+    expect(warn.mock.calls.map((call) => call[0])).not.toContain('job_workerek_kikapcsolva')
+  })
+
+  it('NEM production: kikapcsolt workerekre sem megy riasztás', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('ENABLE_JOB_WORKERS', undefined)
+    const warn = vi.fn()
+
+    assertRequiredEnv(warn)
+
+    expect(warn).not.toHaveBeenCalled()
   })
 })
 

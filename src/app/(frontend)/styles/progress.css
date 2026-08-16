@@ -1,12 +1,14 @@
 /**
  * Haladás-vizualizációk stílusa (src/components/ui/Progress.tsx).
  *
- * KONTRASZT-JEGYZŐKÖNYV (WCAG 1.4.11 — információt hordozó grafika ≥ 3:1):
- *   kitöltés accent-deep (#2f6e9f)  a sínen (#d8e2eb) ...... 3,60:1  ✓
- *   sín (#d8e2eb)                  a paper lapon (#f6f9fc)  1,28:1  → a sín
+ * KONTRASZT-JEGYZŐKÖNYV (WCAG 1.4.11 — információt hordozó grafika ≥ 3:1;
+ * a számok 2026-08-16-án ÚJRASZÁMOLVA a jelenlegi palettával — a korábbi
+ * 3,60 / 1,28 / 5,78 értékek egy régebbi tokenkészletből maradtak itt):
+ *   kitöltés accent-deep (#2f6e9f)  a sínen (#d8e2eb) ...... 4,15:1  ✓
+ *   sín (#d8e2eb)                  a paper lapon (#f6f9fc)  1,24:1  → a sín
  *     ezért kap 1px-es, erősebb (hairline-strong) keretet, hogy a HATÁRA
  *     akkor is érzékelhető legyen, ha a kitöltés 0%;
- *   kész-állapot success (#166534) a sínen ................. 5,78:1  ✓
+ *   kész-állapot success (#166534) a sínen ................. 5,43:1  ✓
  *
  * A sáv magassága és a kör mérete a 4px-es térköz-rácsról, illetve a hívó által
  * megadott átmérőből származik; elemre írt betűméret nincs (UX-skill 4. pont).
@@ -25,10 +27,22 @@
   overflow: hidden;
 }
 
+/* A `--sm` változat a lejátszó FEHÉR fejlécében fut. A `border: 0` miatt a
+   sínt (hairline #d8e2eb) semmi nem határolta: a fehéren 1,31:1 — a sáv
+   KITERJEDÉSE nem érzékelhető, tehát a „mennyi van hátra" nem olvasható le
+   róla (1.4.11, információt hordozó grafika). Mobilon ez nem is pótolható a
+   %-os felirattal, mert az ott `display: none`.
+   Megoldás: 1px-es KÜLSŐ gyűrű box-shadow-val — nem növeli a doboz méretét,
+   így a 4px-es sávmagasság és a kitöltés/sín arány is marad.
+   Mérve: gyűrű border-strong (#6b7f94) a fehér fejlécen 4,13:1 ✓,
+   kitöltés accent-deep a sínen 4,15:1 ✓, kész-állapot 5,43:1 ✓.
+   (Elvetett alternatíva: magát a sínt `border-strong`-ra festeni — akkor a
+   kitöltés/sín arány 1,32:1-re esne.) */
 .kc-progress-bar--sm {
   block-size: 0.25rem;
   border: 0;
   border-radius: 0;
+  box-shadow: 0 0 0 1px var(--kc-color-border-strong);
 }
 
 .kc-progress-bar__fill {

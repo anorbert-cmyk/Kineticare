@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   adminOrPublishedStatus,
+  canUpdateUser,
   isAdmin,
   isAdminFieldAccess,
   isDocumentOwner,
@@ -107,6 +108,51 @@ describe('isSelfOrAdmin (users read/update)', () => {
 
   it('látogatónak false', () => {
     expect(isSelfOrAdmin(accessArgs(null))).toBe(false)
+  })
+})
+
+/**
+ * A users ÍRÁSI szabálya (2026-08-16, belső biztonsági átvizsgálás).
+ *
+ * A régi szabály (`isSelfOrAdmin`) a staffnak MINDEN felhasználói rekordra
+ * írási jogot adott — az owner és a többi staff rekordjára is. A Payload
+ * beépített `password`/`email` mezőin nincs mezőszintű access, tehát ez idegen
+ * fiók hitelesítési adatainak átírását (fiókátvételt) engedte volna. Az alábbi
+ * mátrix mind a négy szerepkör-kombinációra rögzíti az új szabályt; a régi
+ * kódon a staff-sor (`true` helyett where-kényszer) azonnal megbukna.
+ */
+describe('canUpdateUser (users update — legkisebb jogosultság)', () => {
+  it('owner minden rekordot módosíthat (true)', () => {
+    expect(canUpdateUser(accessArgs(owner))).toBe(true)
+  })
+
+  it('staff CSAK a saját rekordját és a customer rekordokat módosíthatja', () => {
+    expect(canUpdateUser(accessArgs(staff))).toEqual({
+      or: [{ id: { equals: staff.id } }, { role: { equals: 'customer' } }],
+    })
+  })
+
+  it('a staff where-kényszere NEM engedi az owner/staff rekordot (csak customer vagy önmaga)', () => {
+    const where = canUpdateUser(accessArgs(staff)) as {
+      or: Array<Record<string, Record<string, unknown>>>
+    }
+    // Egyik ág sem enged owner/staff szerepkörű, idegen rekordot:
+    expect(where.or.map((clause) => Object.keys(clause)[0])).toEqual(['id', 'role'])
+    expect(where.or[1].role.equals).toBe('customer')
+  })
+
+  it('customer kizárólag a saját rekordját módosíthatja (id-kényszer)', () => {
+    expect(canUpdateUser(accessArgs(customer))).toEqual({ id: { equals: customer.id } })
+  })
+
+  it('látogatónak false', () => {
+    expect(canUpdateUser(accessArgs(null))).toBe(false)
+  })
+
+  it('az OLVASÁS tágabb marad, mint az írás (a staff minden rekordot lát)', () => {
+    // Ügyfélszolgálat/rendelés-egyeztetés: a staff olvasása változatlanul true.
+    expect(isSelfOrAdmin(accessArgs(staff))).toBe(true)
+    expect(canUpdateUser(accessArgs(staff))).not.toBe(true)
   })
 })
 
@@ -282,7 +328,11 @@ describe('collection access bekötés a végleges configban', () => {
     const users = (config.collections ?? []).find((c) => c.slug === 'users')
 
     expect(users?.access?.read).toBe(isSelfOrAdmin)
-    expect(users?.access?.update).toBe(isSelfOrAdmin)
+    // Az ÍRÁS szűkebb, mint az olvasás: staff csak a saját + customer rekordot.
+    expect(users?.access?.update).toBe(canUpdateUser)
+    expect(users?.access?.update?.(accessArgs(owner))).toBe(true)
+    expect(users?.access?.update?.(accessArgs(staff))).not.toBe(true)
+    expect(users?.access?.update?.(accessArgs(null))).toBe(false)
     expect(users?.access?.delete).toBe(isOwner)
     expect(users?.access?.admin).toBe(isStaffOrOwner)
     // A create nyitott (regisztráció) — látogató is hozhat létre fiókot.
@@ -293,10 +343,15 @@ describe('collection access bekötés a végleges configban', () => {
     expect(roleField?.access?.create).toBe(isOwnerFieldAccess)
     expect(roleField?.access?.update).toBe(isOwnerFieldAccess)
 
-    // A purchases mezőt továbbra sem írhatja senki az API-n keresztül.
+    // A purchases mezőt staff és owner írhatja (kézi kurzus-jóváírás az
+    // adminban), a VEVŐ és a látogató SOHA — a részletes mátrix külön őrben:
+    // src/__tests__/security/users-purchases-field-access.test.ts.
     const purchasesField = findField(users as CollectionConfig, 'purchases')
-    expect(purchasesField?.access?.create?.(fieldAccessArgs(owner))).toBe(false)
-    expect(purchasesField?.access?.update?.(fieldAccessArgs(owner))).toBe(false)
+    expect(purchasesField?.access?.create?.(fieldAccessArgs(owner))).toBe(true)
+    expect(purchasesField?.access?.update?.(fieldAccessArgs(owner))).toBe(true)
+    expect(purchasesField?.access?.update?.(fieldAccessArgs(staff))).toBe(true)
+    expect(purchasesField?.access?.update?.(fieldAccessArgs(customer))).toBe(false)
+    expect(purchasesField?.access?.update?.(fieldAccessArgs(null))).toBe(false)
   })
 
   it('products: ár-mezők és status owner-only írásúak', async () => {

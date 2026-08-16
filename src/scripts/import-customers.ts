@@ -32,13 +32,14 @@ import {
   resolveServerUrl,
   type InviteLink,
 } from '../lib/customer-import/invite'
-import { parseCustomerCsv, type RowIssue } from '../lib/customer-import/parse'
+import { parseCustomerCsv, type ParsedCsv, type RowIssue } from '../lib/customer-import/parse'
 import { buildImportPlan, parseCourseMap, type ImportPlan } from '../lib/customer-import/plan'
 import {
   checkSendInvitesPreconditions,
   sendInviteEmails,
   type InviteSendOutcome,
 } from '../lib/customer-import/send-invites'
+import { buildTagRuleSet, SYSTEME_TAG_RULES } from '../lib/customer-import/tags'
 import { createLogger } from '../lib/logger'
 import config from '../payload.config'
 
@@ -58,6 +59,8 @@ interface CliArgs {
   file: string
   map: string[]
   dryRun: boolean
+  /** CSAK a fájl ellenőrzése: adatbázis-kapcsolat nélkül, terv nélkül. */
+  parseOnly: boolean
   outLinks?: string
   inviteAll: boolean
   sendInvites?: SendInvitesMode
@@ -65,7 +68,24 @@ interface CliArgs {
   emailCol?: string
   nameCol?: string
   coursesCol?: string
+  lastNameCol?: string
+  registeredCol?: string
+  format?: 'auto' | 'generic' | 'systeme'
+  /** További, hozzáférést NEM adó címkék. */
+  ignoreTags: string[]
+  /** További visszatérítés-párok: „Visszatérítés-címke=Vásárlás-címke". */
+  refundTags: string[]
 }
+
+/**
+ * A CSV-t hordozó KÖRNYEZETI VÁLTOZÓ neve (base64-kódolt fájltartalom).
+ *
+ * MIÉRT: a vásárlói lista SZEMÉLYES ADAT — a repóba nem kerülhet be, a Railway
+ * jobnak viszont valahogy meg kell kapnia. A base64-kódolt tartalom változóként
+ * adható át, a futás után pedig TÖRLENDŐ (Railway → Variables → a változó
+ * törlése), különben a személyes adat ott marad a szolgáltatás konfigjában.
+ */
+const CSV_BASE64_ENV = 'IMPORT_CUSTOMERS_CSV_BASE64'
 
 const USAGE = [
   'Vásárló-import (systeme.io → Kineticare)',
@@ -73,25 +93,40 @@ const USAGE = [
   'Használat:',
   '  npx tsx src/scripts/import-customers.ts --file=export.csv --map "Kurzus A=SKU-A" [opciók]',
   '',
-  'Kötelező:',
+  'Bemenet (a kettő közül az egyik kötelező):',
   '  --file=<út>            A beolvasandó CSV-fájl.',
+  `  ${CSV_BASE64_ENV}   Környezeti változó a base64-kódolt CSV-vel (fájl helyett).`,
+  '                         A személyes adatot tartalmazó lista így nem kerül fájlba;',
+  '                         a változót a futás UTÁN törölni kell.',
   '',
   'Leképezés (ismételhető):',
-  '  --map "Kurzusnév=SKU"  Egy systeme.io-kurzusnév → Kineticare-termék (sku).',
+  '  --map "Kurzusnév=SKU"  Egy systeme.io-kurzusnév/címke → Kineticare-termék (sku).',
   '                         Minden kurzushoz kell egy pár; ami kimarad, az nem',
   '                         tűnik el csendben, hanem a mérlegben listázódik.',
   '',
   'Opciók:',
   '  --dry-run              PRÓBAFUTÁS: nulla írás, csak a teljes terv kiírása.',
+  '  --parse-only           CSAK a fájl ellenőrzése — adatbázis-kapcsolat nélkül.',
   '  --out-links=<út>       Aktiválási linkek CSV-be (éles futás után).',
   '  --invite-all           Link ne csak az új, hanem minden érintett vevőnek.',
   '  --send-invites         Aktiváló LEVÉL kiküldése az új fiókoknak (Resend).',
   '  --send-invites=all     Levél minden tervbeli vevőnek (a kihagyottaknak is).',
   '  --delimiter=<jel>      Mezőelválasztó (alap: ","; magyar Excel: ";").',
   '  --email-col=<név>      Az e-mail-oszlop fejlécneve.',
-  '  --name-col=<név>       A név-oszlop fejlécneve.',
-  '  --courses-col=<név>    A kurzus-oszlop fejlécneve.',
+  '  --name-col=<név>       A név-oszlop fejlécneve (systeme.io: „First name").',
+  '  --last-name-col=<név>  A vezetéknév-oszlop fejlécneve (systeme.io: „Last name").',
+  '  --courses-col=<név>    A kurzus-/címke-oszlop fejlécneve (systeme.io: „Tag").',
+  '  --registered-col=<név> A dátum-oszlop fejlécneve (systeme.io: „Date Registered").',
+  '  --format=<alak>        auto (alap) | generic | systeme — a bemeneti alak.',
+  '  --ignore-tag "<címke>" További, hozzáférést NEM adó címke (ismételhető).',
+  '  --refund-tag "V=K"     Visszatérítés-címke (V) → az általa kiütött vásárlás-címke (K).',
   '  --help                 Ez a súgó.',
+  '',
+  'SYSTEME.IO-CÍMKÉK: a `Tag` oszlop vesszős címkelistáját szabálytábla értelmezi',
+  '(src/lib/customer-import/tags.ts). Vásárlás-címke hozzáférést ad, a',
+  'visszatérítés-címke a saját párját KIÜTI (a sor másik kurzusa jár), az',
+  'érdeklődő-címke nem ad hozzáférést, az ISMERETLEN címke pedig figyelmeztetést',
+  'kap — a sor feldolgozása hozzáférés nélkül folytatódik.',
   '',
   'ELŐBB MINDIG --dry-run. A próbafutás ugyanazt a tervet mutatja, amit az éles',
   'futás végrehajtana, és egyetlen sort sem ír az adatbázisba.',
@@ -118,7 +153,15 @@ type ArgsResult =
 
 /** Argumentum-feldolgozás: `--kulcs=érték`, `--kulcs érték` és kapcsoló-alak is. */
 function parseArgs(argv: readonly string[]): ArgsResult {
-  const args: CliArgs = { file: '', map: [], dryRun: false, inviteAll: false }
+  const args: CliArgs = {
+    file: '',
+    map: [],
+    dryRun: false,
+    parseOnly: false,
+    inviteAll: false,
+    ignoreTags: [],
+    refundTags: [],
+  }
   const valueKeys = new Set([
     'file',
     'map',
@@ -127,6 +170,11 @@ function parseArgs(argv: readonly string[]): ArgsResult {
     'email-col',
     'name-col',
     'courses-col',
+    'last-name-col',
+    'registered-col',
+    'format',
+    'ignore-tag',
+    'refund-tag',
   ])
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -137,6 +185,10 @@ function parseArgs(argv: readonly string[]): ArgsResult {
     }
     if (raw === '--dry-run') {
       args.dryRun = true
+      continue
+    }
+    if (raw === '--parse-only') {
+      args.parseOnly = true
       continue
     }
     if (raw === '--invite-all') {
@@ -207,14 +259,52 @@ function parseArgs(argv: readonly string[]): ArgsResult {
       case 'courses-col':
         args.coursesCol = value
         break
+      case 'last-name-col':
+        args.lastNameCol = value
+        break
+      case 'registered-col':
+        args.registeredCol = value
+        break
+      case 'format':
+        if (value !== 'auto' && value !== 'generic' && value !== 'systeme') {
+          writeError(
+            `Hiba: a "--format" értéke csak auto, generic vagy systeme lehet (kapott: "${value}").`,
+          )
+          return { kind: 'error' }
+        }
+        args.format = value
+        break
+      case 'ignore-tag':
+        args.ignoreTags.push(value)
+        break
+      case 'refund-tag':
+        args.refundTags.push(value)
+        break
       default:
         writeError(`Hiba: ismeretlen argumentum: "--${key}".`)
         return { kind: 'error' }
     }
   }
 
-  if (args.file === '') {
-    writeError('Hiba: a --file argumentum kötelező. Súgó: --help')
+  if (args.file === '' && !hasCsvFromEnv()) {
+    writeError(
+      `Hiba: a --file argumentum kötelező (vagy add át a CSV-t az ${CSV_BASE64_ENV} ` +
+        'környezeti változóban, base64-kódolva). Súgó: --help',
+    )
+    return { kind: 'error' }
+  }
+  if (args.file !== '' && hasCsvFromEnv()) {
+    writeError(
+      `Hiba: a --file és az ${CSV_BASE64_ENV} környezeti változó EGYSZERRE van megadva. ` +
+        'Pontosan az egyiket add meg, hogy egyértelmű legyen, melyik listát importálod.',
+    )
+    return { kind: 'error' }
+  }
+  if (args.parseOnly && args.sendInvites !== undefined) {
+    writeError(
+      'Hiba: a --parse-only és a --send-invites nem használható együtt (a fájl-ellenőrzés ' +
+        'adatbázis és levélküldés nélkül fut).',
+    )
     return { kind: 'error' }
   }
   // A levélküldés feltételeit MÉG a fájl beolvasása és bármilyen DB-kapcsolat
@@ -274,6 +364,48 @@ function printIssues(title: string, issues: readonly RowIssue[]): void {
   }
 }
 
+/**
+ * A CÍMKE-MÉRLEG kiírása (systeme.io-alak).
+ *
+ * A megrendelő kérdésére válaszol: hány vevő kap melyik kurzust, hány maradt ki
+ * visszatérítés miatt, hány az érdeklődő, és van-e ismeretlen címke. A számok
+ * VEVŐNKÉNT (összefésült e-mail-cím szerint) értendők, nem fájlsoronként.
+ */
+function printTagSummary(parsed: ParsedCsv): void {
+  const stats = parsed.tagStats
+  if (stats === undefined) {
+    return
+  }
+  write('')
+  write(`CÍMKE-MÉRLEG (${parsed.rows.length} vevő a fájlban):`)
+  const line = (label: string, value: number): void => {
+    write(`  ${label}: ${value}`)
+  }
+  for (const [tag, count] of stats.granted) {
+    line(`hozzáférést kap — "${tag}"`, count)
+  }
+  for (const [tag, count] of stats.refunded) {
+    line(`VISSZATÉRÍTÉS miatt kihagyva — "${tag}"`, count)
+  }
+  for (const [tag, count] of stats.ignored) {
+    line(`nem vásárlás (hozzáférés nélkül) — "${tag}"`, count)
+  }
+  for (const [tag, count] of stats.unknown) {
+    line(`ISMERETLEN címke (hozzáférés nélkül) — "${tag}"`, count)
+  }
+  line('címke nélküli vevő', stats.customersWithoutTags)
+  line('összesen hozzáférés nélkül marad', stats.customersWithoutAccess)
+  line('régi vásárlás-dátummal', stats.customersWithDate)
+  if (stats.unparsableDates > 0) {
+    line('ÉRTELMEZHETETLEN dátum', stats.unparsableDates)
+  }
+  write('')
+  write('A címke-szabályok (vásárlás / visszatérítés / érdeklődő):')
+  for (const rule of SYSTEME_TAG_RULES) {
+    write(`  - "${rule.tag}" → ${rule.note}`)
+  }
+}
+
 function printUnknownCourses(plan: ImportPlan): void {
   if (plan.unknownCourseNames.length === 0) {
     return
@@ -302,6 +434,39 @@ async function writeLinksFile(target: string, contents: string): Promise<void> {
   }
 }
 
+/** Van-e (nem üres) base64-CSV a környezeti változóban? */
+function hasCsvFromEnv(): boolean {
+  const raw = process.env[CSV_BASE64_ENV]
+  return typeof raw === 'string' && raw.trim() !== ''
+}
+
+/**
+ * A CSV beolvasása a KÖRNYEZETI VÁLTOZÓBÓL (base64).
+ *
+ * A Railway-változó értékébe a másoláskor sortörés is kerülhet — a whitespace
+ * ezért a dekódolás előtt kiesik. A dekódolt tartalom UTF-8 szövegként áll
+ * elő; a BOM levágását a parser végzi.
+ *
+ * A hibaüzenet SOHA nem írja ki a változó tartalmát (személyes adat).
+ */
+function readCsvFromEnv(): string {
+  const raw = (process.env[CSV_BASE64_ENV] ?? '').replace(/\s+/g, '')
+  if (raw === '') {
+    throw new Error(`Az ${CSV_BASE64_ENV} környezeti változó üres.`)
+  }
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(raw)) {
+    throw new Error(
+      `Az ${CSV_BASE64_ENV} környezeti változó nem base64-kódolt szöveg. ` +
+        'Készítsd így: base64 -w0 lista.csv (macOS: base64 -i lista.csv).',
+    )
+  }
+  const decoded = Buffer.from(raw, 'base64').toString('utf8')
+  if (decoded.trim() === '') {
+    throw new Error(`Az ${CSV_BASE64_ENV} változó dekódolt tartalma üres.`)
+  }
+  return decoded
+}
+
 async function readCsvFile(file: string): Promise<string> {
   try {
     return await readFile(path.resolve(file), 'utf8')
@@ -326,22 +491,55 @@ async function readCsvFile(file: string): Promise<string> {
 
 async function run(args: CliArgs): Promise<number> {
   // --- 1. CSV beolvasása és értelmezése -------------------------------------
-  const csv = await readCsvFile(args.file)
+  const csv = args.file !== '' ? await readCsvFile(args.file) : readCsvFromEnv()
+  if (args.file === '') {
+    write(`A CSV az ${CSV_BASE64_ENV} környezeti változóból érkezett (fájl nélkül).`)
+    write(
+      `FIGYELEM: a lista SZEMÉLYES ADAT — az ${CSV_BASE64_ENV} változót a futás után TÖRÖLD ` +
+        '(Railway → Variables).',
+    )
+  }
+  const tagRules = buildTagRuleSet({
+    ignoreTags: args.ignoreTags,
+    refundPairs: args.refundTags,
+  })
+  if (tagRules.errors.length > 0) {
+    for (const error of tagRules.errors) {
+      writeError(`Hiba: ${error}`)
+    }
+    return 1
+  }
   const parsed = parseCustomerCsv(csv, {
     delimiter: args.delimiter,
     emailColumn: args.emailCol,
     nameColumn: args.nameCol,
     coursesColumn: args.coursesCol,
+    lastNameColumn: args.lastNameCol,
+    registeredColumn: args.registeredCol,
+    format: args.format,
+    tagRules: tagRules.ruleSet,
   })
 
   for (const warning of parsed.warnings) {
     write(`Figyelmeztetés: ${warning}`)
   }
   printIssues('Kihagyott sorok', parsed.issues)
+  printTagSummary(parsed)
 
   if (parsed.rows.length === 0) {
     write('')
     write('Nincs importálható sor.')
+    return parsed.issues.length > 0 ? 1 : 0
+  }
+
+  // --- 1b. CSAK FÁJL-ELLENŐRZÉS (adatbázis nélkül) --------------------------
+  if (args.parseOnly) {
+    write('')
+    write(
+      `FÁJL-ELLENŐRZÉS — ${parsed.rows.length} vevő a fájlban, ${parsed.issues.length} hibás sor. ` +
+        'Adatbázis-kapcsolat nem épült ki, írás nem történt.',
+    )
+    write('Következő lépés: ugyanez a parancs --parse-only helyett --dry-run kapcsolóval.')
     return parsed.issues.length > 0 ? 1 : 0
   }
 
@@ -384,6 +582,15 @@ async function run(args: CliArgs): Promise<number> {
         `nem leképezett kurzusnév: ${plan.unknownCourseNames.length}. ` +
         'Az adatbázisba SEMMI nem íródott.',
     )
+    const withDate = plan.entries.filter(
+      (entry) => entry.action !== 'skip-complete' && entry.registeredAt !== undefined,
+    ).length
+    if (withDate > 0) {
+      write(
+        `A régi vásárlás időpontja ${withDate} vevőnél kerülne audit-bejegyzésbe ` +
+          '(admin → Rendszer → Műveletnapló, „customer-import.legacy-purchase").',
+      )
+    }
     if (plan.emptyUserCollection && plan.summary.create > 0) {
       write(
         'FIGYELEM: a users kollekció ÜRES — az első létrehozott felhasználó tulajdonosi (owner) ' +
@@ -526,6 +733,10 @@ async function run(args: CliArgs): Promise<number> {
       ? { levelElkuldve: sentCount, levelSikertelen: sendFailedCount }
       : {}),
   })
+  write(
+    'A régi (systeme.io-beli) vásárlás időpontja a Műveletnaplóba került, ' +
+      'műveletnév: „customer-import.legacy-purchase" (admin → Rendszer → Műveletnapló).',
+  )
   write(
     'Az import idempotens: ugyanez a parancs bármikor újrafuttatható — a kész sorok kimaradnak.',
   )

@@ -14,6 +14,13 @@ import {
  * A Media xs/sm/md/lg méretei alapján srcSet-et és intrinsic méreteket ad,
  * a preferált méret hiányában az eredeti képre esik vissza. Alt kötelező a
  * sémában; hiányában dekoratívként (alt="") renderel, fejlesztői figyelmeztetéssel.
+ *
+ * `decorative`: a kép TUDATOSAN dekoráció — `alt=""`-t kap, és a hiányzó
+ * alt-ra figyelmeztető fejlesztői üzenet is elmarad. Ott kell, ahol a kép a
+ * környező szöveget ismételné meg (pl. a kurzuskártya borítója a cím alatt):
+ * ilyenkor az alt-szöveg nem információ, hanem duplikáció, ami a képernyő-
+ * olvasós nevet hízlalja (WCAG 1.1.1 — a tisztán dekoratív kép üres alttal
+ * kihagyandó az akadálymentességi fából).
  */
 export interface MediaImageProps {
   media: MediaLike
@@ -21,9 +28,18 @@ export interface MediaImageProps {
   priority?: boolean
   sizes?: string
   className?: string
+  /** Tudatosan dekoratív kép: `alt=""`, figyelmeztetés nélkül. */
+  decorative?: boolean
 }
 
-export function MediaImage({ media, preferredSize, priority, sizes, className }: MediaImageProps) {
+export function MediaImage({
+  media,
+  preferredSize,
+  priority,
+  sizes,
+  className,
+  decorative = false,
+}: MediaImageProps) {
   const src = pickMediaUrl(media, preferredSize)
   if (!src) {
     if (process.env.NODE_ENV !== 'production') {
@@ -32,8 +48,8 @@ export function MediaImage({ media, preferredSize, priority, sizes, className }:
     return null
   }
 
-  const alt = mediaAlt(media)
-  if (process.env.NODE_ENV !== 'production' && alt.trim().length === 0) {
+  const alt = decorative ? '' : mediaAlt(media)
+  if (process.env.NODE_ENV !== 'production' && !decorative && alt.trim().length === 0) {
     console.warn('[MediaImage] Hiányzó alt-szöveg — a Media sémában kötelező; ellenőrizd az adatot.')
   }
 

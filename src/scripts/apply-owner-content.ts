@@ -55,6 +55,20 @@
  *     `/kurzusok/[slug]` route a numerikus szegmenst tartósan a kanonikus
  *     címre irányítja (src/lib/course-url.ts), a menü SOS-pontja pedig
  *     termék-referencia, tehát magától követi a slugot (src/lib/menu-seed.ts).
+ * 14. Az ÁSZF-ben BENNMARADT `[xxx]` HELYKITÖLTŐ: az ügyvédi szövegben az
+ *     adatkezelési tájékoztatóra mutató hivatkozás CÍME üresen maradt, mert a
+ *     végleges webcímet a fejlesztés adja meg. Élesben ma a látogató a
+ *     „[xxx]” karaktersort látja a kötelező tájékoztatóra mutató link helyén.
+ *     A javítás CSAK a hivatkozás címét írja be; a mondat állítása és a jogi
+ *     szöveg minden más része változatlan, és a csere kizárólag BETŰRE egyező
+ *     bekezdésen történik (szerkesztett szövegnél hangosan kihagy).
+ * 13. Az „SOS Kézrelax villámkurzus” INGYENES jelölője (`priceInHUFEnabled`):
+ *     élesben nincs kimondva, ezért a kurzusoldal NÉGY helyen „Megveszem"
+ *     gombot mutat, ár nélkül, a pénztár viszont elutasítja („A termékhez nem
+ *     tartozik érvényes ár…") — a tulajdonos 2026-08-16-i élő hibabejelentése.
+ *     A javítás `false`-ra állítja, de KIZÁRÓLAG akkor, ha a terméknek nincs
+ *     érvényes (pozitív) ára; beárazott terméket sosem tesz ingyenessé. A
+ *     7. javítással egyetlen írásba fut össze (ugyanaz a rekord).
  *  8. A `/szolgaltatasok` oldal rendelői szekciójának HORGONYA: a fejléc-menü
  *     a `/szolgaltatasok#rendeloi` címre visz, az élő szekció viszont
  *     `arlista` horgonyt visel — a menüpontra kattintva ma SEMMI nem történik.
@@ -282,6 +296,8 @@ export type JavitasSzabaly =
   | 'zaro-cta'
   | 'szolgaltatasok-hero-kep'
   | 'szolgaltatasok-bevezeto'
+  | 'sos-ingyenes-jelolo'
+  | 'aszf-adatvedelem-link'
 
 /** Egy elvégzett módosítás vagy egy indokolt kihagyás gépileg is vizsgálható leírása. */
 export interface JavitasLepes {
@@ -885,6 +901,238 @@ export const alkalmazSosKurzusSlug = (jelenlegi: Product['slug']): SlugAtalakita
       {
         szabaly: 'sos-kurzus-slug',
         uzenet: `${uzenet}: (üres) → „${SOS_KURZUS_SLUG}”. A régi, id-alapú URL tovább él: a kurzus-route a numerikus szegmenst a kanonikus címre irányítja.`,
+        indok: null,
+      },
+    ],
+    kihagyasok: [],
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 14. javítás — az ÁSZF-ben bennmaradt `[xxx]` helykitöltő link.
+// ---------------------------------------------------------------------------
+
+/** A helykitöltő szövege, ahogy az ügyvédi forrásban állt. */
+export const ASZF_HELYKITOLTO_BEKEZDES =
+  'Adatkezelési tájékoztatónkat az alábbi linken érheti el: [xxx]'
+
+/** A javított bekezdés — a `legal-source/aszf.txt` mai tartalmával AZONOS. */
+export const ASZF_JAVITOTT_BEKEZDES =
+  'Adatkezelési tájékoztatónkat az alábbi linken érheti el: https://www.kineticare.hu/adatvedelem'
+
+/** Az ÁSZF-javítás eredménye. */
+export interface AszfLinkAtalakitas {
+  /** A visszaírandó rich-text, vagy `null`, ha nem szabad írni. */
+  content: unknown | null
+  modositasok: JavitasLepes[]
+  kihagyasok: JavitasLepes[]
+}
+
+/**
+ * Az élő ÁSZF-oldalon bennmaradt `[xxx]` helykitöltő cseréje a valódi
+ * adatkezelési tájékoztató címére.
+ *
+ * ═══ MIÉRT SZABAD EHHEZ HOZZÁNYÚLNI ═══
+ * A 6. javítás szabálya, hogy jogi oldalt a script SOSEM ír felül — a szöveg
+ * az ügyvédé. Ez a lépés NEM jogi tartalmat módosít: az ügyvéd a hivatkozás
+ * CÍMÉT hagyta kitöltetlenül (`[xxx]`), mert a végleges webcímet a fejlesztés
+ * adja meg. A mondat állítása („az adatkezelési tájékoztató ezen a linken
+ * érhető el") változatlan; csak a link kerül a helyére. Amíg ez így áll, az
+ * élő ÁSZF a kötelező adatkezelési tájékoztatóra NEM mutat használható
+ * hivatkozást — a látogató a `[xxx]`-et látja.
+ *
+ * ═══ MIÉRT NEM TUD KÁRT OKOZNI ═══
+ * KIZÁRÓLAG azt a bekezdést cseréli, amelynek a szövege BETŰRE azonos a
+ * helykitöltős változattal, és csak akkor, ha PONTOSAN EGY ilyen bekezdés van.
+ * Ha az ügyvéd vagy a tulajdonos bármit hozzáírt, a mondat már nem egyezik, és
+ * a script hangosan kihagyja. A bekezdés-csomópont többi mezője (formátum,
+ * irány, verzió) érintetlen marad: csak a szöveg-gyerek `text` értéke cserélődik.
+ */
+export const alkalmazAszfAdatvedelemLink = (content: unknown): AszfLinkAtalakitas => {
+  const uzenet = 'Az ÁSZF adatkezelési hivatkozása'
+  const gyoker =
+    typeof content === 'object' && content !== null
+      ? (content as { root?: { children?: unknown[] } }).root
+      : undefined
+  const gyerekek = Array.isArray(gyoker?.children) ? gyoker.children : null
+
+  if (gyerekek === null) {
+    return {
+      content: null,
+      modositasok: [],
+      kihagyasok: [
+        {
+          szabaly: 'aszf-adatvedelem-link',
+          uzenet,
+          indok: 'az ÁSZF tartalma nem a várt rich-text szerkezet — a script nem nyúl hozzá',
+          hangos: true,
+        },
+      ],
+    }
+  }
+
+  const talalatok = gyerekek
+    .map((csomopont, index) => ({ csomopont, index }))
+    .filter(({ csomopont }) => bekezdesSzovege(csomopont) === ASZF_HELYKITOLTO_BEKEZDES)
+
+  if (talalatok.length === 0) {
+    const marJavitva = gyerekek.some(
+      (csomopont) => bekezdesSzovege(csomopont) === ASZF_JAVITOTT_BEKEZDES,
+    )
+    return {
+      content: null,
+      modositasok: [],
+      kihagyasok: [
+        {
+          szabaly: 'aszf-adatvedelem-link',
+          uzenet,
+          indok: marJavitva
+            ? 'a hivatkozás MÁR a helyén van — nincs teendő'
+            : 'a helykitöltős mondat nem található betűre egyezően — a szöveget azóta szerkesztették, a script nem tippel',
+          hangos: !marJavitva,
+        },
+      ],
+    }
+  }
+
+  if (talalatok.length > 1) {
+    return {
+      content: null,
+      modositasok: [],
+      kihagyasok: [
+        {
+          szabaly: 'aszf-adatvedelem-link',
+          uzenet,
+          indok: `${talalatok.length} egyforma helykitöltős bekezdés van — nem egyértelmű, melyiket kellene javítani; emberi döntés kell`,
+          hangos: true,
+        },
+      ],
+    }
+  }
+
+  const { index } = talalatok[0]
+  const ujGyerekek = gyerekek.map((csomopont, i) =>
+    i === index ? bekezdesSzovegCsere(csomopont, ASZF_JAVITOTT_BEKEZDES) : csomopont,
+  )
+
+  return {
+    content: { ...(content as object), root: { ...gyoker, children: ujGyerekek } },
+    modositasok: [
+      {
+        szabaly: 'aszf-adatvedelem-link',
+        uzenet: `${uzenet}: „[xxx]" helykitöltő → https://www.kineticare.hu/adatvedelem. A mondat állítása változatlan, csak a hivatkozás címe kerül a helyére; a jogi szöveg többi részéhez a script nem nyúl.`,
+        indok: null,
+      },
+    ],
+    kihagyasok: [],
+  }
+}
+
+/** Egy bekezdés-csomópont teljes szövege, vagy `null`, ha nem bekezdés. */
+const bekezdesSzovege = (csomopont: unknown): string | null => {
+  if (typeof csomopont !== 'object' || csomopont === null) {
+    return null
+  }
+  const node = csomopont as { type?: unknown; children?: unknown }
+  if (node.type !== 'paragraph' || !Array.isArray(node.children)) {
+    return null
+  }
+  return node.children
+    .map((gyerek) =>
+      typeof gyerek === 'object' && gyerek !== null && typeof (gyerek as { text?: unknown }).text === 'string'
+        ? ((gyerek as { text: string }).text)
+        : '',
+    )
+    .join('')
+}
+
+/**
+ * Egy bekezdés szövegének cseréje EGYETLEN szöveg-gyerekre.
+ *
+ * A helykitöltős mondat a generált tartalomban egyetlen, formázatlan
+ * szöveg-csomópont (`jogiRichText` → `para`), ezért a csere biztonságos: nem
+ * veszik el félkövér vagy dőlt szakasz, mert nincs ilyen benne.
+ */
+const bekezdesSzovegCsere = (csomopont: unknown, ujSzoveg: string): unknown => {
+  const node = csomopont as { children?: unknown[] }
+  const elsoGyerek = Array.isArray(node.children) ? node.children[0] : undefined
+  const alap =
+    typeof elsoGyerek === 'object' && elsoGyerek !== null ? (elsoGyerek as object) : {}
+  return { ...(csomopont as object), children: [{ ...alap, text: ujSzoveg }] }
+}
+
+// ---------------------------------------------------------------------------
+// 13. javítás — az SOS villámkurzus INGYENES jelölője.
+// ---------------------------------------------------------------------------
+
+/** Az ingyenes-jelölő átalakításának eredménye. */
+export interface IngyenesJeloloAtalakitas {
+  /** A beírandó érték, vagy `null`, ha nem szabad írni. */
+  priceInHUFEnabled: false | null
+  modositasok: JavitasLepes[]
+  kihagyasok: JavitasLepes[]
+}
+
+/**
+ * Az SOS villámkurzus `priceInHUFEnabled` mezőjének `false`-ra állítása.
+ *
+ * ═══ A HIBA, AMIT BEZÁR ═══
+ * A tulajdonos élő bejelentése: az ingyenes kurzusra megadta az adatait, és
+ * „A termékhez nem tartozik érvényes ár, így nem vásárolható meg" üzenetet
+ * kapott. A mérés (2026-08-16, GET a `/kurzusok/sos-kezrelax-villamkurzus`
+ * címre) igazolta: az oldalon NÉGYSZER áll „Megveszem" felirat, ár SEHOL —
+ * tehát a terméken az ár-pipa nincs `false`-ra állítva, a felület fizetősnek
+ * mutatja, a checkout-kapu viszont elutasítja. A kód-oldali javítás (a CTA az
+ * ÉRVÉNYES árat kérdezze) önmagában csak annyit érne el, hogy a gomb eltűnne;
+ * ahhoz, hogy az ingyenes kurzus TÉNYLEG ingyenesként viselkedjen, az élő
+ * rekordon is ki kell mondani a szándékot. A két javítás EGYÜTT teljes.
+ *
+ * ═══ MIÉRT BIZTONSÁGOS ═══
+ * Csak akkor ír, ha a terméknek NINCS érvényes (pozitív) ára. Ha valaki
+ * szándékosan beárazta, a script hozzá sem nyúl, és hangosan kihagyásként
+ * naplózza — egy bevételt hozó termék ingyenessé tétele sosem lehet egy
+ * automata script mellékhatása.
+ */
+export const alkalmazSosIngyenesJelolo = (
+  termek: Pick<Product, 'priceInHUF' | 'priceInHUFEnabled'>,
+): IngyenesJeloloAtalakitas => {
+  const uzenet = `Az SOS kurzus ingyenes-jelölője („${SOS_COURSE_SKU}”)`
+
+  if (termek.priceInHUFEnabled === false) {
+    return {
+      priceInHUFEnabled: null,
+      modositasok: [],
+      kihagyasok: [
+        {
+          szabaly: 'sos-ingyenes-jelolo',
+          uzenet,
+          indok: 'a kurzus MÁR ingyenesként van jelölve — nincs teendő',
+        },
+      ],
+    }
+  }
+
+  const ar = typeof termek.priceInHUF === 'number' ? termek.priceInHUF : null
+  if (ar !== null && ar > 0) {
+    return {
+      priceInHUFEnabled: null,
+      modositasok: [],
+      kihagyasok: [
+        {
+          szabaly: 'sos-ingyenes-jelolo',
+          uzenet,
+          indok: `a kurzusnak ÉRVÉNYES ára van (${ar} Ft) — a script beárazott terméket sosem tesz ingyenessé; ha mégis ingyenes kell, az adminban kell kivenni az árat`,
+        },
+      ],
+    }
+  }
+
+  return {
+    priceInHUFEnabled: false,
+    modositasok: [
+      {
+        szabaly: 'sos-ingyenes-jelolo',
+        uzenet: `${uzenet}: (nincs kimondva) → INGYENES. Enélkül a kurzusoldal „Megveszem" gombot mutat, a pénztár viszont elutasítja („A termékhez nem tartozik érvényes ár…") — pontosan ezt a hibát jelentette a tulajdonos.`,
         indok: null,
       },
     ],
@@ -1836,6 +2084,37 @@ async function futtat(): Promise<void> {
     }
   }
 
+  // --- 14. javítás: az ÁSZF `[xxx]` helykitöltője ---------------------------
+  // Csak a MÁR LÉTEZŐ ÁSZF-oldalra vonatkozik: ha a lapot ez a futás hozta
+  // létre, a szöveg a forrásfájlból már a javított hivatkozással érkezett.
+  const aszfOldal = jogiTalalat.docs.find((doc) => doc.slug === 'aszf')
+  if (aszfOldal !== undefined) {
+    const aszfEredmeny = alkalmazAszfAdatvedelemLink(aszfOldal.content)
+    naplozdLepeseket(aszfEredmeny, dryRun)
+    modositasokSzama += aszfEredmeny.modositasok.length
+    kihagyasokSzama += aszfEredmeny.kihagyasok.length
+
+    if (aszfEredmeny.content !== null && !dryRun) {
+      await payload.update({
+        collection: 'pages',
+        id: aszfOldal.id,
+        data: { content: aszfEredmeny.content as typeof aszfOldal.content },
+        depth: 0,
+        overrideAccess: true,
+      })
+      const piszkozat = await payload
+        .findByID({
+          collection: 'pages',
+          id: aszfOldal.id,
+          depth: 0,
+          draft: true,
+          overrideAccess: true,
+        })
+        .catch(() => null)
+      figyelmeztessPiszkozatra('ÁSZF', aszfOldal.updatedAt, piszkozat?.updatedAt)
+    }
+  }
+
   // --- 7. javítás: az SOS kurzus webcíme ------------------------------------
   const sosTalalat = await payload.find({
     collection: 'products',
@@ -1857,11 +2136,27 @@ async function futtat(): Promise<void> {
     modositasokSzama += eredmeny.modositasok.length
     kihagyasokSzama += eredmeny.kihagyasok.length
 
-    if (eredmeny.slug !== null && !dryRun) {
+    // --- 13. javítás: az SOS kurzus ingyenes-jelölője -----------------------
+    // Ugyanazon a rekordon dolgozik, ezért EGYETLEN update-be fut össze a
+    // slug-javítással: két külön írás két verzió-bejegyzést hozna létre.
+    const ingyenes = alkalmazSosIngyenesJelolo(sosKurzus)
+    naplozdLepeseket(ingyenes, dryRun)
+    modositasokSzama += ingyenes.modositasok.length
+    kihagyasokSzama += ingyenes.kihagyasok.length
+
+    const sosAdat: Partial<Pick<Product, 'slug' | 'priceInHUFEnabled'>> = {}
+    if (eredmeny.slug !== null) {
+      sosAdat.slug = eredmeny.slug
+    }
+    if (ingyenes.priceInHUFEnabled !== null) {
+      sosAdat.priceInHUFEnabled = ingyenes.priceInHUFEnabled
+    }
+
+    if (Object.keys(sosAdat).length > 0 && !dryRun) {
       await payload.update({
         collection: 'products',
         id: sosKurzus.id,
-        data: { slug: eredmeny.slug },
+        data: sosAdat,
         depth: 0,
         overrideAccess: true,
       })

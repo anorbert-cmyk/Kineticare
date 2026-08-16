@@ -74,9 +74,11 @@
  * Környezeti változók (értékek nélkül, a doksiban részletezve —
  * docs/demo-kornyezet.md):
  *   DEMO_MODE=1                 KÖTELEZŐ kapu (bármely más érték = leállás)
- *   DEMO_CUSTOMER_PASSWORD      opcionális: a bemutató demo-fiókjának jelszava;
- *                               hiányában a script egyszeri, véletlen jelszót
- *                               generál és EGYSZER kiírja (csak létrehozáskor)
+ *   DEMO_CUSTOMER_PASSWORD      KÖTELEZŐ: a bemutató demo-fiókjának jelszava.
+ *                               Hiányában a script HANGOSAN, írás előtt leáll —
+ *                               generált jelszót nem készít és NAPLÓBA SEM ÍR
+ *                               (a logger redakciója kulcsnév-alapú, tehát az
+ *                               üzenetszövegbe ágyazott titkot nem szűrné)
  *   DEMO_COURSE_SKU             opcionális: melyik kurzusra szóljanak a
  *                               vásárlások (alapértelmezés: „Otthoni KézRehab
  *                               Program", a 79 500 Ft-os kurzus)
@@ -92,6 +94,7 @@ import { minimalRichText } from '../lib/home-seed'
 import { createLogger, type Logger } from '../lib/logger'
 import { applyBarionStateTransition } from '../lib/order-status/apply-barion-state'
 import { generateInitialPassword } from '../lib/security/initial-password'
+import { isProductionServerUrl, PRODUCTION_HOSTS, serverUrlHost } from '../lib/security/live-environment'
 import {
   formatPasswordPolicyErrors,
   validatePasswordStrength,
@@ -128,8 +131,12 @@ export const DEMO_COURSE_PRICE_HUF = 79_500
  * Éles publikus hosztok — ezekre mutató `NEXT_PUBLIC_SERVER_URL` mellett a
  * script SOSEM fut le. (A demó-környezet saját aldomaint vagy Railway-címet
  * kap, lásd docs/demo-kornyezet.md.)
+ *
+ * A definíció a KÖZÖS modulban él (src/lib/security/live-environment.ts), mert
+ * a `seed.ts` éles-védelme ugyanezt a listát használja; itt csak
+ * továbbexportáljuk, hogy a meglévő importok változatlanul működjenek.
  */
-export const PRODUCTION_HOSTS: readonly string[] = ['kineticare.hu', 'www.kineticare.hu']
+export { PRODUCTION_HOSTS, serverUrlHost }
 
 /** Egy demó-rendelés kimenetele — a bemutatón mindkettőt látni akarjuk. */
 export type DemoOrderOutcome = 'paid' | 'payment_failed'
@@ -335,8 +342,8 @@ export function demoGuardErrors(input: DemoGuardInput): string[] {
     )
   }
 
-  const host = serverUrlHost(input.serverUrl)
-  if (host !== null && PRODUCTION_HOSTS.includes(host)) {
+  if (isProductionServerUrl(input.serverUrl)) {
+    const host = serverUrlHost(input.serverUrl)
     errors.push(
       `A NEXT_PUBLIC_SERVER_URL az ÉLES oldalra mutat (${host}) — a demó-feltöltés ` +
         'ilyen környezetben nem futhat. A demó-környezet saját címet kap ' +
@@ -345,18 +352,6 @@ export function demoGuardErrors(input: DemoGuardInput): string[] {
   }
 
   return errors
-}
-
-/** A publikus szerver-URL hosztja kisbetűsen; érvénytelen/hiányzó értéknél null. */
-export function serverUrlHost(rawValue: string | undefined | null): string | null {
-  if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
-    return null
-  }
-  try {
-    return new URL(rawValue.trim()).hostname.toLowerCase()
-  } catch {
-    return null
-  }
 }
 
 /** Demó-címnek számít-e (kizárólag az `@example.com` domain). */
@@ -942,24 +937,49 @@ async function ensureDemoProgress(
 // ---------------------------------------------------------------------------
 
 /**
- * A bemutató demo-fiókjának jelszava.
- *
- * A repóban SOSEM szerepel jelszó: vagy a `DEMO_CUSTOMER_PASSWORD` környezeti
- * változóból jön (ilyenkor nem írjuk ki), vagy a script generál egyet, és azt
- * EGYSZER, a fiók létrehozásakor kiírja a naplóba.
+ * A hiányzó `DEMO_CUSTOMER_PASSWORD` magyar hibaüzenete. Exportált, hogy a
+ * teszt karakter-pontosan rögzíthesse (és hogy sose kerüljön bele érték).
  */
-function resolveDemoAccountPassword(): { password: string; generated: boolean } {
+export const MISSING_DEMO_PASSWORD_MESSAGE =
+  'A DEMO_CUSTOMER_PASSWORD környezeti változó KÖTELEZŐ: a bemutató fiókjának ' +
+  'jelszavát a futtatókörnyezet adja meg, a script nem generál és nem naplóz ' +
+  'jelszót. Állítsd be a demó-szolgáltatás Variables felületén (érték a repóba ' +
+  'SOHA nem kerül), majd indítsd újra a feltöltést — részletek: docs/demo-kornyezet.md.'
+
+/**
+ * A bemutató demo-fiókjának jelszava — KIZÁRÓLAG a `DEMO_CUSTOMER_PASSWORD`
+ * környezeti változóból.
+ *
+ * ═══ MIÉRT KÖTELEZŐ (2026-08-16-i átvizsgálás) ═══
+ * Korábban a script generált egy jelszót, és azt a naplóüzenet SZÖVEGÉBE
+ * illesztve kiírta. A logger redakciója KULCSNÉV-alapú, tehát az üzenetszövegbe
+ * ágyazott titkot nem szűri — a demó-szolgáltatás pedig minden induláskor
+ * lefut, így a jelszó minden deploy-naplóba bekerült.
+ *
+ * A két lehetséges megoldás közül a KÖTELEZŐ környezeti változó az
+ * üzemeltethetőbb: a bemutató fiókjába a prezentálónak BE KELL tudnia lépni,
+ * márpedig a „jelszó-beállításra váró" (passwordSetupPending) állapotból csak
+ * e-mailben kiküldött aktiváló linkkel lehet kijönni — a demó-környezetben
+ * viszont sem valódi postafiók (`@example.com`), sem garantáltan beállított
+ * levélküldő nincs. Így a fiók használhatatlan lenne. A változó egyszeri,
+ * emberi beállítást igényel, utána a jelszó stabil és ISMERT — érték sehol nem
+ * kerül a repóba vagy a naplóba.
+ *
+ * Hiányzó változó esetén a script HANGOSAN, írás előtt leáll (a hívó a
+ * `demoSeed()` elején, minden adatbázis-művelet előtt hívja).
+ */
+function resolveDemoAccountPassword(): string {
   const provided = process.env.DEMO_CUSTOMER_PASSWORD
-  if (typeof provided === 'string' && provided.length > 0) {
-    const errors = validatePasswordStrength({ password: provided, email: DEMO_ACCOUNT_EMAIL })
-    if (errors.length > 0) {
-      throw new Error(
-        `A DEMO_CUSTOMER_PASSWORD nem felel meg a jelszó-politikának. ${formatPasswordPolicyErrors(errors)}`,
-      )
-    }
-    return { password: provided, generated: false }
+  if (typeof provided !== 'string' || provided.trim().length === 0) {
+    throw new Error(MISSING_DEMO_PASSWORD_MESSAGE)
   }
-  return { password: generateInitialPassword(DEMO_ACCOUNT_EMAIL), generated: true }
+  const errors = validatePasswordStrength({ password: provided, email: DEMO_ACCOUNT_EMAIL })
+  if (errors.length > 0) {
+    throw new Error(
+      `A DEMO_CUSTOMER_PASSWORD nem felel meg a jelszó-politikának. ${formatPasswordPolicyErrors(errors)}`,
+    )
+  }
+  return provided
 }
 
 export async function demoSeed(): Promise<void> {
@@ -971,7 +991,7 @@ export async function demoSeed(): Promise<void> {
     throw new Error(`A demó-feltöltés nem futhat le:\n- ${guardErrors.join('\n- ')}`)
   }
 
-  // A jelszó-ellenőrzés MINDEN adatbázis-írás előtt fut le: hibás
+  // A jelszó-ellenőrzés MINDEN adatbázis-írás előtt fut le: hiányzó vagy hibás
   // DEMO_CUSTOMER_PASSWORD mellett félkész demó-adat sem keletkezhet.
   const demoAccountPassword = resolveDemoAccountPassword()
 
@@ -995,7 +1015,7 @@ export async function demoSeed(): Promise<void> {
   for (const [index, person] of DEMO_PEOPLE.entries()) {
     const isDemoAccount = person.email === DEMO_ACCOUNT_EMAIL
     const password = isDemoAccount
-      ? demoAccountPassword.password
+      ? demoAccountPassword
       : // A többi demó-fiókhoz eldobható, véletlen jelszó tartozik: azokba
         // senki nem lép be, a bemutató a demo-fiókkal megy.
         generateInitialPassword(person.email)
@@ -1003,10 +1023,11 @@ export async function demoSeed(): Promise<void> {
     const userCountBefore = summary.felhasznaloLetrehozva
     const user = await ensureDemoUser(payload, person, password, summary)
     if (isDemoAccount && summary.felhasznaloLetrehozva > userCountBefore) {
+      // JELSZÓ SOHA NEM KERÜL A NAPLÓBA — sem kulcson, sem üzenetszövegbe
+      // ágyazva (a logger redakciója kulcsnév-alapú, szöveget nem szűr).
       log.info(
-        demoAccountPassword.generated
-          ? `demó: a bemutató fiókja létrejött — belépés: ${DEMO_ACCOUNT_EMAIL} / ${demoAccountPassword.password}`
-          : `demó: a bemutató fiókja létrejött — belépés: ${DEMO_ACCOUNT_EMAIL} (a jelszó a DEMO_CUSTOMER_PASSWORD értéke)`,
+        `demó: a bemutató fiókja létrejött — belépés: ${DEMO_ACCOUNT_EMAIL}, ` +
+          'a jelszó a DEMO_CUSTOMER_PASSWORD környezeti változó értéke.',
       )
     } else if (isDemoAccount) {
       log.info(

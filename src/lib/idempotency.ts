@@ -19,6 +19,64 @@ export type WebhookProvider = 'barion' | 'stream' | 'szamlazz'
 
 export type WebhookEventStatus = 'received' | 'processed' | 'failed'
 
+/**
+ * NEM TERMINÁLIS üzleti kimenetelek — ezek NEM zárják le véglegesen az eseményt.
+ *
+ * ═══ A HIBA, AMIT BEZÁR (B4) ═══
+ * A Barion MINDEN státuszváltásra UGYANAZZAL a PaymentId-vel küld callbacket
+ * (`Prepared`/`Started` → `Succeeded`). A dedup viszont a (provider, externalId)
+ * páron dolgozik, tehát a MÁSODIK kézbesítés ugyanahhoz a rekordhoz érkezik.
+ * Amíg a függő (`pending_repoll`) kimenetel `processed`-re zárta a rekordot, a
+ * későbbi — és épp a LÉNYEGES — `Succeeded` callback duplikátumként némán
+ * eldobódott: a rendelés sosem lett paid a callback-úton.
+ *
+ * Ezért a függő kimenetel ÚJRAFELDOLGOZHATÓ állapotban hagyja az eseményt
+ * (`status='received'`, `processedAt` NULL), a TERMINÁLIS kimeneteleket
+ * (`paid`, `cancelled`, `rejected`) pedig változatlanul véglegesnek tekintjük —
+ * rájuk a duplikátum-elnyelés teljes erővel érvényes.
+ *
+ * Az `attempts` a függő futásoknál is NŐ. Ez szándékos: a webhook-retry job így
+ * nem pörög korlátlanul egy soha el nem dőlő fizetésen (a kimerült rekordokat a
+ * scan-szűrő kizárja). A VÉGLEGES callback feldolgozását ez nem gátolja — a
+ * route-handler útja nem nézi az attempts-ot —, a hosszan függő rendelések
+ * mentőhálója pedig amúgy is az order-poll job.
+ */
+export const NON_TERMINAL_WEBHOOK_RESULTS: readonly string[] = ['pending_repoll']
+
+/** A TÁROLT `result` mező jelöl-e nem terminális (újrafeldolgozható) kimenetelt? */
+export function isNonTerminalWebhookResult(result: string | null | undefined): boolean {
+  return typeof result === 'string' && NON_TERMINAL_WEBHOOK_RESULTS.includes(result)
+}
+
+/**
+ * VÉGLEGESEN lezárt-e az esemény? Csak ilyenkor szabad a következő kézbesítést
+ * duplikátumként eldobni. (A `processed` + nem terminális eredmény kombináció a
+ * B4 előtti kódból maradt sorokon fordulhat elő — azok is újrafeldolgozhatók.)
+ */
+export function isTerminallyProcessed(
+  event: Pick<WebhookEventDoc, 'status' | 'result'>,
+): boolean {
+  return event.status === 'processed' && !isNonTerminalWebhookResult(event.result)
+}
+
+/**
+ * A handler ezzel a mezővel jelzi vissza, hogy az esemény ÜZLETILEG NEM zárult
+ * le (pl. a fizetés még függőben van). Ilyenkor a rekord `received` marad, tehát
+ * a következő kézbesítés — és a webhook-retry job — újra feldolgozza.
+ */
+export interface NonTerminalHandlerOutcome {
+  webhookNonTerminal: true
+}
+
+/** A handler visszatérési értéke jelöl-e nem terminális kimenetelt? */
+export function isNonTerminalHandlerOutcome(result: unknown): boolean {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    (result as { webhookNonTerminal?: unknown }).webhookNonTerminal === true
+  )
+}
+
 export interface WebhookEventDoc {
   id: number | string
   provider: WebhookProvider
@@ -90,7 +148,14 @@ export interface ProcessWebhookParams {
 }
 
 export type ProcessWebhookOutcome =
-  | { kind: 'processed'; eventId: number | string; attempts: number; result: unknown }
+  | {
+      kind: 'processed'
+      eventId: number | string
+      attempts: number
+      result: unknown
+      /** true → a handler NEM terminális kimenetelt adott: a rekord received maradt. */
+      nonTerminal?: boolean
+    }
   /** Már korábban sikeresen feldolgoztuk — no-op, a korábbi eredmény jelzése. */
   | { kind: 'already-processed'; eventId: number | string }
   /** Versenyhelyzet: egy párhuzamos worker hozta létre / dolgozza fel éppen. */
@@ -148,13 +213,23 @@ async function attemptProcessing(
   const attempts = (record.attempts ?? 0) + 1
   try {
     const result = await handler(record)
+    // NEM TERMINÁLIS kimenetel (pl. még függő fizetés): a rekord `received`
+    // marad, tehát a Barion következő — ugyanarra a PaymentId-re érkező —
+    // callbackje és a webhook-retry job is újra feldolgozza (B4).
+    const nonTerminal = isNonTerminalHandlerOutcome(result)
     await store.update({
       collection: 'webhook-events',
       id: record.id,
-      data: { status: 'processed', attempts, lastError: null },
+      data: { status: nonTerminal ? 'received' : 'processed', attempts, lastError: null },
       overrideAccess: true,
     })
-    return { kind: 'processed', eventId: record.id, attempts, result }
+    return {
+      kind: 'processed',
+      eventId: record.id,
+      attempts,
+      result,
+      ...(nonTerminal ? { nonTerminal: true } : {}),
+    }
   } catch (error) {
     const message = errorMessage(error)
     // A státuszfrissítés best-effort: ha ez is elhasal, a rekord received/failed
@@ -180,8 +255,10 @@ async function attemptProcessing(
 /**
  * Idempotens webhook-feldolgozás.
  *
- * - Ha az esemény már `processed`: no-op, `already-processed` jelzéssel.
- * - Ha `received`/`failed`: attempts++ és újrapróbálás.
+ * - Ha az esemény VÉGLEGESEN lezárult (`processed` + terminális `result`):
+ *   no-op, `already-processed` jelzéssel.
+ * - Ha `received`/`failed` (vagy nem terminális eredménnyel zárult): attempts++
+ *   és újrafeldolgozás.
  * - Ha még nincs rekord: létrehozás `received` státusszal; a (provider,
  *   externalId) unique-violation elkapása azt jelenti, hogy egy párhuzamos
  *   worker már feldolgozta / éppen feldolgozza (`in-progress`).
@@ -199,7 +276,10 @@ export async function processWebhook({
   const record = existing.docs[0]
 
   if (record) {
-    if (record.status === 'processed') {
+    // Duplikátumot CSAK a véglegesen lezárt eseményre szabad mondani: a függő
+    // (pending_repoll) kimenetel után ugyanarra a PaymentId-re érkezik majd a
+    // végleges státusz — azt fel KELL dolgozni (B4).
+    if (isTerminallyProcessed(record)) {
       logger.info('webhook-esemény már feldolgozva — duplikátum eldobva', {
         provider,
         externalId,

@@ -2,6 +2,8 @@ import { after } from 'next/server'
 import type { Payload } from 'payload'
 
 import {
+  isNonTerminalWebhookResult,
+  isTerminallyProcessed,
   isUniqueViolation,
   processWebhook,
   webhookEventStore,
@@ -17,9 +19,15 @@ import { createBarionCallbackProcessor } from './process-callback'
  * A Barion 15 mp-en belül HTTP 200-at vár, különben a retry-lépcsője
  * (2s/6s/18s/54s/102s) újra és újra kézbesít — ezért a handler:
  *
+ *  0. FELOLDJA a PaymentId-t: a Barion a QUERY STRINGBEN küldi
+ *     (`CallbackUrl?paymentId=<guid>`), a POST-törzs ÜRES — ezért a query az
+ *     elsődleges forrás, a JSON-törzs csak tartalék (üres/nem JSON törzs
+ *     önmagában nem hiba).
  *  1. AZONNAL dedupol: a webhook-events-be (provider='barion',
  *     externalId=PaymentId) ír; a (provider, externalId) UNIQUE-ütközés =
- *     már feldolgozva/feldolgozás alatt → 200, no-op.
+ *     már feldolgozva/feldolgozás alatt → 200, no-op. Duplikátumot CSAK a
+ *     VÉGLEGESEN lezárt eseményre mond: a függő (pending_repoll) kimenetel után
+ *     a következő kézbesítés hozza a végleges státuszt, azt fel KELL dolgozni.
  *  2. AZONNAL 200-at válaszol — a verifikáció és az állapot-átmenet ASZINKRON
  *     (a handler SOSEM blokkol a GetState-híváson).
  *
@@ -76,16 +84,10 @@ const PAYMENT_ID_PATTERN =
 export const MAX_PAYMENT_ID_LENGTH = 36
 
 /**
- * A PaymentId kinyerése és ALAK-ellenőrzése — hiányzó, üres, túl hosszú vagy
- * nem GUID-alakú érték esetén null (a hívó 400-zal válaszol, DB-írás nélkül).
+ * Egy nyers érték ALAK-ellenőrzése — hiányzó, üres, túl hosszú vagy nem
+ * GUID-alakú érték esetén null.
  */
-function extractPaymentId(body: unknown): string | null {
-  if (typeof body !== 'object' || body === null) {
-    return null
-  }
-  // A Barion callback 'PaymentId' kulccsal küld; a kisbetűs alakot is elfogadjuk.
-  const raw =
-    (body as Record<string, unknown>).PaymentId ?? (body as Record<string, unknown>).paymentId
+function normalizePaymentId(raw: unknown): string | null {
   if (typeof raw !== 'string') {
     return null
   }
@@ -95,6 +97,40 @@ function extractPaymentId(body: unknown): string | null {
     return null
   }
   return PAYMENT_ID_PATTERN.test(trimmed) ? trimmed : null
+}
+
+/**
+ * A PaymentId kinyerése a QUERY STRINGBŐL — ez az ÉLES csatorna.
+ *
+ * ═══ A HIBA, AMIT BEZÁR (B1) ═══
+ * A Barion a callbacket `CallbackUrl?paymentId=<guid>` alakban, ÜRES POST-
+ * törzzsel küldi. A korábbi kód `await request.json()`-nel indult, ami üres
+ * törzsön DOB — így MINDEN valódi callback 400-at kapott, és a fizetés sosem
+ * zárult le a callback-úton.
+ */
+function paymentIdFromQuery(request: Request): string | null {
+  let params: URLSearchParams
+  try {
+    params = new URL(request.url).searchParams
+  } catch {
+    return null
+  }
+  // A Barion kisbetűs 'paymentId'-t küld; a nagybetűs alakot is elfogadjuk.
+  return normalizePaymentId(params.get('paymentId') ?? params.get('PaymentId'))
+}
+
+/**
+ * A PaymentId kinyerése a JSON-TÖRZSBŐL — TARTALÉK csatorna (a Barion mai
+ * viselkedése szerint nem ez az élő út, de egy JSON-törzses kézbesítés is
+ * feldolgozható marad).
+ */
+function extractPaymentId(body: unknown): string | null {
+  if (typeof body !== 'object' || body === null) {
+    return null
+  }
+  const raw =
+    (body as Record<string, unknown>).PaymentId ?? (body as Record<string, unknown>).paymentId
+  return normalizePaymentId(raw)
 }
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
@@ -108,21 +144,25 @@ export function createBarionCallbackHandler(deps: BarionCallbackHandlerDeps) {
     const requestId = getRequestId(request.headers) ?? generateRequestId()
     const log = logger.child({ requestId, route: 'barion-callback' })
 
-    let body: unknown
-    try {
-      body = await request.json()
-    } catch {
-      log.warn('barion-callback: nem JSON törzs — 400')
-      return jsonResponse({ ok: false, error: 'A kérés törzse nem értelmezhető JSON.' }, 400)
+    // 0. A PaymentId FELOLDÁSA: elsődlegesen a query string (ez az éles Barion-
+    //    csatorna), tartalékként a JSON-törzs. Az ÜRES vagy nem JSON törzs
+    //    önmagában NEM hiba — a Barion pont ilyet küld.
+    let paymentIdSource: 'query' | 'body' = 'query'
+    let paymentId = paymentIdFromQuery(request)
+    if (!paymentId) {
+      paymentIdSource = 'body'
+      const body: unknown = await request.json().catch(() => null)
+      paymentId = extractPaymentId(body)
     }
-
-    const paymentId = extractPaymentId(body)
     if (!paymentId) {
       // A nyers értéket NEM naplózzuk (tetszőleges, kívülről jött szöveg).
       log.warn('barion-callback: hiányzó vagy nem GUID-alakú PaymentId — 400')
       return jsonResponse({ ok: false, error: 'Hiányzó vagy érvénytelen PaymentId.' }, 400)
     }
     const eventLog = log.child({ paymentId })
+    // Az éles próbavásárlásnál EZ a sor bizonyítja, hogy a callback megérkezett
+    // és melyik csatornán hozta az azonosítót.
+    eventLog.info('barion-callback: PaymentId feloldva', { source: paymentIdSource })
 
     const payload = await deps.getPayload()
     const store = deps.store ?? webhookEventStore(payload)
@@ -168,16 +208,18 @@ export function createBarionCallbackHandler(deps: BarionCallbackHandlerDeps) {
       })
       const record = existing.docs[0]
 
-      if (record && record.status === 'processed') {
-        // Már sikeresen feldolgozva → no-op (dupla kézbesítés).
+      if (record && isTerminallyProcessed(record)) {
+        // Már VÉGLEGESEN feldolgozva → no-op (dupla kézbesítés).
         eventLog.info('barion-callback: duplikált kézbesítés — már feldolgozva, no-op 200')
         return jsonResponse({ ok: true, status: 'duplicate' })
       }
 
       if (record) {
-        // 'received' = feldolgozás már ütemezve/fut (vagy a retry-job viszi);
-        // 'failed' = a Barion retry-lépcső újra kézbesítette → azonnali újrapróbálás.
-        if (record.status === 'failed') {
+        // 'received' + még nincs eredmény = a feldolgozás ütemezve/fut;
+        // 'failed' = a Barion retry-lépcső újra kézbesítette → azonnali újrapróbálás;
+        // nem terminális eredmény (pending_repoll) = a fizetés korábban még függő
+        // volt, EZ a kézbesítés hozza a végleges státuszt → újra feldolgozzuk (B4).
+        if (record.status === 'failed' || isNonTerminalWebhookResult(record.result)) {
           schedule(runProcessing)
         }
         return jsonResponse({ ok: true, status: 'received' })

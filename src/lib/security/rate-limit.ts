@@ -78,14 +78,23 @@
  *
  * ## IP-kinyerés és annak korlátja
  *
- * Proxy mögött futunk, ezért a kliens IP-je a fejlécekből jön: elsődlegesen a
- * `cf-connecting-ip` (a Cloudflare felülírja, ezért a kliens nem hamisíthatja),
- * ennek hiányában az `x-forwarded-for` ELSŐ eleme. Ismert korlát: ha a kérés
- * nem a Cloudflare-en át érkezik, az `x-forwarded-for` lánc elejét a kliens
- * hamisíthatja, és IP-rotációval kerülgetheti a keretet. A védelem ezért a
- * hétköznapi visszaélést és a véletlen elárasztást fogja meg, elszánt,
- * elosztott támadót nem — arra a Cloudflare-szintű (WAF/rate limiting) védelem
- * a helyes eszköz.
+ * Proxy mögött futunk, ezért a kliens IP-je a fejlécekből jön. A kinyerés a
+ * `resolveClientIp`-pel közös (src/lib/audit.ts) — ott áll a részletes
+ * indoklás. Röviden:
+ *
+ *  - a `cf-connecting-ip` CSAK a `TRUST_CF_CONNECTING_IP=true` kapcsoló mellett
+ *    számít. Az éles kiszolgálás előtt mérés szerint NINCS Cloudflare, tehát
+ *    kapcsoló nélkül ezt a fejlécet bármely kliens ráírhatná a kérésre, és
+ *    kérésenként más értékkel korlátlanul kerülgetné a keretet — 2026-08-16-ig
+ *    pontosan ez volt a helyzet;
+ *  - egyébként az `x-forwarded-for` HÁTULRÓL vett, megbízható eleme
+ *    (`TRUSTED_PROXY_HOP_COUNT`, alapértelmezés 1): a lánc VÉGÉT a saját
+ *    edge-proxynk fűzi hozzá, az elejét a kliens küldi.
+ *
+ * Ismert korlát marad: több replika esetén a keret replikánként külön számol
+ * (lásd fentebb), és egy valóban elosztott, sok különböző forrás-IP-ről érkező
+ * támadást az IP-keret elvileg sem foghat meg — arra a szolgáltató-szintű
+ * (WAF/rate limiting) védelem a helyes eszköz.
  */
 
 import { resolveClientIp } from '../audit'

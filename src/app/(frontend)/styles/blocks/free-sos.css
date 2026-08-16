@@ -114,6 +114,20 @@
   color: var(--kc-free-sos-band);
 }
 
+/* Letiltott állapot a saját sávon: a `ui.css` világos kitöltése itt beleolvadna
+   a sávba, ezért a gomb ÜRES marad, sáv-ellenszínű kerettel és felirattal —
+   fehér az accent-deep sávon 5,45:1, az ink változaton 15,63:1 (mindkettő a
+   szöveg- ÉS az UI-küszöb felett). A letiltás jelentését a `not-allowed`
+   kurzor, a hover hiánya és a gomb melletti magyarázat hordozza, nem a szín.
+   A négy osztályból álló szelektor SPECIFIKUSABB a `ui.css` sötét-sáv
+   szabályánál, tehát az importsorrendtől függetlenül nyer. */
+.kc-free-sos .kc-free-sos__cta.kc-button:disabled,
+.kc-free-sos .kc-free-sos__cta.kc-button.kc-button--disabled {
+  background-color: transparent;
+  border-color: var(--kc-free-sos-on-band);
+  color: var(--kc-free-sos-on-band);
+}
+
 /* A globális fókuszgyűrű az akcent-mély — a saját sávján nem látszana. */
 .kc-free-sos :focus-visible {
   outline-color: var(--kc-free-sos-on-band);

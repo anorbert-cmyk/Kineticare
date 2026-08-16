@@ -236,6 +236,15 @@ describe('startCheckout — boldog út', () => {
     expect(body.PaymentType).toBe('Immediate')
     expect(body.GuestCheckOut).toBe(true)
     expect(body.CallbackUrl).toBe('https://shop.example.test/api/barion/callback')
+    /**
+     * B2 — a köszönőoldal a RENDELÉSSZÁMBÓL poll-ozza a státuszt. A `?order=`
+     * nélkül MINDEN fizető vevő a „Hiányzik a rendelésszám" nézetet kapná
+     * (src/app/(frontend)/fizetes/koszonom/page.tsx) — a RÉGI kódon ez az
+     * állítás megbukik.
+     */
+    expect(body.RedirectUrl).toBe(
+      `https://shop.example.test/fizetes/koszonom?order=${ORDER_NUMBER}`,
+    )
     const transactions = body.Transactions as Array<Record<string, unknown>>
     expect(transactions[0]?.POSTransactionId).toBe(`${ORDER_NUMBER}-1`)
     expect(transactions[0]?.Total).toBe(5000)
@@ -251,6 +260,22 @@ describe('startCheckout — boldog út', () => {
     expect(
       calls.update.every((call) => (call.data as { status?: string }).status !== 'paid'),
     ).toBe(true)
+  })
+
+  /**
+   * B2 — a visszairányítási URL-ből a köszönőoldal ténylegesen KI TUDJA OLVASNI
+   * a rendelésszámot. Az állítás a felparszolt query-paraméterre megy, nem a
+   * nyers stringre: így az esetleges kódolási hiba is kiütne.
+   */
+  it('a Barion RedirectUrl-jéből a köszönőoldal kiolvassa a rendelésszámot', async () => {
+    fetchMock.mockResolvedValueOnce(barionStartSuccess())
+    const { payload } = createMockPayload()
+
+    await startCheckout({ payload, user: mockUser, input: happyInput })
+
+    const redirectUrl = new URL(String(lastBarionRequestBody().RedirectUrl))
+    expect(redirectUrl.pathname).toBe('/fizetes/koszonom')
+    expect(redirectUrl.searchParams.get('order')).toBe(ORDER_NUMBER)
   })
 
   it('a kliens által küldött EGYEZŐ ár elfogadható, de a végösszeg továbbra is szerver-oldali', async () => {
@@ -528,6 +553,66 @@ describe('startCheckout — termék- és inputellenőrzés', () => {
     const promise = startCheckout({ payload, user: mockUser, input: happyInput })
     await expect(promise).rejects.toMatchObject({ status: 400 })
     await expect(promise).rejects.toThrowError(/jelenleg nem megvásárolható/)
+  })
+
+  /**
+   * ÁR-KAPU (latens hiba, gomb-inventár mérés): a `priceInHUFEnabled: true` +
+   * `priceInHUF: 0` páros korábban ÁTMENT a kapun, és VALÓDI Barion-fizetés
+   * indult volna 0 Ft-ról — a Barion vagy hibázik (a vevő 502-t kap), vagy
+   * létrejön egy 0 forintos rendelés és számla, amit kézzel kell takarítani.
+   *
+   * Az ingyenességet az ár-pipa `false` értéke fejezi ki (külön, Barion nélküli
+   * út), NEM a 0 Ft — ezért a nulla és minden nem pozitív érték ugyanazon az
+   * ágon bukik, mint a hiányzó ár.
+   *
+   * A fetch-mock itt HANGOSAN DOB: ha a kapu mégis átengedné, nem csendes
+   * mellékhatás lesz belőle, hanem néven nevezett tesztbukás (és valódi
+   * hálózati hívás így sem indulhat — CLAUDE.md 15. tanulság).
+   */
+  it.each([
+    ['0 Ft', 0],
+    ['negatív ár', -1],
+    ['NaN ár (typeof number, de értelmezhetetlen)', Number.NaN],
+  ])('érvénytelen ár (%s) → 400, rendelés NEM jön létre, Barion NEM hívódik', async (_label, price) => {
+    fetchMock.mockImplementation(() => {
+      throw new Error('TESZT: érvénytelen árú terméknél NEM indulhat Barion-hívás')
+    })
+    const { payload, calls } = createMockPayload({
+      product: { ...publishedProduct, priceInHUFEnabled: true, priceInHUF: price } as Product,
+    })
+
+    const promise = startCheckout({ payload, user: mockUser, input: happyInput })
+
+    await expect(promise).rejects.toBeInstanceOf(CheckoutError)
+    await expect(promise).rejects.toMatchObject({ status: 400 })
+    await expect(promise).rejects.toThrowError(/nem tartozik érvényes ár/)
+    expect(calls.create).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('hiányzó ár (priceInHUF: null) → változatlanul 400, ugyanazzal az üzenettel', async () => {
+    const { payload, calls } = createMockPayload({
+      product: { ...publishedProduct, priceInHUFEnabled: true, priceInHUF: null } as Product,
+    })
+
+    const promise = startCheckout({ payload, user: mockUser, input: happyInput })
+
+    await expect(promise).rejects.toMatchObject({ status: 400 })
+    await expect(promise).rejects.toThrowError(/nem tartozik érvényes ár/)
+    expect(calls.create).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('kikapcsolt ár-pipa (ingyenes kurzus) → 400: a fizetős úton nem indul Barion-hívás', async () => {
+    const { payload, calls } = createMockPayload({
+      product: { ...publishedProduct, priceInHUFEnabled: false, priceInHUF: 5000 } as Product,
+    })
+
+    const promise = startCheckout({ payload, user: mockUser, input: happyInput })
+
+    await expect(promise).rejects.toMatchObject({ status: 400 })
+    expect(calls.create).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('nem létező termék → 404', async () => {

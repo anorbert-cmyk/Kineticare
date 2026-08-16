@@ -25,13 +25,25 @@
  * HIBAKEZELÉS: a hibás sor (üres/rossz e-mail, hiányzó oszlop) nem állítja meg
  * a feldolgozást — kimarad, és bekerül az `issues` listába, hogy a futás végén
  * a mérlegben megjelenjen. Csendes kihagyás sehol nincs.
+ *
+ * KÉT BEMENETI ALAK (`format`):
+ *  - `generic` — a korábbi, kurzusnév-oszlopos alak (`Email,Name,Courses`),
+ *  - `systeme` — a systeme.io kontakt-export (`Email, First name, Last name,
+ *    Tag, Date Registered`): KÉT név-oszlop, vesszővel felsorolt CÍMKÉK egy
+ *    cellában, és regisztrációs dátum. A címkék jelentését (vásárlás /
+ *    visszatérítés / érdeklődő / ismeretlen) a `tags.ts` szabálytáblája adja.
+ *
+ * Alapértelmezés: `auto` — a systeme.io-alakot a vezetéknév- ÉS a címke-oszlop
+ * EGYÜTTES jelenléte azonosítja; minden más bemenet marad `generic`, tehát a
+ * korábbi importok viselkedése változatlan.
  */
 
-/**
- * Az UTF-8 BOM kódpontja szövegként — a fájl elejéről levágandó. Szándékosan
- * escape-elt alakban (a nyers karakter láthatatlan lenne a forrásban).
- */
-export const UTF8_BOM = '\uFEFF'
+import { collapseWhitespace, normalizeKey, UTF8_BOM } from './normalize'
+import { buildTagRuleSet, classifyTags, splitTagCell, type TagRuleSet } from './tags'
+
+// A korábbi hívók (CLI, tesztek) ezeket a parse.ts-ből importálják — a
+// re-export megtartja a meglévő importokat a közös modulra váltás után is.
+export { collapseWhitespace, normalizeKey, UTF8_BOM }
 
 /** Egy nyers CSV-rekord: a mezői és a rekord KEZDŐ fizikai sora (1-alapú). */
 export interface CsvRecord {
@@ -61,6 +73,18 @@ export interface CustomerRow {
   readonly courseNames: readonly string[]
   /** Mely fájlbeli sorokból állt össze (összefésülésnél több elem). */
   readonly lines: readonly number[]
+  /**
+   * A régi rendszerbeli regisztráció/vásárlás időpontja ISO-8601 alakban
+   * (`Date Registered`). Több sor összefésülésénél a LEGKORÁBBI marad — ez az
+   * az időpont, amikor a vevő vevővé vált.
+   */
+  readonly registeredAt?: string
+  /** VISSZATÉRÍTÉS miatt kihagyott kurzusok (a sor mérlegéhez, hozzáférést nem ad). */
+  readonly refundedCourseNames?: readonly string[]
+  /** Ismert, de hozzáférést nem adó címkék (pl. előjelentkező). */
+  readonly ignoredTags?: readonly string[]
+  /** Egyik szabályba sem illő címkék — figyelmeztetés, hozzáférés nélkül. */
+  readonly unknownTags?: readonly string[]
 }
 
 /** A felismert oszlopok indexe a fejlécben (`null` = nincs ilyen oszlop). */
@@ -68,27 +92,69 @@ export interface ResolvedColumns {
   readonly email: number
   readonly name: number | null
   readonly courses: number | null
+  /** systeme.io: a `Last name` oszlop (a `name` ilyenkor a `First name`). */
+  readonly lastName: number | null
+  /** systeme.io: a `Date Registered` oszlop. */
+  readonly registeredAt: number | null
 }
+
+/** A bemeneti alak. Az `auto` a fejlécből dönt (lásd a modul fejlécét). */
+export type CsvFormat = 'auto' | 'generic' | 'systeme'
 
 export interface ParseOptions {
   /** Mezőelválasztó. Alap: `,`. A `\t` / `tab` szöveg tabulátorra fordul. */
   readonly delimiter?: string
   /** Az e-mail-oszlop fejlécneve (felülírja az automatikus felismerést). */
   readonly emailColumn?: string
-  /** A név-oszlop fejlécneve. */
+  /** A név-oszlop fejlécneve (systeme.io-nál a keresztnév-oszlopé). */
   readonly nameColumn?: string
-  /** A kurzus-oszlop fejlécneve. */
+  /** A kurzus-/címke-oszlop fejlécneve. */
   readonly coursesColumn?: string
+  /** A vezetéknév-oszlop fejlécneve (systeme.io). */
+  readonly lastNameColumn?: string
+  /** A dátum-oszlop fejlécneve (systeme.io `Date Registered`). */
+  readonly registeredColumn?: string
+  /** A bemeneti alak kényszerítése. Alap: `auto`. */
+  readonly format?: CsvFormat
+  /**
+   * A címke-szabálytábla (systeme.io-alak). Hiányában a beépített tábla
+   * (`SYSTEME_TAG_RULES`) érvényes, CLI-kiegészítés nélkül.
+   */
+  readonly tagRules?: TagRuleSet
+}
+
+/** A címke-értelmezés összesítője — a próbafutás mérlegének forrása. */
+export interface TagStats {
+  /** Címke → hány vevőnek ADOTT hozzáférést. */
+  readonly granted: ReadonlyMap<string, number>
+  /** Címke → hány vevőnél maradt ki VISSZATÉRÍTÉS miatt. */
+  readonly refunded: ReadonlyMap<string, number>
+  /** Nem-vásárlás (érdeklődő) címke → hány vevőnél fordult elő. */
+  readonly ignored: ReadonlyMap<string, number>
+  /** Ismeretlen címke → hány vevőnél fordult elő. */
+  readonly unknown: ReadonlyMap<string, number>
+  /** Hány vevőnél nem volt EGYETLEN címke sem (üres cella). */
+  readonly customersWithoutTags: number
+  /** Hány vevő marad hozzáférés nélkül (üres, érdeklődő vagy csak visszatérített). */
+  readonly customersWithoutAccess: number
+  /** Hány vevőnél van kitöltött, értelmezhető dátum. */
+  readonly customersWithDate: number
+  /** Hány vevőnél volt kitöltött, de ÉRTELMEZHETETLEN dátum. */
+  readonly unparsableDates: number
 }
 
 export interface ParsedCsv {
   readonly header: readonly string[]
   readonly columns: ResolvedColumns
+  /** A ténylegesen alkalmazott bemeneti alak (az `auto` feloldása után). */
+  readonly format: Exclude<CsvFormat, 'auto'>
   /** E-mailenként egy sor, e-mail szerint növekvő, determinisztikus sorrendben. */
   readonly rows: readonly CustomerRow[]
   readonly issues: readonly RowIssue[]
   /** Nem hibák, de a futás végén ki kell írni őket (pl. összefésült e-mailek). */
   readonly warnings: readonly string[]
+  /** Csak a systeme.io-alaknál értelmezett címke-összesítő. */
+  readonly tagStats?: TagStats
 }
 
 /** Automatikus fejléc-felismerés: e-mail-oszlop lehetséges nevei. */
@@ -138,6 +204,39 @@ const COURSES_HEADERS: readonly string[] = [
   'címkék',
 ]
 
+/** Automatikus fejléc-felismerés: vezetéknév-oszlop lehetséges nevei. */
+const LAST_NAME_HEADERS: readonly string[] = [
+  'last name',
+  'surname',
+  'family name',
+  'vezeteknev',
+  'vezetéknév',
+]
+
+/** Automatikus fejléc-felismerés: dátum-oszlop lehetséges nevei. */
+const REGISTERED_HEADERS: readonly string[] = [
+  'date registered',
+  'registered',
+  'registration date',
+  'signup date',
+  'created at',
+  'regisztracio',
+  'regisztráció',
+  'regisztralt',
+  'regisztrált',
+  'regisztráció dátuma',
+  'vasarlas datuma',
+  'vásárlás dátuma',
+  'datum',
+  'dátum',
+]
+
+/**
+ * A CÍMKE-oszlop fejlécnevei. Csak ezek mellett indul a systeme.io-értelmezés
+ * `auto` módban: a `Courses`/`Termékek` oszlop továbbra is kurzusnév-lista.
+ */
+const TAG_HEADERS: readonly string[] = ['tag', 'tags', 'cimke', 'címke', 'cimkek', 'címkék']
+
 /**
  * Cellán belül több kurzus elválasztói. A `;` azért is biztonságos, mert a
  * mező-szintű `;` elválasztót a tokenizer már feldolgozta: ide csak a cella
@@ -151,11 +250,6 @@ const COURSE_SPLIT = /[|;]/
  * teljes újraimplementálása — a szigorúbb szabály valódi címeket zárna ki.
  */
 const EMAIL_PATTERN = /^[^\s@,;]+@[^\s@,;.]+(\.[^\s@,;.]+)+$/
-
-/** Egyeztetési kulcs fejléchez és kurzusnévhez: trim + kisbetű + szóköz-normalizálás. */
-export function normalizeKey(value: string): string {
-  return value.replace(UTF8_BOM, '').trim().replace(/\s+/g, ' ').toLowerCase()
-}
 
 /** A `--delimiter` értékének feloldása (a `\t` / `tab` szöveg tabulátort jelent). */
 export function resolveDelimiter(raw: string | undefined): string {
@@ -321,12 +415,175 @@ function fallbackName(email: string): string {
   return localPart.trim() === '' ? email : localPart
 }
 
+/** Szó-szintű tartalmazás: a `needle` MINDEN szava, egyben, a `haystack`-ben. */
+function containsWords(haystack: string, needle: string): boolean {
+  return ` ${haystack} `.includes(` ${needle} `)
+}
+
+/**
+ * A megjelenő név összeállítása a systeme.io KÉT név-oszlopából.
+ *
+ * A régi rendszerben a két oszlop össze-vissza van töltve: van, ahol a
+ * keresztnév az elsőben és a vezetéknév a másodikban, van, ahol fordítva, és
+ * van, ahol az egyik oszlop hordozza a TELJES nevet, a másik üres — vagy éppen
+ * ugyanazt ismétli. A szabály ezért nem próbálja kitalálni, melyik a vezeték-
+ * és melyik a keresztnév (magyar névből ez megbízhatóan nem következik):
+ *
+ *  1. üres oszlop → a másik érték megy tovább,
+ *  2. azonos érték → egyszer szerepel,
+ *  3. az egyik érték TARTALMAZZA a másikat (szó-szinten) → a bővebb marad,
+ *  4. különben a kettő összefűzve, a FÁJL oszlopsorrendjében.
+ *
+ * Így egyetlen névtöredék sem vész el, és duplikátum sem keletkezik. A
+ * kis-/nagybetűs írásmódot szándékosan NEM javítjuk: a „de Vries" típusú
+ * neveket az automatikus nagybetűsítés elrontaná.
+ */
+export function composeCustomerName(first: string, last: string): string {
+  const firstName = collapseWhitespace(first)
+  const lastName = collapseWhitespace(last)
+  if (firstName === '') {
+    return lastName
+  }
+  if (lastName === '') {
+    return firstName
+  }
+  const firstKey = normalizeKey(firstName)
+  const lastKey = normalizeKey(lastName)
+  if (firstKey === lastKey) {
+    return firstName
+  }
+  if (containsWords(firstKey, lastKey)) {
+    return firstName
+  }
+  if (containsWords(lastKey, firstKey)) {
+    return lastName
+  }
+  return `${firstName} ${lastName}`
+}
+
+/**
+ * A systeme.io dátum-cellája: `2024-05-12 09:30:11 (UTC+2)`.
+ *
+ * Visszatérés: ISO-8601 szöveg (`2024-05-12T09:30:11+02:00`), vagy `null`, ha
+ * a cella üres vagy értelmezhetetlen. A rövidebb alakokat is elviseli:
+ * `2024-05-12`, `2024-05-12 09:30`, `2024-05-12T09:30:11Z`, `…+02:00`.
+ *
+ * MIÉRT NEM `new Date(...)`: a nyers `Date`-értelmezés motorfüggő (a
+ * `2024-05-12 09:30:11 (UTC+2)` alakot a V8 helyi időként, más motor
+ * sehogy sem olvassa), és a hibás dátumot csendben `Invalid Date`-té teszi.
+ * Az explicit minta a hibás cellát MEGMONDJA a hívónak.
+ */
+export function parseRegisteredAt(value: string): string | null {
+  const text = collapseWhitespace(value)
+  if (text === '') {
+    return null
+  }
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?(?:\s*\(UTC\s*([+-])(\d{1,2})(?::?(\d{2}))?\)|\s*(Z)|\s*([+-])(\d{2}):?(\d{2}))?$/i.exec(
+      text,
+    )
+  if (!match) {
+    return null
+  }
+  const [
+    ,
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second,
+    utcSign,
+    utcHour,
+    utcMinute,
+    zulu,
+    offsetSign,
+    offsetHour,
+    offsetMinute,
+  ] = match
+
+  // Naptári ellenőrzés: a 2024-02-31 alakilag illeszkedne, de nem létező nap.
+  const asUtc = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour ?? '0'),
+    Number(minute ?? '0'),
+    Number(second ?? '0'),
+  )
+  const check = new Date(asUtc)
+  if (
+    Number.isNaN(asUtc) ||
+    check.getUTCFullYear() !== Number(year) ||
+    check.getUTCMonth() !== Number(month) - 1 ||
+    check.getUTCDate() !== Number(day)
+  ) {
+    return null
+  }
+  if (Number(hour ?? '0') > 23 || Number(minute ?? '0') > 59 || Number(second ?? '0') > 59) {
+    return null
+  }
+
+  // Dátum-only cella: nincs mit időzónásítani, a nap marad a nap.
+  if (hour === undefined) {
+    return `${year}-${month}-${day}`
+  }
+
+  const time = `${hour}:${minute}:${second ?? '00'}`
+  if (zulu !== undefined) {
+    return `${year}-${month}-${day}T${time}Z`
+  }
+  if (utcSign !== undefined && utcHour !== undefined) {
+    const offset = `${utcSign}${utcHour.padStart(2, '0')}:${(utcMinute ?? '00').padStart(2, '0')}`
+    return `${year}-${month}-${day}T${time}${offset === '+00:00' ? 'Z' : offset}`
+  }
+  if (offsetSign !== undefined && offsetHour !== undefined && offsetMinute !== undefined) {
+    const offset = `${offsetSign}${offsetHour}:${offsetMinute}`
+    return `${year}-${month}-${day}T${time}${offset === '+00:00' ? 'Z' : offset}`
+  }
+  // Időzóna-jelölés nélküli időpont: a systeme.io UTC-ben exportál, a jelölés
+  // hiánya nem tehet egy időpontot időzóna-függővé — ezért Z.
+  return `${year}-${month}-${day}T${time}Z`
+}
+
 interface MutableRow {
   email: string
   name: string
   courseNames: string[]
   courseKeys: Set<string>
   lines: number[]
+  registeredAt?: string
+  refundedCourseNames: string[]
+  ignoredTags: string[]
+  unknownTags: string[]
+  /** Volt-e a sorban EGYÁLTALÁN címke (a mérleg „címke nélküli vevő" száma). */
+  hasTags: boolean
+}
+
+/** A korábbi (legkisebb) ISO-időpont — a vevővé válás pillanata. */
+function earlierIso(current: string | undefined, next: string | undefined): string | undefined {
+  if (current === undefined) {
+    return next
+  }
+  if (next === undefined) {
+    return current
+  }
+  const currentMs = Date.parse(current)
+  const nextMs = Date.parse(next)
+  if (Number.isNaN(currentMs)) {
+    return next
+  }
+  if (Number.isNaN(nextMs)) {
+    return current
+  }
+  return nextMs < currentMs ? next : current
+}
+
+/** Előfordulás-számláló a címke-összesítőhöz. */
+function countTags(target: Map<string, number>, tags: readonly string[]): void {
+  for (const tag of tags) {
+    target.set(tag, (target.get(tag) ?? 0) + 1)
+  }
 }
 
 /**
@@ -343,7 +600,8 @@ export function parseCustomerCsv(input: string, options: ParseOptions = {}): Par
   if (records.length === 0) {
     return {
       header: [],
-      columns: { email: -1, name: null, courses: null },
+      columns: { email: -1, name: null, courses: null, lastName: null, registeredAt: null },
+      format: 'generic',
       rows: [],
       issues: [],
       warnings: ['A fájl üres — nincs benne fejlécsor sem.'],
@@ -362,6 +620,23 @@ export function parseCustomerCsv(input: string, options: ParseOptions = {}): Par
   }
   const nameIndex = findColumn(header, options.nameColumn, NAME_HEADERS)
   const coursesIndex = findColumn(header, options.coursesColumn, COURSES_HEADERS)
+  const lastNameIndex = findColumn(header, options.lastNameColumn, LAST_NAME_HEADERS)
+  const registeredIndex = findColumn(header, options.registeredColumn, REGISTERED_HEADERS)
+
+  // A címke-oszlop felismerése: `auto` módban csak a TÉNYLEGES címke-fejléc
+  // (Tag/Címke) mellett indul systeme.io-értelmezés, a `Courses` oszlop
+  // továbbra is kurzusnév-lista marad.
+  const coursesHeaderKey = coursesIndex === null ? '' : normalizeKey(header[coursesIndex] ?? '')
+  const looksLikeSysteme = lastNameIndex !== null && TAG_HEADERS.includes(coursesHeaderKey)
+  const format: Exclude<CsvFormat, 'auto'> =
+    options.format === 'systeme'
+      ? 'systeme'
+      : options.format === 'generic'
+        ? 'generic'
+        : looksLikeSysteme
+          ? 'systeme'
+          : 'generic'
+  const tagRules: TagRuleSet = options.tagRules ?? buildTagRuleSet().ruleSet
 
   const warnings: string[] = []
   if (options.nameColumn !== undefined && nameIndex === null) {
@@ -379,11 +654,29 @@ export function parseCustomerCsv(input: string, options: ParseOptions = {}): Par
         'Add meg kézzel: --courses-col="<oszlopnév>"',
     )
   }
+  if (format === 'systeme') {
+    warnings.push(
+      'systeme.io-alak: a címke-oszlop értelmezése szabálytáblából történik ' +
+        '(vásárlás / visszatérítés / érdeklődő). A visszatérített kurzushoz NEM jár hozzáférés.',
+    )
+    if (options.format === 'systeme' && !TAG_HEADERS.includes(coursesHeaderKey)) {
+      warnings.push(
+        'A kényszerített systeme.io-alakhoz nem található „Tag" oszlop — ' +
+          'add meg kézzel: --courses-col="<oszlopnév>"',
+      )
+    }
+    if (registeredIndex === null) {
+      warnings.push(
+        'Nincs dátum-oszlop (Date Registered) — a régi vásárlás időpontja nem őrizhető meg.',
+      )
+    }
+  }
 
   const issues: RowIssue[] = []
   const byEmail = new Map<string, MutableRow>()
   const mergedEmails: string[] = []
   let missingNameCount = 0
+  let unparsableDates = 0
 
   for (const record of records.slice(1)) {
     const { fields, line } = record
@@ -412,12 +705,39 @@ export function parseCustomerCsv(input: string, options: ParseOptions = {}): Par
       continue
     }
 
-    const rawName = nameIndex === null ? '' : (fields[nameIndex] ?? '').trim()
+    // NÉV: generic alakban egyetlen oszlop, systeme.io-nál a két név-oszlop
+    // összeállítása (composeCustomerName — egyetlen névtöredék sem veszhet el).
+    const firstNameCell = nameIndex === null ? '' : (fields[nameIndex] ?? '')
+    const lastNameCell =
+      format === 'systeme' && lastNameIndex !== null ? (fields[lastNameIndex] ?? '') : ''
+    const rawName =
+      format === 'systeme'
+        ? composeCustomerName(firstNameCell, lastNameCell)
+        : firstNameCell.trim()
     if (rawName === '') {
       missingNameCount += 1
     }
     const name = rawName === '' ? fallbackName(email) : rawName
-    const courseNames = coursesIndex === null ? [] : splitCourseNames(fields[coursesIndex] ?? '')
+
+    // KURZUS/CÍMKE: generic alakban kurzusnév-lista, systeme.io-nál címkék,
+    // amikből a szabálytábla dönti el, mi ad hozzáférést.
+    const cell = coursesIndex === null ? '' : (fields[coursesIndex] ?? '')
+    const tags = format === 'systeme' ? splitTagCell(cell) : []
+    const classification = format === 'systeme' ? classifyTags(tags, tagRules) : null
+    const courseNames =
+      classification !== null ? [...classification.courseNames] : splitCourseNames(cell)
+
+    // DÁTUM: a régi rendszerbeli vevővé válás időpontja.
+    const rawDate = registeredIndex === null ? '' : (fields[registeredIndex] ?? '')
+    const registeredAt = parseRegisteredAt(rawDate) ?? undefined
+    if (registeredAt === undefined && rawDate.trim() !== '') {
+      unparsableDates += 1
+      issues.push({
+        line,
+        email,
+        reason: `Értelmezhetetlen dátum: "${rawDate.trim()}" — a sor importálható, de a régi vásárlás időpontja nélkül.`,
+      })
+    }
 
     const existing = byEmail.get(email)
     if (existing === undefined) {
@@ -427,6 +747,14 @@ export function parseCustomerCsv(input: string, options: ParseOptions = {}): Par
         courseNames: [...courseNames],
         courseKeys: new Set(courseNames.map(normalizeKey)),
         lines: [line],
+        registeredAt,
+        refundedCourseNames: [...(classification?.refundedCourseNames ?? [])],
+        ignoredTags: [...(classification?.ignoredTags ?? [])],
+        unknownTags: [
+          ...(classification?.unknownTags ?? []),
+          ...(classification?.unmatchedRefundTags ?? []),
+        ],
+        hasTags: format === 'systeme' ? tags.length > 0 : courseNames.length > 0,
       })
       continue
     }
@@ -443,6 +771,15 @@ export function parseCustomerCsv(input: string, options: ParseOptions = {}): Par
         existing.courseNames.push(courseName)
       }
     }
+    // A vevővé válás pillanata a LEGKORÁBBI dátum a sorai közül.
+    existing.registeredAt = earlierIso(existing.registeredAt, registeredAt)
+    existing.refundedCourseNames.push(...(classification?.refundedCourseNames ?? []))
+    existing.ignoredTags.push(...(classification?.ignoredTags ?? []))
+    existing.unknownTags.push(
+      ...(classification?.unknownTags ?? []),
+      ...(classification?.unmatchedRefundTags ?? []),
+    )
+    existing.hasTags = existing.hasTags || (format === 'systeme' ? tags.length > 0 : courseNames.length > 0)
     existing.lines.push(line)
     if (existing.lines.length === 2) {
       mergedEmails.push(email)
@@ -468,14 +805,93 @@ export function parseCustomerCsv(input: string, options: ParseOptions = {}): Par
       name: row.name,
       courseNames: row.courseNames,
       lines: row.lines,
+      ...(row.registeredAt !== undefined ? { registeredAt: row.registeredAt } : {}),
+      ...(row.refundedCourseNames.length > 0
+        ? { refundedCourseNames: uniqueByKey(row.refundedCourseNames) }
+        : {}),
+      ...(row.ignoredTags.length > 0 ? { ignoredTags: uniqueByKey(row.ignoredTags) } : {}),
+      ...(row.unknownTags.length > 0 ? { unknownTags: uniqueByKey(row.unknownTags) } : {}),
     }))
     .sort((a, b) => (a.email < b.email ? -1 : a.email > b.email ? 1 : 0))
 
+  const tagStats = format === 'systeme' ? buildTagStats([...byEmail.values()], unparsableDates) : undefined
+  if (tagStats !== undefined && tagStats.unknown.size > 0) {
+    const shown = [...tagStats.unknown.entries()]
+      .map(([tag, count]) => `"${tag}" (${count} vevő)`)
+      .join(', ')
+    warnings.push(
+      `ISMERETLEN CÍMKE — hozzáférést NEM adtunk érte: ${shown}. ` +
+        'Ha ez mégis vásárlás, vedd fel a szabálytáblába (src/lib/customer-import/tags.ts) ' +
+        'vagy jelöld nem-vásárlásnak: --ignore-tag "<címke>".',
+    )
+  }
+
   return {
     header,
-    columns: { email: emailIndex, name: nameIndex, courses: coursesIndex },
+    columns: {
+      email: emailIndex,
+      name: nameIndex,
+      courses: coursesIndex,
+      lastName: format === 'systeme' ? lastNameIndex : null,
+      registeredAt: registeredIndex,
+    },
+    format,
     rows,
     issues,
     warnings,
+    ...(tagStats !== undefined ? { tagStats } : {}),
+  }
+}
+
+/** Duplikátum-szűrés az eredeti írásmód megtartásával. */
+function uniqueByKey(values: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const value of values) {
+    const key = normalizeKey(value)
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    result.push(value)
+  }
+  return result
+}
+
+/** A címke-összesítő felépítése a VEVŐNKÉNTI (összefésült) sorokból. */
+function buildTagStats(rows: readonly MutableRow[], unparsableDates: number): TagStats {
+  const granted = new Map<string, number>()
+  const refunded = new Map<string, number>()
+  const ignored = new Map<string, number>()
+  const unknown = new Map<string, number>()
+  let customersWithoutTags = 0
+  let customersWithoutAccess = 0
+  let customersWithDate = 0
+
+  for (const row of rows) {
+    countTags(granted, uniqueByKey(row.courseNames))
+    countTags(refunded, uniqueByKey(row.refundedCourseNames))
+    countTags(ignored, uniqueByKey(row.ignoredTags))
+    countTags(unknown, uniqueByKey(row.unknownTags))
+    if (!row.hasTags) {
+      customersWithoutTags += 1
+    }
+    if (row.courseNames.length === 0) {
+      customersWithoutAccess += 1
+    }
+    if (row.registeredAt !== undefined) {
+      customersWithDate += 1
+    }
+  }
+
+  return {
+    granted,
+    refunded,
+    ignored,
+    unknown,
+    customersWithoutTags,
+    customersWithoutAccess,
+    customersWithDate,
+    unparsableDates,
   }
 }

@@ -1,11 +1,32 @@
 import { withPayload } from '@payloadcms/next/withPayload'
 import type { NextConfig } from 'next'
 
+import { buildLegacyRedirects } from './src/lib/legacy-redirects'
 import { buildContentSecurityPolicy } from './src/lib/security/csp'
 
 const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://eu.i.posthog.com'
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // A `src/app/global-not-found.tsx` KIZÁRÓLAG ezzel a kapcsolóval él —
+    // enélkül a Next figyelmen kívül hagyja a fájlt, és a nem illeszkedő
+    // URL-ekre a beépített, ANGOL nyelvű 404-lapját küldi (mérve 2026-08-16:
+    // `GET /egy/ket/harom` → „404 · This page could not be found.", keret,
+    // magyar szöveg és link nélkül).
+    //
+    // Miért nem elég a `not-found.tsx`: a Next a gyökérszintű, nem illeszkedő
+    // URL-eket csak EGYETLEN gyökér-layout mellett tudja a `not-found`-dal
+    // összerakni. Ennek a projektnek kettő van — `(frontend)` és `(payload)` —,
+    // és a hivatalos dokumentáció erre az esetre írja elő a `global-not-found`-ot:
+    // https://nextjs.org/docs/app/api-reference/file-conventions/not-found
+    //
+    // A kapcsoló kísérleti (Next 15.4 óta létezik). Következmény, ha egy jövőbeli
+    // Next-verzióban átnevezik vagy stabilizálják: a global-not-found lap némán
+    // kiesik, és visszatér az angol beépített lap. Ezt őr-teszt fogja meg
+    // (`src/__tests__/hibaoldal.test.tsx`): a teszt megköveteli, hogy a kapcsoló
+    // és a fájl EGYÜTT létezzen.
+    globalNotFound: true,
+  },
   // PostHog elsőfél-proxy: a kliens a saját domainünk /ingest útvonalát hívja,
   // a Next pedig továbbítja a PostHog EU-cloud felé (ad-blocker-ellenállás +
   // first-party süti-működés). A /ingest/static az assets-kiszolgálás (toolbar,
@@ -26,6 +47,19 @@ const nextConfig: NextConfig = {
   // A PostHog proxy átirányításai (pl. /decide → /flags) az origin-hostra
   // mutatnának — skip, hogy a kliens a saját domainen maradjon.
   skipTrailingSlashRedirect: true,
+
+  // Örökölt kineticare.hu URL-ek megőrzése a domain-átállításhoz: mind a 25
+  // régi sitemap-URL kap sorsot (változatlan slug · tartós 308 · 410 Gone).
+  // A térkép, az indoklás és a mérés a src/lib/legacy-redirects.ts fejlécében
+  // él, a szabályokat a src/__tests__/orokolt-url-atiranyitasok.test.ts őrzi;
+  // a végleges táblázat: docs/orokolt-url-atiranyitasok.md.
+  //
+  // FIGYELEM: a redirects() — a headers()-höz hasonlóan — a BUILD idején sül
+  // bele a .next/routes-manifest.json-be, tehát a térkép módosítása után
+  // VALÓDI újrabuildelés kell (CLAUDE.md 1. üzemeltetési tanulság).
+  async redirects() {
+    return buildLegacyRedirects()
+  },
 
   // OWASP A05: biztonsági HTTP-fejlécek minden válaszon. Maga a CSP a
   // src/lib/security/csp.ts tiszta függvényében él (direktívánkénti magyar

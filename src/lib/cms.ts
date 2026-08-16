@@ -3,6 +3,7 @@ import { getPayload } from 'payload'
 import config from '../payload.config'
 import type { Category, Page, Post, Product, Testimonial } from '../payload-types'
 import { HOME_PAGE_SLUG } from './content-slugs'
+import { reportUnpricedPublishedCourses } from './courses'
 import { logger } from './logger'
 
 /**
@@ -284,6 +285,20 @@ export async function getCategoryBySlug(slug: string): Promise<Category | null> 
 }
 
 /**
+ * A HIÁNYOSAN konfigurált (publikált, de beállítatlan ár-pipájú) termékek
+ * hangos jelzése — a storefront MINDEN termék-listázó lekérdezése ezen megy át.
+ *
+ * Miért itt: ez az a pont, ahol a rosszul konfigurált termék a LÁTOGATÓ elé
+ * kerülne. A riasztás (`logger.error`, „RIASZTÁS:" előtag) így pontosan akkor
+ * szól, amikor a hibának üzleti következménye van — a szerkesztő hibája nem
+ * marad némán (a tulajdonos gomb-hibájának gyökere ez volt).
+ */
+function withUnpricedCourseAlert(docs: Product[]): Product[] {
+  reportUnpricedPublishedCourses(docs, logger)
+  return docs
+}
+
+/**
  * Kurzus-kiemelés a kezdőlaphoz: published termékek (cover/cím/ár kártyákhoz).
  * A products publikáltsága a saját `status` selectje (draft/published/archived);
  * az archived sosem kerül ki a storefrontra.
@@ -302,7 +317,7 @@ export async function getFeaturedProducts(limit = 3): Promise<Product[]> {
         draft: false,
         overrideAccess: true,
       })
-      return docs
+      return withUnpricedCourseAlert(docs)
     },
     [],
   )
@@ -327,7 +342,7 @@ export async function getPublishedProducts(limit = 12): Promise<Product[]> {
         draft: false,
         overrideAccess: true,
       })
-      return docs
+      return withUnpricedCourseAlert(docs)
     },
     [],
   )

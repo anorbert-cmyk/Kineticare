@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 import {
   CONSENT_EVENT,
@@ -11,6 +11,8 @@ import {
   type ConsentState,
 } from '@/lib/analytics/consent'
 import { optInToAnalytics, optOutOfAnalytics } from '@/lib/analytics/posthog'
+
+import '../../app/(frontend)/styles/consent-banner.css'
 
 /**
  * ConsentBanner — GDPR-kompatibilis analytics-hozzájárulás sáv.
@@ -26,69 +28,27 @@ import { optInToAnalytics, optOutOfAnalytics } from '@/lib/analytics/posthog'
  * - Visszafogott, a design-tokenekre épülő sötét sáv; nincs animáció
  *   (a prefers-reduced-motion így triviálisan tiszteletben tartva),
  *   mobilon a gombok a szöveg alá tördelnek (flex-wrap).
+ *
+ * ═══ AKADÁLYMENTESSÉG (2026-08-16, docs/gomb-kontraszt-audit.md B2 + B4) ═══
+ * A stílus INLINE `style`-ból STÍLUSLAPRA költözött (styles/consent-banner.css),
+ * mert az inline stílus nem tud `:focus-visible`-t leírni — pontosan ezért
+ * maradt le a sávról a sötét felületek fókusz-felülírása, és kapott a két gomb
+ * 2,87:1-es fókuszgyűrűt (1.4.11 + 2.4.7 bukás minden oldalon). A sáv a
+ * lap egyetlen olyan sötét felülete volt, ami nem `.kc-section--dark`.
+ *
+ * A sáv `position: fixed` a lap alján, ezért eltakarhatta a fókuszált elemet
+ * (WCAG 2.2 SC 2.4.11 Focus Not Obscured, AA). Amíg látszik, a
+ * dokumentumgyökér `kc-has-consent-banner` osztályt kap, és a MÉRT magasság a
+ * `--kc-consent-offset` változóba kerül — ebből jön a `scroll-padding-bottom`
+ * és a lap alsó térköze. Ugyanaz a minta, mint a `MobileBuyBar`
+ * `kc-has-buybar`-ja, de MÉRÉSSEL, mert a sáv magassága a nézetablaktól és a
+ * tördeléstől függ (mobilon 2–3 sor + két gomb).
  */
 
-const bannerStyle: CSSProperties = {
-  position: 'fixed',
-  left: 0,
-  right: 0,
-  bottom: 0,
-  zIndex: 1000, // a legmagasabb meglévő réteg (100) fölött
-  backgroundColor: 'var(--kc-color-surface-dark)',
-  color: 'var(--kc-color-on-dark)',
-  padding: 'var(--kc-space-4) var(--kc-space-5)',
-  boxShadow: '0 -2px 12px rgba(16, 36, 62, 0.35)',
-}
-
-const innerStyle: CSSProperties = {
-  maxWidth: '1120px', // --kc-content-wide
-  margin: '0 auto',
-  display: 'flex',
-  flexWrap: 'wrap', // mobilon a gombok a szöveg alá kerülnek
-  alignItems: 'center',
-  gap: 'var(--kc-space-3) var(--kc-space-5)',
-}
-
-const textStyle: CSSProperties = {
-  flex: '1 1 32rem',
-  margin: 0,
-  fontSize: 'var(--kc-font-s)',
-  lineHeight: 'var(--kc-leading-body)',
-}
-
-const linkStyle: CSSProperties = {
-  color: 'var(--kc-color-on-dark-muted)',
-  textDecoration: 'underline',
-}
-
-const actionsStyle: CSSProperties = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: 'var(--kc-space-3)',
-}
-
-const buttonBaseStyle: CSSProperties = {
-  font: 'inherit',
-  fontWeight: 700, // --kc-font-weight-bold
-  padding: 'var(--kc-space-2) var(--kc-space-5)',
-  borderRadius: 'var(--kc-radius-md)',
-  cursor: 'pointer',
-  whiteSpace: 'nowrap',
-}
-
-const acceptStyle: CSSProperties = {
-  ...buttonBaseStyle,
-  border: '2px solid var(--kc-color-on-dark)',
-  backgroundColor: 'var(--kc-color-on-dark)',
-  color: 'var(--kc-color-surface-dark)',
-}
-
-const declineStyle: CSSProperties = {
-  ...buttonBaseStyle,
-  border: '2px solid var(--kc-color-on-dark)',
-  backgroundColor: 'transparent',
-  color: 'var(--kc-color-on-dark)',
-}
+/** A dokumentumgyökér jelölése, amíg a sáv látszik (scroll-padding + térköz). */
+const ROOT_CLASS = 'kc-has-consent-banner'
+/** A sáv mért magassága — a stíluslap ebből számol (lásd consent-banner.css). */
+const OFFSET_VAR = '--kc-consent-offset'
 
 /**
  * A tárolt consent KÜLSŐ store-ként. A `kc:analytics-consent` esemény az
@@ -129,6 +89,43 @@ export function ConsentBanner() {
   // út): döntés után is újra látható a sáv, amíg a látogató újra nem dönt.
   const [reopened, setReopened] = useState(false)
   const consent = decision ?? storedConsent
+  const bannerRef = useRef<HTMLDivElement>(null)
+  const visible = consentBannerVisible(consent, reopened)
+
+  /**
+   * A sáv TÉNYLEGES magasságának mérése (2.4.11). Fix érték itt nem elég: a
+   * sáv 1–3 sorosra tördel a nézetablaktól, a betűmérettől és a fordítás
+   * hosszától függően. A ResizeObserver az ablakméret-váltást és a
+   * betűméret-változást is lekezeli; ha a böngésző nem ismeri, egyetlen
+   * kezdeti mérés marad (a `scroll-padding` így is jobb, mint a semmi).
+   */
+  useEffect(() => {
+    const root = document.documentElement
+    const banner = bannerRef.current
+    if (!visible || banner === null) {
+      root.classList.remove(ROOT_CLASS)
+      root.style.removeProperty(OFFSET_VAR)
+      return
+    }
+    const measure = (): void => {
+      root.style.setProperty(OFFSET_VAR, `${Math.ceil(banner.getBoundingClientRect().height)}px`)
+    }
+    root.classList.add(ROOT_CLASS)
+    measure()
+    if (typeof ResizeObserver !== 'function') {
+      return () => {
+        root.classList.remove(ROOT_CLASS)
+        root.style.removeProperty(OFFSET_VAR)
+      }
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(banner)
+    return () => {
+      observer.disconnect()
+      root.classList.remove(ROOT_CLASS)
+      root.style.removeProperty(OFFSET_VAR)
+    }
+  }, [visible])
 
   useEffect(() => {
     const onOpen = (): void => {
@@ -141,7 +138,7 @@ export function ConsentBanner() {
     return () => window.removeEventListener(CONSENT_OPEN_EVENT, onOpen)
   }, [])
 
-  if (!consentBannerVisible(consent, reopened)) {
+  if (!visible) {
     return null
   }
 
@@ -158,21 +155,26 @@ export function ConsentBanner() {
   }
 
   return (
-    <div role="region" aria-label="Süti-hozzájárulás" style={bannerStyle}>
-      <div style={innerStyle}>
-        <p style={textStyle}>
+    <div aria-label="Süti-hozzájárulás" className="kc-consent-banner" ref={bannerRef} role="region">
+      <div className="kc-consent-banner__inner">
+        <p className="kc-consent-banner__text">
           Sütiket használunk a felhasználói élmény javításához és a látogatottsági statisztikák
           készítéséhez. Az analitika csak a hozzájárulásával kapcsol be. Részletek az{' '}
-          <Link href="/adatvedelem" style={linkStyle}>
-            adatvédelmi tájékoztatóban
-          </Link>
-          .
+          <Link href="/adatvedelem">adatvédelmi tájékoztatóban</Link>.
         </p>
-        <div style={actionsStyle}>
-          <button type="button" onClick={onAccept} style={acceptStyle}>
+        <div className="kc-consent-banner__actions">
+          <button
+            className="kc-consent-banner__button kc-consent-banner__button--accept"
+            onClick={onAccept}
+            type="button"
+          >
             Elfogadom
           </button>
-          <button type="button" onClick={onDecline} style={declineStyle}>
+          <button
+            className="kc-consent-banner__button kc-consent-banner__button--decline"
+            onClick={onDecline}
+            type="button"
+          >
             Elutasítom
           </button>
         </div>

@@ -26,8 +26,23 @@ import { jobsConfig } from './jobs'
 import { restrictJobStatsGlobalAccess } from './jobs/jobs-stats-access'
 import { restrictLockedDocumentsAccess } from './lib/security/locked-documents-access'
 import { registerBarionWebhookProcessor } from './lib/barion-callback/process-callback'
+import { APPOINTMENT_FORM_TITLE, ensureAppointmentForm } from './lib/appointment/form'
+import {
+  APPOINTMENT_AVAILABILITY_FIELD,
+  APPOINTMENT_EMAIL_FIELD,
+  APPOINTMENT_NAME_FIELD,
+  APPOINTMENT_PHONE_FIELD,
+  APPOINTMENT_REASON_FIELD,
+  validateAppointmentSubmissionData,
+} from './lib/appointment/validation'
 import { validateContactSubmissionData } from './lib/contact-submission'
-import { contactStaffEmail, kineticareEmailAdapter, sendMail, usersAuthEmails } from './lib/email'
+import {
+  appointmentStaffEmail,
+  contactStaffEmail,
+  kineticareEmailAdapter,
+  sendMail,
+  usersAuthEmails,
+} from './lib/email'
 import { NEWSLETTER_FORM_TITLE, ensureNewsletterForm } from './lib/newsletter/form'
 import { validateNewsletterSubmissionData } from './lib/newsletter/validation'
 import { logger } from './lib/logger'
@@ -93,16 +108,19 @@ const verifyTurnstile = async (data: unknown): Promise<unknown> => {
 }
 
 /**
- * A nyilvános űrlapok KÉT sémája (C9). A `form-submissions` collection egyetlen
- * hookláncot futtat, de a beküldés sémája űrlaponként más:
+ * A nyilvános űrlapok HÁROM sémája (C9). A `form-submissions` collection
+ * egyetlen hookláncot futtat, de a beküldés sémája űrlaponként más:
  *  - `contact` — a „Kapcsolat" űrlap (név, e-mail, tárgy, üzenet, consentPrivacy);
- *  - `newsletter` — a lábléc „Hírlevél" űrlapja (e-mail, consentNewsletter).
+ *  - `newsletter` — a lábléc „Hírlevél" űrlapja (e-mail, consentNewsletter);
+ *  - `appointment` — az „Időpontkérés" űrlap (név, telefon, e-mail, panasz,
+ *    időpont-sávok, consentHealth), az időpontkérő szekcióból.
  *
- * Enélkül a hírlevél-beküldés a kapcsolat-szerződésen bukna el („Add meg a
- * neved.") — a `src/lib/contact-submission.ts` fejléce pontosan ezt az esetet
- * jelzi előre: több nyilvános űrlapnál a szerződést szét kell bontani.
+ * Enélkül a hírlevél- és az időpontkérés-beküldés a kapcsolat-szerződésen bukna
+ * el („Add meg az üzenet tárgyát.") — a `src/lib/contact-submission.ts` fejléce
+ * pontosan ezt az esetet jelzi előre: több nyilvános űrlapnál a szerződést szét
+ * kell bontani.
  */
-type FormSubmissionKind = 'contact' | 'newsletter'
+type FormSubmissionKind = 'contact' | 'newsletter' | 'appointment'
 
 /** A besorolás átadása a beforeValidate → afterChange úton (Payload req.context). */
 const FORM_KIND_CONTEXT_KEY = 'kineticareFormKind'
@@ -146,7 +164,13 @@ async function resolveFormKind(
       req,
     })
     const title = (doc as unknown as { title?: unknown }).title
-    return title === NEWSLETTER_FORM_TITLE ? 'newsletter' : 'contact'
+    if (title === NEWSLETTER_FORM_TITLE) {
+      return 'newsletter'
+    }
+    if (title === APPOINTMENT_FORM_TITLE) {
+      return 'appointment'
+    }
+    return 'contact'
   } catch (error) {
     logger.warn('az űrlap-beküldéshez tartozó űrlap nem azonosítható — a szigorúbb szerződés fut', {
       error: error instanceof Error ? error.message : String(error),
@@ -193,7 +217,9 @@ const validateContactSubmission: CollectionBeforeValidateHook = async ({
   const errors =
     kind === 'newsletter'
       ? validateNewsletterSubmissionData(record.submissionData)
-      : validateContactSubmissionData(record.submissionData)
+      : kind === 'appointment'
+        ? validateAppointmentSubmissionData(record.submissionData)
+        : validateContactSubmissionData(record.submissionData)
   if (errors.length > 0) {
     throw new APIError(errors.join(' '), 400)
   }
@@ -201,7 +227,7 @@ const validateContactSubmission: CollectionBeforeValidateHook = async ({
 }
 
 /**
- * Staff-értesítő kapcsolat-űrlap beküldéskor (T-018 contact-staff sablon).
+ * Staff-értesítő űrlap-beküldéskor (T-018 sablonok).
  * A címzettlista a CONTACT_STAFF_EMAILS env-ből jön (vessző-szeparált); üres
  * env = nincs értesítés, a beküldés ettől függetlenül mentődik. Best-effort:
  * az e-mail-hiba sosem rontja el a beküldést.
@@ -212,6 +238,12 @@ const validateContactSubmission: CollectionBeforeValidateHook = async ({
  * feliratkozások az adminban, az Űrlapbeküldések listán látszanak
  * (docs/hirlevel.md). A besorolás a beforeValidate-ből érkezik a
  * `req.context`-en — hiánya (elvi ág) a mai viselkedést, a küldést jelenti.
+ *
+ * Az IDŐPONTKÉRÉS viszont KÜLÖN sablont kap (`appointmentStaffEmail`): ott a
+ * munkafolyamat a visszahívás, tehát a tárgyban és a levél élén a
+ * TELEFONSZÁMNAK kell állnia. A kapcsolat-sablonnal küldve a levél „Új
+ * kapcsolatfelvétel" tárggyal, üres üzenettörzzsel érkezne, és a stáb nem
+ * látná, kit kell hívnia.
  */
 const notifyStaffOnSubmission = async ({
   doc,
@@ -245,12 +277,23 @@ const notifyStaffOnSubmission = async ({
         : undefined
     const fieldValue = (name: string): string =>
       submissionData?.find((entry) => entry.field === name)?.value ?? ''
-    const template = contactStaffEmail({
-      name: fieldValue('name') || 'Ismeretlen beküldő',
-      email: fieldValue('email') || '-',
-      message: fieldValue('message'),
-      submittedAt: new Date().toLocaleString('hu-HU'),
-    })
+    const submittedAt = new Date().toLocaleString('hu-HU')
+    const template =
+      formKind === 'appointment'
+        ? appointmentStaffEmail({
+            name: fieldValue(APPOINTMENT_NAME_FIELD) || 'Ismeretlen beküldő',
+            phone: fieldValue(APPOINTMENT_PHONE_FIELD),
+            email: fieldValue(APPOINTMENT_EMAIL_FIELD),
+            availability: fieldValue(APPOINTMENT_AVAILABILITY_FIELD),
+            reason: fieldValue(APPOINTMENT_REASON_FIELD),
+            submittedAt,
+          })
+        : contactStaffEmail({
+            name: fieldValue('name') || 'Ismeretlen beküldő',
+            email: fieldValue('email') || '-',
+            message: fieldValue('message'),
+            submittedAt,
+          })
     const result = await sendMail({ to: recipients, ...template })
     if (!result.ok) {
       logger.warn('staff-értesítő küldése sikertelen', {
@@ -457,6 +500,18 @@ async function onInit(payload: Payload): Promise<void> {
     logger.warn('a „Hírlevél" űrlap onInit-seedelése nem sikerült — a lábléc-blokk kimarad', {
       error: error instanceof Error ? error.message : String(error),
     })
+  }
+  // Az időpontkérő szekció űrlapja ugyanilyen telepítési előfeltétel: a blokkot
+  // a szerkesztő bármelyik lapra kiteheti, és űrlap nélkül a szekció csak a
+  // telefonos utat tudná felkínálni. Idempotens, meglévőt sosem ír felül;
+  // best-effort, mint minden onInit-seedelés.
+  try {
+    await ensureAppointmentForm(payload)
+  } catch (error) {
+    logger.warn(
+      'az „Időpontkérés" űrlap onInit-seedelése nem sikerült — a szekció űrlapja letiltva renderel',
+      { error: error instanceof Error ? error.message : String(error) },
+    )
   }
 }
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  ASZF_HELYKITOLTO_BEKEZDES,
+  ASZF_JAVITOTT_BEKEZDES,
   KURZUS_ELONYOK,
   REGI_ALLAPOTOK_BEVEZETO,
   REGI_KURZUS_SZEKCIO_CIM,
@@ -12,12 +14,14 @@ import {
   UJ_KURZUS_SZEKCIO_CIM,
   UJ_PACIENS_ERTEK,
   alkalmazAllapotokBevezeto,
+  alkalmazAszfAdatvedelemLink,
   alkalmazJogiOldalak,
   alkalmazKezdolapJavitasok,
   alkalmazKurzusElonyok,
   alkalmazPressLogosFejlec,
   alkalmazRendeloiHorgony,
   alkalmazRolunkHeroKep,
+  alkalmazSosIngyenesJelolo,
   alkalmazSosKurzusSlug,
   alkalmazSzakmaiHarmonika,
   alkalmazSzolgaltatasokBevezeto,
@@ -43,6 +47,7 @@ import {
 } from '../scripts/restore-legacy-content'
 import { DEFAULT_HEADING as PRESS_ALAPFELIRAT } from '../components/blocks/PressLogos'
 import { buildCourseSlug } from '../lib/course-url'
+import { coursePriceBadgeKind } from '../lib/courses'
 import { JOGI_OLDALAK, jogiOldalTartalom, richTextSzoveg } from '../lib/legal-content'
 import {
   CLINIC_TREATMENTS_ANCHOR,
@@ -730,6 +735,122 @@ describe('alkalmazSosKurzusSlug', () => {
     expect(eredmeny.slug).toBeNull()
     expect(eredmeny.kihagyasok[0].indok).toContain('MÁR')
     expect(eredmeny.kihagyasok[0].hangos).not.toBe(true)
+  })
+})
+
+// ===========================================================================
+// 14. javítás — az ÁSZF `[xxx]` helykitöltője.
+// ===========================================================================
+
+describe('alkalmazAszfAdatvedelemLink', () => {
+  const aszfTartalom = (bekezdesek: string[]): unknown =>
+    richText(bekezdesek.map((szoveg) => para(szoveg)))
+
+  it('a helykitöltős bekezdést a valódi hivatkozásra cseréli', () => {
+    const eredmeny = alkalmazAszfAdatvedelemLink(
+      aszfTartalom(['Bevezető mondat.', ASZF_HELYKITOLTO_BEKEZDES, 'Záró mondat.']),
+    )
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(richTextSzoveg(eredmeny.content)).toBe(
+      ['Bevezető mondat.', ASZF_JAVITOTT_BEKEZDES, 'Záró mondat.'].join('\n'),
+    )
+  })
+
+  it('a jogi szöveg TÖBBI bekezdését érintetlenül hagyja', () => {
+    const eredeti = aszfTartalom(['Első.', ASZF_HELYKITOLTO_BEKEZDES, 'Harmadik.'])
+    const eredmeny = alkalmazAszfAdatvedelemLink(eredeti)
+    const eredetiGyerekek = (eredeti as { root: { children: unknown[] } }).root.children
+    const ujGyerekek = (eredmeny.content as { root: { children: unknown[] } }).root.children
+    // Referencia-azonosság: a nem érintett csomópontok UGYANAZOK az objektumok.
+    expect(ujGyerekek[0]).toBe(eredetiGyerekek[0])
+    expect(ujGyerekek[2]).toBe(eredetiGyerekek[2])
+    expect(ujGyerekek[1]).not.toBe(eredetiGyerekek[1])
+  })
+
+  it('idempotens: a már javított szövegen nem ír és nem is kiabál', () => {
+    const eredmeny = alkalmazAszfAdatvedelemLink(aszfTartalom([ASZF_JAVITOTT_BEKEZDES]))
+    expect(eredmeny.content).toBeNull()
+    expect(eredmeny.kihagyasok[0].indok).toContain('MÁR a helyén')
+    expect(eredmeny.kihagyasok[0].hangos).not.toBe(true)
+  })
+
+  it('SZERKESZTETT mondatot nem ír át, és hangosan jelzi', () => {
+    const eredmeny = alkalmazAszfAdatvedelemLink(
+      aszfTartalom(['Adatkezelési tájékoztatónkat itt éred el: [xxx] (frissítés alatt)']),
+    )
+    expect(eredmeny.content).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('nem tippel')
+  })
+
+  it('TÖBB egyforma helykitöltőnél nem dönt maga', () => {
+    const eredmeny = alkalmazAszfAdatvedelemLink(
+      aszfTartalom([ASZF_HELYKITOLTO_BEKEZDES, ASZF_HELYKITOLTO_BEKEZDES]),
+    )
+    expect(eredmeny.content).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+  })
+
+  it('idegen szerkezetnél hangosan kihagy', () => {
+    const eredmeny = alkalmazAszfAdatvedelemLink({ nem: 'richtext' })
+    expect(eredmeny.content).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+  })
+
+  it('a FORRÁSFÁJLBÓL generált ÁSZF már a javított hivatkozást hozza', () => {
+    // Ez köti össze a két felet: az újonnan létrehozott oldalon nincs mit
+    // javítani, a régin viszont van. Ha valaki visszaírná a `[xxx]`-et a
+    // forrásba, ez a teszt bukik.
+    const aszf = JOGI_OLDALAK.find((oldal) => oldal.slug === 'aszf')
+    expect(aszf).toBeDefined()
+    const szoveg = richTextSzoveg(jogiOldalTartalom(aszf!))
+    expect(szoveg).toContain(ASZF_JAVITOTT_BEKEZDES)
+    expect(szoveg).not.toContain('[xxx]')
+  })
+})
+
+// ===========================================================================
+// 13. javítás — az SOS villámkurzus ingyenes-jelölője.
+// ===========================================================================
+
+describe('alkalmazSosIngyenesJelolo', () => {
+  it.each([
+    ['beállítatlan pipa', { priceInHUF: null, priceInHUFEnabled: null }],
+    ['bepipálva, de üres ár', { priceInHUF: null, priceInHUFEnabled: true }],
+    ['bepipálva, 0 Ft', { priceInHUF: 0, priceInHUFEnabled: true }],
+  ])('%s → INGYENESRE állítja', (_nev, termek) => {
+    const eredmeny = alkalmazSosIngyenesJelolo(termek)
+    expect(eredmeny.priceInHUFEnabled).toBe(false)
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.kihagyasok).toHaveLength(0)
+  })
+
+  it('BEÁRAZOTT terméket sosem tesz ingyenessé', () => {
+    const eredmeny = alkalmazSosIngyenesJelolo({ priceInHUF: 4900, priceInHUFEnabled: true })
+    expect(eredmeny.priceInHUFEnabled).toBeNull()
+    expect(eredmeny.modositasok).toHaveLength(0)
+    expect(eredmeny.kihagyasok[0].indok).toContain('ÉRVÉNYES ára van')
+  })
+
+  it('idempotens: a már ingyenesként jelölt terméket csendben kihagyja', () => {
+    const eredmeny = alkalmazSosIngyenesJelolo({ priceInHUF: null, priceInHUFEnabled: false })
+    expect(eredmeny.priceInHUFEnabled).toBeNull()
+    expect(eredmeny.kihagyasok[0].indok).toContain('MÁR')
+    expect(eredmeny.kihagyasok[0].hangos).not.toBe(true)
+  })
+
+  it('a javított rekordot a kurzus-logika INGYENESNEK látja (a hurok bezárul)', () => {
+    // Ez a teszt köti össze a tartalom-javítást a felülettel: hiába állítja be
+    // a script a mezőt, ha az ár-címke logikája mást mondana. A tulajdonos
+    // hibája pontosan a kettő szétcsúszásából állt elő — a terméken nem volt
+    // kimondva az ingyenesség, ezért a felület fizetősnek mutatta.
+    const elotte = { priceInHUF: null, priceInHUFEnabled: null }
+    expect(coursePriceBadgeKind(elotte)).not.toBe('free')
+
+    const eredmeny = alkalmazSosIngyenesJelolo(elotte)
+    expect(
+      coursePriceBadgeKind({ priceInHUF: null, priceInHUFEnabled: eredmeny.priceInHUFEnabled }),
+    ).toBe('free')
   })
 })
 

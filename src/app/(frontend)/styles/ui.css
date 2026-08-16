@@ -247,10 +247,55 @@
   color: var(--kc-color-on-dark-muted);
 }
 
+/* ---- Letiltott gomb ------------------------------------------------------
+   A letiltott állapotot SZÁNDÉKOS TOKEN-PÁR jelöli, NEM áttetszőség.
+
+   MIÉRT NEM `opacity`: az áttetszőség a feliratot ÉS a kitöltést EGYSZERRE
+   keveri a lappal, ezért a felirat kontrasztja összeomlik. Mérve (WCAG 2.2,
+   opacity .5): primary/paper 2,12:1 · primary/fehér 2,10:1 · primary/tint
+   2,16:1 · ghost/paper 2,06:1 · secondary/paper 3,11:1. A WCAG a letiltott
+   komponenst ugyan MENTESÍTI (1.4.3 „Incidental”, 1.4.11 „Inactive User
+   Interface Components”), de a felirat pontosan olyankor hordozza a
+   legfontosabb információt („Feldolgozás…”, „Megrendelés és fizetés”), amikor
+   olvashatatlanná válik. Az ipari gyakorlat ezért nevesített letiltás-tokent
+   használ, nem az aktív állapot áttetsző változatát:
+     IBM Carbon (text-disabled / border-disabled / icon-disabled tokenek)
+       https://carbondesignsystem.com/components/button/style/
+     Material Design 3 (dokumentált state-layer rendszer, nem ad hoc opacity)
+       https://m3.material.io/foundations/interaction/states/state-layers
+     Shopify Polaris (a letiltás jelentéssel bíró állapot, magyarázattal)
+       https://polaris.shopify.com/components/actions/button
+   A repó saját, helyes ellenpéldája: `.kc-player-actions__primary--inactive`
+   (player.css) — explicit token-hármas, olvasható felirattal.
+
+   Kontraszt a javítás UTÁN (számolt):
+     felirat text-muted (#33495f) a border (#d8e2eb) kitöltésen ... 7,08:1  T ✓
+     keret border-strong (#6b7f94) a paperen ..................... 3,91:1  N ✓
+     keret border-strong a fehér kártyán ......................... 4,13:1  N ✓
+     keret border-strong a tint sávon ............................ 3,57:1  N ✓
+     keret border-strong a saját kitöltésén ...................... 3,14:1  N ✓
+   A „letiltott” JELENTÉST nem a szín hordozza (1.4.1): `not-allowed` kurzor,
+   a hover-visszajelzés hiánya, a `disabled`/`aria-disabled` szemantika, és —
+   kötelezően — a gomb MELLETT álló magyar magyarázat, hogy mi hiányzik
+   (docs/ui-sztenderdek.md §2.3 5. sor és Á-3; W3C ARIA APG button-minta:
+   https://www.w3.org/WAI/ARIA/apg/patterns/button/). */
 .kc-button:disabled,
 .kc-button--disabled {
-  opacity: 0.5;
   cursor: not-allowed;
+  background-color: var(--kc-color-border);
+  border-color: var(--kc-color-border-strong);
+  color: var(--kc-color-text-muted);
+  text-decoration: none;
+}
+
+/* Sötét sávon a világos kitöltés kiabálna: ott a letiltott gomb ÜRES marad,
+   halvány akcent kerettel és felirattal (accent-quiet az inken 8,49:1 — a
+   szöveg- és az UI-küszöb felett is). */
+.kc-section--dark .kc-button:disabled,
+.kc-section--dark .kc-button--disabled {
+  background-color: transparent;
+  border-color: var(--kc-color-on-dark-muted);
+  color: var(--kc-color-on-dark-muted);
 }
 
 /* A gomb felirata a törzsméreten áll (M) — a `--sm` változat CSAK a belső
@@ -361,7 +406,15 @@
   box-shadow: 0 0 0 3px rgb(179 38 30 / 0.25);
 }
 
+/* MÉRTÉK: a súgósor a HÁROM-MÉRETES skála S lépcsőjén áll (14 px), a
+   pénztár-űrlap mezői viszont 622 px szélesek — a leghosszabb súgó
+   („A vásárláshoz nem kell regisztrálnod…") így Chromiumban mérve 96–100
+   karakter/sor volt 768–1920 px között. Ez a docs/ertekesitesi-ux-skill.md 4.
+   pontjának 45–85-ös sávja FÖLÖTT van, és a WCAG 2.2 1.4.8 (AAA) 80 karakteres
+   plafonját is átlépi. A javítás a mérték, nem a betűméret: a kényelmes
+   mérték-token (30rem) a kis lépcsőn ≈ 75 karakteres sort ad. */
 .kc-field__hint {
+  max-width: var(--kc-measure-comfort);
   font-size: var(--kc-font-s);
   color: var(--kc-color-text-muted);
 }

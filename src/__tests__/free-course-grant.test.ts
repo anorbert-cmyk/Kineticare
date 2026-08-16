@@ -18,6 +18,18 @@ import { Users } from '../collections/Users'
  * A mock a where-objektumot TÉNYLEGESEN kiértékeli a fixtúrákon — így az is
  * bukik, ha a lekérdezés feltételei ellazulnának (pl. fizetős termék is
  * bekerülne a grantbe).
+ *
+ * ═══ SZÁNDÉKOS VISELKEDÉSVÁLTOZÁS (2026-08-16, belső biztonsági átvizsgálás) ═══
+ * A lekérdezés korábban `not_equals: true` volt, tehát a BEÁLLÍTATLAN (NULL)
+ * ár-pipájú, publikált terméket is ingyenesnek vette, és minden belépéskor
+ * kiosztotta MINDEN felhasználónak — miközben a storefront ugyanarra a termékre
+ * „Megveszem" gombot mutatott (szigorú `=== false`), és a jogosultság az ár
+ * utólagos beállítása után is bent maradt. Az új, egységes szabály szigorú:
+ * ingyenes KIZÁRÓLAG a `priceInHUFEnabled === false` (isFreeCourse), a
+ * lekérdezés `equals: false`. A beállítatlan ár-pipa hiányos konfiguráció, amit
+ * a `reportUnpricedPublishedCourses` RIASZTÁS-sal jelez.
+ * Ez a fájl korábban a NULL-ingyenes viselkedést RÖGZÍTETTE — az alábbi
+ * elvárások ezért fordítottak.
  */
 
 /** Csendes logger — a tesztfutás kimenete ne teljen meg naplósorokkal. */
@@ -40,7 +52,16 @@ interface FixtureProduct {
 }
 
 const FREE_PUBLISHED: FixtureProduct = { id: 11, status: 'published', priceInHUFEnabled: false }
-const FREE_PUBLISHED_UNSET: FixtureProduct = { id: 12, status: 'published', priceInHUFEnabled: null }
+/**
+ * BEÁLLÍTATLAN ár-pipa: se be, se ki. Az új szabály szerint NEM ingyenes,
+ * hanem hiányos konfiguráció — a grantből kimarad. (A régi, `not_equals: true`
+ * alakú lekérdezésen ez a termék bekerült volna: ezen bukik meg a régi kód.)
+ */
+const UNSET_PRICE_FLAG: FixtureProduct = {
+  id: 12,
+  status: 'published',
+  priceInHUFEnabled: null,
+}
 const PAID_PUBLISHED: FixtureProduct = {
   id: 21,
   status: 'published',
@@ -56,13 +77,25 @@ const MISCONFIGURED: FixtureProduct = {
   priceInHUF: null,
 }
 
-const ALL_PRODUCTS = [FREE_PUBLISHED, FREE_PUBLISHED_UNSET, PAID_PUBLISHED, FREE_ARCHIVED, MISCONFIGURED]
+const ALL_PRODUCTS = [FREE_PUBLISHED, UNSET_PRICE_FLAG, PAID_PUBLISHED, FREE_ARCHIVED, MISCONFIGURED]
 
-/** A szolgáltatás where-alakjának minimális kiértékelője (a valódi szűrés mása). */
+/**
+ * A szolgáltatás where-alakjának minimális kiértékelője (a valódi szűrés mása).
+ *
+ * A Postgres-szemantikát követi: `equals: false` a NULL sorra NEM illeszkedik
+ * (`priceInHUFEnabled === false` szigorú összehasonlítás), a `not_equals: true`
+ * viszont igen — pontosan ez a különbség a régi és az új szabály közt.
+ */
 function matchesWhere(product: FixtureProduct, where: unknown): boolean {
   const clauses = (where as { and?: Array<Record<string, Record<string, unknown>>> }).and ?? []
   for (const clause of clauses) {
     if (clause.status?.equals !== undefined && product.status !== clause.status.equals) {
+      return false
+    }
+    if (
+      clause.priceInHUFEnabled?.equals !== undefined &&
+      product.priceInHUFEnabled !== clause.priceInHUFEnabled.equals
+    ) {
       return false
     }
     if (
@@ -97,7 +130,7 @@ function createMockPayload(products: FixtureProduct[] = ALL_PRODUCTS) {
 }
 
 describe('grantFreeCoursesToUser — mit ír be és mit nem', () => {
-  it('a published + ingyenes termékek a purchases-be kerülnek (ár nélküli = ingyenes)', async () => {
+  it('CSAK a published + TUDATOSAN ingyenes (ár-pipa KI) termék kerül a purchases-be', async () => {
     const { payload, updates } = createMockPayload()
 
     const result = await grantFreeCoursesToUser({
@@ -106,13 +139,44 @@ describe('grantFreeCoursesToUser — mit ír be és mit nem', () => {
       logger: silentLogger(),
     })
 
-    expect(result.grantedProductIds).toEqual([FREE_PUBLISHED.id, FREE_PUBLISHED_UNSET.id])
+    expect(result.grantedProductIds).toEqual([FREE_PUBLISHED.id])
     expect(updates).toHaveLength(1)
     expect(updates[0]).toMatchObject({
       collection: 'users',
       id: 7,
-      data: { purchases: [FREE_PUBLISHED.id, FREE_PUBLISHED_UNSET.id] },
+      data: { purchases: [FREE_PUBLISHED.id] },
     })
+  })
+
+  it('a BEÁLLÍTATLAN ár-pipájú (NULL) publikált termék NEM ingyenes — nem kerül be', async () => {
+    // Ez a szándékos viselkedésváltozás magja: a régi, `not_equals: true` alakú
+    // lekérdezésen ez a termék bekerült, és minden belépőnek kiosztódott.
+    const { payload, updates } = createMockPayload([UNSET_PRICE_FLAG])
+
+    const result = await grantFreeCoursesToUser({
+      payload,
+      user: { id: 7, purchases: [] },
+      logger: silentLogger(),
+    })
+
+    expect(result.grantedProductIds).toEqual([])
+    expect(result.freeProductCount).toBe(0)
+    expect(updates).toHaveLength(0)
+  })
+
+  it('a lekérdezés SZIGORÚ `equals: false` feltétellel megy (nem `not_equals: true`)', async () => {
+    const { payload } = createMockPayload()
+
+    await grantFreeCoursesToUser({
+      payload,
+      user: { id: 7, purchases: [] },
+      logger: silentLogger(),
+    })
+
+    const where = (payload.find as unknown as { mock: { calls: [{ where: unknown }][] } }).mock
+      .calls[0][0].where as { and: Array<Record<string, Record<string, unknown>>> }
+    const priceClause = where.and.find((clause) => 'priceInHUFEnabled' in clause)
+    expect(priceClause?.priceInHUFEnabled).toEqual({ equals: false })
   })
 
   it('fizetős, archivált és hibásan konfigurált (ár-pipa BE, ár ÜRES) termék NEM kerül be', async () => {
@@ -127,6 +191,7 @@ describe('grantFreeCoursesToUser — mit ír be és mit nem', () => {
     expect(result.grantedProductIds).not.toContain(PAID_PUBLISHED.id)
     expect(result.grantedProductIds).not.toContain(FREE_ARCHIVED.id)
     expect(result.grantedProductIds).not.toContain(MISCONFIGURED.id)
+    expect(result.grantedProductIds).not.toContain(UNSET_PRICE_FLAG.id)
   })
 
   it('idempotens: a már meglévő ingyenes termék mellett NEM ír (no-op, naplósor nélkül)', async () => {
@@ -135,7 +200,7 @@ describe('grantFreeCoursesToUser — mit ír be és mit nem', () => {
 
     const result = await grantFreeCoursesToUser({
       payload,
-      user: { id: 7, purchases: [FREE_PUBLISHED.id, FREE_PUBLISHED_UNSET.id, PAID_PUBLISHED.id] },
+      user: { id: 7, purchases: [FREE_PUBLISHED.id, PAID_PUBLISHED.id] },
       logger: log,
     })
 

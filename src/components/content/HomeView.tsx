@@ -1,4 +1,5 @@
 import type { Page, Post, Product, Testimonial } from '../../payload-types'
+import type { AppointmentSectionContext } from '../../lib/appointment/context'
 import { faqPageJsonLd, organizationJsonLd } from '../../lib/seo'
 import { HERO_VIDEO_STREAM_ID } from '../../lib/hero-video'
 import { SectionReveal } from '../motion/SectionReveal'
@@ -73,6 +74,13 @@ export interface HomeViewProps {
    * egyszerűen elmarad.
    */
   testimonials?: Testimonial[]
+  /**
+   * Az időpontkérő szekció szerver-oldali környezete (űrlap-azonosító,
+   * Turnstile site key). Opcionális: a kezdőlapi szekciósorban ritkán van
+   * időpontkérő blokk, és hiányában a szekció a rendelő elérhetőségeit akkor is
+   * megmutatja, csak az űrlapja renderel letiltva. A `/` route tölti fel.
+   */
+  appointment?: AppointmentSectionContext
 }
 
 function HeroSection({ home }: { home: Page | null }) {
@@ -106,7 +114,13 @@ function HeroSection({ home }: { home: Page | null }) {
   )
 }
 
-export function HomeView({ home, products, posts, testimonials = [] }: HomeViewProps) {
+export function HomeView({
+  home,
+  products,
+  posts,
+  testimonials = [],
+  appointment,
+}: HomeViewProps) {
   // Szekció-rendszer: ha a kezdőlap CMS-oldalán VAN összeállított szekciósor
   // (Pages → Szekciók), azt rendereljük — a sorrend és a láthatóság teljes
   // egészében a szerkesztőé. A FAQPage JSON-LD-t ilyenkor a faq blokk adja a
@@ -117,7 +131,13 @@ export function HomeView({ home, products, posts, testimonials = [] }: HomeViewP
     return (
       <>
         <JsonLd data={organizationJsonLd()} />
-        <RenderBlocks layout={layout} posts={posts} products={products} testimonials={testimonials} />
+        <RenderBlocks
+          appointment={appointment}
+          layout={layout}
+          posts={posts}
+          products={products}
+          testimonials={testimonials}
+        />
         <SectionReveal />
       </>
     )

@@ -35,6 +35,14 @@ import {
  * (lastError + attempts), a processedAt NEM állítódik — az esemény a
  * webhook-retry jobbal újrapróbálható marad, kimerülésnél owner-riasztás.
  *
+ * FÜGGŐ (NEM TERMINÁLIS) KIMENETEL (B4): a `Prepared`/`Started` státusz csak
+ * annyit jelent, hogy a fizetés MÉG NEM DŐLT EL. A Barion ugyanarra a
+ * PaymentId-re küld újabb callbacket a végleges státuszról, ezért az eseményt
+ * ilyenkor NEM zárjuk le: a `result='pending_repoll'` beíródik, a `processedAt`
+ * viszont NULL marad, és a `webhookNonTerminal` jelző hatására a processWebhook
+ * a rekordot `received` státuszban hagyja — a következő kézbesítés (és a
+ * webhook-retry job) így újra feldolgozza.
+ *
  * TERMINÁLIS KIVÉTEL (M6): a „biztosan nincs ilyen fizetés" GetState-kimenetel
  * (HTTP 404, vagy ismert payment-not-found provider-hibakód) NEM dob — az
  * esemény result='rejected'-kel, processedAt-tel VÉGLEGESEN lezárul (a
@@ -146,6 +154,23 @@ async function closeEvent(
     collection: 'webhook-events',
     id: event.id,
     data: { processedAt: new Date().toISOString(), result },
+    overrideAccess: true,
+  })
+}
+
+/**
+ * NEM TERMINÁLIS jelölés: CSAK a `result` íródik, a `processedAt` SZÁNDÉKOSAN
+ * üresen marad — az esemény újrafeldolgozható (a státuszt a processWebhook
+ * hagyja `received`-en, lásd isNonTerminalHandlerOutcome).
+ */
+async function markEventPending(
+  store: WebhookEventStore,
+  event: WebhookEventDoc,
+): Promise<void> {
+  await store.update({
+    collection: 'webhook-events',
+    id: event.id,
+    data: { result: 'pending_repoll' satisfies BarionCallbackResult },
     overrideAccess: true,
   })
 }
@@ -272,8 +297,19 @@ export function createBarionCallbackProcessor(deps: BarionCallbackProcessorDeps)
 
       // 5. Esemény-lezárás az akcióhoz rendelt result-tal.
       if (transition.action === 'pending') {
-        await closeEvent(store, event, 'pending_repoll')
-        return { status: 'payment_pending', orderId: order.id, orderNumber: order.orderNumber }
+        // B4 — A FÜGGŐ ÁLLAPOT NEM VÉGLEGES. A Barion ugyanezzel a PaymentId-vel
+        // küld újabb callbacket a végleges státuszról (Succeeded/Canceled): ha az
+        // eseményt itt lezárnánk, a dedup a LÉNYEGES kézbesítést dobná el
+        // duplikátumként, és a rendelés sosem lenne paid a callback-úton.
+        // Ezért csak a `result` jelölődik, a `processedAt` üresen marad, és a
+        // `webhookNonTerminal` jelző a rekordot `received` státuszban hagyja.
+        await markEventPending(store, event)
+        return {
+          status: 'payment_pending',
+          webhookNonTerminal: true,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+        }
       }
       if (transition.action === 'cancelled') {
         await closeEvent(store, event, 'cancelled')

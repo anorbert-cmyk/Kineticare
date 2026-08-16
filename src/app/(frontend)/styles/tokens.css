@@ -47,6 +47,29 @@
   --kc-color-success-surface: #e8f5ec;
   --kc-color-warning: #8a5a00;
   --kc-color-warning-surface: #fdf3e0;
+  /* Az állapot-négyes NEGYEDIK tagja: „információ" (semleges, folyamatban lévő
+     állapot — kosár-értesítés, „fizetés folyamatban" köszönő-doboz). NEM új
+     márkaszín: a hűvös paletta akcent-mély/tint párosát viszi tovább, hogy a
+     doboz szerkezete (telített 1px keret + halk felület) azonos legyen a
+     danger/success/warning hármaséval.
+     A checkout.css 2026-08-16 előtt már HIVATKOZOTT rá, de a token sehol nem
+     volt definiálva: a `var()` „invalid at computed-value time" miatt a
+     `.kc-cart-notice` háttere `transparent`-re, a `.kc-thankyou--timeout`
+     `border` RÖVIDÍTÉSE pedig `border-style: none`-ra esett vissza — a doboz
+     keret és háttér nélkül maradt. Lásd docs/gomb-kontraszt-audit.md B9. */
+  --kc-color-info: var(--kc-color-accent-deep);
+  --kc-color-info-surface: var(--kc-color-tint-cool);
+
+  /* A süti-sáv (ConsentBanner) TÉNYLEGES magassága, futásidőben mérve — a sáv
+     ResizeObserverrel írja a <html> inline stílusára, amíg látszik. Innen jön
+     a `scroll-padding-bottom` és a lap alsó térköze (WCAG 2.2 SC 2.4.11 Focus
+     Not Obscured), lásd styles/consent-banner.css. A 0px alapérték azért kell,
+     hogy a token JS nélkül is DEFINIÁLT legyen (G-K1 őr).
+     MINDEN alul ragadó réteg ehhez igazodik — ma a kurzusoldal vásárlósávja is
+     (kurzusok.css `bottom: var(--kc-consent-offset, 0px)`) —, hogy a két sáv ne
+     takarja el egymást. Két, egymástól független kör vezette be ugyanezt a
+     tokent; a szüretnél egyetlen definícióra vontuk össze. */
+  --kc-consent-offset: 0px;
 
   /* ---- Legacy nyers tokenek (csak kompatibilitás, szerep nélkül) --------- */
   --kc-color-navy-900: #0b243f; /* legacy márka-sötét — új kódban NE használd */
@@ -76,6 +99,10 @@
        hairline-strong        fehér .................  4,13:1  UI-határ ✓
        hairline-strong        paper .................  3,91:1  UI-határ ✓
        hairline-strong        tint ..................  3,57:1  UI-határ ✓
+       info (#2f6e9f)         paper .................  5,16:1  UI-határ ✓
+       ink                    info-surface (#e6f0f8)  13,53:1  AA/AAA ✓
+       text-muted (#33495f)   border (#d8e2eb) ......  7,08:1  AA ✓ (letiltott gomb)
+       border-strong          border ................  3,14:1  UI-határ ✓ (ua.)
 
      AKCENT-KORLÁT (változatlan): az `accent` (#3d78aa) a tinten csak 4,07:1,
      a paperen 4,45:1, fehéren 4,70:1 — a normál szöveg 4,5:1-es küszöbét a

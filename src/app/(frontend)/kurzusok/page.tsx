@@ -10,6 +10,7 @@ import {
   CATEGORY_QUERY_PARAM,
   collectCourseCategories,
   filterCoursesByCategory,
+  reportUnpricedPublishedCourses,
   resolveCategoryFilter,
 } from '@/lib/courses'
 import { logger } from '@/lib/logger'
@@ -63,6 +64,9 @@ async function listPublishedCourses(): Promise<Product[]> {
       // befolyásolja a listát.
       overrideAccess: true,
     })
+    // Hangos jelzés a hiányosan konfigurált (beállítatlan ár-pipájú) publikált
+    // kurzusokról — a lista ettől változatlanul renderel (lásd src/lib/courses.ts).
+    reportUnpricedPublishedCourses(docs, logger)
     return docs
   } catch (error) {
     logger.warn('kurzuslista-lekérdezés sikertelen — üres állapottal renderelünk', {

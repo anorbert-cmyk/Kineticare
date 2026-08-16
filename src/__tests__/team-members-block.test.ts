@@ -13,7 +13,7 @@ import type { BlockTeamMembers, Page } from '../payload-types'
 /**
  * Szakértő-kártyák (teamMembers) — fókuszált tesztek, DB nélkül.
  *
- * Négy szerződést rögzítenek:
+ * Öt szerződést rögzítenek:
  *  1. a BLOKK-DEFINÍCIÓ: benne van a katalógusban, a `members` tömb legfeljebb
  *     KETTŐ (ez a 50–50-es páros szerződése), és a név kötelező;
  *  2. a RENDERELÉS: két tag egymás mellett, névvel/titulussal/bióval, a hiányos
@@ -21,10 +21,15 @@ import type { BlockTeamMembers, Page } from '../payload-types'
  *  3. a LINKELÉS és a TISZTÍTÁS: `tel:`/`mailto:` href-építés, tiltott sémájú
  *     CMS-webcím némán link nélkül renderel;
  *  4. a CV-HARMONIKA: natív `details`, a darabszám a TÉNYLEGES sorokból jön,
- *     üres sor nem számít bele, és a blokk NEM ad ki FAQPage JSON-LD-t.
+ *     üres sor nem számít bele, és a blokk NEM ad ki FAQPage JSON-LD-t;
+ *  5. a BEJELENTKEZÉS-RÉTEG (2026-08-16): a telefonszám saját, nagy
+ *     érintőcélú hívás-felületet kap, a hozzáférhető neve tartalmazza a
+ *     látható feliratot (WCAG 2.5.3), és a szekció alján megjelenhet egy
+ *     írásos időpontkérési út.
  *
- * A stíluslap két szabálya (akcent-korlát, prefers-reduced-motion) fájl-szinten
- * őrzött: mindkettő olyan, amit egy későbbi szerkesztés csendben elronthatna.
+ * A stíluslap szabályai (akcent-korlát, érintőcél, prefers-reduced-motion)
+ * fájl-szinten őrzöttek: mindegyik olyan, amit egy későbbi szerkesztés csendben
+ * elronthatna.
  */
 
 // ---------------------------------------------------------------------------
@@ -82,9 +87,7 @@ describe('teamMembers blokk-definíció', () => {
   })
 
   it('a `members` tömb LEGFELJEBB kettő — ez a 50–50-es páros szerződése', () => {
-    const members = teamMembers.fields.find(
-      (field) => 'name' in field && field.name === 'members',
-    )
+    const members = teamMembers.fields.find((field) => 'name' in field && field.name === 'members')
     expect(members, 'nincs `members` mező a blokkban').toBeDefined()
     expect(members).toMatchObject({ type: 'array', maxRows: 2, minRows: 1 })
   })
@@ -102,8 +105,17 @@ describe('teamMembers blokk-definíció', () => {
     expect(byName.get('name')).toMatchObject({ required: true })
     expect(byName.get('photo')).toMatchObject({ type: 'upload', relationTo: 'media' })
     // A `required` a Payload mező-uniójában nem minden ágon létezik (UIField),
-    // ezért itt szűkítés nélkül, tulajdonság-jelenlétre vizsgálunk.
-    for (const optional of ['role', 'bio', 'phone', 'email'] as const) {
+    // ezért itt szűkítés nélkül, tulajdonság-jelenlétre vizsgálunk. A
+    // bejelentkezés-réteg három mezője is OPCIONÁLIS: a blokk meglévő
+    // (/rolunk) használatát nem törheti el egy új kötelező mező.
+    for (const optional of [
+      'role',
+      'bio',
+      'phone',
+      'callLabel',
+      'availability',
+      'email',
+    ] as const) {
       const field = byName.get(optional)
       expect(field, `hiányzó mező: ${optional}`).toBeDefined()
       expect(
@@ -115,6 +127,22 @@ describe('teamMembers blokk-definíció', () => {
     expect(
       teamMembers.fields.some((field) => 'name' in field && field.name === 'sectionSettings'),
     ).toBe(true)
+  })
+
+  it('van szekció-szintű, ÍRÁSOS időpontkérési út (`bookingLink`), a közös link-mezőkkel', () => {
+    const booking = teamMembers.fields.find(
+      (field): field is Extract<typeof field, { fields: unknown[] }> =>
+        'name' in field && field.name === 'bookingLink' && 'fields' in field,
+    )
+    expect(booking, 'nincs `bookingLink` csoport a blokkban').toBeDefined()
+    expect(booking).toMatchObject({ type: 'group' })
+    // Ugyanaz a három mező, mint minden más szekció-CTA-nál (link-fields.ts):
+    // a szerkesztőnek egyszer kell megtanulnia, és a webcím ugyanazt az
+    // allowlist-validációt kapja.
+    const nevek = (booking?.fields ?? []).flatMap((field) =>
+      'name' in field && typeof field.name === 'string' ? [field.name] : [],
+    )
+    expect(nevek).toEqual(['felirat', 'url', 'ujAblakban'])
   })
 })
 
@@ -230,9 +258,7 @@ describe('TeamMembers kapcsolati linkek', () => {
     const blocked = renderBlock({
       id: 'b9',
       blockType: 'teamMembers',
-      members: [
-        { ...kocsis, link: { felirat: 'Bővebben', url: 'javascript:alert(1)' } },
-      ],
+      members: [{ ...kocsis, link: { felirat: 'Bővebben', url: 'javascript:alert(1)' } }],
       sectionSettings: {},
     })
     expect(blocked).toContain('Kocsis Kata')
@@ -246,6 +272,95 @@ describe('TeamMembers kapcsolati linkek', () => {
     })
     expect(allowed).toContain('href="/rolunk#cv-kocsis"')
     expect(allowed).toContain('aria-label="Kocsis Kata: Bővebben"')
+  })
+
+  it('a hívás SAJÁT felületet kap (nem a régi, apró kapcsolat-lista eleme)', () => {
+    const html = renderBlock({
+      id: 'b8b',
+      blockType: 'teamMembers',
+      members: [{ ...kocsis, email: 'info@kineticare.hu' }],
+      sectionSettings: {},
+    })
+    // A telefon a bejelentkezés-blokk hívás-felületén áll, a szám külön
+    // elemben (hogy az egy sorban tartás és a táblázatos számjegy ráérjen).
+    expect(html).toContain('class="kc-team__booking"')
+    expect(html).toContain('class="kc-team__call"')
+    expect(html).toContain('<span class="kc-team__call-number">+36 30 169 2263</span>')
+    // Az e-mail MÁSODLAGOS marad: saját, halkabb osztályt visz.
+    expect(html).toContain('class="kc-team__email"')
+    // A dekoratív ikon nem kaphat hozzáférhető nevet (a linknek már van).
+    expect(html).toContain('<svg aria-hidden="true"')
+    expect(html).toContain('focusable="false"')
+  })
+
+  it('a hívás hozzáférhető neve tartalmazza a LÁTHATÓ feliratot (WCAG 2.5.3)', () => {
+    const felirattal = renderBlock({
+      id: 'b8c',
+      blockType: 'teamMembers',
+      members: [{ ...kocsis, callLabel: 'Hívd Kocsis Katát' }],
+      sectionSettings: {},
+    })
+    // Látható: a felirat ÉS a szám — mindkettőnek benne kell lennie a névben.
+    expect(felirattal).toContain('<span class="kc-team__call-label">Hívd Kocsis Katát</span>')
+    expect(felirattal).toContain('aria-label="Hívd Kocsis Katát: +36 30 169 2263"')
+    // Elválasztónak kettőspont áll, nem gondolatjel (projekt-skill 2. pont).
+    expect(felirattal).not.toContain('aria-label="Hívd Kocsis Katát —')
+
+    // Felirat nélkül a puszta szám nem azonosít, ezért a név marad a horgony.
+    const felirapNelkul = renderBlock({
+      id: 'b8d',
+      blockType: 'teamMembers',
+      members: [kocsis],
+      sectionSettings: {},
+    })
+    expect(felirapNelkul).toContain('aria-label="Kocsis Kata telefonszáma: +36 30 169 2263"')
+    expect(felirapNelkul).not.toContain('kc-team__call-label')
+  })
+
+  it('az elérhetőségi sor és az írásos időpontkérés csak megadva jelenik meg', () => {
+    const nelkule = renderBlock({
+      id: 'b8e',
+      blockType: 'teamMembers',
+      members: [kocsis],
+      sectionSettings: {},
+    })
+    expect(nelkule).not.toContain('kc-team__availability')
+    expect(nelkule).not.toContain('kc-team__booking-note')
+
+    const teljes = renderBlock({
+      id: 'b8f',
+      blockType: 'teamMembers',
+      bookingLink: { felirat: 'Kérj időpontot üzenetben', url: '/kapcsolat' },
+      members: [{ ...kocsis, availability: 'Hétfőtől péntekig, a budapesti rendelőben' }],
+      sectionSettings: {},
+    })
+    expect(teljes).toContain('Hétfőtől péntekig, a budapesti rendelőben')
+    expect(teljes).toContain('class="kc-team__booking-link"')
+    expect(teljes).toContain('href="/kapcsolat"')
+    expect(teljes).toContain('Kérj időpontot üzenetben')
+    // A felirat önmagában beszédes: külön aria-label nem takarhatja el
+    // (WCAG 2.5.3 — a hozzáférhető név és a látható felirat egyezzen).
+    expect(teljes).not.toMatch(/aria-label="[^"]*Kérj időpontot üzenetben/)
+  })
+
+  it('az írásos időpontkérés is átmegy az allowlist-szűrőn', () => {
+    const tiltott = renderBlock({
+      id: 'b8g',
+      blockType: 'teamMembers',
+      bookingLink: { felirat: 'Időpont', url: 'javascript:alert(1)' },
+      members: [kocsis],
+      sectionSettings: {},
+    })
+    expect(tiltott).not.toContain('kc-team__booking-link')
+    // Felirat nélküli webcím sem renderel linket (a kettő együtt kell).
+    const felirapNelkul = renderBlock({
+      id: 'b8h',
+      blockType: 'teamMembers',
+      bookingLink: { url: '/kapcsolat' },
+      members: [kocsis],
+      sectionSettings: {},
+    })
+    expect(felirapNelkul).not.toContain('kc-team__booking-link')
   })
 
   it('új lapon nyíló külső linknél kötelező a rel="noopener noreferrer"', () => {
@@ -370,10 +485,13 @@ describe('TeamMembers — minden tartalom az adminból jön', () => {
       role: 'Ee-jelzo',
       bio: 'Ff-jelzo',
       phone: '+11 22 333 4444',
+      callLabel: 'Kk-jelzo',
+      availability: 'Ll-jelzo',
       email: 'gg@jelzo.test',
       cvHeading: 'Hh-jelzo',
       cvItem: 'Ii-jelzo',
       linkLabel: 'Jj-jelzo',
+      bookingLabel: 'Mm-jelzo',
     }
     const html = renderBlock({
       id: 'b15',
@@ -381,6 +499,7 @@ describe('TeamMembers — minden tartalom az adminból jön', () => {
       eyebrow: sentinels.eyebrow,
       title: sentinels.title,
       lead: sentinels.lead,
+      bookingLink: { felirat: sentinels.bookingLabel, url: '/kapcsolat' },
       members: [
         {
           id: 'm9',
@@ -388,6 +507,8 @@ describe('TeamMembers — minden tartalom az adminból jön', () => {
           role: sentinels.role,
           bio: sentinels.bio,
           phone: sentinels.phone,
+          callLabel: sentinels.callLabel,
+          availability: sentinels.availability,
           email: sentinels.email,
           cvSections: [{ id: 'cv9', heading: sentinels.cvHeading, items: sentinels.cvItem }],
           link: { felirat: sentinels.linkLabel, url: '/rolunk' },
@@ -401,8 +522,9 @@ describe('TeamMembers — minden tartalom az adminból jön', () => {
       expect(remaining, `hiányzó mező-érték a kimenetből: ${value}`).toContain(value)
       remaining = remaining.split(value).join(' ')
     }
-    // Ami marad: a számolt darabszám (1) és a dekoratív nyíl. Bármi más beégetett
-    // szöveg lenne — az a tulajdonosi feltétel megsértése.
+    // Ami marad: a számolt darabszám (1) és a két dekoratív nyíl. Bármi más
+    // beégetett szöveg lenne — az a tulajdonosi feltétel megsértése. (A
+    // telefon-ikon SVG, nem szöveg, ezért a kivonás után sem hagy nyomot.)
     expect(remaining.replace(/[\s→1]/g, '')).toBe('')
   })
 
@@ -416,9 +538,11 @@ describe('TeamMembers — minden tartalom az adminból jön', () => {
     expect(visibleText(html)).toBe('Csak Név')
     expect(html).not.toContain('kc-team__role')
     expect(html).not.toContain('kc-team__bio')
-    expect(html).not.toContain('kc-team__contact')
+    expect(html).not.toContain('kc-team__booking')
     expect(html).not.toContain('kc-team__cv')
     expect(html).not.toContain('<img')
+    // Telefonszám nélkül nincs se hívás-felület, se telefon-ikon.
+    expect(html).not.toContain('<svg')
   })
 
   it('a kártyák sorrendje a tömb sorrendje — az adminban átrendezhető', () => {
@@ -463,7 +587,78 @@ describe('team-members.css szabály-őrök', () => {
     expect(reduced).toContain('transform: none')
   })
 
+  it('a bejelentkezés-réteg MINDEN átmenete is a mozgás-kapcsoló mögött van', () => {
+    const reduced = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'))
+    // A hívás-felület kifordulása, a kártyakeret és a felirat színváltása —
+    // mindhárom `transition`, tehát mindhármat le kell tiltani.
+    for (const selector of ['.kc-team__card', '.kc-team__call', '.kc-team__call-label']) {
+      expect(reduced, `${selector} átmenete nincs kikapcsolva`).toContain(selector)
+    }
+  })
+
   it('a rács auto-fit — egy taggal nem marad üres hasáb (kutatás B3.5)', () => {
     expect(css).toContain('grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr))')
+  })
+
+  it('a hívás-felület érintőcélja 3,5rem (56px) — a WCAG 2.5.8 minimumának duplája', () => {
+    const call = css.slice(css.indexOf('.kc-team__call {'), css.indexOf('.kc-team__call:hover'))
+    expect(call).toContain('min-height: 3.5rem')
+  })
+
+  it('minden önálló hivatkozás legalább 44px magas (érintőcél, UX-skill 3. pont)', () => {
+    // A blokk önálló (nem mondatba ágyazott) hivatkozásai: hívás, e-mail,
+    // kártya-link, harmonika-fejléc és az írásos időpontkérés.
+    for (const selector of [
+      '.kc-team__email',
+      '.kc-team__cv-summary',
+      '.kc-team__link',
+      '.kc-team__booking-link',
+    ]) {
+      const start = css.indexOf(`${selector} {`)
+      expect(start, `nincs ilyen szabály: ${selector}`).toBeGreaterThan(-1)
+      const rule = css.slice(start, css.indexOf('}', start))
+      expect(rule, `${selector} nem éri el a 44px-es érintőcélt`).toContain('min-height: 2.75rem')
+    }
+  })
+
+  it('a hívás-felület kerete és telt állapota szerep-tokenről jön (mért AA-kontraszt)', () => {
+    // Világos sávon accent-deep (fehér kártyán 5,45:1 — a nem-szöveges 3:1-es
+    // küszöb fölött), telt állapotban fehér szöveggel ugyanaz az 5,45:1.
+    expect(css).toContain('--kc-team-action-line: var(--kc-color-primary)')
+    expect(css).toContain('--kc-team-action-on-fill: var(--kc-color-on-primary)')
+    // Sötét sávon az accent-deep az inken csak 2,87:1 lenne, ezért fehérre vált.
+    const dark = css.slice(css.indexOf('.kc-section--dark.kc-team {'))
+    expect(dark).toContain('--kc-team-action-line: var(--kc-color-on-dark)')
+    expect(dark).toContain('--kc-team-action-on-fill: var(--kc-color-surface-dark)')
+  })
+
+  it('a telefonszám nem törhet több sorba (a kártya `overflow-wrap: anywhere` ellenére)', () => {
+    // Két szabály hivatkozik a számra (méret/tördelés, illetve a
+    // fajsúly-erősített színöröklés) — a nowrap az elsőben él.
+    const number = css.slice(css.indexOf('\n.kc-team__call-number {'))
+    expect(number.slice(0, number.indexOf('}'))).toContain('white-space: nowrap')
+  })
+
+  it('a hívás-felület szabályai KÉT osztállyal íródnak (a ui.css sötét-sáv szabálya erősebb)', () => {
+    /*
+     * MÉRT HIBA (2026-08-16, Chromium, pixelből): egyosztályos
+     * `.kc-team__call:hover` mellett a ui.css `.kc-section--dark a:hover`
+     * szabálya (két osztály + pszeudo-osztály) nyert, és a szám a fehér
+     * kitöltésen halvány akcentre váltott — 1,84:1, azaz AA alatt. Két
+     * osztállyal a saját szabály nyer: a telt állapotban 15,63:1 a mért érték.
+     */
+    expect(css).toContain('.kc-team .kc-team__call {')
+    expect(css).toContain('.kc-team .kc-team__call:hover {')
+    expect(css).toContain('.kc-team .kc-team__call .kc-team__call-number {')
+    // Egyosztályos (gyengébb) alak nem maradhat a fájlban.
+    expect(css).not.toMatch(/(^|\n)\.kc-team__call:hover\s*\{/)
+  })
+
+  it('a két hívás-felület EGY vonalban áll az eltérő bemutatkozás-hossz ellenére is', () => {
+    // A bejelentkezés-réteg viszi az `auto` felső margót; ha a kártya-link is
+    // vinné, a flex szétosztaná a szabad helyet, és a páros elcsúszna.
+    const booking = css.slice(css.indexOf('.kc-team__booking {'))
+    expect(booking.slice(0, booking.indexOf('}'))).toContain('margin-top: auto')
+    expect(css).toContain('.kc-team__booking ~ .kc-team__link {')
   })
 })

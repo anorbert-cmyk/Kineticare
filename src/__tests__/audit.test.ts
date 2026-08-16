@@ -1,6 +1,12 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { stripSensitiveFields, writeAuditLog, type AuditLogStore } from '../lib/audit'
+import {
+  resolveClientIp,
+  stripSensitiveFields,
+  trustedForwardedForEntry,
+  writeAuditLog,
+  type AuditLogStore,
+} from '../lib/audit'
 import { auditActionsForChange, auditAfterChange } from '../plugins/audit'
 
 describe('writeAuditLog', () => {
@@ -204,5 +210,78 @@ describe('audit plugin injekciós hook', () => {
     } as never)
 
     expect(result).toBe(doc)
+  })
+})
+
+/**
+ * ═══ KLIENS-IP: A HAMISÍTHATÓ FEJLÉC BEZÁRÁSA (2026-08-16) ═══
+ *
+ * Az `ipAddress` az audit-sor bizonyító ereje, és ugyanez a függvény adja a
+ * kérés-korlát kulcsát is. A régi sorrend feltétel nélkül elfogadta a
+ * `cf-connecting-ip` fejlécet, és az `x-forwarded-for` ELSŐ (kliens által
+ * küldött) elemét használta — mindkettő hamisítható, mert az éles kiszolgálás
+ * előtt nincs Cloudflare.
+ */
+describe('resolveClientIp — megbízható IP proxy mögül', () => {
+  afterEach(() => {
+    delete process.env.TRUST_CF_CONNECTING_IP
+    delete process.env.TRUSTED_PROXY_HOP_COUNT
+  })
+
+  it('a cf-connecting-ip alapból FIGYELMEN KÍVÜL marad (a régi kódon ez nyert volna)', () => {
+    const headers = new Headers({
+      'cf-connecting-ip': '9.9.9.9',
+      'x-forwarded-for': '1.1.1.1, 203.0.113.9',
+    })
+    expect(resolveClientIp(headers)).toBe('203.0.113.9')
+  })
+
+  it('a cf-connecting-ip CSAK TRUST_CF_CONNECTING_IP=true mellett számít', () => {
+    process.env.TRUST_CF_CONNECTING_IP = 'true'
+    const headers = new Headers({
+      'cf-connecting-ip': '9.9.9.9',
+      'x-forwarded-for': '1.1.1.1, 203.0.113.9',
+    })
+    expect(resolveClientIp(headers)).toBe('9.9.9.9')
+  })
+
+  it('bekapcsolt kapcsoló mellett is az x-forwarded-for marad, ha nincs CF-fejléc', () => {
+    process.env.TRUST_CF_CONNECTING_IP = 'true'
+    expect(resolveClientIp(new Headers({ 'x-forwarded-for': '1.1.1.1, 203.0.113.9' }))).toBe(
+      '203.0.113.9',
+    )
+  })
+
+  it('x-real-ip a végső tartalék; fejléc nélkül undefined (nem dob)', () => {
+    expect(resolveClientIp(new Headers({ 'x-real-ip': '198.51.100.5' }))).toBe('198.51.100.5')
+    expect(resolveClientIp(new Headers())).toBeUndefined()
+    expect(resolveClientIp(undefined)).toBeUndefined()
+  })
+
+  it('üres/whitespace fejléc hiányzónak számít', () => {
+    expect(resolveClientIp(new Headers({ 'x-forwarded-for': '   ' }))).toBeUndefined()
+    expect(
+      resolveClientIp(new Headers({ 'x-forwarded-for': ' , , ', 'x-real-ip': '198.51.100.5' })),
+    ).toBe('198.51.100.5')
+  })
+})
+
+describe('trustedForwardedForEntry — a lánc megbízható eleme', () => {
+  it('alapból (1 hop) a JOBB SZÉLSŐ elem — azt a saját edge-proxynk fűzi hozzá', () => {
+    expect(trustedForwardedForEntry('1.1.1.1, 2.2.2.2, 203.0.113.9', 1)).toBe('203.0.113.9')
+  })
+
+  it('több hop esetén annyival beljebb', () => {
+    expect(trustedForwardedForEntry('1.1.1.1, 203.0.113.9, 10.0.0.9', 2)).toBe('203.0.113.9')
+  })
+
+  it('a hop-számnál rövidebb lánc → a legkorábbi elérhető elem (sosem dob)', () => {
+    expect(trustedForwardedForEntry('203.0.113.9', 3)).toBe('203.0.113.9')
+  })
+
+  it('üres bejegyzéseket kiszűr; használható elem híján undefined', () => {
+    expect(trustedForwardedForEntry('1.1.1.1, , 203.0.113.9 ', 1)).toBe('203.0.113.9')
+    expect(trustedForwardedForEntry(' , , ', 1)).toBeUndefined()
+    expect(trustedForwardedForEntry(undefined, 1)).toBeUndefined()
   })
 })

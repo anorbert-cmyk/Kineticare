@@ -35,12 +35,30 @@ const REVEAL_CLASS = 'kc-reveal'
 const REVEALED_CLASS = 'is-revealed'
 /**
  * Egy szekció akkor kap belépőt, ha a betöltéskor a nézetablak alja alatt
- * kezdődik. A 0,9-es szorzó ad egy kis ráhagyást: a hajtás alján éppen
- * beleérő szekció még „látottnak" számít, tehát nem villan.
+ * kezdődik.
+ *
+ * A szorzó 2026-08-16-án 0,9-ről 1,0-ra változott, hibajavításként: a 0,9
+ * azt jelentette, hogy a nézetablak alsó 10%-ában ÉPP LÁTSZÓ szekció is
+ * kapott rejtett kezdőállapotot — vagyis a hidratálás pillanatában, a
+ * felhasználó szeme előtt tűnt el, majd tűnt vissza. 1,0-nál CSAK a
+ * ténylegesen képernyőn KÍVÜL kezdődő szekció kap belépőt, tehát ami már
+ * látszik, az nem villan.
  */
-const BELOW_FOLD_RATIO = 0.9
+const BELOW_FOLD_RATIO = 1
 /** A megfigyelő ennyivel a nézetablak alja ELŐTT gyújt (korai, nyugodt belépő). */
 const ROOT_MARGIN = '0px 0px -12% 0px'
+
+/**
+ * Kap-e belépőt egy szekció? A döntés TISZTA függvény, hogy a szabály
+ * DOM nélkül is őrizhető legyen (őr-teszt: mozgas-es-linkek).
+ *
+ * @param top a szekció teteje a nézetablak tetejéhez képest (px)
+ * @param viewportHeight a nézetablak magassága (px)
+ * @returns true, ha a szekció a nézetablakon KÍVÜL, alatta kezdődik
+ */
+export function kapBelepot(top: number, viewportHeight: number): boolean {
+  return top > viewportHeight * BELOW_FOLD_RATIO
+}
 
 export function SectionReveal() {
   useEffect(() => {
@@ -56,12 +74,12 @@ export function SectionReveal() {
       return
     }
 
-    const fold = window.innerHeight * BELOW_FOLD_RATIO
+    const viewportHeight = window.innerHeight
     const targets = Array.from(main.children).filter(
       (element): element is HTMLElement =>
         element instanceof HTMLElement &&
         element.classList.contains('kc-section') &&
-        element.getBoundingClientRect().top > fold,
+        kapBelepot(element.getBoundingClientRect().top, viewportHeight),
     )
     if (targets.length === 0) {
       return

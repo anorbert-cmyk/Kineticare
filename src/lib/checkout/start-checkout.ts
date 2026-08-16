@@ -3,6 +3,7 @@ import type { Payload } from 'payload'
 import type { Order, Product, User } from '../../payload-types'
 import { withAdvisoryLock } from '../advisory-lock'
 import { BARION_DEFAULT_PAYMENT_WINDOW, BarionApiError, startPayment } from '../barion'
+import { coursePriceHuf } from '../courses'
 import { logger, type Logger } from '../logger'
 import {
   billingSummaryMessage,
@@ -257,12 +258,45 @@ function assertPurchasable(product: Product, log: Logger, priceHuf?: number): vo
     })
     throw new CheckoutError(400, 'Ez a termék jelenleg nem megvásárolható.')
   }
-  if (product.priceInHUFEnabled !== true || typeof product.priceInHUF !== 'number') {
+  /**
+   * ÁR-KAPU: az ár-pipa MELLETT a szám ÉRTÉKE is számít — csak a POZITÍV ár
+   * érvényes.
+   *
+   * ═══ A HIBA, AMIT BEZÁR ═══
+   * A `priceInHUFEnabled: true` + `priceInHUF: 0` páros korábban átment ezen a
+   * kapun, és VALÓDI Barion-fizetés indult volna 0 Ft-ról: a Barion vagy hibát
+   * ad (a vevő magyarázat nélküli 502-t kap), vagy — rosszabb — létrejön egy
+   * 0 forintos rendelés és számla, amit kézzel kell takarítani. A negatív ár
+   * ugyanígy értelmezhetetlen, a `NaN` pedig `typeof 'number'`, tehát a régi
+   * feltételen az is átcsúszott.
+   *
+   * ═══ MIÉRT NEM „INGYENES" A 0 Ft (a döntés, hogy egy refaktor se írja
+   * vissza) ═══
+   * Az ingyenességet EGY dolog fejezi ki: az ár-pipa `false` értéke
+   * (`priceInHUFEnabled: false`) — arra van külön, Barion nélküli út
+   * (/penztar ingyenes ága + free-course-grant). Ha a 0 Ft is „ingyenest"
+   * jelentene, két, egymással versengő igazságforrás lenne ugyanarra az
+   * állapotra, és a fizetési út némán szétágazna egy szerkesztői elgépeléstől.
+   * Ezért a 0 (és minden nem pozitív érték) itt HIÁNYZÓ/HIBÁS konfiguráció:
+   * ugyanaz az elutasító ág, mint a hiányzó áré.
+   */
+  //
+  // ═══ MIÉRT A coursePriceHuf DÖNT (és nem egy itteni feltétel) ═══
+  // Az „érvényes ár" fogalmának EGY implementációja van, a courses.ts-ben, és
+  // azt hívja a gomb-logika (resolveCourseCta → isPaidCourse), az ár-címke és
+  // ez a kapu is. Amíg a kapu saját másolatot tartott, a kettő elsodródott: a
+  // felület ajánlott egy vásárlást, amit a szerver elutasított. A másolat
+  // visszavezetése ezt a hibaosztályt szünteti meg, nem csak a mai példányát.
+  const price = product.priceInHUF
+  if (coursePriceHuf(product) === null) {
     log.warn('checkout-start: vásárlás elutasítva — a termékhez nincs érvényes ár', {
       productId: product.id,
       productStatus: product.status,
       priceEnabled: product.priceInHUFEnabled === true,
-      reason: 'price-missing',
+      // A megkülönböztetés a naplóban látszik: a hiányzó és a nem pozitív ár
+      // ugyanazt az üzenetet adja a vevőnek, de az üzemeltetőnek mást jelent
+      // (utóbbi szerkesztői elgépelés, ami adminban javítható).
+      reason: typeof price === 'number' ? 'price-not-positive' : 'price-missing',
     })
     throw new CheckoutError(400, 'A termékhez nem tartozik érvényes ár, így nem vásárolható meg.')
   }
@@ -677,7 +711,11 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
     const startResponse = await startPayment({
       // PaymentRequestId = orderNumber → Barion-oldali idempotencia.
       paymentRequestId: orderNumber,
-      redirectUrl: `${serverUrl}/fizetes/koszonom`,
+      // A köszönőoldal a RENDELÉSSZÁMBÓL poll-ozza a státuszt (`?order=…`).
+      // Enélkül minden fizető vevő a „Hiányzik a rendelésszám" nézetet kapná —
+      // a Barion-visszatérés ugyanis nem hordoz más azonosítót, amit az oldal
+      // használni tudna.
+      redirectUrl: `${serverUrl}/fizetes/koszonom?order=${encodeURIComponent(orderNumber)}`,
       callbackUrl: `${serverUrl}/api/barion/callback`,
       payerHint: buyer.email || undefined,
       cardHolderNameHint: buyer.name ?? undefined,

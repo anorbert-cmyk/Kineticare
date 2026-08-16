@@ -188,6 +188,52 @@ describe('order-poll — elveszett callback-mentés', () => {
     expect(paidCalls).toEqual([101])
   })
 
+  /**
+   * K1 — a paid-átmenet mellékhatásai (számla + visszaigazoló/aktiváló e-mail)
+   * nem veszhetnek el egy félbeszakadt jogosultság-beírás miatt.
+   *
+   * A RÉGI sorrenden (előbb `status: 'paid'`, utána grant) ez a teszt megbukna:
+   * az első futás után a rendelés már paid lenne, tehát a második futás
+   * `transitionedToPaid: false`-t adna, és az onPaid SOHA nem futna le — a vevő
+   * fizetne, hozzáférést kapna, de levelet (vendégként jelszó-beállító linket)
+   * sosem.
+   */
+  it('a jogosultság-beírás elhasalása után a következő futás PONTOSAN EGYSZER hívja az onPaid-et', async () => {
+    const order = createPendingOrder()
+    const base = setup({ pending: [order], stateStatus: 'Succeeded' })
+    let grantFails = true
+    const payload = {
+      ...(base.payload as unknown as Record<string, unknown>),
+      update: async (args: { collection: string; data: Record<string, unknown> }) => {
+        if (args.collection === 'users' && grantFails) {
+          throw new Error('teszt: a jogosultság-beírás elhasal (DB-hiba)')
+        }
+        return (base.payload as unknown as { update: (a: unknown) => Promise<unknown> }).update(args)
+      },
+    } as never
+    const deps = {
+      payload,
+      fetchState: base.fetchState,
+      onPaid: base.onPaid,
+      queueInvoice: base.queueInvoice,
+      invoicingEnabled: base.invoicingEnabled,
+      now: NOW,
+    }
+
+    await expect(pollPendingOrders(deps)).rejects.toThrow()
+    // A rendelés NEM ragadhat paid-ben elmaradt mellékhatásokkal.
+    expect(order.status).toBe('payment_pending')
+    expect(base.paidCalls).toEqual([])
+
+    grantFails = false
+    const summary = await pollPendingOrders(deps)
+
+    expect(summary.transitionedPaid).toBe(1)
+    expect(order.status).toBe('paid')
+    expect(base.user.purchases).toEqual([42])
+    expect(base.paidCalls).toEqual([101])
+  })
+
   it.each([['Canceled'], ['Expired']])('Barion %s → a rendelés cancelled lesz', async (status) => {
     const order = createPendingOrder()
     const { payload, fetchState, onPaid, queueInvoice, paidCalls } = setup({

@@ -11,10 +11,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  composeCustomerName,
   normalizeEmail,
   normalizeKey,
   parseCsvRecords,
   parseCustomerCsv,
+  parseRegisteredAt,
   resolveDelimiter,
   splitCourseNames,
   UTF8_BOM,
@@ -108,7 +110,15 @@ describe('teljes CSV feldolgozása', () => {
 
   it('a fejléc alapján ismeri fel az oszlopokat', () => {
     const parsed = parseCustomerCsv(csv)
-    expect(parsed.columns).toEqual({ email: 0, name: 1, courses: 2 })
+    expect(parsed.columns).toEqual({
+      email: 0,
+      name: 1,
+      courses: 2,
+      // A generic alaknál nincs külön vezetéknév- és dátum-oszlop.
+      lastName: null,
+      registeredAt: null,
+    })
+    expect(parsed.format).toBe('generic')
     expect(parsed.rows).toHaveLength(2)
     expect(parsed.issues).toEqual([])
   })
@@ -226,5 +236,185 @@ describe('üres fájl és csak fejléc', () => {
     expect(() => parseCustomerCsv('Email,Name\n', { emailColumn: 'nincs-ilyen' })).toThrow(
       /Nincs "nincs-ilyen" nevű oszlop/,
     )
+  })
+})
+
+
+/**
+ * A systeme.io kontakt-export alakja (`Email, First name, Last name, Tag,
+ * Date Registered`).
+ *
+ * MINDEN ADAT KITALÁLT — a valódi lista SZEMÉLYES ADAT, tesztfixtúrába sem
+ * kerülhet.
+ */
+describe('systeme.io kontakt-export (címke-alapú bemenet)', () => {
+  const header = '"Email","First name","Last name","Tag","Date Registered"'
+  const csv = [
+    header,
+    '"anna.teszt@example.com","Anna","Teszt","SOS KézRelax vásárló","2025-01-02 10:11:12 (UTC+1)"',
+    '"bela.teszt@example.com","Béla","Teszt","Otthoni KézRehab vásárló, Visszatérítés Kézrehab","2025-02-03 08:00:00 (UTC+1)"',
+    '"cili.teszt@example.com","Cili","","Előjelentkezők, SOS KézRelax vásárló","2025-03-04 09:30:00 (UTC+2)"',
+    '"dora.teszt@example.com","Dóra","Teszt","Hírlevél feliratkozó","2025-04-05 11:00:00 (UTC+2)"',
+    '"edit.teszt@example.com","Edit","Teszt","","2025-05-06 12:00:00 (UTC+2)"',
+    '',
+  ].join('\n')
+
+  const parsed = parseCustomerCsv(csv)
+  const rowFor = (email: string) => parsed.rows.find((row) => row.email === email)
+
+  it('a fejlécből felismeri a systeme.io-alakot és minden oszlopát', () => {
+    expect(parsed.format).toBe('systeme')
+    expect(parsed.columns).toEqual({
+      email: 0,
+      name: 1,
+      courses: 3,
+      lastName: 2,
+      registeredAt: 4,
+    })
+  })
+
+  it('a vásárlás-címkéből kurzus-hozzáférés lesz', () => {
+    expect(rowFor('anna.teszt@example.com')?.courseNames).toEqual(['SOS KézRelax vásárló'])
+  })
+
+  it('a VISSZATÉRÍTETT kurzushoz nem jár hozzáférés', () => {
+    const row = rowFor('bela.teszt@example.com')
+    expect(row?.courseNames).toEqual([])
+    expect(row?.refundedCourseNames).toEqual(['Otthoni KézRehab vásárló'])
+  })
+
+  it('az előjelentkező címke nem ad hozzáférést, a mellette lévő vásárlás igen', () => {
+    const row = rowFor('cili.teszt@example.com')
+    expect(row?.courseNames).toEqual(['SOS KézRelax vásárló'])
+    expect(row?.ignoredTags).toEqual(['Előjelentkezők'])
+  })
+
+  it('az ismeretlen címke figyelmeztetés, nem hiba — a sor bekerül, hozzáférés nélkül', () => {
+    const row = rowFor('dora.teszt@example.com')
+    expect(row).toBeDefined()
+    expect(row?.courseNames).toEqual([])
+    expect(row?.unknownTags).toEqual(['Hírlevél feliratkozó'])
+    expect(parsed.issues).toEqual([])
+    expect(parsed.warnings.join(' ')).toContain('ISMERETLEN CÍMKE')
+    expect(parsed.warnings.join(' ')).toContain('Hírlevél feliratkozó')
+  })
+
+  it('üres címke-cella: fiók igen, hozzáférés nem', () => {
+    expect(rowFor('edit.teszt@example.com')?.courseNames).toEqual([])
+  })
+
+  it('a régi vásárlás dátumát ISO-alakban őrzi meg', () => {
+    expect(rowFor('anna.teszt@example.com')?.registeredAt).toBe('2025-01-02T10:11:12+01:00')
+    expect(rowFor('cili.teszt@example.com')?.registeredAt).toBe('2025-03-04T09:30:00+02:00')
+  })
+
+  it('a címke-mérleg vevőnkénti számokat ad', () => {
+    const stats = parsed.tagStats
+    expect(stats).toBeDefined()
+    expect(stats?.granted.get('SOS KézRelax vásárló')).toBe(2)
+    expect(stats?.refunded.get('Otthoni KézRehab vásárló')).toBe(1)
+    expect(stats?.ignored.get('Előjelentkezők')).toBe(1)
+    expect(stats?.unknown.get('Hírlevél feliratkozó')).toBe(1)
+    expect(stats?.customersWithoutTags).toBe(1)
+    expect(stats?.customersWithoutAccess).toBe(3)
+    expect(stats?.customersWithDate).toBe(5)
+    expect(stats?.unparsableDates).toBe(0)
+  })
+
+  it('a `Courses` oszlopos (generic) fájl NEM vált címke-értelmezésre', () => {
+    const generic = parseCustomerCsv('Email,Name,Courses\na@example.com,Anna,"Kurzus A|Kurzus B"\n')
+    expect(generic.format).toBe('generic')
+    expect(generic.tagStats).toBeUndefined()
+    expect(generic.rows[0].courseNames).toEqual(['Kurzus A', 'Kurzus B'])
+  })
+
+  it('a --format=systeme kényszerítés a fejléctől függetlenül él', () => {
+    const forced = parseCustomerCsv(
+      'Email,Name,Tags\na@example.com,Anna,"SOS KézRelax vásárló, Előjelentkezők"\n',
+      { format: 'systeme' },
+    )
+    expect(forced.format).toBe('systeme')
+    expect(forced.rows[0].courseNames).toEqual(['SOS KézRelax vásárló'])
+  })
+
+  it('ugyanaz az e-mail több sorban: kurzusok uniója, a LEGKORÁBBI dátum marad', () => {
+    const merged = parseCustomerCsv(
+      [
+        header,
+        '"anna.teszt@example.com","Anna","Teszt","SOS KézRelax vásárló","2025-06-01 10:00:00 (UTC+2)"',
+        '"anna.teszt@example.com","Anna","Teszt","Otthoni KézRehab vásárló","2024-02-02 09:00:00 (UTC+1)"',
+        '',
+      ].join('\n'),
+    )
+    expect(merged.rows).toHaveLength(1)
+    expect(merged.rows[0].courseNames).toEqual([
+      'SOS KézRelax vásárló',
+      'Otthoni KézRehab vásárló',
+    ])
+    expect(merged.rows[0].registeredAt).toBe('2024-02-02T09:00:00+01:00')
+  })
+
+  it('az értelmezhetetlen dátum a sort NEM ejti ki, csak figyelmeztet', () => {
+    const broken = parseCustomerCsv(
+      [header, '"anna.teszt@example.com","Anna","Teszt","","tegnap"', ''].join('\n'),
+    )
+    expect(broken.rows).toHaveLength(1)
+    expect(broken.rows[0].registeredAt).toBeUndefined()
+    expect(broken.issues[0].reason).toContain('Értelmezhetetlen dátum')
+  })
+})
+
+describe('név-összeállítás a két név-oszlopból', () => {
+  it.each([
+    ['mindkettő kitöltve', 'Anna', 'Teszt', 'Anna Teszt'],
+    ['csak keresztnév', 'Anna', '', 'Anna'],
+    ['csak vezetéknév', '', 'Teszt', 'Teszt'],
+    ['ugyanaz mindkét oszlopban', 'Anna', 'anna', 'Anna'],
+    ['az egyik oszlop a TELJES nevet hordozza', 'Teszt Anna', 'Anna', 'Teszt Anna'],
+    ['fordított sorrendű teljes név a másodikban', 'Anna', 'Anna Teszt', 'Anna Teszt'],
+    ['fölös szóközök', '  Anna   ', '  Teszt  ', 'Anna Teszt'],
+    ['mindkettő üres', '', '', ''],
+    ['két szó + két szó (nincs átfedés)', 'Anna Mária', 'Teszt Kiss', 'Anna Mária Teszt Kiss'],
+  ])('%s', (_label, first, last, expected) => {
+    expect(composeCustomerName(first, last)).toBe(expected)
+  })
+
+  it('a fájlban a névösszeállítás eredménye kerül a sorba', () => {
+    const parsed = parseCustomerCsv(
+      [
+        '"Email","First name","Last name","Tag","Date Registered"',
+        '"anna.teszt@example.com","Teszt Anna","Anna","",""',
+        '"bela.teszt@example.com","","Teszt Béla","",""',
+        '"cili.teszt@example.com","","","",""',
+        '',
+      ].join('\n'),
+    )
+    expect(parsed.rows.find((row) => row.email.startsWith('anna'))?.name).toBe('Teszt Anna')
+    expect(parsed.rows.find((row) => row.email.startsWith('bela'))?.name).toBe('Teszt Béla')
+    // Név nélküli sor: az e-mail @ előtti része a pótlék (a users.name kötelező).
+    expect(parsed.rows.find((row) => row.email.startsWith('cili'))?.name).toBe('cili.teszt')
+  })
+})
+
+describe('regisztrációs dátum értelmezése', () => {
+  it.each([
+    ['systeme.io alak (UTC+2)', '2025-03-04 09:30:00 (UTC+2)', '2025-03-04T09:30:00+02:00'],
+    ['systeme.io alak (UTC+0)', '2025-03-04 09:30:00 (UTC+0)', '2025-03-04T09:30:00Z'],
+    ['csak dátum', '2025-03-04', '2025-03-04'],
+    ['ISO Z-vel', '2025-03-04T09:30:00Z', '2025-03-04T09:30:00Z'],
+    ['ISO eltolással', '2025-03-04T09:30:00+02:00', '2025-03-04T09:30:00+02:00'],
+    ['másodperc nélkül', '2025-03-04 09:30', '2025-03-04T09:30:00Z'],
+  ])('%s', (_label, input, expected) => {
+    expect(parseRegisteredAt(input)).toBe(expected)
+  })
+
+  it.each([
+    ['üres cella', ''],
+    ['szöveg', 'tegnap'],
+    ['nem létező nap', '2025-02-31 10:00:00 (UTC+1)'],
+    ['hibás hónap', '2025-13-01'],
+    ['fordított alak', '04.03.2025'],
+  ])('%s → null (nem talál ki dátumot)', (_label, input) => {
+    expect(parseRegisteredAt(input)).toBeNull()
   })
 })

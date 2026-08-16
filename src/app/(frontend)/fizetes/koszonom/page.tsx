@@ -14,6 +14,22 @@ interface KoszonjukPageProps {
 }
 
 /**
+ * A `?order=` érték tisztítása.
+ *
+ * MIÉRT VÁGUNK a '?' / '&' / '#' karakternél: a Barion a visszairányítás
+ * URL-jéhez hozzáfűzi a saját `paymentId` paraméterét. Ha ezt a mi query
+ * stringünk mellé nem '&'-tel, hanem '?'-lel fűzi hozzá, a böngésző EGYETLEN
+ * paramétert lát: `order=KH-2026-000123?paymentId=<guid>`. A rendelésszám
+ * alakja kötött (KH-<év>-<6 jegy>, lásd src/lib/order-number.ts), ilyen
+ * karakter sosem szerepel benne — az első ilyen karakter utáni rész tehát
+ * biztosan idegen, és levágva a státusz-poll a valódi rendelésszámmal indul.
+ */
+function normalizeOrderParam(raw: string): string | null {
+  const trimmed = raw.split(/[?&#]/)[0]?.trim() ?? ''
+  return trimmed.length > 0 ? trimmed : null
+}
+
+/**
  * /fizetes/koszonom — a Barion redirect célja (a T-021 redirectUrl-ja).
  *
  * A köszönőoldal a rendelés-státuszt 2 mp-enként poll-ozza (a T-022
@@ -44,7 +60,7 @@ export default async function KoszonjukPage({ searchParams }: KoszonjukPageProps
   const params = await searchParams
 
   const orderParam = params.order
-  const orderNumber = typeof orderParam === 'string' && orderParam.trim().length > 0 ? orderParam.trim() : null
+  const orderNumber = typeof orderParam === 'string' ? normalizeOrderParam(orderParam) : null
 
   return (
     <Section>

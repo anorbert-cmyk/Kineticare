@@ -28,6 +28,29 @@ import { sectionSettings } from './section-settings'
  * A tételek SORONKÉNT egy szövegdobozban élnek, nem beágyazott tömbben: a régi
  * oldal 38 tanfolyamos listáját így be lehet MÁSOLNI, míg 38 külön tömb-sor
  * felvétele a laikus szerkesztőnek használhatatlan lenne.
+ *
+ * BEJELENTKEZÉS-RÉTEG (2026-08-16, tulajdonosi kérés: „a bejelentkezés a
+ * lányokhoz meg róluk a kép"). A blokk eddig is ismerte a telefonszámot, de
+ * apró szöveglinkként — az a lábjegyzet, nem cselekvés. A három új mező ezt
+ * teszi valódi kapcsolatfelvételi úttá, és mind a három OPCIONÁLIS, tehát a
+ * meglévő /rolunk-használatot nem érinti:
+ *
+ *  - `callLabel`   — a szám fölé kerülő, cselekvő felirat („Hívd Katát"). A
+ *                    projekt-skill 2. pontja szerint a CTA ige + tárgy; a
+ *                    magyar névragozást kód nem tudja helyesen előállítani,
+ *                    ezért a felirat MEZŐ, nem generált szöveg.
+ *  - `availability`— egy sor arról, mikor és hol érhető el a szakember. Az
+ *                    NN/g hitelesség-kutatásának 2. tényezője az „Upfront
+ *                    Disclosure": a kapcsolati és elérhetőségi adat ott
+ *                    legyen kiírva, ahol a látogató dönt, ne űrlap mögött.
+ *                    https://www.nngroup.com/articles/trustworthy-design/
+ *  - `bookingLink` — szekció-szintű, ÍRÁSOS időpontkérési út (pl. a
+ *                    /kapcsolat űrlapja). Az NN/g egészségügyi
+ *                    út-kutatásában a válaszadók többsége kifejezetten
+ *                    KERÜLI a telefonálást („these often go unanswered and
+ *                    result in »phone tag«"), ezért a hívás mellé aszinkron
+ *                    alternatíva is kell.
+ *                    https://www.nngroup.com/articles/healthcare-customer-journeys/
  */
 export const teamMembers: Block = {
   slug: 'teamMembers',
@@ -67,6 +90,13 @@ export const teamMembers: Block = {
         description: 'Egy-két mondat a nevek fölé. Nem kötelező.',
       },
     },
+    linkGroup({
+      name: 'bookingLink',
+      label: 'Írásos időpontkérés',
+      description:
+        'Nem kötelező, a szekció alján jelenik meg, a kártyák alatt. A telefonálás melletti MÁSIK út (pl. „Kérj időpontot üzenetben" a /kapcsolat oldalra). Sok páciens nem szívesen telefonál, ezért érdemes írásos utat is kínálni.',
+      labelDescription: 'Ez a szöveg jelenik meg a linken (pl. „Kérj időpontot üzenetben").',
+    }),
     {
       name: 'members',
       type: 'array',
@@ -116,12 +146,42 @@ export const teamMembers: Block = {
           },
         },
         {
+          /*
+           * A NEMZETKÖZI alak (`+36 …`) nem stílus kérdése: a `tel:` hivatkozás
+           * csak így tárcsáz megbízhatóan minden készüléken és külföldről is
+           * (web.dev, Click to Call: „Always supply the phone number using the
+           * international dialing format: the plus sign (+), country code, area
+           * code, and number.") — https://web.dev/articles/click-to-call
+           * A LÁTHATÓ szám viszont tagolt marad: a hosszú számsort csoportokra
+           * bontva lehet leolvasni és visszamondani (NHS design system, NHS
+           * numbers: „Write the NHS number as 3 groups of numbers, with a single
+           * space between them") —
+           * https://service-manual.nhs.uk/design-system/patterns/ask-for-nhs-numbers
+           */
           name: 'phone',
           type: 'text',
           label: 'Telefonszám',
           admin: {
             description:
-              'Nem kötelező. Tagoltan írd (pl. „+36 30 169 2263") — mobilon kattintható hívás-linkké alakul.',
+              'Nem kötelező. Nemzetközi alakban, csoportokra tagolva írd (pl. „+36 30 169 2263"): így külföldről is tárcsázható, és könnyen leolvasható. Mobilon kattintható hívás-linkké alakul.',
+          },
+        },
+        {
+          name: 'callLabel',
+          type: 'text',
+          label: 'A hívás felirata',
+          admin: {
+            description:
+              'Nem kötelező. Rövid, cselekvő felirat a telefonszám fölé (pl. „Hívd Katát"). Ha üresen hagyod, csak a szám látszik. Telefonszám nélkül nincs hatása.',
+          },
+        },
+        {
+          name: 'availability',
+          type: 'text',
+          label: 'Mikor és hol érhető el',
+          admin: {
+            description:
+              'Nem kötelező, egyetlen sor a hívás alá (pl. „Hétfőtől péntekig, a budapesti rendelőben"). Azt mondja meg, mire számítson a látogató, ha telefonál.',
           },
         },
         {
@@ -168,7 +228,8 @@ export const teamMembers: Block = {
           label: 'Hivatkozás',
           description:
             'Nem kötelező. Pl. „Bővebben a szakmai hátterről" — a részletes önéletrajz horgonyára vagy egy aloldalra mutathat.',
-          labelDescription: 'Ez a szöveg jelenik meg a linken (pl. „Bővebben a szakmai hátterről").',
+          labelDescription:
+            'Ez a szöveg jelenik meg a linken (pl. „Bővebben a szakmai hátterről").',
         }),
       ],
     },

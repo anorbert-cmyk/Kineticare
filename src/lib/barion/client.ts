@@ -6,9 +6,11 @@ import { BarionApiError, type BarionError } from './types'
  * timeoutos HTTP-hívások, strukturált hibakezelés és titokmentes naplózás.
  *
  * Környezetkapcsoló (tisztán envből):
- * - BARION_ENVIRONMENT: 'test' (alapértelmezés) | 'prod'
+ * - BARION_ENVIRONMENT: 'test' (alapértelmezés) | 'prod' — élesben
+ *   (NODE_ENV=production) KÖTELEZŐ, lásd src/env.ts
  * - BARION_API_URL: az AKTÍV környezet API alap-URL-je
- *   (test: https://api.test.barion.com, prod: https://api.barion.com)
+ *   (test: https://api.test.barion.com, prod: https://api.barion.com); a
+ *   hosztnak a BARION_ENVIRONMENT-hez KELL illeszkednie (konzisztencia-assert)
  * - BARION_POSKEY_TEST / BARION_POSKEY_PROD: az aktív környezet POSKey-e
  * - BARION_PAYEE_EMAIL: a kereskedői (payee) e-mail-cím
  * - BARION_TIMEOUT_MS: HTTP-timeout felülírás (opcionális, default 15 000 ms)
@@ -42,6 +44,24 @@ export interface BarionClientConfig {
 
 export const BARION_DEFAULT_TIMEOUT_MS = 15_000
 
+/**
+ * A BARION_TIMEOUT_MS felső korlátja.
+ *
+ * MIÉRT: a visszatérítés (src/lib/refund/refund-order.ts) a Barion-hívást
+ * rendelés-szintű Postgres advisory-zár ALATT futtatja. Egy 60 mp fölötti
+ * timeout mellett a zár-tranzakció olyan sokáig élne, hogy a Railway/Postgres
+ * oldali kapcsolat-bontás (idle/statement timeout) elvághatná — a zár úgy
+ * szabadulna fel, hogy a hívás sorsa ismeretlen. 30 mp bőven elég a Barion
+ * válaszidejéhez, és a zár-tartományt biztonságos sávban tartja.
+ */
+export const BARION_MAX_TIMEOUT_MS = 30_000
+
+/** Az AKTÍV környezethez tartozó, elvárt Barion API-hoszt. */
+export const BARION_API_HOSTS: Record<BarionEnvironment, string> = {
+  test: 'api.test.barion.com',
+  prod: 'api.barion.com',
+}
+
 const logger = createLogger({ module: 'barion' })
 
 function readEnv(env: NodeJS.ProcessEnv, key: string): string | undefined {
@@ -54,7 +74,19 @@ function parseTimeoutMs(raw: string | undefined): number {
     return BARION_DEFAULT_TIMEOUT_MS
   }
   const parsed = Number.parseInt(raw, 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : BARION_DEFAULT_TIMEOUT_MS
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return BARION_DEFAULT_TIMEOUT_MS
+  }
+  if (parsed > BARION_MAX_TIMEOUT_MS) {
+    // NEM dobunk: egy túl nagyra állított timeout ne akassza meg az indulást —
+    // de a plafon némán sem érvényesülhet, mert a beállító mást vár.
+    logger.warn('BARION_TIMEOUT_MS a megengedett plafon fölött — a plafon érvényesül', {
+      requestedMs: parsed,
+      appliedMs: BARION_MAX_TIMEOUT_MS,
+    })
+    return BARION_MAX_TIMEOUT_MS
+  }
+  return parsed
 }
 
 /**
@@ -99,16 +131,39 @@ export function getBarionConfig(env: NodeJS.ProcessEnv = process.env): BarionCli
   }
 
   let normalizedApiUrl: string
+  let apiHost: string
   try {
     const parsed = new URL(apiUrl as string)
     if (parsed.protocol !== 'https:') {
       throw new Error('not-https')
     }
     normalizedApiUrl = parsed.origin
+    apiHost = parsed.hostname.toLowerCase()
   } catch {
     throw new Error(
       `Barion-konfigurációs hiba: a BARION_API_URL nem érvényes https URL ('${apiUrl}'). ` +
         'Test környezetben https://api.test.barion.com, élesben https://api.barion.com az elvárt érték.',
+    )
+  }
+
+  /**
+   * KONZISZTENCIA-ELLENŐRZÉS (B3): a környezetkapcsoló és az API-hoszt EGYÜTT
+   * dönti el, melyik Barion-világban fut a fizetés — a kettő szétcsúszása a
+   * legdrágább néma hiba, amit ez a modul okozhat:
+   * - `prod` környezet + teszt-hoszt: a vevő valódi kártyaadattal fizetne a
+   *   sandboxban → a pénz SOSEM érkezik meg, a rendelés mégis paid lenne;
+   * - `test` környezet + éles hoszt: a tesztkulcs az éles API-n hitelesítési
+   *   hibát ad, tehát minden fizetésindítás elhasal.
+   * Egyik sem derülne ki magától, ezért itt, a konfigfeloldásnál bukik el.
+   */
+  const expectedHost = BARION_API_HOSTS[environment]
+  if (apiHost !== expectedHost) {
+    throw new Error(
+      `Barion-konfigurációs hiba: a BARION_ENVIRONMENT ('${environment}') és a BARION_API_URL ` +
+        `hosztja ('${apiHost}') nem illik össze — a '${environment}' környezethez a ` +
+        `'${expectedHost}' hoszt tartozik. Az alkalmazás így nem indulhat el: éles környezetben ` +
+        'a teszt-API-val a fizetés sosem érkezne meg. Javítsd a környezeti változókat ' +
+        '(BARION_ENVIRONMENT + BARION_API_URL együtt), majd indítsd újra a szervert.',
     )
   }
 

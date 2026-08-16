@@ -349,6 +349,80 @@ describe('applyBarionStateTransition — K5 dupla-fizetés blokk', () => {
   })
 })
 
+/**
+ * K1 — ÍRÁSI SORREND a paid-átmenetben (jogosultság ELŐBB, státusz UTÁNA).
+ *
+ * ═══ A HIBA, AMIT BEZÁR ═══
+ * Fordított sorrendben a két írás közötti megszakadás (grant-hiba, crash)
+ * VÉGLEGESEN elnyelte a paid-átmenet mellékhatásait: a rendelés már `paid`
+ * volt, tehát az újrapróbáláskor `alreadyPaid === true` → `transitionedToPaid:
+ * false` → az onOrderPaid (számla + visszaigazoló/aktiváló e-mail) SOHA nem
+ * futott le. Vendég-vásárlónál: fizetett, hozzáférése van, de jelszó-beállító
+ * linket sosem kap.
+ *
+ * Mindkét alábbi állítás MEGBUKNA a régi sorrenden.
+ */
+describe('applyBarionStateTransition — K1 írási sorrend', () => {
+  it('a jogosultság-beírás MEGELŐZI a paid státusz-írást', async () => {
+    const order = createOrder()
+    const { payload, updates } = createMockPayload(order)
+
+    await applyBarionStateTransition({
+      payload,
+      order,
+      mapped: 'paid',
+      state: createState(),
+      log: createLogger(),
+    })
+
+    expect(updates.map((entry) => entry.collection)).toEqual(['users', 'orders'])
+  })
+
+  it('a grant elhasalása után az újrapróbálás FRISS paid-átmenet (a levél pontosan egyszer megy ki)', async () => {
+    const order = createOrder()
+    const base = createMockPayload(order)
+    let grantFails = true
+    const payload = {
+      ...(base.payload as unknown as Record<string, unknown>),
+      update: vi.fn(async (args: { collection: string; data: Record<string, unknown> }) => {
+        if (args.collection === 'users' && grantFails) {
+          throw new Error('teszt: a jogosultság-beírás elhasal (DB-hiba)')
+        }
+        return (base.payload as unknown as { update: (a: unknown) => Promise<unknown> }).update(args)
+      }),
+    } as unknown as Parameters<typeof applyBarionStateTransition>[0]['payload']
+
+    // 1. kísérlet: a grant dob → a rendelés NEM lehet paid (különben a
+    //    mellékhatások örökre elvesznének).
+    await expect(
+      applyBarionStateTransition({
+        payload,
+        order,
+        mapped: 'paid',
+        state: createState(),
+        log: createLogger(),
+      }),
+    ).rejects.toThrow()
+    expect(order.status).toBe('payment_pending')
+    expect(base.updates.filter((entry) => entry.collection === 'orders')).toHaveLength(0)
+
+    // 2. kísérlet (callback-retry vagy order-poll): most már végigmegy, és a
+    //    transitionedToPaid IGAZ — az onOrderPaid tehát pontosan egyszer fut.
+    grantFails = false
+    const retry = await applyBarionStateTransition({
+      payload,
+      order,
+      mapped: 'paid',
+      state: createState(),
+      log: createLogger(),
+    })
+
+    expect(retry).toMatchObject({ action: 'paid', transitionedToPaid: true, duplicate: false })
+    expect(order.status).toBe('paid')
+    expect(base.user.purchases).toEqual([PRODUCT_ID])
+  })
+})
+
 
 // ---------------------------------------------------------------------------
 // Vendég-rendelés paid-átmenete (a fiók a fizetés UTÁN dől el)

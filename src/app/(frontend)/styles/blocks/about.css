@@ -64,20 +64,33 @@
     padding: var(--kc-board-y) clamp(2.5rem, 4.3vw, 3.875rem) 0 clamp(3.5rem, 6.25vw, 5.625rem);
   }
 
+  /* HASÁB-ARÁNY: MÉRT sorhossz-kalibráció (2026-08-16).
+     A tükör 30,5%-os szöveghasábja a HÁROM-MÉRETES skála előtti, ~13 px-es
+     tábla-betűhöz készült; a bemutatkozó bekezdés azóta a TÖRZSMÉRETEN (M,
+     18 px) áll. Ugyanabban a hasábban ez Chromiumban mérve 35 kar/sor
+     (1280 px) és 40 kar/sor (1440 px) sorhosszt adott — a
+     docs/ertekesitesi-ux-skill.md 4. pontjának 45 karakteres alsó határa
+     alatt, ami a rövid, csonka sorok miatt rontja az olvasás ritmusát
+     (Baymard/NN-g olvashatósági sáv: 45–85 karakter).
+     A betűméret nem változhat, ezért a MÉRTÉK nő: a szöveghasáb 30,5% → 38%,
+     a fotó hasábja 55,5% → 48% (a fotó `object-fit: cover`, tehát az arány
+     változása nem torzítja). Mért eredmény: 46 kar/sor (1280 px) és
+     50 kar/sor (1440 px) — a sávban. */
   .kc-about__grid {
-    grid-template-columns: minmax(20rem, 30.5%) minmax(30rem, 55.5%) minmax(7rem, 14%);
+    grid-template-columns: minmax(22rem, 38%) minmax(24rem, 48%) minmax(7rem, 14%);
     gap: 0;
   }
 }
 
-/* Tablet-kalibráció a tükörből (941–956.): szűkebb hasábok, kisebb címméret. */
+/* Tablet-kalibráció a tükörből (941–956.): szűkebb hasábok, kisebb címméret.
+   A szöveghasáb itt is bővül (35% → 42%), ugyanabból az okból. */
 @media (min-width: 900px) and (max-width: 1100px) {
   .kc-section.kc-board.kc-about {
     padding-left: var(--kc-space-7);
   }
 
   .kc-about__grid {
-    grid-template-columns: 35% 49% 16%;
+    grid-template-columns: 42% 42% 16%;
   }
 
   .kc-about__copy {
@@ -118,9 +131,14 @@
   background-color: var(--kc-about-accent);
 }
 
+/* MÉRTÉK: a tükör 7,4ch-ja a 4,5rem-es tábla-címhez volt szabva. Az L lépcsőn
+   (2,9rem) ugyanez 205 px, amiben a „Kiss Kata és Kocsis Kata vagyunk" cím
+   ÖT sorra esett szét egy 328 px-es hasábban (mérve 1440 px-en). A cím ezért
+   a hasáb szélességét kapja; a 62ch felső korlát csak ultraszéles kijelzőn
+   lép be, ugyanazzal a ch↔karakter átváltással, mint a welcome-tábla címe. */
 .kc-about__title {
   margin: var(--kc-space-5) 0 0;
-  max-width: 7.4ch;
+  max-width: 62ch;
   font-family: var(--kc-font-heading);
   font-size: var(--kc-font-l);
   font-weight: var(--kc-font-weight-normal);

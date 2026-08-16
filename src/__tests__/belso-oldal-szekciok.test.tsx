@@ -8,6 +8,7 @@ import { pageBlockSlugs } from '../blocks'
 import { validateAnchorId } from '../blocks/section-settings'
 import { RenderBlocks } from '../components/blocks/RenderBlocks'
 import { minimalRichText } from '../lib/home-seed'
+import { CLINIC_TREATMENTS_ANCHOR } from '../lib/menu-seed'
 import { buildRolunkLayout, buildSzolgaltatasokLayout } from '../scripts/restore-legacy-content'
 import type { Page } from '../payload-types'
 
@@ -171,9 +172,14 @@ describe('/rolunk alap-szekciósora', () => {
   })
 
   it('a telefonszámok és a partnerek NEM kerülnek lenyitó mögé (GOV.UK-szabály)', () => {
-    // A kapcsolatfelvételi adat és a referencia-sor rövid: a nyitott, szabad
-    // szöveges blokkban kell maradnia, nem a harmonikában.
-    const nyitott = layout.filter((block) => block.blockType === 'richText')
+    // A kapcsolatfelvételi adat és a referencia-sor rövid: MINDIG LÁTHATÓ
+    // blokkban kell maradnia, nem a harmonikában. A telefonszámokat 2026-08-16
+    // óta a `teamMembers` blokk viszi (portréval és kattintható `tel:`
+    // hivatkozással), a partnerek sora maradt szabad szövegben — a lényeg
+    // változatlan: egyik sem kerülhet `details` mögé.
+    const nyitott = layout.filter(
+      (block) => block.blockType === 'richText' || block.blockType === 'teamMembers',
+    )
     const nyitottSzoveg = renderToStaticMarkup(
       createElement(RenderBlocks, {
         layout: nyitott,
@@ -186,6 +192,80 @@ describe('/rolunk alap-szekciósora', () => {
     expect(nyitottSzoveg).toContain('+36 20 357 3493')
     expect(nyitottSzoveg).toContain('Partnereink')
     expect(nyitottSzoveg).not.toContain('<details')
+  })
+
+  /**
+   * BEJELENTKEZÉS A SZAKEMBEREKHEZ (tulajdonosi kérés, 2026-08-16).
+   *
+   * A /rolunk oldalon a két telefonszám korábban folyó szövegben állt („… –
+   * telefon: +36 30 169 2263"): mobilon kézzel kellett átírni, és nem volt
+   * mellette arc. A `teamMembers` blokk mindkettőt megadja, a részletes
+   * önéletrajzot pedig NEM ismétli meg, hanem a lap alján álló harmonikára
+   * mutat (#szakmai-hatter) — így a tartalom egy helyen él.
+   */
+  it('a két szakember kattintható `tel:` hivatkozást és portré-helyet kap', () => {
+    const markup = renderLayout(buildRolunkLayout({ kocsisPortre: 21, kissPortre: 22 }))
+
+    expect(markup).toContain('href="tel:+36301692263"')
+    expect(markup).toContain('href="tel:+36203573493"')
+    expect(markup).toContain('Hívd Kocsis Katát')
+    expect(markup).toContain('Hívd Kiss Katát')
+    expect((markup.match(/class="kc-team__call"/g) ?? []).length).toBe(2)
+
+    // A portré-hivatkozás adat-szinten ellenőrizhető: a renderelő a Media
+    // OBJEKTUMOT várja (mélység-feloldás után), a szekciósor viszont az id-t
+    // tárolja — a kettő közti kapcsolatot a Payload adja, nem ez a teszt.
+    const teamBlock = buildRolunkLayout({ kocsisPortre: 21, kissPortre: 22 }).find(
+      (block) => block.blockType === 'teamMembers',
+    )
+    if (teamBlock?.blockType !== 'teamMembers') {
+      throw new Error('A szakember-szekció hiányzik a /rolunk szekciósorból.')
+    }
+    expect((teamBlock.members ?? []).map((tag) => tag.photo)).toEqual([21, 22])
+    // Kép nélkül is épkézláb marad a szekció (a seed kép nélkül is lefut).
+    const kepNelkul = buildRolunkLayout().find((block) => block.blockType === 'teamMembers')
+    if (kepNelkul?.blockType !== 'teamMembers') {
+      throw new Error('A szakember-szekció kép nélkül eltűnt a szekciósorból.')
+    }
+    expect((kepNelkul.members ?? []).map((tag) => tag.photo)).toEqual([undefined, undefined])
+  })
+
+  it('a szakember-kártya a MEGLÉVŐ önéletrajz-harmonikára mutat, nem ismétli meg', () => {
+    const teamBlock = buildRolunkLayout().find((block) => block.blockType === 'teamMembers')
+    expect(teamBlock).toBeDefined()
+    if (teamBlock?.blockType !== 'teamMembers') {
+      throw new Error('A szakember-szekció hiányzik a /rolunk szekciósorból.')
+    }
+    for (const member of teamBlock.members ?? []) {
+      expect(member.link?.url).toBe('#szakmai-hatter')
+      // A kártyán NINCS saját CV-lista: az a harmonika dolga (egy tartalom,
+      // egy hely — az IA-leltár 6.4 D3 „két felület, egy funkció" hibája ellen).
+      expect(member.cvSections ?? []).toEqual([])
+    }
+    // A horgony célja tényleg létezik a lapon.
+    const anchors = buildRolunkLayout().map((block) => block.sectionSettings?.anchorId)
+    expect(anchors).toContain('szakmai-hatter')
+  })
+
+  it('a titulus a szakmai önéletrajzból jön — nem csúszhat el oldalanként', () => {
+    const rolunk = buildRolunkLayout().find((block) => block.blockType === 'teamMembers')
+    const szolgaltatasok = buildSzolgaltatasokLayout().find(
+      (block) => block.blockType === 'teamMembers',
+    )
+    if (rolunk?.blockType !== 'teamMembers' || szolgaltatasok?.blockType !== 'teamMembers') {
+      throw new Error('A szakember-szekció hiányzik valamelyik szekciósorból.')
+    }
+    const titulusok = (blokk: typeof rolunk) => (blokk.members ?? []).map((tag) => tag.role)
+    expect(titulusok(rolunk)).toEqual(titulusok(szolgaltatasok))
+    for (const titulus of titulusok(rolunk)) {
+      expect((titulus ?? '').trim().length).toBeGreaterThan(0)
+    }
+  })
+
+  it('a szekció írásos időpontkérési utat is kínál a /kapcsolat oldalra', () => {
+    const markup = renderLayout(buildRolunkLayout())
+    expect(markup).toContain('Kérj időpontot üzenetben')
+    expect(markup).toContain('href="/kapcsolat"')
   })
 
   it('egyetlen elsődleges CTA-gombot tartalmaz, a fizetős kurzusra (B6.5)', () => {
@@ -266,7 +346,10 @@ describe('/rolunk — a részletes szakmai háttér harmonikája', () => {
 
     // A számot a tényleges listákból vezetjük le — ha valaki bővíti a CV-t, a
     // kivonatnak vele kell nőnie (kézzel beírt számnál ez elcsúszna).
-    const kocsisTanfolyam = listaTetelszam(kocsis.tartalom, 'Tanfolyamok, továbbképzések, konferenciák')
+    const kocsisTanfolyam = listaTetelszam(
+      kocsis.tartalom,
+      'Tanfolyamok, továbbképzések, konferenciák',
+    )
     const kocsisKonferencia = listaTetelszam(kocsis.tartalom, 'Konferenciák, előadások')
     const kocsisMedia = listaTetelszam(kocsis.tartalom, 'Média-megjelenések')
     expect(kocsisTanfolyam).toBeGreaterThan(10)
@@ -276,9 +359,7 @@ describe('/rolunk — a részletes szakmai háttér harmonikája', () => {
 
     const kissTanfolyam = listaTetelszam(kiss.tartalom, 'Tanfolyamok, továbbképzések, konferenciák')
     const kissKonferencia = listaTetelszam(kiss.tartalom, 'Konferenciák, előadások')
-    expect(kiss.osszefoglalo).toBe(
-      `${kissTanfolyam} tanfolyam · ${kissKonferencia} konferencia`,
-    )
+    expect(kiss.osszefoglalo).toBe(`${kissTanfolyam} tanfolyam · ${kissKonferencia} konferencia`)
   })
 
   it('natív details/summary-vel renderelődik, alapból ZÁRVA', () => {
@@ -349,6 +430,70 @@ describe('/szolgaltatasok alap-szekciósora', () => {
     expect((markup.match(/kc-button--primary/g) ?? []).length).toBe(1)
     expect(markup).toContain('Megnézem a kurzusokat')
     expect(markup).toContain('időpontot kérek')
+  })
+
+  /**
+   * BEJELENTKEZÉS A SZAKEMBEREKHEZ — a /szolgaltatasok ELSŐDLEGES helye.
+   *
+   * MIÉRT ITT (docs/informacios-architektura.md): a 2.1 leltár szerint ez a lap
+   * a rendelői kezeléseké, tehát itt dől el a személyes bejelentkezés; az 5.
+   * fejezet élő mérése szerint viszont a `<main>`-ben eddig egyetlen név, arc
+   * és telefonszám sem volt, csak egy általános „Kapcsolat" szöveglink.
+   *
+   * A szekció NEM másolja sem a /rolunk önéletrajz-harmonikáját (oda LINKEL),
+   * sem a /kapcsolat űrlapját (oda LINKEL) — az IA-leltár 6.4 pontja épp az
+   * ilyen többszörözést („Extreme Polyhierarchy") méri hibaként.
+   */
+  it('a rendelői régió a szakemberek bejelentkezés-szekciójával zárul', () => {
+    const indexek = layout.map((block, index) => ({ block, index }))
+    // A horgony a MEGOSZTOTT konstansból jön, nem literálból: a fejléc-menü
+    // ugyanezt hivatkozza, és a szekció korábban épp azért nem nyílt meg, mert
+    // a kettő elcsúszott. Literállal ez a teszt a következő átnevezésnél némán
+    // rossz blokkot keresne.
+    const arlista = indexek.find(
+      ({ block }) => block.sectionSettings?.anchorId === CLINIC_TREATMENTS_ANCHOR,
+    )
+    const szakemberek = indexek.find(({ block }) => block.blockType === 'teamMembers')
+    expect(arlista, 'nincs rendelői kezelések blokk').toBeDefined()
+    expect(szakemberek, 'nincs szakember-szekció').toBeDefined()
+    // Közvetlenül az árlista UTÁN áll: „mit kapsz, mennyiért, kitől".
+    expect(szakemberek?.index).toBe((arlista?.index ?? -1) + 1)
+    // Azonos háttérsáv = közös régió (B2.2); a sávváltás a régióhatárt jelöli.
+    // (A `hatter` a film-hero szekció-beállításain nem létezik, ezért a
+    // unióból tulajdonság-jelenléttel olvassuk ki.)
+    const hatter = (block: (typeof layout)[number]): string | undefined => {
+      const settings = block.sectionSettings
+      return settings !== undefined && settings !== null && 'hatter' in settings
+        ? (settings.hatter ?? undefined)
+        : undefined
+    }
+    expect(szakemberek && hatter(szakemberek.block)).toBe(arlista && hatter(arlista.block))
+    expect(szakemberek && hatter(szakemberek.block)).toBe('feher')
+    expect(szakemberek?.block.sectionSettings?.anchorId).toBe('szakembereink')
+  })
+
+  it('a kártya a /rolunk önéletrajzára mutat, nem másolja ide a CV-t', () => {
+    const szakemberek = layout.find((block) => block.blockType === 'teamMembers')
+    if (szakemberek?.blockType !== 'teamMembers') {
+      throw new Error('A szakember-szekció hiányzik a /szolgaltatasok szekciósorból.')
+    }
+    for (const tag of szakemberek.members ?? []) {
+      expect(tag.link?.url).toBe('/rolunk#szakmai-hatter')
+      expect(tag.cvSections ?? []).toEqual([])
+    }
+    const markup = renderLayout(layout)
+    expect(markup).toContain('href="tel:+36301692263"')
+    expect(markup).toContain('href="tel:+36203573493"')
+    // Az önéletrajz tételei NEM kerülnek át (az a /rolunk harmonikájáé).
+    expect(markup).not.toContain('Svédmasszázs (2015)')
+  })
+
+  it('a bejelentkezés-szekció nem hoz be új elsődleges gombot (B6.5)', () => {
+    // A hívás LINK, felület-szerű súllyal; a tömör `primary` kitöltés a lap
+    // egyetlen vásárlási CTA-jáé marad.
+    const markup = renderLayout(layout)
+    expect((markup.match(/kc-button--primary/g) ?? []).length).toBe(1)
+    expect((markup.match(/class="kc-team__call"/g) ?? []).length).toBe(2)
   })
 
   it('nem visz saját h1-et (a lap h1-e a hero címe marad)', () => {

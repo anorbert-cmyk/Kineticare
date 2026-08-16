@@ -105,3 +105,23 @@
     transition: none;
   }
 }
+
+/* ---- Nyomtatás ------------------------------------------------------------
+   MÉRT hiba (2026-08-16, Chromium 141, `emulateMedia({ media: 'print' })`):
+   nyomtatási nézetben a kezdőlap MINDEN belépőt kapott szekciója
+   `opacity: 0` volt, tehát üres lapok jöttek ki. Oka: a nyomtatáskor a
+   belépő-animáció nem fut le (a nyomtatási pillanatkép a kezdőállapotot
+   viszi), a `.kc-reveal` kezdőállapota pedig átlátszó.
+
+   Nyomtatásban tehát a belépőt fel kell oldani: a tartalom mindig látszik.
+   Ugyanez a szabály védi a „nyomtatás PDF-be" utat is, amivel a látogató a
+   gyakorlatsorát viszi el. */
+
+@media print {
+  .kc-reveal,
+  .kc-reveal.is-revealed {
+    opacity: 1;
+    animation: none;
+    transform: none;
+  }
+}

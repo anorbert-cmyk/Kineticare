@@ -68,11 +68,28 @@ betartandók — az ügynök ezek megsértésére irányuló kérést is utasít
 
 ## Felületi (UX/UI) munka
 
-A kezdőlap, a navigáció, a termék-megjelenítés vagy a tipográfia bármilyen
-módosítása ELŐTT kötelező betölteni a verziózott projekt-skillt:
-**`docs/ertekesitesi-ux-skill.md`** (cél-hierarchia M1–M8, sticky-nav
-szabályok, WCAG AA kontraszt, tipográfiai skála, mérési kör). Háttérkutatás:
-`docs/ux-hierarchia-audit.md`.
+**KÖTELEZŐ SKILL: `.claude/skills/termektervezes/SKILL.md`** — a vevői felület
+BÁRMELY elemének tervezése vagy módosítása előtt be kell tölteni (gomb, felirat,
+navigáció, szekció, űrlap, állapot, folyamat, tipográfia, szín, elrendezés — akkor
+is, ha „csak" egy szöveget írnál át).
+
+A tulajdonos 2026-08-16-i kikötése, szó szerint: *„semmit nem jelentetek késznek,
+ha csak memóriából dolgoztatok, mindenre kell több tanulmány, kutatás, tudományos
+legyen, valamint világhírű terméktervező cégeknek a tanulmányait kell figyelembe
+venni minden tervezésnél"* — és: a vevői szövegekben nem lehet AI-ízű,
+gondolatjel-halmozó írásmód, natív magyar kell.
+
+Ebből következően minden felületi döntéshez legalább KÉT külső forrás kell
+(NN/g, Baymard, GOV.UK, Apple HIG, Material 3, Polaris, Carbon, WCAG 2.2 a
+sikerkritérium számával), és minden állítást MÉRNI kell (kontraszt-arány,
+érintőcél, sorhossz, 320 px-es reflow), nem szemre becsülni.
+
+Hivatkozási kézikönyvek: `docs/ui-sztenderdek.md` (sztenderdek + magyar
+mikroszöveg-szabályzat), `docs/informacios-architektura.md` (útvonal- és
+gomb-gráf), `docs/gomb-inventar.md` (CTA-szótár), `docs/gomb-kontraszt-audit.md`,
+`docs/felhasznaloi-seta.md` (kognitív séta personával),
+`docs/regi-oldal-osszehasonlitas.md`, `docs/ertekesitesi-ux-skill.md`
+(cél-hierarchia M1–M8, sticky-nav, tipográfiai skála), `docs/ux-hierarchia-audit.md`.
 
 ## Branch-konvenció
 

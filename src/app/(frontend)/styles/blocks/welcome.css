@@ -39,6 +39,12 @@
   /* Szöveg-akcent: a felvezető sor és a pipa-jel. */
   --kc-welcome-accent-text: var(--kc-color-primary);
   --kc-welcome-badge: var(--kc-color-surface-tint);
+  /* A két hasáb közti FÉL hasábköz: ennyi jut a bal szöveg és az elválasztó
+     vonal, illetve a vonal és a jobb szöveg közé — a kettő egyenlő. */
+  --kc-welcome-gutter: clamp(1.5rem, 2.5vw, 2.4rem);
+  /* A két hasáb közös függőleges ritmusa (bal: tétel-belső térköz, jobb:
+     bekezdés-köz). Egyetlen forrás, hogy a kettő ne tudjon szétcsúszni. */
+  --kc-welcome-rhythm: var(--kc-space-5);
 }
 
 /* Tint sávon a hűvös tint-korong beleolvadna a háttérbe — ott fehér a korong. */
@@ -62,10 +68,27 @@
    nem a 70px-es serif címre — a burkoló így 259px lesz, és a tábla-cím
    szó-per-sor tördeléssel 10 sorra esik szét. A tükör MINDEN MÁS tábla-címe a
    saját elemén hordozza a `ch`-mértéket (kc-about-title 7,4ch, kc-services-title
-   7,2ch, kc-quote-big 17ch) — itt is így, ezért a mérték a címre került. */
+   7,2ch, kc-quote-big 17ch) — itt is így, ezért a mérték a címre került.
+
+   MÉRTÉK-KALIBRÁCIÓ (2026-08-16, tulajdonosi visszajelzés + Chromiumban mért
+   érték). A korábbi `18ch` a HÁROM-MÉRETES skála előtti, jóval nagyobb
+   tábla-címhez (`--kc-text-board-5xl`, 4,5rem) volt szabva. Az L lépcsőn
+   (2,9rem = 46,4 px) ugyanez a 18ch már csak 499 px: a cím ötsoros, keskeny
+   hasábbá esett szét, és a mért sorhossz-KAPACITÁSA 22 karakter volt — a
+   docs/ertekesitesi-ux-skill.md 4. pontjának 45–75-ös (a projekt-skill szerint
+   45–85-ös) sávja alatt, miközben a rács 1253 px-t kínált mellette üresen
+   (1440 px-es nézetablakon mérve).
+
+   Az új mérték a KAPACITÁST viszi a sávba: a Tenor Sans L lépcsőjén 1ch =
+   0,597em, egy ÁTLAGOS magyar karakter viszont 0,489em (mindkettő a lapon
+   mérve, 78 karakteres mintacímmel) — vagyis 1ch ≈ 1,22 tényleges karakter.
+   A 62ch felső korlát így ≈ 76 karakteres sort enged: a sáv felső harmadában
+   marad ultraszéles kijelzőn is, alatta pedig a hasáb szélessége szab határt
+   (1440 px-en 55, 1920 px-en 76 karakter). Ugyanez a ch↔karakter arány áll a
+   tokens.css `--kc-measure` levezetése mögött is. */
 .kc-welcome__title {
   margin: 0;
-  max-width: 18ch;
+  max-width: 62ch;
   font-family: var(--kc-font-heading);
   font-size: var(--kc-font-l);
   font-weight: var(--kc-font-weight-normal);
@@ -90,6 +113,35 @@
   color: var(--kc-welcome-accent-text);
 }
 
+/* TÁBLA-MAGASSÁG MÉRSÉKLÉSE (2026-08-16, Chromiumban mért üresség-arány).
+   A `.kc-board` alap-viselkedése 100dvh (ui.css). Ez a szekció viszont a
+   kezdőlap LEGRÖVIDEBB táblája: a mért tartalom-magassága 1440×900-on 475 px,
+   1920×1080-on 420 px, vagyis a tábla 53%, illetve 39% kitöltöttséggel állt —
+   330 px üres sávval a tartalom fölött ÉS alatt. A többi kezdőlapi tábla
+   ugyanezen a mérésen 78–96% között van (usps 83%, states 83%, services 93%,
+   about 95%, vélemények 89%), tehát ez az EGY szekció lógott ki a sorból; a
+   fájdalom-blokk üressége ráadásul pont az értékesítési út elején tart fel.
+
+   A javítás nem a betűméret (a három-méretes skála sérthetetlen) és nem is a
+   tábla eltörlése, hanem a MAGASSÁG mérséklése: a szekció megtartja a bőkezű
+   `--kc-section-y` szegélyét és a teljes szélességű tábla-jellegét, de nem
+   nyúlik a tartalma fölé. A minimum (34rem) továbbra is megakadályozza, hogy
+   nagyon rövid szerkesztői tartalomnál összeessen.
+
+   Ugyanez a mérséklő logika él a belső oldalakon 78dvh-val (styles/content.css)
+   — a forrás ott az NN/g „Illusion of Completeness" vizsgálata. */
+@media (min-width: 900px) {
+  .kc-section.kc-board.kc-welcome {
+    min-height: 34rem;
+  }
+}
+
+@media (min-width: 2000px) {
+  .kc-section.kc-board.kc-welcome {
+    min-height: 34rem;
+  }
+}
+
 .kc-welcome__grid {
   display: grid;
   gap: var(--kc-space-6);
@@ -108,10 +160,20 @@
    sorok NYÚLNAK (`stretch`): a pipás felsorolás tételei egyenletesen osztják el
    a közös magasságot, az összefoglaló hasáb pedig függőlegesen középre zár, így
    az elválasztó vonal végig a felsorolás mellett fut. */
+/* A HASÁBKÖZ ÉS AZ ELVÁLASZTÓ VONAL SZIMMETRIÁJA (2026-08-16, tulajdonosi
+   visszajelzés: „a jobb oldali most kicsit fura").
+   Az elválasztó vonal a JOBB hasáb bal kerete, tehát a hasábköz VÉGÉN áll.
+   Korábban a rács `gap`-je 1440 px-en 72 px, a jobb hasáb `padding-left`-je
+   viszont csak 36 px volt: a vonal a jobb oldali szöveghez tapadt, a bal
+   szöveg és a vonal között kétszer akkora üres sáv maradt (mérve: 72 / 36 px).
+   Most a kettő UGYANARRÓL az értékről jön, így a vonal optikailag a hasábköz
+   közepén áll — ez a projekt eddigi mintája is (`.kc-about__copy` szimmetrikus
+   bal/jobb belső térköze, blocks/about.css). Mellékhatásként mindkét hasáb
+   ~18 px-t nyer, ami a sorhossznak is jót tesz. */
 @media (min-width: 900px) {
   .kc-welcome__grid {
     grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
-    gap: clamp(2.25rem, 5vw, 4.5rem);
+    gap: var(--kc-welcome-gutter);
     margin-top: clamp(2rem, 4vw, 3.25rem);
     align-items: stretch;
   }
@@ -127,13 +189,22 @@
   list-style: none;
 }
 
+/* TÉRKÖZ ÉS SORTÁV (2026-08-16, tulajdonosi visszajelzés).
+   A korábbi `1.1rem` (17,6 px) a 4 px-es térköz-rácson kívül esett, és nem
+   volt köze a jobb hasáb bekezdés-közéhez (szintén 1.1rem, de más sortávval),
+   ezért a két hasáb ritmusa optikailag szétcsúszott. Most mindkettő a közös
+   `--kc-welcome-rhythm` tokenről jön.
+   A sortáv 1,3-ról a törzsszöveg sávjába (1,55) kerül: a tételek 2–3 soros
+   MONDATOK, nem címkék, a docs/ertekesitesi-ux-skill.md 4. pontja pedig
+   törzsre 1,55–1,7-et ír elő. (Mérve 1440 px-en: a tételek 2 sorosak, a
+   korábbi 23,4 px-es sortáv mellett a sorok összeértek.) */
 .kc-welcome__checklist-item {
   position: relative;
-  padding: 1.1rem 0 1.1rem var(--kc-space-7);
+  padding: var(--kc-welcome-rhythm) 0 var(--kc-welcome-rhythm) var(--kc-space-7);
   border-top: 1px solid var(--kc-welcome-rule);
   font-family: var(--kc-font-heading);
   font-size: var(--kc-font-m);
-  line-height: 1.3;
+  line-height: 1.55;
   color: var(--kc-welcome-ink);
   /* A mező textarea: a szerkesztő sortörései maradjanak meg. */
   white-space: pre-line;
@@ -143,7 +214,9 @@
 .kc-welcome__checklist-item::before {
   content: '\2713';
   position: absolute;
-  top: 1.05rem;
+  /* A 2rem-es korong a tétel ELSŐ sorára közepez: a tétel felső belső térköze
+     plusz a sor és a korong magasságkülönbségének fele. */
+  top: calc(var(--kc-welcome-rhythm) - 0.125rem);
   left: 0;
   display: inline-flex;
   width: 2rem;
@@ -191,7 +264,7 @@
 }
 
 .kc-welcome__side {
-  padding-top: var(--kc-space-5);
+  padding-top: var(--kc-welcome-rhythm);
   border-top: 1px solid var(--kc-welcome-accent);
 }
 
@@ -204,14 +277,15 @@
     flex-direction: column;
     justify-content: center;
     padding-top: 0;
-    padding-left: clamp(1.5rem, 2.5vw, 2.4rem);
+    /* Ugyanaz az érték, mint a rács hasábköze — így áll a vonal középen. */
+    padding-left: var(--kc-welcome-gutter);
     border-top: 0;
     border-left: 1px solid var(--kc-welcome-accent);
   }
 }
 
 .kc-welcome__side-text {
-  margin: 0 0 1.1rem;
+  margin: 0 0 var(--kc-welcome-rhythm);
   max-width: var(--kc-measure);
   font-size: var(--kc-font-m);
   line-height: 1.65;

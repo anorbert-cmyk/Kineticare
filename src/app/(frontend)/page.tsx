@@ -4,6 +4,7 @@ import { draftMode } from 'next/headers'
 import { HomeView } from '@/components/content/HomeView'
 import { KNOWLEDGE_POSTS_FETCH_LIMIT } from '@/components/content/home/KnowledgeSection'
 import { PreviewBar } from '@/components/preview/PreviewBar'
+import { getAppointmentSectionContext } from '@/lib/appointment/section'
 import { getHomePage, getLatestPosts, getPublishedProducts, getTestimonials } from '@/lib/cms'
 import { withDraftRobots } from '@/lib/preview/draft-metadata'
 
@@ -46,10 +47,21 @@ export default async function HomePage() {
   // fixture-tesztek fognak. Itt NEM ismételjük meg: a duplikált Organization
   // séma egy oldalon validációs figyelmeztetést okoz, és fölöslegesen kétszer
   // írja le ugyanazt az entitást a gépi olvasónak.
+  // Az időpontkérő szekció űrlapjához kell a form-azonosító és a Turnstile site
+  // key. A lekérdezés csak akkor fut, ha a kezdőlapi szekciósorban tényleg van
+  // ilyen blokk (a helper maga dönti el).
+  const appointment = await getAppointmentSectionContext(home?.layout)
+
   return (
     <>
       {isDraft ? <PreviewBar path="/" /> : null}
-      <HomeView home={home} posts={posts} products={products} testimonials={testimonials} />
+      <HomeView
+        appointment={appointment}
+        home={home}
+        posts={posts}
+        products={products}
+        testimonials={testimonials}
+      />
     </>
   )
 }
