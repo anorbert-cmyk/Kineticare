@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { Services } from '../components/blocks/Services'
+import { kapBelepot } from '../components/motion/SectionReveal'
 import type { BlockServices } from '../payload-types'
 
 /**
@@ -62,6 +63,24 @@ describe('mozgás-réteg (styles/motion.css)', () => {
     expect(csokkentett).toContain('animation: none')
   })
 
+  /**
+   * ŐR a nyomtatás ellen (2026-08-16, mért hiba).
+   *
+   * Nyomtatási nézetben a belépő-animáció nem fut le, tehát a szekció a
+   * `.kc-reveal` kezdőállapotában (opacity: 0) került papírra: MÉRVE a
+   * kezdőlap 14 szekciójából 14 volt láthatatlan. A nyomtatási médiában a
+   * belépőt fel kell oldani.
+   */
+  it('nyomtatásban a szekció-belépő feloldódik (a tartalom nem tűnhet el a papírról)', () => {
+    const nyomtatasIndex = motion.indexOf('@media print')
+    expect(nyomtatasIndex).toBeGreaterThanOrEqual(0)
+    const nyomtatas = motion.slice(nyomtatasIndex)
+    expect(nyomtatas).toContain('.kc-reveal,')
+    expect(nyomtatas).toContain('.kc-reveal.is-revealed')
+    expect(nyomtatas).toContain('opacity: 1')
+    expect(nyomtatas).toContain('animation: none')
+  })
+
   it('a nyitható szakasz átmenete @supports mögött áll (natív működés marad a tartalék)', () => {
     // A kommentekben szabad a technikáról beszélni; a SZABÁLYOK helye számít.
     const kod = motion.replace(/\/\*[\s\S]*?\*\//g, '')
@@ -102,8 +121,28 @@ describe('SectionReveal — progresszív ráépítés', () => {
   })
 
   it('csak a HAJTÁS ALATTI szekciókat rejti el, és egyszer mutatja meg őket', () => {
-    expect(forras).toContain('getBoundingClientRect().top > fold')
+    expect(forras).toContain('kapBelepot(element.getBoundingClientRect().top, viewportHeight)')
     expect(forras).toContain('observer.unobserve(entry.target)')
+  })
+
+  /**
+   * ŐR a hidratálás utáni KIVILLANÁS ellen (2026-08-16).
+   *
+   * A korábbi 0,9-es szorzó mellett a nézetablak alsó 10%-ában ÉPP LÁTSZÓ
+   * szekció is megkapta a rejtett kezdőállapotot: a tartalom a felhasználó
+   * szeme előtt tűnt el, majd tűnt vissza. A szabály most az, hogy csak a
+   * nézetablakon KÍVÜL kezdődő szekció kap belépőt — az alábbi 0,95-ös eset
+   * a régi kódon `true`-t adott volna.
+   */
+  it('a nézetablak alján ÉPP LÁTSZÓ szekció NEM kap belépőt (nincs kivillanás)', () => {
+    const vh = 800
+    expect(kapBelepot(vh * 0.95, vh)).toBe(false)
+    expect(kapBelepot(vh * 0.9, vh)).toBe(false)
+    expect(kapBelepot(vh - 1, vh)).toBe(false)
+    // Pontosan a hajtáson: még nem „kívül" — a határ szigorúan nagyobb.
+    expect(kapBelepot(vh, vh)).toBe(false)
+    // A ténylegesen képernyőn kívüli szekció viszont kap.
+    expect(kapBelepot(vh + 1, vh)).toBe(true)
   })
 
   it('a kezdőlap mindkét ága (CMS-szekciósor és rögzített) beköti', () => {

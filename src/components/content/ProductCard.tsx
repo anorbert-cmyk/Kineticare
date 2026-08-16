@@ -36,8 +36,17 @@ import '../../app/(frontend)/styles/blocks/course-cards.css'
  *
  * AKADÁLYMENTESSÉG: a kártya EGÉSZE egyetlen link, ezért benne beágyazott
  * gomb/link nem lehet — a CTA `aria-hidden` dekoráció (a korábbi nyíl-CTA
- * mintája), a pipa-ikonok szintén. A link akadálymentes neve így a cím, a
- * leírás, az előnyök és az ár marad; a gombfelirat nem duplázza meg.
+ * mintája), a pipa-ikonok szintén.
+ *
+ * A link NEVE explicit `aria-label` (2026-08-16). Enélkül a név a kártya
+ * teljes szövegéből számítódott — borító-alt + célközönség + cím + három
+ * előnysor + leírás + ár + hozzáférés-sor —, ami MÉRVE 348 karakter hosszú
+ * volt (a borító alt-ja ráadásul megismételte a címet). Egy ilyen név
+ * képernyőolvasóval végighallgathatatlan, és a link-listában sem
+ * megkülönböztethető. A név most „{cím}: a kurzus részletei": tartalmazza a
+ * látható címet, tehát a WCAG 2.2 SC 2.5.3 (Label in Name) is teljesül, és
+ * megmondja, hova visz (SC 2.4.4). A borító `alt=""`-t kap (dekoratív).
+ *
  * Kontraszt: minden szöveg `text`/`text-muted` fehér kártyán (15,63:1 ill.
  * 9,30:1), a CTA fehér az `accent-deep`-en (5,45:1) — lásd course-cards.css.
  *
@@ -177,12 +186,21 @@ export function ProductCard({ product, ctaLabel, featured = false }: ProductCard
       interactive
       padded={false}
     >
-      <Link className="kc-product-card__link" href={courseHref(product)}>
+      <Link
+        aria-label={`${title}: a kurzus részletei`}
+        className="kc-product-card__link"
+        href={courseHref(product)}
+      >
         {coverMedia ? (
           <span className="kc-product-card__cover">
             {/* A kiemelt kártya borítója a szekció fél szélességét kapja, ezért
-                nagyobb forrásból (md) és nagyobb `sizes`-szal renderel. */}
+                nagyobb forrásból (md) és nagyobb `sizes`-szal renderel.
+                A borító DEKORATÍV (alt=""): a Media alt-ja a kurzus címét
+                ismételte meg, és mivel a kártya EGÉSZE egyetlen link, ez a
+                link akadálymentes nevébe is beleszámított — mérve 348
+                karakter hosszú nevet adott (a javítás után 44). */}
             <MediaImage
+              decorative
               media={coverMedia}
               preferredSize={featured ? 'md' : 'sm'}
               sizes={

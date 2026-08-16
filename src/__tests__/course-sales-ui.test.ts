@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { CourseBuyBar } from '../components/courses/CourseBuyBar'
 import { CourseBuybox } from '../components/courses/CourseBuybox'
 import { CourseCurriculum, moduleMetaLabel } from '../components/courses/CourseCurriculum'
 import { CourseFaq } from '../components/courses/CourseFaq'
@@ -9,7 +10,6 @@ import { CourseFitCheck } from '../components/courses/CourseFitCheck'
 import { CourseGuarantee } from '../components/courses/CourseGuarantee'
 import { CourseHowItWorks } from '../components/courses/CourseHowItWorks'
 import { CourseJumpNav } from '../components/courses/CourseJumpNav'
-import { MobileBuyBar } from '../components/courses/MobileBuyBar'
 import type { CurriculumModule } from '../lib/curriculum/curriculum'
 import { formatPriceHuf } from '../lib/format-price'
 import type { Product } from '../payload-types'
@@ -42,6 +42,7 @@ function buybox(overrides: Record<string, unknown> = {}): string {
     createElement(CourseBuybox, {
       audienceLabel: 'Otthoni gyakorlóknak',
       categoryLabel: 'Kézrehabilitáció',
+      ctaId: 'kurzus-vasarlas-gomb',
       guaranteeLabel: '30 napos kipróbálási garancia',
       hasPurchased: false,
       highlights: ['Örökös hozzáférés', '50+ videós gyakorlat', '4 modul'],
@@ -364,9 +365,9 @@ describe('a tartalomban ismételt vásárló-gomb NINCS', () => {
       fileURLToPath(new URL('../app/(frontend)/kurzusok/[slug]/page.tsx', import.meta.url)),
       'utf8',
     )
-    // Az egyetlen vásárlási felület a buybox + a mobil ragadós sáv.
+    // Az egyetlen vásárlási felület a buybox + a ragadós vásárlósáv.
     expect(forras).toContain('CourseBuybox')
-    expect(forras).toContain('MobileBuyBar')
+    expect(forras).toContain('CourseBuyBar')
     expect(forras).not.toContain('CourseCtaBand')
     expect(forras).not.toContain('ctaBand')
   })
@@ -399,11 +400,11 @@ describe('CourseHowItWorks — lépések rácsban', () => {
   })
 })
 
-describe('MobileBuyBar — JS nélkül csendben elmarad', () => {
+describe('CourseBuyBar — JS nélkül csendben elmarad', () => {
   it('a szerver-oldali kimenet REJTETT állapotban renderel', () => {
     const html = renderToStaticMarkup(
-      createElement(MobileBuyBar, {
-        anchorId: 'kurzus-vasarlas',
+      createElement(CourseBuyBar, {
+        anchorId: 'kurzus-vasarlas-gomb',
         courseTitle: 'Otthoni KézRehab Program',
         href: '/penztar?termek=42',
         label: 'Megveszem',

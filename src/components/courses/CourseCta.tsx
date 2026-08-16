@@ -38,13 +38,27 @@ export interface CourseCtaProps {
   product: Pick<Product, 'id' | 'status' | 'priceInHUF' | 'priceInHUFEnabled'>
   /** Bejelentkezett felhasználó purchases-listája alapján (csak olvasás). */
   hasPurchased: boolean
+  /**
+   * A CTA-blokk horgonya. A ragadós vásárlósáv (CourseBuyBar) EZT figyeli
+   * IntersectionObserverrel: a sáv pontosan akkor jelenik meg, amikor ez a
+   * gomb nem látszik — bármilyen okból (kigörgött, vagy a ragadós doboz
+   * belső görgetése levágta).
+   */
+  id?: string
 }
 
-export function CourseCta({ product, hasPurchased }: CourseCtaProps) {
+export function CourseCta({ product, hasPurchased, id }: CourseCtaProps) {
   const cta = resolveCourseCta(product, hasPurchased)
 
+  // Az `id` a ragadós vásárlósáv horgonya: az IntersectionObserver ezt a
+  // CTA-blokkot figyeli, nem a teljes dobozt — így pontosan akkor gyújt,
+  // amikor maga a GOMB nem látszik.
   return (
-    <div className="kc-course-cta">
+    <div className="kc-course-cta" id={id}>
+      {/* A `label !== null` nem formalitás: a nem cselekvő (archivált, hiányos
+          konfigurációjú) állapotoknak SZÁNDÉKOSAN nincs feliratuk (Á-3, §3.2
+          #16) — letiltott „Megveszem" helyett a cselekvés eltűnik, és a
+          magyarázó mondat mondja meg, miért. */}
       {cta.label !== null ? (
         <Button
           href={cta.href ?? undefined}

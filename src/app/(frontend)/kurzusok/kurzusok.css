@@ -296,6 +296,46 @@
     /* A ragadós fejléc alá sosem csúszhat be (WCAG 2.2 SC 2.4.11). */
     top: calc(var(--kc-header-height) + var(--kc-space-4));
     margin-bottom: 0;
+    /* ---- A doboz BELSŐ görgetése (2026-08-16, mért regresszió javítása) ----
+       Mérés (produkciós build, Chromium 141): a doboz 905px magas, a
+       nézetablak 1366×768-on 768px — a „Megveszem" a lap görgetésének
+       mindössze 10%-án volt látható, 1280×720-on 8%-án. A ragadós doboz
+       ugyanis a nézetablaknál MAGASABB volt, tehát az alsó része (benne a
+       gombbal) sosem került képbe.
+
+       Megoldás: a doboz magassága legfeljebb a rendelkezésre álló
+       nézetablak-magasság, a fölötte lévő rész pedig a dobozon BELÜL
+       görgethető. Mivel az ár és a gomb a doboz ELEJÉN áll (CourseBuybox),
+       a döntési pillanat eleme minden asztali magasságon látszik, belső
+       görgetés nélkül is.
+
+       - 100dvh (nem 100vh): mobil böngészőkben a dinamikusan eltűnő
+         címsorral is a TÉNYLEGES látható magasság számít; a 100vh-s sor
+         fallback a dvh-t nem ismerő böngészőknek.
+       - overscroll-behavior: contain — a doboz aljára érve a görgetés nem
+         „ragad át" a lapra (scroll chaining), tehát a látogató nem veszíti
+         el a helyét a hosszú tartalomban.
+       - A fókuszgyűrű (3px outline + 2px offset, base.css) NEM vágódik le:
+         a kártya belső térköze 24px (--kc-space-5), tehát minden fókuszálható
+         elem gyűrűstül a görgetődoboz belsejében marad.
+       - scrollbar-width: thin — a görgetősáv LÁTHATÓ marad (ez jelzi, hogy
+         van még tartalom), de a keskeny sáv nem szűkíti érdemben a hasábot.
+       - A süti-sáv magasságát (--kc-consent-offset) is levonjuk: mérve
+         1280×720-on a doboz alja a süti-sáv MÖGÉ ért, és a gomb az első
+         látogatás alatt csak a görgetés 8%-án volt kattintható. A sávot
+         eltakarni nem szabad, tehát a doboz húzódik össze. */
+    max-height: calc(
+      100vh - var(--kc-header-height) - var(--kc-space-4) * 2 - var(--kc-consent-offset, 0px)
+    );
+    max-height: calc(
+      100dvh - var(--kc-header-height) - var(--kc-space-4) * 2 - var(--kc-consent-offset, 0px)
+    );
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    /* Billentyűzetes fókusz-ugrásnál a dobozon belül is marad levegő
+       (WCAG 2.2 SC 2.4.11 — a fókuszált elem nem tapadhat a doboz széléhez). */
+    scroll-padding-block: var(--kc-space-4);
   }
 }
 
@@ -856,33 +896,68 @@
   color: var(--kc-color-text-muted);
 }
 
-/* ---- Mobil ragadós vásárlósáv --------------------------------------------
+/* ---- Ragadós vásárlósáv ---------------------------------------------------
    Alapállapotban REJTETT: JS nélkül (vagy IntersectionObserver híján) a sáv
    sosem jelenik meg, tehát a degradáció csendes és teljes. Csak a
-   `data-visible="true"` állapot mutatja, és csak mobil szélességen. */
+   `data-visible="true"` állapot mutatja.
+
+   2026-08-16-ig a sáv `@media (max-width: 1023px)` mögött állt („mobil
+   vásárlósáv"). A méret-korlát MÉRT lyukat hagyott: a ragadós vásárlódoboz
+   magasabb lehet a rendelkezésre álló nézetablak-magasságnál, és ilyenkor
+   asztali méreten sem elérhető a gomb (1280×720-on a lap görgetésének 8%-án,
+   1366×768-on 10%-án volt kattintható). A korlát ezért megszűnt: a sáv
+   MÉRET-ALAPÚ feltétellel jelenik meg, mégpedig pontosan akkor, amikor a
+   vásárlódoboz GOMBJA nem látszik (CourseBuyBar, IntersectionObserver a
+   CTA-blokkon — az ősök `overflow`-levágását is beszámítja). Így soha nincs
+   egyszerre két látható vásárlógomb: a sáv csak a hiányzó gombot pótolja
+   (B6.5, „egy oldalon egy elsődleges cél"). */
 
 .kc-course-buybar {
   display: none;
 }
 
-@media (max-width: 1023px) {
+.kc-course-buybar[data-visible='true'] {
+  position: fixed;
+  inset-inline: 0;
+  /* A süti-sáv FÖLÉ tolva (2026-08-16, mért hiba javítása).
+     Mérés (produkciós build, Chromium 141, elementFromPoint): a süti-sáv
+     (position: fixed; bottom: 0; z-index: 1000) 390×844, 360×640 és
+     768×1024 méreten TELJESEN eltakarta a 75px-es vásárlósávot (z-index:
+     40) — az első látogatás teljes ideje alatt a koppintás a süti-sáv
+     gombjára esett, tehát a vásárlógomb nem volt kattintható.
+     A süti-sávot elrejteni vagy alátolni NEM lehet (a hozzájárulás
+     kezelésének láthatónak és használhatónak kell maradnia), ezért a
+     vásárlósáv lép följebb. Az eltolás a süti-sáv TÉNYLEGES magassága:
+     a ConsentBanner ResizeObserverrel írja a gyökérre — így a mobilra
+     tördelt, magasabb sávnál is pontos. A sáv eltűnésekor nullázódik. */
+  bottom: var(--kc-consent-offset, 0px);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kc-space-4);
+  min-height: var(--kc-space-8);
+  padding: var(--kc-space-3) var(--kc-space-5);
+  border-top: 1px solid var(--kc-color-border);
+  background-color: var(--kc-color-surface-raised);
+  /* A tartalom FÖLÉ úszó réteg — a landing nyelvében csak az ilyen kap
+     árnyékot (tokens.css árnyék-blokk). */
+  box-shadow: var(--kc-shadow-md);
+  animation: kc-course-buybar-in var(--kc-motion-base) var(--kc-ease-out) both;
+}
+
+/* Széles képernyőn a sáv tartalma a lap tartalom-szélességéhez igazodik, és a
+   gomb NEM fut ki a teljes szélességre: „If you are using a sticky »Add to
+   Cart« button, surround it with sufficient white space — don't use a
+   full-width button" (Baymard, ecommerce UX best practices #791). */
+@media (min-width: 1024px) {
   .kc-course-buybar[data-visible='true'] {
-    position: fixed;
-    inset-inline: 0;
-    bottom: 0;
-    z-index: 40;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--kc-space-4);
-    min-height: var(--kc-space-8);
-    padding: var(--kc-space-3) var(--kc-space-5);
-    border-top: 1px solid var(--kc-color-border);
-    background-color: var(--kc-color-surface-raised);
-    /* A tartalom FÖLÉ úszó réteg — a landing nyelvében csak az ilyen kap
-       árnyékot (tokens.css árnyék-blokk). */
-    box-shadow: var(--kc-shadow-md);
-    animation: kc-course-buybar-in var(--kc-motion-base) var(--kc-ease-out) both;
+    justify-content: center;
+    gap: var(--kc-space-6);
+    padding-inline: max(
+      var(--kc-space-5),
+      calc((100vw - var(--kc-container-wide)) / 2)
+    );
   }
 }
 
@@ -895,6 +970,14 @@
 .kc-course-buybar__cta {
   flex: 1 1 auto;
   max-width: 60%;
+}
+
+@media (min-width: 1024px) {
+  .kc-course-buybar__cta {
+    flex: 0 0 auto;
+    max-width: none;
+    min-width: 14rem;
+  }
 }
 
 @keyframes kc-course-buybar-in {
@@ -911,13 +994,16 @@
 
 /* Amíg a sáv látszik, a lap alja nem kerülhet alá, és a horgony-/fókusz-
    ugrás sem csúszhat a sáv mögé (WCAG 2.2 SC 2.4.11). Az osztályt a
-   MobileBuyBar teszi a dokumentumgyökérre. */
+   MobileBuyBar teszi a dokumentumgyökérre. A süti-sáv magasságát is bele
+   kell számolni, mert a vásárlósáv annak a TETEJÉN áll. */
 .kc-has-buybar {
-  scroll-padding-bottom: calc(var(--kc-space-8) + var(--kc-space-4));
+  scroll-padding-bottom: calc(
+    var(--kc-space-8) + var(--kc-space-4) + var(--kc-consent-offset, 0px)
+  );
 }
 
 .kc-has-buybar body {
-  padding-bottom: calc(var(--kc-space-8) + var(--kc-space-4));
+  padding-bottom: calc(var(--kc-space-8) + var(--kc-space-4) + var(--kc-consent-offset, 0px));
 }
 
 /* ---- RichText-tartalom (helyi LexicalContent kimenete) ---------------------

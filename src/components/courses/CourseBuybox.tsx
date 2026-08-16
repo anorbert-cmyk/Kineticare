@@ -10,15 +10,44 @@ import { CourseCta } from './CourseCta'
  *
  * A tartalma és a SORRENDJE a kutatás szerint áll össze
  * (docs/ux-belso-oldalak-kutatas.md 5.1): meta-jelölők → H1 → egymondatos
- * lead → 3 pipás előny → ÁR a gomb KÖZVETLEN közelében (B6.2) → elsődleges
- * CTA → másodlagos, nem versengő szöveglink (B6.5) → garancia-sor (B6.3).
+ * lead → ÁR (B6.2) → elsődleges CTA → 3 pipás előny → másodlagos, nem
+ * versengő szöveglink (B6.5) → garancia-sor (B6.3).
  *
- * A doboz `id`-t kap: erre figyel a mobil ragadós vásárlósáv
- * (MobileBuyBar) IntersectionObserverrel — a sáv csak akkor jelenik meg,
- * amikor ez a doboz már nem látszik.
+ * ═══ MIÉRT ELÖL AZ ÁR ÉS A GOMB (2026-08-16-i sorrend-változás) ═══
+ * Korábban a három pipás előnysor az ár és a gomb ELŐTT állt, így a doboz
+ * döntési eleme ~200 pixellel lejjebb került. A doboz ragadós, és a
+ * mérésünk szerint (produkciós build, Chromium 141) 905 pixel magas volt,
+ * vagyis 1366×768-as nézetablakban a gomb a lap görgetésének csak 10%-án
+ * látszott. A sorrend megfordítása a döntési pillanat elemét a doboz első
+ * képernyőjébe hozza, tehát belső görgetés nélkül is látszik.
+ *
+ * A hivatkozott kutatás:
+ *  - NN/g, Scrolling and Attention — a nézési idő 42%-a a lap felső 20%-ára,
+ *    65%-a a felső 40%-ára esik, és „Keep major CTAs above the fold"
+ *    (https://www.nngroup.com/articles/scrolling-and-attention/).
+ *  - Baymard, ecommerce UX best practices #791 — az elsődleges „kosárba"
+ *    gomb legyen egyedi és feltűnő, versengő CTA nélkül
+ *    (https://baymard.com/learn/ecommerce-ux-best-practices).
+ *  - Baymard termékoldal-benchmark: az ár és a teljes fizetendő a gomb
+ *    KÖZVETLEN közelében látszik (B6.2 — a benchmarkolt oldalak 67%-a
+ *    elrontja: https://baymard.com/blog/current-state-ecommerce-product-page-ux).
+ * Az előnysorok nem tűnnek el, csak a gomb MÖGÉ kerülnek: a doboz így a
+ * „mibe kerül és mit nyomjak meg" kérdésre válaszol előbb, a „miért érdemes"
+ * pedig közvetlenül utána, ugyanabban a dobozban marad.
+ *
+ * A doboz és a CTA-blokk is `id`-t kap. A ragadós vásárlósáv (CourseBuyBar) a
+ * CTA-blokkot figyeli IntersectionObserverrel — a sáv pontosan akkor jelenik
+ * meg, amikor a GOMB nem látszik. (A doboz `id`-je erre nem elég: a doboz
+ * teteje látszhat úgy is, hogy a gomb a belső görgetésen kívül van.)
  */
 export interface CourseBuyboxProps {
   id: string
+  /**
+   * A CTA-blokk horgonya — a ragadós vásárlósáv (CourseBuyBar) EZT figyeli.
+   * A doboz `id`-je erre nem elég: a doboz TETEJE látszhat úgy is, hogy a
+   * gomb már a belső görgetésen kívül van (mérve 1280×720-on).
+   */
+  ctaId: string
   title: string
   lead: string | null
   categoryLabel: string | null
@@ -42,6 +71,7 @@ export interface CourseBuyboxProps {
 
 export function CourseBuybox({
   id,
+  ctaId,
   title,
   lead,
   categoryLabel,
@@ -64,6 +94,17 @@ export function CourseBuybox({
       <h1 className="kc-course-buybox__title">{title}</h1>
       {lead ? <p className="kc-course-buybox__lead">{lead}</p> : null}
 
+      {priceBadge === 'price' && priceHuf !== null ? (
+        <p className="kc-course-buybox__price">
+          <PriceTag label="Ár:" priceHuf={priceHuf} />
+          <span className="kc-course-buybox__price-note">egyszeri díj, további költség nincs</span>
+        </p>
+      ) : priceBadge === 'free' ? (
+        <p className="kc-course-buybox__price kc-course-buybox__price--free">Ingyenes</p>
+      ) : null}
+
+      <CourseCta hasPurchased={hasPurchased} id={ctaId} product={product} />
+
       {highlights.length > 0 ? (
         <ul className="kc-course-checklist" role="list">
           {highlights.map((item, index) => (
@@ -80,17 +121,6 @@ export function CourseBuybox({
           ))}
         </ul>
       ) : null}
-
-      {priceBadge === 'price' && priceHuf !== null ? (
-        <p className="kc-course-buybox__price">
-          <PriceTag label="Ár:" priceHuf={priceHuf} />
-          <span className="kc-course-buybox__price-note">egyszeri díj, további költség nincs</span>
-        </p>
-      ) : priceBadge === 'free' ? (
-        <p className="kc-course-buybox__price kc-course-buybox__price--free">Ingyenes</p>
-      ) : null}
-
-      <CourseCta hasPurchased={hasPurchased} product={product} />
 
       {secondaryHref && secondaryLabel ? (
         <p className="kc-course-buybox__secondary">

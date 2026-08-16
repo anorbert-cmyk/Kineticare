@@ -8,6 +8,7 @@ import { cache } from 'react'
 
 import { TrackEvent } from '@/components/analytics/TrackEvent'
 import { JsonLd } from '@/components/content/JsonLd'
+import { CourseBuyBar } from '@/components/courses/CourseBuyBar'
 import { CourseBuybox } from '@/components/courses/CourseBuybox'
 import { CourseCurriculum } from '@/components/courses/CourseCurriculum'
 import { CourseFaq } from '@/components/courses/CourseFaq'
@@ -16,7 +17,6 @@ import { CourseGuarantee } from '@/components/courses/CourseGuarantee'
 import { CourseHowItWorks } from '@/components/courses/CourseHowItWorks'
 import { CourseJumpNav, type CourseJumpTarget } from '@/components/courses/CourseJumpNav'
 import { LexicalContent } from '@/components/courses/LexicalContent'
-import { MobileBuyBar } from '@/components/courses/MobileBuyBar'
 import { PreviewVideo, hasPreviewVideo } from '@/components/courses/PreviewVideo'
 import { RelatedCourses } from '@/components/courses/RelatedCourses'
 import { buildCourseSalesContent } from '@/components/courses/sales-content'
@@ -197,8 +197,14 @@ function relatedProductsOf(product: Product): Product[] {
   )
 }
 
-/** A vásárlódoboz horgonya — a mobil ragadós sáv EZT figyeli. */
+/** A vásárlódoboz horgonya (a másodlagos szöveglinkek és a JSON-LD miatt). */
 const BUYBOX_ID = 'kurzus-vasarlas'
+/**
+ * A vásárlógomb horgonya — a ragadós vásárlósáv EZT figyeli.
+ * SZÁNDÉKOSAN a gomb, nem a doboz: a ragadós doboz teteje látszhat úgy is,
+ * hogy a gomb már a doboz belső görgetésén kívül van (mérve 1280×720-on).
+ */
+const CTA_ID = 'kurzus-vasarlas-gomb'
 
 /** A megjelenő szakaszok leírója (horgony-cél + tartalom). */
 interface PageSection {
@@ -281,11 +287,11 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
   })
 
   // A CTA állapotgépe (courses.ts) — a checkout-útvonal és az árlogika
-  // VÁLTOZATLAN. A mobil ragadós sáv csak a ténylegesen vásárolható
+  // VÁLTOZATLAN. A ragadós vásárlósáv csak a ténylegesen vásárolható
   // állapotban jelenik meg: „már megvetted" vagy „nem vásárolható" mellett
   // egyedül a vásárlódoboz jelzése marad.
   const cta = resolveCourseCta(product, purchased)
-  const showMobileBuyBar = cta.kind === 'buy' || cta.kind === 'free'
+  const showBuyBar = cta.kind === 'buy' || cta.kind === 'free'
   const priceLabel =
     priceBadge === 'price' && price !== null
       ? formatPriceHuf(price)
@@ -435,6 +441,7 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
               <CourseBuybox
                 audienceLabel={audienceLabel}
                 categoryLabel={category}
+                ctaId={CTA_ID}
                 guaranteeLabel={guaranteeLabel}
                 hasPurchased={purchased}
                 highlights={sales.highlights}
@@ -480,15 +487,16 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
         </Container>
       </Section>
 
-      {/* Mobil ragadós vásárlósáv: csak akkor, ha tényleg van mit indítani, és
-          csak akkor látszik, ha a fő vásárlódoboz már kigörgött a képből. JS
-          nélkül rejtve marad (MobileBuyBar). */}
-      {/* A `label !== null` nem formalitás: a nem cselekvő (archivált, nem
-          vásárolható) állapotoknak SZÁNDÉKOSAN nincs feliratuk (Á-3), így a
+      {/* Ragadós vásárlósáv: csak akkor, ha tényleg van mit indítani, és csak
+          akkor látszik, ha a vásárlódoboz GOMBJA nem látszik — bármilyen
+          méreten (mérve: asztali méreteken a gomb korábban a lap 90%-án
+          kattinthatatlan volt). JS nélkül rejtve marad (CourseBuyBar).
+          A `label !== null` nem formalitás: a nem cselekvő (archivált, hiányos
+          konfigurációjú) állapotoknak SZÁNDÉKOSAN nincs feliratuk (Á-3), így a
           ragadós sáv sem kaphat hamis ígéretű gombot. */}
-      {showMobileBuyBar && cta.href !== null && cta.label !== null ? (
-        <MobileBuyBar
-          anchorId={BUYBOX_ID}
+      {showBuyBar && cta.href !== null && cta.label !== null ? (
+        <CourseBuyBar
+          anchorId={CTA_ID}
           courseTitle={title}
           href={cta.href}
           label={cta.label}

@@ -64,7 +64,11 @@
      ResizeObserverrel írja a <html> inline stílusára, amíg látszik. Innen jön
      a `scroll-padding-bottom` és a lap alsó térköze (WCAG 2.2 SC 2.4.11 Focus
      Not Obscured), lásd styles/consent-banner.css. A 0px alapérték azért kell,
-     hogy a token JS nélkül is DEFINIÁLT legyen (G-K1 őr). */
+     hogy a token JS nélkül is DEFINIÁLT legyen (G-K1 őr).
+     MINDEN alul ragadó réteg ehhez igazodik — ma a kurzusoldal vásárlósávja is
+     (kurzusok.css `bottom: var(--kc-consent-offset, 0px)`) —, hogy a két sáv ne
+     takarja el egymást. Két, egymástól független kör vezette be ugyanezt a
+     tokent; a szüretnél egyetlen definícióra vontuk össze. */
   --kc-consent-offset: 0px;
 
   /* ---- Legacy nyers tokenek (csak kompatibilitás, szerep nélkül) --------- */
