@@ -27,14 +27,21 @@
   flex: 1;
 }
 
+/* A kosártétel címe LINK a kurzusoldalra. Alapállapotban semmi nem jelezte,
+   hogy kattintható (ink szín, aláhúzás nélkül, címsor-betűvel) — az
+   affordancia csak hoveren jelent meg, ami érintőképernyőn nem létezik.
+   A `.kc-text-link` / lábléc-linkek nyelvét kapja: ink + aláhúzás, 14,79:1 a
+   paperen (a kontraszt nem változik, csak a jelölés). */
 .kc-cart__title {
   font-family: var(--kc-font-heading);
   font-size: var(--kc-font-m);
   color: var(--kc-color-text);
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
 }
 
 .kc-cart__title:hover {
+  color: var(--kc-color-link-hover);
   text-decoration: underline;
 }
 
@@ -219,9 +226,24 @@
   background-color: transparent;
 }
 
+/* A gomb és a MELLETTE álló magyarázat egy oszlopban, jobbra zárva: a
+   „mi hiányzik még" szöveg a gombhoz tartozik, ezért vele együtt mozog. */
 .kc-checkout-form__actions {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--kc-space-2);
+}
+
+/* A beküldés akadályának magyarázata (aria-describedby a gombon). Nem hiba,
+   csak feltétel — ezért ink-soft, nem danger: a paperen 8,80:1 (AA/AAA). */
+.kc-checkout-form__block-hint {
+  max-width: var(--kc-measure);
+  margin: 0;
+  color: var(--kc-color-text-muted);
+  font-size: var(--kc-font-s);
+  line-height: var(--kc-leading-body);
+  text-align: end;
 }
 
 /* ---- Köszönő / sikertelen ------------------------------------------------- */

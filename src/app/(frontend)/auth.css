@@ -54,8 +54,16 @@
   color: var(--kc-color-text-muted);
 }
 
+/* „Már van fiókod? Lépj be" / „Még nincs fiókod? Regisztrálj" — MONDATBA
+   ágyazott linkek. A szín önmagában nem elég jelölő: az akcent-mély (#2f6e9f)
+   és a körülötte futó ink-soft (#33495f) szöveg között mindössze **1,71:1**,
+   a G183 technika 3:1-es küszöbe alatt (WCAG 1.4.1). Az aláhúzással a
+   nem-szín jelölő megvan, a link-szín HÁTTÉRHEZ mért kontrasztja pedig
+   változatlanul 5,16:1 a paperen. */
 .kc-auth-alt a {
   color: var(--kc-color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
 }
 
 .kc-auth-success {

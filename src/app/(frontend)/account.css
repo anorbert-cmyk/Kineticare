@@ -44,9 +44,17 @@
   padding: 0;
 }
 
+/* A fiók kurzuslistájának linkjei. Ugyanaz a hiba volt, mint a `.kc-auth-alt`
+   linkjeinél: a jelölést egyedül a szín hordozta — az akcent-mély a környező
+   ink-soft szöveghez képest **1,71:1** (G183 küszöb 3:1, WCAG 1.4.1). A
+   félkövér súly nem elég megkülönböztető jelölő, mert a lista többi eleme is
+   hangsúlyos. Aláhúzással a nem-szín jelölő megvan; a link-szín a paperen
+   változatlanul 5,16:1. */
 .kc-account__course {
   color: var(--kc-color-primary);
   font-weight: var(--kc-font-weight-bold);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
 }
 
 /* ---- Hozzáférés lejárata (A1) --------------------------------------------

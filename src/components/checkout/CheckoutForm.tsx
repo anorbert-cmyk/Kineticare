@@ -27,6 +27,12 @@ import {
 import { submitCheckout, type CheckoutUser, type CheckoutProduct } from '../../lib/checkout-submit'
 
 /**
+ * A beküldést gátló feltétel magyarázatának elem-azonosítója. A gomb
+ * `aria-describedby`-ja erre mutat, amíg van akadály.
+ */
+export const CHECKOUT_BLOCK_HINT_ID = 'kc-checkout-block-hint'
+
+/**
  * CheckoutForm — a /penztar űrlapja (a vásárlás befejezése).
  *
  * A jogszabály szerinti két waiver-checkbox (45/2014. (II. 26.) Korm. rend.
@@ -124,6 +130,17 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
 
   const requiresWaiver = !product.isFree
   const waiverComplete = !requiresWaiver || (waiverStart && waiverLoss)
+  /**
+   * MI HIÁNYZIK MÉG a beküldéshez — a gomb MELLETT kiírva, magyarul. A gomb
+   * nem tiltódik le tőle (lásd a beküldő-gomb melletti kommentet): ez az
+   * `aria-describedby` célja, hogy a billentyűzetes és a képernyőolvasós
+   * látogató a gombra érve azonnal megtudja, mi az akadály.
+   */
+  const blockReason: string | null = alreadyPurchased
+    ? 'Ezt a kurzust már megvetted, ezért új rendelés nem indítható. A kurzusaid között éred el.'
+    : !waiverComplete
+      ? 'A fizetéshez pipáld ki mindkét nyilatkozatot az „Elállási jog” résznél.'
+      : null
 
   const updateBilling = (field: BillingFieldName, value: string): void => {
     setBilling((previous) => withBillingValue(previous, field, value))
@@ -355,10 +372,42 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
         </Card>
       )}
 
+      {/*
+        A FIZETŐGOMB LETILTÁSA — mit tiltunk le és mit nem (2026-08-16-i
+        akadálymentességi kör, docs/gomb-kontraszt-audit.md B8).
+
+        KORÁBBAN: `disabled={submitting || alreadyPurchased || !waiverComplete}`.
+        A natív `disabled` KIESIK A TAB-SORRENDBŐL, ezért a billentyűzetes vevő
+        addig, amíg nem pipálta ki a két elállási nyilatkozatot, a fizetőgombig
+        el sem jutott — és semmi nem mondta meg neki, miért nem működik. A
+        felirat ráadásul `opacity: .5` mellett 2,12:1 volt, tehát a „Megrendelés
+        és fizetés" gyakorlatilag olvashatatlan.
+
+        MOST: a gomb csak a BEKÜLDÉS IDEJÉRE tiltódik le (dupla küldés elleni
+        védelem — docs/ui-sztenderdek.md §2.6 L-1; a szerveroldali idempotencia
+        emellett is megvan, L-2). A kipipálatlan nyilatkozat és a már megvett
+        kurzus NEM tiltás, hanem VALIDÁCIÓ: a `planCheckoutSubmission`
+        `blocked` ága magyar hibaüzenetet ad az élő régióba (role="alert"), és a
+        fókuszt az első hiányzó jelölőnégyzetre viszi. Ez a GOV.UK gomb-
+        útmutatójának ajánlása (a letiltott gomb nem közli, mi a teendő):
+        https://design-system.service.gov.uk/components/button/
+        A hiányzó feltételt a gomb MELLETT álló magyarázat is kimondja, és az
+        `aria-describedby` a gombhoz köti (W3C ARIA APG, button-minta):
+        https://www.w3.org/WAI/ARIA/apg/patterns/button/
+      */}
       <div className="kc-checkout-form__actions">
-        <Button disabled={submitting || alreadyPurchased || !waiverComplete} type="submit">
+        <Button
+          describedBy={blockReason === null ? undefined : CHECKOUT_BLOCK_HINT_ID}
+          disabled={submitting}
+          type="submit"
+        >
           {submitting ? 'Feldolgozás…' : product.isFree ? 'Hozzáférés megnyitása' : 'Megrendelés és fizetés'}
         </Button>
+        {blockReason === null ? null : (
+          <p className="kc-checkout-form__block-hint" id={CHECKOUT_BLOCK_HINT_ID}>
+            {blockReason}
+          </p>
+        )}
       </div>
     </form>
   )

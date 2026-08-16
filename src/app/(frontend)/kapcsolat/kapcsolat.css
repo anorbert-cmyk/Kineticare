@@ -82,6 +82,26 @@
   line-height: var(--kc-leading-body);
 }
 
+/* A hozzájárulás-szövegbe ÁGYAZOTT link (Adatkezelési és adatvédelmi
+   szabályzat). Szabály nélkül a `base.css` alapnyelvét örökölte: `ink` szín,
+   `text-decoration: none` — vagyis PONTOSAN ugyanolyan volt, mint a körülötte
+   futó mondat. Mérve: a link és a környező szöveg megkülönböztetése **1,00:1**,
+   nem-szín jelölő nélkül → WCAG 1.4.1 (Use of Color) bukás, és a GDPR-
+   tájékoztató gyakorlatilag megtalálhatatlan.
+   Javítva a hírlevél-űrlap már meglévő nyelvével (layout.css
+   `.kc-newsletter__consent-label a`): ink + aláhúzás — a link a paperen
+   14,79:1, az aláhúzás pedig a nem-szín jelölő (G183 3:1-es feltétele így
+   tárgytalan). Hoveren akcent-mély, 5,16:1. */
+.kc-contact-form__consent-label a {
+  color: var(--kc-color-text);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+.kc-contact-form__consent-label a:hover {
+  color: var(--kc-color-link-hover);
+}
+
 .kc-contact-form__turnstile {
   min-height: 65px; /* a widget helyfoglalása — ugrálás (CLS) nélkül */
 }

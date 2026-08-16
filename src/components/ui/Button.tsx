@@ -22,6 +22,18 @@ import { sanitizeCmsUrl } from '../../lib/safe-url'
  *
  * A fókusz-állapotot a globális :focus-visible szabály kezeli (lásd base.css);
  * sötét szekcióban a gyűrű fehérre vált (ui.css, .kc-section--dark).
+ *
+ * LETILTOTT ÁLLAPOT: a jelölés NEM áttetszőség, hanem szándékos token-pár
+ * (ui.css `.kc-button:disabled`) — a felirat olvasható marad (7,08:1). A
+ * letiltás OKÁT mindig ki kell mondani a gomb mellett, és a magyarázatot a
+ * `describedBy`-jal a gombra kell kötni (W3C ARIA APG button-minta:
+ * https://www.w3.org/WAI/ARIA/apg/patterns/button/). Ahol a letiltás a
+ * felhasználó által ORVOSOLHATÓ hiányból fakad (pl. kipipálatlan nyilatkozat),
+ * ott a gombot NEM tiltjuk le: a natív `disabled` kiesik a Tab-sorrendből,
+ * tehát a billentyűzetes látogató meg sem találja, hogy elolvassa a
+ * magyarázatot. Ilyenkor a gomb aktív marad, a beküldést pedig validáció fogja
+ * meg, világos magyar hibaüzenettel — a GOV.UK gomb-útmutatója ugyanezt
+ * ajánlja (https://design-system.service.gov.uk/components/button/).
  */
 
 export interface ButtonProps {
@@ -32,6 +44,12 @@ export interface ButtonProps {
   disabled?: boolean
   type?: 'button' | 'submit'
   className?: string
+  /**
+   * Az `aria-describedby` célja: a gomb MELLETT álló magyarázó szöveg
+   * azonosítója (pl. „mi hiányzik még a fizetéshez"). Kötelező mindenütt, ahol
+   * a gomb letiltott vagy a beküldés feltételhez kötött.
+   */
+  describedBy?: string
   /** Csak <button>-rendernél értelmezett. */
   onClick?: () => void
   /**
@@ -50,6 +68,7 @@ export function Button({
   disabled = false,
   type = 'button',
   className,
+  describedBy,
   onClick,
   openInNewTab = false,
 }: ButtonProps) {
@@ -64,6 +83,8 @@ export function Button({
   // letiltott gomb, mint az explicit `disabled` — különben aktívnak látszana
   // egy olyan elem, amire kattintva nem történik semmi.
   const isDisabled = disabled || (Boolean(href) && safeHref === null)
+
+  const described = describedBy === undefined ? {} : { 'aria-describedby': describedBy }
 
   const classes = [
     'kc-button',
@@ -81,6 +102,7 @@ export function Button({
         <a
           className={classes}
           href={safeHref}
+          {...described}
           {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         >
           {children}
@@ -91,6 +113,7 @@ export function Button({
       <Link
         className={classes}
         href={safeHref}
+        {...described}
         {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       >
         {children}
@@ -100,14 +123,14 @@ export function Button({
 
   if (href) {
     return (
-      <span className={classes} aria-disabled="true">
+      <span className={classes} aria-disabled="true" {...described}>
         {children}
       </span>
     )
   }
 
   return (
-    <button className={classes} disabled={disabled} onClick={onClick} type={type}>
+    <button className={classes} disabled={disabled} onClick={onClick} type={type} {...described}>
       {children}
     </button>
   )

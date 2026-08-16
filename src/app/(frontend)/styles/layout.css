@@ -98,6 +98,36 @@
 }
 
 /**
+ * A FEJLÉC FÓKUSZGYŰRŰJE — a fátyollal ARÁNYOSAN, ugyanazon a logikán, mint a
+ * wordmark-tag és a CTA-pirula (lásd a fenti kontraszt-levezetés 1–2. pontját).
+ *
+ * MIÉRT KELL: a globális gyűrű (base.css) fix `accent-deep` (#2f6e9f) —
+ * középtónus, pontosan úgy, ahogy a másik két elem volt. A kezdőlap TETEJÉN
+ * (veil = 0) a fejléc alatti kompozit `#8c959d`, amin a fix gyűrű mindössze
+ * **1,79:1** — ez a lap ELSŐ Tab-lenyomása, és 1.4.11 + 2.4.7 bukás. A fix
+ * gyűrű csak `veil ≥ 0,44` felett éri el a 3:1-et (bináris kereséssel mérve).
+ *
+ * MÉRT EREDMÉNY a fátyol teljes tartományán (a legsötétebb filmblokk + a
+ * film-hero felső, 0,50-es világosító lejtője ellen számolva):
+ *   veil 0,00 → 5,13:1 · 0,25 → 5,45:1 · 0,50 → 5,49:1 · 0,75 → 5,33:1 ·
+ *   1,00 → 5,16:1 (a paperen; ez a többi oldal állandó értéke is).
+ * Mindegyik a 3:1-es UI-küszöb felett. Elvetett alternatíva: fix FEHÉR gyűrű —
+ * az a veil ≥ 0,25 állásokban 2,25:1-re esne.
+ *
+ * A `:focus-visible` a fejléc LESZÁRMAZOTTAIRA szól (wordmark-link, menülinkek,
+ * lenyitó-gombok, hamburger, CTA-pirula); csak az `outline-color`-t írja felül,
+ * a vastagság/offset/rádiusz a base.css-ből marad. Ne cseréld vissza fix
+ * színre — ugyanaz a hiba térne vissza, amit a 2–3. pont a kitöltésnél leír.
+ */
+.kc-site-header :focus-visible {
+  outline-color: color-mix(
+    in srgb,
+    var(--kc-color-focus) calc(var(--kc-header-veil, 0) * 100%),
+    var(--kc-color-ink)
+  );
+}
+
+/**
  * A sáv fátyla KÜLÖN rétegen (::before) él, nem magán a fejlécen.
  *
  * MIÉRT: a `backdrop-filter` — a `transform`-hoz és `filter`-hez hasonlóan —

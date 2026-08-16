@@ -177,10 +177,18 @@ main > .kc-film-hero:first-of-type {
   background-color: var(--kc-color-tint-cool);
 }
 
-/* Fókuszgyűrű a film felett: a navy gyűrűt fehér elválasztó öleli körbe, így
-   világos ÉS sötét filmkockán is látszik. */
+/* Fókuszgyűrű a film felett: a gyűrűt fehér elválasztó haló öleli körbe, így
+   világos ÉS sötét filmkockán is látszik.
+
+   A gyűrű SZÍNE `ink`, nem `focus` (accent-deep). Miért: a haló 0–6px-en, a
+   gyűrű 3–6px-en fut, tehát a jelzésnek KÉT éle van — a belső a fehér halón,
+   a külső közvetlenül a filmen. Az accent-deep a legsötétebb filmkompoziton
+   (#9e9fa1) csak **2,06:1**, tehát a külső él 1.4.11 alatt maradt. Mérve a
+   csere után: ink a fehér halón **15,63:1**, ink a filmkompoziton **5,90:1** —
+   mindkét él a 3:1-es küszöb felett. Arculati változás nincs: a hero
+   másodlagos gombjának 2px-es kerete már ma is ink. */
 .kc-film-hero .kc-film-hero__cta:focus-visible {
-  outline: 3px solid var(--kc-color-focus);
+  outline: 3px solid var(--kc-color-ink);
   outline-offset: 3px;
   box-shadow: 0 0 0 6px var(--kc-color-white);
 }

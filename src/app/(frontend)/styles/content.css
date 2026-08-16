@@ -730,6 +730,15 @@
   border: 0;
 }
 
+/* A beágyazott lejátszó FÓKUSZÁLHATÓ (iframe), és sötét (ink) konténeren ül:
+   a globális accent-deep gyűrű itt csak 2,87:1 lenne. Fehérre váltva 15,63:1 —
+   ugyanaz a felülírás, mint a `.kc-section--dark`-on és a lejátszó
+   `.kc-player__media` felületén (G-K3 őr: minden sötét felület definiál
+   fókusz-felülírást). */
+.kc-richtext__video :focus-visible {
+  outline-color: var(--kc-color-focus-on-dark);
+}
+
 /* ==== B2 — Piszkozat-előnézet sáv ========================================
    A `/next/preview` route által bekapcsolt Next draft mode jelzősávja
    (src/components/preview/PreviewBar.tsx). Vékony, nem-tolakodó, a tartalom

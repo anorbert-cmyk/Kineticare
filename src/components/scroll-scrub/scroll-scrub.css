@@ -178,15 +178,22 @@
   color: var(--ss-ink);
 }
 
+/* Az AKTÍV állapot jelölője és a fókuszgyűrű `--ss-ink`, nem `--ss-accent`.
+   Miért: a gombok a FILMKOCKÁN ülnek, az akcent pedig középtónus — a repó
+   filmkockáiból számolt legvilágosabb/legsötétebb kompozitokon (#8c959d,
+   #9e9fa1, #a2aab1) az akcent-mély gyűrű csak 1,79 / 2,06 / 2,32:1 lenne
+   (1.4.11 alatt), az ink viszont 5,16 / 5,92 / 6,67:1. Ugyanaz a döntés, mint
+   a film-hero CTA-gyűrűjénél (film-hero.css) és a fejlécnél (layout.css).
+   Ma latens: a sáv csak egynél több jelenetnél renderel route-gombot. */
 .scroll-scrub__route-button[aria-current='step'] {
   text-decoration: underline;
-  text-decoration-color: var(--ss-accent);
+  text-decoration-color: var(--ss-ink);
   text-decoration-thickness: 0.15em;
   text-underline-offset: 0.3em;
 }
 
 .scroll-scrub__route-button:focus-visible {
-  outline: 3px solid var(--ss-accent);
+  outline: 3px solid var(--ss-ink);
   outline-offset: 3px;
 }
 
