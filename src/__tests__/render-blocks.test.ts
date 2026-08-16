@@ -356,7 +356,14 @@ describe('RenderBlocks', () => {
     expect(html).toContain('Ingyenes SOS')
   })
 
-  it('freeSos: blokk-cím + gomb-felülírás; termék híján is renderel', () => {
+  /**
+   * A gomb feliratát a szerkesztő adja, DE csak akkor, ha a cél valóban az
+   * ingyenes kurzus. Ingyenes termék nélkül a gomb a listára visz, és ott az
+   * indítás-ígéret hazugság lenne — ezért a felirat a listáéra vált
+   * (`resolveFreeSosCta`; a mért hiba: docs/gomb-inventar.md B7). A teljes
+   * ág-mérés az `src/__tests__/kezdolap-cta-egyertelmuseg.test.tsx` őrben van.
+   */
+  it('freeSos: termék híján is renderel, de a gomb nem ígér indítást', () => {
     const html = renderBlocks(
       layoutOf({
         blockType: 'freeSos',
@@ -368,7 +375,35 @@ describe('RenderBlocks', () => {
       }),
     )
     expect(html).toContain('Ingyenes villámkurzus sáv')
+    expect(html).toContain('Rövid szöveg a sávban.')
+    expect(html).toContain('Nézd meg a kurzusokat')
+    expect(html).toContain('href="/kurzusok"')
+    expect(html).not.toContain('Kérem az ingyenes anyagot')
+  })
+
+  it('freeSos: ingyenes termékkel a szerkesztő felirata él, a cél a kurzusoldal', () => {
+    const html = renderBlocks(
+      layoutOf({
+        blockType: 'freeSos',
+        id: 'f1',
+        title: 'Ingyenes villámkurzus sáv',
+        cta: { felirat: 'Kérem az ingyenes anyagot', url: '/kurzusok' },
+        sectionSettings: {},
+      }),
+      {
+        products: [
+          product({
+            id: 7,
+            displayTitle: 'SOS Kézrelax villámkurzus',
+            slug: 'sos-kezrelax-villamkurzus',
+            priceInHUF: null,
+            priceInHUFEnabled: false,
+          } as Partial<Product> & { id: number }),
+        ],
+      },
+    )
     expect(html).toContain('Kérem az ingyenes anyagot')
+    expect(html).toContain('href="/kurzusok/sos-kezrelax-villamkurzus"')
   })
 })
 

@@ -41,7 +41,10 @@ export const freeSos: Block = {
     linkGroup({
       name: 'cta',
       label: 'Gomb',
-      description: 'A sáv gombja — ez visz az ingyenes kurzushoz.',
+      description:
+        'A sáv gombja. A „Hová vigyen" mezőt hagyd üresen: a gomb magától az ingyenes kurzus oldalára visz, és ha éppen nincs ingyenes kurzus, a kurzuslistára, a listához illő felirattal. Csak akkor írj be címet, ha egy MÁSIK kurzus oldalára akarod vinni (pl. /kurzusok/sos-kezrelax-villamkurzus); a puszta /kurzusok cím nem érvényesül, mert azon a listán nem indul el az ingyenes kurzus.',
+      urlDescription:
+        'Hagyd üresen: a rendszer az ingyenes kurzus oldalára visz. Ha másik kurzusra akarod vinni, annak a kurzusnak a címét írd be (pl. /kurzusok/sos-kezrelax-villamkurzus).',
     }),
     {
       name: 'backgroundImage',

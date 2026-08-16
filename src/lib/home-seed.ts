@@ -261,8 +261,12 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
     title: HOME_HERO_TITLE,
     lead: HOME_HERO_LEAD,
     tags: [{ label: 'Kéz' }, { label: 'Csukló' }, { label: 'Könyök' }, { label: 'Váll' }],
+    // A felirat a jóváhagyott szótárból jön (docs/ui-sztenderdek.md §3.2 #10,
+    // kódbeli szótár: src/lib/cta-vocabulary.ts `course-list-open`). Egy
+    // cselekvésre EGY felirat az egész lapon — WCAG 2.2 3.2.4 Consistent
+    // Identification.
     ctas: [
-      { felirat: 'Kurzusok megtekintése', url: '/kurzusok', ujAblakban: false },
+      { felirat: 'Nézd meg a kurzusokat', url: '/kurzusok', ujAblakban: false },
       { felirat: 'Ingyenes SOS gyakorlatok', url: '#ingyenes', ujAblakban: false },
     ],
     sectionSettings: { visible: true },
@@ -298,11 +302,20 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
   // ajánlat elnyomná a fizetőset (értékesítési UX-skill M4/K2), ezért marad a
   // világoskék sáv — ahogy a mai kezdőlap FreeSos szekciója is. A landing
   // háttérképe (sos-hands-board.jpg) viszont átjön.
+  //
+  // A GOMBNAK SZÁNDÉKOSAN NINCS `url`-je (2026-08-16, IA-audit T1 /
+  // gomb-inventár B7). A korábbi `url: '/kurzusok'` felülírta a komponens
+  // termékből számolt célját, ezért a gomb az ingyenes kurzus INDÍTÁSÁT ígérte,
+  // de a kurzuslistára vitt. Cél nélkül a `FreeSos` maga oldja fel: van
+  // ingyenes termék → annak a kurzusoldala, nincs → a lista, és ilyenkor a
+  // felirat is a lista feliratára vált (resolveFreeSosCta). A felirat a
+  // jóváhagyott szótárból jön: docs/ui-sztenderdek.md §3.2 #4.
   {
     blockType: 'freeSos',
-    title: 'SOS Kézrelax — ingyenes villámkurzus',
+    // Kettőspont, nem gondolatjel (docs/ui-sztenderdek.md §3.1).
+    title: 'SOS Kézrelax: ingyenes villámkurzus',
     body: 'Ha előbb kipróbálnád a módszert: rövid, azonnal használható gyakorlatok hirtelen jelentkező kézfájdalomra.',
-    cta: { felirat: 'Elindítom az ingyenes kurzust', url: '/kurzusok', ujAblakban: false },
+    cta: { felirat: 'Elindítom ingyen', ujAblakban: false },
     backgroundImage: media['sos-hands-board.jpg'],
     sectionSettings: { visible: true, anchorId: 'ingyenes', hatter: 'tint' },
   },
@@ -441,7 +454,13 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
         number: '02',
         title: 'Otthoni program',
         body: 'Ha nem tudsz eljutni kezelésre, vagy egyszerűen csak megpróbálnád előbb magadnak megoldani a kézproblémádat, akkor ezeket neked készítettük. Az átfogó kézrehabilitációs programban bárhol, bármikor végezhető megoldásokat találsz.',
-        felirat: 'Tovább a programra',
+        // Korábban „Tovább a programra" volt, ami EGY konkrét programot ígért,
+        // és a kurzuslistára vitt (IA-audit T2). A cél marad a lista, a felirat
+        // pedig a listához tartozó jóváhagyott alakra vált
+        // (docs/ui-sztenderdek.md §3.2 #10) — így a lapon a `/kurzusok` minden
+        // hivatkozása ugyanazt mondja (WCAG 2.2 3.2.4). A puszta „Tovább…"
+        // amúgy sem lehet CTA (§3.1.4 M-7).
+        felirat: 'Nézd meg a kurzusokat',
         url: '/kurzusok',
         ujAblakban: false,
       },
@@ -582,7 +601,11 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
     blockType: 'ctaBanner',
     title: 'Kezdd el még ma',
     text: 'Az otthoni kézrehabilitációs programmal a saját tempódban indulhatsz: a videós gyakorlatokat a vásárlás után azonnal eléred, és naponta néhány perc gyakorlás is visz előre. A programot kézrehabilitációval foglalkozó gyógytornászok állították össze.',
-    cta: { felirat: 'Megnézem a kurzusokat', url: '/kurzusok', ujAblakban: false },
+    // A záró CTA ugyanoda visz, mint a hero és a szolgáltatás-sor második
+    // gombja (/kurzusok), ezért UGYANAZT a feliratot viseli — a §3.2 #10
+    // jóváhagyott alakját. A korábbi „Megnézem a kurzusokat" egy hatodik,
+    // eltérő feliratot vitt ugyanarra a célra a kezdőlapon (WCAG 2.2 · 3.2.4).
+    cta: { felirat: 'Nézd meg a kurzusokat', url: '/kurzusok', ujAblakban: false },
     sectionSettings: { visible: true, hatter: 'tint' },
   },
 ]

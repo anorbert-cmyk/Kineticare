@@ -1,5 +1,3 @@
-import Link from 'next/link'
-
 import type { Product } from '../../../payload-types'
 import { isPaidCourse } from '../../../lib/courses'
 import { Container } from '../../ui/Container'
@@ -22,10 +20,25 @@ import '../../../app/(frontend)/styles/blocks/course-cards.css'
  * A lead-magnet helye a FreeSos szekció — a rács a fizetős ajánlaté.
  * Üres (fizetős) listánál a szekció elmarad, nincs törött üres blokk.
  *
+ * NINCS „Összes kurzus megtekintése" hivatkozás (2026-08-16, IA-audit D1/#7).
+ * Két mért ok:
+ *  - a rács SOHA nincs csonkolva (a hívó minden fizetős kurzust átad), tehát az
+ *    „összes" ígéret ugyanazt adta, ami már a képernyőn volt. „A link is a
+ *    promise": a felirat azt ígérje, ami a kattintás után TÉNYLEGESEN történik
+ *    (NN/g, Better Link Labels — „Sincere",
+ *    https://www.nngroup.com/articles/better-link-labels/);
+ *  - ez volt a HARMADIK, egymástól eltérő felirat ugyanarra a célra
+ *    (`/kurzusok`) ugyanazon a lapon, ami WCAG 2.2 3.2.4 (Consistent
+ *    Identification) sérülés,
+ *    https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html
+ * A szekció CTA-ja innentől maga a kurzuskártya (a kártya EGÉSZE link,
+ * docs/ui-sztenderdek.md §3.2 #11), a kurzuslistára pedig a hero és a záró
+ * CTA-sáv visz, egyetlen, azonos felirattal.
+ *
  * Megjelenés: a landing szekció-nyelve (kis felső felirat + serif cím) és a
  * „mini-buybox" kurzuskártya (ProductCard). A közös osztályok (`kc-eyebrow`,
- * `kc-section-title`, `kc-section-lead`, `kc-text-link`) a content.css-ből
- * jönnek, a blokk-specifikus réteg a styles/blocks/course-cards.css-ben él.
+ * `kc-section-title`, `kc-section-lead`) a content.css-ből jönnek, a
+ * blokk-specifikus réteg a styles/blocks/course-cards.css-ben él.
  *
  * EGYETLEN KURZUSNÁL VÍZSZINTES, KIEMELT KÁRTYA (tulajdonosi visszajelzés,
  * 2026-08-16). A rács `auto-fit`-je egy kártyánál egy 26rem-es oszlopot rajzol
@@ -147,14 +160,6 @@ export function CourseCards({
             />
           ))}
         </div>
-        <p className="kc-section-more">
-          <Link className="kc-text-link kc-course-cards__link" href="/kurzusok">
-            <span className="kc-text-link__label">Összes kurzus megtekintése</span>
-            <span aria-hidden="true" className="kc-text-link__arrow">
-              →
-            </span>
-          </Link>
-        </p>
       </Container>
     </Section>
   )

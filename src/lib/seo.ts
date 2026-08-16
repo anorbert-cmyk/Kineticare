@@ -345,6 +345,56 @@ export function courseJsonLd(args: {
   }
 }
 
+/**
+ * Blog (lista) JSON-LD a Tudástár lap- és kategória-oldalaihoz.
+ *
+ * Miért `Blog` és nem `ItemList`: a lap maga a Tudástár (illetve annak egy
+ * témája), nem egy tetszőleges felsorolás — a `Blog` típus mondja meg a gépi
+ * olvasónak, hogy cikkgyűjteményről van szó, a `blogPost` pedig az egyes
+ * bejegyzésekre mutat.
+ *
+ * A `blogPost` lista KIZÁRÓLAG a ténylegesen megjelenített cikkekből épül, és
+ * ÜRES listánál a mező kimarad. Ez nem formalitás: a strukturált adatnak a
+ * látható tartalommal kell egyeznie (docs/seo-geo-llm.md 1. fejezet), és egy
+ * nulla elemű gyűjtemény meghirdetése pontosan az az eltérés, ami miatt a
+ * keresők elvetik a strukturált adatot.
+ */
+export function blogJsonLd(args: {
+  name: string
+  description?: string
+  path: string
+  posts: ReadonlyArray<Pick<Post, 'title' | 'slug' | 'excerpt' | 'publishedAt'>>
+}): Record<string, unknown> {
+  const { name, description, path, posts } = args
+  const entries = posts.filter((post) => typeof post.slug === 'string' && post.slug.length > 0)
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Blog',
+    name,
+    ...(description ? { description } : {}),
+    url: absoluteUrl(path),
+    inLanguage: 'hu-HU',
+    publisher: {
+      '@type': 'Organization',
+      name: SITE_NAME,
+      url: absoluteUrl('/'),
+    },
+    ...(entries.length > 0
+      ? {
+          blogPost: entries.map((post) => ({
+            '@type': 'BlogPosting',
+            headline: post.title,
+            url: absoluteUrl(`/blog/${post.slug}`),
+            ...(typeof post.excerpt === 'string' && post.excerpt.trim().length > 0
+              ? { description: post.excerpt.trim() }
+              : {}),
+            ...(typeof post.publishedAt === 'string' ? { datePublished: post.publishedAt } : {}),
+          })),
+        }
+      : {}),
+  }
+}
+
 /** Article JSON-LD a blogposzt-oldalakhoz. */
 export function articleJsonLd(args: {
   post: Pick<Post, 'title' | 'excerpt' | 'publishedAt' | 'updatedAt'>
@@ -358,6 +408,10 @@ export function articleJsonLd(args: {
     '@type': 'Article',
     headline: post.title,
     ...(post.excerpt ? { description: post.excerpt } : {}),
+    // A nyelv explicit megadása ugyanaz az entitás-egyértelműsítő lépés, mint
+    // az Organization/FAQPage/Course sémákban: magyar nyelvű, magyar
+    // közönségnek szóló tartalom (docs/seo-geo-llm.md).
+    inLanguage: 'hu-HU',
     mainEntityOfPage: absoluteUrl(path),
     ...(typeof post.publishedAt === 'string' ? { datePublished: post.publishedAt } : {}),
     ...(typeof post.updatedAt === 'string' ? { dateModified: post.updatedAt } : {}),

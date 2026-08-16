@@ -71,16 +71,41 @@ function sectionProps(block: LayoutBlock): {
   return { id: anchorId, variant }
 }
 
+/** A CMS link-csoportjának nyers alakja (felirat/url/ujAblakban). */
+type CmsLink = { felirat?: string | null; url?: string | null; ujAblakban?: boolean | null }
+
 /** LinkGroup (felirat/url/ujAblakban) → egyszerű link-objektum; hiányos linknél undefined. */
-function linkFrom(
-  link: { felirat?: string | null; url?: string | null; ujAblakban?: boolean | null } | undefined | null,
-): { label: string; href: string; newTab: boolean } | undefined {
+function linkFrom(link: CmsLink | undefined | null): { label: string; href: string; newTab: boolean } | undefined {
   const label = link?.felirat?.trim() ?? ''
   const href = link?.url?.trim() ?? ''
   if (label.length === 0 || href.length === 0) {
     return undefined
   }
   return { label, href, newTab: link?.ujAblakban === true }
+}
+
+/**
+ * RÉSZLEGES link-felülírás: a mezőket külön-külön adja tovább.
+ *
+ * A `freeSos` blokk gombjánál a felirat és a cél NEM egy csomag: a célt a
+ * komponens számolja az ingyenes termékből, a szerkesztő pedig önmagában a
+ * feliratot is átírhatja (`resolveFreeSosCta`). A `linkFrom` itt nem
+ * használható, mert az a hiányos linket egészben eldobná, és a szerkesztő
+ * felirata némán elveszne.
+ */
+function partialLinkFrom(
+  link: CmsLink | undefined | null,
+): { label?: string; href?: string; newTab?: boolean } | undefined {
+  const label = link?.felirat?.trim() ?? ''
+  const href = link?.url?.trim() ?? ''
+  if (label.length === 0 && href.length === 0) {
+    return undefined
+  }
+  return {
+    ...(label.length > 0 ? { label } : {}),
+    ...(href.length > 0 ? { href } : {}),
+    newTab: link?.ujAblakban === true,
+  }
 }
 
 export interface RenderBlocksProps {
@@ -236,7 +261,7 @@ function BlockSwitch({
         <FreeSos
           backgroundImage={backgroundImage}
           body={block.body ?? undefined}
-          cta={linkFrom(block.cta)}
+          cta={partialLinkFrom(block.cta)}
           freeProduct={freeProduct}
           id={id ?? (isRepeat ? `ingyenes-${block.id ?? 'ismetelt'}` : undefined)}
           title={block.title}
