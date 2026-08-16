@@ -5,7 +5,7 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
-    "startCommand": "sh -c 'npx payload migrate && npx tsx src/scripts/seed.ts; npx tsx src/scripts/restore-legacy-content.ts; npx tsx src/scripts/demo-seed.ts; npm start'",
+    "startCommand": "sh -c 'npx payload migrate && npx tsx src/scripts/seed.ts; npx tsx src/scripts/restore-legacy-content.ts; npx tsx src/scripts/demo-seed.ts; npx tsx src/scripts/apply-owner-content.ts; npm start'",
     "healthcheckPath": "/admin",
     "healthcheckTimeout": 600,
     "restartPolicyType": "ON_FAILURE",
