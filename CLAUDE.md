@@ -101,9 +101,17 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
    régi kód, miközben minden zöld. **Ellenőrzés:** a deploy build-logjában
    szerepelnie kell egy tényleges `npm run build` futásnak. Ezért van explicit
    `buildCommand` és `healthcheckPath` beállítva.
-2. **A service-szintű beállítás felülírja a `railway.json`-t.** Ha a fájlban
-   módosítasz (builder, buildCommand, healthcheck), ellenőrizd a szolgáltatás
-   beállításában is, különben a fájl csak dokumentáció marad.
+2. **A config-as-code (`railway.json`) MINDIG felülírja a service-beállítást**
+   — a hivatalos dokumentáció szerint is („Configuration defined in code will
+   always override values from the dashboard"). 2026-08-16-án mérve: az API-n
+   beállított egyedi `startCommand`-ot a repóból deployoló szolgáltatás némán
+   figyelmen kívül hagyta, és a `railway.json` `startCommand`-ját futtatta —
+   redeploy után is. Ha egy szolgáltatásnak MÁS parancs kell (pl. seed-job,
+   demo), az egyetlen megbízható út: dedikált config-fájl a repóban
+   (`railway.seed-job.json`, `railway.demo.json`) + a szolgáltatáson a
+   „Config file path" (API: `railwayConfigFile`) átállítása erre a fájlra.
+   A fájlban NEM szereplő beállításokat továbbra is a dashboard adja — a
+   felülírás kulcsonként érvényesül.
 3. **A Postgres-szolgáltatás újraindítása kiürítheti az adatbázist.** Egy
    redeploy `initdb`-t futtatott és a kötet üresen jött vissza — a séma csak a
    `payload migrate` újrafutásával állt helyre. **2026-08-15-i frissítés — a

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "echo seed-job-nincs-build"
+  },
+  "deploy": {
+    "startCommand": "sh -c 'echo SEED_JOB_START; npx tsx src/scripts/seed-menu.ts && echo MENU_SEED_OK; npx tsx src/scripts/restore-legacy-content.ts && echo LEGACY_SEED_OK; echo SEED_JOB_DONE; sleep 2147483647'",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 1,
+    "numReplicas": 1
+  }
+}
