@@ -300,6 +300,230 @@
   }
 }
 
+/* ---- Fiók-belépési pont (AccountNav) --------------------------------------
+ *
+ * MIÉRT VAN. A site-kereten korábban NULLA belépési pont volt: `/belepes` 0
+ * link, `/kurzusaim` 0 link, kijelentkezés sehol (docs/informacios-
+ * architektura.md §4 mátrix + TOP-10 #2 és #6; a javítás kiírása §8.1/2).
+ *
+ * SÚLY. Szöveglink + kontúros gomb, NEM második kitöltött pirula: a lapon egy
+ * elsődleges cselekvés lehet („Kurzusok"). GOV.UK Design System, Button:
+ * „Avoid using multiple default buttons on a single page… Use secondary buttons
+ * for secondary calls to action."
+ * https://design-system.service.gov.uk/components/button/
+ * Elhelyezés a jobb felső sarokban, mert a látogató ott keresi — NN/g, Utility
+ * Navigation: „Group utilities where people expect them: either in the
+ * top-right corner…"  https://www.nngroup.com/articles/utility-navigation/
+ *
+ * ── A KONTRASZT LEVEZETÉSE (számolt, nem becsült) ──────────────────────────
+ * A fejléc-sáv háttere a `--kc-header-veil` függvénye: 0 a lap tetején (a
+ * kezdőlapon a hero-film látszik át), 1 legörgetve (szolid paper). A film
+ * legrosszabb esete a fájl elején álló levezetésből: ink 5,13:1, ami ~#949494
+ * effektív háttérnek felel meg.
+ *
+ * Ezért a KERET és a FÓKUSZGYŰRŰ színe is a fátyollal arányosan kevert. A
+ * teljes 0→1 sweep mért szélsőértékei (21 lépés):
+ *
+ *   veil  háttér    keret     keret:bg   gyűrű     gyűrű:bg   felirat(ink):bg
+ *   0.00  #949494   #10243e     5,15       #10243e    5,15        5,15
+ *   0.40  #bbbcbe   #344860     4,93       #1c4265    5,48        8,22
+ *   1.00  #f6f9fc   #6b7f94     3,91       #2f6e9f    5,16       14,79
+ *
+ *   legrosszabb keret 3,91:1 (küszöb 3,0 — WCAG 2.2 1.4.11 Non-text Contrast)
+ *   legrosszabb gyűrű 5,15:1 (küszöb 3,0)
+ *   legrosszabb felirat 5,15:1 (küszöb 4,5 — WCAG 2.2 1.4.3)
+ *
+ * FIX színekkel ez BUKNA: `border-strong` a filmen 1,36:1, `accent-deep`
+ * fókuszgyűrű a filmen 1,80:1. Ne cseréld vissza fix értékre.
+ */
+.kc-account-nav {
+  /* Mobilon a sávban nincs hely (wordmark + „Kurzusok" pirula + hamburger már
+     kitölti a 320px-es sávot) — ott a blokk a drawer ELSŐ eleme. Így 320px-en
+     sincs vízszintes görgetés (WCAG 2.2 1.4.10 Reflow). */
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .kc-account-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--kc-space-2);
+    /* A hibaüzenet horgonya: a sávot NEM tolhatja szét (a fejléc magassága
+       fix), ezért abszolút pozícióban lóg a sáv alá. */
+    position: relative;
+  }
+}
+
+/* „Belépés" / „Kurzusaim" — a fejléc MÁR MEGLÉVŐ másodlagos linknyelve
+   (.kc-nav-desktop__link): ink szöveg, hoveren akcent + aláhúzás. Nem hozunk be
+   új vizuális súlyt. Érintési cél 44px magas (WCAG 2.2 2.5.8 küszöbe 24×24,
+   a projekt célja 44×44). */
+.kc-account-nav__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: var(--kc-space-2) var(--kc-space-3);
+  border-radius: var(--kc-radius-sm);
+  font-size: var(--kc-font-s);
+  font-weight: var(--kc-font-weight-medium);
+  letter-spacing: 0.02em;
+  color: var(--kc-header-ink);
+  text-decoration: none;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.3em;
+  transition:
+    color var(--kc-motion-fast) var(--kc-ease-out),
+    text-underline-offset var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-account-nav__link:hover {
+  color: var(--kc-header-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.35em;
+}
+
+/* Az `active` (lenyomott) állapot: a felirat egy hajszálnyit lejjebb ül. Nem
+   dísz — visszajelzés, hogy a koppintás célba ért. */
+.kc-account-nav__link:active,
+.kc-account-nav__signout:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+/* „Kijelentkezés" — GOMB, mert CSELEKVÉS (session-törlés), nem navigáció.
+   W3C WAI-ARIA APG, Button Pattern: „The types of actions performed by buttons
+   are distinctly different from the function of a link."
+   https://www.w3.org/WAI/ARIA/apg/patterns/button/
+   Ezért a MEGJELENÉSE is gombé (kontúros pirula), nem szöveglinké: az APG
+   kifejezetten azt ajánlja, hogy a vizuális terv illeszkedjen a szerephez.
+   A kitöltött „Kurzusok" pirulához képest kontúros = másodlagos súly. */
+.kc-account-nav__signout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: var(--kc-space-2) var(--kc-space-4);
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--kc-color-border-strong) calc(var(--kc-header-veil, 0) * 100%),
+      var(--kc-header-ink)
+    );
+  border-radius: var(--kc-radius-full);
+  background-color: transparent;
+  font-family: inherit;
+  font-size: var(--kc-font-s);
+  font-weight: var(--kc-font-weight-medium);
+  letter-spacing: 0.02em;
+  color: var(--kc-header-ink);
+  cursor: pointer;
+  transition:
+    background-color var(--kc-motion-fast) var(--kc-ease-out),
+    border-color var(--kc-motion-fast) var(--kc-ease-out),
+    color var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-account-nav__signout:hover:not(:disabled) {
+  border-color: var(--kc-header-accent);
+  background-color: var(--kc-header-accent-soft);
+  color: var(--kc-header-accent);
+}
+
+/* Folyamatban / letiltott: a gomb NEM tűnik el és nem vált feliratot némán —
+   a szöveg „Kijelentkezés…"-re vált (ui-sztenderdek §3.1.3, L-1: három pont,
+   gondolatjel nélkül), az `aria-busy` pedig a képernyőolvasónak szól. A
+   halványítás mértéke szándékosan mérsékelt (0,6), hogy a felirat a paperen
+   így is 4,5:1 felett maradjon: 14,79 × 0,6-os keverés ≈ 6,6:1. */
+.kc-account-nav__signout:disabled {
+  /* A „kijelentkezés folyamatban" allapot NEM `opacity`-vel jelolodik (G-K4):
+     az attetszoseg a feliratot es a keretet egyszerre mossa el, a felirat
+     olvashatatlanna valna. Helyette szandekos token-par, ugyanaz a minta,
+     mint a `ui.css .kc-button:disabled`-nel. */
+  cursor: progress;
+  border-color: var(--kc-color-border-strong);
+  color: var(--kc-color-text-muted);
+}
+
+/* A fókuszgyűrű a fejléc-sávban a FÁTYOLLAL arányos — a globális
+   `:focus-visible` accent-deep gyűrűje a hero-filmen csak 1,80:1 lenne
+   (mérve), ami a WCAG 2.2 1.4.11 alatt van. A keverés minden fátyol-álláson
+   5,15:1 fölött tart (lásd a fenti sweep-táblázatot). A szabály a fejléc-sávra
+   szorítkozik, mert csak ott átlátszó a háttér. */
+.kc-site-header__bar :focus-visible {
+  outline-color: color-mix(
+    in srgb,
+    var(--kc-color-focus) calc(var(--kc-header-veil, 0) * 100%),
+    var(--kc-header-ink)
+  );
+}
+
+/* Hibaüzenet a sikertelen kijelentkezésről. A sáv magasságát nem változtatja
+   (abszolút, a sáv alá lóg), így a fejléc nem ugrik meg. */
+.kc-account-nav__error {
+  position: absolute;
+  top: 100%;
+  inset-inline-end: 0;
+  z-index: 1;
+  max-width: 22rem;
+  margin-top: var(--kc-space-2);
+  padding: var(--kc-space-2) var(--kc-space-3);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-surface-raised);
+  box-shadow: var(--kc-shadow-lg);
+  font-size: var(--kc-font-s);
+  font-weight: var(--kc-font-weight-bold);
+  /* danger a fehér felületen 6,54:1 (számolt) */
+  color: var(--kc-color-danger);
+}
+
+/* ---- Fiók-belépési pont a mobil drawerben ---------------------------------
+ * A drawer ELSŐ eleme, a CMS-menüpontok FÖLÖTT: a lista elejét olvassák el a
+ * legnagyobb eséllyel (NN/g F-mintázat; ui-sztenderdek N-3), és a visszatérő
+ * vevőnek ez a legfontosabb célja. A hajszálvonal elválasztja a CMS-menütől,
+ * jelezve, hogy más természetű (segéd-)navigáció.
+ * A drawer háttere `--kc-color-surface-raised` (fehér), tehát itt NINCS fátyol:
+ * a fix színek mértéke — link (ink) 15,63:1, keret (border-strong) 4,13:1,
+ * fókuszgyűrű (accent-deep) 5,45:1, hiba (danger) 6,54:1.
+ */
+.kc-account-nav--drawer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--kc-space-2);
+  position: static;
+  padding: var(--kc-space-3) var(--kc-space-4);
+  border-bottom: 1px solid var(--kc-header-hairline);
+}
+
+.kc-account-nav--drawer .kc-account-nav__link {
+  justify-content: space-between;
+  padding: var(--kc-space-3) var(--kc-space-2);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+  letter-spacing: 0.01em;
+  color: var(--kc-color-text);
+}
+
+.kc-account-nav--drawer .kc-account-nav__link:hover {
+  background-color: var(--kc-header-accent-soft);
+  color: var(--kc-header-accent);
+  text-decoration: none;
+}
+
+.kc-account-nav--drawer .kc-account-nav__signout {
+  width: 100%;
+  border-color: var(--kc-color-border-strong);
+  color: var(--kc-color-text);
+}
+
+.kc-account-nav--drawer .kc-account-nav__error {
+  position: static;
+  max-width: none;
+  margin-top: 0;
+  padding: var(--kc-space-2) 0 0;
+  background-color: transparent;
+  box-shadow: none;
+}
+
 /* ---- Desktop navigáció ---------------------------------------------------- */
 .kc-nav-desktop {
   display: none;

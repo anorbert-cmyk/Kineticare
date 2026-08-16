@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 
 import type { NavItem } from '../../lib/menu-tree'
+import { AccountNav } from './AccountNav'
 import { NavAnchor } from './NavAnchor'
 
 /**
@@ -28,8 +29,18 @@ import { NavAnchor } from './NavAnchor'
  * - Hivatkozásra kattintva a fókusz NEM tér vissza a hamburgerre: ott az
  *   oldalváltás veszi át, a fókusz-visszaadás elrabolná az új oldal
  *   kezdőpontját.
+ *
+ * A FIÓK-BLOKK A DRAWER ELSŐ ELEME (AccountNav). Mobilon a fejléc-sávban nincs
+ * hely rá (wordmark + „Kurzusok" pirula + hamburger már kitölti a 320px-es
+ * sávot, lásd a Header kommentjét és a 320px-es reflow-mérést), a mai menü
+ * viszont KIZÁRÓLAG a CMS-menüpontokat sorolta — a belépés így mobilon
+ * sehonnan nem volt elérhető (docs/informacios-architektura.md §4, TOP-10 #2).
+ * A blokk azért az ELSŐ elem, mert a lista elejét olvassák el a legnagyobb
+ * eséllyel (NN/g F-mintázat, `docs/ui-sztenderdek.md` N-3), és mert a
+ * visszatérő vevőnek ez a legfontosabb célja; a CMS-menütől elválasztó
+ * hajszálvonal jelzi, hogy más természetű (segéd-)navigáció.
  */
-export function MobileNav({ items }: { items: NavItem[] }) {
+export function MobileNav({ items, signedIn = false }: { items: NavItem[]; signedIn?: boolean }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const drawerId = useId()
@@ -155,6 +166,7 @@ export function MobileNav({ items }: { items: NavItem[] }) {
             </svg>
           </button>
         </div>
+        <AccountNav onNavigate={close} signedIn={signedIn} variant="drawer" />
         {items.length > 0 ? (
           <ul className="kc-nav-mobile__list">
             {items.map((item) => (
