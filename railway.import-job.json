@@ -5,9 +5,8 @@
     "buildCommand": "echo import-job-nincs-build"
   },
   "deploy": {
-    "startCommand": "sh -c 'echo IMPORT_JOB_START; if [ \"$IMPORT_MODE\" = \"eles\" ]; then MOD=\"\"; else MOD=\"--dry-run\"; fi; echo \"IMPORT_JOB_MOD=${MOD:-eles}\"; npx tsx src/scripts/import-customers.ts $MOD --map \"SOS KézRelax vásárló=SOS Kézrelax villámkurzus\" --map \"Otthoni KézRehab vásárló=Otthoni KézRehab Program\" && echo IMPORT_JOB_OK; echo IMPORT_JOB_DONE; sleep 2147483647'",
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 1,
+    "startCommand": "sh scripts/import-job.sh",
+    "restartPolicyType": "NEVER",
     "numReplicas": 1
   }
 }
