@@ -297,6 +297,7 @@ export type JavitasSzabaly =
   | 'szolgaltatasok-hero-kep'
   | 'szolgaltatasok-bevezeto'
   | 'sos-ingyenes-jelolo'
+  | 'kurzuslista-feliratok'
   | 'aszf-adatvedelem-link'
 
 /** Egy elvégzett módosítás vagy egy indokolt kihagyás gépileg is vizsgálható leírása. */
@@ -1507,6 +1508,126 @@ export const alkalmazAllapotokBevezeto = (input: {
  * Kétes esetben (több CTA-sáv, hiányzó seed-blokk, üres szekciósor) HANGOS
  * kihagyás, írás nélkül.
  */
+/**
+ * A kurzuslistára vivő gombok EGYSÉGES felirata az élő szekciósorban.
+ *
+ * ═══ A MÉRT HIBA ═══
+ * Az élő kezdőlapon (GET, 2026-08-16, a #87 deploy után) HÁROM különböző
+ * felirat vitt ugyanarra a `/kurzusok` címre: „Kurzusok megtekintése" (hero),
+ * „Nézd meg a kurzusokat" (szolgáltatás-sor) és „Megnézem a kurzusokat" (záró
+ * sáv). A #87 a seed-buildert és a kódba égetett feliratokat javította, de az
+ * élő lap szekciósora az ADATBÁZISBÓL jön, és a seed sosem ír felül meglévő
+ * tartalmat — a felület tehát a javítás után is három nevet ad egy
+ * cselekvésnek (WCAG 2.2 · 3.2.4 Consistent Identification).
+ *
+ * ═══ MIT CSERÉL, ÉS MIT NEM ═══
+ * KIZÁRÓLAG olyan hivatkozás feliratát írja át, amelynek a címe pontosan
+ * `/kurzusok`, ÉS a felirata BETŰRE egyezik az ismert régi változatok
+ * egyikével. Bármi más — a szerkesztő saját szövege, más cím, más cselekvés —
+ * érintetlen marad. A már jóváhagyott feliratot csendben kihagyja
+ * (idempotencia), tehát a script kétszer futtatva sem ír.
+ *
+ * A fejléc „Kurzusok" gombja NEM ezen az úton él (nem a szekciósor része),
+ * ezért nem érinti; az a navigáció rövid címkéje, nem szekció-CTA.
+ */
+export const KURZUSLISTA_JOVAHAGYOTT_FELIRAT = 'Nézd meg a kurzusokat'
+
+/** A cserélendő, korábban élő feliratok — betűre egyező illesztéshez. */
+export const KURZUSLISTA_REGI_FELIRATOK = [
+  'Kurzusok megtekintése',
+  'Megnézem a kurzusokat',
+  'Összes kurzus megtekintése',
+  'Megnézem a programot',
+  'Tovább a programra',
+] as const
+
+/** A `/kurzusok` cím, amelyre a csere korlátozódik. */
+const KURZUSLISTA_URL = '/kurzusok'
+
+/**
+ * Egy tetszőleges mélységű szekciósorban minden `{ felirat, url }` alakú
+ * objektumot bejár, és a `/kurzusok`-ra mutató, ismert régi feliratút
+ * lecseréli. A bejárás azért általános, mert a CTA-k blokktípusonként más
+ * mezőben ülnek (hero `ctas` tömb, services `rows`, ctaBanner `cta`).
+ */
+export const alkalmazKurzuslistaFeliratok = (layout: Page['layout']): SzekciosorCsere => {
+  const uzenet = 'A kurzuslistára vivő gombok felirata'
+  const regi = new Set<string>(KURZUSLISTA_REGI_FELIRATOK)
+  const cserek: string[] = []
+  let mariJoVolt = 0
+
+  const bejar = (ertek: unknown): unknown => {
+    if (Array.isArray(ertek)) {
+      return ertek.map(bejar)
+    }
+    if (typeof ertek !== 'object' || ertek === null) {
+      return ertek
+    }
+    const rekord = ertek as Record<string, unknown>
+    if (rekord.url === KURZUSLISTA_URL && typeof rekord.felirat === 'string') {
+      if (rekord.felirat === KURZUSLISTA_JOVAHAGYOTT_FELIRAT) {
+        mariJoVolt += 1
+        return ertek
+      }
+      if (regi.has(rekord.felirat)) {
+        cserek.push(rekord.felirat)
+        return { ...rekord, felirat: KURZUSLISTA_JOVAHAGYOTT_FELIRAT }
+      }
+    }
+    const uj: Record<string, unknown> = {}
+    for (const [kulcs, ertekBelso] of Object.entries(rekord)) {
+      uj[kulcs] = bejar(ertekBelso)
+    }
+    return uj
+  }
+
+  if (!Array.isArray(layout) || layout.length === 0) {
+    return {
+      layout: null,
+      modositasok: [],
+      kihagyasok: [
+        {
+          szabaly: 'kurzuslista-feliratok',
+          uzenet,
+          indok: 'a kezdőlapnak nincs szekciósora — nincs mit egységesíteni',
+          hangos: true,
+        },
+      ],
+    }
+  }
+
+  const ujLayout = bejar(layout) as NonNullable<Page['layout']>
+
+  if (cserek.length === 0) {
+    return {
+      layout: null,
+      modositasok: [],
+      kihagyasok: [
+        {
+          szabaly: 'kurzuslista-feliratok',
+          uzenet,
+          indok:
+            mariJoVolt > 0
+              ? `mind a ${mariJoVolt} kurzuslista-gomb MÁR a jóváhagyott feliratot viseli — nincs teendő`
+              : 'nincs ismert régi feliratú kurzuslista-gomb; a szerkesztő saját szövegeit a script sosem írja át',
+        },
+      ],
+    }
+  }
+
+  return {
+    layout: ujLayout,
+    modositasok: [
+      {
+        szabaly: 'kurzuslista-feliratok',
+        uzenet: `${uzenet}: ${cserek.length} gomb egységesítve „${KURZUSLISTA_JOVAHAGYOTT_FELIRAT}"-ra (cserélt feliratok: ${cserek.map((f) => `„${f}"`).join(', ')}). Ugyanaz a cselekvés mostantól ugyanazzal a szóval jelenik meg.`,
+        indok: null,
+      },
+    ],
+    kihagyasok: [],
+  }
+}
+
 export const alkalmazZaroCta = (input: {
   layout: Page['layout']
   /** A seed-builder záró CTA-sávja, vagy `null`, ha a builder alakja elcsúszott. */
@@ -1897,6 +2018,10 @@ async function futtat(): Promise<void> {
     )
     // --- 11. javítás: a záró CTA-sáv -----------------------------------------
     kezdolapLepes(alkalmazZaroCta({ layout: kezdolapLayout, seedBlokk: zaroCtaSeedBlokk() }))
+    // --- 15. javítás: a kurzuslista-gombok egységes felirata -----------------
+    // A LÁNC VÉGÉN fut, hogy a 11. javítás által ÚJONNAN beszúrt záró CTA-sáv
+    // feliratát is elérje — a beszúrás után az is a szekciósor része.
+    kezdolapLepes(alkalmazKurzuslistaFeliratok(kezdolapLayout))
 
     if (kezdolapValtozott && !dryRun) {
       await payload.update({
