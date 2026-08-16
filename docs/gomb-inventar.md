@@ -302,7 +302,7 @@ Ezek a `ui-sztenderdek.md` §6.3 **G-UI1** őrének kiegészítései, nem helyet
 | --- | --- | --- | --- | --- |
 | `/belepes` | Belépés / Belépés… | P | `disabled`, `role="alert"` | rendben (§3.2 #5) |
 | `/belepes` | Regisztrálj · Elfelejtetted a jelszavad? | L | - | rendben |
-| `/regisztracio` | Regisztráció / Regisztráció… | P | `disabled` | §3.2 #6: főnév helyett `Fiók létrehozása` |
+| `/regisztracio` | Regisztráció / Regisztráció… | P | `disabled` | rendben (§3.2 #6 és L-1: az Ü5-döntés P-1c kivétele a bevett egyszavas címkére) |
 | `/regisztracio` | Számlázási adatok (opcionális — a checkout előtölti) | `<summary>` | natív | **Z2** |
 | `/elfelejtett-jelszo` | Visszaállító link küldése / Küldés… | P | **alapból letiltva** | **K3** |
 | `/elfelejtett-jelszo` siker | *(nincs továbblépés)* | - | `role="status"` | **K4** |
@@ -337,39 +337,59 @@ Ezek a `ui-sztenderdek.md` §6.3 **G-UI1** őrének kiegészítései, nem helyet
 
 **A szótár a `docs/ui-sztenderdek.md` §3.2.** Az alábbi táblázat a **mért** feliratokat képezi le rá. A „§3.2 #" oszlop a jóváhagyott sor száma.
 
+> **Frissítve 2026-08-16-án, az Ü5-döntés után.** A vezető eldöntötte a nyelvtani személyt (`ui-sztenderdek.md` 1.4/Ü5 és 3.1.5/P-1; normatív forrás: `.claude/skills/termektervezes/SKILL.md` 2. pont): a látogató **saját, elkötelező** cselekvését kimondó gomb **E/1**, a puszta **navigáció E/2**, a bevett egyszavas címke **főnévi**, a folyamatban-felirat **semleges**. A §3.2 táblázat ezzel átíródott, és négy új sorral bővült (**#19–#22**) – pontosan azokkal, amiket az 5.1 hiányként talált. **A „Jóváhagyott" oszlop innentől bitre egyezik** a §3.2 táblázatával ÉS a `src/lib/cta-vocabulary.ts` modullal; az egyezést a **G-UI1** őr méri (`src/__tests__/cta-vocabulary-guard.test.ts`), nem emberi figyelem.
+>
+> **Ez a doksi továbbra sem szótár.** Amit itt látsz, az a MÉRT állapot leképezése a jóváhagyott feliratokra. Új feliratot csak a §3.2 vehet fel.
+
 | Cselekvés | Hány feliratot mértem | A mért feliratok | §3.2 # | Jóváhagyott |
 | --- | --- | --- | --- | --- |
 | Kurzuslistára | **8** | Kurzusok · Kurzusok megtekintése · Megnézem a kurzusokat · Összes kurzus megtekintése · Nézd meg a kurzusainkat · Nézd meg a kurzusokat · Válassz kurzust · Kurzusok megnézése (+ „Tovább a programra", „Megnézem a programot") | **#10** | `Nézd meg a kurzusokat` |
-| Fizetős vásárlás indítása | 1 | Megveszem | **#1** | `Vedd meg a kurzust` |
-| Ingyenes kurzus indítása | 2 | Ingyenes — azonnal eléred · Elindítom az ingyenes kurzust | **#3, #4** | `Indítsd el ingyen` |
-| Fizetés befejezése | 2 | Megrendelés és fizetés · Hozzáférés megnyitása | **#2** | `Megrendelem és fizetek` / `Fizetés Barionnal` |
-| Saját kurzusokhoz | **4** | Kurzusaim · Tovább a kurzusaimhoz · Nézd meg a kurzusaimat · Vissza a kurzusaimhoz | **#9** | `Ugorj a kurzusaidhoz` |
+| Fizetős vásárlás indítása | 1 | Megveszem | **#1** | `Megveszem a kurzust` |
+| Ingyenes kurzus indítása | 2 | Ingyenes — azonnal eléred · Elindítom az ingyenes kurzust | **#3, #4** | `Elindítom ingyen` |
+| Fizetés befejezése | 2 | Megrendelés és fizetés · Hozzáférés megnyitása | **#2** | `Megrendelem és fizetek` |
+| Saját kurzusokhoz | **4** | Kurzusaim · Tovább a kurzusaimhoz · Nézd meg a kurzusaimat · Vissza a kurzusaimhoz | **#9** | `Nyisd meg a kurzusaidat` |
 | Kurzus folytatása | 1 | Folytatás: *lecke* | **#7** | `Folytasd a kurzust` |
 | Kurzus megkezdése | 1 | Kezdés | **#8** | `Kezdd el a kurzust` |
 | Belépés | 2 | Belépés · Belépés (ha van fiókod) | **#5** | `Belépés` |
-| Fiók létrehozása | 1 | Regisztráció | **#6** | `Fiók létrehozása` |
-| Kapcsolatfelvétel | 1 | Üzenet küldése | **#12** | `Küldd el az üzenetet` |
-| Hírlevél | 1 | Feliratkozom | **#13** | `Iratkozz fel` |
-| Letöltés | 1 | Számla letöltése | **#14** | `Töltsd le a számlát` |
-| Vissza-navigáció | 2 | Vissza a kurzusokhoz · Vissza a kezdőlapra | **#15** | célmegnevezéssel (mindkettő megfelel) |
-| Újrapróbálás | **3** | Újrapróbálom · Újrapróbálom a fizetést · Próbáld újra | **#17** | `Próbáld újra` |
-| Süti-döntés | 2 | Elfogadom · Elutasítom | **#18** | `Fogadd el mindet` / `Csak a szükségeseket` |
-| Archivált termék | 1 | Megveszem (letiltva) | **#16** | *(nincs gomb)* + magyarázó mondat |
+| Fiók létrehozása | 1 | Regisztráció | **#6** | `Regisztráció` |
+| Kapcsolatfelvétel | 1 | Üzenet küldése | **#12** | `Elküldöm az üzenetet` |
+| Hírlevél | 1 | Feliratkozom | **#13** | `Feliratkozom` |
+| Letöltés | 1 | Számla letöltése | **#14** | `Letöltöm a számlát` |
+| Vissza-navigáció | 2 | Vissza a kurzusokhoz · Vissza a kezdőlapra | **#15** | `Vissza a kurzusokhoz` |
+| Újrapróbálás | **3** | Újrapróbálom · Újrapróbálom a fizetést · Próbáld újra | **#17** | `Újrapróbálom` |
+| Süti-döntés | 2 | Elfogadom · Elutasítom | **#18** | `Elfogadom mindet` / `Csak a szükségeseket` |
+| Archivált termék | 1 | Megveszem (letiltva) | **#16** | `Ez a kurzus jelenleg nem vásárolható meg.` *(gomb nélkül)* |
 | Kártya-CTA | 1 | Megnézem a programot (dekoratív) | **#11** | *(nincs gomb)* |
-| Folyamatban | **6** | Feldolgozás… · Küldés… · Mentés… · Belépés… · Regisztráció… · Beállítás… | **L-1** | `Belépés…` `Feldolgozás…` `Küldés…` `Mentés…` `Betöltés…` |
+| **Tétel kivétele a kosárból** | 1 | Törlés | **#19** | `Kiveszem a kosárból` |
+| **Kosárból a pénztárba** | 1 | Tovább a penztárhoz | **#20** | `Menj a pénztárhoz` |
+| **Visszaállító link kérése** | 1 | Visszaállító link küldése | **#21** | `Kérem a visszaállító linket` |
+| **Új jelszó beállítása** | 1 | Jelszó beállítása | **#22** | `Beállítom az új jelszót` |
+| Folyamatban | **6** | Feldolgozás… · Küldés… · Mentés… · Belépés… · Regisztráció… · Beállítás… | **L-1** | `Belépés…` `Regisztráció…` `Küldés…` `Mentés…` `Feldolgozás…` `Betöltés…` |
 
-### 5.1 Amit a §3.2 még nem fed le (felveendő)
+**Mit mond ez a leképezés összesítve:** 17 mért cselekvésre **41 különböző felirat** él ma; a jóváhagyott szótárban ugyanezekre **21 felirat + 6 folyamatban-alak** van. A legnagyobb nyereség a kurzuslistánál (8 → 1) és a saját kurzusoknál (4 → 1) keletkezik – mindkettő WCAG 2.2 **3.2.4** sérülés ma.
 
-A leltár négy olyan cselekvést talált, amire nincs jóváhagyott sor. **Ezeket a `ui-sztenderdek.md` §3.2 táblázatába kell felvenni**, nem ide:
+**Amit a döntés NEM változtatott meg** (a felirat ma is helyes, kódot nem kell írni): `Belépés`, `Feliratkozom`. **Ami csak a személy miatt maradt E/1-ben, de a szótári alakra pontosítandó:** `Megveszem` → `Megveszem a kurzust`, `Újrapróbálom` (marad, de a másik két alak megszűnik), `Elfogadom` → `Elfogadom mindet`.
 
-| Cselekvés | Hol fordul elő | Javasolt (a §3.1.4 M-szabályok szerint, jóváhagyásra) |
-| --- | --- | --- |
-| **Tétel törlése a kosárból** | `CartView.tsx:88` „Törlés" | `Töröld a kosárból` (ige + tárgy, M-1; a `Törlés` főnév) |
-| **Kosárból a pénztárba lépés** | `CartView.tsx:103` „Tovább a penztárhoz" | `Fizetéshez` helyett ige: `Menj a pénztárhoz` (a „Tovább" tiltott kezdés, M-7) |
-| **Jelszó-visszaállító link kérése** | `ForgotPasswordForm.tsx:74` | `Kérd a visszaállító linket` |
-| **Új jelszó beállítása** | `ResetPasswordForm.tsx:99` „Jelszó beállítása" | `Állítsd be a jelszót` |
+### 5.1 A négy hiányzó cselekvés – FELVÉVE a §3.2-be (2026-08-16)
 
-Emellett a `Beállítás…` folyamatban-felirat sincs az L-1 listán; vagy oda kerül, vagy `Mentés…`-re egységesül.
+A leltár négy olyan cselekvést talált, amire nem volt jóváhagyott sor. **A vezető jóváhagyta, és mind a négy bekerült a `ui-sztenderdek.md` §3.2 táblázatába** (#19–#22). Az alábbi táblázat a javaslat → jóváhagyott felirat útját dokumentálja; a normatív alak a §3.2-ben és a `src/lib/cta-vocabulary.ts`-ben él.
+
+| Cselekvés | Hol fordul elő | Az eredeti javaslatom | **Jóváhagyva (§3.2)** | Miért tér el a javaslattól |
+| --- | --- | --- | --- | --- |
+| **Tétel kivétele a kosárból** | `CartView.tsx:88` „Törlés" | `Töröld a kosárból` | **#19** `Kiveszem a kosárból` | Két ok. (a) **Személy:** a kosár a látogató dolga, tehát P-1a → E/1. (b) **Szóválasztás:** a Carbon kimondja, hogy a *remove* ≠ *delete* – *„Deletion is the most common type of removal and is destructive"* –, és a helyreállítható műveletre a *remove* alakot írja elő. A kosárból kivett tétel **nem semmisül meg**, bármikor visszatehető. |
+| **Kosárból a pénztárba lépés** | `CartView.tsx:103` „Tovább a penztárhoz" | `Menj a pénztárhoz` | **#20** `Menj a pénztárhoz` | Változatlanul jóváhagyva. P-1b: itt még semmi nem történik, csak odaérünk (a vállalás a #2 gombnál van). Egyúttal javítja a mai **elgépelést** („penztárhoz"). |
+| **Jelszó-visszaállító link kérése** | `ForgotPasswordForm.tsx:74` | `Kérd a visszaállító linket` | **#21** `Kérem a visszaállító linket` | Csak a személy változott (P-1a: e-mail indul a látogatónak). A régi `kineticare.hu` ugyanezt a szerkezetet használta: `KÉREM A PROGRAMOT`, `KÉREM A HOZZÁFÉRÉST`, `KÉREM AZ ÉRTESÍTÉST` – mérve, `docs/regi-oldal-osszehasonlitas.md` 3.1. **Nem tévesztendő** a §2.7-ben tiltott udvariaskodó „Kérjük"-kel: ez E/1-es ige. |
+| **Új jelszó beállítása** | `ResetPasswordForm.tsx:99` „Jelszó beállítása" | `Állítsd be a jelszót` | **#22** `Beállítom az új jelszót` | Csak a személy változott (P-1a: a fiók megváltozik). Az „új" szó azért kell, mert a látogató két jelszót lát a fejében (a régit és az újat) – NN/g „Specific". |
+
+#### A `Beállítás…` folyamatban-felirat sorsa: `Mentés…`-re egységesül
+
+**Döntés: NEM kerül az L-1 listára.** A `/jelszo-visszaallitas` űrlap mai `Beállítás…` felirata a `Mentés…`-re változik. Három indok, ebben a sorrendben:
+
+1. **Szinonima.** A „beállítás" és a „mentés" itt **ugyanazt a műveletet** nevezi meg: a látogató bevitt adata tartósan eltárolódik. A Shopify Polaris *Vocabulary* fejezete kifejezetten előírja a szinonimák azonosítását és felszámolását (*„identify and eliminate synonyms"*) – [polaris.shopify.com/content/vocabulary](https://polaris.shopify.com/content/vocabulary).
+2. **Konzisztencia, mérhetően.** A `/fiok` mentés-gombja már ma is `Mentés…`-t ír. A két űrlap így ugyanazt a szót használja ugyanarra a műveletre – WCAG 2.2 **3.2.4 Consistent Identification**.
+3. **A lista zárva marad.** A `Regisztráció…` viszont **felkerült** az L-1-re: ma is él a felületen, és a §3.2 #6 főnévi címkéjének (P-1c) szabályos folyamatban-párja. Az L-1 így pontosan **hat** elem, és a G-UI1 őr ezt a hatot méri.
+
+**Miért nem személyragozzuk a folyamatban-feliratot** (tehát miért nem `Mentem…`): ez **rendszerállapot-üzenet**, nem a látogató cselekvése – NN/g 1. heurisztika (*visibility of system status*), WCAG 2.2 **4.1.3 Status Messages**. A §3.2 P-1d sora rögzíti.
 
 ---
 
@@ -397,7 +417,7 @@ A `ui-szt.` A/2 repó-szintű számot ad (4688 db U+2014). Az alábbi lista ehhe
 
 | Fájl:sor | Mai szöveg | Javasolt |
 | --- | --- | --- |
-| `lib/courses.ts:69,119` | `Ingyenes — azonnal eléred` | a §3.2 **#3** jóváhagyott felirata (`Indítsd el ingyen`); az „azonnal eléred" ígéret a gomb alatti segédszövegbe |
+| `lib/courses.ts:69,119` | `Ingyenes — azonnal eléred` | a §3.2 **#3** jóváhagyott felirata (`Elindítom ingyen`); az „azonnal eléred" ígéret a gomb alatti segédszövegbe |
 | `content/home/FreeSos.tsx:65` | `SOS Kézrelax — ingyenes villámkurzus` | `SOS Kézrelax: ingyenes villámkurzus` |
 | `auth/RegisterForm.tsx:90` | `Számlázási adatok (opcionális — a checkout előtölti)` | `Számlázási adatok (nem kötelező, a pénztár kitölti helyetted)` |
 | `layout/Header.tsx:38` | `aria-label="Kineticare — kezdőlap"` | `aria-label="Kineticare kezdőlap"` |
@@ -479,7 +499,7 @@ A `ui-szt.` §2.3 5. sora „csökkent kontraszt + magyarázó szöveg" párost 
 
 1. **B1, B2, B3, K10** egyetlen patchben (3.5) a tesztekkel (3.6). Legnagyobb üzleti hatás, legkisebb felület, nem érint tilos zónát.
 2. **B7** a seedben és az élő DB-ben.
-3. A `ui-sztenderdek.md` §3.2 kiegészítése a 5.1 hiányzó soraival, majd a **G-UI1** szótár-őr megírása.
+3. ~~A `ui-sztenderdek.md` §3.2 kiegészítése a 5.1 hiányzó soraival, majd a **G-UI1** szótár-őr megírása.~~ **KÉSZ (2026-08-16):** a §3.2 a #19–#22 sorokkal bővült, a szótár a `src/lib/cta-vocabulary.ts`-ben él, a **G-UI1** őr (`src/__tests__/cta-vocabulary-guard.test.ts`) méri a mikroszöveg-szabályokat és a doksi↔kód egyezést. **Ami ebből még hátravan: a hívóhelyek átírása** (`resolveCourseCta`, `CourseCta`, `MobileBuyBar`, `CartView`, `penztar/page.tsx`, `ThankYouView`, `ForgotPasswordForm`, `ResetPasswordForm`, `NewsletterForm`, `ContactForm`, `FreeSos`, `HeroCta`, `CourseCards`, `home-seed.ts`) – külön kör, mert a felület-átírás mérést (6.5 előmérés) és kognitív sétát is igényel.
 4. **A/2 + 7. fejezet**: gondolatjel-irtás kódban, majd a **G-UI2** őr.
 5. **K1, K2, T3, T4, T5**: a `Button` szerződésének rendbetétele.
 6. **K3, K4, K9, Á1-Á10**: állapotok és zsákutcák.
@@ -491,9 +511,9 @@ A B4, B5, B6 az `informacios-architektura.md` 8. fejezetének javítási terve s
 
 ## 11. Nyitott kérdések a vezetőnek
 
-1. **Doksi-tulajdon.** A `termektervezes` skill 2. pontja szerint a CTA-szótár ebben a fájlban él („nézd meg a `docs/gomb-inventar.md` CTA-szótárát"), a `ui-sztenderdek.md` §3.2 viszont saját magát nevezi meg egyetlen szótárként. **Én a `ui-sztenderdek.md` §3.2-t vettem normatívnak**, és ezt a fájlt leképezésre szűkítettem. Kérem megerősíteni, és a skill szövegét ehhez igazítani.
+1. ~~**Doksi-tulajdon.**~~ **MEGVÁLASZOLVA (2026-08-16).** A skill 2. pontja azóta kimondja: *„A CTA-szótár EGYETLEN normatív helye a `docs/ui-sztenderdek.md` §3.2… A `docs/gomb-inventar.md` ehhez képest **leltár**."* A munkamegosztás tehát megerősítve, ez a fájl leképezés marad.
 2. **A `'none'` badge sorsa.** A 3.5 patch megszünteti a „konfigurációs hiba" állapotot: a beállított de üres árú termék ezután INGYENES-ként jelenik meg. Ez az Ü4-gyel egyezik, de tudatos viselkedésváltás. Alternatíva: a `'none'` marad, de a CTA `unavailable` lesz. **Döntést kérek.**
-3. **E/1 vs E/2 megszólítás.** A `ui-szt.` A/5 és a §3.1.4 nyitva hagyja. A leltár megerősíti, hogy ma vegyes. A leképezésem (5. fejezet) a §3.2 E/2-es feliratait veszi át; ha a vezető E/1 mellett dönt, a §3.2 táblázatot kell átírni, nem ezt.
+3. ~~**E/1 vs E/2 megszólítás.**~~ **ELDÖNTVE (2026-08-16).** A vezető a **P-1** szabályt hagyta jóvá (`ui-szt.` 1.4/Ü5, 3.1.5): elkötelező cselekvés **E/1**, puszta navigáció **E/2**, bevett egyszavas címke **főnévi**, folyamatban-felirat **semleges**. Az 5. fejezet leképezése ehhez igazítva. **A mérésem, ami a döntés alapja lett:** a régi `kineticare.hu` 100 %-ban E/1 volt (`docs/regi-oldal-osszehasonlitas.md` 3.4), és a mai felület is az – a váltás tehát nem a személyt, hanem a **szinonimákat** és a **deverbális főnévi alakokat** számolja fel.
 4. **A hibát okozó adat pontos állapota.** A nyilvános HTML-ből nem dönthető el, hogy az SOS-terméken `priceInHUFEnabled` értéke `true` vagy `null` (3.3). A javítás mindkettőt kezeli, de ha a tulajdonos szeretné tudni, egy `payload find` lekérdezés a `products`-on megadja.
 
 ---
@@ -514,5 +534,9 @@ A külső források teljes, forrásolt jegyzékét a `ui-sztenderdek.md` 7. szak
 - [NN/g: A Link is a Promise](https://www.nngroup.com/articles/link-promise/) (B1, T2)
 - [NN/g: Beyond Blue Links](https://www.nngroup.com/articles/clickable-elements/) (T1, T4)
 - [Baymard: Cart & Checkout Usability](https://baymard.com/research/checkout-usability) (4.4)
+- [IBM Carbon: Remove pattern (remove ≠ delete)](https://v10.carbondesignsystem.com/community/patterns/remove-pattern/) – *„Removing is an action that moves information from one location to another… Deletion is the most common type of removal and is destructive."* (5.1/#19: miért „Kiveszem a kosárból", nem „Törlés")
+- [Shopify Polaris: Vocabulary](https://polaris.shopify.com/content/vocabulary) – *„identify and eliminate synonyms"* (5.1: miért egységesül a `Beállítás…` a `Mentés…`-re)
+- [GOV.UK Design System: Button – writing button text](https://design-system.service.gov.uk/components/button/) – a fizetésre „Pay", a záró lépésre „Confirm and send"; *„Disabled buttons have poor contrast and can confuse some users, so avoid them if possible."* (5. fejezet #2, #16, #20)
+- [NN/g: Jakob's Law of Internet User Experience](https://www.nngroup.com/videos/jakobs-law-internet-ux/) (5. fejezet: a régi oldal 100 %-os E/1 mintája mint megszokás-bizonyíték)
 
 **Mérési reprodukció:** `curl` GET a `https://kineticare-production.up.railway.app` 11 útvonalára, majd `<a>`/`<button>` kivonatolás script- és svg-mentesített HTML-ből; a kontraszt-számítás sRGB relatív luminanciával a `styles/tokens.css` hex-értékeiből. A `npm run typecheck` a K1 igazolásához futott (exit 0).

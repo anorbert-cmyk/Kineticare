@@ -1,8 +1,14 @@
 # UI-sztenderdek – a Kineticare kötelező felületi szabályrendszere
 
-**Verzió:** 1.0 · **Kiadva:** 2026-08-16 · **Státusz:** kötelező projekt-sztenderd
+**Verzió:** 1.1 · **Kiadva:** 2026-08-16 · **Státusz:** kötelező projekt-sztenderd
 **Minden forrás online ellenőrizve:** 2026-08-16 (a hozzáférés dátuma a
 7. Forrásjegyzékben tételenként is szerepel).
+
+> **Változásnapló – 1.1 (2026-08-16).** A vezető eldöntötte az Ü5 nyitott
+> kérdést (CTA-nyelvtan). A §3.2 szótár átírva a döntés szerint, négy új sorral
+> bővült (#19–#22), és a döntés óta **kódba is önthető**:
+> `src/lib/cta-vocabulary.ts` + a G-UI1 őr-teszt. Érintett szakaszok: 1.4/Ü5,
+> 3.1.4 (M-2, P-1), 3.2, 6.5, 7.5, 7.6 (új), A/5.
 
 > **Mi ez?** Verziózott, hivatkozott sztenderd a gombokra, a CTA-szövegekre, a
 > navigációra és a magyar mikroszövegre. Ez a dokumentum **nem vélemény**: minden
@@ -28,7 +34,7 @@ belőle egy oldalon, és hogyan hangzik magyarul. A meglévő két UX-doksi föl
 | `docs/ertekesitesi-ux-skill.md` | üzleti cél-hierarchia (M1–M8), sticky-nav, tipográfiai skála | **Fölérendelt** üzleti szinten. Ütközésnél az ott rögzített cél-sorrend nyer, kivéve a 1.4-ben feloldott pontokat. |
 | `docs/ux-hierarchia-audit.md` | a kezdőlap K1–K8 hibái | Diagnózis; ez a doksi ad rá gyógyszert gomb- és szöveg-szinten. |
 | `docs/ux-belso-oldalak-kutatas.md` | belső oldalak elrendezése (B1–B8) | **Testvér-dokumentum.** A B-szabályok elrendezésről szólnak, ez a doksi elemekről és szövegről. Ütközések feloldva: 1.4. |
-| `docs/gomb-inventar.md` | a MAI állapot gomb- és CTA-leltára, hibalista, fájl:sor szintű cserejavaslatok | **Testvér-dokumentum, munkamegosztással:** *ez* a doksi mondja meg, mi a **szabály**; a `gomb-inventar.md` mondja meg, **hol sérül ma** és mit kell átírni. A per-fájl patch-listát ne duplikáld ide. Ütközés: 1.4/Ü5. |
+| `docs/gomb-inventar.md` | a MAI állapot gomb- és CTA-leltára, hibalista, fájl:sor szintű cserejavaslatok | **Testvér-dokumentum, munkamegosztással:** *ez* a doksi mondja meg, mi a **szabály**; a `gomb-inventar.md` mondja meg, **hol sérül ma** és mit kell átírni. A per-fájl patch-listát ne duplikáld ide. A korábbi szótár-ütközés **feloldva**: 1.4/Ü5 (2026-08-16); a `gomb-inventar.md` §5 azóta leképezés, nem szótár. |
 | `docs/informacios-architektura.md` | útvonal-leltár, navigációs gráf, zsákutcák, IA-hibalista | **Testvér-dokumentum.** A 4. szakasz elveit *arra* a térképre kell alkalmazni; új útvonal vagy menüpont előtt az IA-térkép a kiindulás. |
 | `docs/seo-geo-llm.md` | SEO/GEO technikai és tartalmi réteg | Kiegészítő. A CTA- és címke-szövegek a látható tartalom részei, tehát a JSON-LD mezőinek forrásai is (lásd `seo-geo-llm.md` „minden mező a látható tartalomból jön"). |
 | `.claude/skills/termektervezes` | a tulajdonos kötelező munkamenete felületi munkához | **Fölérendelt.** Ez a doksi a skill 1–7. pontjának végrehajtható kifejtése. |
@@ -83,38 +89,62 @@ csak 24×24 CSS px-et. Ez **nem ellentmondás**: a 44 px szigorúbb, és a WCAG
 2.5.5 (AAA) szintje. **Marad a 44 px** minden gombra; a 24 px csak a soron
 belüli (inline) hivatkozásokra és az apró segédvezérlőkre a mentesség (2.4).
 
-**Ü5 – ⚠️ BLOKKOLÓ: E/1 vagy E/2 a CTA-kban? (vezetői döntés kell)**
-Két, egy napon született projekt-dokumentum **ellentétes** CTA-szótárt javasol:
+**Ü5 – ✅ ELDÖNTVE (2026-08-16): vegyes nyelvtan, kimondott szabály szerint.**
 
-| | `docs/gomb-inventar.md` §5.3 | **ez a doksi** §3.2 |
-|---|---|---|
-| Személy | **E/1** („a vevő mondja") | **E/2** (tegező megszólítás) |
-| Vásárlás | `Megveszem` (marad) | `Vedd meg a kurzust` |
-| Ingyenes | `Indítom a kurzust` | `Indítsd el ingyen` |
-| Belépés | `Belépek` | `Belépés` |
-| Regisztráció | `Létrehozom a fiókom` | `Fiók létrehozása` |
-| Folyamatban | `Küldöm…`, `Mentem…` | `Küldés…`, `Mentés…` |
+**Ez a pont 2026-08-16-ig nyitott volt** (két projekt-doksi ellentétes szótárt
+javasolt: E/1 „Megveszem" ↔ E/2 „Vedd meg a kurzust"). **A vezető döntött**, és
+a döntés **normatív forrása a `.claude/skills/termektervezes/SKILL.md` 2.
+pontja**; ez a szakasz csak rögzíti és a szótárra alkalmazza.
 
-**Mindkettő védhető, de csak az EGYIK valósítható meg** – a vegyes használat
-maga a hiba (WCAG 3.2.4). A tények:
+**A döntés szó szerint (SKILL.md 2. pont):**
 
-- A **`termektervezes` skill 2. pontja** (tulajdonosi mandátum) kimondja:
-  *„A CTA cselekvést ír le, nem ígéretet: ige + tárgy, **egyes szám második
-  személy**."* → formálisan **E/2 a projekt szabálya**.
-- A **`gomb-inventar.md`** amellett érvel, hogy az E/1 illik a repó meglévő
-  hangjához (`Megveszem`, `Feliratkozom`, `Újrapróbálom`), és hivatkozik rá,
-  hogy a felület máshol is tegez.
-- **Külső bizonyíték:** az E/1 mellett egyetlen, 2013-as, angol nyelvű
-  A/B-teszt szól (ContentVerve/Unbounce: +90 %), replikáció nélkül; a
-  design-rendszerek (Carbon, Polaris, Atlassian, GOV.UK) **kivétel nélkül**
-  felszólító/parancs alakot írnak elő; az NN/g nem foglal állást.
+> A felhasználó SAJÁT cselekvését kimondó gombok **egyes szám első személyben**
+> állnak („Megveszem a kurzust", „Elindítom ingyen", „Feliratkozom"); a
+> navigáció, az útmutató szöveg és a magyarázatok **egyes szám második
+> személyben** tegeznek. Kivétel: a bevett, egyszavas felületi címkék
+> („Belépés", „Regisztráció") maradhatnak főnévi alakban.
 
-**Az én álláspontom:** a skill mandátuma és a négy design-rendszer egybehangzása
-alapján **E/2**, ezért ez a doksi E/2-ben írja a §3.2 szótárt. **De ez a vezető
-döntése**, nem az enyém – és amíg nem dőlt el, **a `src/lib/cta-vocabulary.ts`
-(a `gomb-inventar.md` §5.4 javaslata) nem írható meg**, mert utána az egész
-felületet újra kellene írni. **A döntés után a két doksi szótárának bitre
-egyeznie kell.**
+**Az indoklás (szintén a SKILL.md 2. pontjából, mérésre alapozva):**
+
+1. **Megszokás, mérve.** A régi `www.kineticare.hu` – amit a meglévő ~274 vevő
+   használ – **100 %-ban E/1-es gombfeliratokat** használt: `KÉREM A PROGRAMOT`,
+   `KÉREM A VILLÁMKURZUST`, `KÉREM A HOZZÁFÉRÉST`, `KÉREM AZ ÉRTESÍTÉST`,
+   `MEGRENDELEM`, `MEGNÉZEM`, `ELKÜLDÖM`. **Egyetlen felszólító alakú
+   gombfelirat sem volt a teljes régi oldalon** (mérés:
+   `docs/regi-oldal-osszehasonlitas.md` 3.1 és 3.4). A mai új felület is E/1-es.
+   Jakob törvénye (NN/g) szerint a visszatérő vevő azt a mintát várja, amit már
+   ismer – itt tehát a megtartás a bizonyítékkal alátámasztott irány.
+2. **Az angol design-rendszerek érve nem ültethető át egy az egyben.** A GOV.UK,
+   a Carbon, a Polaris és az Atlassian azért ír felszólító alakot, mert az
+   angolban **nincs E/1-es gombidióma** (*„I buy the course"* nem gombfelirat).
+   Az elvük – „a gomb mondja meg, mi történik, ha rákattintasz" – E/1-ben
+   **ugyanúgy teljesül**: a „Megveszem a kurzust" pontosan olyan konkrét, mint a
+   „Vedd meg a kurzust". A szabály mechanikus átvétele fordítás-ízű hangot adna,
+   amit a tulajdonos kifejezetten tiltott.
+3. **Kutatási tény ebben nincs** – sem E/1, sem E/2 mellett nincs magyar nyelvű,
+   replikált mérés (lásd 7.5). Ezért ez **vezetői döntés**, és így is van
+   jelölve; a doksi nem álcázza kutatási eredménynek.
+
+**Amit a döntés NEM old fel** (ezek a személytől függetlenül hibák, és a §3.2
+mindet érvényesíti):
+
+- **egy cselekvés = egy felirat** az egész oldalon (WCAG 3.2.4) – ma a „menj a
+  kurzuslistára" cselekvésre **nyolc**, a „saját kurzusaidhoz"-ra **négy**
+  felirat él (`gomb-inventar.md` §5);
+- **a felirat legyen igaz** – ingyenes terméken a „Megveszem" hazugság (A/1);
+- **töltelék gondolatjel tilos** – az „Ingyenes — azonnal eléred" ezért is hibás
+  (3.1.2);
+- **a puszta „Tovább…" nem CTA** – nem mondja meg, mi történik (M-7);
+- **a főnévi (deverbális) alak gyengébb az igei alaknál** – „Üzenet küldése",
+  „Jelszó beállítása" helyett ige (M-1); a *kivétel* csak a bevett, egyszavas
+  címke („Belépés", „Regisztráció"), nem a `-ás/-és` képzős szerkezet;
+- **archivált/nem elérhető terméknél nincs letiltott gomb**, hanem magyarázó
+  mondat (§3.2 #16, Á-3).
+
+**Következmény:** a szótár innentől **kódba önthető** – a §3.2 egyetlen
+igazságforrása a `src/lib/cta-vocabulary.ts` modul, amit a **G-UI1** őr véd
+(6.3). **A két doksi szótárának bitre egyeznie kell**: a normatív szótár a §3.2,
+a `docs/gomb-inventar.md` §5 ennek a *leképezése* a mért állapotra.
 
 **Ü6 – Sorhossz: 45–85 vagy 50–75 karakter?**
 A `termektervezes` skill 3. pontja **45–85 karaktert** ír elő (magyar szöveggel
@@ -499,81 +529,148 @@ relevánsabb tartalomról. A résztvevő szava:
 
 - **M-1. Ige + tárgy.** A gomb **cselekvést** nevez meg, nem állapotot és nem
   ígéretet. Rossz: „Ingyenes — azonnal eléred" (ez állapot + ígéret).
-  Jó: „Kurzus indítása" / „Indítsd el a kurzust".
-- **M-2. Egyes szám második személy (te-forma), egységesen.** A GOV.UK elve –
-  *„write like you're talking to your user one-on-one"* – magyarul a
-  te-megszólítás. A repó szövegei (`Add meg a neved.`, `Írd meg az üzeneted.`)
-  már ezt a hangot viszik; a **gomboknak is ezt kell**.
+  Jó: „Megveszem a kurzust" / „Elindítom ingyen". A **deverbális főnévi alak**
+  („Üzenet küldése", „Jelszó beállítása") gyengébb: nem cselekvést mond ki,
+  hanem megnevez egy dolgot. Kivétel csak a bevett, egyszavas felületi címke
+  (M-2/P-1 alább).
+- **M-2. Nyelvtani személy: a P-1 szabály szerint** (vezetői döntés,
+  2026-08-16 – lásd 1.4/Ü5). Röviden: a látogató **saját, elkötelező**
+  cselekvését kimondó gomb **E/1**, a puszta **navigáció E/2** (tegező), a
+  bevett egyszavas címke **főnévi**. A magyarázó és útmutató szöveg mindig
+  tegez – a GOV.UK elve (*„write like you're talking to your user
+  one-on-one"*) itt érvényesül; a repó szövegei (`Add meg a neved.`,
+  `Írd meg az üzeneted.`) már ezt a hangot viszik.
 - **M-3. Rövidség: 1–4 szó** (NN/g: 2–4 szó; Carbon: nem tördeljük, nem
-  csonkítjuk).
+  csonkítjuk). Ez **kikényszerített**: a G-UI1 őr minden szótári feliratot
+  megszámol.
 - **M-4. Mondatkezdő nagybetű** (sentence case) – verzál csak CSS-transzformáció
   lehet, a DOM-szöveg soha (a `Header` wordmark mintája).
 - **M-5. Névelő nélkül**, ha attól nem sérül a magyar mondat („Kurzus
   megnyitása", nem „A kurzus megnyitása").
 - **M-6. Márkanév nem kerül gombra** (NN/g), kivéve ahol a fizetési szolgáltató
   megnevezése jogilag/bizalmilag szükséges („Fizetés Barionnal").
-- **M-7. Tilos szavak gombon:** „Küldés" önmagában (Atlassian: *Submit* tilos),
-  „OK", „Kattints ide", „Tovább" önmagában, „Bővebben", „Részletek".
+- **M-7. Tilos a PUSZTA, célt nem nevező felirat:** „Tovább", „Küldés"
+  (Atlassian: *Submit* tilos), „OK", „Mehet", „Kattints ide", „Bővebben",
+  „Részletek" – önmagában, kiegészítés nélkül. **Pontosítás (1.1):** a tilalom
+  a *puszta* alakra vonatkozik, nem a szó puszta előfordulására: a „Tovább"
+  azért tilos, mert nem mondja meg, mi történik (NN/g „Get Started"). Ha a
+  felirat megnevezi a célt vagy a cselekvést, a szó nem tilos önmagában – de a
+  §3.2 szótárban akkor is a **konkrétabb, ige-kezdetű** alak nyer
+  („Menj a pénztárhoz", nem „Tovább a pénztárhoz"), mert a NN/g „Succinct"
+  a másik három S után jön, nem előttük.
 - **M-8. Ígéret helyett cselekvés.** „Azonnal eléred", „Örökre a tiéd",
   „Garantált eredmény" nem gomb-szöveg – ezek állítások, amiket a törzsszöveg
   hordoz, és amiket bizonyítani kell.
 
-> **Nyitott döntés a vezetőnek (E/1 vs. E/2).** A repó ma **E/1-et** használ
-> („Megveszem", „Megnézem a programot", „Feliratkozom", „Elindítom az ingyenes
-> kurzust"). Az E/1 mellett egyetlen, széles körben idézett bizonyíték áll: a
-> ContentVerve/Unbounce A/B-teszt, ahol a *„start my free 30-day trial"* 90 %-kal
-> több kattintást hozott a *„start your…"*-nál, és egy „create account" vs
-> „create **your** account" ismétlés −24,91 %-kal. Ez **egyetlen, 2013-as
-> marketing-teszt**, rendszeres replikáció nélkül; a szakmai design-rendszerek
-> (Carbon, Polaris, Atlassian, GOV.UK) **kivétel nélkül felszólító/parancs
-> alakot** írnak elő, az NN/g pedig nem foglal állást a személyről. **Javaslat:**
-> egységes E/2 (a kiírás szerint), **de a váltást méréssel kell kísérni** (6.4),
-> mert a jelenlegi E/1 mellett is szól bizonyíték. A vegyes használat viszont
-> **minden forrás szerint hiba** (WCAG 3.2.4 + NN/g konzisztencia) – ma pedig
-> vegyes. **→ A/5 megállapítás.**
+#### 3.1.5 P-1 – a nyelvtani személy eldöntött szabálya
+
+**Státusz: ELDÖNTVE, 2026-08-16.** Normatív forrás:
+`.claude/skills/termektervezes/SKILL.md` 2. pont; a döntés indoklása és a
+mérési háttere az 1.4/**Ü5** pontban. Ez a szakasz a szabály **alkalmazható**
+alakja, ami a §3.2 minden sorát megmagyarázza.
+
+| Eset | Személy | Példa | Miért |
+|---|---|---|---|
+| **P-1a.** A látogató **saját, elkötelező** cselekvése: pénzügyi, adat- vagy hozzáférés-következménnyel jár, vagy megváltoztat valamit a látogató dolgaiban (rendelés, kosár, fiók, feliratkozás, jelszó, letöltött fájl, süti-döntés) | **E/1** | `Megveszem a kurzust` · `Megrendelem és fizetek` · `Elindítom ingyen` · `Feliratkozom` · `Elküldöm az üzenetet` · `Kiveszem a kosárból` · `Kérem a visszaállító linket` · `Beállítom az új jelszót` · `Letöltöm a számlát` · `Újrapróbálom` | A vezetői döntés (Ü5) + a régi oldal 100 %-os E/1 mintája (Jakob törvénye, mérve) |
+| **P-1b.** Puszta **navigáció**: a kattintás után csak *máshol vagyok*, semmi nem változik | **E/2** (tegező) | `Nézd meg a kurzusokat` · `Nyisd meg a kurzusaidat` · `Folytasd a kurzust` · `Kezdd el a kurzust` · `Menj a pénztárhoz` · `Vissza a kurzusokhoz` | A vezetői döntés második fele; a navigáció nem a látogató „vállalása", hanem útmutatás |
+| **P-1c.** Bevett, **egyszavas** felületi címke | **főnévi** | `Belépés` · `Regisztráció` | Az Ü5 kivétele; Carbon és Polaris ugyanígy mentesíti a bevett rövid parancsokat (*Done, Close, Cancel*) a `{ige}+{főnév}` képlet alól |
+| **P-1d.** **Folyamatban**-felirat (a rendszer állapota, nem a látogató cselekvése) | **semleges, deverbális + „…"** | `Belépés…` · `Regisztráció…` · `Küldés…` · `Mentés…` · `Feldolgozás…` · `Betöltés…` | Ez **rendszerállapot-üzenet** (NN/g 1. heurisztika; WCAG 4.1.3), nem CTA – ezért nem személyragozzuk. A `Megveszem…` alak értelmetlen lenne. |
+| **P-1e.** **Magyarázó, útmutató, hibaszöveg** | **E/2** (tegező) | `Add meg a neved.` · `Ez a kurzus jelenleg nem vásárolható meg.` | GOV.UK: *„write like you're talking to your user one-on-one"* |
+
+**A határeset eldöntése egy kérdéssel:** *a kattintás után változik-e bármi a
+látogató dolgaiban (rendelés, fiók, kosár, feliratkozás, fájl), vagy csak
+máshol lesz?* Ha változik → **E/1**. Ha csak máshol lesz → **E/2**.
+Az elem *technikai típusa* (gomb vagy link) ezt **nem** dönti el: a
+„Megveszem a kurzust" a kódban `<Link>`, mégis elkötelezés – a §2.1 gomb/link
+szabálya a *szemantikáról* szól, nem a felirat személyéről.
+
+**→ Ez váltja fel a korábbi, kizárólag E/2-t előíró M-2-t. Az A/5 megállapítás
+(vegyes személy) továbbra is hiba – de mostantól a P-1 mondja meg, melyik
+elemen melyik a helyes, nem az egységesítés iránya nyitott kérdés.**
 
 ### 3.2 CTA-szótár – jóváhagyott magyar feliratok
 
-> ⚠️ **A táblázat E/2-ben íródott (Ü5), és a `docs/gomb-inventar.md` §5.3
-> E/1-es szótárával ÜTKÖZIK. Amíg a vezető nem döntött, EGYIK szótár sem
-> önthető kódba.** A `gomb-inventar.md` méréssel is alátámasztja, milyen rossz
-> a mai állapot: a „menj a kurzuslistára" cselekvésre **nyolc** különböző
-> felirat él a felületen, a „saját kurzusaidhoz"-ra **négy**.
+> ✅ **A nyelvtani személy 2026-08-16-án ELDŐLT** (1.4/Ü5). A táblázat a
+> **P-1 szabály** szerint íródott: a látogató saját, elkötelező cselekvése
+> **E/1** („Megveszem a kurzust"), a puszta navigáció **E/2** („Nézd meg a
+> kurzusokat"), a bevett egyszavas címke **főnévi** („Belépés"), a
+> folyamatban-felirat **semleges** („Küldés…"). A döntés normatív forrása a
+> `.claude/skills/termektervezes/SKILL.md` 2. pontja; a mérési háttér a régi
+> `www.kineticare.hu` 100 %-os E/1 mintája
+> (`docs/regi-oldal-osszehasonlitas.md` 3.4).
+>
+> **A táblázat innentől kódba van öntve:** `src/lib/cta-vocabulary.ts`, a
+> **G-UI1** őrrel (`src/__tests__/cta-vocabulary-guard.test.ts`). Ez a táblázat
+> és a modul **bitre egyezik** – az őr ezt ellenőrzi, nem emberi figyelem.
+> A `docs/gomb-inventar.md` §5 ugyanezeket a feliratokat *képezi le* a mért
+> állapotra; ott sem lehet más felirat.
 
 **Használati szabály:** ugyanaz a cselekvés **mindig ugyanezzel a szóval**
 jelenik meg, az egész oldalon (WCAG 3.2.4, lásd 5. szakasz). Új felirat csak
-akkor kerülhet be, ha ez a táblázat bővül – és **a `docs/gomb-inventar.md`
-szótára ezzel együtt frissül** (a skill 2. pontja a `gomb-inventar.md`-t nevezi
-meg a felirat-kereséskor első helyen).
+akkor kerülhet be, ha **ez** a táblázat bővül – vele együtt frissül a
+`src/lib/cta-vocabulary.ts` és a `docs/gomb-inventar.md` §5 leképezése.
+(A skill 2. pontja ezt a §-t nevezi meg a szótár egyetlen normatív helyeként;
+a `gomb-inventar.md` leltár, nem szótár.)
 
-**Megvalósítás:** a szótár egyetlen modulban éljen konstansként
-(`src/lib/cta-vocabulary.ts` – a `gomb-inventar.md` §5.4 javaslata), és onnan
-olvasson a `resolveCourseCta`, a `course-list-order.ts`, a `ThankYouView`, a
-`CartView` és a `penztar/page.tsx`. Így a G-UI1 őr egyetlen fájlt ellenőriz.
+**Megvalósítás:** a szótár egyetlen modulban él konstansként
+(`src/lib/cta-vocabulary.ts`), és onnan olvas majd a `resolveCourseCta`, a
+`course-list-order.ts`, a `ThankYouView`, a `CartView` és a `penztar/page.tsx`.
+Így a G-UI1 őr egyetlen fájlt ellenőriz. **A hívóhelyek átírása külön kör** – a
+modul most a szótár igazságforrása, a bevezetés a következő lépés.
 
-| # | Eset | **Jóváhagyott felirat** | Változat | Miért ez – forrás |
-|---|---|---|---|---|
-| 1 | **Fizetős kurzus vásárlása** (kurzusoldal, buybox) | `Vedd meg a kurzust` | `primary` | Ige + tárgy, E/2 (M-1, M-2). Konkrét: megmondja, mi történik. Carbon `{ige}+{főnév}`; NN/g 4 S „Specific". *(Ma: „Megveszem" – E/1, tárgy nélkül.)* |
-| 2 | **Vásárlás a pénztáron** (beküldő gomb) | `Megrendelem és fizetek` **vagy** `Fizetés Barionnal` | `primary` | GOV.UK: *Pay*. A fizetési szolgáltató néven nevezése bizalmi elem (M-6). A gomb után **nincs** további elsődleges. *(Ma: „Megrendelés és fizetés" – főnévi alak, elfogadható, de nem ige-kezdetű.)* |
-| 3 | **INGYENES kurzus igénylése** | `Indítsd el ingyen` **vagy** `Kérd az ingyenes kurzust` | `secondary` | **A jelenlegi „Ingyenes — azonnal eléred" háromszorosan hibás:** nem ige, gondolatjelet használ elválasztóként (3.1.2), és ígéretet tesz (M-8). Az ingyenesség **badge-ként**, nem a gombban jelenik meg (a `Badge tone="success"` már így működik). A `secondary` súly kötelező (K-3, K2-hiba). |
-| 4 | **Ingyenes anyag a kezdőlapon** (FreeSos sáv) | `Indítsd el ingyen` | `secondary` | Azonos cselekvés = azonos szó (3.2 használati szabály). *(Ma: „Elindítom az ingyenes kurzust" – E/1, 4 szó.)* |
-| 5 | **Belépés** | `Belépés` | `primary` az auth-oldalon | Bevett, egyszavas parancs – Carbon kivétel-listája (*Done, Close, Cancel*) analógiája; GOV.UK: *Sign in*. Folyamatban: `Belépés…` |
-| 6 | **Regisztráció** | `Fiók létrehozása` | `primary` a regisztrációs oldalon | Polaris: `{ige}+{főnév}`; a „Regisztráció" főnév, nem cselekvés. Megmondja, mi keletkezik. |
-| 7 | **Kurzus folytatása** (fiók, kurzuslista) | `Folytasd a kurzust` | `primary` a kártyán, `secondary` a listafejben | Ige + tárgy; a folytatás ≠ indítás, ezért külön felirat (NN/g: a parancsnév legyen megkülönböztető). |
-| 8 | **Kurzus megkezdése** (még el nem kezdett) | `Kezdd el a kurzust` | `primary` | Ua. |
-| 9 | **Megvásárolt kurzushoz ugrás** (kurzusoldalról) | `Ugorj a kurzusaidhoz` | `secondary` | A vevőnek ez már nem vásárlás, tehát nem `primary`. *(Ma: „Tovább a kurzusaimhoz" – E/1, „Tovább" tiltott kezdés, M-7.)* |
-| 10 | **Kurzuskínálat megtekintése** (hero, nav, szekció-láb) | `Nézd meg a kurzusokat` | hero: `primary`; nav: `secondary`; szekció-láb: szöveglink | **Egyetlen felirat mind a négy jelenlegi helyett.** Ma: „Kurzusok" (nav), „Kurzusok megtekintése" (hero), „Összes kurzus megtekintése" (szekció-láb), „Megnézem a kurzusokat" (CMS), „Megnézem a programot" (kártya) – WCAG **3.2.4** sérülés. **→ A/6.** |
-| 11 | **Kurzus részleteihez** (kártya) | *(nincs gomb)* – a kártya egésze link, a jelölő a nyíl + cím | dekoráció | NN/g: *„don't make nonclickable items look like buttons"*. **→ A/4.** |
-| 12 | **Kapcsolatfelvétel** (űrlap beküldése) | `Küldd el az üzenetet` | `primary` | Ige + tárgy; a puszta „Küldés"/„Submit" tiltott (Atlassian). *(Ma: „Üzenet küldése" – főnévi, elfogadható; egységesítendő.)* |
-| 13 | **Hírlevél-feliratkozás** | `Iratkozz fel` | `secondary` | Ige, E/2, 2 szó. *(Ma: „Feliratkozom" – E/1.)* Az e-mail-cím mezője mellett, nem `primary` (nem ez az oldal célja). |
-| 14 | **Letöltés** | `Töltsd le a <mit>` (pl. `Töltsd le a számlát`) | `secondary` | NN/g „Substantial": a felirat a környezete nélkül is érthető; a fájl megnevezése kötelező. |
-| 15 | **Vissza-navigáció** | `Vissza a kurzusokhoz` (a cél megnevezésével) | `ghost` / szöveglink | NN/g 4 S: a puszta „Vissza" nem „Substantial". A böngésző vissza-gombját **nem** duplikáljuk; ez mindig konkrét célra visz. |
-| 16 | **Archivált / nem elérhető termék** | *(nincs gomb)* + magyarázó mondat: `Ez a kurzus jelenleg nem vásárolható.` | – | Á-3: letiltott „Megveszem" helyett a cselekvés eltűnik, és a szöveg megmondja, miért. A jelenlegi kód a feliratot meghagyja `Megveszem`-nek egy szürke elemen – hamis ígéret (NN/g: *a link ígéret*). **→ A/1.** |
-| 17 | **Hiba utáni újrapróbálkozás** | `Próbáld újra` | `secondary` | GOV.UK: mondd meg, hogyan javítható. „Kérjük" nélkül (2.7). |
-| 18 | **Beleegyezés-kezelés** (süti-sáv) | `Fogadd el mindet` / `Csak a szükségeseket` | egyenrangú `secondary` | Nem lehet dark pattern: az elutasítás **azonos súlyú és azonos szintű**, nem bújtatott szöveglink (`ertekesitesi-ux-skill.md` 6. pont). |
+**Ami a döntéstől FÜGGETLENÜL kötelező** (ezért több sor akkor is változik, ha
+a személy egyébként stimmel): egy cselekvésre egy felirat (WCAG 3.2.4); a
+felirat legyen igaz (ingyenes terméken „Megveszem" tilos); nulla töltelék
+gondolatjel (3.1.2); a puszta „Tovább…" nem CTA (M-7); a deverbális főnévi alak
+gyengébb az igei alaknál (M-1); archivált terméknél nincs letiltott gomb, hanem
+magyarázó mondat (#16).
 
-**Folyamatban-feliratok** (L-1; három pont, gondolatjel nélkül):
-`Belépés…` · `Feldolgozás…` · `Küldés…` · `Mentés…` · `Betöltés…`
+| # | Eset | **Jóváhagyott felirat** | P-1 | Változat | Miért ez – forrás |
+|---|---|---|---|---|---|
+| 1 | **Fizetős kurzus vásárlása** (kurzusoldal, buybox) | `Megveszem a kurzust` | E/1 (P-1a) | `primary` | Elkötelezés, tehát E/1 (Ü5-döntés; a régi oldal `MEGRENDELEM`/`KÉREM A PROGRAMOT` mintája). A puszta „Megveszem" **tárgy nélkül** áll: Carbon és Polaris `{ige}+{főnév}` képlete a tárgyat kéri, NN/g „Substantial" szerint a felirat a környezete nélkül is érthető legyen – egy kosár- vagy listaoldalon a „Megveszem" magában nem az. *(Ma: „Megveszem".)* |
+| 2 | **Vásárlás a pénztáron** (beküldő gomb) | `Megrendelem és fizetek` | E/1 (P-1a) | `primary` | GOV.UK a fizetés lépésére *„Pay"*-t, a záró lépésre *„Confirm and send"*-et ír elő: a felirat mondja ki, hogy **ez a visszavonhatatlan lépés**. Baymard: a homályos „Continue" helyett explicit „Place Order". A régi oldal ugyanezt a szót használta: `MEGRENDELEM`. **Egyetlen felirat, nincs alternatíva** (a korábbi „vagy `Fizetés Barionnal`" maga sértette a C-1-et). A Barion megnevezése **bizalmi elem, de nem a gombon**: a szolgáltató neve és logója a gomb *mellé* kerül (M-6 megengedi, nem kötelezi). *(Ma: „Megrendelés és fizetés" – deverbális főnévi alak.)* |
+| 3 | **INGYENES kurzus igénylése** | `Elindítom ingyen` | E/1 (P-1a) | `secondary` | Hozzáférést szerez, tehát elkötelezés → E/1; a SKILL.md 2. pontjának szó szerinti példája. **A jelenlegi „Ingyenes — azonnal eléred" háromszorosan hibás:** nem ige, U+2014-et használ elválasztóként (3.1.1–3.1.2), és ígéretet tesz (M-8). Az ingyenesség **badge-ként**, nem a gombban jelenik meg (a `Badge tone="success"` már így működik). A `secondary` súly kötelező (K-3, K2-hiba). |
+| 4 | **Ingyenes anyag a kezdőlapon** (FreeSos sáv) | `Elindítom ingyen` | E/1 (P-1a) | `secondary` | Azonos cselekvés = azonos szó (WCAG 3.2.4). *(Ma: „Elindítom az ingyenes kurzust" – jó személy, de 4 szó és eltér a #3-tól.)* |
+| 5 | **Belépés** | `Belépés` | főnévi (P-1c) | `primary` az auth-oldalon | Bevett, egyszavas címke – az Ü5-döntés kivétele; Carbon és Polaris ugyanígy mentesíti a bevett rövid parancsokat (*Done, Close, Cancel*) a `{ige}+{főnév}` képlet alól; GOV.UK: *Sign in*. Folyamatban: `Belépés…` *(Ma is ez.)* |
+| 6 | **Regisztráció** | `Regisztráció` | főnévi (P-1c) | `primary` a regisztrációs oldalon | **1.1-ben módosítva** (korábban `Fiók létrehozása`). Ugyanaz a P-1c kivétel, mint a #5-nél: a „Belépés" és a „Regisztráció" **egymás párja**, egyszavas, bevett felületi címke, és a nav-menü is így nevezi (WCAG 3.2.4 – a menüpont és a beküldő gomb ne mondjon mást). Az E/1-es alternatíva („Létrehozom a fiókom") itt hosszabb és a párját elrontja. Folyamatban: `Regisztráció…` *(Ma is ez.)* |
+| 7 | **Kurzus folytatása** (fiók, kurzuslista) | `Folytasd a kurzust` | E/2 (P-1b) | `primary` a kártyán, `secondary` a listafejben | Puszta navigáció (a lejátszó megnyílik, semmi nem változik) → E/2. Ige + tárgy; a folytatás ≠ indítás, ezért külön felirat (NN/g: a parancsnév legyen megkülönböztető). |
+| 8 | **Kurzus megkezdése** (még el nem kezdett) | `Kezdd el a kurzust` | E/2 (P-1b) | `primary` | Ua. Megkülönböztetendő a #3-tól: ott a hozzáférés *keletkezik* (E/1), itt a meglévő kurzus *megnyílik* (E/2). |
+| 9 | **Megvásárolt kurzushoz ugrás** (kurzusoldalról, köszönőoldalról) | `Nyisd meg a kurzusaidat` | E/2 (P-1b) | `secondary` | **1.1-ben módosítva** (korábban `Ugorj a kurzusaidhoz`). Két ok: (a) az „Ugrás" szót a felület már a skip-linkre használja („Ugrás a tartalomra") – C-4 szerint egy szó egy jelentés; (b) a „Nyisd meg" konkrétabban mondja meg, mi történik (NN/g „Specific"). Szándékosan **nem** hasonlít a #10-re („kurzusokat" ↔ „kurzusaidat" különbsége önmagában kevés lenne). *(Ma: „Kurzusaim", „Tovább a kurzusaimhoz", „Nézd meg a kurzusaimat", „Vissza a kurzusaimhoz" – négy felirat egy cselekvésre.)* |
+| 10 | **Kurzuskínálat megtekintése** (hero, nav, szekció-láb, üres állapotok) | `Nézd meg a kurzusokat` | E/2 (P-1b) | hero: `primary`; nav: `secondary`; szekció-láb: szöveglink | **Egyetlen felirat a mai nyolc helyett.** Ma: „Kurzusok" (nav), „Kurzusok megtekintése" (hero), „Összes kurzus megtekintése" (szekció-láb), „Megnézem a kurzusokat" (CMS), „Megnézem a programot" (kártya), „Nézd meg a kurzusainkat" (üres kosár), „Válassz kurzust" (üres pénztár), „Kurzusok megnézése" (üres kurzusaim) – WCAG **3.2.4** sérülés. **→ A/6.** A nav-elem kivétel: ott a menüpont neve `Kurzusok` marad (menücímke, nem CTA – N-3). |
+| 11 | **Kurzus részleteihez** (kártya) | *(nincs gomb)* – a kártya egésze link, a jelölő a nyíl + cím | – | dekoráció | NN/g: *„don't make nonclickable items look like buttons"*. **→ A/4.** |
+| 12 | **Kapcsolatfelvétel** (űrlap beküldése) | `Elküldöm az üzenetet` | E/1 (P-1a) | `primary` | Adatot küld be, tehát elkötelezés → E/1. **A régi oldal kapcsolat-űrlapján szó szerint `ELKÜLDÖM` állt** (mérve) – Jakob törvénye. Ige + tárgy; a puszta „Küldés"/„Submit" tiltott (Atlassian). *(Ma: „Üzenet küldése" – deverbális főnévi alak.)* Folyamatban: `Küldés…` |
+| 13 | **Hírlevél-feliratkozás** | `Feliratkozom` | E/1 (P-1a) | `secondary` | **1.1-ben módosítva** (korábban `Iratkozz fel`). A SKILL.md 2. pontjának szó szerinti példája; feliratkozás = a látogató saját vállalása. Egyszavas, de nem „puszta" felirat: önmagában megmondja, mi történik (NN/g „Specific"). Az e-mail-cím mezője mellett, nem `primary` (nem ez az oldal célja). *(Ma is ez – nem kell kódot írni.)* |
+| 14 | **Letöltés** | `Letöltöm a számlát` | E/1 (P-1a) | `secondary` | Fájl kerül a látogató gépére → E/1. **Mintázatos felirat** (C-6): a `Letöltöm a <mit>` séma más dokumentumra is használható (`Letöltöm az igazolást`), a fájl megnevezése **kötelező** – NN/g „Substantial": a felirat a környezete nélkül is érthető legyen. *(Ma: „Számla letöltése".)* |
+| 15 | **Vissza-navigáció** | `Vissza a kurzusokhoz` | E/2 (P-1b) | `ghost` / szöveglink | Mintázatos felirat (C-6): mindig `Vissza a <hova>`. NN/g 4 S: a puszta „Vissza" nem „Substantial". A böngésző vissza-gombját **nem** duplikáljuk; ez mindig konkrét célra visz. |
+| 16 | **Archivált / nem elérhető termék** | `Ez a kurzus jelenleg nem vásárolható meg.` (magyarázó mondat, **gomb nélkül**) | E/2 magyarázat (P-1e) | – | Á-3: letiltott gomb helyett a cselekvés **eltűnik**, és a szöveg megmondja, miért. GOV.UK: *„Disabled buttons have poor contrast and can confuse some users, so avoid them if possible."* A jelenlegi kód a feliratot meghagyja `Megveszem`-nek egy szürke elemen – hamis ígéret (NN/g: *a link ígéret*). **→ A/1.** |
+| 17 | **Hiba utáni újrapróbálkozás** | `Újrapróbálom` | E/1 (P-1a) | `secondary` | **1.1-ben módosítva** (korábban `Próbáld újra`). A művelet (fizetés, mentés, betöltés) újraindítása a látogató vállalása → E/1. Ma három alak él („Újrapróbálom", „Újrapróbálom a fizetést", „Próbáld újra") – **egy marad**. Ahol több újrapróbálható dolog van egy képernyőn, a **hozzáférhető név** kapja a célt rejtett szövegben (a `/kurzusaim` már így csinálja), nem a látható felirat változik (WCAG 2.5.3 + 3.2.4). „Kérjük" nélkül (2.7). |
+| 18 | **Beleegyezés-kezelés** (süti-sáv) | `Elfogadom mindet` / `Csak a szükségeseket` | E/1 (P-1a) | egyenrangú `secondary` | A süti-döntés a látogató saját döntése → E/1. A második felirat **elliptikus**: az igét („fogadom el") az első tagból veszi át, így a két gomb azonos hosszú és azonos súlyú marad. Nem lehet dark pattern: az elutasítás **azonos súlyú és azonos szintű**, nem bújtatott szöveglink (`ertekesitesi-ux-skill.md` 6. pont). *(Ma: „Elfogadom" / „Elutasítom" – a súly rendben, a hatókör nem derül ki.)* |
+| 19 | **Tétel kivétele a kosárból** | `Kiveszem a kosárból` | E/1 (P-1a) | `ghost` | **Új sor (1.1)** – a `gomb-inventar.md` §5.1 hiánya. A kosár tartalma a látogató dolga → E/1. **Miért nem „Törlés":** Carbon kimondja, hogy a *remove* és a *delete* nem ugyanaz – *„Deletion is the most common type of removal and is destructive"* –, és a helyreállítható műveletre a *remove* alakot írja elő. A kosárból kivett tétel **nem semmisül meg**, bármikor visszatehető, tehát „kivétel", nem „törlés". A tétel megnevezése a **hozzáférhető névbe** kerül rejtett szöveggel (több tétel esetén a puszta „Kiveszem a kosárból" nem egyedi – WCAG 2.4.4). *(Ma: „Törlés" – deverbális főnév, és rossz szó.)* |
+| 20 | **Kosárból a pénztárba lépés** | `Menj a pénztárhoz` | E/2 (P-1b) | `primary` | **Új sor (1.1)** – a `gomb-inventar.md` §5.1 hiánya. Itt még **semmi nem történik**, csak odaérünk a pénztárhoz (a vállalás a #2 gombnál van) → E/2. Ige + cél; Baymard szerint a kosár elsődleges CTA-ja legyen explicit és jól megtalálható. *(Ma: „Tovább a penztárhoz" – puszta „Tovább"-kezdés (M-7) **és elgépelés**.)* **Vezetői pontosítás (2026-08-16):** ez a sor és a **#1** (`Megveszem a kurzust`) ugyanarra az útvonalra (`/penztar`) visz, mégis MÁS feliratot visel — ez SZÁNDÉKOS, és nem sérti a WCAG 3.2.4-et. A sikerkritérium azonos *funkciót* kér azonos néven; itt viszont két különböző funkció van: a #1 egy KONKRÉT termékre vállal kötelezettséget (a kurzusoldalról indítja a rendelést), a #20 pedig egy MÁR ÖSSZEÁLLÍTOTT kosarat visz a következő lépésre. Aki később „egységesítené" a kettőt, azzal a kurzusoldali vásárlási szándékot fokozná le puszta navigációvá. |
+| 21 | **Jelszó-visszaállító link kérése** | `Kérem a visszaállító linket` | E/1 (P-1a) | `primary` | **Új sor (1.1)** – a `gomb-inventar.md` §5.1 hiánya. E-mail indul a látogatónak → elkötelezés, E/1. **A régi oldal ugyanezt a szerkezetet használta:** `KÉREM A PROGRAMOT`, `KÉREM A HOZZÁFÉRÉST`, `KÉREM AZ ÉRTESÍTÉST` (mérve) – Jakob törvénye. **Figyelem:** ez az E/1-es *„kérem"* ige, nem a 2.7-ben tiltott udvariaskodó „Kérjük" – a két szó nem keverendő. *(Ma: „Visszaállító link küldése" – deverbális főnévi alak.)* Folyamatban: `Küldés…` |
+| 22 | **Új jelszó beállítása** | `Beállítom az új jelszót` | E/1 (P-1a) | `primary` | **Új sor (1.1)** – a `gomb-inventar.md` §5.1 hiánya. A fiók megváltozik → E/1, ige + tárgy. *(Ma: „Jelszó beállítása" – deverbális főnévi alak.)* Folyamatban: `Mentés…` (lásd L-1). |
+
+**L-1 jóváhagyott feliratkészlet** (P-1d; három pont, gondolatjel nélkül).
+A §2.6 **L-1** mondja ki a *szabályt* („a beküldő gomb azonnal letiltódik, és
+a felirata folyamatot mond"); az alábbi lista a hozzá tartozó **jóváhagyott
+feliratkészlet** – ez a §3.2 szótár része, és **zárt**: pontosan hat elem.
+
+`Belépés…` · `Regisztráció…` · `Küldés…` · `Mentés…` · `Feldolgozás…` · `Betöltés…`
+
+**A `Beállítás…` NEM kerül a listára.** A `/jelszo-visszaallitas` űrlap mai
+`Beállítás…` felirata a **`Mentés…`-re egységesül**. Indoklás: a „beállítás" és
+a „mentés" itt **ugyanazt a műveletet** nevezi meg (a látogató bevitt adata
+tartósan eltárolódik), a Polaris pedig kimondottan előírja a szinonimák
+azonosítását és felszámolását (*„identify and eliminate synonyms"*); a WCAG
+3.2.4 ugyanezt kéri hozzáférhetőségi oldalról. A `/fiok` mentés-gombja már ma is
+`Mentés…`-t ír – a két űrlap így ugyanazt a szót használja ugyanarra a
+műveletre. A `Regisztráció…` viszont **felkerül** a listára: ma is él a
+felületen, és a #6 főnévi címkéjének (P-1c) szabályos folyamatban-párja.
+
+**A folyamatban-felirat sosem E/1.** Ez rendszerállapot-üzenet (NN/g 1.
+heurisztika: *„visibility of system status"*; WCAG 4.1.3 Status Messages), nem a
+látogató cselekvése – ezért marad semleges, deverbális alakban. A `Megveszem…`
+alak nyelvtanilag is értelmetlen volna.
 
 ---
 
@@ -686,7 +783,7 @@ actions mean the same thing."*
 | **C-3** | **Ugyanaz a cselekvés = ugyanaz a HELY.** A buybox CTA-ja mindig a doboz alján, a nav-CTA mindig a sáv jobb szélén, a beküldő gomb mindig az űrlap alján. | Kézi ellenőrzés PR-ben |
 | **C-4** | **Ugyanaz az ikon = ugyanaz a jelentés.** A `→` mindig „tovább ebbe az irányba", a `✓` mindig „teljesült". A WCAG 3.2.4 magyarázata kifejezetten kiemeli az ikonok szöveges alternatívájának egységességét. | Ikon-leltár |
 | **C-5** | **A látható felirat része a hozzáférhető névnek** (WCAG 2.5.3). | Automatizált (6.3) |
-| **C-6** | A mintázatos feliratok megengedettek, ha a **minta** azonos: a WCAG magyarázata szerint a „Go to page 4" / „Go to page 5" megfelel. Nálunk: `Töltsd le a számlát` / `Töltsd le az igazolást`. | – |
+| **C-6** | A mintázatos feliratok megengedettek, ha a **minta** azonos: a WCAG magyarázata szerint a „Go to page 4" / „Go to page 5" megfelel. Nálunk: `Letöltöm a számlát` / `Letöltöm az igazolást` (§3.2 #14), illetve `Vissza a kurzusokhoz` / `Vissza a kezdőlapra` (#15). | – |
 | **C-7** | **Az e-mail-sablonok CTA-i is a szótárból jönnek** (`src/lib/email/templates/**`) – a levélből érkező látogató ugyanazt a szót találja az oldalon. | Szótár-őrteszt |
 
 ---
@@ -737,7 +834,7 @@ A repó tesztkultúrája már erős (`src/__tests__/course-sales-ui.test.ts`,
 
 | Őr | Mit véd | Bukás-feltétel |
 |---|---|---|
-| **G-UI1 – CTA-szótár** | 3.2 táblázat | A `resolveCourseCta` és a szótár-konstansok kimenete nem szerepel a jóváhagyott listán |
+| **G-UI1 – CTA-szótár** (`src/__tests__/cta-vocabulary-guard.test.ts`) – **megírva, 2026-08-16** | 3.2 táblázat + 3.1 mikroszöveg | A `src/lib/cta-vocabulary.ts` bármely felirata U+2014-et vagy gondolatjelet tartalmaz, „Tovább"-bal kezdődik, 4 szónál hosszabb, csupa nagybetűs, puszta tiltott felirat (M-7), **vagy** két bejegyzés ugyanarra a cselekvés-kulcsra kerül, **vagy** a modul és a §3.2 táblázat feliratkészlete eltér |
 | **G-UI2 – gondolatjel-tilalom** | 3.1.2 | Bármely **U+2014** karakter látogatói szövegkonstansban (gombfelirat, `aria-label`, badge, mezőfelirat, hibaüzenet). Első körben: a `src/lib/**` és `src/components/**` string-literáljai |
 | **G-UI3 – egy elsődleges** | K-1 | A szerver-renderelt HTML-ben egynél több `kc-button--primary` a kurzusoldalon, illetve a kezdőlapon kettőnél több |
 | **G-UI4 – érintési cél** | 2.4 | `kc-button`-ra vagy nav-elemre `min-height` < 2,75 rem |
@@ -770,9 +867,14 @@ A meglévő tölcsér változatlan:
 (`ertekesitesi-ux-skill.md` 5. pont).
 
 **Kötelező előmérés minden CTA-szöveg-változtatás előtt** (a
-`ux-belso-oldalak-kutatas.md` 6.1 protokollja szerint), mert a 3.2 szótár
-bevezetése **E/1 → E/2 váltás**, amire ellentmondó bizonyíték is van (3.1.4
-nyitott döntés). A PR-leírás rögzíti az előtte-utána számokat.
+`ux-belso-oldalak-kutatas.md` 6.1 protokollja szerint). **1.1-es pontosítás:**
+az Ü5-döntés után a 3.2 szótár bevezetése **NEM személyváltás** – a vásárlási,
+ingyenes-igénylési, feliratkozási és üzenetküldési gombok E/1-ben maradnak,
+ahogy ma is állnak. Amit a bevezetés valóban megváltoztat, az (a) a szinonimák
+felszámolása (nyolc feliratról egyre a kurzuslistánál, négyről egyre a saját
+kurzusoknál), (b) a deverbális főnévi alakok igére cserélése, (c) az ingyenes
+termék hamis „Megveszem" feliratának javítása. A tölcsér ezekre érzékeny, ezért
+a PR-leírás rögzíti az előtte-utána számokat.
 
 ---
 
@@ -1002,7 +1104,13 @@ Minden forrás **2026-08-16-án** ellenőrizve.
   „create **your** account" −24,91 %), amelyet a szakirodalom nem replikált
   rendszeresen, és amely **nem magyar nyelvű**. A design-rendszerek
   (Carbon, Polaris, Atlassian, GOV.UK) egységesen felszólító alakot írnak elő,
-  az NN/g nem foglal állást. **→ Ez vezetői döntés, nem kutatási tény** (3.1.4).
+  az NN/g nem foglal állást. **Ez tehát vezetői döntés volt, nem kutatási
+  tény** – és 2026-08-16-án meg is született (1.4/Ü5, 3.1.5/P-1). **Ami
+  mérésen alapul, és ezért nem vélemény:** a régi `www.kineticare.hu` gombjai
+  100 %-ban E/1-ben álltak (`docs/regi-oldal-osszehasonlitas.md` 3.1, 3.4) –
+  ez a *megszokásra* nézve bizonyíték (Jakob törvénye), a *hatékonyságra* nézve
+  továbbra sincs magyar nyelvű mérésünk. Ha valaha lesz A/B-kapacitás, ez az
+  első mérendő tétel (6.5).
 - **A gondolatjel-sűrűség konkrét számhatára** (3.1.3, „1 / 200 szó"). Ez
   **konvenció**, nem mérés; a *tilalmi* rész viszont (UI-címkékben nulla,
   U+2014 magyar szövegben nem használt) forrásolt.
@@ -1013,6 +1121,49 @@ Minden forrás **2026-08-16-án** ellenőrizve.
 - **A vélemény-blokk hossza és helye** (`ertekesitesi-ux-skill.md` M6) – a
   testvér-doksi 3.9/2. pontja szerint erre nincs kutatási alap; itt sem
   találtam. Vélemény-alapú szabályként megtartandó vagy A/B-vel mérendő.
+
+### 7.6 A 2026-08-16-i CTA-döntéshez (1.1) ellenőrzött további források
+
+Ezek a tételek az Ü5-döntés utáni szótár-átíráshoz és a négy új sorhoz
+(#19–#22) készültek. Ellenőrizve: **2026-08-16**.
+
+43. **IBM Carbon Design System – Remove pattern (remove ≠ delete).**
+    https://v10.carbondesignsystem.com/community/patterns/remove-pattern/
+    *Szó szerint:* „**Removing** is an action that moves information from one
+    location to another. Removal can be both destructive and non-destructive.
+    **Deletion** is the most common type of removal and is destructive."
+    A helyreállítható műveletre a *remove* alak való, a *delete* a
+    visszafordíthatatlanra. **A #19 sor alapja:** a kosárból kivett tétel nem
+    semmisül meg, ezért „Kiveszem a kosárból", nem „Törlés".
+    *(Kiegészítő, ugyanerről:* https://carbondesignsystem.com/guidelines/content/action-labels/
+    *– a `{ige}+{főnév}` képlet és a bevett rövid parancsok kivétel-listája:
+    Done, Close, Cancel, Add, Delete. Az oldal glosszárium-komponensből
+    renderel, ezért a szöveg csak a nyilvános összefoglalókból volt kinyerhető;
+    a 27. tétellel egybevág.)*
+44. **GOV.UK Design System – Button: „Writing button text".**
+    https://design-system.service.gov.uk/components/button/
+    *Szó szerint (a döntéshez használt tételek):* a fizetési lépésre „**Pay**";
+    a mentéssel járó továbblépésre „**Save and continue**"; a záró, jogi
+    következményű lépésre „**Confirm and send**" / „**Accept and send**";
+    letiltott gombra: „*Disabled buttons have poor contrast and can confuse
+    some users, so avoid them if possible.*"; destruktív műveletnél „*use
+    another style of button for the initial call to action, and a warning
+    button for the final confirmation*".
+    **A #2, #16 és #20 sor alapja.**
+45. **Baymard Institute – Checkout flow UX optimization.**
+    https://baymard.com/learn/checkout-flow-ux-optimization
+    *Lényeg:* a kosár és a checkout elsődleges CTA-ja legyen **explicit és
+    cselekvés-vezérelt**, a homályos „Continue" helyett a következő lépést vagy
+    a véglegesítést megnevező felirat. **A #2 és #20 sor alapja.**
+46. **Régi-oldal mérés (belső, reprodukálható):
+    `docs/regi-oldal-osszehasonlitas.md` 3.1 és 3.4.**
+    *Mérés:* a `www.kineticare.hu` 11 útvonalának `<a>`/`<button>`
+    kivonatolása. *Eredmény:* minden cselekvés-gomb E/1
+    (`KÉREM A PROGRAMOT`, `KÉREM A VILLÁMKURZUST`, `KÉREM A HOZZÁFÉRÉST`,
+    `KÉREM AZ ÉRTESÍTÉST`, `MEGRENDELEM`, `MEGNÉZEM`, `ELKÜLDÖM`), **egyetlen
+    felszólító alakú gombfelirat sincs**. Ez a P-1a szabály és a #2, #3, #12,
+    #21 sor Jakob-törvény szerinti alátámasztása
+    ([NN/g – Jakob's Law](https://www.nngroup.com/videos/jakobs-law-internet-ux/)).
 
 ---
 
@@ -1037,7 +1188,7 @@ végrehajtási kör bemenete; a javítás **nem** ennek a doksinak a feladata.
 | **A/2** | 3.1.1, ELTE-tipográfia | Repó-szintű mérés: **4688 db U+2014 (`—`)** és 391 db U+2013 (`–`); látogatói szövegben pl. `src/lib/courses.ts:119` `'Ingyenes — azonnal eléred'`, `src/components/content/home/FreeSos.tsx:65` `'SOS Kézrelax — ingyenes villámkurzus'`, `src/components/courses/MobileBuyBar.tsx:81` `aria-label={…' — vásárlás'}`, `src/components/courses/CourseCard.tsx:30`, `src/components/layout/Header.tsx:38` `aria-label="Kineticare — kezdőlap"` | A kvirtmínusz **nem magyar írásjel**, és elválasztóként a gondolatjel sem az. Ez a tulajdonos „AI-szagú" kifogásának pontos oka. |
 | **A/3** | Á-4, WCAG 4.1.2 | `src/components/ui/Button.tsx:101–107` – letiltott link-gomb `<span className={classes} aria-disabled="true">` | Szerep nélküli `<span>`-en az `aria-disabled` nem jut el a kisegítő technológiához, az elem pedig nem is fókuszálható: a billentyűzetes látogató **soha nem tudja meg**, hogy létezik és miért nem működik. |
 | **A/4** | B-3, K-1, NN/g „nonclickable items" | `src/components/content/ProductCard.tsx:230–232` (`<span aria-hidden="true" className="kc-product-card__cta">`) + `src/app/(frontend)/styles/blocks/course-cards.css:186–201` (`background-color: var(--kc-color-primary)`, `min-height: 2.75rem`, `border-radius`) | Minden kurzuskártyán egy **elsődleges gombnak látszó, nem kattintható** elem áll. A kezdőlapon így a hero `primary`-ja mellé kártyánként egy ál-`primary` kerül. |
-| **A/5** | M-2, C-1 | Vegyes személy: E/1 – `courses.ts:106` `'Megveszem'`, `ProductCard.tsx:54` `'Megnézem a programot'`, `NewsletterForm.tsx:155` `'Feliratkozom'`, `FreeSos.tsx:71` `'Elindítom az ingyenes kurzust'`; E/2 – `kapcsolat/_lib/validation.ts:43,47,53,57` `'Add meg a neved.'`, `'Írd meg az üzeneted.'` | Egy felületen kétféle megszólítás. Bármelyik személyt választja a vezető, a **vegyes** használat minden forrás szerint hiba. |
+| **A/5** | M-2 / **P-1**, C-1 | Vegyes személy **szabály nélkül**: `courses.ts:106` `'Megveszem'`, `ProductCard.tsx:54` `'Megnézem a programot'`, `NewsletterForm.tsx:155` `'Feliratkozom'`, `FreeSos.tsx:71` `'Elindítom az ingyenes kurzust'` (E/1) ↔ `kapcsolat/_lib/validation.ts:43,47,53,57` `'Add meg a neved.'`, `'Írd meg az üzeneted.'` (E/2) | **1.1-es állapot:** a személy-keveredés önmagában már nem hiba – a **P-1** (3.1.5) megmondja, melyik elemen melyik a helyes, és a fenti E/1-es gombok többsége eszerint **helyes marad**. Ami A/5-ként hiba marad: (a) a `'Megnézem a programot'` **navigáció** E/1-ben (P-1b sérül, ráadásul ál-gomb – A/4); (b) a `'Elindítom az ingyenes kurzust'` eltér a #3/#4 egységes feliratától; (c) a deverbális főnévi gombok (`'Üzenet küldése'`, `'Jelszó beállítása'`, `'Visszaállító link küldése'`, `'Számla letöltése'`, `'Törlés'`) – M-1. |
 | **A/6** | C-1, WCAG **3.2.4** | Ugyanaz a cél (`/kurzusok`) öt feliratot kap: `Header.tsx:44` `'Kurzusok'`; `home/HeroCta.tsx:13` `'Kurzusok megtekintése'`; `home/CourseCards.tsx:142` `'Összes kurzus megtekintése'`; `src/lib/home-seed.ts:585` `'Megnézem a kurzusokat'`; `ProductCard.tsx:54` `'Megnézem a programot'` | „Components that have the same functionality… are identified consistently" – ez öt névvel nem teljesül. |
 | **A/7** | N-4, NN/g „You Are Here" | A fő navigáció linkjei `aria-current` nélkül: `src/components/layout/NavAnchor.tsx:38–64` (a `DesktopNav` és a `MobileNav` is ezt használja). Ellenpélda a repóból, ami helyes: `CategoryFilter.tsx:27,39`, `kurzusok/[slug]/page.tsx:425` | A látogató a menüből nem tudja meg, melyik oldalon áll – sem vizuálisan, sem képernyőolvasóval. |
 | **A/8** | 2.2 4. szint (Carbon *danger*, GOV.UK *warning*) | `src/components/ui/Button.tsx:29` – `variant?: 'primary' \| 'secondary' \| 'ghost'`; destruktív változat nincs. Használat: `src/components/admin/RefundPanel.tsx` | A visszatérítés és a hozzáférés-visszavonás ugyanolyan gombot kap, mint egy mentés – pedig ezek visszafordíthatatlanok. |
