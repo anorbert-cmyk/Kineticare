@@ -749,16 +749,33 @@
    megkülönböztetést innentől a tint HÁTTÉR és a bőkezű belső térköz viszi —
    ugyanaz a nyelv, mint a többi kiemelt felületé. */
 
+/* SZŰK KIJELZŐ: a ✓ jelölő SAJÁT SORBA kerül.
+   A jelölő az L lépcsőn áll (32 px 390 px-es nézetablakon), és a kétoszlopos
+   rácsban a 32 px-es hasáb + 24 px-es köz + 2×32 px-es doboz-belsőtérköz
+   összesen 115 px-t vett el a 342 px-es dobozból: a garancia-szövegre 227 px
+   maradt, ami Chromiumban mérve 31 karakter/sor — a 45-ös alsó határ ALATT
+   (a bekezdés 14 sor magas oszloppá nyúlt). Egy hasábra rendezve a szöveg
+   278 px-t kap (≈ 40 kar/sor), a doboz belső térköze pedig egy lépcsőt
+   csökken. A jelölő dekoratív, a jelentést a cím és a szöveg hordozza, ezért
+   a sorrend-változás nem visz el információt. */
 .kc-course-guarantee {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--kc-space-4) var(--kc-space-5);
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--kc-space-3);
   margin-bottom: var(--kc-space-8);
-  padding: var(--kc-space-6);
+  padding: var(--kc-space-5);
   border-radius: var(--kc-radius-lg);
   background-color: var(--kc-color-surface-tint);
   scroll-margin-top: calc(var(--kc-header-height) + var(--kc-space-4));
+}
+
+@media (min-width: 600px) {
+  .kc-course-guarantee {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--kc-space-4) var(--kc-space-5);
+    align-items: center;
+    padding: var(--kc-space-6);
+  }
 }
 
 .kc-course-guarantee__mark {

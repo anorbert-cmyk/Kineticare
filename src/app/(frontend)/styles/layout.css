@@ -313,10 +313,27 @@
   }
 }
 
+/* MENÜSÁV-TARTALÉK (2026-08-16, Chromiumban mért érték).
+   A menülink a HÁROM-MÉRETES skálán a törzsméretet (M) viszi; korábban a
+   kisebb `--kc-text-sm` lépcsőn állt. A sáv helyigénye ezzel 900 px-es
+   nézetablakon 676 → 745 px-re nőtt (a mai, négy főmenüpontos élő menüvel
+   mérve), vagyis a 900 px-es töréspont tartaléka 176 px-ről 107 px-re esett.
+   Hét menüpontos menüvel ugyanez már 1185 px-t kért, azaz a DOKUMENTUM
+   vízszintesen görgethetővé vált 900–1339 px között (WCAG 2.2, 1.4.10).
+   A betűméret nem változhat, ezért a TÉRKÖZ szűkül: link-belsőtérköz
+   12 → 8 px, a lista köze 4 → 0 px. Így a linkek felirata között továbbra is
+   16 px marad, a célfelület pedig változatlanul ≥ 69×44 px (WCAG 2.5.8 Target
+   Size 24×24-es minimuma felett). Mért nyereség a négy menüpontos menün:
+   44 px tartalék vissza — épp annyi, hogy a skill 3. pontja által KÖTELEZŐVÉ
+   tett „Kurzusok" menüpont (98 px) is beférjen a 900 px-es sávba.
+   A hamburgerre váltás töréspontját SZÁNDÉKOSAN nem emeltük: az NN/g
+   hidden-navigation vizsgálata szerint a rejtett menü desktopon mérhetően
+   rosszabb (a látogatók 27%-a használta a rejtettet, szemben a látható menü
+   ~50%-ával) — https://www.nngroup.com/articles/hamburger-menus/ */
 .kc-nav-desktop__list {
   display: flex;
   align-items: center;
-  gap: var(--kc-space-1);
+  gap: 0;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -336,7 +353,7 @@
   align-items: center;
   gap: var(--kc-space-1);
   min-height: 2.75rem;
-  padding: var(--kc-space-2) var(--kc-space-3);
+  padding: var(--kc-space-2);
   border-radius: var(--kc-radius-sm);
   font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-medium);

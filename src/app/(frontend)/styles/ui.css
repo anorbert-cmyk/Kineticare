@@ -406,7 +406,15 @@
   box-shadow: 0 0 0 3px rgb(179 38 30 / 0.25);
 }
 
+/* MÉRTÉK: a súgósor a HÁROM-MÉRETES skála S lépcsőjén áll (14 px), a
+   pénztár-űrlap mezői viszont 622 px szélesek — a leghosszabb súgó
+   („A vásárláshoz nem kell regisztrálnod…") így Chromiumban mérve 96–100
+   karakter/sor volt 768–1920 px között. Ez a docs/ertekesitesi-ux-skill.md 4.
+   pontjának 45–85-ös sávja FÖLÖTT van, és a WCAG 2.2 1.4.8 (AAA) 80 karakteres
+   plafonját is átlépi. A javítás a mérték, nem a betűméret: a kényelmes
+   mérték-token (30rem) a kis lépcsőn ≈ 75 karakteres sort ad. */
 .kc-field__hint {
+  max-width: var(--kc-measure-comfort);
   font-size: var(--kc-font-s);
   color: var(--kc-color-text-muted);
 }

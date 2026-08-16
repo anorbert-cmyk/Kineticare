@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 
+import { LEGACY_GONE_HTML, isLegacyGonePath } from './lib/legacy-redirects'
 import { REQUEST_ID_HEADER, resolveRequestId } from './lib/request-id'
 
 /**
@@ -11,9 +12,31 @@ import { REQUEST_ID_HEADER, resolveRequestId } from './lib/request-id'
  * - A request headerekbe is beírja, hogy a route handlerek és Payload-hookok a
  *   `getRequestId` segéddel kiolvashassák, és a logger contextébe köthessék.
  * - A response mindig visszaadja a headerben a kliens/naplózás felé.
+ *
+ * Emellett EGY örökölt-URL ág fut itt: a régi kineticare.hu spam-posztjai
+ * **410 Gone** választ kapnak. Miért itt és nem a `next.config.ts`-ben: a
+ * `redirects()` kizárólag átirányítás-státuszokat tud kiadni (a Next
+ * `allowedStatusCodes` listája: 301, 302, 303, 307, 308 —
+ * `next/dist/lib/redirect-status.js`), 410-et nem. Öt dedikált route-fájl
+ * helyett egy középponti ág marad, így a térkép egyetlen forrásból
+ * (`src/lib/legacy-redirects.ts`) él. A tartós átirányítások változatlanul a
+ * `next.config.ts` `redirects()`-ében vannak — a middleware azokhoz nem nyúl.
  */
 export function middleware(request: NextRequest): NextResponse {
   const requestId = resolveRequestId(request.headers.get(REQUEST_ID_HEADER))
+
+  if (isLegacyGonePath(request.nextUrl.pathname)) {
+    const gone = new NextResponse(LEGACY_GONE_HTML, {
+      status: 410,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        // Az elavult tartalom ne ragadjon be közbenső gyorsítótárba.
+        'Cache-Control': 'no-store',
+      },
+    })
+    gone.headers.set(REQUEST_ID_HEADER, requestId)
+    return gone
+  }
 
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set(REQUEST_ID_HEADER, requestId)
