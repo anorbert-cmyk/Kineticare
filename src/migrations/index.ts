@@ -16,6 +16,7 @@ import * as migration_20260815_125333_kurzus_lathatosag_alapertek from './202608
 import * as migration_20260815_192419_vendeg_vasarlas_jelszo_beallitas from './20260815_192419_vendeg_vasarlas_jelszo_beallitas';
 import * as migration_20260815_221033_szakerto_kartyak_blokk from './20260815_221033_szakerto_kartyak_blokk';
 import * as migration_20260815_230708_kurzuskartya_kiemelesek from './20260815_230708_kurzuskartya_kiemelesek';
+import * as migration_20260815_233751_kurzus_ertekesito_mezok from './20260815_233751_kurzus_ertekesito_mezok';
 
 export const migrations = [
   {
@@ -106,6 +107,11 @@ export const migrations = [
   {
     up: migration_20260815_230708_kurzuskartya_kiemelesek.up,
     down: migration_20260815_230708_kurzuskartya_kiemelesek.down,
-    name: '20260815_230708_kurzuskartya_kiemelesek'
+    name: '20260815_230708_kurzuskartya_kiemelesek',
+  },
+  {
+    up: migration_20260815_233751_kurzus_ertekesito_mezok.up,
+    down: migration_20260815_233751_kurzus_ertekesito_mezok.down,
+    name: '20260815_233751_kurzus_ertekesito_mezok'
   },
 ];
