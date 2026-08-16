@@ -47,7 +47,7 @@ import {
 } from '../scripts/restore-legacy-content'
 import { DEFAULT_HEADING as PRESS_ALAPFELIRAT } from '../components/blocks/PressLogos'
 import { buildCourseSlug } from '../lib/course-url'
-import { isFreeCourse } from '../lib/courses'
+import { coursePriceBadgeKind } from '../lib/courses'
 import { JOGI_OLDALAK, jogiOldalTartalom, richTextSzoveg } from '../lib/legal-content'
 import {
   CLINIC_TREATMENTS_ANCHOR,
@@ -841,13 +841,16 @@ describe('alkalmazSosIngyenesJelolo', () => {
 
   it('a javított rekordot a kurzus-logika INGYENESNEK látja (a hurok bezárul)', () => {
     // Ez a teszt köti össze a tartalom-javítást a felülettel: hiába állítja be
-    // a script a mezőt, ha az isFreeCourse mást mondana. A tulajdonos hibája
-    // pontosan a kettő szétcsúszásából állt elő.
+    // a script a mezőt, ha az ár-címke logikája mást mondana. A tulajdonos
+    // hibája pontosan a kettő szétcsúszásából állt elő — a terméken nem volt
+    // kimondva az ingyenesség, ezért a felület fizetősnek mutatta.
     const elotte = { priceInHUF: null, priceInHUFEnabled: null }
-    expect(isFreeCourse(elotte)).toBe(false)
+    expect(coursePriceBadgeKind(elotte)).not.toBe('free')
 
     const eredmeny = alkalmazSosIngyenesJelolo(elotte)
-    expect(isFreeCourse({ priceInHUFEnabled: eredmeny.priceInHUFEnabled })).toBe(true)
+    expect(
+      coursePriceBadgeKind({ priceInHUF: null, priceInHUFEnabled: eredmeny.priceInHUFEnabled }),
+    ).toBe('free')
   })
 })
 
