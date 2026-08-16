@@ -11,6 +11,7 @@ import { isPubliclyVisibleProduct } from '../content/ProductCard'
 import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
 import { About } from './About'
+import { Accordion } from './Accordion'
 import { CtaBanner } from './CtaBanner'
 import { FaqBlock } from './FaqBlock'
 import { FilmHero } from './FilmHero'
@@ -27,8 +28,8 @@ import { Welcome } from './Welcome'
  * A Pages `layout` mezőjének blokkjait rendereli a szerkesztő által beállított
  * sorrendben. Két blokkfajtát köt össze egyetlen listában:
  *  - az új, Higgsfield-kinézetű blokkok (FilmHero, Welcome, Usps, States,
- *    Services, About, PressLogos, TeamMembers, FaqBlock, CtaBanner) a teljes
- *    blokkot kapják és maguk kezelik a szekció-beállításaikat,
+ *    Services, About, PressLogos, TeamMembers, FaqBlock, Accordion, CtaBanner)
+ *    a teljes blokkot kapják és maguk kezelik a szekció-beállításaikat,
  *  - az adatvezérelt / örökölt szekciók (credsStrip, courseCards, freeSos,
  *    howItWorks, testimonials, knowledge, richText) a meglévő kezdőlapi
  *    komponensekre képződnek le — a blokk mezői opcionális felülírásként
@@ -155,6 +156,8 @@ function BlockSwitch({
       return <TeamMembers block={block} />
     case 'faq':
       return <FaqBlock block={block} />
+    case 'accordion':
+      return <Accordion block={block} />
     case 'ctaBanner':
       return <CtaBanner block={block} />
     case 'credsStrip': {

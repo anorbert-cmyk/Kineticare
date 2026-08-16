@@ -302,6 +302,7 @@ export interface Page {
         | BlockKnowledge
         | BlockFaq
         | BlockTeamMembers
+        | BlockAccordion
         | BlockRichText
         | BlockCtaBanner
       )[]
@@ -1183,6 +1184,78 @@ export interface BlockTeamMembers {
   id?: string | null;
   blockName?: string | null;
   blockType: 'teamMembers';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockAccordion".
+ */
+export interface BlockAccordion {
+  /**
+   * A cím fölötti apró szöveg (pl. „Szakmai háttér"). Nem kötelező.
+   */
+  eyebrow?: string | null;
+  /**
+   * A nyitható sorok fölötti cím (pl. „Részletes szakmai háttér").
+   */
+  title?: string | null;
+  /**
+   * Egy-két mondat a nyitható sorok fölé — ez MINDIG látszik. Ide írd azt, amit senki nem hagyhat ki; a lenyitott részbe csak olyasmi kerüljön, ami elolvasás nélkül is érthetővé teszi az oldalt.
+   */
+  lead?: string | null;
+  /**
+   * Minden sor alapból ZÁRVA jelenik meg, a látogató kattintásra nyitja ki. Ezért ide csak MÁSODLAGOS, hosszú olvasnivaló való (pl. szakmai önéletrajz, médiamegjelenések). Árat, kedvezményt, garanciát és a fő gombot SOHA ne rejtsd lenyitó mögé — amit elrejtesz, azt sokan sosem olvassák el.
+   */
+  items?:
+    | {
+        /**
+         * Ez látszik csukott állapotban, erre kattint a látogató (pl. „Kocsis Kata — szakmai önéletrajz").
+         */
+        cim: string;
+        /**
+         * Nem kötelező, de érdemes: csukott állapotban is megmutatja, mennyi és milyen tartalom van a sor mögött (pl. „31 tanfolyam · 8 konferencia"). Egy sornyi legyen.
+         */
+        osszefoglalo?: string | null;
+        /**
+         * A lenyitáskor megjelenő szöveg. A felső eszköztárral formázhatsz, alcímet, felsorolást és linket is beszúrhatsz.
+         */
+        tartalom: {
+          root: {
+            type: string;
+            children: {
+              type: any;
+              version: number;
+              [k: string]: unknown;
+            }[];
+            direction: ('ltr' | 'rtl') | null;
+            format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+            indent: number;
+            version: number;
+          };
+          [k: string]: unknown;
+        };
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'accordion';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2619,6 +2692,7 @@ export interface PagesSelect<T extends boolean = true> {
         knowledge?: T | BlockKnowledgeSelect<T>;
         faq?: T | BlockFaqSelect<T>;
         teamMembers?: T | BlockTeamMembersSelect<T>;
+        accordion?: T | BlockAccordionSelect<T>;
         richText?: T | BlockRichTextSelect<T>;
         ctaBanner?: T | BlockCtaBannerSelect<T>;
       };
@@ -3019,6 +3093,32 @@ export interface BlockTeamMembersSelect<T extends boolean = true> {
               url?: T;
               ujAblakban?: T;
             };
+        id?: T;
+      };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockAccordion_select".
+ */
+export interface BlockAccordionSelect<T extends boolean = true> {
+  eyebrow?: T;
+  title?: T;
+  lead?: T;
+  items?:
+    | T
+    | {
+        cim?: T;
+        osszefoglalo?: T;
+        tartalom?: T;
         id?: T;
       };
   sectionSettings?:

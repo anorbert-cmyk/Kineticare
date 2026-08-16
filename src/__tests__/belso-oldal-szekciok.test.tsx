@@ -163,10 +163,29 @@ describe('/rolunk alap-szekciósora', () => {
     expect(markup).toContain('+36 30 169 2263')
     expect(markup).toContain('+36 20 357 3493')
     expect(markup).toContain('Partnereink')
-    expect(markup).toContain('Kocsis Kata szakmai önéletrajz')
-    expect(markup).toContain('Kiss Kata szakmai önéletrajz')
-    // A bizonyíték MENNYISÉGE a bizalmi jelzés — a CV-tételek nincsenek rövidítve.
+    expect(markup).toContain('Kocsis Kata — szakmai önéletrajz')
+    expect(markup).toContain('Kiss Kata — szakmai önéletrajz')
+    // A bizonyíték MENNYISÉGE a bizalmi jelzés — a CV-tételek nincsenek rövidítve
+    // (a harmonika CSUKVA is a DOM-ban tartja őket, csak a böngésző rejti el).
     expect(markup).toContain('Svédmasszázs (2015) – OKTÁV Továbbképző Központ')
+  })
+
+  it('a telefonszámok és a partnerek NEM kerülnek lenyitó mögé (GOV.UK-szabály)', () => {
+    // A kapcsolatfelvételi adat és a referencia-sor rövid: a nyitott, szabad
+    // szöveges blokkban kell maradnia, nem a harmonikában.
+    const nyitott = layout.filter((block) => block.blockType === 'richText')
+    const nyitottSzoveg = renderToStaticMarkup(
+      createElement(RenderBlocks, {
+        layout: nyitott,
+        posts: [],
+        products: [],
+        testimonials: [],
+      }),
+    )
+    expect(nyitottSzoveg).toContain('+36 30 169 2263')
+    expect(nyitottSzoveg).toContain('+36 20 357 3493')
+    expect(nyitottSzoveg).toContain('Partnereink')
+    expect(nyitottSzoveg).not.toContain('<details')
   })
 
   it('egyetlen elsődleges CTA-gombot tartalmaz, a fizetős kurzusra (B6.5)', () => {
@@ -184,6 +203,93 @@ describe('/rolunk alap-szekciósora', () => {
     expect(layout.some((block) => block.blockType === 'pressLogos')).toBe(false)
     const logokkal = buildRolunkLayout({ sajtoLogok: [11, 12] })
     expect(logokkal.some((block) => block.blockType === 'pressLogos')).toBe(true)
+  })
+})
+
+/**
+ * RÉSZLETES SZAKMAI HÁTTÉR — harmonikában (tulajdonosi kérés, 2026-08-16).
+ *
+ * ═══ MI VÁLTOZOTT ═══
+ * A két teljes szakmai önéletrajz korábban EGY szabad szöveges blokkban, folyó
+ * szövegként állt: több képernyőnyi görgetés a lap alsó felében. Most az új
+ * `accordion` blokk viszi, tételenként (szakemberenként) csukható sorban.
+ *
+ * A SZERZŐDÉS, AMIT EZ A LEÍRÁS ŐRIZ:
+ *  - a tartalom nem vész el (a CV-tételek a DOM-ban maradnak),
+ *  - a fejléc DARABSZÁMA a TÉNYLEGES tartalomból számolódik (nem kézzel beírt
+ *    szám, ami elcsúszhatna a listától — a teamMembers CV-harmonikájának
+ *    mintája),
+ *  - a rövid, kapcsolatfelvételi tartalom NEM kerül lenyitó mögé.
+ */
+describe('/rolunk — a részletes szakmai háttér harmonikája', () => {
+  const layout = buildRolunkLayout()
+  const accordionBlock = layout.find((block) => block.blockType === 'accordion')
+
+  /** Egy lexical richText tömbben: az adott h3 címsort KÖVETŐ lista tételszáma. */
+  function listaTetelszam(tartalom: unknown, listaCim: string): number {
+    const children = (tartalom as { root?: { children?: unknown[] } } | null)?.root?.children ?? []
+    const cimIndex = children.findIndex((node) => {
+      const tipus = (node as { type?: string }).type
+      const szoveg = ((node as { children?: { text?: string }[] }).children ?? [])
+        .map((child) => child.text ?? '')
+        .join('')
+      return tipus === 'heading' && szoveg === listaCim
+    })
+    if (cimIndex === -1) {
+      throw new Error(`Nincs ilyen lista az önéletrajzban: ${listaCim}`)
+    }
+    const lista = children[cimIndex + 1] as { type?: string; children?: unknown[] }
+    expect(lista.type, `a(z) „${listaCim}" címsort nem lista követi`).toBe('list')
+    return (lista.children ?? []).length
+  }
+
+  it('a szekciósorban ott van az accordion blokk, a „szakmai-hatter" horgonnyal', () => {
+    expect(accordionBlock, 'nincs accordion blokk a /rolunk szekciósorában').toBeDefined()
+    expect(accordionBlock?.sectionSettings?.anchorId).toBe('szakmai-hatter')
+    // Az új blokktípus a katalógus része (különben az adminban sem lenne).
+    expect(pageBlockSlugs).toContain('accordion')
+  })
+
+  it('szakemberenként egy nyitható sor, beszélő címmel', () => {
+    if (accordionBlock?.blockType !== 'accordion') {
+      throw new Error('A harmonika-blokk hiányzik a szekciósorból.')
+    }
+    const cimek = (accordionBlock.items ?? []).map((item) => item.cim)
+    expect(cimek).toEqual(['Kocsis Kata — szakmai önéletrajz', 'Kiss Kata — szakmai önéletrajz'])
+  })
+
+  it('a fejléc darabszáma a TARTALOMBÓL számolódik, nem kézzel beírt szám', () => {
+    if (accordionBlock?.blockType !== 'accordion') {
+      throw new Error('A harmonika-blokk hiányzik a szekciósorból.')
+    }
+    const [kocsis, kiss] = accordionBlock.items ?? []
+
+    // A számot a tényleges listákból vezetjük le — ha valaki bővíti a CV-t, a
+    // kivonatnak vele kell nőnie (kézzel beírt számnál ez elcsúszna).
+    const kocsisTanfolyam = listaTetelszam(kocsis.tartalom, 'Tanfolyamok, továbbképzések, konferenciák')
+    const kocsisKonferencia = listaTetelszam(kocsis.tartalom, 'Konferenciák, előadások')
+    const kocsisMedia = listaTetelszam(kocsis.tartalom, 'Média-megjelenések')
+    expect(kocsisTanfolyam).toBeGreaterThan(10)
+    expect(kocsis.osszefoglalo).toContain(`${kocsisTanfolyam} tanfolyam`)
+    expect(kocsis.osszefoglalo).toContain(`${kocsisKonferencia} konferencia`)
+    expect(kocsis.osszefoglalo).toContain(`${kocsisMedia} médiamegjelenés`)
+
+    const kissTanfolyam = listaTetelszam(kiss.tartalom, 'Tanfolyamok, továbbképzések, konferenciák')
+    const kissKonferencia = listaTetelszam(kiss.tartalom, 'Konferenciák, előadások')
+    expect(kiss.osszefoglalo).toBe(
+      `${kissTanfolyam} tanfolyam · ${kissKonferencia} konferencia`,
+    )
+  })
+
+  it('natív details/summary-vel renderelődik, alapból ZÁRVA', () => {
+    const markup = renderLayout(layout)
+
+    expect(markup).toContain('<details class="kc-accordion__item">')
+    expect(markup).toContain('<summary class="kc-accordion__summary">')
+    // Nyitott állapotot egyik sor sem visz — a látogató nyitja ki.
+    expect(markup).not.toContain('<details class="kc-accordion__item" open')
+    // A harmonika NEM ad ki FAQPage strukturált adatot (egy CV nem GYIK).
+    expect(markup).not.toContain('FAQPage')
   })
 })
 
