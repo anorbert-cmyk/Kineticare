@@ -15,13 +15,21 @@
 }
 
 .kc-auth-form__error,
+/* A sikeres űrlap-visszajelzés címsora komponens-cím, nem szekció-cím
+   (a három-méretes skála törzsmérete, 700-as súllyal). */
+.kc-auth-success > h2 {
+  font-family: var(--kc-font-body);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+}
+
 .kc-auth-error {
   padding: var(--kc-space-3) var(--kc-space-4);
   border: 1px solid var(--kc-color-danger);
   border-radius: var(--kc-radius-md);
   background-color: var(--kc-color-danger-surface);
   color: var(--kc-color-danger);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
 }
 
 .kc-auth-form__billing {
@@ -42,7 +50,7 @@
 
 .kc-auth-alt {
   margin-top: var(--kc-space-6);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   color: var(--kc-color-text-muted);
 }
 

@@ -12,6 +12,18 @@ import '../../../app/(frontend)/styles/blocks/how-it-works.css'
  *
  * Megjelenés: a landing számozott-sor nyelve (hajszálvonalas sorok, nagy
  * halvány serif sorszám) — a stílus a styles/blocks/how-it-works.css-ben él.
+ *
+ * ELRENDEZÉS (tulajdonosi visszajelzés, 2026-08-16): a szekció 900 px felett
+ * ASZIMMETRIKUS KÉT HASÁBRA nyílik — balra a cím (a görgetés alatt a helyén
+ * marad), jobbra a lépések hajszálvonalas sora. A korábbi, teljes szélességű
+ * halomban a rövid lépésszövegek elvesztek a széles sávban, a cím pedig
+ * magányos sorként ült felettük. A váltakozó (jobbra-balra ugráló) elrendezést
+ * szándékosan KERÜLJÜK: a folyamat sorrendje egyetlen, felülről lefelé futó
+ * olvasási tengelyen a legérthetőbb.
+ *
+ * A markup csak BURKOLÓKKAL bővült (`kc-how__grid`, `kc-how__head`), a
+ * lista-szerkezet (`ol` > `li`, dekoratív sorszám, lépéscím, szöveg) és a
+ * CMS-felülírás változatlan.
  */
 
 export interface HowItWorksStep {
@@ -22,7 +34,7 @@ export interface HowItWorksStep {
 const STEPS: HowItWorksStep[] = [
   {
     title: 'Kiválasztod a kurzust',
-    text: 'A panaszodhoz illő programot néhány kattintással megvásárolod — bankkártyával, biztonságosan.',
+    text: 'A panaszodhoz illő programot néhány kattintással megvásárolod, bankkártyával, biztonságosan.',
   },
   {
     title: 'Azonnal hozzáférsz',
@@ -30,7 +42,7 @@ const STEPS: HowItWorksStep[] = [
   },
   {
     title: 'Otthon gyakorolsz',
-    text: 'A gyakorlatok lépésről lépésre vezetnek — naponta néhány perc is elég a haladáshoz.',
+    text: 'A gyakorlatok lépésről lépésre vezetnek, naponta néhány perc is elég a haladáshoz.',
   },
 ]
 
@@ -50,21 +62,25 @@ export function HowItWorks({ title, steps, id, variant = 'default' }: HowItWorks
   return (
     <Section className="kc-how" id={id} variant={variant}>
       <Container>
-        <h2 className="kc-section-title">{heading}</h2>
-        <ol className="kc-how__list">
-          {shownSteps.map((step, index) => (
-            <li className="kc-how__row" key={step.title}>
-              {/* A sorrendet a rendezett lista hordozza — a látható sorszám dekoratív. */}
-              <p aria-hidden="true" className="kc-how__num">
-                {index + 1}
-              </p>
-              <div className="kc-how__body">
-                <h3 className="kc-how__step-title">{step.title}</h3>
-                <p className="kc-how__text">{step.text}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
+        <div className="kc-how__grid">
+          <div className="kc-how__head">
+            <h2 className="kc-section-title">{heading}</h2>
+          </div>
+          <ol className="kc-how__list">
+            {shownSteps.map((step, index) => (
+              <li className="kc-how__row" key={step.title}>
+                {/* A sorrendet a rendezett lista hordozza — a látható sorszám dekoratív. */}
+                <p aria-hidden="true" className="kc-how__num">
+                  {index + 1}
+                </p>
+                <div className="kc-how__body">
+                  <h3 className="kc-how__step-title">{step.title}</h3>
+                  <p className="kc-how__text">{step.text}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
       </Container>
     </Section>
   )

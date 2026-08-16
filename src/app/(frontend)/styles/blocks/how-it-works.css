@@ -18,6 +18,10 @@
  * KONTRASZT (tokens.css jegyzőkönyve): lépéscím `text` (ink) a paperen
  * 14,79:1, törzs `text-muted` a paperen 8,80:1, a tinten 8,05:1 — AA felett.
  *
+ * ELRENDEZÉS (2026-08-16): a szekció 900px felett aszimmetrikus két hasáb —
+ * balra a (görgetés alatt helyben maradó) cím, jobbra a lépéssor. Lásd a
+ * `.kc-how__grid` szabályt; a lépések belső szerkezete változatlan.
+ *
  * Betöltés: src/components/content/home/HowItWorks.tsx.
  */
 
@@ -38,12 +42,42 @@
 .kc-how .kc-section-title {
   max-width: 30ch;
   margin-bottom: 0;
-  font-size: var(--kc-text-3xl);
 }
 
-/* A base.css `ol { padding-inline-start }` alapértékét itt vesszük vissza. */
+/* ---- Szekció-rács -------------------------------------------------------
+   Mobilon egyszerű halom (cím, alatta a lépések). 900px felett ASZIMMETRIKUS
+   két hasáb: balra a cím, jobbra a lépéssor. Az arány (4:7) a landing
+   board-rácsainak ritmusát követi — a cím kap egy nyugodt, szűk hasábot, a
+   folyamat pedig a szélesebbet, ahol a lépéscím és a szöveg egy sorba fér.
+   A tengely SZÁNDÉKOSAN egyetlen, felülről lefelé futó oszlop: a jobbra-balra
+   váltakozó elrendezés a sorrendet olvasás közben elbizonytalanítja. */
+.kc-how__grid {
+  display: grid;
+  gap: var(--kc-space-6);
+}
+
+@media (min-width: 900px) {
+  .kc-how__grid {
+    grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+    gap: clamp(2.5rem, 6vw, 5rem);
+  }
+
+  /* A cím a lépések olvasása közben a helyén marad. A `top` a lebegő fejléc alá
+     igazít (base.css `scroll-padding-top` ugyanezzel a tokennel számol).
+     FONTOS: a rács hasábjai NYÚLNAK (nincs `align-items: start`) — a ragadós
+     elem csak a saját, teljes magasságú rács-cellájában tud elmozdulni; egy
+     tartalom-magasságú cellában a `sticky` némán hatástalan maradna. */
+  .kc-how__head {
+    position: sticky;
+    top: calc(var(--kc-header-height) + var(--kc-space-5));
+    align-self: stretch;
+  }
+}
+
+/* A base.css `ol { padding-inline-start }` alapértékét itt vesszük vissza.
+   A cím és a lista közti térközt a rács `gap`-je adja. */
 .kc-how__list {
-  margin: var(--kc-space-6) 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -60,19 +94,23 @@
   border-bottom: 1px solid var(--kc-how-rule);
 }
 
+/* A szűkebb (7fr-es) hasábban a sorszám-oszlop 4rem — a nagy serif szám
+   elfér benne, a lépésszöveg mértéke pedig nem szorul össze. */
 @media (min-width: 900px) {
   .kc-how__row {
-    grid-template-columns: 5rem minmax(0, 1fr);
-    gap: var(--kc-space-6);
+    grid-template-columns: 4rem minmax(0, 1fr);
+    gap: var(--kc-space-5);
     padding: var(--kc-space-6) 0;
   }
 }
 
 /* Nagy, halvány serif sorszám (dekoratív — lásd a lap fejlécét). */
+/* A lépésszám a törzsméreten áll; jelölő-szerepét a 700-as súly, a tabuláris
+   számjegy és a saját színe adja (a címsor-betűnek nincs 700-as metszete). */
 .kc-how__num {
   margin: 0;
-  font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-3xl);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
   font-variant-numeric: tabular-nums;
   line-height: 1;
   color: var(--kc-how-num);
@@ -81,7 +119,7 @@
 .kc-how__step-title {
   margin: 0 0 var(--kc-space-2);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-normal);
   line-height: var(--kc-leading-heading);
   letter-spacing: 0.01em;
@@ -92,7 +130,7 @@
 .kc-how__text {
   margin: 0;
   max-width: 60ch;
-  font-size: var(--kc-text-base);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-body);
   color: var(--kc-how-muted);
 }

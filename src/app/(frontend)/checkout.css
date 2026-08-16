@@ -29,7 +29,7 @@
 
 .kc-cart__title {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
   color: var(--kc-color-text);
   text-decoration: none;
 }
@@ -41,7 +41,7 @@
 .kc-cart__description {
   margin: var(--kc-space-1) 0 0;
   color: var(--kc-color-text-muted);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
 }
 
 .kc-cart__price {
@@ -58,15 +58,18 @@
   border-top: 1px solid var(--kc-color-border);
 }
 
+/* A végösszeg a törzsméreten áll, a hangsúlyt a 700-as súly viszi (a
+   három-méretes skála ár-szabálya, lásd tokens.css). */
 .kc-cart__total {
   margin: 0 0 var(--kc-space-2);
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
 }
 
 .kc-cart__total-note {
   margin: 0 0 var(--kc-space-5);
   color: var(--kc-color-text-muted);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
 }
 
 .kc-cart-empty,
@@ -109,7 +112,7 @@
 .kc-checkout-billing h2,
 .kc-checkout-waiver h2 {
   margin: 0 0 var(--kc-space-4);
-  font-size: var(--kc-text-xl);
+  font-size: var(--kc-font-m);
 }
 
 .kc-checkout-billing__grid {
@@ -127,7 +130,7 @@
 .kc-checkout-waiver__lead {
   margin: 0 0 var(--kc-space-4);
   color: var(--kc-color-text-muted);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
 }
 
 .kc-checkout-waiver__item {
@@ -146,7 +149,7 @@
 }
 
 .kc-checkout-waiver__item label {
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-body);
 }
 
@@ -161,7 +164,7 @@
   border-radius: var(--kc-radius-md);
   background-color: var(--kc-color-danger-surface);
   color: var(--kc-color-danger);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
 }
 
 /**
@@ -223,7 +226,7 @@
 
 .kc-thankyou__order {
   margin: var(--kc-space-3) 0;
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   color: var(--kc-color-text-muted);
 }
 
@@ -236,7 +239,7 @@
 
 .kc-thankyou__spinner {
   margin: var(--kc-space-4) 0 0;
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-font-l);
   animation: kc-pulse 1.5s ease-in-out infinite;
 }
 

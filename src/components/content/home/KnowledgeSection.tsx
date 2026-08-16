@@ -68,7 +68,10 @@ export function KnowledgeSection({
         </div>
         <p className="kc-section-more">
           <Link className="kc-text-link kc-knowledge__link" href="/blog">
-            Összes bejegyzés a tudástárban <span aria-hidden="true">→</span>
+            <span className="kc-text-link__label">Összes bejegyzés a tudástárban</span>
+            <span aria-hidden="true" className="kc-text-link__arrow">
+              →
+            </span>
           </Link>
         </p>
       </Container>

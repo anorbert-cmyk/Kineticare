@@ -35,7 +35,7 @@
 
 .kc-account__saved {
   color: var(--kc-color-success);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
 }
 
 .kc-account__courses {
@@ -59,7 +59,7 @@
 .kc-course-access {
   display: block;
   margin: 0 0 var(--kc-space-3);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   color: var(--kc-color-text-muted);
 }
 
@@ -102,7 +102,7 @@
   flex-wrap: wrap;
   gap: var(--kc-space-2) var(--kc-space-4);
   margin-top: var(--kc-space-1);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   color: var(--kc-color-text-muted);
 }
 

@@ -62,7 +62,7 @@ export const CURRENT_GROUP_TITLE = 'Folyamatban lévő és új kurzusaid'
 /** Üres állapot — barátságos, nem szemrehányó. */
 export const EMPTY_TITLE = 'Itt jelennek meg a kurzusaid'
 export const EMPTY_BODY =
-  'Még nincs elérhető kurzusod. Nézd meg a kínálatunkat — a megvásárolt kurzus azonnal itt nyílik meg.'
+  'Még nincs elérhető kurzusod. Nézd meg a kínálatunkat: a megvásárolt kurzus azonnal itt nyílik meg.'
 export const EMPTY_CTA_LABEL = 'Kurzusok megnézése'
 export const EMPTY_CTA_HREF = '/kurzusok'
 

@@ -34,7 +34,7 @@
 .kc-states__title {
   margin: 0;
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-board-5xl);
+  font-size: var(--kc-font-l);
   font-weight: var(--kc-font-weight-normal);
   letter-spacing: 0.004em;
   line-height: var(--kc-leading-board);
@@ -44,8 +44,8 @@
 
 .kc-states__lead {
   margin: var(--kc-space-5) 0 0;
-  max-width: 68ch;
-  font-size: var(--kc-text-base);
+  max-width: var(--kc-measure);
+  font-size: var(--kc-font-m);
   line-height: 1.65;
   color: var(--kc-states-muted);
   white-space: pre-line;
@@ -88,7 +88,7 @@
   left: var(--kc-space-4);
   padding: 0.3rem 0.55rem;
   background-color: var(--kc-states-badge-bg);
-  font-size: var(--kc-text-board-2xs);
+  font-size: var(--kc-font-s);
   font-weight: var(--kc-font-weight-bold);
   letter-spacing: 0.16em;
   line-height: 1.4;
@@ -127,10 +127,13 @@
   background-color: var(--kc-color-surface-dark);
 }
 
+/* A kártyacím a törzs-betű 600-as metszetét viseli, nem a címsor-betűt: a
+   Tenor Sans egyetlen 400-as vágattal érkezik, tehát a 600 ott szintetikus,
+   torz vastagítás lenne — törzsméreten (M) ez már jól látszana. */
 .kc-states__card-title {
   margin: 0 0 var(--kc-space-1);
-  font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-board-md);
+  font-family: var(--kc-font-body);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-medium);
   line-height: 1.1;
   color: var(--kc-color-on-dark);
@@ -139,7 +142,7 @@
 /* A tükör fehér/78% törzsszövege az ink sávon (≈ 10:1 — AA felett). */
 .kc-states__text {
   margin: 0;
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   line-height: 1.5;
   color: color-mix(in srgb, var(--kc-color-on-dark) 78%, var(--kc-color-surface-dark));
   white-space: pre-line;

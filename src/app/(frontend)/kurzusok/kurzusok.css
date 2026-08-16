@@ -12,7 +12,7 @@
 
 .kc-course-list__header h1 {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-3xl);
+  font-size: var(--kc-font-l);
   line-height: var(--kc-leading-heading);
   margin: 0 0 var(--kc-space-3);
 }
@@ -45,7 +45,7 @@
   border-radius: var(--kc-radius-full);
   color: var(--kc-color-text);
   text-decoration: none;
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   background-color: var(--kc-color-surface-raised);
   transition:
     background-color var(--kc-motion-fast) var(--kc-ease-out),
@@ -97,7 +97,7 @@
    fiók — érintetlenek"), és két képernyőnyi üres tábla eltolná a fizetős
    kártyákat a hajtás alá (UX-skill M3). A sáv ezért a lista saját rétegében
    él, kizárólag meglévő tokenekből — új szín és új fontméret nélkül; a címsor
-   ugyanazon a lépcsőn (--kc-text-2xl) áll, mint a kurzusoldal szekciócímei. */
+   ugyanazon az L lépcsőn áll, mint a kurzusoldal szekciócímei. */
 
 .kc-course-band {
   /* Horgony-ugrásnál (#otthoni, #szakembereknek) a sticky fejléc ne takarja el
@@ -111,7 +111,7 @@
 
 .kc-course-band__title {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-font-l);
   line-height: var(--kc-leading-heading);
   margin: 0 0 var(--kc-space-2);
 }
@@ -160,7 +160,7 @@
 
 .kc-course-card__title {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-heading);
   margin: 0;
 }
@@ -176,7 +176,7 @@
 
 .kc-course-card__excerpt {
   color: var(--kc-color-text-muted);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   margin: 0;
   flex: 1;
 }
@@ -196,7 +196,7 @@
 
 .kc-course-empty h2 {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-xl);
+  font-size: var(--kc-font-m);
   margin: 0 0 var(--kc-space-2);
 }
 
@@ -233,7 +233,7 @@
   list-style: none;
   margin: 0 0 var(--kc-space-5);
   padding: 0;
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   color: var(--kc-color-text-muted);
 }
 
@@ -260,10 +260,12 @@
   /* A lap-szintű tokenek itt élnek, hogy MINDEN szakasz ugyanabból dolgozzon. */
   --kc-course-measure: 34rem; /* ≈ 75 magyar karakter — a felső határ */
   --kc-course-measure-comfort: 30rem; /* ≈ 66 karakter — a kényelmes cél */
-  /* A vásárlódoboz hasábja. 23rem (368px) a mérésből jön: a kártya belső
-     szélessége így ~320px, amiben a --kc-text-3xl-es H1 a mi magyar
-     kurzuscímeinknél nem törik három sorba (a 22rem-es hasábban törött). */
-  --kc-course-aside: 23rem;
+  /* A vásárlódoboz hasábja. A három-méretes skálán a H1 az L lépcsőt viszi
+     (1440px-en 46,4px), ami a korábbi 40,8px-nél ~14%-kal szélesebb sort kér:
+     a hasáb ezért 23rem-ről 25rem-re (400px) nőtt, hogy a magyar kurzuscímek
+     továbbra is két sorban maradjanak. A fő hasáb így is ~600px marad, tehát
+     a 34rem-es (544px) szöveg-mérték érintetlen. */
+  --kc-course-aside: 25rem;
 
   display: block;
 }
@@ -314,13 +316,15 @@
 
 .kc-course-buybox__title {
   font-family: var(--kc-font-heading);
-  /* A H1 a doboz szűk hasábjában él: a 3xl lépcső a felső korlát (UX-skill 4.),
-     a hosszú magyar összetett szavakhoz kötelező elválasztással (B3.4). */
-  font-size: var(--kc-text-3xl);
+  /* A lap H1-e — az L lépcső (a hero-címsor és a szekció-H2-k közös mérete).
+     A doboz szűk hasábjában áll, ezért a hosszú magyar összetett szavakhoz
+     kötelező az elválasztás (B3.4), és a sortörés kiegyensúlyozott. */
+  font-size: var(--kc-font-l);
   line-height: var(--kc-leading-heading);
   margin: 0;
   hyphens: auto;
   overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .kc-course-buybox__lead {
@@ -328,29 +332,33 @@
   margin: 0;
 }
 
+/* Az ÁR a törzsméreten áll (M), a kiemelését a 700-as SÚLY viszi — a
+   három-méretes skálán a hangsúly nem méretből, hanem vastagságból jön. */
 .kc-course-buybox__price {
   display: flex;
   flex-direction: column;
   gap: var(--kc-space-1);
   margin: 0;
-  font-size: var(--kc-text-xl);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
 }
 
+/* Az „Ingyenes" ugyanazt az ár-nyelvet viszi (törzs-betű, 700), csak a
+   sikerszínt kapja: #166534 a paperen 7,04:1 — AA/AAA. */
 .kc-course-buybox__price--free {
-  font-family: var(--kc-font-heading);
   color: var(--kc-color-success);
 }
 
 /* Az ár MELLETT áll ki, hogy nincs rejtett költség (B6.2). */
 .kc-course-buybox__price-note {
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   color: var(--kc-color-text-muted);
 }
 
 .kc-course-buybox__secondary,
 .kc-course-buybox__trust {
   margin: 0;
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   color: var(--kc-color-text-muted);
 }
 
@@ -364,7 +372,6 @@
 
 .kc-course-buybox__trust-mark {
   color: var(--kc-color-primary); /* dekoratív pont — 5,16:1, de aria-hidden */
-  font-size: var(--kc-text-xs);
 }
 
 /* A doboz elsődleges gombja a teljes szélességet kapja: ez a lap egyetlen
@@ -409,7 +416,7 @@
 
 .kc-course-cta__note--owned {
   color: var(--kc-color-success);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
 }
 
 /* ---- Pipás listák (előnyök, „kinek való / kinek nem") ----------------------
@@ -430,7 +437,9 @@
   display: grid;
   grid-template-columns: 1.25rem 1fr;
   gap: var(--kc-space-2);
-  animation: kc-course-fade-up var(--kc-motion-base) var(--kc-ease-out) both;
+  /* A KÖZÖS belépő kulcsképsor (styles/motion.css) — ugyanaz, amit a
+     kezdőlap szekció-belépője használ; két mozgás-nyelvet nem tartunk. */
+  animation: kc-fade-up var(--kc-motion-base) var(--kc-ease-out) both;
   animation-delay: calc(var(--kc-course-stagger, 0) * 60ms);
 }
 
@@ -445,18 +454,6 @@
    aria-hidden — WCAG 1.4.1. */
 .kc-course-checklist--no .kc-course-checklist__mark {
   color: var(--kc-color-danger);
-}
-
-@keyframes kc-course-fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* ---- Média (előzetes vagy borítókép) -------------------------------------- */
@@ -481,7 +478,7 @@
 
 .kc-course-media__caption {
   margin-top: var(--kc-space-2);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   color: var(--kc-color-text-muted);
 }
 
@@ -498,7 +495,7 @@
 }
 
 .kc-course-jump__label {
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   color: var(--kc-color-text-muted);
 }
 
@@ -521,7 +518,7 @@
   border-radius: var(--kc-radius-full);
   background-color: var(--kc-color-surface-raised);
   color: var(--kc-color-text);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   text-decoration: none;
   transition:
     background-color var(--kc-motion-fast) var(--kc-ease-out),
@@ -546,7 +543,7 @@
 
 .kc-course-section__title {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-font-l);
   line-height: var(--kc-leading-heading);
   margin: 0 0 var(--kc-space-5);
 }
@@ -555,7 +552,7 @@
    kérdésre válaszolunk. */
 .kc-course-section__count {
   color: var(--kc-color-text-muted);
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
 }
 
 /* A FOLYÓSZÖVEG mértéke — a lap széles marad, a sor rövid (B1.1, B1.4). */
@@ -609,10 +606,13 @@
   overflow-wrap: anywhere;
 }
 
+/* A lépés- és modulszámok a törzsméreten állnak; a jelölő-szerepüket a
+   700-as súly, a tabuláris számjegy és az akcent-mély szín adja. */
 .kc-course-step__index {
   margin: 0 0 var(--kc-space-2);
-  font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-xl);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   color: var(--kc-color-primary);
 }
@@ -620,13 +620,13 @@
 .kc-course-step__title {
   margin: 0 0 var(--kc-space-2);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-heading);
 }
 
 .kc-course-step__text {
   margin: 0;
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   color: var(--kc-color-text-muted);
 }
 
@@ -667,28 +667,29 @@
 
 .kc-course-module__index {
   margin: 0 0 var(--kc-space-2);
-  font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
-  color: var(--kc-color-accent-quiet);
+  color: var(--kc-color-text-muted);
 }
 
 .kc-course-module__title {
   margin: 0 0 var(--kc-space-2);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-heading);
 }
 
 .kc-course-module__summary {
   margin: 0 0 var(--kc-space-2);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   color: var(--kc-color-text-muted);
 }
 
 .kc-course-module__meta {
   margin: 0 0 var(--kc-space-3);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
   font-weight: var(--kc-font-weight-medium);
   color: var(--kc-color-primary);
 }
@@ -699,7 +700,7 @@
   gap: var(--kc-space-1);
   margin: 0;
   padding-inline-start: var(--kc-space-5);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
 }
 
 .kc-course-module__lesson-kind {
@@ -736,36 +737,44 @@
 .kc-course-fit__title {
   margin: 0 0 var(--kc-space-4);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-heading);
 }
 
-/* ---- Garancia: KIEMELT sáv, a lap alja helyett (B6.3) --------------------- */
+/* ---- Garancia: KIEMELT sáv, a lap alja helyett (B6.3) ---------------------
+   ELVÁLASZTÁS HÁTTÉRREL, NEM BAL SZEGÉLLYEL (2026-08-16, tulajdonosi
+   visszajelzés). A sávnak korábban 4px-es akcent-bal-szegélye volt; a
+   dekoratív bal vonal a lapon máshol nem fordul elő, ezért idegen elemként
+   ült ki, és a „figyelmeztetés"-kallout nyelvét idézte, nem a bizalomét. A
+   megkülönböztetést innentől a tint HÁTTÉR és a bőkezű belső térköz viszi —
+   ugyanaz a nyelv, mint a többi kiemelt felületé. */
 
 .kc-course-guarantee {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--kc-space-4);
+  gap: var(--kc-space-4) var(--kc-space-5);
+  align-items: center;
   margin-bottom: var(--kc-space-8);
   padding: var(--kc-space-6);
-  border: 1px solid var(--kc-color-border);
-  border-left: 4px solid var(--kc-color-primary);
   border-radius: var(--kc-radius-lg);
-  background-color: var(--kc-color-surface-raised);
+  background-color: var(--kc-color-surface-tint);
   scroll-margin-top: calc(var(--kc-header-height) + var(--kc-space-4));
 }
 
 .kc-course-guarantee__mark {
   margin: 0;
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-font-l);
   line-height: 1;
   color: var(--kc-color-primary);
 }
 
+/* A ✓ és a cím egy optikai sorban: a jelölő a cím L-lépcsőjén áll, a
+   szöveg-hasáb a maradékot kapja. */
+
 .kc-course-guarantee__title {
   margin: 0 0 var(--kc-space-2);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-xl);
+  font-size: var(--kc-font-l);
   line-height: var(--kc-leading-heading);
 }
 
@@ -775,53 +784,6 @@
   margin: 0;
   max-width: var(--kc-course-measure-comfort);
   color: var(--kc-color-text-muted);
-}
-
-.kc-course-guarantee__action {
-  grid-column: 1 / -1;
-}
-
-.kc-course-guarantee__action .kc-course-ctaband {
-  margin-bottom: 0;
-}
-
-/* ---- Ismételt vásárlási sáv (B6.1) ---------------------------------------- */
-
-.kc-course-ctaband {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--kc-space-4);
-  margin-bottom: var(--kc-space-8);
-  padding: var(--kc-space-5);
-  border-radius: var(--kc-radius-lg);
-  background-color: var(--kc-color-surface-tint);
-}
-
-.kc-course-ctaband__title {
-  margin: 0;
-  font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
-  line-height: var(--kc-leading-heading);
-}
-
-.kc-course-ctaband__note {
-  margin: var(--kc-space-1) 0 0;
-  font-size: var(--kc-text-sm);
-  color: var(--kc-color-text-muted);
-}
-
-.kc-course-ctaband__action {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--kc-space-4);
-}
-
-.kc-course-ctaband__price {
-  margin: 0;
-  font-size: var(--kc-text-lg);
 }
 
 /* ---- GYIK-harmonika (natív details/summary — B5.1, B7.5) ------------------ */
@@ -858,7 +820,6 @@
   content: '+';
   flex: none;
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-xl);
   line-height: 1;
   color: var(--kc-color-primary);
   transition: transform var(--kc-motion-base) var(--kc-ease-out);
@@ -910,8 +871,8 @@
 
 .kc-course-buybar__price {
   margin: 0;
-  font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
 }
 
 .kc-course-buybar__cta {
@@ -942,55 +903,27 @@
   padding-bottom: calc(var(--kc-space-8) + var(--kc-space-4));
 }
 
-/* ---- RichText-tartalom (helyi LexicalContent kimenete) --------------------- */
-/* TODO(W2-értékelés): az 5B-renderer konszolidációjakor a tartalom-tipográfia
-   az 5B styles/content.css-jébe kerül — ez a blokk akkor megszűnik. */
+/* ---- RichText-tartalom (helyi LexicalContent kimenete) ---------------------
+   A tipográfiát (címsor-lépcsők, mérték, idézet, kód) a KÖZÖS
+   styles/content.css adja — az a lap a route-group globális importláncában
+   van, tehát a kurzusoldalon is érvényes. A korábbi, itt duplikált
+   `h2/h3/h4` és `blockquote` méretszabályok a három-méretes skálán már
+   csak egy második, szétcsúszni képes igazságforrást jelentettek volna,
+   ezért megszűntek; itt CSAK a kurzus-scope eltérése marad. */
 
 .kc-richtext > * + * {
   margin-top: var(--kc-space-4);
-}
-
-.kc-richtext h2,
-.kc-richtext h3,
-.kc-richtext h4 {
-  font-family: var(--kc-font-heading);
-  line-height: var(--kc-leading-heading);
-}
-
-.kc-richtext h2 {
-  font-size: var(--kc-text-xl);
-}
-
-.kc-richtext h3 {
-  font-size: var(--kc-text-lg);
-}
-
-.kc-richtext h4 {
-  font-size: var(--kc-text-base);
 }
 
 .kc-richtext a {
   color: var(--kc-color-primary);
 }
 
-.kc-richtext blockquote {
-  margin-inline: 0;
-  padding-left: var(--kc-space-4);
-  border-left: 3px solid var(--kc-color-border);
-  color: var(--kc-color-text-muted);
-}
-
-.kc-richtext code {
-  background-color: var(--kc-color-surface-tint);
-  padding: 0 var(--kc-space-1);
-  border-radius: var(--kc-radius-sm);
-}
-
 /* ---- Upsell-sáv ------------------------------------------------------------ */
 
 .kc-course-related__title {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-2xl);
+  font-size: var(--kc-font-l);
   line-height: var(--kc-leading-heading);
   margin: 0 0 var(--kc-space-5);
 }

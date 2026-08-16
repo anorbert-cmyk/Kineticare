@@ -115,76 +115,51 @@
   --kc-font-heading: 'Tenor Sans', 'Georgia', 'Times New Roman', serif;
   --kc-font-body: 'Nunito Sans', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
 
-  /* Tipográfiai skála — folytonos (clamp), ~1.25 modulus, 1rem = 16px
-     böngésző-alap (html-en nincs font-size felülírás; a korábbi „18px legacy
-     alap" komment nem a valós renderelt méretet írta le). A felső lépcsők
-     360px→1200px között viewport-arányosan nőnek; a --kc-text-4xl a
-     display-lépcső, egyben a hero-címsor felső korlátja
-     (docs/ertekesitesi-ux-skill.md, 4. pont).
+  /* ---- HÁROM-MÉRETES tipográfiai skála (tulajdonosi döntés, 2026-08-16) ----
+     Az ügyféloldali felületen LEGFELJEBB HÁROM betűméret élhet. A korábbi
+     kilenc törzs-lépcső (--kc-text-2xs … 4xl) és tizenhárom tábla-lépcső
+     (--kc-text-board-*) helyére ez a három token lép; minden `font-size`
+     deklaráció KIZÁRÓLAG ezekre hivatkozhat (őr-teszt: kc-harom-meret).
 
-     A landing-átvétel (G1) EGY lépcsővel bővítette a skálát: a --kc-text-2xs
-     a landing `kc-eyebrow` felvezető-sorának mérete (ott elemre írt
-     clamp(0.65rem, 0.82vw, 0.75rem) volt; a skill 4. pontja szerint egyedi
-     px/rem tilos, ezért lett tokenné). A 4xl FÖLÉ szándékosan NEM került új
-     lépcső: a landing 4–5,6rem-es tábla-címsorai a skill 4. pontjának
-     felső korlátja fölé esnének. */
-  --kc-text-2xs: clamp(0.7rem, 0.67rem + 0.13vw, 0.77rem);
-  --kc-text-xs: 0.777rem;
-  --kc-text-sm: 0.888rem;
-  --kc-text-base: 1rem;
-  --kc-text-lg: clamp(1.125rem, 1.07rem + 0.24vw, 1.25rem);
-  --kc-text-xl: clamp(1.3rem, 1.21rem + 0.4vw, 1.5rem);
-  --kc-text-2xl: clamp(1.55rem, 1.38rem + 0.75vw, 1.95rem);
-  --kc-text-3xl: clamp(1.9rem, 1.62rem + 1.25vw, 2.55rem);
-  --kc-text-4xl: clamp(2.25rem, 1.8rem + 2vw, 3.3rem);
+     MIÉRT NEM SZEGÉNYEBB EZ A HIERARCHIA. A vizuális hierarchiát nem a
+     méret egyedül hordozza: az NN/g „Visual Hierarchy" alapelve szerint a
+     méret, a SÚLY, a SZÍN, a verzál/betűköz és az ELHELYEZÉS együtt jelölik
+     a szintet. Három mérethez két súly (400/700), két szövegszín (ink /
+     ink-soft), két betűcsalád (Tenor Sans címsor / Nunito Sans törzs) és a
+     verzál+tracking eyebrow-nyelv társul — ez így 5-nél több egyértelműen
+     megkülönböztethető szintet ad, miközben a lapon mért betűméret-készlet
+     háromra szűkül. A korábbi állapot ellenkezője volt ennek: 22 különböző
+     méret futott a kezdőlapon, ami zajt adott hierarchia helyett.
 
-  /* ---- Tábla-lépcsők (board scale) ----------------------------------------
-     A kezdőlap TÁBLA-szekciói (Welcome, Usps, States, Services, Rólunk,
-     Vélemények) a higgsfield-tükör 1440 × 810-es board-mesterét reprodukálják.
-     A tükör betűméretei a TÁBLA ARÁNYAIHOZ vannak hangolva — a cím a tábla
-     magasságának adott hányadát tölti ki —, ezért a törzs-skála (--kc-text-*)
-     1,2-es modulusa itt nem elég: az a folyószöveghez való, és a --kc-text-4xl
-     3,3rem-nél megáll, míg a tükör tábla-címei 4–5,6rem-ig mennek.
+     A LÉPCSŐK SZEREPE
+       L — CÍMEK. A hero H1 ÉS a szekció-H2-k KÖZÖS mérete. A H1 és a H2
+           megkülönböztetése NEM méret, hanem elhelyezés (a H1 a hero-ban áll,
+           lead + CTA kíséri), felvezető sor (eyebrow) és szín dolga.
+           Egyben a display-lépcső: a hero címsora ennél nagyobb nem lehet
+           (docs/ertekesitesi-ux-skill.md 4. pont — a 2,9rem a skill
+           --fs-display ≈ 3,5rem-es plafonja alatt marad).
+       M — TÖRZS. Bekezdés, lead, navigáció, gomb, űrlapmező, kártyacím,
+           kártyaszöveg, ár (az ár kiemelése SÚLLYAL: 700), accordion-fejléc.
+           Alsó határa pontosan 1rem = 16px, hogy az iOS Safari ne
+           nagyítson rá az űrlapmezőkre.
+       S — KIEGÉSZÍTŐ. Eyebrow, badge, meta-sor (dátum, darabszám, hossz),
+           apróbetű, lábléc-finomságok, űrlap-súgó és -hibaüzenet.
 
-     Ezek a lépcsők ezért a tükör PONTOS clamp-jei (forrás soronként lent),
-     hogy a szekció ugyanúgy fessen, mint a landingen. Mind clamp-alapú és
-     viewport-arányos (UX-skill 4. pont); a felső korlát 2K felett is tart,
-     mert a clamp maximuma fix rem.
-
-     HASZNÁLATI KORLÁT: kizárólag `.kc-board` tábla-szekcióban. A film-hero H1
-     felső korlátja VÁLTOZATLANUL a --kc-text-4xl (UX-skill 4. pont) — az a
-     szabály a hero címsorára szól, nem a szekciócímekre.
-
-     Mobilon (900px alatt) a tábla-viselkedés kikapcsol, és a lépcsők a saját
-     clamp-minimumukon állnak; a tükör külön mobil-nagyításait (12–20vw)
-     szándékosan NEM vesszük át, hogy ne kelljen második, viewporttól függő
-     token-készletet vezetni.
-
-     Forrás: higgsfield-site/app/src/kineticare.css */
-  --kc-text-board-2xs: clamp(0.64rem, 0.79vw, 0.74rem); /* kc-stat dt · kc-attribution */
-  --kc-text-board-xs: clamp(0.78rem, 0.92vw, 0.88rem); /* kc-about-p */
-  --kc-text-board-sm: clamp(0.92rem, 1.12vw, 1.03rem); /* kc-service-p · kc-quote-small p */
-  --kc-text-board-md: clamp(1.3rem, 1.75vw, 1.6rem); /* kc-checklist li · kc-state-title */
-  --kc-text-board-lg: clamp(1.75rem, 2.5vw, 2.3rem); /* kc-usp-title · kc-usp-num */
-  --kc-text-board-xl: clamp(2.05rem, 2.65vw, 2.55rem); /* kc-stat dd · kc-service-h */
-  --kc-text-board-2xl: clamp(2.3rem, 3.1vw, 3rem); /* kc-quote-big */
-  --kc-text-board-3xl: clamp(2.7rem, 3.35vw, 3.1rem); /* kc-quotes-title */
-  /* A 4xl mobil-minimuma (3,2rem) magasabb az 5xl-énél (2,9rem): a szűk hasábú
-     Rólunk-cím rövidebb sorokból áll, ezért bírja a nagyobb alsó lépcsőt. */
-  --kc-text-board-4xl: clamp(3.2rem, 4.45vw, 4rem); /* kc-about-copy .kc-about-title */
-  --kc-text-board-5xl: clamp(2.9rem, 4.9vw, 4.5rem); /* kc-welcome-title · kc-about-title */
-  --kc-text-board-6xl: clamp(4rem, 6.2vw, 5.6rem); /* kc-services-title */
-  /* Dekoratív idézőjel-glifák (a markupban aria-hidden) — méretük tipográfiai,
-     ezért ezek is a skáláról jönnek. */
-  --kc-text-board-mark: clamp(7rem, 10vw, 9rem); /* kc-quote-mark */
-  --kc-text-board-mark-sm: clamp(2.4rem, 3.3vw, 3rem); /* kc-quote-mini-mark */
+     Mind a három clamp-alapú és viewport-arányos (360px → ~1200px között nő,
+     felül fix rem-en zár), tehát a skill „folytonos skála" előírását tartja.
+     Mért végpontok: L 32 → 46,4px · M 16 → 18px · S 13 → 14px. */
+  --kc-font-l: clamp(2rem, 1.62rem + 1.7vw, 2.9rem);
+  --kc-font-m: clamp(1rem, 0.955rem + 0.2vw, 1.125rem);
+  --kc-font-s: clamp(0.8125rem, 0.785rem + 0.12vw, 0.875rem);
 
   --kc-leading-tight: 1.15;
   --kc-leading-heading: 1.2; /* legacy headline 108/100 ≈ 1.08, olvashatóságra kerekítve */
   --kc-leading-body: 1.67;   /* legacy 30/18 */
-  /* Tábla-címsorok sortávja (UX-skill 4. pont: display 1,05–1,15 között). */
-  --kc-leading-board: 1.06; /* tükör: kc-welcome-title / kc-about-title / kc-quotes-title */
-  --kc-leading-board-tight: 0.98; /* tükör: kc-services-title 0,97 · kc-about-copy cím 0,98 */
+  /* Display-sortáv az L lépcsőhöz (UX-skill 4. pont: display 1,05-1,15 között).
+     A tükör 0,97-0,98-as, óriás betűkhöz hangolt értéke a három-méretes skálán
+     már a sáv alá esne (és a magyar ékezetek a fölötte lévő sorba érnének),
+     ezért megszűnt. */
+  --kc-leading-board: 1.06;
 
   --kc-font-weight-normal: 400;
   --kc-font-weight-medium: 600; /* landing eyebrow / inline-link súlya */

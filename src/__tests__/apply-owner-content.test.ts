@@ -4,18 +4,35 @@ import {
   KURZUS_ELONYOK,
   REGI_KURZUS_SZEKCIO_CIM,
   REGI_PACIENS_ERTEK,
+  SOS_KURZUS_SLUG,
   SZAKMAI_HATTER_HORGONY,
   UJ_KURZUS_SZEKCIO_CIM,
   UJ_PACIENS_ERTEK,
+  alkalmazJogiOldalak,
   alkalmazKezdolapJavitasok,
   alkalmazKurzusElonyok,
+  alkalmazRendeloiHorgony,
   alkalmazRolunkHeroKep,
+  alkalmazSosKurzusSlug,
   alkalmazSzakmaiHarmonika,
   heroKepAzonosito,
   rolunkSzakmaiUjBlokkok,
   stabilJson,
 } from '../scripts/apply-owner-content'
-import { rolunkSzakmaiOrokoltTartalom } from '../scripts/restore-legacy-content'
+import {
+  buildSzolgaltatasokLayout,
+  heading,
+  para,
+  richText,
+  rolunkSzakmaiOrokoltTartalom,
+} from '../scripts/restore-legacy-content'
+import { buildCourseSlug } from '../lib/course-url'
+import { JOGI_OLDALAK, jogiOldalTartalom, richTextSzoveg } from '../lib/legal-content'
+import {
+  CLINIC_TREATMENTS_ANCHOR,
+  CLINIC_TREATMENTS_PATH,
+  SOS_COURSE_SKU,
+} from '../lib/menu-seed'
 import type { Media, Page, Product } from '../payload-types'
 
 /**
@@ -600,6 +617,204 @@ describe('alkalmazSzakmaiHarmonika — az örökölt óriás-blokk cseréje', ()
     const bemenet = [orokoltSzakmaiBlokk()]
     const lenyomat = stabilJson(bemenet)
     csere(bemenet)
+    expect(stabilJson(bemenet)).toBe(lenyomat)
+  })
+})
+
+// ===========================================================================
+// 6. javítás — a három jogi oldal LÉTREHOZÁSA (felülírás soha).
+// ===========================================================================
+
+describe('alkalmazJogiOldalak', () => {
+  it('üres adatbázisban MIND A HÁROM oldalt létrehozza, közzétett állapotban', () => {
+    const eredmeny = alkalmazJogiOldalak({ letezoSlugok: [] })
+
+    expect(eredmeny.letrehozando.map((oldal) => oldal.slug)).toEqual([
+      'aszf',
+      'adatvedelem',
+      'impresszum',
+    ])
+    expect(eredmeny.kihagyasok).toHaveLength(0)
+    expect(eredmeny.modositasok).toHaveLength(3)
+
+    for (const oldal of eredmeny.letrehozando) {
+      expect(oldal.status).toBe('published')
+      expect(oldal._status).toBe('published')
+      expect(oldal.title.length).toBeGreaterThan(0)
+      expect(oldal.seoDescription.length).toBeGreaterThan(0)
+      // A tartalom a jogász szó szerinti szövege — nem üres, és a
+      // szó szerintiséget a legal-content.test.ts bizonyítja karakterre.
+      expect(oldal.content.root.children.length).toBeGreaterThan(10)
+    }
+  })
+
+  it('LÉTEZŐ webcímet SOHA nem ír felül — csendben kihagyja', () => {
+    const eredmeny = alkalmazJogiOldalak({ letezoSlugok: ['aszf', 'impresszum'] })
+
+    expect(eredmeny.letrehozando.map((oldal) => oldal.slug)).toEqual(['adatvedelem'])
+    expect(eredmeny.kihagyasok).toHaveLength(2)
+    for (const kihagyas of eredmeny.kihagyasok) {
+      expect(kihagyas.szabaly).toBe('jogi-oldalak')
+      expect(kihagyas.indok).toContain('MÁR LÉTEZIK')
+      // A jogi oldal hiánya nem üzemeltetési hiba: nem hangos kihagyás.
+      expect(kihagyas.hangos).not.toBe(true)
+    }
+  })
+
+  it('idempotens: másodszor futtatva egyetlen létrehozás sem marad', () => {
+    const elso = alkalmazJogiOldalak({ letezoSlugok: [] })
+    const masodik = alkalmazJogiOldalak({
+      letezoSlugok: elso.letrehozando.map((oldal) => oldal.slug),
+    })
+
+    expect(masodik.letrehozando).toHaveLength(0)
+    expect(masodik.modositasok).toHaveLength(0)
+    expect(masodik.kihagyasok).toHaveLength(3)
+  })
+
+  it('a jogi oldalak tartalma a legal-content modulból jön (nem másolat)', () => {
+    const eredmeny = alkalmazJogiOldalak({ letezoSlugok: [] })
+    for (const [index, oldal] of eredmeny.letrehozando.entries()) {
+      expect(richTextSzoveg(oldal.content)).toBe(
+        richTextSzoveg(jogiOldalTartalom(JOGI_OLDALAK[index])),
+      )
+    }
+  })
+})
+
+// ===========================================================================
+// 7. javítás — az SOS villámkurzus webcíme.
+// ===========================================================================
+
+describe('alkalmazSosKurzusSlug', () => {
+  it('a jóváhagyott slug PONTOSAN az, amit a mező slug-generátora adna', () => {
+    // Ha a kurzus nevéből más slug adódna, a kézzel beírt érték és a mező
+    // hookja (src/fields/course-slug.ts) szétcsúszna.
+    expect(buildCourseSlug(SOS_COURSE_SKU)).toBe(SOS_KURZUS_SLUG)
+  })
+
+  it.each([undefined, null, '', '   '])('üres mezőt (%p) kitölti', (jelenlegi) => {
+    const eredmeny = alkalmazSosKurzusSlug(jelenlegi)
+    expect(eredmeny.slug).toBe(SOS_KURZUS_SLUG)
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.kihagyasok).toHaveLength(0)
+  })
+
+  it('MEGLÉVŐ webcímet sosem ír át', () => {
+    const eredmeny = alkalmazSosKurzusSlug('sajat-webcim')
+    expect(eredmeny.slug).toBeNull()
+    expect(eredmeny.modositasok).toHaveLength(0)
+    expect(eredmeny.kihagyasok[0].indok).toContain('MÁR VAN webcíme')
+  })
+
+  it('idempotens: a már beírt slugot csendben kihagyja', () => {
+    const eredmeny = alkalmazSosKurzusSlug(SOS_KURZUS_SLUG)
+    expect(eredmeny.slug).toBeNull()
+    expect(eredmeny.kihagyasok[0].indok).toContain('MÁR')
+    expect(eredmeny.kihagyasok[0].hangos).not.toBe(true)
+  })
+})
+
+// ===========================================================================
+// 8. javítás — a rendelői szekció horgonya.
+// ===========================================================================
+
+describe('alkalmazRendeloiHorgony', () => {
+  /** Szövegblokk a megadott címsorral és horgonnyal. */
+  const szovegSzekcio = (cimsor: string, anchorId?: string | null): Szekcio =>
+    ({
+      blockType: 'richText',
+      id: `rt-${cimsor.slice(0, 6)}`,
+      content: richText([
+        heading('h3', cimsor),
+        para('Gyógytorna, manuálterápia és kiegészítő technikák.'),
+      ]),
+      sectionSettings: { visible: true, hatter: 'feher', ...(anchorId ? { anchorId } : {}) },
+    }) as Szekcio
+
+  /** A ténylegesen élő állapot: a rendelői szekció `arlista` horgonnyal. */
+  const eloSzekciosor = (): Szekciosor => [
+    kurzusSzekcio('Kurzusaink'),
+    szovegSzekcio('Rendelői kezelések – személyes terápiás megoldások', 'arlista'),
+  ]
+
+  it('az „arlista" horgonyt a menüponthoz igazítja', () => {
+    const eredmeny = alkalmazRendeloiHorgony(eloSzekciosor())
+
+    expect(eredmeny.layout).not.toBeNull()
+    expect(eredmeny.layout?.[1].sectionSettings?.anchorId).toBe(CLINIC_TREATMENTS_ANCHOR)
+    // A menü célja ezután tényleg létező horgonyra mutat.
+    expect(CLINIC_TREATMENTS_PATH.endsWith(`#${CLINIC_TREATMENTS_ANCHOR}`)).toBe(true)
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.kihagyasok).toHaveLength(0)
+    // A szekció többi beállítása változatlan.
+    const rendeloi = eredmeny.layout?.[1]
+    expect(rendeloi?.blockType).toBe('richText')
+    if (rendeloi?.blockType === 'richText') {
+      expect(rendeloi.sectionSettings?.hatter).toBe('feher')
+    }
+  })
+
+  it('horgony nélküli szekciót is felcímkéz', () => {
+    const eredmeny = alkalmazRendeloiHorgony([
+      szovegSzekcio('Rendelői kezelések – személyes terápiás megoldások'),
+    ])
+    expect(eredmeny.layout?.[0].sectionSettings?.anchorId).toBe(CLINIC_TREATMENTS_ANCHOR)
+  })
+
+  it('idempotens: a már helyes horgonyt csendben kihagyja', () => {
+    const elso = alkalmazRendeloiHorgony(eloSzekciosor())
+    const masodik = alkalmazRendeloiHorgony(elso.layout)
+
+    expect(masodik.layout).toBeNull()
+    expect(masodik.modositasok).toHaveLength(0)
+    expect(masodik.kihagyasok[0].hangos).not.toBe(true)
+    expect(masodik.kihagyasok[0].indok).toContain('MÁR')
+  })
+
+  it('a seed-builder alapállapota már helyes (nincs teendő)', () => {
+    const eredmeny = alkalmazRendeloiHorgony(buildSzolgaltatasokLayout())
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].indok).toContain('MÁR')
+  })
+
+  it('üres szekciósor: hangos kihagyás', () => {
+    expect(alkalmazRendeloiHorgony(null).kihagyasok[0].hangos).toBe(true)
+    expect(alkalmazRendeloiHorgony([]).kihagyasok[0].hangos).toBe(true)
+  })
+
+  it('nem azonosítható szekció: hangos kihagyás, írás nélkül', () => {
+    const eredmeny = alkalmazRendeloiHorgony([kurzusSzekcio('Kurzusaink')])
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('nincs olyan szövegblokk')
+  })
+
+  it('TÖBB illeszkedő szekció: hangos kihagyás, írás nélkül', () => {
+    const eredmeny = alkalmazRendeloiHorgony([
+      szovegSzekcio('Rendelői kezelések – személyes terápiás megoldások'),
+      szovegSzekcio('Rendelői kezelések – árlista'),
+    ])
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('nem egyértelmű')
+  })
+
+  it('a horgonyt MÁS blokk viseli: hangos kihagyás (ütközés-védelem)', () => {
+    const eredmeny = alkalmazRendeloiHorgony([
+      kurzusSzekcio('Kurzusaink'),
+      szovegSzekcio('Rendelői kezelések – személyes terápiás megoldások', 'arlista'),
+      szovegSzekcio('Valami más szekció', CLINIC_TREATMENTS_ANCHOR),
+    ])
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+    expect(eredmeny.kihagyasok[0].indok).toContain('ütközne')
+  })
+
+  it('a bemeneti szekciósort nem módosítja helyben', () => {
+    const bemenet = eloSzekciosor()
+    const lenyomat = stabilJson(bemenet)
+    alkalmazRendeloiHorgony(bemenet)
     expect(stabilJson(bemenet)).toBe(lenyomat)
   })
 })

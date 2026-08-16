@@ -11,9 +11,11 @@
  * `.kc-board`/`.kc-board--edge` adja (styles/ui.css); itt csak a szekció saját
  * rács-geometriája és tipográfiája él.
  *
- * MÉRETEK: minden betűméret a skáláról jön — a tábla-címek és a tábla apró
- * szövegei a `--kc-text-board-*` lépcsőkről (tokens.css), amelyek a tükör
- * pontos clamp-jei (UX-skill 4. pont: elemre írt px/rem TILOS).
+ * MÉRETEK: minden betűméret a HÁROM-MÉRETES skáláról jön (`--kc-font-l/m/s`,
+ * tokens.css; UX-skill 4. pont: elemre írt px/rem TILOS). A tábla-cím az L
+ * lépcsőn áll, a bemutatkozó bekezdés viszont a TÖRZSMÉRETEN (M) — ez utóbbi
+ * 2026-08-16-i tulajdonosi javítás: a bemutatkozás a korábbi tábla-lépcsőn
+ * (~14px) olvashatatlanul apró volt a szekció léptékéhez képest.
  *
  * AKCENT-KORLÁT (terv 3.1): a kis felső felirat, a kiemelt blokk felirata és a
  * nagy számok `accent-deep` (paperen 5,16:1, tinten 4,72:1 — AA felett);
@@ -99,7 +101,7 @@
 
 .kc-about__eyebrow {
   margin: 0;
-  font-size: var(--kc-text-2xs);
+  font-size: var(--kc-font-s);
   font-weight: var(--kc-font-weight-medium);
   letter-spacing: var(--kc-tracking-eyebrow);
   line-height: 1.3;
@@ -120,9 +122,9 @@
   margin: var(--kc-space-5) 0 0;
   max-width: 7.4ch;
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-board-4xl);
+  font-size: var(--kc-font-l);
   font-weight: var(--kc-font-weight-normal);
-  line-height: var(--kc-leading-board-tight);
+  line-height: var(--kc-leading-board);
   color: var(--kc-about-ink);
   text-wrap: balance;
 }
@@ -140,7 +142,7 @@
 .kc-about__text {
   margin: 0 0 var(--kc-space-2);
   max-width: 38ch;
-  font-size: var(--kc-text-board-xs);
+  font-size: var(--kc-font-m);
   line-height: 1.55;
   color: var(--kc-about-muted);
   white-space: pre-line;
@@ -178,7 +180,7 @@
 
 .kc-about__feature-label {
   margin: 0;
-  font-size: var(--kc-text-board-2xs);
+  font-size: var(--kc-font-s);
   font-weight: var(--kc-font-weight-medium);
   letter-spacing: 0.16em;
   line-height: 1.4;
@@ -189,7 +191,7 @@
 .kc-about__feature-note {
   margin: var(--kc-space-1) 0 0;
   max-width: 28ch;
-  font-size: var(--kc-text-board-2xs);
+  font-size: var(--kc-font-s);
   line-height: 1.5;
   color: var(--kc-about-muted);
   white-space: pre-line;
@@ -264,7 +266,7 @@
 .kc-about__stat-value {
   margin: 0 0 var(--kc-space-2);
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-board-xl);
+  font-size: var(--kc-font-l);
   line-height: 1;
   color: var(--kc-about-accent-text);
 }
@@ -272,7 +274,7 @@
 .kc-about__stat-label {
   margin: 0;
   max-width: 12ch;
-  font-size: var(--kc-text-board-2xs);
+  font-size: var(--kc-font-s);
   line-height: 1.55;
   color: var(--kc-about-muted);
 }

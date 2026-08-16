@@ -24,7 +24,7 @@ import '../../app/(frontend)/styles/blocks/film-hero.css'
  *
  * UX-korlátok (docs/ertekesitesi-ux-skill.md):
  * - A cím az oldal EGYETLEN H1-e (a ScrollScrub az első jelenet címét h1-ként
- *   rendereli), mérete a display-lépcső (--kc-text-4xl) — annál nagyobb nem
+ *   rendereli), mérete a három-méretes skála L (cím) lépcsője — annál nagyobb nem
  *   lehet (4. pont).
  * - M1: legfeljebb 2 gomb; az ELSŐ a hangsúlyos, fizetős irányba mutató CTA,
  *   a második visszafogott. A sorrendet a szerkesztő adja a blokkban.

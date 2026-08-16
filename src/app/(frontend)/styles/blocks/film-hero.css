@@ -8,7 +8,7 @@
  * színsáv, gombok.
  *
  * SZABÁLYOK (docs/ertekesitesi-ux-skill.md):
- * - Fontméret elemre írt px/rem NÉLKÜL: minden méret a --kc-text-* skáláról
+ * - Fontméret elemre írt px/rem NÉLKÜL: minden méret a --kc-font-l/m/s skáláról
  *   jön (a címsor a scroll-scrub.css-ben a display-lépcsőt kapja, ennél
  *   nagyobb nem lehet). Ez a lap SEMMILYEN font-size-t nem ír felül.
  * - Szín kizárólag tokenről (tokens.css). A landing `ink #10243e` a fő site
@@ -137,7 +137,7 @@ main > .kc-film-hero:first-of-type {
 }
 
 /* A feliratok a márka display-betűjét viszik, a hero-címmel egy nyelven. A
-   méret a közös skáláról jön (scroll-scrub.css: --kc-text-2xl) — itt csak a
+   méret a közös skáláról jön (scroll-scrub.css: törzsméret) — itt csak a
    metszet, ahogy a címsornál is. */
 .kc-film-hero .scroll-scrub__caption {
   font-family: var(--kc-font-heading);
@@ -146,7 +146,7 @@ main > .kc-film-hero:first-of-type {
 }
 
 /* Címsor: a márka display-betűje. Méret és sortáv a komponens-lapról
-   (--kc-text-4xl / --kc-leading-tight) — itt csak a metszet és a tracking. */
+   (--kc-font-l / --kc-leading-tight) — itt csak a metszet és a tracking. */
 .kc-film-hero .scroll-scrub__title {
   font-family: var(--kc-font-heading);
   font-weight: var(--kc-font-weight-normal);

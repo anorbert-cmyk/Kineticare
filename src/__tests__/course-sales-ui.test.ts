@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { CourseBuybox } from '../components/courses/CourseBuybox'
-import { CourseCtaBand } from '../components/courses/CourseCtaBand'
 import { CourseCurriculum, moduleMetaLabel } from '../components/courses/CourseCurriculum'
 import { CourseFaq } from '../components/courses/CourseFaq'
 import { CourseFitCheck } from '../components/courses/CourseFitCheck'
@@ -25,6 +24,9 @@ import type { Product } from '../payload-types'
  *  - a horgony-chipek csak LÉTEZŐ szakaszokra mutatnak (B2.3);
  *  - a GYIK natív `details`, darabszámmal (B5.1, B5.3), de ár és garancia
  *    SOSEM harmonikában (B5.2);
+ *  - a garancia-sáv TISZTA érv: 2026-08-16 óta NEM hordoz vásárló-gombot — a
+ *    lap egyetlen vásárlási célja a ragadós vásárlódoboz, mobilon a ragadós
+ *    alsó sáv (tulajdonosi döntés az ismételt CTA-k ellen);
  *  - a mobil vásárlósáv JS nélkül REJTVE marad;
  *  - a tananyag nyilvános nézete nem szivárogtat fizetős azonosítót (S2/b).
  */
@@ -201,7 +203,7 @@ describe('CourseFitCheck — a két lista EGYMÁS MELLETT', () => {
       createElement(CourseFitCheck, {
         fitFor: ['Otthon szeretnél gyakorolni'],
         fitTitle: 'Neked való, ha…',
-        heading: 'Kinek való — és kinek nem?',
+        heading: 'Kinek való, és kinek nem?',
         headingId: 'kinek-valo-cim',
         notFitFor: ['Nincs napi 5 perced'],
         notFitTitle: 'Nem javasoljuk, ha…',
@@ -276,46 +278,42 @@ describe('CourseFaq — natív harmonika, darabszámmal', () => {
   })
 })
 
-describe('CourseGuarantee + CourseCtaBand — a garancia után gomb jön (B6.1)', () => {
-  it('a garancia-sáv kiemelt szakasz, és hordozhatja az ismételt CTA-t', () => {
-    const html = renderToStaticMarkup(
-      createElement(
-        CourseGuarantee,
-        {
-          guarantee: { title: '30 napos garancia', text: 'Kérdés nélkül visszafizetjük.' },
-          headingId: 'garancia-cim',
-        },
-        createElement(CourseCtaBand, {
-          courseTitle: 'Otthoni KézRehab Program',
-          guaranteeLabel: '30 napos garancia',
-          hasPurchased: false,
-          priceBadge: 'price',
-          priceHuf: 79500,
-          product,
-        }),
-      ),
-    )
+describe('CourseGuarantee — tiszta érv, vásárló-gomb NÉLKÜL', () => {
+  const html = renderToStaticMarkup(
+    createElement(CourseGuarantee, {
+      guarantee: { title: '30 napos garancia', text: 'Kérdés nélkül visszafizetjük.' },
+      headingId: 'garancia-cim',
+    }),
+  )
+
+  it('kiemelt, horgonyozott szakasz a garancia címével és szövegével', () => {
     expect(html).toContain('id="garancia"')
     expect(html).toContain('30 napos garancia')
     expect(html).toContain('Kérdés nélkül visszafizetjük.')
-    expect(html).toContain('/penztar?termek=42')
     // A garancia NEM harmonikában van (B5.2).
     expect(html).not.toContain('<details')
   })
 
-  it('az ismételt sáv ugyanarra a checkout-útvonalra visz, mint a doboz', () => {
-    const html = renderToStaticMarkup(
-      createElement(CourseCtaBand, {
-        courseTitle: 'Otthoni KézRehab Program',
-        guaranteeLabel: null,
-        hasPurchased: false,
-        priceBadge: 'price',
-        priceHuf: 79500,
-        product,
-      }),
+  it('NEM hordoz checkout-útvonalat: a lapon egyetlen vásárlási cél él', () => {
+    expect(html).not.toContain('/penztar')
+    expect(html).not.toContain('kc-button')
+    expect(html).not.toContain('kc-course-cta')
+  })
+})
+
+describe('a tartalomban ismételt vásárló-gomb NINCS', () => {
+  it('a kurzusoldal forrása nem hivatkozik ismételt CTA-sávra', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { fileURLToPath } = await import('node:url')
+    const forras = readFileSync(
+      fileURLToPath(new URL('../app/(frontend)/kurzusok/[slug]/page.tsx', import.meta.url)),
+      'utf8',
     )
-    expect(html).toContain('/penztar?termek=42')
-    expect(html).toContain(formatPriceHuf(79500))
+    // Az egyetlen vásárlási felület a buybox + a mobil ragadós sáv.
+    expect(forras).toContain('CourseBuybox')
+    expect(forras).toContain('MobileBuyBar')
+    expect(forras).not.toContain('CourseCtaBand')
+    expect(forras).not.toContain('ctaBand')
   })
 })
 

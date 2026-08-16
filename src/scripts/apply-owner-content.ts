@@ -2,9 +2,9 @@
  * Tulajdonos által jóváhagyott, EGYSZERI szerkesztői tartalom-javítások.
  *
  * ═══ MIT JAVÍT ═══
- * Négy, 2026-08-16-án jóváhagyott tartalom-javítás — mind a négy KIZÁRÓLAG
- * pontos egyezésnél fut le, tehát a lányok időközbeni szerkesztését sosem írja
- * felül:
+ * Nyolc, 2026-08-16-án jóváhagyott tartalom-javítás. Mind KIZÁRÓLAG pontos
+ * egyezésnél (illetve üres mezőnél, hiányzó oldalnál) fut le, tehát a lányok
+ * időközbeni szerkesztését egyik sem írja felül:
  *
  *  1. Kezdőlap → Kurzuskártyák szekció címe: „Így tudunk neked segíteni” →
  *     „Kurzusaink”. Ok: az eredeti cím ÜTKÖZÖTT a lentebbi Szolgáltatások
@@ -41,6 +41,27 @@
  *     blokk tartalma byte-ra a seedelt örökölt tartalom (kulcs-sorrendtől
  *     független összevetés a jsonb miatt) — szerkesztői módosítás esetén a
  *     blokk érintetlen marad.
+ *  6. A HÁROM JOGI OLDAL létrehozása a jogász szó szerinti szövegéből:
+ *     `/aszf`, `/adatvedelem`, `/impresszum` (a lábléc linkjeivel azonos
+ *     webcímek — src/components/layout/Footer.tsx). A szöveg forrása a
+ *     `src/lib/legal-content.ts` modul és a mellette élő, betűhív
+ *     `legal-source/*.txt`. Ez a lépés CSAK LÉTREHOZ: ha a webcím már
+ *     létezik, a script SEMMIT nem ír felül és nem is módosít — a jogi
+ *     szöveget a tulajdonos/ügyvéd gondozza, egy script sosem írhatja át.
+ *  7. Az „SOS Kézrelax villámkurzus” webcíme (`products.slug`): élesben ÜRES,
+ *     ezért a kurzus a régi, id-alapú `/kurzusok/2` címen érhető el. A
+ *     javítás beírja a beszédes `sos-kezrelax-villamkurzus` slugot —
+ *     KIZÁRÓLAG akkor, ha a mező tényleg üres. A régi URL nem törik el: a
+ *     `/kurzusok/[slug]` route a numerikus szegmenst tartósan a kanonikus
+ *     címre irányítja (src/lib/course-url.ts), a menü SOS-pontja pedig
+ *     termék-referencia, tehát magától követi a slugot (src/lib/menu-seed.ts).
+ *  8. A `/szolgaltatasok` oldal rendelői szekciójának HORGONYA: a fejléc-menü
+ *     a `/szolgaltatasok#rendeloi` címre visz, az élő szekció viszont
+ *     `arlista` horgonyt visel — a menüpontra kattintva ma SEMMI nem történik.
+ *     A javítás a rendelői szekciót a TARTALMA alapján azonosítja (a benne
+ *     álló „Rendelői kezelések…” címsor), és csak EGYÉRTELMŰ találatnál ír; a
+ *     kód-szintű alapállapotban a seed-builder már a helyes horgonyt adja
+ *     (src/scripts/restore-legacy-content.ts `buildSzolgaltatasokLayout`).
  *
  * ═══ KAPU ═══
  * Alapértelmezésben PRÓBAFUTÁS (dry-run): a script mindent kiszámol és
@@ -57,12 +78,13 @@
  * sosem írhat kifejezett kérés nélkül.
  *
  * ═══ IDEMPOTENCIA ═══
- * Mind a négy javítás pontos egyezésre szűr, ezért másodszor lefuttatva már
- * egyetlen módosítást sem talál: a kimenet ugyanaz a tartalom, a naplóban
- * pedig indokolt kihagyások állnak. A kezdőlap szekciósorát a script TELJES
- * tömbként írja vissza (a Payload blokk-mező részlegesen nem frissíthető), de
- * a nem érintett blokkokat VÁLTOZATLAN objektum-referenciaként adja tovább —
- * így a többi szekció tartalma bitre azonos marad.
+ * Mindegyik javítás pontos egyezésre (üres mezőre, hiányzó webcímre) szűr,
+ * ezért másodszor lefuttatva már egyetlen módosítást sem talál: a kimenet
+ * ugyanaz a tartalom, a naplóban pedig indokolt kihagyások állnak. A kezdőlap
+ * szekciósorát a script TELJES tömbként írja vissza (a Payload blokk-mező
+ * részlegesen nem frissíthető), de a nem érintett blokkokat VÁLTOZATLAN
+ * objektum-referenciaként adja tovább — így a többi szekció tartalma bitre
+ * azonos marad.
  */
 
 import { pathToFileURL } from 'node:url'
@@ -70,7 +92,14 @@ import { pathToFileURL } from 'node:url'
 import { getPayload, type Payload } from 'payload'
 
 import { HOME_PAGE_SLUG } from '../lib/content-slugs'
+import {
+  JOGI_OLDALAK,
+  jogiOldalTartalom,
+  richTextSzoveg,
+  type JogiOldalLeiras,
+} from '../lib/legal-content'
 import { logger } from '../lib/logger'
+import { CLINIC_TREATMENTS_ANCHOR, SOS_COURSE_SKU } from '../lib/menu-seed'
 import config from '../payload.config'
 import type { Page, Product } from '../payload-types'
 // Mellékhatás-mentes import (a legacy-script futtatás-kapuval védett): a
@@ -121,6 +150,26 @@ export const REGI_ROLUNK_HERO_PREFIX = '682a121babe80_IMG_7573'
 /** Az ÚJ fejléc-kép fájlnév-prefixe (páros csapatfotó — mindkét gyógytornász). */
 export const UJ_ROLUNK_HERO_PREFIX = 'katak-team'
 
+/**
+ * Az SOS villámkurzus jóváhagyott webcíme (`products.slug`).
+ *
+ * A `sku`-ból a kurzus-slug szabályai szerint adódik (src/lib/course-url.ts
+ * `buildCourseSlug`) — a konstans mellett ezt teszt is őrzi, hogy a beírt
+ * érték soha ne csússzon el a mező saját slug-generátorától.
+ */
+export const SOS_KURZUS_SLUG = 'sos-kezrelax-villamkurzus'
+
+/** A `/szolgaltatasok` oldal webcíme (Pages.slug). */
+export const SZOLGALTATASOK_SLUG = 'szolgaltatasok'
+
+/**
+ * A rendelői szekció TARTALMI ismertetőjegye: a szekció ezzel a címsorral
+ * kezdődik (src/scripts/restore-legacy-content.ts `rendeloiKezelesekNodes`).
+ * A horgony-javítás EZ ALAPJÁN azonosítja a blokkot — nem sorszám alapján,
+ * mert a szerkesztő átrendezheti a szekciókat.
+ */
+export const RENDELOI_SZEKCIO_CIMKEZDET = 'Rendelői kezelések'
+
 // ---------------------------------------------------------------------------
 // Típusok
 // ---------------------------------------------------------------------------
@@ -138,6 +187,9 @@ export type JavitasSzabaly =
   | 'kurzus-elonyok'
   | 'rolunk-hero-kep'
   | 'szakmai-harmonika'
+  | 'jogi-oldalak'
+  | 'sos-kurzus-slug'
+  | 'rendeloi-horgony'
 
 /** Egy elvégzett módosítás vagy egy indokolt kihagyás gépileg is vizsgálható leírása. */
 export interface JavitasLepes {
@@ -594,6 +646,271 @@ export const alkalmazSzakmaiHarmonika = (input: {
 }
 
 // ---------------------------------------------------------------------------
+// 6. javítás — a három jogi oldal LÉTREHOZÁSA (felülírás soha).
+// ---------------------------------------------------------------------------
+
+/** Egy létrehozandó jogi oldal teljes Pages-adata. */
+export interface JogiOldalAdat {
+  title: string
+  slug: string
+  content: Page['content']
+  seoDescription: string
+  /** A storefront a saját `status` mezőre szűr, a verziózás a `_status`-ra. */
+  status: 'published'
+  _status: 'published'
+}
+
+/** A jogi oldalak létrehozásának eredménye. */
+export interface JogiOldalAtalakitas {
+  /** A LÉTREHOZANDÓ oldalak — a már létező webcímek nincsenek benne. */
+  letrehozando: JogiOldalAdat[]
+  modositasok: JavitasLepes[]
+  kihagyasok: JavitasLepes[]
+}
+
+/**
+ * A három jogi oldal (ÁSZF, adatkezelés, impresszum) CREATE-ONLY átalakítása.
+ *
+ * Tiszta függvény: a hívó adja meg, mely webcímek léteznek már; a függvény a
+ * hiányzókhoz felépíti a teljes Pages-adatot (a szó szerinti jogi szövegből
+ * generált Lexical tartalommal), a meglévőket pedig CSENDBEN kihagyja.
+ *
+ * MIÉRT CSAK LÉTREHOZÁS: a jogi szöveg felelőse a tulajdonos és az ügyvédje.
+ * Ha az oldal már létezik — akár a lányok szerkesztették, akár egy korábbi
+ * futás hozta létre —, a script hozzá sem nyúl; a szöveg frissítése tudatos,
+ * emberi döntés (admin vagy külön, jóváhagyott lépés).
+ */
+export const alkalmazJogiOldalak = (input: {
+  /** A `pages` collectionben MÁR LÉTEZŐ webcímek (bármelyik státuszban). */
+  letezoSlugok: readonly string[]
+  /** A létrehozandó oldalak leírásai — alapból mind a három. */
+  oldalak?: readonly JogiOldalLeiras[]
+}): JogiOldalAtalakitas => {
+  const oldalak = input.oldalak ?? JOGI_OLDALAK
+  const letezo = new Set(input.letezoSlugok)
+  const letrehozando: JogiOldalAdat[] = []
+  const modositasok: JavitasLepes[] = []
+  const kihagyasok: JavitasLepes[] = []
+
+  for (const oldal of oldalak) {
+    const uzenet = `Jogi oldal („${oldal.cim}”, webcím: „/${oldal.slug}”)`
+    if (letezo.has(oldal.slug)) {
+      kihagyasok.push({
+        szabaly: 'jogi-oldalak',
+        uzenet,
+        indok:
+          'a webcím MÁR LÉTEZIK — a script jogi oldalt sosem ír felül, a szöveg frissítése emberi döntés (admin)',
+      })
+      continue
+    }
+    const content = jogiOldalTartalom(oldal)
+    letrehozando.push({
+      title: oldal.cim,
+      slug: oldal.slug,
+      content,
+      seoDescription: oldal.seoLeiras,
+      status: 'published',
+      _status: 'published',
+    })
+    modositasok.push({
+      szabaly: 'jogi-oldalak',
+      uzenet: `${uzenet}: LÉTREHOZÁS közzétett állapotban, ${content.root.children.length} bekezdés/címsor a jogász szó szerinti szövegéből`,
+      indok: null,
+    })
+  }
+
+  return { letrehozando, modositasok, kihagyasok }
+}
+
+// ---------------------------------------------------------------------------
+// 7. javítás — az SOS villámkurzus webcíme.
+// ---------------------------------------------------------------------------
+
+/** A kurzus-slug átalakításának eredménye. */
+export interface SlugAtalakitas {
+  /** A beírandó webcím, vagy `null`, ha nem szabad írni. */
+  slug: string | null
+  modositasok: JavitasLepes[]
+  kihagyasok: JavitasLepes[]
+}
+
+/**
+ * Az SOS villámkurzus `slug` mezőjének tiszta átalakítása.
+ *
+ * KIZÁRÓLAG ÜRES mezőt tölt ki (hiányzó, `null`, vagy csak whitespace). Bármi
+ * más — akár már a jóváhagyott slug, akár a szerkesztő saját webcíme —
+ * érintetlen marad: a közzétett kurzus webcímének megváltoztatása élő URL-t
+ * törne el, amiről nincs átirányítás.
+ */
+export const alkalmazSosKurzusSlug = (jelenlegi: Product['slug']): SlugAtalakitas => {
+  const uzenet = `Az SOS kurzus webcíme („${SOS_COURSE_SKU}”)`
+  const meglevo = typeof jelenlegi === 'string' ? jelenlegi.trim() : ''
+
+  if (meglevo === SOS_KURZUS_SLUG) {
+    return {
+      slug: null,
+      modositasok: [],
+      kihagyasok: [
+        {
+          szabaly: 'sos-kurzus-slug',
+          uzenet,
+          indok: `a webcím MÁR „${SOS_KURZUS_SLUG}” — nincs teendő`,
+        },
+      ],
+    }
+  }
+
+  if (meglevo.length > 0) {
+    return {
+      slug: null,
+      modositasok: [],
+      kihagyasok: [
+        {
+          szabaly: 'sos-kurzus-slug',
+          uzenet,
+          indok: `a kurzusnak MÁR VAN webcíme („${meglevo}”) — a script csak ÜRES mezőt tölt ki, meglévő webcímet sosem ír át (az élő URL törne el alatta)`,
+        },
+      ],
+    }
+  }
+
+  return {
+    slug: SOS_KURZUS_SLUG,
+    modositasok: [
+      {
+        szabaly: 'sos-kurzus-slug',
+        uzenet: `${uzenet}: (üres) → „${SOS_KURZUS_SLUG}”. A régi, id-alapú URL tovább él: a kurzus-route a numerikus szegmenst a kanonikus címre irányítja.`,
+        indok: null,
+      },
+    ],
+    kihagyasok: [],
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 8. javítás — a rendelői szekció horgonya a /szolgaltatasok oldalon.
+// ---------------------------------------------------------------------------
+
+/** A horgony-javítás eredménye. */
+export interface HorgonyAtalakitas {
+  /** Az ÚJ szekciósor, vagy `null`, ha nem szabad írni. */
+  layout: Szekciosor | null
+  modositasok: JavitasLepes[]
+  kihagyasok: JavitasLepes[]
+}
+
+/**
+ * A rendelői szekció megkeresése a szekciósorban, TARTALMI jegy alapján.
+ *
+ * A szekció rich-text blokk, és a `Rendelői kezelések…` címsorral kezdődik. A
+ * keresés a blokk TELJES szövegében néz sor-elejei egyezést (a
+ * `richTextSzoveg` blokkonként új sorral tagol), így akkor is talál, ha a
+ * szerkesztő a szekció elé bekezdést szúrt.
+ */
+const rendeloiSzekcioIndexek = (layout: Szekciosor): number[] => {
+  const talalatok: number[] = []
+  layout.forEach((blokk, index) => {
+    if (blokk.blockType !== 'richText') {
+      return
+    }
+    const sorok = richTextSzoveg(blokk.content).split('\n')
+    if (sorok.some((sor) => sor.trimStart().startsWith(RENDELOI_SZEKCIO_CIMKEZDET))) {
+      talalatok.push(index)
+    }
+  })
+  return talalatok
+}
+
+/**
+ * A `/szolgaltatasok` oldal rendelői szekciójának horgony-javítása.
+ *
+ * A fejléc-menü „Rendelői kezelések” pontja a `/szolgaltatasok#rendeloi`
+ * címre visz (src/lib/menu-seed.ts `CLINIC_TREATMENTS_PATH`), az élő szekció
+ * viszont más horgonyt (`arlista`) visel — a kattintás ezért nem csinál semmit.
+ *
+ * VÉDŐFELTÉTELEK (kétes esetben HANGOS kihagyás, írás nélkül):
+ *  - a szekciósornak léteznie kell;
+ *  - a rendelői szekciónak EGYÉRTELMŰEN azonosíthatónak kell lennie (pontosan
+ *    egy találat a tartalmi jegyre);
+ *  - ha a horgonyt MÁR MÁS blokk viseli, nem írunk (két azonos id ütközne, és
+ *    a böngésző az elsőre ugrana — kézi átnézés kell);
+ *  - ha a szekció horgonya már a helyes, nincs teendő (idempotencia).
+ */
+export const alkalmazRendeloiHorgony = (layout: Page['layout']): HorgonyAtalakitas => {
+  const uzenet = 'A rendelői kezelések szekció horgonya (/szolgaltatasok)'
+
+  const kihagyas = (indok: string, hangos = false): HorgonyAtalakitas => ({
+    layout: null,
+    modositasok: [],
+    kihagyasok: [{ szabaly: 'rendeloi-horgony', uzenet, indok, hangos }],
+  })
+
+  if (!Array.isArray(layout) || layout.length === 0) {
+    return kihagyas(
+      'a Szolgáltatások oldalnak nincs szekciósora — a horgonyt nincs mire tenni',
+      true,
+    )
+  }
+
+  const talalatok = rendeloiSzekcioIndexek(layout)
+  if (talalatok.length === 0) {
+    return kihagyas(
+      `a szekciósorban nincs olyan szövegblokk, amely a „${RENDELOI_SZEKCIO_CIMKEZDET}…” címsorral kezdődne — a szekció hiányzik vagy átírták, kézi átnézés kell`,
+      true,
+    )
+  }
+  if (talalatok.length > 1) {
+    return kihagyas(
+      `a tartalmi jegyre („${RENDELOI_SZEKCIO_CIMKEZDET}…”) ${talalatok.length} szekció is illeszkedik (${talalatok
+        .map((index) => `${index + 1}.`)
+        .join(', ')}) — nem egyértelmű, melyik a menüpont célja, ezért a script nem ír`,
+      true,
+    )
+  }
+
+  const index = talalatok[0]
+  const blokk = layout[index]
+  const jelenlegiHorgony = blokk.sectionSettings?.anchorId ?? null
+
+  if (jelenlegiHorgony === CLINIC_TREATMENTS_ANCHOR) {
+    return kihagyas(
+      `a szekció horgonya MÁR „${CLINIC_TREATMENTS_ANCHOR}” — a menüpont célba ér, nincs teendő`,
+    )
+  }
+
+  const utkozo = layout.findIndex(
+    (masik, masikIndex) =>
+      masikIndex !== index && masik.sectionSettings?.anchorId === CLINIC_TREATMENTS_ANCHOR,
+  )
+  if (utkozo !== -1) {
+    return kihagyas(
+      `a „${CLINIC_TREATMENTS_ANCHOR}” horgonyt MÁR a(z) ${utkozo + 1}. szekció viseli — két azonos horgony ütközne, ezért a script nem ír; nézd át az adminban`,
+      true,
+    )
+  }
+
+  const ujLayout: Szekciosor = layout.map((elem, elemIndex) =>
+    elemIndex === index
+      ? { ...elem, sectionSettings: { ...elem.sectionSettings, anchorId: CLINIC_TREATMENTS_ANCHOR } }
+      : elem,
+  )
+
+  return {
+    layout: ujLayout,
+    modositasok: [
+      {
+        szabaly: 'rendeloi-horgony',
+        uzenet: `${uzenet}: ${ertekCimke(jelenlegiHorgony)} → ${ertekCimke(
+          CLINIC_TREATMENTS_ANCHOR,
+        )} (${index + 1}. szekció) — a fejléc-menü „Rendelői kezelések” pontja ezután ide ugrik`,
+        indok: null,
+      },
+    ],
+    kihagyasok: [],
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Futtatás — a tiszta átalakításokat köti az adatbázishoz.
 // ---------------------------------------------------------------------------
 
@@ -851,6 +1168,131 @@ async function futtat(): Promise<void> {
         })
         .catch(() => null)
       figyelmeztessPiszkozatra('Rólunk oldal', rolunk.updatedAt, piszkozat?.updatedAt)
+    }
+  }
+
+  // --- 6. javítás: a három jogi oldal létrehozása ---------------------------
+  // A meglévő webcímeket EGY lekérdezés deríti ki (draft-ot is beleértve: a
+  // publikálatlan piszkozat is „létező" oldal — ha ilyet találunk, a script
+  // hozzá sem nyúl, nehogy párhuzamos, második jogi oldal keletkezzen).
+  const jogiSlugok = JOGI_OLDALAK.map((oldal) => oldal.slug)
+  const jogiTalalat = await payload.find({
+    collection: 'pages',
+    where: { slug: { in: jogiSlugok } },
+    limit: jogiSlugok.length,
+    depth: 0,
+    draft: true,
+    overrideAccess: true,
+  })
+  const jogiEredmeny = alkalmazJogiOldalak({
+    letezoSlugok: jogiTalalat.docs
+      .map((doc) => doc.slug)
+      .filter((slug): slug is string => typeof slug === 'string'),
+  })
+  naplozdLepeseket(jogiEredmeny, dryRun)
+  modositasokSzama += jogiEredmeny.modositasok.length
+  kihagyasokSzama += jogiEredmeny.kihagyasok.length
+
+  if (!dryRun) {
+    for (const adat of jogiEredmeny.letrehozando) {
+      await payload.create({
+        collection: 'pages',
+        data: { ...adat, publishedAt: new Date().toISOString() },
+        depth: 0,
+        overrideAccess: true,
+      })
+    }
+  }
+
+  // --- 7. javítás: az SOS kurzus webcíme ------------------------------------
+  const sosTalalat = await payload.find({
+    collection: 'products',
+    where: { sku: { equals: SOS_COURSE_SKU } },
+    limit: 1,
+    depth: 0,
+    overrideAccess: true,
+  })
+  const sosKurzus = sosTalalat.docs[0]
+
+  if (sosKurzus === undefined) {
+    logger.error(
+      `Tartalom-javítás: nem található az SOS kurzus (Kurzusok, azonosító: „${SOS_COURSE_SKU}”) — a webcím javítása kimaradt.`,
+    )
+    hiba = true
+  } else {
+    const eredmeny = alkalmazSosKurzusSlug(sosKurzus.slug)
+    naplozdLepeseket(eredmeny, dryRun)
+    modositasokSzama += eredmeny.modositasok.length
+    kihagyasokSzama += eredmeny.kihagyasok.length
+
+    if (eredmeny.slug !== null && !dryRun) {
+      await payload.update({
+        collection: 'products',
+        id: sosKurzus.id,
+        data: { slug: eredmeny.slug },
+        depth: 0,
+        overrideAccess: true,
+      })
+      const piszkozat = await payload
+        .findByID({
+          collection: 'products',
+          id: sosKurzus.id,
+          depth: 0,
+          draft: true,
+          overrideAccess: true,
+        })
+        .catch(() => null)
+      figyelmeztessPiszkozatra(
+        `SOS kurzus („${SOS_COURSE_SKU}”)`,
+        sosKurzus.updatedAt,
+        piszkozat?.updatedAt,
+      )
+    }
+  }
+
+  // --- 8. javítás: a rendelői szekció horgonya ------------------------------
+  const szolgaltatasokTalalat = await payload.find({
+    collection: 'pages',
+    where: { slug: { equals: SZOLGALTATASOK_SLUG } },
+    limit: 1,
+    depth: 0,
+    overrideAccess: true,
+  })
+  const szolgaltatasok = szolgaltatasokTalalat.docs[0]
+
+  if (szolgaltatasok === undefined) {
+    logger.error(
+      `Tartalom-javítás: nem található a Szolgáltatások oldal (Pages, webcím: „${SZOLGALTATASOK_SLUG}”) — a rendelői horgony javítása kimaradt.`,
+    )
+    hiba = true
+  } else {
+    const eredmeny = alkalmazRendeloiHorgony(szolgaltatasok.layout)
+    naplozdLepeseket(eredmeny, dryRun)
+    modositasokSzama += eredmeny.modositasok.length
+    kihagyasokSzama += eredmeny.kihagyasok.length
+
+    if (eredmeny.layout !== null && !dryRun) {
+      await payload.update({
+        collection: 'pages',
+        id: szolgaltatasok.id,
+        data: { layout: eredmeny.layout },
+        depth: 0,
+        overrideAccess: true,
+      })
+      const piszkozat = await payload
+        .findByID({
+          collection: 'pages',
+          id: szolgaltatasok.id,
+          depth: 0,
+          draft: true,
+          overrideAccess: true,
+        })
+        .catch(() => null)
+      figyelmeztessPiszkozatra(
+        'Szolgáltatások oldal',
+        szolgaltatasok.updatedAt,
+        piszkozat?.updatedAt,
+      )
     }
   }
 

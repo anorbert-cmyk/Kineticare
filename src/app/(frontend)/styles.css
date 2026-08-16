@@ -1,13 +1,14 @@
 /**
  * A (frontend) route-group globális stílusbejegyzése.
  *
- * Sorrend: tokenek → fontok (@font-face) → alapréteg → UI-primitívek →
- * layout (header/footer/nav). Új stíluslapot a megfelelő rétegbe tegyél,
- * NE ide.
+ * Sorrend: tokenek → fontok (@font-face) → alapréteg → mozgás-réteg →
+ * UI-primitívek → layout (header/footer/nav). Új stíluslapot a megfelelő
+ * rétegbe tegyél, NE ide.
  */
 @import './styles/tokens.css';
 @import './styles/fonts.css';
 @import './styles/base.css';
+@import './styles/motion.css';
 @import './styles/ui.css';
 @import './styles/progress.css';
 @import './styles/layout.css';

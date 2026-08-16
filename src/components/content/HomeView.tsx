@@ -1,6 +1,7 @@
 import type { Page, Post, Product, Testimonial } from '../../payload-types'
 import { faqPageJsonLd, organizationJsonLd } from '../../lib/seo'
 import { HERO_VIDEO_STREAM_ID } from '../../lib/hero-video'
+import { SectionReveal } from '../motion/SectionReveal'
 import { RenderBlocks } from '../blocks/RenderBlocks'
 import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
@@ -54,6 +55,11 @@ import { RichText } from '../lexical/RichText'
  *    docs/seo-geo-llm.md).
  * A kapcsolat/footer a layoutban él, itt érintetlen.
  *
+ * MOZGÁS: a szekciók halk belépőt kapnak (SectionReveal + styles/motion.css) —
+ * néhány pixeles emelkedés és áttűnés, egyszer, kizárólag a hajtás alatti
+ * szekciókra. `prefers-reduced-motion: reduce` esetén és JS nélkül semmi nem
+ * történik: a lap pontosan úgy néz ki, mint eddig.
+ *
  * A draft tartalom ide el sem jut: a lekérdezések published-szűrtjei mellett a
  * kártyakomponensek is védőhálót tartanak.
  */
@@ -73,7 +79,7 @@ function HeroSection({ home }: { home: Page | null }) {
   const title = home?.title?.trim() || 'Hatékony és biztonságos módszerek a kéz és a kar fájdalmai ellen'
   const lead =
     home?.excerpt?.trim() ||
-    'Kézrehabilitációs online videókurzusok otthon végezhető gyógytornászati programmal — ínhüvelygyulladás, kéztőalagút-szindróma és teniszkönyök esetén.'
+    'Kézrehabilitációs online videókurzusok otthon végezhető gyógytornászati programmal: ínhüvelygyulladás, kéztőalagút-szindróma és teniszkönyök esetén.'
   const heroMedia = home?.heroImage && typeof home.heroImage === 'object' ? home.heroImage : null
 
   return (
@@ -112,6 +118,7 @@ export function HomeView({ home, products, posts, testimonials = [] }: HomeViewP
       <>
         <JsonLd data={organizationJsonLd()} />
         <RenderBlocks layout={layout} posts={posts} products={products} testimonials={testimonials} />
+        <SectionReveal />
       </>
     )
   }
@@ -166,6 +173,8 @@ export function HomeView({ home, products, posts, testimonials = [] }: HomeViewP
       />
 
       <Faq />
+
+      <SectionReveal />
     </>
   )
 }

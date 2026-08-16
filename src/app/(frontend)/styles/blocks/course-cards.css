@@ -31,7 +31,10 @@
  * hagyna, egyetlen kurzusnál pedig egy 1120 px széles óriáskártyát adna
  * (B3.5). Az `auto-fit` + felső track-korlát elemszámhoz igazodik, a
  * `min(100%, …)` alsó korlát pedig 320 px-en is megakadályozza a vízszintes
- * túlcsordulást (B7.1 / WCAG 1.4.10 Reflow).
+ * túlcsordulást (B7.1 / WCAG 1.4.10 Reflow). EGYETLEN kurzusnál a rács helyett
+ * a KIEMELT, VÍZSZINTES kártya áll (`.kc-course-cards__featured` +
+ * `.kc-product-card--featured`, lásd lentebb): a középre zárt magányos hasáb
+ * üresnek mutatta a lap értékesítési motorját.
  *
  * MIÉRT ITT VAN A KÁRTYA IS: a stíluslapot maga a ProductCard is importálja,
  * hogy a kártya bárhonnan renderelve ugyanígy nézzen ki. A szabályok a kártya
@@ -63,30 +66,15 @@
   margin-bottom: var(--kc-space-4);
 }
 
-/* A szekció-rendszer blokkjaival azonos címsor-lépcső (a közös
-   .kc-section-title alapból a kisebb, 2xl lépcsőn áll). */
-.kc-course-cards .kc-section-title {
-  font-size: var(--kc-text-3xl);
-}
-
 .kc-course-cards .kc-section-lead {
   margin-bottom: 0;
-}
-
-/* A landing inline-linkjén a nyíl hoverre elmozdul (a többit a .kc-text-link
-   adja: akcent-mély szín, 1px aláhúzás nagy offsettel, 44px célfelület). */
-.kc-course-cards__link span {
-  transition: transform var(--kc-motion-fast) var(--kc-ease-out);
-}
-
-.kc-course-cards__link:hover span {
-  transform: translateX(0.2rem);
 }
 
 /* ---- Kurzus-rács --------------------------------------------------------
    Elemszámhoz igazodó rács üres oszlop és óriáskártya nélkül. A track felső
    korlátja (26rem) tartja a kártya olvasható mértékét akkor is, ha egyetlen
-   kurzus van kint. */
+   kurzus van kint. EGYETLEN kurzusnál a rács helyett a kiemelt, vízszintes
+   kártya áll (lásd lentebb) — a rács kettőtől kap szerepet. */
 .kc-card-grid.kc-card-grid--courses {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 26rem));
   justify-content: center;
@@ -150,7 +138,7 @@
 }
 
 .kc-product-card .kc-product-card__highlight-text {
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-body);
   color: var(--kc-color-text);
   hyphens: auto;
@@ -187,7 +175,7 @@
 }
 
 .kc-product-card .kc-product-card__access {
-  font-size: var(--kc-text-xs);
+  font-size: var(--kc-font-s);
   color: var(--kc-color-text-muted);
 }
 
@@ -205,7 +193,7 @@
   border-radius: var(--kc-radius-md);
   background-color: var(--kc-color-primary);
   color: var(--kc-color-on-primary);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-m);
   font-weight: var(--kc-font-weight-bold);
   line-height: 1.4;
   text-align: center;
@@ -227,18 +215,101 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .kc-course-cards__link span,
   .kc-product-card .kc-product-card__cover img,
   .kc-product-card .kc-product-card__cta,
   .kc-product-card .kc-product-card__cta-arrow {
     transition: none;
   }
 
-  .kc-course-cards__link:hover span,
   .kc-card--interactive.kc-product-card:hover .kc-product-card__cover img,
   .kc-card--interactive.kc-product-card:focus-within .kc-product-card__cover img,
   .kc-card--interactive.kc-product-card:hover .kc-product-card__cta-arrow,
   .kc-card--interactive.kc-product-card:focus-within .kc-product-card__cta-arrow {
     transform: none;
+  }
+}
+
+/* ---- Kiemelt, VÍZSZINTES kurzuskártya (egyetlen fizetős kurzusnál) --------
+   Tulajdonosi visszajelzés (2026-08-16): egy kártyánál a rács a szekció
+   közepére rajzolt egy 26rem-es hasábot, körülötte ~2/3 üres szélességgel — a
+   lap értékesítési motorja félkésznek hatott. Ilyenkor a kártya a szekció
+   TELJES szélességét megkapja, és 900px felett vízszintesre fordul: borító
+   balra, tartalom (címke, cím, előnysorok, leírás, ár, CTA) jobbra.
+
+   A KÁRTYA TARTALMA VÁLTOZATLAN — ez tisztán elrendezési réteg: ugyanazok az
+   elemek, ugyanabban a sorrendben, ugyanazzal az akadálymentességi mintával
+   (a kártya egésze egyetlen link, a CTA aria-hidden dekoráció). Fontméretet
+   sem állít: a tipográfia a közös kártya-szabályokból öröklődik.
+
+   900px ALATT nincs külön szabály: a kártya a megszokott függőleges
+   elrendezésben áll (a szűk hasáb más formát nem is bír el), így a mobil
+   viselkedés bitre a rács-kártyáé.
+
+   MIÉRT A LAP VÉGÉN ÁLL: a felülírandó alap-szabályok (`.kc-product-card
+   .kc-product-card__cover/__foot/__pricing/__cta`) AZONOS specificitásúak
+   (0,2,0), és a médialekérdezés nem növeli a specificitást — ilyenkor a
+   FORRÁS-SORREND dönt. Feljebb írva az alap-szabályok némán visszavennék a
+   vízszintes elrendezést (borító-ív, láb-irány, gomb-belsőmargó). */
+.kc-course-cards__featured {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 900px) {
+  .kc-product-card--featured .kc-product-card__link {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: stretch;
+  }
+
+  /* Borító nélküli kurzusnál nem marad üres hasáb (a mező nem kötelező). */
+  .kc-product-card--featured .kc-product-card__link:not(:has(> .kc-product-card__cover)) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* A borító a kártya teljes magasságát kitölti (a rács-kártyán 16:9 keret áll);
+     az ív a kártya BAL oldalát követi. */
+  .kc-product-card--featured .kc-product-card__cover {
+    height: 100%;
+    aspect-ratio: auto;
+    border-radius: var(--kc-radius-lg) 0 0 var(--kc-radius-lg);
+  }
+
+  .kc-product-card--featured .kc-product-card__body {
+    justify-content: center;
+    gap: var(--kc-space-4);
+    padding: clamp(2rem, 3.2vw, 3rem);
+  }
+
+  /* A széles hasábban a sorhossz a mérték-tokenre korlátozódik (UX-skill 4.
+     pont: 45–75 karakter), különben a leírás egyetlen hosszú sorrá nyúlna. */
+  .kc-product-card--featured .kc-product-card__description,
+  .kc-product-card--featured .kc-product-card__highlight-text {
+    max-width: var(--kc-measure);
+  }
+
+  .kc-product-card--featured .kc-product-card__highlights {
+    gap: var(--kc-space-3);
+  }
+
+  /* A láb egy sorba rendeződik: balra az ár és a hozzáférés, jobbra a CTA. */
+  .kc-product-card--featured .kc-product-card__foot {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kc-space-5);
+  }
+
+  .kc-product-card--featured .kc-product-card__pricing {
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--kc-space-1);
+  }
+
+  .kc-product-card--featured .kc-product-card__cta {
+    flex: 0 0 auto;
+    padding-inline: var(--kc-space-6);
   }
 }

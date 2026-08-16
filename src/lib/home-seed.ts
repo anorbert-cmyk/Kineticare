@@ -213,7 +213,8 @@ export const ensureHomeImages = async (payload: Payload): Promise<HomeMediaIds> 
 // SORREND: az értékesítési audit M1–M8 hierarchiája, a landing kinézetével —
 //   filmHero (M1) → credsStrip (M2) → courseCards (M3) → freeSos (M4) →
 //   pressLogos → welcome → usps → states → services → about →
-//   howItWorks (M5) → testimonials (M6) → knowledge (M7) → faq (M8).
+//   howItWorks (M5) → testimonials (M6) → knowledge (M7) → faq (M8) →
+//   ctaBanner (záró CTA-sáv).
 // A lányok ettől szabadon eltérhetnek az adminban — ez a rendszer értelme.
 //
 // SZÖVEGEK: betűhíven a forrásokból. A landing-szekciók szövege a tükör
@@ -310,7 +311,11 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
   // való. A logók sorrendje a landingé.
   {
     blockType: 'pressLogos',
-    heading: 'Ismerhetsz minket innen',
+    // Tulajdonosi szöveg-javítás (2026-08-16): a korábbi „Ismerhetsz minket
+    // innen" helyett — a sorban szakmai szervezet logója is áll, és ez a
+    // megfogalmazás a látogató szemszögéből pontosabb. A komponens beépített
+    // felirata (PressLogos DEFAULT_HEADING) ugyanez.
+    heading: 'Itt találkozhattál velünk',
     // A logónkénti alt-felülírást szándékosan üresen hagyjuk: így a Médiatárban
     // megadott képleírás jelenik meg, azaz egy helyen szerkeszthető.
     logos: (
@@ -385,10 +390,16 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
 
   // Három állapot. A `number` szándékosan üres: a landingen is a megjelenítés
   // számoz (01, 02, 03), nem a tartalom — a blokk ugyanezt ígéri.
+  //
+  // BEVEZETŐ (tulajdonosi visszajelzés, 2026-08-16): a szekció címe alatt
+  // MAGYARÁZAT kell, különben a három kép önmagában áll, és a látogatónak kell
+  // kitalálnia, mit lát. A szöveg a terápia ívét mondja el (ez a szekció
+  // valódi állítása), és a logó-utalást is megtartja — így akkor is helyes,
+  // ha a szerkesztő a címet „A terápia működik"-re cseréli.
   {
     blockType: 'states',
     title: 'Három állapot, egy folyamat',
-    lead: 'A logónkat a kezed ismeri fel: zárt, nyíló, majd teljesen nyitott. A három kép a filmünk kulcskockái, pontosan abban a sorrendben, ahogyan a terápia halad.',
+    lead: 'A terápia íve három képben: a fájdalomtól zárt kézből előbb oldódik a görcs, aztán visszatér a szabad mozgás. Ugyanezt a három állapotot rajzolja ki a logónk is.',
     cards: [
       {
         image: media['state-zart.png'],
@@ -494,7 +505,7 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
     steps: [
       {
         title: 'Kiválasztod a kurzust',
-        text: 'A panaszodhoz illő programot néhány kattintással megvásárolod — bankkártyával, biztonságosan.',
+        text: 'A panaszodhoz illő programot néhány kattintással megvásárolod, bankkártyával, biztonságosan.',
       },
       {
         title: 'Azonnal hozzáférsz',
@@ -502,7 +513,7 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
       },
       {
         title: 'Otthon gyakorolsz',
-        text: 'A gyakorlatok lépésről lépésre vezetnek — naponta néhány perc is elég a haladáshoz.',
+        text: 'A gyakorlatok lépésről lépésre vezetnek, naponta néhány perc is elég a haladáshoz.',
       },
     ],
     sectionSettings: { visible: true, hatter: 'feher' },
@@ -536,7 +547,7 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
       {
         question: 'Műtét után is végezhetem a gyakorlatokat?',
         answer:
-          'A kurzusok általános rehabilitációs programok. Műtét után mindig a kezelőorvosod vagy gyógytornászod jóváhagyásával kezdj bele — ha bizonytalan vagy, írj nekünk a kapcsolat oldalon, és segítünk eligazodni.',
+          'A kurzusok általános rehabilitációs programok. Műtét után mindig a kezelőorvosod vagy gyógytornászod jóváhagyásával kezdj bele. Ha bizonytalan vagy, írj nekünk a kapcsolat oldalon, és segítünk eligazodni.',
       },
       {
         question: 'Fájdalmasak a gyakorlatok?',
@@ -546,15 +557,33 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
       {
         question: 'Mennyi időt vesz igénybe naponta?',
         answer:
-          'Napi 10–15 perc is elég — a rövid, rendszeres gyakorlás hozza a tartós eredményt, nem az egyszeri nagy erőfeszítés.',
+          'Napi 10–15 perc is elég: a rövid, rendszeres gyakorlás hozza a tartós eredményt, nem az egyszeri nagy erőfeszítés.',
       },
       {
         question: 'Szükségem van eszközökre a gyakorlatokhoz?',
         answer:
-          'Nem. A gyakorlatok többsége saját testsúllyal, otthon található eszközökkel végezhető — ahol bármi kell, azt a videóban jelezzük.',
+          'Nem. A gyakorlatok többsége saját testsúllyal, otthon található eszközökkel végezhető. Ahol bármi kell, azt a videóban jelezzük.',
       },
     ],
     sectionSettings: { visible: true, hatter: 'feher' },
+  },
+
+  // ZÁRÓ CTA-SÁV. A GYIK a lap utolsó ellenérv-kezelő szekciója; utána a lap
+  // CSELEKVÉSSEL zárul, a fizetős irányba (UX-skill 1. pont: ami pénzt hoz, az
+  // hangsúlyos helyre kerül). Ugyanez a minta zárja a /rolunk és a
+  // /szolgaltatasok oldalt is (src/scripts/restore-legacy-content.ts).
+  //
+  // A SZÖVEG (tulajdonosi visszajelzés, 2026-08-16) nem lehet üres: a cím
+  // önmagában felszólítás indoklás nélkül. A két mondat azt mondja el, mi
+  // történik a kattintás után, és ki állította össze az anyagot — ígéret,
+  // sürgetés és visszaszámláló nélkül (UX-skill 6. pont: dark pattern tilos).
+  // A tint sáv a fölötte álló fehér GYIK-tól választja el a lezárást.
+  {
+    blockType: 'ctaBanner',
+    title: 'Kezdd el még ma',
+    text: 'Az otthoni kézrehabilitációs programmal a saját tempódban indulhatsz: a videós gyakorlatokat a vásárlás után azonnal eléred, és naponta néhány perc gyakorlás is visz előre. A programot kézrehabilitációval foglalkozó gyógytornászok állították össze.',
+    cta: { felirat: 'Megnézem a kurzusokat', url: '/kurzusok', ujAblakban: false },
+    sectionSettings: { visible: true, hatter: 'tint' },
   },
 ]
 

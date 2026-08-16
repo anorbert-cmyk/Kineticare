@@ -49,7 +49,7 @@
 
 .kc-mycourses__heading {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-3xl);
+  font-size: var(--kc-font-l);
   line-height: var(--kc-leading-heading);
   margin: 0;
 }
@@ -59,7 +59,7 @@
 .kc-mycourses__summary-line {
   margin: var(--kc-space-2) 0 0;
   color: var(--kc-color-text-muted);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
 }
 
 /* ---- Csoportok ----------------------------------------------------------- */
@@ -72,7 +72,7 @@
 
 .kc-mycourses__group-title {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-xl);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-heading);
   margin: 0 0 var(--kc-space-4);
 }
@@ -120,7 +120,6 @@
 
 .kc-mycourses__summary .kc-mycourses__group-title {
   margin: 0;
-  font-size: var(--kc-text-lg);
 }
 
 .kc-mycourses__collapsible[open] > .kc-mycourses__summary {
@@ -214,7 +213,7 @@
 
 .kc-mycourse__title {
   font-family: var(--kc-font-heading);
-  font-size: var(--kc-text-lg);
+  font-size: var(--kc-font-m);
   line-height: var(--kc-leading-heading);
   margin: 0;
 }
@@ -223,7 +222,7 @@
 .kc-mycourse__meta {
   margin: 0;
   color: var(--kc-color-text-muted);
-  font-size: var(--kc-text-sm);
+  font-size: var(--kc-font-s);
 }
 
 .kc-mycourse__bar {

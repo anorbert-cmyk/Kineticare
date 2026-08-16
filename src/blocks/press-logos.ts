@@ -4,7 +4,7 @@ import { linkFields } from './link-fields'
 import { sectionSettings } from './section-settings'
 
 /**
- * Sajtó-logósor — „Ismerhetsz minket innen" (terv 2. blokk-katalógus).
+ * Sajtó-logósor — „Itt találkozhattál velünk" (terv 2. blokk-katalógus).
  *
  * Média-megjelenések és szakmai szervezetek logói egy sorban. Bizalmi elem, de
  * NEM helyettesíti a szakmai hitel-csíkot (terv 4. pont): a logósor a lap
@@ -28,7 +28,8 @@ export const pressLogos: Block = {
       type: 'text',
       label: 'Felirat',
       admin: {
-        description: 'A logók fölötti rövid szöveg (pl. „Ismerhetsz minket innen").',
+        description:
+          'A logók fölötti rövid szöveg. Üresen hagyva a beépített „Itt találkozhattál velünk" felirat jelenik meg.',
       },
     },
     {

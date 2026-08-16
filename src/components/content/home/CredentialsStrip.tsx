@@ -65,7 +65,10 @@ export function CredentialsStrip({
   // A nyíl dekoratív (a linket a felirat nevezi meg), ezért aria-hidden.
   const linkContent = safeLink ? (
     <>
-      {safeLink.label} <span aria-hidden="true">→</span>
+      <span className="kc-text-link__label">{safeLink.label}</span>
+      <span aria-hidden="true" className="kc-text-link__arrow">
+        →
+      </span>
     </>
   ) : null
 

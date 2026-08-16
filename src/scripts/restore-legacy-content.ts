@@ -64,7 +64,11 @@
  *  - a funnel/checkout/köszönő oldalak (kezrehab-penztar, typ-*, hamarosan, oto-*)
  *    — az új oldalnak saját checkout-folyamata van (/penztar, Barion);
  *  - a kapcsolat oldal — az új oldalon dedikált /kapcsolat route űrlappal létezik;
- *  - a jogi oldalak (adatvedelem, aszf, impresszum) — külön jogi review tárgya.
+ *  - a jogi oldalak (adatvedelem, aszf, impresszum): NEM az archívumból épülnek
+ *    vissza, hanem az ügyvéd 2026-os, szó szerinti szövegéből — a tartalom a
+ *    `src/lib/legal-content.ts` modulban (+ `legal-source/*.txt`) él, a három
+ *    oldalt pedig a tulajdonosi tartalom-javító script hozza létre
+ *    (src/scripts/apply-owner-content.ts, 6. javítás), CSAK ha még nem létezik.
  */
 
 import path from 'node:path'
@@ -74,6 +78,7 @@ import { getPayload, type Payload } from 'payload'
 
 import { HOME_IMAGES } from '../lib/home-seed'
 import { LEGACY_IMAGES, LEGACY_IMAGES_DIR, type LegacyImage } from '../lib/legacy-images'
+import { CLINIC_TREATMENTS_ANCHOR } from '../lib/menu-seed'
 import config from '../payload.config'
 import type { Page, Product } from '../payload-types'
 
@@ -142,12 +147,19 @@ const felulirhato = (payload: Payload, cimke: string): boolean => {
 // ---------------------------------------------------------------------------
 // Lexical richText-építő segédfüggvények (típusosak — a payload-types
 // Page['content'] szerkezetét követik; `any` nélkül).
+//
+// A `textNode`/`paragraph`/`para`/`heading`/`bulletList`/`richText` ötös
+// EXPORTÁLT: a jogi oldalak tartalom-modulja (src/lib/legal-content.ts) a
+// jogász szó szerinti szövegét ugyanezekkel a csomópont-építőkkel fordítja
+// Lexicalra. Külön, párhuzamos építőkészlet azért nem készült, mert a Lexical
+// csomópont-alak (mezőnevek, `version`) egyetlen helyen tartható karban — két
+// másolat közül az egyik előbb-utóbb elcsúszna.
 // ---------------------------------------------------------------------------
 
-type RichTextContent = Page['content']
-type BlockNode = RichTextContent['root']['children'][number]
+export type RichTextContent = Page['content']
+export type BlockNode = RichTextContent['root']['children'][number]
 
-const textNode = (text: string, format = 0): BlockNode => ({
+export const textNode = (text: string, format = 0): BlockNode => ({
   type: 'text',
   detail: 0,
   format,
@@ -157,7 +169,7 @@ const textNode = (text: string, format = 0): BlockNode => ({
   version: 1,
 })
 
-const paragraph = (children: BlockNode[]): BlockNode => ({
+export const paragraph = (children: BlockNode[]): BlockNode => ({
   type: 'paragraph',
   children,
   direction: null,
@@ -166,9 +178,9 @@ const paragraph = (children: BlockNode[]): BlockNode => ({
   version: 1,
 })
 
-const para = (text: string): BlockNode => paragraph([textNode(text)])
+export const para = (text: string): BlockNode => paragraph([textNode(text)])
 
-const heading = (tag: 'h2' | 'h3', text: string): BlockNode => ({
+export const heading = (tag: 'h2' | 'h3', text: string): BlockNode => ({
   type: 'heading',
   tag,
   children: [textNode(text)],
@@ -192,7 +204,7 @@ const link = (url: string, label: string, newTab = false): BlockNode => ({
 const cta = (url: string, label: string, newTab = false): BlockNode =>
   paragraph([link(url, label, newTab)])
 
-const bulletList = (items: string[]): BlockNode => ({
+export const bulletList = (items: string[]): BlockNode => ({
   type: 'list',
   listType: 'bullet',
   tag: 'ul',
@@ -221,7 +233,7 @@ const quote = (text: string): BlockNode => ({
   version: 1,
 })
 
-const richText = (children: BlockNode[]): RichTextContent => ({
+export const richText = (children: BlockNode[]): RichTextContent => ({
   root: {
     type: 'root',
     children,
@@ -1222,6 +1234,11 @@ const buildRolunkLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['layo
  * A lap feladata a DÖNTÉS támogatása („melyik út való nekem?"), ezért a három
  * ág egyetlen szekcióban, azonos mezőrenddel áll egymás mellett (5.3, B4.1), a
  * részletek és az árlista pedig alatta.
+ *
+ * A modul aljáról EXPORTÁLT (lásd a záró `export { … }` blokkot), hogy az élő
+ * layout horgony-javítása (src/scripts/apply-owner-content.ts) ellen
+ * tesztelhető legyen: a kód-szintű alapállapotnak MÁR a helyes horgonyt kell
+ * adnia, így a seed és a javítás nem csúszhat szét.
  */
 const buildSzolgaltatasokLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['layout']> => [
   // Bevezető — a probléma és a kivezető út.
@@ -1252,10 +1269,18 @@ const buildSzolgaltatasokLayout = (media: OldalLayoutMedia = {}): NonNullable<Pa
 
   // Rendelői részletek + árlista egy közös régióban (B2.2). Az időpontkérés
   // itt szöveglink, nem gomb — a lap elsődleges CTA-ja a záró sáv (B6.5).
+  //
+  // A horgony `rendeloi`, NEM `arlista`: a fejléc-menü „Rendelői kezelések"
+  // pontja a `/szolgaltatasok#rendeloi` címre visz (src/lib/menu-seed.ts
+  // CLINIC_TREATMENTS_PATH), a szekció viszont korábban `arlista` horgonyt
+  // kapott — így a menüpontra kattintva SEMMI nem történt (a böngésző nem
+  // talált ilyen id-t). A szekció a rendelői kezelésekkel KEZDŐDIK (az árlista
+  // ugyanennek a régiónak a második fele), tehát a menüpont célja pontosan ez
+  // a blokk. `arlista` horgonyra a repóban semmi nem hivatkozik.
   {
     blockType: 'richText',
     content: richText([...rendeloiKezelesekNodes(), ...arlistaNodes('szoveglink')]),
-    sectionSettings: { visible: true, anchorId: 'arlista', hatter: 'feher' },
+    sectionSettings: { visible: true, anchorId: CLINIC_TREATMENTS_ANCHOR, hatter: 'feher' },
   },
 
   // Három párhuzamos érv → kártyarács (B3.1).

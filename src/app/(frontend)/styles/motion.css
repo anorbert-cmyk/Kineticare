@@ -1,0 +1,107 @@
+/**
+ * Mozgás-réteg — a storefront KÖZÖS, halk mikro-mozgásai.
+ *
+ * Két dolgot ad, mindkettőt progresszív ráépítésként (JS/böngésző-támogatás
+ * nélkül a lap pontosan úgy működik, mint eddig), és mindkettőt a
+ * `prefers-reduced-motion: reduce` mögé zárva:
+ *
+ *  1. SZEKCIÓ-BELÉPŐ (`.kc-reveal`) — a kezdőlap szekciói néhány pixeles
+ *     emelkedéssel és áttűnéssel érkeznek, EGYSZER. Az infrastruktúra a
+ *     kurzusoldal meglévő staggered mintája: ugyanaz a `kc-fade-up`
+ *     kulcsképsor (8px + áttűnés) és ugyanaz a `--kc-*-stagger`
+ *     késleltetés-logika — nem vezetünk be második mozgás-nyelvet.
+ *     A kezdő (rejtett) állapotot KIZÁRÓLAG a kliens teszi rá
+ *     (SectionReveal), és csak olyan szekcióra, amely a betöltéskor a hajtás
+ *     ALATT van — így JS nélkül semmi nem tűnik el, és villanás sincs.
+ *
+ *  2. NYITHATÓ SZAKASZ (details/summary) ÁTMENETE — a GYIK és az accordion
+ *     tartalma magasság-átmenettel nyílik/csukódik. A technika a natív
+ *     `::details-content` + `interpolate-size: allow-keywords` (a `height:
+ *     auto` így animálható); mindkettőt `@supports` őrzi, ezért ahol a
+ *     böngésző nem ismeri, a szakasz a mai módon, azonnal nyílik. Wrapper-div
+ *     nem kell, tehát a markup és a natív, JS nélküli működés érintetlen.
+ *
+ * Minden időzítés és görbe a tokens.css `--kc-motion-*` / `--kc-ease-out`
+ * változóiról jön; elemre írt ms/cubic-bezier itt sincs.
+ */
+
+/* ---- Közös belépő kulcsképsor ------------------------------------------- */
+
+@keyframes kc-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Szekció-belépő ------------------------------------------------------
+   A `.kc-reveal` osztályt a SectionReveal kliens-komponens teszi a hajtás
+   alatti szekciókra; az `is-revealed` a metszéskor érkezik. A `both`
+   kitöltés miatt a szekció a végállapotban áll meg, tehát tartalom sosem
+   marad láthatatlanul. */
+
+.kc-reveal {
+  opacity: 0;
+}
+
+.kc-reveal.is-revealed {
+  /* A szekció nagyobb felület, mint egy listasor: a kurzusoldali 200ms-es
+     alapidő kétszerese ad nyugodt, nem kapkodó belépőt. */
+  animation: kc-fade-up calc(var(--kc-motion-base) * 2) var(--kc-ease-out) both;
+  animation-delay: calc(var(--kc-reveal-stagger, 0) * 70ms);
+}
+
+/* ---- Nyitható szakaszok (details/summary) finom átmenete ------------------
+   A `content-visibility` diszkrét tulajdonság, ezért `allow-discrete`-tel
+   megy át; enélkül a tartalom a záráskor azonnal eltűnne, és a becsukódás
+   nem lenne látható. */
+
+@supports (interpolate-size: allow-keywords) and selector(::details-content) {
+  :root {
+    interpolate-size: allow-keywords;
+  }
+
+  .kc-faq__item::details-content,
+  .kc-accordion__item::details-content,
+  .kc-course-faq__item::details-content,
+  .kc-team__cv-section::details-content {
+    overflow: hidden;
+    block-size: 0;
+    transition:
+      block-size var(--kc-motion-base) var(--kc-ease-out),
+      content-visibility var(--kc-motion-base) allow-discrete;
+  }
+
+  .kc-faq__item[open]::details-content,
+  .kc-accordion__item[open]::details-content,
+  .kc-course-faq__item[open]::details-content,
+  .kc-team__cv-section[open]::details-content {
+    block-size: auto;
+  }
+}
+
+/* ---- Csökkentett mozgás --------------------------------------------------
+   A base.css globálisan 0,01ms-re rövidít minden átmenetet és animációt; itt
+   a kezdőállapotot is vissza kell venni, hogy a szekció ne áttűnéssel, hanem
+   AZONNAL a végállapotban jelenjen meg, a nyitható szakasz pedig a natív,
+   ugrásszerű viselkedést kapja. */
+
+@media (prefers-reduced-motion: reduce) {
+  .kc-reveal,
+  .kc-reveal.is-revealed {
+    opacity: 1;
+    animation: none;
+  }
+
+  .kc-faq__item::details-content,
+  .kc-accordion__item::details-content,
+  .kc-course-faq__item::details-content,
+  .kc-team__cv-section::details-content {
+    transition: none;
+  }
+}

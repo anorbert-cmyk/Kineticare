@@ -26,6 +26,17 @@ import '../../../app/(frontend)/styles/blocks/course-cards.css'
  * `kc-section-title`, `kc-section-lead`, `kc-text-link`) a content.css-ből
  * jönnek, a blokk-specifikus réteg a styles/blocks/course-cards.css-ben él.
  *
+ * EGYETLEN KURZUSNÁL VÍZSZINTES, KIEMELT KÁRTYA (tulajdonosi visszajelzés,
+ * 2026-08-16). A rács `auto-fit`-je egy kártyánál egy 26rem-es oszlopot rajzol
+ * a szekció közepére, a maradék ~2/3 szélesség üresen marad — a szekció
+ * „félkésznek" hat, pedig ez a lap ÉRTÉKESÍTÉSI motorja (UX-skill 1. pont, M3).
+ * Ilyenkor a kártya a teljes szekció-szélességet megkapja, vízszintes
+ * elrendezésben (borító balra, tartalom jobbra). KETTŐ VAGY TÖBB kártyánál
+ * marad a rács: ott az összehasonlíthatóság a fontosabb (azonos mezőrend,
+ * egymás melletti hasábok — docs/ux-belso-oldalak-kutatas.md B4.1).
+ * A döntés kizárólag a DARABSZÁMON múlik, tartalmi feltétele nincs, így a
+ * szerkesztő bármikor visszakapja a rácsot egy második kurzus közzétételével.
+ *
  * SZÖVEGEK: mind CMS-ből felülírható (`courseCards` blokk: eyebrow, heading,
  * lead, ctaLabel). Az alábbi konstansok kizárólag fallbackek — a szekció
  * akkor sem marad felirat nélkül, ha a szerkesztő üresen hagyja a mezőket.
@@ -49,6 +60,17 @@ export const DEFAULT_HEADING = 'Kurzusaink'
 /** Bevezető-fallback — a blokk `lead` mezője írja felül. */
 export const DEFAULT_LEAD =
   'Online kézrehabilitációs kurzusaink lépésről lépésre vezetnek végig az otthoni felépülésen.'
+
+/**
+ * Kiemelt (vízszintes) kártyát kap-e a szekció ennyi kurzusnál.
+ *
+ * A küszöb szándékosan EGY: kettőtől már van mit összehasonlítani, és a rács
+ * két hasábja tölti a szekció szélességét. Külön exportált, hogy a szabályt
+ * teszt közvetlenül rögzíthesse.
+ */
+export function usesFeaturedCard(productCount: number): boolean {
+  return productCount === 1
+}
 
 /** Fizetős-e a termék (az ár-megjelenítés szabályával azonos feltétel). */
 export function isPaidProduct(product: {
@@ -93,6 +115,7 @@ export function CourseCards({
   const eyebrowText = eyebrow?.trim() || DEFAULT_EYEBROW
   const title = heading?.trim() || DEFAULT_HEADING
   const leadText = lead?.trim() || DEFAULT_LEAD
+  const featured = usesFeaturedCard(products.length)
 
   return (
     <Section className="kc-course-cards" id={id} variant={variant}>
@@ -102,14 +125,24 @@ export function CourseCards({
           <h2 className="kc-section-title">{title}</h2>
           <p className="kc-section-lead">{leadText}</p>
         </div>
-        <div className="kc-card-grid kc-card-grid--courses">
+        <div
+          className={featured ? 'kc-course-cards__featured' : 'kc-card-grid kc-card-grid--courses'}
+        >
           {products.map((product) => (
-            <ProductCard ctaLabel={ctaLabel} key={product.id} product={product} />
+            <ProductCard
+              ctaLabel={ctaLabel}
+              featured={featured}
+              key={product.id}
+              product={product}
+            />
           ))}
         </div>
         <p className="kc-section-more">
           <Link className="kc-text-link kc-course-cards__link" href="/kurzusok">
-            Összes kurzus megtekintése <span aria-hidden="true">→</span>
+            <span className="kc-text-link__label">Összes kurzus megtekintése</span>
+            <span aria-hidden="true" className="kc-text-link__arrow">
+              →
+            </span>
           </Link>
         </p>
       </Container>

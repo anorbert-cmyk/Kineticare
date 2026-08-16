@@ -32,6 +32,19 @@ export const SERVICES_PAGE_SLUG = 'szolgaltatasok'
 export const SERVICES_PAGE_PATH = `/${SERVICES_PAGE_SLUG}`
 
 /**
+ * A rendelői kezelések szekciójának HORGONY-AZONOSÍTÓJA
+ * (`sectionSettings.anchorId`) a `/szolgaltatasok` oldalon.
+ *
+ * EZ AZ IGAZSÁGFORRÁS: ugyanezt az értéket kapja a szekció a
+ * seed-builderben (src/scripts/restore-legacy-content.ts
+ * `buildSzolgaltatasokLayout`) és az élő layout javításakor
+ * (src/scripts/apply-owner-content.ts). Korábban a menü `#rendeloi`-ra
+ * mutatott, a szekció viszont `arlista` horgonyt viselt, így a menüpontra
+ * kattintva semmi nem történt — a közös konstans ezt a szétcsúszást zárja ki.
+ */
+export const CLINIC_TREATMENTS_ANCHOR = 'rendeloi'
+
+/**
  * A rendelői kezelések lapon belüli horgonya.
  *
  * A rendelői kezeléseknek MA nincs önálló oldala: a tartalom a
@@ -39,7 +52,7 @@ export const SERVICES_PAGE_PATH = `/${SERVICES_PAGE_SLUG}`
  * amint önálló oldal készül, elég ezt az egy konstanst átírni (és a
  * menüpontot a szerkesztő is átállíthatja az adminban).
  */
-export const CLINIC_TREATMENTS_PATH = `${SERVICES_PAGE_PATH}#rendeloi`
+export const CLINIC_TREATMENTS_PATH = `${SERVICES_PAGE_PATH}#${CLINIC_TREATMENTS_ANCHOR}`
 
 /** A ProBody Stúdióval közös, akkreditált szakmai képzés (külső oldal). */
 export const PROFESSIONAL_TRAINING_URL = 'https://probodystudio.hu/kez-workshop/'

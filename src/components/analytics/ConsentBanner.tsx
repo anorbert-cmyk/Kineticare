@@ -52,7 +52,7 @@ const innerStyle: CSSProperties = {
 const textStyle: CSSProperties = {
   flex: '1 1 32rem',
   margin: 0,
-  fontSize: 'var(--kc-text-sm)',
+  fontSize: 'var(--kc-font-s)',
   lineHeight: 'var(--kc-leading-body)',
 }
 

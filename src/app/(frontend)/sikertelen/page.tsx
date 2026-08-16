@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 
 export const metadata: Metadata = {
   title: 'A fizetés nem sikerült',
-  description: 'A fizetésedet a bank elutasította vagy megszakította — újrapróbálhatod bármikor.',
+  description: 'A fizetésedet a bank elutasította vagy megszakította, de bármikor újrapróbálhatod.',
 }
 
 interface SikertelenPageProps {
@@ -27,8 +27,8 @@ export default async function SikertelenPage({ searchParams }: SikertelenPagePro
         <div className="kc-thankyou kc-thankyou--failed">
           <h1>A fizetés nem sikerült</h1>
           <p>
-            A fizetésedet a bank elutasította vagy megszakította. Semmi sem került levonásra —
-            újrapróbálhatod bármikor.
+            A fizetésedet a bank elutasította vagy megszakította. Semmi sem került levonásra,
+            bármikor újrapróbálhatod.
           </p>
           <p>
             Ha többször is elutasított a bank, érdemes ellenőrizni a kártyaadataidat, vagy a

@@ -18,12 +18,27 @@ import '../../app/(frontend)/styles/blocks/press-logos.css'
  * ilyenkor a MediaImage-nek átadott média-objektum `alt`-ja cserélődik le, hogy
  * a felülírás a `srcSet`/méret-logikát ne kerülje meg.
  *
- * A szekció landmarkjának nevét a felirat adja; felirat nélkül a szekció
- * névtelen marad (nem találunk ki hozzá szöveget).
+ * A szekció landmarkjának nevét a felirat adja. Kitöltetlen feliratnál a
+ * beépített `DEFAULT_HEADING` áll be: a logósor felirat nélkül megfejtendő
+ * képsorrá válna (a látogató nem tudja, MIÉRT látja őket), a szekció pedig
+ * névtelen landmarkként a képernyőolvasóban is elveszne. A felirat így nem
+ * „kitalált marketingszöveg", hanem a szekció megnevezése — a szerkesztő
+ * bármikor felülírja a blokk `heading` mezőjével.
  *
  * SÁV (board `--band`): a tükörben a `kc-press` teljes szélességű, de NEM
  * teljes képernyős — ezért full-bleed sáv természetes magassággal, nem tábla.
  */
+
+/**
+ * A logósor beépített felirata — a blokk `heading` mezője írja felül.
+ *
+ * A korábbi „Ismerhetsz minket innen" helyett a tulajdonos 2026-08-16-án
+ * jóváhagyott szövege: a sorban nemcsak sajtómegjelenések, hanem szakmai
+ * szervezetek (MGYFT) logói is állnak, és a „találkozhattál velünk" ezt a
+ * vegyes halmazt pontosan írja le, ráadásul a látogató szemszögéből.
+ */
+export const DEFAULT_HEADING = 'Itt találkozhattál velünk'
+
 export interface PressLogosProps {
   block: BlockPressLogos
 }
@@ -41,21 +56,19 @@ export function PressLogos({ block }: PressLogosProps) {
   const variant =
     settings?.hatter === 'tint' ? 'tint' : settings?.hatter === 'sotet' ? 'dark' : 'default'
   const headingId = `press-felirat-${block.id ?? 'fo'}`
-  const heading = block.heading?.trim() ?? ''
+  const heading = block.heading?.trim() || DEFAULT_HEADING
 
   return (
     <Section
-      aria-labelledby={heading.length > 0 ? headingId : undefined}
+      aria-labelledby={headingId}
       className="kc-press kc-board kc-board--band"
       id={anchorId}
       variant={variant}
     >
       <div className="kc-board__inner">
-        {heading.length > 0 ? (
-          <p className="kc-press__label" id={headingId}>
-            {heading}
-          </p>
-        ) : null}
+        <p className="kc-press__label" id={headingId}>
+          {heading}
+        </p>
         <ul className="kc-press__row">
           {logos.map((logo, index) => {
             const media = logo.image
@@ -63,11 +76,14 @@ export function PressLogos({ block }: PressLogosProps) {
               return null
             }
             const altOverride = logo.alt?.trim() ?? ''
+            // A logók 2026-08-16-tól nagyobbak (lásd press-logos.css); a
+            // `sizes` ezt követi, hogy a böngésző ne egy alulméretezett
+            // forrásból nagyítson fel.
             const image = (
               <MediaImage
                 media={altOverride.length > 0 ? { ...media, alt: altOverride } : media}
                 preferredSize="xs"
-                sizes="160px"
+                sizes="(max-width: 900px) 140px, 220px"
               />
             )
             // CMS-webcím allowlist-szűrése (src/lib/safe-url.ts): tiltott
