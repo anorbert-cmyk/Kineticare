@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -35,6 +35,30 @@ import type { BlockServices } from '../payload-types'
 
 const REPO = fileURLToPath(new URL('..', import.meta.url))
 const olvas = (relativUt: string): string => readFileSync(join(REPO, relativUt), 'utf8')
+
+/**
+ * A megadott CSS-osztályt használó `.tsx` fájlok (a repóhoz képest relatív
+ * úton). A `components` és az `app` fát járja be — ide kerül minden vevői
+ * felület. Azért fájlrendszerből, hogy a hívók kézzel írt listája ne avuljon
+ * el: egy új hívóra az őr magától kiterjed, egy megszűnő hívó pedig nem
+ * buktatja hamisan.
+ */
+const hasznalok = (cssOsztaly: string): string[] => {
+  const talalatok: string[] = []
+  const bejar = (relativDir: string): void => {
+    for (const bejegyzes of readdirSync(join(REPO, relativDir), { withFileTypes: true })) {
+      const ut = `${relativDir}/${bejegyzes.name}`
+      if (bejegyzes.isDirectory()) {
+        bejar(ut)
+      } else if (bejegyzes.name.endsWith('.tsx') && olvas(ut).includes(cssOsztaly)) {
+        talalatok.push(ut)
+      }
+    }
+  }
+  bejar('components')
+  bejar('app')
+  return talalatok.sort()
+}
 
 // ---------------------------------------------------------------------------
 // 1–2. Mozgás-réteg
@@ -200,11 +224,15 @@ describe('nyíl-linkek — az aláhúzás a szöveg alatt fut, a nyíl alatt nem
     expect(content).toContain('.kc-text-link__label {')
     expect(content).toContain('.kc-text-link__arrow {')
 
-    for (const komponens of [
-      'components/content/home/CourseCards.tsx',
-      'components/content/home/CredentialsStrip.tsx',
-      'components/content/home/KnowledgeSection.tsx',
-    ]) {
+    // A hívók listáját NEM írjuk kézzel: a fájlrendszerből derül ki, ki
+    // használja a `.kc-text-link` osztályt. Így az őr egy ÚJ hívóra is
+    // magától kiterjed, és nem avul el, ha egy komponensből kikerül a link
+    // (a CourseCards szekció-lábából 2026-08-16-án épp azért került ki, mert
+    // hatodik, eltérő feliratú hivatkozás volt ugyanarra a célra).
+    const hivok = hasznalok('kc-text-link')
+    expect(hivok.length, 'egyetlen .kc-text-link-hívó sincs — az őr elnémult').toBeGreaterThan(0)
+
+    for (const komponens of hivok) {
       const forras = olvas(komponens)
       expect(forras, `${komponens}: hiányzó szöveg-span`).toContain('kc-text-link__label')
       expect(forras, `${komponens}: hiányzó nyíl-span`).toContain('kc-text-link__arrow')

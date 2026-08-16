@@ -211,8 +211,9 @@ describe('HomeView (kezdőlap-render)', () => {
 
   it('M1 hero CTA: elsődleges a kurzusokra, másodlagos (visszafogott) az ingyenes SOS-ra', () => {
     const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
-    // EGY elsődleges CTA a fizetős kurzusok oldalára (audit K3).
-    expect(html).toContain('Kurzusok megtekintése')
+    // EGY elsődleges CTA a fizetős kurzusok oldalára (audit K3). A felirat a
+    // jóváhagyott szótárból jön (docs/ui-sztenderdek.md §3.2 #10).
+    expect(html).toContain('Nézd meg a kurzusokat')
     expect(html).toContain('href="/kurzusok"')
     // A lead-magnet csak visszafogott, lapon belüli link (audit K2).
     expect(html).toContain('Ingyenes SOS gyakorlatok')
@@ -400,11 +401,17 @@ describe('HomeView (kezdőlap-render)', () => {
     expect(html).not.toContain('Így tudunk neked segíteni')
   })
 
-  it('M4 SOS-sáv: ingyenes termék nélkül is megjelenik, fallbackben a kurzuslistára mutat', () => {
+  /**
+   * A tartalék ágon a gomb NEM ígérheti az ingyenes kurzus indítását: a
+   * kurzuslistán semmi nem indul el. A részletes ágankénti mérés az
+   * `src/__tests__/kezdolap-cta-egyertelmuseg.test.tsx` őrben van.
+   */
+  it('M4 SOS-sáv: ingyenes termék nélkül is megjelenik, de a gomb a listát ígéri', () => {
     const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
     expect(html).toContain('id="ingyenes"')
     expect(html).toContain('SOS Kézrelax')
-    expect(html).toContain('Elindítom az ingyenes kurzust')
+    expect(html).toContain('Nézd meg a kurzusokat')
+    expect(html).not.toContain('Elindítom ingyen')
   })
 
   it('M5 hogyan-működik: 3 lépés (megveszem → azonnal nézem → otthon gyakorlok)', () => {

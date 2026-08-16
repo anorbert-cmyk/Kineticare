@@ -1,37 +1,112 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+import { cache } from 'react'
 
+import { JsonLd } from '@/components/content/JsonLd'
 import { PostCard } from '@/components/content/PostCard'
+import { PostsEmptyState } from '@/components/content/PostsEmptyState'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
-import { getCategoryBySlug, getPosts } from '@/lib/cms'
+import { getCategoryBySlug, getPosts, getPublishedProducts } from '@/lib/cms'
+import { blogJsonLd, breadcrumbJsonLd } from '@/lib/seo'
+import { freeCourseHref } from '@/lib/tudastar'
+
+/**
+ * /blog/kategoria/[slug] — a Tudástár egy témájának listája.
+ *
+ * ═══ ÜRES ÁLLAPOT ═══
+ * Ugyanaz a panel, mint a bloglistán (PostsEmptyState). Ha a témában nincs
+ * cikk, de máshol VAN, a panel visszavisz a teljes Tudástárba; ha sehol
+ * nincs cikk, a magyarázó (hub) állapot jelenik meg — így a visszaút nem egy
+ * ugyanilyen üres lapra mutat.
+ *
+ * ═══ INDEXELÉS ═══
+ * Az ÜRES kategória-oldal `noindex, follow` jelzést kap. A Google a 200-zal
+ * válaszoló, de tartalom nélküli lapot „soft 404"-ként kezeli, ha „the content
+ * suggests an error for Google Search, an empty page or an error message"
+ * (https://developers.google.com/search/docs/crawling-indexing/http-network-errors),
+ * és a `noindex` a hivatalos módja annak, hogy egy ilyen lap ne kerüljön a
+ * találatok közé
+ * (https://developers.google.com/search/docs/crawling-indexing/block-indexing).
+ * A `follow` SZÁNDÉKOS: a lapon lévő linkek (Tudástár, kurzusok, kapcsolat)
+ * továbbra is bejárhatók maradjanak. Amint az első cikk megjelenik a témában,
+ * a jelzés magától visszavált indexelhetőre — külön teendő nincs.
+ * A sitemap ugyanezt a szabályt követi (src/lib/tudastar.ts
+ * `categoriesWithPosts`): átirányított és nem indexelendő cím nem kerül bele.
+ */
 
 export const dynamic = 'force-dynamic'
 
 type Props = { params: Promise<{ slug: string }> }
 
+/**
+ * Kérés-idejű dedupe: a generateMetadata és a page UGYANAZT a két lekérdezést
+ * használja (a kategória létezik-e, és van-e benne cikk). A React `cache`
+ * nélkül mindkettő kétszer futna minden kérésnél — a kurzusoldal ugyanezt a
+ * mintát viszi.
+ */
+const categoryOf = cache((slug: string) => getCategoryBySlug(slug))
+const postsOf = cache((slug: string) => getPosts({ categorySlug: slug }))
+/** Van-e EGYÁLTALÁN cikk a Tudástárban (a visszaút értelmességéhez). */
+const anyPost = cache(() => getPosts({ limit: 1 }))
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
-  const category = await getCategoryBySlug(slug)
+  const category = await categoryOf(slug)
   if (!category) return {}
+  const posts = await postsOf(slug)
   return {
-    title: `${category.title} — Tudástár`,
-    alternates: { canonical: `/blog/kategoria/${slug}` },
+    // A cím kötőjel-halmozás nélkül, magyarul olvasható mondatrészként. A
+    // korábbi „<téma> — Tudástár" alak kvirtmínuszt (U+2014) használt
+    // elválasztónak, amit a magyar mikroszöveg-szabályzat kizár
+    // (docs/ui-sztenderdek.md §3.1.1).
+    title: `${category.title} a Tudástárban`,
+    description: `${category.title}: kézrehabilitációs cikkek és gyakorlatok a Kineticare Tudástárában.`,
+    alternates: { canonical: `/blog/kategoria/${category.slug}` },
+    // Üres témánál nem kérünk indexelést (soft 404 elkerülése), de a linkek
+    // bejárását igen.
+    ...(posts.length === 0 ? { robots: { index: false, follow: true } } : {}),
   }
 }
 
 export default async function BlogCategoryPage({ params }: Props) {
   const { slug } = await params
-  const category = await getCategoryBySlug(slug)
+  const category = await categoryOf(slug)
   if (!category) notFound()
-  const posts = await getPosts({ categorySlug: slug })
+  const posts = await postsOf(slug)
+
+  // Üres témánál: van-e egyáltalán cikk a Tudástárban? Ettől függ, hogy a
+  // visszaút értelmes-e (lásd a fejléc „ÜRES ÁLLAPOT" pontját).
+  const hasAnyPost = posts.length > 0 || (await anyPost()).length > 0
+  const variant = hasAnyPost ? 'kategoria' : 'tudastar'
+  const freeHref =
+    posts.length === 0 && variant === 'tudastar'
+      ? freeCourseHref(await getPublishedProducts(50))
+      : null
 
   return (
     <Section>
       <Container>
+        <JsonLd
+          // A `name` a LÁTHATÓ H1 szövege (a téma neve), nem a meta-cím: a
+          // strukturált adatnak azzal kell egyeznie, amit az olvasó lát.
+          data={blogJsonLd({
+            name: category.title,
+            path: `/blog/kategoria/${category.slug}`,
+            posts,
+          })}
+        />
+        {/* Morzsa a bejegyzés- és a kurzusoldal bevett alakjában: a szekció
+            gyökere, majd az aktuális lap (PostView, kurzusok/[slug]). */}
+        <JsonLd
+          data={breadcrumbJsonLd([
+            { name: 'Tudástár', path: '/blog' },
+            { name: category.title, path: `/blog/kategoria/${category.slug}` },
+          ])}
+        />
         <h1>{category.title}</h1>
         {posts.length === 0 ? (
-          <p className="kc-empty">Ebben a kategóriában még nincs cikk.</p>
+          <PostsEmptyState freeCourseHref={freeHref} variant={variant} />
         ) : (
           <div className="kc-card-grid">
             {posts.map((post) => (

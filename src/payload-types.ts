@@ -510,7 +510,7 @@ export interface BlockFreeSos {
    */
   body?: string | null;
   /**
-   * A sáv gombja — ez visz az ingyenes kurzushoz.
+   * A sáv gombja. A „Hová vigyen" mezőt hagyd üresen: a gomb magától az ingyenes kurzus oldalára visz, és ha éppen nincs ingyenes kurzus, a kurzuslistára, a listához illő felirattal. Csak akkor írj be címet, ha egy MÁSIK kurzus oldalára akarod vinni (pl. /kurzusok/sos-kezrelax-villamkurzus); a puszta /kurzusok cím nem érvényesül, mert azon a listán nem indul el az ingyenes kurzus.
    */
   cta?: {
     /**
@@ -518,7 +518,7 @@ export interface BlockFreeSos {
      */
     felirat?: string | null;
     /**
-     * Saját oldalra elég a perjellel kezdődő rész (pl. /kurzusok), másik weboldalra a teljes cím https://-sel kezdve.
+     * Hagyd üresen: a rendszer az ingyenes kurzus oldalára visz. Ha másik kurzusra akarod vinni, annak a kurzusnak a címét írd be (pl. /kurzusok/sos-kezrelax-villamkurzus).
      */
     url?: string | null;
     /**

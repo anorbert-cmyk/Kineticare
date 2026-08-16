@@ -44,7 +44,23 @@ const DISALLOWED_PATHS = [
   // Piszkozat-előnézet be-/kikapcsoló végpontok — a válaszaik amúgy is
   // noindexeltek, ez csak plusz védőháló a felesleges crawl ellen.
   '/next/',
+  // PostHog elsőfél-proxy (next.config.ts `rewrites`): ez nem a mi tartalmunk,
+  // hanem továbbított analitikai forgalom. Indexelni nincs mit rajta, a
+  // bejárása viszont fölösleges kimenő kérést generálna minden találatra.
+  '/ingest/',
 ]
+
+/**
+ * Amit SZÁNDÉKOSAN NEM tiltunk, hogy egy későbbi „takarítás" se vegye el:
+ * - `/blog/` és `/blog/kategoria/` — a Tudástár a hosszútávú SEO/GEO-motor.
+ *   Az ÜRES kategória-lap indexelését nem itt, hanem az oldal `noindex`
+ *   jelzésével akadályozzuk: a robots.txt-vel tiltott lapot a Google be sem
+ *   járja, tehát a `noindex`-et sem látná meg
+ *   (https://developers.google.com/search/docs/crawling-indexing/block-indexing:
+ *   „For the `noindex` rule to be effective, the page … must not be blocked by
+ *   a robots.txt file").
+ * - `/kurzusok/` és a jogi lapok — nyilvános, indexelendő tartalom.
+ */
 
 /**
  * AI-crawlerek és -ágensek, amelyeket kifejezetten engedünk.
