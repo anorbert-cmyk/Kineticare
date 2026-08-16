@@ -22,6 +22,7 @@
     "backup:db": "tsx src/scripts/backup-db.ts",
     "seed:legacy": "tsx src/scripts/restore-legacy-content.ts",
     "seed:menu": "tsx src/scripts/seed-menu.ts",
+    "content:owner": "tsx src/scripts/apply-owner-content.ts",
     "kurzus:videok-modulba": "tsx src/scripts/videok-modulba.ts"
   },
   "dependencies": {
