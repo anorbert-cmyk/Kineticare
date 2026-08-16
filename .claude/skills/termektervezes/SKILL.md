@@ -34,7 +34,26 @@ A projekt saját, már meglévő kutatásai kötelező olvasmányok, és a hivat
 - **Natív magyar, AI-szag nélkül.** Gondolatjelet (–, —) csak valódi közbevetésnél
   használunk; töltelék-elválasztóként soha. Helyette vessző, kettőspont, pont, zárójel.
   Ez a tulajdonos kifejezett, ismételt kérése.
-- **A CTA cselekvést ír le, nem ígéretet**: ige + tárgy, egyes szám második személy.
+- **A CTA cselekvést ír le, nem ígéretet**: ige + tárgy. A gomb megmondja, MI
+  TÖRTÉNIK, ha rákattintasz — nem azt ígéri, mi lesz utána jó.
+- **Nyelvtani személy (vezetői döntés, 2026-08-16).** A felhasználó SAJÁT
+  cselekvését kimondó gombok **egyes szám első személyben** állnak
+  („Megveszem a kurzust", „Elindítom ingyen", „Feliratkozom"); a navigáció, az
+  útmutató szöveg és a magyarázatok **egyes szám második személyben** tegeznek.
+  Ez a skill korábbi, kizárólag E/2-t előíró szabályát VÁLTJA FEL.
+  Indoklás: (a) a régi kineticare.hu — amit a meglévő vevők megszoktak — mérve
+  100%-ban E/1-es gombfeliratokat használ, és a mai felület is (Jakob törvénye,
+  NN/g); (b) az angol nyelvű tervezési rendszerek (GOV.UK, Carbon, Polaris,
+  Atlassian) azért írnak felszólító alakot, mert az angolban NINCS E/1-es
+  gombidióma — a magyar kereskedelmi felületeken viszont ez a bevett forma, és
+  az elvük („a gomb mondja meg, mi történik") E/1-ben ugyanúgy teljesül;
+  (c) a szabály angolból való mechanikus átvétele pontosan azt a fordítás-ízű
+  hangot adná, amit a tulajdonos kifejezetten tiltott.
+  Kivétel: a bevett, egyszavas felületi címkék („Belépés", „Regisztráció")
+  maradhatnak főnévi alakban, ha a felület máshol is így nevezi őket.
+  Ami ettől FÜGGETLENÜL kötelező: egy cselekvésre egy felirat az egész oldalon,
+  a felirat legyen igaz (ingyenes terméken „Megveszem" tilos), töltelék
+  gondolatjel nélkül, és a puszta „Tovább…" nem CTA.
 - **Ugyanaz a cselekvés = ugyanaz a szó, mindenhol** (WCAG 3.2.4, konzisztens azonosítás).
   A CTA-szótár EGYETLEN normatív helye a `docs/ui-sztenderdek.md` **§3.2** (a tulajdonos
   2026-08-16-i döntése, miután két doksi is magát nevezte szótárnak). Új gombfelirat
