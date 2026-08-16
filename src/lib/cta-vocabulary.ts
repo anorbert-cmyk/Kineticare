@@ -66,6 +66,9 @@ export type CtaAction =
   | 'cart-to-checkout'
   | 'password-reset-request'
   | 'password-reset-set'
+  | 'call-specialist'
+  | 'appointment-request-link'
+  | 'appointment-submit'
 
 /** A P-1 szabály szerinti nyelvtani alak – auditálható, ezért a szótár tárolja. */
 export type CtaPerson =
@@ -363,6 +366,47 @@ export const CTA_VOCABULARY = [
     person: 'e1',
     weight: 'primary',
     progress: 'save',
+    patterned: false,
+  },
+  {
+    // §3.2 #23 (ÚJ) – közvetlen telefonhívás a szakemberhez (`tel:` hivatkozás).
+    // MINTÁZAT (C-6): `Hívd <Nevet>` – a név nélkül két szakembernél a felirat
+    // nem egyedi (WCAG 2.4.4), és a képernyőolvasós link-listában sem lenne az.
+    // P-1b → E/2: a hívás a telefon-alkalmazásnak adja át a látogatót, a
+    // Kineticare-nél tárolt dolgaiban semmi nem változik (nincs foglalás).
+    section: '#23',
+    action: 'call-specialist',
+    label: 'Hívd Kocsis Katát',
+    person: 'e2',
+    weight: 'secondary',
+    progress: null,
+    patterned: true,
+  },
+  {
+    // §3.2 #24 (ÚJ) – írásos időpontkérés a szakember-szekcióból. P-1b → E/2:
+    // a kattintás a /kapcsolat időpontkérő szekciójára VISZ, maga a vállalás
+    // ott, a #25 gombbal történik. A kettő SZÁNDÉKOSAN külön sor: aki
+    // „egységesítené", az a navigációt és a beküldést mosná össze.
+    // NN/g egészségügyi kutatás: az írásos út a hívás mellett kötelező, mert a
+    // válaszadók jelentős része kerüli a telefonálást.
+    section: '#24',
+    action: 'appointment-request-link',
+    label: 'Kérj időpontot üzenetben',
+    person: 'e2',
+    weight: 'secondary',
+    progress: null,
+    patterned: false,
+  },
+  {
+    // §3.2 #25 (ÚJ) – az időpontkérő űrlap BEKÜLDÉSE. P-1a → E/1: a beküldéssel
+    // időpontkérés keletkezik, tehát a látogató dolgaiban változik valami.
+    // Ezért E/1, szemben a #24 navigációs sorával.
+    section: '#25',
+    action: 'appointment-submit',
+    label: 'Időpontot kérek',
+    person: 'e1',
+    weight: 'primary',
+    progress: 'send',
     patterned: false,
   },
 ] as const satisfies readonly CtaEntry[]

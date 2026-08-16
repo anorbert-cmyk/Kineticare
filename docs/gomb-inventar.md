@@ -364,11 +364,35 @@ Ezek a `ui-sztenderdek.md` §6.3 **G-UI1** őrének kiegészítései, nem helyet
 | **Kosárból a pénztárba** | 1 | Tovább a penztárhoz | **#20** | `Menj a pénztárhoz` |
 | **Visszaállító link kérése** | 1 | Visszaállító link küldése | **#21** | `Kérem a visszaállító linket` |
 | **Új jelszó beállítása** | 1 | Jelszó beállítása | **#22** | `Beállítom az új jelszót` |
+| **Hívás a szakembernek** | 2 | Hívd Kocsis Katát · Hívd Kiss Katát | **#23** | `Hívd Kocsis Katát` |
+| **Írásos időpontkérés (link)** | 1 | Kérj időpontot üzenetben | **#24** | `Kérj időpontot üzenetben` |
+| **Időpontkérő űrlap beküldése** | 1 | Időpontot kérek | **#25** | `Időpontot kérek` |
 | Folyamatban | **6** | Feldolgozás… · Küldés… · Mentés… · Belépés… · Regisztráció… · Beállítás… | **L-1** | `Belépés…` `Regisztráció…` `Küldés…` `Mentés…` `Feldolgozás…` `Betöltés…` |
 
 **Mit mond ez a leképezés összesítve:** 17 mért cselekvésre **41 különböző felirat** él ma; a jóváhagyott szótárban ugyanezekre **21 felirat + 6 folyamatban-alak** van. A legnagyobb nyereség a kurzuslistánál (8 → 1) és a saját kurzusoknál (4 → 1) keletkezik – mindkettő WCAG 2.2 **3.2.4** sérülés ma.
 
 **Amit a döntés NEM változtatott meg** (a felirat ma is helyes, kódot nem kell írni): `Belépés`, `Feliratkozom`. **Ami csak a személy miatt maradt E/1-ben, de a szótári alakra pontosítandó:** `Megveszem` → `Megveszem a kurzust`, `Újrapróbálom` (marad, de a másik két alak megszűnik), `Elfogadom` → `Elfogadom mindet`.
+
+### 5.2 Mért eltérés az időpontkérés körül (2026-08-16, a szótár bővítésekor derült ki)
+
+A `#23`–`#25` sorok felvételekor kiderült, hogy az időpontkérés három helyen jelenik meg, és a
+feliratok **ma ütköznek** (WCAG 2.2 · 3.2.4 Consistent Identification):
+
+| Hol | Mai felirat | Milyen funkció | Melyik sor szerint helyes |
+| --- | --- | --- | --- |
+| `/szolgaltatasok` hivatkozás (`restore-legacy-content.ts:562, 606`) | `Időpontot kérek` | **navigáció** a `/kapcsolat#idopontkeres` szekcióra | **#24** → `Kérj időpontot üzenetben` |
+| Szakember-szekció hivatkozása (`restore-legacy-content.ts:1180`) | `Kérj időpontot üzenetben` | navigáció ugyanoda | **#24** ✓ helyes |
+| Az időpontkérő űrlap beküldő gombja (`restore-legacy-content.ts:1555`) | `Időpontot kérek` | **beküldés** (időpontkérés keletkezik) | **#25** ✓ helyes |
+
+Két hiba egyszerre: (1) ugyanarra a **navigációs** funkcióra két különböző felirat él, (2) a
+`Időpontot kérek` felirat egyszerre jelöl **navigációt** és **beküldést**. A látogató ugyanazt a
+szöveget látja a linken és a gombon, pedig az egyik csak odavisz, a másik ténylegesen elküldi a
+kérést.
+
+**A javítás a hívóhely-csere körébe tartozik** (lásd §10/3.), nem ide: a seed-builderben a
+`/szolgaltatasok` hivatkozás feliratát `Kérj időpontot üzenetben`-re kell állítani. Az ÉLŐ
+szekciósorokat ez nem írja át — azokat az adminban kell javítani, mert a seed sosem ír felül
+meglévő szekciósort.
 
 ### 5.1 A négy hiányzó cselekvés – FELVÉVE a §3.2-be (2026-08-16)
 
