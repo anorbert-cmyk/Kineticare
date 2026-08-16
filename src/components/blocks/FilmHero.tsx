@@ -96,18 +96,38 @@ const CAPTION_MID = { from: 0.44 * PINNED, to: 0.62 * PINNED } as const
 const CAPTION_END = { from: 0.84 * PINNED, to: 1 } as const
 
 /**
- * A 2. és 3. állás SZÖVEGE — IDEIGLENES, kódban rögzített érték.
+ * A 2. és 3. állás SZÖVEGE — kódban rögzített érték.
  *
- * A megrendelő adja meg a végleges szöveget — KÓDBAN CSERÉLENDŐ (a filmsáv
- * feliratai szándékosan NEM CMS-mezők: a blokk sémája nem bővült, migráció sem
- * kell hozzá). Az 1. állás szövege ezzel szemben marad CMS-tartalom: a blokk
- * `title` / `lead` / `tags` / `ctas` mezőiből jön, ahogy eddig.
+ * A filmsáv feliratai szándékosan NEM CMS-mezők: a blokk sémája nem bővült,
+ * migráció sem kell hozzá. Az 1. állás szövege ezzel szemben CMS-tartalom: a
+ * blokk `title` / `lead` / `tags` / `ctas` mezőiből jön.
  *
  * Tartsd rövidnek: egy tömör mondat, amit a néző egy pillantásra elolvas
  * görgetés közben. Üres string esetén az adott állás egyszerűen nem jelenik meg.
+ *
+ * ═══ MIÉRT EZ A KÉT MONDAT (2026-08-16, tulajdonosi kérésre írva) ═══
+ * A filmsáv a logó és a terápia közös ívét rajzolja ki: ZÁRT → NYÍLÓ →
+ * NYITOTT (lásd a kezdőlap „Három állapot" szekcióját). A három felirat ezt az
+ * ívet követi: az 1. állás a problémát mondja ki (CMS-ből), a 2. a
+ * változás folyamatát, a 3. a látogatóra bízza a döntést.
+ *
+ * A 2. állás szövege szándékosan a „Három állapot" NYÍLÓ kártyájának nyelvét
+ * ismétli („Minden alkalommal egy mozdulattal több lesz") — ugyanaz a gondolat
+ * ugyanazokkal a szavakkal, két helyen.
+ *
+ * A korábbi, ideiglenes „A terápia működik" felirat helyett azért nem
+ * hatásosságot állítunk, mert ez egészségügyi kontextus: egy fenntartás nélküli
+ * eredmény-ígéret a vásárlási döntés mellett megtévesztő benyomást kelt, és
+ * ugyanaz a kifogás állna rá, ami miatt a kurzusoldali vélemény-szekciót is
+ * megállítottuk. A haladás LEÍRÁSA igaz állítás; a gyógyulás ÍGÉRETE nem
+ * lenne az.
+ *
+ * Mikroszöveg-szabályok (docs/ui-sztenderdek.md §3.1): natív magyar, töltelék
+ * gondolatjel nélkül, felkiáltójel nélkül, a záró felirat tegez — a §3.2 P-1b
+ * szerint ez nem CTA, hanem a néző felé forduló mondat.
  */
-const CAPTION_MID_TEXT = 'A terápia működik'
-const CAPTION_END_TEXT = 'Kezdd el még ma'
+const CAPTION_MID_TEXT = 'Minden alkalommal egy mozdulattal több'
+const CAPTION_END_TEXT = 'A következő mozdulat a tiéd'
 
 /** A fejezet-navigáció felirata — egyetlen jelenetnél nem is jelenik meg. */
 const FILM_LABEL = 'A kéz nyílása'
