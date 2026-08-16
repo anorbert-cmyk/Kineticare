@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ASZF_HELYKITOLTO_BEKEZDES,
   ASZF_JAVITOTT_BEKEZDES,
+  KURZUSLISTA_JOVAHAGYOTT_FELIRAT,
   KURZUS_ELONYOK,
   REGI_ALLAPOTOK_BEVEZETO,
   REGI_KURZUS_SZEKCIO_CIM,
@@ -17,6 +18,7 @@ import {
   alkalmazAszfAdatvedelemLink,
   alkalmazJogiOldalak,
   alkalmazKezdolapJavitasok,
+  alkalmazKurzuslistaFeliratok,
   alkalmazKurzusElonyok,
   alkalmazPressLogosFejlec,
   alkalmazRendeloiHorgony,
@@ -48,6 +50,7 @@ import {
 import { DEFAULT_HEADING as PRESS_ALAPFELIRAT } from '../components/blocks/PressLogos'
 import { buildCourseSlug } from '../lib/course-url'
 import { coursePriceBadgeKind } from '../lib/courses'
+import { CTA_VOCABULARY } from '../lib/cta-vocabulary'
 import { JOGI_OLDALAK, jogiOldalTartalom, richTextSzoveg } from '../lib/legal-content'
 import {
   CLINIC_TREATMENTS_ANCHOR,
@@ -806,6 +809,73 @@ describe('alkalmazAszfAdatvedelemLink', () => {
     const szoveg = richTextSzoveg(jogiOldalTartalom(aszf!))
     expect(szoveg).toContain(ASZF_JAVITOTT_BEKEZDES)
     expect(szoveg).not.toContain('[xxx]')
+  })
+})
+
+// ===========================================================================
+// 15. javítás — a kurzuslista-gombok egységes felirata.
+// ===========================================================================
+
+describe('alkalmazKurzuslistaFeliratok', () => {
+  const layoutTobbGombbal = (feliratok: string[]): Page['layout'] =>
+    [
+      {
+        blockType: 'filmHero',
+        id: 'h',
+        ctas: [
+          { felirat: feliratok[0], url: '/kurzusok', ujAblakban: false },
+          { felirat: 'Ingyenes SOS gyakorlatok', url: '#ingyenes', ujAblakban: false },
+        ],
+      },
+      {
+        blockType: 'ctaBanner',
+        id: 'c',
+        cta: { felirat: feliratok[1], url: '/kurzusok', ujAblakban: false },
+      },
+    ] as unknown as Page['layout']
+
+  it('a HÁROM élőben mért feliratot egyetlen jóváhagyottra hozza', () => {
+    const eredmeny = alkalmazKurzuslistaFeliratok(
+      layoutTobbGombbal(['Kurzusok megtekintése', 'Megnézem a kurzusokat']),
+    )
+    expect(eredmeny.modositasok).toHaveLength(1)
+    const szoveg = JSON.stringify(eredmeny.layout)
+    expect(szoveg).not.toContain('Kurzusok megtekintése')
+    expect(szoveg).not.toContain('Megnézem a kurzusokat')
+    expect(szoveg.match(/Nézd meg a kurzusokat/g)).toHaveLength(2)
+  })
+
+  it('a MÁS célra mutató gombhoz nem nyúl', () => {
+    const eredmeny = alkalmazKurzuslistaFeliratok(
+      layoutTobbGombbal(['Kurzusok megtekintése', 'Megnézem a kurzusokat']),
+    )
+    // Az ingyenes sáv horgonya (#ingyenes) érintetlen marad.
+    expect(JSON.stringify(eredmeny.layout)).toContain('Ingyenes SOS gyakorlatok')
+  })
+
+  it('a SZERKESZTŐ saját feliratát sosem írja át', () => {
+    const eredmeny = alkalmazKurzuslistaFeliratok(
+      layoutTobbGombbal(['Irány a kurzusaink', 'Kattints ide']),
+    )
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.modositasok).toHaveLength(0)
+    expect(eredmeny.kihagyasok[0].indok).toContain('saját szövegeit')
+  })
+
+  it('idempotens: a már egységes lapon nem ír, és nem is kiabál', () => {
+    const eredmeny = alkalmazKurzuslistaFeliratok(
+      layoutTobbGombbal([KURZUSLISTA_JOVAHAGYOTT_FELIRAT, KURZUSLISTA_JOVAHAGYOTT_FELIRAT]),
+    )
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.kihagyasok[0].indok).toContain('MÁR a jóváhagyott')
+    expect(eredmeny.kihagyasok[0].hangos).not.toBe(true)
+  })
+
+  it('a jóváhagyott felirat AZONOS a kódba öntött szótár §3.2 #10 sorával', () => {
+    // Ha valaki a szótárban átírja a feliratot, ez a teszt buktatja a
+    // tartalom-scriptet is — a kettő nem csúszhat szét.
+    const szotarSor = CTA_VOCABULARY.find((sor) => sor.action === 'course-list-open')
+    expect(szotarSor?.label).toBe(KURZUSLISTA_JOVAHAGYOTT_FELIRAT)
   })
 })
 
