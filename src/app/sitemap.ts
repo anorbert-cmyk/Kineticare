@@ -55,9 +55,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: route.priority,
   }))
 
+  // A statikus lista útvonalai (normalizált alakban): amit már felvettünk, azt
+  // a CMS-oldalak körében nem szabad MÉGEGYSZER kiírni.
+  const staticPaths = new Set(STATIC_ROUTES.map((route) => route.path))
+
   // CMS-oldalak — a kezdőlap kimarad, mert a `/` már a statikus listában van.
+  // Ugyanígy kimarad minden olyan slug, amihez DEDIKÁLT route tartozik, és az
+  // már szerepel a statikus listában: a /kapcsolat lap például saját route, de
+  // a szekciósorát egy azonos slugú CMS-oldal adja (lásd a kapcsolat/page.tsx
+  // fejlécét). Az oldal felvétele nélkül a sitemap ugyanazt a címet kétszer
+  // hirdetné, ami duplikált URL-ként jelenik meg a keresőkben.
   for (const page of pages) {
-    if (page.slug === HOME_PAGE_SLUG) {
+    if (page.slug === HOME_PAGE_SLUG || staticPaths.has(`/${page.slug}`)) {
       continue
     }
     entries.push({

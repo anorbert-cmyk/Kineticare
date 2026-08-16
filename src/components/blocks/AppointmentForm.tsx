@@ -1,0 +1,421 @@
+'use client'
+
+import Link from 'next/link'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+
+import { TurnstileWidget } from '@/app/(frontend)/kapcsolat/_components/TurnstileWidget'
+import { Button } from '@/components/ui/Button'
+import { Field } from '@/components/ui/Field'
+import {
+  APPOINTMENT_CONSENT_TEXT,
+  APPOINTMENT_PRIVACY_POLICY_PATH,
+} from '@/lib/appointment/consent-text'
+import {
+  APPOINTMENT_REASON_MAX_LENGTH,
+  APPOINTMENT_UI_TEXT,
+  EMPTY_APPOINTMENT_VALUES,
+  isAppointmentFormValid,
+  validateAppointmentForm,
+  type AppointmentFormErrors,
+  type AppointmentFormValues,
+} from '@/lib/appointment/validation'
+import {
+  APPOINTMENT_TURNSTILE_PENDING_ERROR,
+  APPOINTMENT_UNAVAILABLE_ERROR,
+  buildAppointmentPayload,
+  isTurnstileEnabled,
+  submitAppointmentForm,
+} from '@/lib/appointment/submit'
+
+/**
+ * AppointmentForm — az időpontkérő szekció űrlapja.
+ *
+ * A meglévő két űrlap (kapcsolat, hírlevél) mintáját követi, mert UGYANARRA a
+ * form-builder végpontra küld: kliensoldali validáció magyar hibaüzenetekkel,
+ * nem előpipált hozzájárulás, honeypot, Turnstile csak beállított site key
+ * mellett, hibaágon magyar üzenet és megmaradó űrlap-állapot.
+ *
+ * Négy szándékos eltérés, mindegyik kutatásra vezethető vissza:
+ *
+ *  1. A NEM KÖTELEZŐ mezők feliratában ott a „(nem kötelező)". A Baymard
+ *     Institute mérése szerint a csak-csillagos jelölés mellett a látogató a
+ *     jelöletlen, érzékeny mezőt (telefon, panasz) is kötelezőnek hiszi, és
+ *     inkább elhagyja az űrlapot; a két jelölés együtt kell
+ *     (https://baymard.com/blog/required-optional-form-fields). A csillagos
+ *     kötelező-jelölés a repó meglévő nyelve marad (WCAG 3.2.4: ugyanaz a
+ *     jelölés mindenhol), az NN/g pedig ugyanezt ajánlja
+ *     (https://www.nngroup.com/articles/required-fields/).
+ *  2. Az „mikor alkalmas" kérdés jelölőnégyzet-CSOPORT `fieldset`/`legend`
+ *     szerkezetben, „Jelöld be az összeset, ami megfelel" segédszöveggel — a
+ *     GOV.UK checkbox-mintája szerint a többszörös választás lehetősége az
+ *     alakból nem derül ki (https://design-system.service.gov.uk/components/checkboxes/).
+ *     A sávok feliratát a szerkesztő adja meg; sáv nélkül a kérdés kimarad.
+ *  3. Siker után az űrlap helyén ÖSSZEFOGLALÓ állapot marad, ami megmondja, mi
+ *     történik most és mikor (GOV.UK „confirmation pages": a lap mondja el a
+ *     következő lépést és annak idejét,
+ *     https://design-system.service.gov.uk/patterns/confirmation-pages/).
+ *  4. A „folyamatban" gombállapot nem díszítés: küldés közben a gomb letiltott
+ *     és a felirata változik, így a dupla beküldés kizárt.
+ *
+ * FÓKUSZ-KEZELÉS (a kapcsolat-űrlappal AZONOS, WCAG 2.2 3.2.4): beküldés után a
+ * siker-címsor, hibánál a hiba-összefoglaló kapja a fókuszt. Enélkül a lap ott
+ * marad, ahol a látogató éppen görgetett, és a visszajelzés a képernyőn kívülre
+ * eshet — a mérés szerint a siker-doboz alacsonyabb az űrlapnál, tehát ez nem
+ * elméleti eset.
+ */
+
+export interface AppointmentFormProps {
+  /** Az „Időpontkérés" form-builder űrlap azonosítója; null = a backend nem elérhető. */
+  formId: string | null
+  /** TURNSTILE_SITE_KEY (szerver-oldalon olvasva); null/üres = widget rejtve. */
+  turnstileSiteKey: string | null
+  /** A választható időpont-sávok feliratai (CMS); üres tömb = a kérdés kimarad. */
+  idopontSavok: readonly string[]
+  /** Az elküldő gomb felirata (CMS); üresen az alapértelmezett. */
+  gombFelirat?: string
+  /** A sikeres beküldés címe (CMS); üresen az alapértelmezett. */
+  sikerCim?: string
+  /** A sikeres beküldés szövege (CMS); üresen az alapértelmezett. */
+  sikerSzoveg?: string
+  /** A siker-nézetben megismételt telefonszámok (CMS), hívás-linkkel. */
+  telefonok?: ReadonlyArray<{ nev: string; szam: string; href: string | null }>
+}
+
+export function AppointmentForm({
+  formId,
+  turnstileSiteKey,
+  idopontSavok,
+  gombFelirat,
+  sikerCim,
+  sikerSzoveg,
+  telefonok = [],
+}: AppointmentFormProps) {
+  const [values, setValues] = useState<AppointmentFormValues>(EMPTY_APPOINTMENT_VALUES)
+  const [errors, setErrors] = useState<AppointmentFormErrors>({})
+  const [submitting, setSubmitting] = useState(false)
+  const [succeeded, setSucceeded] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [honeypot, setHoneypot] = useState('')
+
+  /**
+   * Sikertelen beküldési kísérletek számlálója — CSAK a fókuszáláshoz.
+   *
+   * MIÉRT NEM ELÉG a `errorSummaryRef.current?.focus()` a beküldés-kezelőben:
+   * a hiba-összefoglaló akkor kerül a DOM-ba, amikor a hiba-állapot már
+   * kirenderelődött, a `setErrors` viszont ASZINKRON. A kezelőben hívott focus
+   * ezért még `null` refre futna, és a fókusz a gombon maradna — élő lapon
+   * mérve pontosan ez történt. A számláló növelése új rendert vált ki, és az
+   * effekt már a kirenderelt dobozt találja meg. A számláló azért jobb a
+   * „van-e hiba" logikai értéknél, mert két egymás utáni, UGYANOLYAN hibás
+   * beküldésnél is újra fókuszál.
+   */
+  const [hibasKiserlet, setHibasKiserlet] = useState(0)
+
+  const errorSummaryRef = useRef<HTMLDivElement>(null)
+  const successHeadingRef = useRef<HTMLHeadingElement>(null)
+
+  useEffect(() => {
+    if (succeeded) {
+      successHeadingRef.current?.focus()
+    }
+  }, [succeeded])
+
+  useEffect(() => {
+    if (hibasKiserlet > 0) {
+      errorSummaryRef.current?.focus()
+    }
+  }, [hibasKiserlet])
+
+  const turnstileEnabled = isTurnstileEnabled(turnstileSiteKey)
+  const formAvailable = formId !== null
+  const disabled = !formAvailable || submitting
+
+  const updateValue = useCallback(
+    (key: keyof AppointmentFormValues, value: string | boolean | string[]) => {
+      setValues((previous) => ({ ...previous, [key]: value }))
+      // A javított mező hibája azonnal törlődik — a többi a következő
+      // beküldésig marad (az NN/g „ne szidd le, mielőtt gépelne" szabálya).
+      setErrors((previous) => {
+        if (!(key in previous)) {
+          return previous
+        }
+        const next = { ...previous }
+        delete next[key]
+        return next
+      })
+    },
+    [],
+  )
+
+  const toggleSav = useCallback(
+    (felirat: string, checked: boolean) => {
+      setValues((previous) => ({
+        ...previous,
+        availability: checked
+          ? [...previous.availability, felirat]
+          : previous.availability.filter((item) => item !== felirat),
+      }))
+    },
+    [],
+  )
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setSubmitError(null)
+
+    const validationErrors = validateAppointmentForm(values)
+    setErrors(validationErrors)
+    if (!isAppointmentFormValid(validationErrors)) {
+      setHibasKiserlet((elozo) => elozo + 1)
+      return
+    }
+
+    // Honeypot: bot gyanú esetén hálózati hívás nélkül „sikerül" a beküldés.
+    if (honeypot.length > 0) {
+      setSucceeded(true)
+      return
+    }
+
+    if (turnstileEnabled && !turnstileToken) {
+      setSubmitError(APPOINTMENT_TURNSTILE_PENDING_ERROR)
+      setHibasKiserlet((elozo) => elozo + 1)
+      return
+    }
+
+    if (!formId) {
+      setSubmitError(APPOINTMENT_UNAVAILABLE_ERROR)
+      setHibasKiserlet((elozo) => elozo + 1)
+      return
+    }
+
+    setSubmitting(true)
+    const result = await submitAppointmentForm(
+      buildAppointmentPayload(values, formId, turnstileToken),
+    )
+    setSubmitting(false)
+
+    if (result.ok) {
+      setSucceeded(true)
+      return
+    }
+    setSubmitError(result.message)
+    setHibasKiserlet((elozo) => elozo + 1)
+  }
+
+  if (succeeded) {
+    return (
+      <div aria-live="polite" className="kc-appointment__success" role="status">
+        <h3 className="kc-appointment__success-title" ref={successHeadingRef} tabIndex={-1}>
+          {sikerCim?.trim() || APPOINTMENT_UI_TEXT.successTitle}
+        </h3>
+        <p className="kc-appointment__success-text">
+          {sikerSzoveg?.trim() || APPOINTMENT_UI_TEXT.successBody}
+        </p>
+        {telefonok.length > 0 ? (
+          <p className="kc-appointment__success-text">
+            {APPOINTMENT_UI_TEXT.successPhoneLead}{' '}
+            {telefonok.map((telefon, index) => (
+              <span key={telefon.szam}>
+                {index > 0 ? ', ' : ''}
+                {telefon.href ? <a href={telefon.href}>{telefon.szam}</a> : telefon.szam}
+              </span>
+            ))}
+          </p>
+        ) : null}
+      </div>
+    )
+  }
+
+  const hasErrorSummary =
+    submitError !== null || Object.values(errors).some((message) => Boolean(message))
+
+  return (
+    <form className="kc-appointment__form" noValidate onSubmit={handleSubmit}>
+      {hasErrorSummary ? (
+        <div
+          aria-live="assertive"
+          className="kc-appointment__summary"
+          ref={errorSummaryRef}
+          role="alert"
+          tabIndex={-1}
+        >
+          {submitError ?? APPOINTMENT_UI_TEXT.errorSummary}
+        </div>
+      ) : null}
+
+      <Field
+        autoComplete="name"
+        disabled={disabled}
+        error={errors.name}
+        label={APPOINTMENT_UI_TEXT.nameLabel}
+        name="appointmentName"
+        onChange={(event) => updateValue('name', event.target.value)}
+        required
+        value={values.name}
+      />
+
+      <Field
+        autoComplete="tel"
+        disabled={disabled}
+        error={errors.phone}
+        hint={APPOINTMENT_UI_TEXT.phoneHint}
+        inputMode="tel"
+        label={APPOINTMENT_UI_TEXT.phoneLabel}
+        name="appointmentPhone"
+        onChange={(event) => updateValue('phone', event.target.value)}
+        required
+        type="tel"
+        value={values.phone}
+      />
+
+      <Field
+        autoComplete="email"
+        disabled={disabled}
+        error={errors.email}
+        hint={APPOINTMENT_UI_TEXT.emailHint}
+        inputMode="email"
+        label={APPOINTMENT_UI_TEXT.emailLabel}
+        name="appointmentEmail"
+        onChange={(event) => updateValue('email', event.target.value)}
+        type="email"
+        value={values.email}
+      />
+
+      <div className="kc-field">
+        <label className="kc-field__label" htmlFor="kc-appointment-reason">
+          {APPOINTMENT_UI_TEXT.reasonLabel}
+        </label>
+        <textarea
+          aria-describedby={
+            errors.reason ? 'kc-appointment-reason-error' : 'kc-appointment-reason-hint'
+          }
+          aria-invalid={errors.reason ? true : undefined}
+          className={['kc-field__input', 'kc-appointment__textarea', errors.reason ? 'kc-field__input--error' : '']
+            .filter(Boolean)
+            .join(' ')}
+          disabled={disabled}
+          id="kc-appointment-reason"
+          maxLength={APPOINTMENT_REASON_MAX_LENGTH}
+          name="appointmentReason"
+          onChange={(event) => updateValue('reason', event.target.value)}
+          rows={4}
+          value={values.reason}
+        />
+        {errors.reason ? (
+          <p className="kc-field__error" id="kc-appointment-reason-error" role="alert">
+            {errors.reason}
+          </p>
+        ) : (
+          // Adattakarékossági tájékoztatás a mező MELLETT, nem a lap alján: a
+          // GDPR 9. cikk (1) szerinti egészségügyi adatot itt adja meg a
+          // látogató, tehát itt kell tudnia, hogy nem kötelező és mennyi elég.
+          <p className="kc-field__hint" id="kc-appointment-reason-hint">
+            {APPOINTMENT_UI_TEXT.reasonHint}
+          </p>
+        )}
+      </div>
+
+      {idopontSavok.length > 0 ? (
+        <fieldset className="kc-appointment__fieldset">
+          <legend className="kc-field__label">{APPOINTMENT_UI_TEXT.availabilityLegend}</legend>
+          <p className="kc-field__hint" id="kc-appointment-availability-hint">
+            {APPOINTMENT_UI_TEXT.availabilityHint}
+          </p>
+          <div className="kc-appointment__options">
+            {idopontSavok.map((felirat, index) => {
+              const optionId = `kc-appointment-sav-${index}`
+              return (
+                <div className="kc-appointment__option" key={felirat}>
+                  <input
+                    aria-describedby="kc-appointment-availability-hint"
+                    checked={values.availability.includes(felirat)}
+                    className="kc-appointment__checkbox"
+                    disabled={disabled}
+                    id={optionId}
+                    name="appointmentAvailability"
+                    onChange={(event) => toggleSav(felirat, event.target.checked)}
+                    type="checkbox"
+                    value={felirat}
+                  />
+                  <label className="kc-appointment__option-label" htmlFor={optionId}>
+                    {felirat}
+                  </label>
+                </div>
+              )
+            })}
+          </div>
+          {errors.availability ? (
+            <p className="kc-field__error" role="alert">
+              {errors.availability}
+            </p>
+          ) : null}
+        </fieldset>
+      ) : null}
+
+      {/* Honeypot: emberi látogató sosem tölti ki (vizuálisan és a
+          billentyű-navigációból is rejtett), a botok igen. */}
+      <div aria-hidden="true" className="kc-appointment__hp">
+        <label htmlFor="kc-appointment-website">Weboldal</label>
+        <input
+          autoComplete="off"
+          id="kc-appointment-website"
+          name="website"
+          onChange={(event) => setHoneypot(event.target.value)}
+          tabIndex={-1}
+          type="text"
+          value={honeypot}
+        />
+      </div>
+
+      <div className="kc-appointment__consent">
+        <div className="kc-appointment__consent-row">
+          <input
+            aria-describedby={errors.consentHealth ? 'kc-appointment-consent-error' : undefined}
+            aria-invalid={errors.consentHealth ? true : undefined}
+            checked={values.consentHealth}
+            className="kc-appointment__checkbox"
+            disabled={disabled}
+            id="kc-appointment-consent"
+            name="consentHealth"
+            onChange={(event) => updateValue('consentHealth', event.target.checked)}
+            required
+            type="checkbox"
+          />
+          <label className="kc-appointment__consent-label" htmlFor="kc-appointment-consent">
+            {APPOINTMENT_CONSENT_TEXT.before}
+            <Link href={APPOINTMENT_PRIVACY_POLICY_PATH}>
+              {APPOINTMENT_CONSENT_TEXT.linkLabel}
+            </Link>
+            {APPOINTMENT_CONSENT_TEXT.after}{' '}
+            <span aria-hidden="true" className="kc-field__required">
+              *
+            </span>
+            <span className="kc-visually-hidden"> (kötelező)</span>
+          </label>
+        </div>
+        {errors.consentHealth ? (
+          <p className="kc-field__error" id="kc-appointment-consent-error" role="alert">
+            {errors.consentHealth}
+          </p>
+        ) : null}
+      </div>
+
+      {turnstileEnabled ? (
+        <TurnstileWidget onToken={setTurnstileToken} siteKey={turnstileSiteKey as string} />
+      ) : null}
+
+      {!formAvailable ? (
+        <p className="kc-appointment__unavailable" role="alert">
+          {APPOINTMENT_UNAVAILABLE_ERROR}
+        </p>
+      ) : null}
+
+      <Button disabled={disabled} type="submit">
+        {submitting
+          ? APPOINTMENT_UI_TEXT.submitPending
+          : gombFelirat?.trim() || APPOINTMENT_UI_TEXT.submitLabel}
+      </Button>
+    </form>
+  )
+}

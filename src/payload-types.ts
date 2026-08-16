@@ -303,6 +303,7 @@ export interface Page {
         | BlockFaq
         | BlockTeamMembers
         | BlockAccordion
+        | BlockAppointment
         | BlockRichText
         | BlockCtaBanner
       )[]
@@ -1281,6 +1282,124 @@ export interface BlockAccordion {
   id?: string | null;
   blockName?: string | null;
   blockType: 'accordion';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockAppointment".
+ */
+export interface BlockAppointment {
+  /**
+   * A cím fölötti apró szöveg (pl. „Rendelői kezelés"). Nem kötelező.
+   */
+  eyebrow?: string | null;
+  /**
+   * A szekció címe (pl. „Kérj időpontot a rendelőbe").
+   */
+  title?: string | null;
+  /**
+   * Egy-két mondat a cím alá: kinek való, mire számítson. Ez az a szöveg, ami eldönti, kitölti-e valaki az űrlapot.
+   */
+  lead?: string | null;
+  /**
+   * Írd le, hogyan megy tovább a folyamat (pl. hogy telefonon egyeztetitek a pontos időpontot, és mennyi időn belül hívtok vissza). Fontos: naptár-foglalás NINCS a rendszerben, ezért itt se ígérj azonnali foglalást.
+   */
+  magyarazat?: string | null;
+  /**
+   * Az űrlapdoboz fölötti cím (pl. „Időpontkérés"). Nem kötelező.
+   */
+  urlapCim?: string | null;
+  /**
+   * Az elküldő gomb felirata. Ige + tárgy alakban a legjobb (pl. „Időpontot kérek"). Üresen hagyva az alapértelmezett felirat jelenik meg.
+   */
+  gombFelirat?: string | null;
+  /**
+   * Ezek közül jelölhet be a látogató, hogy MIKOR alkalmas neki. Csak olyan sávot vegyél fel, amit tényleg tudtok tartani (pl. „Hétköznap délelőtt"). Ha üresen hagyod, a kérdés egyszerűen kimarad az űrlapból.
+   */
+  idopontSavok?:
+    | {
+        /**
+         * Rövid, egysoros felirat (pl. „Hétköznap délelőtt").
+         */
+        felirat: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * A rendelő-címek fölötti szó (pl. „Rendelőink").
+   */
+  helyszinekFelirat?: string | null;
+  /**
+   * A rendelők postai címe. A látogató itt látja, hova kell majd mennie; enélkül az időpontkérés vak ugrás lenne.
+   */
+  helyszinek?:
+    | {
+        /**
+         * Teljes postai cím (pl. „1117 Budapest, Nádorliget u. 7/b").
+         */
+        cim: string;
+        /**
+         * Nem kötelező, egysoros kiegészítés (pl. „bejárat az udvar felől").
+         */
+        megjegyzes?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * A telefonszámok fölötti szó (pl. „Telefon").
+   */
+  telefonFelirat?: string | null;
+  /**
+   * Akik időpontot tudnak adni. Mobilon kattintható hívás-linkké alakul, ezért ez a leggyorsabb út a türelmetlen látogatónak.
+   */
+  telefonszamok?:
+    | {
+        /**
+         * Nem kötelező (pl. „Kocsis Kata").
+         */
+        nev?: string | null;
+        /**
+         * Tagoltan írd (pl. „+36 30 169 2263") — mobilon kattintható hívás-link lesz belőle.
+         */
+        szam: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Az e-mail-cím fölötti szó (pl. „E-mail").
+   */
+  emailFelirat?: string | null;
+  /**
+   * Nem kötelező. Ha megadod, kattintható levélíró-linkként jelenik meg.
+   */
+  email?: string | null;
+  /**
+   * Ez jelenik meg az űrlap helyén a sikeres beküldés után (pl. „Megkaptuk az időpontkérésed"). Üresen hagyva az alapértelmezett szöveg jelenik meg.
+   */
+  sikerCim?: string | null;
+  /**
+   * Mi történik most, és mikor keresitek vissza a látogatót. Konkrét határidőt írj (pl. „két munkanapon belül"), mert a bizonytalanság új üzenetet szül.
+   */
+  sikerSzoveg?: string | null;
+  /**
+   * Megjelenés és elrejtés — a szekció szövegét fölötte szerkesztheted.
+   */
+  sectionSettings?: {
+    /**
+     * Ha kiveszed a pipát, a szekció eltűnik az oldalról, de a tartalma megmarad — bármikor visszakapcsolhatod.
+     */
+    visible?: boolean | null;
+    /**
+     * Nem kötelező. Rövid azonosító a lapon belüli ugráshoz (pl. „kurzusok"): ezután a szekcióra a webcím végére írt #kurzusok résszel lehet hivatkozni. Csak ékezet nélküli kisbetű, szám és kötőjel; a # jelet ne írd bele.
+     */
+    anchorId?: string | null;
+    /**
+     * A szekció háttérsávja. Váltogasd a fehéret és a világoskéket, hogy az egymás alatti szekciók jól elkülönüljenek; a sötétkéket ritkán, kiemelésre használd.
+     */
+    hatter?: ('feher' | 'tint' | 'sotet') | null;
+  };
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'appointment';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2718,6 +2837,7 @@ export interface PagesSelect<T extends boolean = true> {
         faq?: T | BlockFaqSelect<T>;
         teamMembers?: T | BlockTeamMembersSelect<T>;
         accordion?: T | BlockAccordionSelect<T>;
+        appointment?: T | BlockAppointmentSelect<T>;
         richText?: T | BlockRichTextSelect<T>;
         ctaBanner?: T | BlockCtaBannerSelect<T>;
       };
@@ -3155,6 +3275,53 @@ export interface BlockAccordionSelect<T extends boolean = true> {
         tartalom?: T;
         id?: T;
       };
+  sectionSettings?:
+    | T
+    | {
+        visible?: T;
+        anchorId?: T;
+        hatter?: T;
+      };
+  id?: T;
+  blockName?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "BlockAppointment_select".
+ */
+export interface BlockAppointmentSelect<T extends boolean = true> {
+  eyebrow?: T;
+  title?: T;
+  lead?: T;
+  magyarazat?: T;
+  urlapCim?: T;
+  gombFelirat?: T;
+  idopontSavok?:
+    | T
+    | {
+        felirat?: T;
+        id?: T;
+      };
+  helyszinekFelirat?: T;
+  helyszinek?:
+    | T
+    | {
+        cim?: T;
+        megjegyzes?: T;
+        id?: T;
+      };
+  telefonFelirat?: T;
+  telefonszamok?:
+    | T
+    | {
+        nev?: T;
+        szam?: T;
+        id?: T;
+      };
+  emailFelirat?: T;
+  email?: T;
+  sikerCim?: T;
+  sikerSzoveg?: T;
   sectionSettings?:
     | T
     | {

@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 import type { BlockTeamMembers } from '../../payload-types'
 import { sanitizeCmsUrl } from '../../lib/safe-url'
+import { telHref } from '../../lib/tel-href'
 import { MediaImage } from '../content/MediaImage'
 import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
@@ -75,21 +76,13 @@ export interface TeamMembersProps {
 }
 
 /**
- * Telefonszám → `tel:` href. A megjelenített szám tagolt marad („+36 30 169
- * 2263"), a hívás-link viszont csak a `+` előjelet és a számjegyeket viheti.
- *
- * A séma itt KÓDBÓL épül (nem szerkesztői szabad szövegből), ezért nem megy át a
- * `sanitizeCmsUrl` allowlistján — az a `tel:`-t tudatosan tiltja a szabadon
- * gépelhető webcím-mezőkben. Az összeállítás azért biztonságos, mert a
- * bemenetből MINDEN más karakter kiesik: injektálható rész nem marad benne.
+ * Telefonszám → `tel:` href. A megvalósítás a `src/lib/tel-href.ts` közös
+ * moduljába költözött, mert az időpontkérő szekció is CMS-mezőből jövő
+ * telefonszámot jelenít meg, és a `tel:`-összeállítás biztonsági kérdés: két
+ * másolat csendben szétcsúszhatna. Itt tovább-exportáljuk, hogy a meglévő
+ * importok (és a szakértő-kártya tesztjei) változatlanul működjenek.
  */
-export function telHref(phone: string): string | null {
-  const digits = phone.replace(/[^\d]/g, '')
-  if (digits.length === 0) {
-    return null
-  }
-  return `tel:${phone.trim().startsWith('+') ? '+' : ''}${digits}`
-}
+export { telHref }
 
 /**
  * Dekoratív telefon-ikon a hívás-felületen.

@@ -10,6 +10,7 @@ import { RichText } from '@/components/lexical/RichText'
 import { PreviewBar } from '@/components/preview/PreviewBar'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
+import { getAppointmentSectionContext } from '@/lib/appointment/section'
 import { getLatestPosts, getPageBySlug, getPublishedProducts, getTestimonials } from '@/lib/cms'
 import { withDraftRobots } from '@/lib/preview/draft-metadata'
 import { buildPageMetadata } from '@/lib/seo'
@@ -76,6 +77,12 @@ export default async function CmsPage({ params }: Props) {
       ])
     : [[], [], []]
 
+  // Az időpontkérő szekció űrlapjához kell a form-azonosító és a Turnstile
+  // site key. A lekérdezés CSAK akkor fut, ha van ilyen blokk a lapon
+  // (getAppointmentSectionContext maga dönti el) — ugyanaz a takarékossági
+  // elv, mint a fenti három listánál.
+  const appointment = await getAppointmentSectionContext(layout)
+
   return (
     <>
       {isDraft ? <PreviewBar path={`/${slug}`} /> : null}
@@ -106,6 +113,7 @@ export default async function CmsPage({ params }: Props) {
         )}
         {hasLayout ? (
           <RenderBlocks
+            appointment={appointment}
             layout={layout}
             posts={posts}
             products={products}

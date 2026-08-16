@@ -43,6 +43,7 @@ import {
 } from '../lib/home-seed'
 import { ensureMediaFiles } from '../lib/media-restore'
 import { ensureNavigationMenu } from '../lib/menu-seed'
+import { ensureAppointmentForm } from '../lib/appointment/form'
 import { ensureNewsletterForm } from '../lib/newsletter/form'
 import { isProductionServerUrl, serverUrlHost } from '../lib/security/live-environment'
 import {
@@ -255,6 +256,10 @@ async function seed(): Promise<void> {
     // előfeltétel — a szűkített (éles) hatókörben is létre kell jönnie,
     // különben a feliratkozó-blokk élesben némán kimaradna.
     await ensureNewsletterForm(payload)
+    // Az időpontkérő szekció űrlapja ugyanígy telepítési előfeltétel: a
+    // szerkesztő a blokkot bármelyik lapra kiteheti, és űrlap nélkül a szekció
+    // csak a telefonos utat tudná felkínálni.
+    await ensureAppointmentForm(payload)
     payload.logger.info('Seed: kész (hatókör: kezdolap).')
     return
   }
@@ -534,11 +539,12 @@ async function seed(): Promise<void> {
   await ensureHomeLayout(payload, homeMediaIds)
   await ensureHomeTestimonials(payload)
 
-  // --- Lábléc hírlevél-űrlapja (C9) ------------------------------------------
+  // --- Nyilvános űrlapok (C9 + időpontkérés) ---------------------------------
   // A form-builder űrlap ADAT (a `forms` collection egy sora), nem séma: nincs
   // hozzá migráció. Idempotens — meglévő űrlapot SOHA nem ír felül, mert azt a
   // szerkesztő már átszabhatta.
   await ensureNewsletterForm(payload)
+  await ensureAppointmentForm(payload)
 
   payload.logger.info('Seed: kész.')
 }

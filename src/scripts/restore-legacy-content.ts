@@ -512,6 +512,17 @@ const szolgaltatasokBevezetoNodes = (): BlockNode[] => [
   ),
 ]
 
+/**
+ * Az időpontkérés célcíme: a /kapcsolat lap időpontkérő SZEKCIÓJA, horgonnyal.
+ *
+ * A horgony nélkül a látogató a kapcsolat-lap tetejére érkezne, és neki kellene
+ * megtalálnia, hol kérhet időpontot. A horgonyt az időpontkérő blokk
+ * `sectionSettings.anchorId` mezője adja (lásd KAPCSOLAT_IDOPONTKERES) — a
+ * kettőt együtt kell módosítani.
+ */
+const IDOPONTKERES_HORGONY = 'idopontkeres'
+const IDOPONTKERES_URL = `/kapcsolat#${IDOPONTKERES_HORGONY}`
+
 /** Rendelői kezelések — a részletes leírás és a technikák felsorolása. */
 const rendeloiKezelesekNodes = (): BlockNode[] => [
   heading('h3', 'Rendelői kezelések – személyes terápiás megoldások'),
@@ -548,10 +559,10 @@ const arlistaNodes = (idopontCta: 'gomb' | 'szoveglink'): BlockNode[] => [
   ),
   para('Helyszíneink: 1117 Budapest, Nádorliget u. 7/b • 1114 Budapest, Fadrusz utca 15.'),
   idopontCta === 'gomb'
-    ? cta('/kapcsolat', 'Időpontot kérek')
+    ? cta(IDOPONTKERES_URL, 'Időpontot kérek')
     : paragraph([
         textNode('Személyes kezelésre a kapcsolat oldalon tudsz jelentkezni: '),
-        link('/kapcsolat', 'időpontot kérek'),
+        link(IDOPONTKERES_URL, 'időpontot kérek'),
         textNode('.'),
       ]),
 ]
@@ -593,7 +604,7 @@ const SZOLGALTATASI_AGAK: readonly SzolgaltatasSor[] = [
     title: 'Rendelői kezelések',
     body: 'Akut sérülés, műtét utáni állapot vagy krónikus fájdalom esetén: egyénre szabott gyógytorna, manuálterápia és kiegészítő terápiák. Két budapesti rendelőben (Nádorliget u. 7/b, Fadrusz utca 15.), 50 vagy 20 perces alkalmakban. Ár: 18 000 Ft (50 perc), illetve 10 000 Ft (20 perc).',
     label: 'Időpontot kérek',
-    url: '/kapcsolat',
+    url: IDOPONTKERES_URL,
   },
   {
     title: 'Otthoni online program',
@@ -1508,6 +1519,81 @@ const buildSzolgaltatasokLayout = (media: OldalLayoutMedia = {}): NonNullable<Pa
     sectionSettings: { visible: true, hatter: 'tint' },
   },
 ]
+
+// ---------------------------------------------------------------------------
+// /kapcsolat — az időpontkérő szekció alapállapota
+// ---------------------------------------------------------------------------
+
+/**
+ * A /kapcsolat lap SZEKCIÓSORA.
+ *
+ * FIGYELEM, HOGY MŰKÖDIK: a /kapcsolat dedikált Next.js-route (nem CMS-oldal),
+ * de a route beolvassa az ILYEN SLUGÚ CMS-oldal `layout` mezőjét, és azt a
+ * szekció-rendszerrel rendereli (lásd src/app/(frontend)/kapcsolat/page.tsx).
+ * Ennek az oldalnak tehát a SZEKCIÓSORA jelenik meg a lapon; a `content`
+ * (rich text), a `title` és a `heroImage` NEM — azokat a route saját fejléce és
+ * az üzenetküldő szekció adja. Ezért van az oldal a sitemapból is kihagyva
+ * (az útvonalat a statikus lista már hirdeti).
+ *
+ * A tartalom a repóban dokumentált, VALÓS adatokból áll: a két rendelő címe és
+ * az árlista a /szolgaltatasok lapról (arlistaNodes), a telefonszámok a /rolunk
+ * szakember-blokkjából, az e-mail-cím a láblécből (FOOTER_CONTACT_EMAIL).
+ *
+ * Az időpont-sávok között SZÁNDÉKOSAN nincs hétvégi sáv: a repóban semmi nem
+ * igazolja, hogy hétvégén is van rendelés, egy nem tartható sáv felkínálása
+ * pedig ígéret lenne. Ha van hétvégi rendelés, a sávot az adminban egy sorral
+ * lehet hozzáadni.
+ */
+const KAPCSOLAT_IDOPONTKERES = {
+  blockType: 'appointment' as const,
+  eyebrow: 'Rendelői kezelés',
+  title: 'Kérj időpontot a rendelőbe',
+  lead: 'Gyógytorna, manuálterápia és kiegészítő terápiák akut sérülésre, műtét utáni állapotra és krónikus fájdalomra. Hagyd itt az elérhetőséged, és megkeressük a neked megfelelő időpontot.',
+  magyarazat:
+    'Ez az űrlap nem foglalás. Miután elküldted, két munkanapon belül telefonon keresünk, és közösen egyeztetjük a pontos időpontot. Az első alkalom minden esetben 50 perces vizsgálattal kezdődik.',
+  urlapCim: 'Időpontkérés',
+  gombFelirat: 'Időpontot kérek',
+  idopontSavok: [
+    { felirat: 'Hétköznap délelőtt' },
+    { felirat: 'Hétköznap délután' },
+    { felirat: 'Rugalmas vagyok' },
+  ],
+  helyszinekFelirat: 'Rendelőink',
+  helyszinek: [
+    { cim: '1117 Budapest, Nádorliget u. 7/b' },
+    { cim: '1114 Budapest, Fadrusz utca 15.' },
+  ],
+  telefonFelirat: 'Telefon',
+  telefonszamok: [
+    { nev: 'Kocsis Kata', szam: '+36 30 169 2263' },
+    { nev: 'Kiss Kata', szam: '+36 20 357 3493' },
+  ],
+  emailFelirat: 'E-mail',
+  email: 'info@kineticare.hu',
+  sikerCim: 'Megkaptuk az időpontkérésed',
+  sikerSzoveg:
+    'Két munkanapon belül telefonon keresünk, és egyeztetjük a pontos időpontot. Ha addig megváltozna valami, hívj minket nyugodtan.',
+  sectionSettings: {
+    visible: true,
+    anchorId: IDOPONTKERES_HORGONY,
+    hatter: 'tint' as const,
+  },
+}
+
+const buildKapcsolatLayout = (): NonNullable<Page['layout']> => [KAPCSOLAT_IDOPONTKERES]
+
+/**
+ * A /kapcsolat CMS-oldal rich-text törzse. A route NEM jeleníti meg (a lap
+ * fejlécét és az üzenetküldő szekciót maga adja), de a `content` mező a Pages
+ * collectionben kötelező — ezért itt a lap két útjának rövid, igaz leírása áll.
+ */
+const kapcsolatContent = (): RichTextContent =>
+  richText([
+    para(
+      'Rendelői kezelésre az időpontkérő szekcióban tudsz jelentkezni: hagyd meg a neved és a telefonszámod, és két munkanapon belül visszahívunk. Minden más kérdésre az üzenetküldő űrlapon válaszolunk.',
+    ),
+  ])
+
 // ---------------------------------------------------------------------------
 // Termékleírások — a régi sales-oldalak (kezrehab.md, kezrelax.md) szövegéből.
 // ---------------------------------------------------------------------------
@@ -2414,6 +2500,22 @@ async function restoreLegacyContent(): Promise<void> {
     }),
   )
 
+  // --- Oldal: kapcsolat (a /kapcsolat route SZEKCIÓSORÁNAK hordozója) ---------
+  // A lapot dedikált route szolgálja ki, de a szekciósora innen jön (lásd a
+  // KAPCSOLAT_IDOPONTKERES fejlécét). A `content`/`title` nem jelenik meg a
+  // storefronton; az oldal a sitemapból is ki van hagyva.
+  await upsertPage(payload, {
+    slug: 'kapcsolat',
+    title: 'Kapcsolat',
+    excerpt:
+      'Kérj időpontot rendelői kezelésre, vagy írj üzenetet a Kineticare csapatának.',
+    content: kapcsolatContent(),
+    seoTitle: 'Kapcsolat – Kineticare',
+    seoDescription:
+      'Időpontkérés rendelői gyógytornára és manuálterápiára Budapesten (Nádorliget u. 7/b, Fadrusz utca 15.), telefonos egyeztetéssel.',
+  })
+  await ensurePageLayout(payload, 'kapcsolat', buildKapcsolatLayout())
+
   // --- Termékkategória ---------------------------------------------------------
   const productCategoryId = await ensureProductCategory(payload)
 
@@ -2553,8 +2655,11 @@ const szolgaltatasokRegiBevezetoTartalom = (): RichTextContent =>
   richText(szolgaltatasokBevezetoNodes())
 
 export {
+  buildKapcsolatLayout,
   buildRolunkLayout,
   buildSzolgaltatasokLayout,
+  IDOPONTKERES_HORGONY,
+  IDOPONTKERES_URL,
   kezdolapContent,
   rolunkContent,
   rolunkSzakmaiOrokoltTartalom,

@@ -1,4 +1,8 @@
 import type { Page, Post, Product, Testimonial } from '../../payload-types'
+import {
+  EMPTY_APPOINTMENT_CONTEXT,
+  type AppointmentSectionContext,
+} from '../../lib/appointment/context'
 import { isFreeCourse } from '../../lib/courses'
 import { RichText } from '../lexical/RichText'
 import { hasLexicalContent } from '../lexical/serialize'
@@ -13,6 +17,7 @@ import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
 import { About } from './About'
 import { Accordion } from './Accordion'
+import { Appointment } from './Appointment'
 import { CtaBanner } from './CtaBanner'
 import { FaqBlock } from './FaqBlock'
 import { FilmHero } from './FilmHero'
@@ -29,8 +34,10 @@ import { Welcome } from './Welcome'
  * A Pages `layout` mezőjének blokkjait rendereli a szerkesztő által beállított
  * sorrendben. Két blokkfajtát köt össze egyetlen listában:
  *  - az új, Higgsfield-kinézetű blokkok (FilmHero, Welcome, Usps, States,
- *    Services, About, PressLogos, TeamMembers, FaqBlock, Accordion, CtaBanner)
- *    a teljes blokkot kapják és maguk kezelik a szekció-beállításaikat,
+ *    Services, About, PressLogos, TeamMembers, FaqBlock, Accordion,
+ *    Appointment, CtaBanner) a teljes blokkot kapják és maguk kezelik a
+ *    szekció-beállításaikat (az Appointment emellett a route-tól kapja az
+ *    űrlap-azonosítót és a Turnstile site key-t — lásd `appointment` prop),
  *  - az adatvezérelt / örökölt szekciók (credsStrip, courseCards, freeSos,
  *    howItWorks, testimonials, knowledge, richText) a meglévő kezdőlapi
  *    komponensekre képződnek le — a blokk mezői opcionális felülírásként
@@ -84,9 +91,23 @@ export interface RenderBlocksProps {
   posts: Post[]
   /** Vélemények a testimonials blokkhoz. */
   testimonials: Testimonial[]
+  /**
+   * Az időpontkérő szekció szerver-oldali környezete (űrlap-azonosító,
+   * Turnstile site key). Elhagyva a szekció megjelenik, de az űrlapja letiltva
+   * renderel, magyar magyarázattal — a rendelő elérhetőségei ilyenkor is
+   * látszanak, tehát a lap nem lesz zsákutca. A route a
+   * `getAppointmentSectionContext`-tel tölti fel.
+   */
+  appointment?: AppointmentSectionContext
 }
 
-export function RenderBlocks({ layout, products, posts, testimonials }: RenderBlocksProps) {
+export function RenderBlocks({
+  layout,
+  products,
+  posts,
+  testimonials,
+  appointment = EMPTY_APPOINTMENT_CONTEXT,
+}: RenderBlocksProps) {
   const visibleProducts = products.filter(isPubliclyVisibleProduct)
   // A courseCards rácsba KIZÁRÓLAG fizetős termék kerül; az ingyenes
   // lead-magnet helye a freeSos blokk (kezdőlap-audit, 2026-08-15: a kettős
@@ -119,7 +140,7 @@ export function RenderBlocks({ layout, products, posts, testimonials }: RenderBl
         return (
           <BlockSwitch
             key={key}
-            {...{ block, isRepeat, paidProducts, freeProduct, posts, testimonials }}
+            {...{ block, isRepeat, paidProducts, freeProduct, posts, testimonials, appointment }}
           />
         )
       })}
@@ -134,6 +155,7 @@ function BlockSwitch({
   freeProduct,
   posts,
   testimonials,
+  appointment,
 }: {
   block: LayoutBlock
   /** A típus ismételt példánya-e a lapon — az alap-horgony csak az elsőé. */
@@ -142,6 +164,7 @@ function BlockSwitch({
   freeProduct: Product | null
   posts: Post[]
   testimonials: Testimonial[]
+  appointment: AppointmentSectionContext
 }) {
   switch (block.blockType) {
     case 'filmHero':
@@ -164,6 +187,14 @@ function BlockSwitch({
       return <FaqBlock block={block} />
     case 'accordion':
       return <Accordion block={block} />
+    case 'appointment':
+      return (
+        <Appointment
+          block={block}
+          formId={appointment.formId}
+          turnstileSiteKey={appointment.turnstileSiteKey}
+        />
+      )
     case 'ctaBanner':
       return <CtaBanner block={block} />
     case 'credsStrip': {

@@ -1,0 +1,376 @@
+/**
+ * Időpontkérő szekció (Appointment) — szekció-stílus.
+ *
+ * VIZUÁLIS NYELV: a landing hajszálvonalas kártya-nyelve. Az űrlap a lap FÖLÉ
+ * emelt fehér felületen (`--kc-color-surface-raised`) ül, a szekció-fej és a
+ * rendelő-adatok a sávon maradnak — így a szem a kártyát találja meg először,
+ * ami az elvégzendő feladat.
+ *
+ * BETŰMÉRET: a lap PONTOSAN HÁROM méret-tokent használ, mindet a közös
+ * skáláról (elemre írt px/rem TILOS, UX-skill 4. pont):
+ *   --kc-text-3xl … a szekció címe (h2)
+ *   --kc-text-lg  … az űrlapkártya és a siker-nézet címe (h3)
+ *   --kc-text-2xs … a kis felső felirat és az adat-listák felirat-szavai
+ * Minden más szöveg örökli a lap alapméretét, illetve az űrlap-primitívek
+ * (`.kc-field*`, `.kc-button`) saját méretét a ui.css-ből. Erre őr-teszt van.
+ *
+ * KONTRASZT-JEGYZŐKÖNYV (számolt, WCAG 2.2 1.4.3 / 1.4.11):
+ *   ink        / tint (alapértelmezett sáv) ............ 13,53:1  AA/AAA ✓
+ *   ink-soft   / tint (bevezető, magyarázat) ...........  8,05:1  AA/AAA ✓
+ *   accent-deep/ tint (kis felső felirat, felirat-szó) ..  4,72:1  AA ✓
+ *   accent-deep/ paper (fehér sávra állítva) ...........  5,16:1  AA ✓
+ *   ink        / fehér (kártya-szöveg) ................. 15,63:1  AA/AAA ✓
+ *   ink-soft   / fehér (mezőfelirat, segédszöveg) ......  9,30:1  AA/AAA ✓
+ *   fehér      / accent-deep (elsődleges gomb) .........  5,45:1  AA ✓
+ *   danger     / danger-surface (hibadoboz) ............  5,72:1  AA ✓
+ *   success    / success-surface (siker-keret és cím) ...  6,35:1  AA ✓
+ *   ink        / success-surface (siker-szöveg) ........ 13,92:1  AA/AAA ✓
+ *   hairline-strong / tint (kártya-keret, UI-határ) ....  3,57:1  ≥ 3:1 ✓
+ *   hairline-strong / fehér (mezőkeret, UI-határ) ......  4,13:1  ≥ 3:1 ✓
+ * A nyers `--kc-color-accent` (#3d78aa) itt SEHOL nem visz szöveget: a hűvös
+ * felületeken csak 4,07:1, ami a normál szöveg küszöbe alatt van.
+ *
+ * ÉRINTŐCÉL (WCAG 2.2 2.5.8, minimum 24×24 CSS px; a projekt célja 44×44):
+ * a jelölőnégyzetek 1,5rem (24px) élűek, a kattintható sor (négyzet + felirat)
+ * viszont legalább 2,75rem (44px) magas, és a felirat a `label` révén a
+ * célfelület része.
+ *
+ * MOZGÁS: egyetlen finom keret- és háttér-átmenet; `prefers-reduced-motion:
+ * reduce` esetén kikapcsol.
+ *
+ * 320 px: a rács egyhasábos, a hosszú adatok (cím, e-mail) `overflow-wrap`-pel
+ * törnek, tehát vízszintes görgetés nem keletkezik.
+ *
+ * Betöltés: a szekció-komponens importálja (src/components/blocks/Appointment.tsx).
+ */
+
+.kc-appointment {
+  --kc-appointment-ink: var(--kc-color-text);
+  --kc-appointment-muted: var(--kc-color-text-muted);
+  --kc-appointment-accent-text: var(--kc-color-primary);
+  --kc-appointment-rule: var(--kc-color-border);
+  --kc-appointment-panel-bg: var(--kc-color-surface-raised);
+  --kc-appointment-panel-border: var(--kc-color-border-strong);
+}
+
+/* Sötétkék sáv: fehér 15,63:1, accent-quiet 8,49:1 az inken — az accent-deep
+   ott csak 2,87:1 lenne, ezért a kiemelt szöveg világosra vált. A kártya
+   fehér marad: az űrlap olvashatósága fontosabb a sáv egyneműségénél. */
+.kc-section--dark.kc-appointment {
+  --kc-appointment-ink: var(--kc-color-on-dark);
+  --kc-appointment-muted: var(--kc-color-on-dark-muted);
+  --kc-appointment-accent-text: var(--kc-color-on-dark-muted);
+  --kc-appointment-rule: color-mix(in srgb, var(--kc-color-on-dark) 35%, transparent);
+}
+
+/* ---- Rács ---------------------------------------------------------------- */
+
+.kc-appointment__grid {
+  display: grid;
+  gap: var(--kc-space-6);
+  align-items: start;
+}
+
+/* ---- Bal hasáb: szekció-fej és a rendelő adatai --------------------------- */
+
+.kc-appointment__eyebrow {
+  margin: 0;
+  font-size: var(--kc-font-s);
+  font-weight: var(--kc-font-weight-medium);
+  letter-spacing: var(--kc-tracking-eyebrow);
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: var(--kc-appointment-accent-text);
+}
+
+.kc-appointment__title {
+  margin: var(--kc-space-3) 0 0;
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-font-l);
+  font-weight: var(--kc-font-weight-normal);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-appointment-ink);
+  text-wrap: balance;
+}
+
+.kc-appointment__lead,
+.kc-appointment__note {
+  /* Mérték (sorhossz): a folyószöveg a 45–75 karakteres sávban marad. */
+  max-width: var(--kc-measure);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-appointment-muted);
+  /* A mezők textarea-k: a szerkesztő sortörései maradjanak meg. */
+  white-space: pre-line;
+}
+
+.kc-appointment__lead {
+  margin: var(--kc-space-4) 0 0;
+}
+
+/* A folyamat magyarázata („mi történik a beküldés után") elhatárolt sáv: ez
+   az a mondat, ami megakadályozza, hogy bárki foglalásnak higgye az űrlapot. */
+.kc-appointment__note {
+  margin: var(--kc-space-5) 0 0;
+  padding-inline-start: var(--kc-space-4);
+  border-inline-start: 2px solid var(--kc-appointment-accent-text);
+}
+
+.kc-appointment__contact {
+  display: grid;
+  gap: var(--kc-space-4);
+  margin: var(--kc-space-6) 0 0;
+  padding-block-start: var(--kc-space-5);
+  border-top: 1px solid var(--kc-appointment-rule);
+}
+
+.kc-appointment__contact-group {
+  display: grid;
+  gap: var(--kc-space-1);
+}
+
+.kc-appointment__contact dt {
+  font-size: var(--kc-font-s);
+  font-weight: var(--kc-font-weight-medium);
+  letter-spacing: var(--kc-tracking-eyebrow);
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: var(--kc-appointment-accent-text);
+}
+
+.kc-appointment__contact dd {
+  margin: 0;
+  line-height: var(--kc-leading-body);
+  color: var(--kc-appointment-ink);
+  /* 320 px: a hosszú cím és e-mail-cím törjön, ne csorduljon túl. */
+  overflow-wrap: anywhere;
+}
+
+/* LINK-LÁTHATÓSÁG (WCAG 2.2 1.4.1 — „a szín nem lehet az EGYETLEN jel"): a
+   repó alap link-nyelve ink-színű, aláhúzás nélküli (base.css), mert a
+   navigáció és a kártya-linkek helyzetükből felismerhetők. Ebben a szekcióban
+   viszont a linkek FOLYÓSZÖVEGBEN és adat-listában állnak, ahol a szövegtől
+   semmi nem különböztetné meg őket — ezért itt mindig aláhúzottak. A gomb
+   kivétel: az a saját, kitöltött felületével azonosítja magát. */
+.kc-appointment a:not(.kc-button) {
+  text-decoration: underline;
+}
+
+.kc-appointment__contact a {
+  color: inherit;
+}
+
+.kc-appointment__contact-note {
+  margin-inline-start: var(--kc-space-2);
+  color: var(--kc-appointment-muted);
+}
+
+/* ---- Jobb hasáb: az űrlap kártyája ---------------------------------------- */
+
+.kc-appointment__panel {
+  padding: var(--kc-space-5);
+  border: 1px solid var(--kc-appointment-panel-border);
+  border-radius: var(--kc-radius-lg);
+  background-color: var(--kc-appointment-panel-bg);
+  /* A kártyán belül a szöveg MINDIG az ink (a sötét sávon is fehér lenne
+     örökölve, ami a fehér lapon olvashatatlan). */
+  color: var(--kc-color-text);
+}
+
+.kc-appointment__panel-title {
+  margin: 0 0 var(--kc-space-4);
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-normal);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-color-text);
+}
+
+.kc-appointment__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-5);
+}
+
+.kc-appointment__textarea {
+  min-height: 6.5rem;
+  resize: vertical;
+  font-family: var(--kc-font-body);
+}
+
+/* Hiba-összefoglaló (szerverhiba vagy validációs figyelmeztetés). Beküldéskor
+   programból kap fókuszt, hogy a lap oda ugorjon — a gyűrű a hibadoboz saját
+   színével rajzolódik (a kapcsolat-űrlap azonos mintája). */
+.kc-appointment__summary,
+.kc-appointment__unavailable {
+  padding: var(--kc-space-3) var(--kc-space-4);
+  border: 1px solid var(--kc-color-danger);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-danger-surface);
+  color: var(--kc-color-danger);
+}
+
+.kc-appointment__summary:focus-visible {
+  outline: 2px solid var(--kc-color-danger);
+  outline-offset: 2px;
+}
+
+/* ---- „Mikor alkalmas" jelölőnégyzet-csoport ------------------------------- */
+
+.kc-appointment__fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* A `legend` böngésző-alapértelmezett oldalsó térköze behúzná a kérdést a
+   mezőfeliratok vonalából — a függőleges olvasási tengely fontosabb. */
+.kc-appointment__fieldset > legend {
+  padding-inline: 0;
+}
+
+.kc-appointment__options {
+  display: grid;
+  gap: var(--kc-space-1);
+  margin-block-start: var(--kc-space-3);
+}
+
+.kc-appointment__option {
+  display: flex;
+  /* 44px érintési célfelület: a felirat a `label` révén a célfelület része. */
+  min-height: 2.75rem;
+  align-items: center;
+  gap: var(--kc-space-3);
+  padding-inline: var(--kc-space-2);
+  border-radius: var(--kc-radius-md);
+  transition: background-color var(--kc-motion-fast) var(--kc-ease-out);
+}
+
+.kc-appointment__option:hover {
+  background-color: var(--kc-color-surface-tint);
+}
+
+.kc-appointment__option-label {
+  flex: 1;
+  /* A célfelület a FELIRATON is deklarált, nem csak a körülölelő soron: a
+     kattintható elem maga a label, tehát az őrnek (G-K5) és a képernyőolvasós
+     használatnak is ezen kell teljesülnie. 44px = a projekt célja, a WCAG 2.2
+     2.5.8 minimuma 24px. */
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  line-height: var(--kc-leading-body);
+  cursor: pointer;
+  /* Magyar tördelés: a hosszú sáv-felirat 320 px-en se csorduljon túl. */
+  overflow-wrap: anywhere;
+}
+
+/* WCAG 2.2 2.5.8 minimuma 24×24 CSS px — a négyzet pontosan ekkora, a
+   kattintható sor pedig 44px magas. */
+.kc-appointment__checkbox {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  accent-color: var(--kc-color-primary);
+}
+
+.kc-appointment__checkbox:focus-visible {
+  outline: 2px solid var(--kc-color-focus);
+  outline-offset: 2px;
+}
+
+/* ---- Hozzájárulás --------------------------------------------------------- */
+
+.kc-appointment__consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--kc-space-3);
+}
+
+.kc-appointment__consent .kc-appointment__checkbox {
+  margin-block-start: 0.15rem;
+}
+
+.kc-appointment__consent-label {
+  /* Ugyanaz az indok, mint az időpont-sáv feliratánál: a célfelület a
+     kattintható elemen deklarált. Itt a szöveg többsoros lehet, ezért a
+     min-height csak alsó korlát. */
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  line-height: var(--kc-leading-body);
+  cursor: pointer;
+}
+
+/* ---- Turnstile ------------------------------------------------------------
+   A spam-ellenőrző widgetet a /kapcsolat oldal komponense adja, a stílusát
+   viszont eddig CSAK a kapcsolat.css hozta — az pedig kizárólag azon a lapon
+   töltődik be. Ez a szekció bármelyik oldalra kikerülhet, ezért a helyfoglalást
+   (CLS ellen) és a hibadoboz kinézetét itt is megadjuk, a szekcióra szűkítve. */
+
+.kc-appointment__form .kc-contact-form__turnstile {
+  min-height: 65px; /* a widget helyfoglalása — ugrálás (CLS) nélkül */
+}
+
+.kc-appointment__form .kc-contact-form__turnstile-error {
+  padding: var(--kc-space-3) var(--kc-space-4);
+  border: 1px solid var(--kc-color-danger);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-danger-surface);
+  color: var(--kc-color-danger);
+}
+
+/* Honeypot — vizuálisan és a képernyőolvasó/billentyű-útvonalból is rejtett. */
+.kc-appointment__hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* ---- Siker-állapot -------------------------------------------------------- */
+
+.kc-appointment__success {
+  display: grid;
+  gap: var(--kc-space-3);
+  padding: var(--kc-space-5);
+  border: 1px solid var(--kc-color-success);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-success-surface);
+  color: var(--kc-color-text);
+}
+
+.kc-appointment__success-title {
+  margin: 0;
+  font-family: var(--kc-font-heading);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-normal);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-color-success);
+}
+
+.kc-appointment__success-text {
+  margin: 0;
+  line-height: var(--kc-leading-body);
+}
+
+/* ---- Nagyobb képernyő ----------------------------------------------------- */
+
+@media (min-width: 900px) {
+  .kc-appointment__grid {
+    /* A bal hasáb rugalmas, az űrlap felső szélessége kötött: a mezők így nem
+       nyúlnak olvashatatlanul szélesre nagy kijelzőn. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);
+    gap: var(--kc-space-7);
+  }
+
+  .kc-appointment__panel {
+    padding: var(--kc-space-6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kc-appointment__option {
+    transition: none;
+  }
+}
