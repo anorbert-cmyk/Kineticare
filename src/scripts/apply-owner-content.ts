@@ -2,7 +2,7 @@
  * Tulajdonos által jóváhagyott, EGYSZERI szerkesztői tartalom-javítások.
  *
  * ═══ MIT JAVÍT ═══
- * Nyolc, 2026-08-16-án jóváhagyott tartalom-javítás. Mind KIZÁRÓLAG pontos
+ * Tizenkét, 2026-08-16-án jóváhagyott tartalom-javítás. Mind KIZÁRÓLAG pontos
  * egyezésnél (illetve üres mezőnél, hiányzó oldalnál) fut le, tehát a lányok
  * időközbeni szerkesztését egyik sem írja felül:
  *
@@ -62,6 +62,41 @@
  *     álló „Rendelői kezelések…” címsor), és csak EGYÉRTELMŰ találatnál ír; a
  *     kód-szintű alapállapotban a seed-builder már a helyes horgonyt adja
  *     (src/scripts/restore-legacy-content.ts `buildSzolgaltatasokLayout`).
+ *  9. A kezdőlapi sajtó-logósor FELIRATA: „Ismerhetsz minket innen” → „Itt
+ *     találkozhattál velünk”. Ok: a sorban nemcsak sajtómegjelenések, hanem
+ *     szakmai szervezet (MGYFT) logója is áll, és az új szöveg ezt a vegyes
+ *     halmazt a látogató szemszögéből írja le. Az ÚJ feliratot a script a
+ *     kezdőlap seed-builderéből veszi (src/lib/home-seed.ts), nem külön
+ *     literálból. ÜRES feliratnál a script SEMMIT nem ír: a komponens beépített
+ *     felirata (src/components/blocks/PressLogos.tsx `DEFAULT_HEADING`) már az
+ *     új szöveget hozza, üres mező kitöltése tehát fölösleges írás lenne.
+ * 10. A kezdőlapi „Három állapot” szekció BEVEZETŐJE: az élesben álló, régi
+ *     seedelt szöveg (a logó-metaforáról szólt) helyére a terápia ívét
+ *     elmondó, jóváhagyott mondatpár kerül — ez a szekció valódi állítása, és
+ *     akkor is helyes marad, ha a szerkesztő a címet átírja. Az ÚJ szöveg
+ *     igazságforrása szintén a seed-builder (`buildHomeLayout` `states`
+ *     blokkjának `lead` mezője). Csere pontos egyezésnél VAGY üres mezőnél;
+ *     bármilyen más szövegnél indokolt kihagyás.
+ * 11. A kezdőlap ZÁRÓ CTA-SÁVJA: a lap ma a GYIK-kal ér véget, cselekvésre
+ *     hívás nélkül. A seed-builder már tartalmaz egy záró `ctaBanner` blokkot
+ *     („Kezdd el még ma”); a javítás EZT a blokkot fűzi a szekciósor végére, ha
+ *     élesben egyáltalán nincs CTA-sáv. Ha van, de a szövege üres, csak a
+ *     szöveg íródik be; ha van és van szövege, a script hozzá sem nyúl. Több
+ *     CTA-sávnál nem dönt: hangosan kihagy (nem tudni, melyik a lezárás).
+ * 12. A `/szolgaltatasok` oldal TETEJE (mért redesign, 2026-08-16), két rész:
+ *     (a) a fejléc-kép (`heroImage`) ÜRÍTÉSE — a rendelő-fotó a lap tetején
+ *         csak tolta lefelé a tartalmat, anélkül hogy bármit állítana. Ürítés
+ *         KIZÁRÓLAG akkor, ha a mező tényleg a `67b3bd06f3936_Rendelo`
+ *         fájlnév-prefixű média-rekordra mutat (futásidejű prefix-feloldás, a
+ *         4. javítás mintájára); minden más képhez a script hozzá sem nyúl.
+ *     (b) az 1. szekció cseréje: az örökölt, folyó szöveges richText blokk (két
+ *         címsor + öt bekezdés szövegfala) helyére a seed-builder ÚJ üdvözlő
+ *         (`welcome`) blokkja kerül — cím + felvezető, alatta pipás felsorolás
+ *         és oldalsó összefoglaló. A SZÖVEG betűhíven a régi kineticare.hu
+ *         bevezetője marad, csak a szerkezet változik. Csere KIZÁRÓLAG akkor,
+ *         ha az élő blokk tartalma byte-ra a seedelt örökölt (kulcs-sorrendtől
+ *         független összevetés — `szolgaltatasokRegiBevezetoTartalom`); ha az
+ *         1. blokk már `welcome`, nincs teendő.
  *
  * ═══ KAPU ═══
  * Alapértelmezésben PRÓBAFUTÁS (dry-run): a script mindent kiszámol és
@@ -78,13 +113,21 @@
  * sosem írhat kifejezett kérés nélkül.
  *
  * ═══ IDEMPOTENCIA ═══
- * Mindegyik javítás pontos egyezésre (üres mezőre, hiányzó webcímre) szűr,
- * ezért másodszor lefuttatva már egyetlen módosítást sem talál: a kimenet
- * ugyanaz a tartalom, a naplóban pedig indokolt kihagyások állnak. A kezdőlap
- * szekciósorát a script TELJES tömbként írja vissza (a Payload blokk-mező
- * részlegesen nem frissíthető), de a nem érintett blokkokat VÁLTOZATLAN
- * objektum-referenciaként adja tovább — így a többi szekció tartalma bitre
- * azonos marad.
+ * Mindegyik javítás pontos egyezésre (üres mezőre, hiányzó webcímre, hiányzó
+ * blokkra) szűr, ezért másodszor lefuttatva már egyetlen módosítást sem talál:
+ * a kimenet ugyanaz a tartalom, a naplóban pedig indokolt kihagyások állnak. A
+ * záró CTA-sáv hozzáfűzése (11.) is így viselkedik: a második futás már talál
+ * CTA-sávot, szöveggel — tehát nem duplázza. A kezdőlap szekciósorát a script
+ * TELJES tömbként írja vissza (a Payload blokk-mező részlegesen nem
+ * frissíthető), de a nem érintett blokkokat VÁLTOZATLAN objektum-referenciaként
+ * adja tovább — így a többi szekció tartalma bitre azonos marad.
+ *
+ * ═══ EGY OLDAL, TÖBB JAVÍTÁS ═══
+ * A kezdőlapra négy (1–2., 9., 10., 11.), a /szolgaltatasok oldalra három (8.,
+ * 12a., 12b.) javítás vonatkozik. Ezek LÁNCBAN futnak — mindegyik az előző
+ * eredményén dolgozik —, és oldalanként EGYETLEN `payload.update` megy ki, egy
+ * piszkozat-ellenőrzéssel. A lánc konvergenciáját (második futásra nulla
+ * módosítás) teszt méri, adatbázis nélkül.
  */
 
 import { pathToFileURL } from 'node:url'
@@ -92,6 +135,9 @@ import { pathToFileURL } from 'node:url'
 import { getPayload, type Payload } from 'payload'
 
 import { HOME_PAGE_SLUG } from '../lib/content-slugs'
+// A kezdőlap alapállapotának builder-e: a 9–11. javítás ÚJ értékei innen
+// jönnek, hogy a seed és a javítás ne két külön literálban éljen.
+import { buildHomeLayout } from '../lib/home-seed'
 import {
   JOGI_OLDALAK,
   jogiOldalTartalom,
@@ -103,9 +149,15 @@ import { CLINIC_TREATMENTS_ANCHOR, SOS_COURSE_SKU } from '../lib/menu-seed'
 import config from '../payload.config'
 import type { Page, Product } from '../payload-types'
 // Mellékhatás-mentes import (a legacy-script futtatás-kapuval védett): a
-// szakmai-háttér csere a seed-builderből veszi az ÚJ blokkokat, és az örökölt
-// tartalommal veti össze az élő blokkot.
-import { buildRolunkLayout, rolunkSzakmaiOrokoltTartalom } from './restore-legacy-content'
+// szakmai-háttér csere és a /szolgaltatasok lap-tetejének cseréje a
+// seed-builderből veszi az ÚJ blokkokat, és az örökölt tartalommal veti össze
+// az élő blokkot.
+import {
+  buildRolunkLayout,
+  buildSzolgaltatasokLayout,
+  rolunkSzakmaiOrokoltTartalom,
+  szolgaltatasokRegiBevezetoTartalom,
+} from './restore-legacy-content'
 
 // ---------------------------------------------------------------------------
 // A jóváhagyott értékek — a három javítás igazságforrása.
@@ -170,12 +222,47 @@ export const SZOLGALTATASOK_SLUG = 'szolgaltatasok'
  */
 export const RENDELOI_SZEKCIO_CIMKEZDET = 'Rendelői kezelések'
 
+/**
+ * A sajtó-logósor RÉGI felirata; kizárólag pontosan ez az érték cserélhető.
+ *
+ * Az ÚJ felirat szándékosan NEM konstans itt: a kezdőlap seed-builderéből
+ * (src/lib/home-seed.ts) jön futásidőben, hogy a kód-szintű alapállapot és a
+ * javítás ne csúszhasson szét. A seed értéke pedig a komponens beépített
+ * feliratával azonos — ezt a kezdőlap-teszt őrzi.
+ */
+export const REGI_PRESS_FEJLEC = 'Ismerhetsz minket innen'
+
+/**
+ * A „Három állapot” szekció RÉGI, seedelt bevezetője — élesben ez áll.
+ *
+ * A logó-metaforáról szólt, nem a terápia ívéről: ha a szerkesztő a szekció
+ * címét átírja, a szöveg értelmezhetetlenné válik. Kizárólag PONTOSAN ez a
+ * szöveg (vagy üres mező) cserélhető.
+ */
+export const REGI_ALLAPOTOK_BEVEZETO =
+  'A logónkat a kezed ismeri fel: zárt, nyíló, majd teljesen nyitott. A három kép a filmünk kulcskockái, pontosan abban a sorrendben, ahogyan a terápia halad.'
+
+/**
+ * A `/szolgaltatasok` fejléc-képének fájlnév-prefixe (rendelő-fotó).
+ *
+ * Prefix és futásidejű feloldás a 4. javítás mintájára: a Média collection
+ * webp-re konvertál, ezért a kiterjesztés környezetenként eltér, fix
+ * azonosítót pedig nem használhatunk.
+ */
+export const SZOLGALTATASOK_HERO_PREFIX = '67b3bd06f3936_Rendelo'
+
 // ---------------------------------------------------------------------------
 // Típusok
 // ---------------------------------------------------------------------------
 
 /** A kezdőlap szekciósora (Pages.layout). */
 type Szekciosor = NonNullable<Page['layout']>
+
+/** Egy adott típusú szekció-blokk pontos alakja (pl. a `ctaBanner` blokk mezői). */
+type SzekcioTipus<T extends Szekciosor[number]['blockType']> = Extract<
+  Szekciosor[number],
+  { blockType: T }
+>
 
 /** A kurzuskártya előny-sorai (products.cardHighlights). */
 type ElonySorok = NonNullable<Product['cardHighlights']>
@@ -190,6 +277,11 @@ export type JavitasSzabaly =
   | 'jogi-oldalak'
   | 'sos-kurzus-slug'
   | 'rendeloi-horgony'
+  | 'presslogos-fejlec'
+  | 'allapotok-bevezeto'
+  | 'zaro-cta'
+  | 'szolgaltatasok-hero-kep'
+  | 'szolgaltatasok-bevezeto'
 
 /** Egy elvégzett módosítás vagy egy indokolt kihagyás gépileg is vizsgálható leírása. */
 export interface JavitasLepes {
@@ -214,6 +306,19 @@ export interface SzekciosorAtalakitas {
   /** Elvégzett (próbafutásban: elvégzendő) módosítások. */
   modositasok: JavitasLepes[]
   /** Kihagyások — mindegyik a maga indokával. */
+  kihagyasok: JavitasLepes[]
+}
+
+/**
+ * Szekciósor-szintű javítás eredménye (9., 10., 11. és 12b. javítás).
+ *
+ * A `layout` szándékosan `null`, ha nincs teendő: a futtató ebből tudja, hogy
+ * NEM kell írnia — üres módosítás-listánál sosem megy ki `payload.update`.
+ */
+export interface SzekciosorCsere {
+  /** Az ÚJ szekciósor, vagy `null`, ha nem szabad írni. */
+  layout: Szekciosor | null
+  modositasok: JavitasLepes[]
   kihagyasok: JavitasLepes[]
 }
 
@@ -911,6 +1016,493 @@ export const alkalmazRendeloiHorgony = (layout: Page['layout']): HorgonyAtalakit
 }
 
 // ---------------------------------------------------------------------------
+// 9–11. javítás — a kezdőlap további szövegei. Az ÚJ értékek MIND a
+// seed-builderből (src/lib/home-seed.ts `buildHomeLayout`) jönnek.
+// ---------------------------------------------------------------------------
+
+/**
+ * Egy adott típusú, PONTOSAN EGY példányban álló blokk a kezdőlap
+ * seed-builderéből.
+ *
+ * MIÉRT ÍGY: a 9–11. javítás ÚJ értékeit a kód-szintű alapállapotból vesszük,
+ * nem külön literálból — így a seed és a javítás nem csúszhat szét (ugyanaz az
+ * elv, mint a szakmai harmonikánál, `rolunkSzakmaiUjBlokkok`). Ha a builder
+ * alakja megváltozik (nulla vagy több ilyen blokk), `null` jön vissza, és a
+ * hívó HANGOSAN kihagy — vaktában sosem írunk.
+ */
+export const kezdolapSeedBlokk = <T extends Szekciosor[number]['blockType']>(
+  blockType: T,
+): SzekcioTipus<T> | null => {
+  const talalatok = buildHomeLayout().filter((blokk) => blokk.blockType === blockType)
+  return talalatok.length === 1 ? (talalatok[0] as SzekcioTipus<T>) : null
+}
+
+/** A sajtó-logósor jóváhagyott ÚJ felirata (a seed-builderből). */
+export const pressLogosUjFejlec = (): string | null => {
+  const fejlec = kezdolapSeedBlokk('pressLogos')?.heading
+  return typeof fejlec === 'string' && fejlec.trim().length > 0 ? fejlec : null
+}
+
+/** A „Három állapot” szekció jóváhagyott ÚJ bevezetője (a seed-builderből). */
+export const allapotokUjBevezeto = (): string | null => {
+  const lead = kezdolapSeedBlokk('states')?.lead
+  return typeof lead === 'string' && lead.trim().length > 0 ? lead : null
+}
+
+/** A záró CTA-sáv blokkja a seed-builderből (a 11. javítás ezt fűzi a lap végére). */
+export const zaroCtaSeedBlokk = (): SzekcioTipus<'ctaBanner'> | null =>
+  kezdolapSeedBlokk('ctaBanner')
+
+/**
+ * 9. javítás — a kezdőlapi sajtó-logósor feliratának cseréje.
+ *
+ * VÉDŐFELTÉTELEK:
+ *  - csere KIZÁRÓLAG akkor, ha a felirat PONTOSAN a régi szöveg;
+ *  - ÜRES (hiányzó, `null`, csak whitespace) feliratba a script NEM ír: a
+ *    komponens beépített felirata (PressLogos `DEFAULT_HEADING`) már az új
+ *    szöveget hozza, tehát az üres mező kitöltése fölösleges írás lenne — és a
+ *    szerkesztő szándékos üresen hagyását is felülírná;
+ *  - minden más felirat a szerkesztőé: érintetlen marad;
+ *  - több logósor esetén mindegyiket külön bírálja el (ugyanaz a minta, mint a
+ *    páciensszámnál).
+ */
+export const alkalmazPressLogosFejlec = (input: {
+  layout: Page['layout']
+  /** A seed-builderből vett ÚJ felirat, vagy `null`, ha a builder alakja elcsúszott. */
+  ujFejlec: string | null
+  /** Napló-címke — a /rolunk láncában futtatva ezzel különbözik a kezdőlapitól. */
+  uzenetCimke?: string
+}): SzekciosorCsere => {
+  const { layout, ujFejlec } = input
+  const uzenet = input.uzenetCimke ?? 'A kezdőlap sajtó-logósorának felirata'
+
+  const kihagyas = (indok: string, hangos = false): SzekciosorCsere => ({
+    layout: null,
+    modositasok: [],
+    kihagyasok: [{ szabaly: 'presslogos-fejlec', uzenet, indok, hangos }],
+  })
+
+  if (ujFejlec === null) {
+    return kihagyas(
+      'a kezdőlap seed-buildere (buildHomeLayout) nem ad pontosan egy, feliratos sajtó-logósort — a kód és a javítás szétcsúszott, kézi átnézés kell',
+      true,
+    )
+  }
+  if (!Array.isArray(layout) || layout.length === 0) {
+    return kihagyas('a kezdőlapnak nincs szekciósora — a feliratot nincs hol átírni')
+  }
+
+  const modositasok: JavitasLepes[] = []
+  const kihagyasok: JavitasLepes[] = []
+  let voltLogosor = false
+
+  const ujLayout: Szekciosor = layout.map((blokk, index) => {
+    if (blokk.blockType !== 'pressLogos') {
+      return blokk
+    }
+    voltLogosor = true
+    const helye = `${index + 1}. szekció`
+    const jelenlegi = blokk.heading
+
+    if (jelenlegi === REGI_PRESS_FEJLEC) {
+      modositasok.push({
+        szabaly: 'presslogos-fejlec',
+        uzenet: `${uzenet} (${helye}): ${ertekCimke(jelenlegi)} → ${ertekCimke(ujFejlec)}`,
+        indok: null,
+      })
+      return { ...blokk, heading: ujFejlec }
+    }
+
+    if (typeof jelenlegi !== 'string' || jelenlegi.trim().length === 0) {
+      kihagyasok.push({
+        szabaly: 'presslogos-fejlec',
+        uzenet: `${uzenet} (${helye})`,
+        indok: `a felirat ÜRES, a script pedig üres mezőt nem tölt ki: a komponens beépített felirata már ${ertekCimke(
+          ujFejlec,
+        )}, tehát a látogató MÁR az új szöveget látja`,
+      })
+      return blokk
+    }
+
+    if (jelenlegi === ujFejlec) {
+      kihagyasok.push({
+        szabaly: 'presslogos-fejlec',
+        uzenet: `${uzenet} (${helye})`,
+        indok: `a felirat MÁR ${ertekCimke(ujFejlec)} — nincs teendő`,
+      })
+      return blokk
+    }
+
+    kihagyasok.push({
+      szabaly: 'presslogos-fejlec',
+      uzenet: `${uzenet} (${helye})`,
+      indok: `a jelenlegi felirat ${ertekCimke(
+        jelenlegi,
+      )}, ami nem PONTOSAN a cserélendő ${ertekCimke(
+        REGI_PRESS_FEJLEC,
+      )} — a script csak pontos egyezésnél ír át`,
+    })
+    return blokk
+  })
+
+  if (!voltLogosor) {
+    kihagyasok.push({
+      szabaly: 'presslogos-fejlec',
+      uzenet,
+      indok:
+        'a kezdőlap szekciósorában nincs Sajtó-logósor (pressLogos) szekció — a feliratot nincs hol átírni',
+    })
+  }
+
+  return { layout: modositasok.length > 0 ? ujLayout : null, modositasok, kihagyasok }
+}
+
+/**
+ * 10. javítás — a „Három állapot” szekció bevezetőjének cseréje.
+ *
+ * VÉDŐFELTÉTELEK:
+ *  - csere akkor, ha a bevezető PONTOSAN a régi seedelt szöveg, VAGY ha a mező
+ *    üres (a szekció ilyenkor magyarázat nélkül áll: három kép, és a
+ *    látogatónak kell kitalálnia, mit lát);
+ *  - ha már az új szöveg áll benne, nincs teendő (idempotencia);
+ *  - bármilyen MÁS szöveg a szerkesztőé — érintetlen marad.
+ */
+export const alkalmazAllapotokBevezeto = (input: {
+  layout: Page['layout']
+  /** A seed-builderből vett ÚJ bevezető, vagy `null`, ha a builder alakja elcsúszott. */
+  ujBevezeto: string | null
+}): SzekciosorCsere => {
+  const { layout, ujBevezeto } = input
+  const uzenet = 'A kezdőlap „Három állapot” szekciójának bevezetője'
+
+  const kihagyas = (indok: string, hangos = false): SzekciosorCsere => ({
+    layout: null,
+    modositasok: [],
+    kihagyasok: [{ szabaly: 'allapotok-bevezeto', uzenet, indok, hangos }],
+  })
+
+  if (ujBevezeto === null) {
+    return kihagyas(
+      'a kezdőlap seed-buildere (buildHomeLayout) nem ad pontosan egy, bevezetővel ellátott „Három állapot” szekciót — a kód és a javítás szétcsúszott, kézi átnézés kell',
+      true,
+    )
+  }
+  if (!Array.isArray(layout) || layout.length === 0) {
+    return kihagyas('a kezdőlapnak nincs szekciósora — a bevezetőt nincs hova írni')
+  }
+
+  const modositasok: JavitasLepes[] = []
+  const kihagyasok: JavitasLepes[] = []
+  let voltAllapotSzekcio = false
+
+  const ujLayout: Szekciosor = layout.map((blokk, index) => {
+    if (blokk.blockType !== 'states') {
+      return blokk
+    }
+    voltAllapotSzekcio = true
+    const helye = `${index + 1}. szekció`
+    const jelenlegi = blokk.lead
+    const ures = typeof jelenlegi !== 'string' || jelenlegi.trim().length === 0
+
+    if (jelenlegi === REGI_ALLAPOTOK_BEVEZETO || ures) {
+      modositasok.push({
+        szabaly: 'allapotok-bevezeto',
+        uzenet: `${uzenet} (${helye}): ${
+          ures ? '(üres)' : 'a régi, logó-metaforás szöveg'
+        } → ${ertekCimke(ujBevezeto)}`,
+        indok: null,
+      })
+      return { ...blokk, lead: ujBevezeto }
+    }
+
+    if (jelenlegi === ujBevezeto) {
+      kihagyasok.push({
+        szabaly: 'allapotok-bevezeto',
+        uzenet: `${uzenet} (${helye})`,
+        indok: 'a bevezető MÁR a jóváhagyott új szöveg — nincs teendő',
+      })
+      return blokk
+    }
+
+    kihagyasok.push({
+      szabaly: 'allapotok-bevezeto',
+      uzenet: `${uzenet} (${helye})`,
+      indok: `a jelenlegi bevezető ${ertekCimke(
+        jelenlegi,
+      )}, ami sem a régi seedelt szöveg, sem az új — a szerkesztő időközben átírta, a script nem nyúl hozzá`,
+    })
+    return blokk
+  })
+
+  if (!voltAllapotSzekcio) {
+    kihagyasok.push({
+      szabaly: 'allapotok-bevezeto',
+      uzenet,
+      indok:
+        'a kezdőlap szekciósorában nincs „Három állapot” (states) szekció — a bevezetőt nincs hova írni',
+    })
+  }
+
+  return { layout: modositasok.length > 0 ? ujLayout : null, modositasok, kihagyasok }
+}
+
+/**
+ * 11. javítás — a kezdőlap záró CTA-sávja.
+ *
+ * HÁROM ESET:
+ *  - nincs CTA-sáv a lapon → a seed-builder záró sávja a szekciósor VÉGÉRE
+ *    kerül (a lap ma a GYIK-kal, cselekvésre hívás nélkül ér véget);
+ *  - van, de a szövege üres → CSAK a szöveg íródik be (a cím, a gomb és a
+ *    sávbeállítás a szerkesztőé marad);
+ *  - van és van szövege → nincs teendő.
+ *
+ * Kétes esetben (több CTA-sáv, hiányzó seed-blokk, üres szekciósor) HANGOS
+ * kihagyás, írás nélkül.
+ */
+export const alkalmazZaroCta = (input: {
+  layout: Page['layout']
+  /** A seed-builder záró CTA-sávja, vagy `null`, ha a builder alakja elcsúszott. */
+  seedBlokk: SzekcioTipus<'ctaBanner'> | null
+}): SzekciosorCsere => {
+  const { layout, seedBlokk } = input
+  const uzenet = 'A kezdőlap záró CTA-sávja'
+
+  const kihagyas = (indok: string, hangos = false): SzekciosorCsere => ({
+    layout: null,
+    modositasok: [],
+    kihagyasok: [{ szabaly: 'zaro-cta', uzenet, indok, hangos }],
+  })
+
+  if (seedBlokk === null) {
+    return kihagyas(
+      'a kezdőlap seed-buildere (buildHomeLayout) nem ad pontosan egy záró CTA-sávot — a kód és a javítás szétcsúszott, kézi átnézés kell',
+      true,
+    )
+  }
+  const seedSzoveg = typeof seedBlokk.text === 'string' ? seedBlokk.text.trim() : ''
+  if (seedSzoveg.length === 0) {
+    return kihagyas(
+      'a seed-builder záró CTA-sávjának nincs szövege — a cím önmagában indoklás nélküli felszólítás lenne, ezért a script nem ír',
+      true,
+    )
+  }
+  if (!Array.isArray(layout) || layout.length === 0) {
+    return kihagyas(
+      'a kezdőlapnak nincs szekciósora — magában álló CTA-sávot a script nem tesz ki',
+      true,
+    )
+  }
+
+  const indexek = layout.flatMap((blokk, index) => (blokk.blockType === 'ctaBanner' ? [index] : []))
+
+  if (indexek.length === 0) {
+    return {
+      layout: [...layout, seedBlokk],
+      modositasok: [
+        {
+          szabaly: 'zaro-cta',
+          uzenet: `${uzenet}: HOZZÁFŰZÉS a szekciósor végére (${
+            layout.length + 1
+          }. szekció), ${ertekCimke(seedBlokk.title)} címmel — a lap eddig cselekvésre hívás nélkül, a GYIK-kal ért véget`,
+          indok: null,
+        },
+      ],
+      kihagyasok: [],
+    }
+  }
+
+  if (indexek.length > 1) {
+    return kihagyas(
+      `a szekciósorban ${indexek.length} CTA-sáv áll (${indexek
+        .map((index) => `${index + 1}.`)
+        .join(', ')}) — nem egyértelmű, melyik a lap lezárása, ezért a script nem ír`,
+      true,
+    )
+  }
+
+  const index = indexek[0]
+  const blokk = layout[index]
+  if (blokk.blockType !== 'ctaBanner') {
+    return kihagyas('a megtalált blokk mégsem CTA-sáv — kézi átnézés kell', true)
+  }
+
+  const jelenlegiSzoveg = typeof blokk.text === 'string' ? blokk.text.trim() : ''
+  if (jelenlegiSzoveg.length > 0) {
+    return kihagyas(
+      `a záró CTA-sávnak (${index + 1}. szekció) MÁR van szövege (${ertekCimke(
+        jelenlegiSzoveg,
+      )}) — szerkesztői tartalmat a script sosem ír felül`,
+    )
+  }
+
+  const ujLayout: Szekciosor = layout.map((elem, elemIndex) =>
+    elemIndex === index ? { ...blokk, text: seedBlokk.text } : elem,
+  )
+
+  return {
+    layout: ujLayout,
+    modositasok: [
+      {
+        szabaly: 'zaro-cta',
+        uzenet: `${uzenet} (${index + 1}. szekció): a hiányzó szöveg pótlása — ${ertekCimke(
+          seedSzoveg,
+        )}`,
+        indok: null,
+      },
+    ],
+    kihagyasok: [],
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 12. javítás — a /szolgaltatasok oldal teteje: fejléc-kép ürítése + az örökölt
+// bevezető blokk cseréje üdvözlő (welcome) blokkra.
+// ---------------------------------------------------------------------------
+
+/** A fejléc-kép ürítésének eredménye. */
+export interface HeroKepUritesAtalakitas {
+  /** `true` → a `heroImage` mezőt ÜRÍTENI kell (null-ra írni); `false` → nincs írás. */
+  uritendo: boolean
+  modositasok: JavitasLepes[]
+  kihagyasok: JavitasLepes[]
+}
+
+/**
+ * 12a. javítás — a `/szolgaltatasok` fejléc-képének ürítése.
+ *
+ * A rendelő-fotó a lap tetején csak lejjebb tolta a tartalmat, állítás nélkül
+ * (mért redesign). Ürítés KIZÁRÓLAG akkor, ha a mező tényleg a rendelő-fotóra
+ * mutat — a média-azonosítót a HÍVÓ deríti ki fájlnév-prefix alapján (a Média
+ * collection webp-re konvertál, ezért fix azonosító nem használható).
+ */
+export const alkalmazSzolgaltatasokHeroKep = (input: {
+  /** A `szolgaltatasok` oldal jelenlegi `heroImage` értéke. */
+  jelenlegi: Page['heroImage']
+  /** A rendelő-fotó média-azonosítója, vagy `null`, ha nincs ilyen rekord. */
+  regiMediaId: number | null
+}): HeroKepUritesAtalakitas => {
+  const { jelenlegi, regiMediaId } = input
+  const jelenlegiId = heroKepAzonosito(jelenlegi)
+  const uzenet = 'A /szolgaltatasok oldal fejléc-képe'
+
+  const kihagyas = (indok: string, hangos = false): HeroKepUritesAtalakitas => ({
+    uritendo: false,
+    modositasok: [],
+    kihagyasok: [{ szabaly: 'szolgaltatasok-hero-kep', uzenet, indok, hangos }],
+  })
+
+  // Idempotencia: üres mezőn nincs mit üríteni.
+  if (jelenlegiId === null) {
+    return kihagyas('az oldalnak MÁR nincs fejléc-képe — nincs teendő')
+  }
+
+  if (regiMediaId === null) {
+    return kihagyas(
+      `a Médiatárban nincs „${SZOLGALTATASOK_HERO_PREFIX}” kezdetű fájlnevű kép, a mostani fejléc-kép (azonosító: ${jelenlegiId}) tehát nem az ürítendő rendelő-fotó — érintetlen marad`,
+      true,
+    )
+  }
+
+  if (jelenlegiId !== regiMediaId) {
+    return kihagyas(
+      `a fejléc-kép nem a rendelő-fotóra mutat (mostani azonosító: ${jelenlegiId}, várt: ${regiMediaId}) — a script csak pontos egyezésnél üríti a mezőt`,
+    )
+  }
+
+  return {
+    uritendo: true,
+    modositasok: [
+      {
+        szabaly: 'szolgaltatasok-hero-kep',
+        uzenet: `${uzenet}: a rendelő-fotó („${SZOLGALTATASOK_HERO_PREFIX}…”, azonosító: ${regiMediaId}) LEVÉTELE — a lap a tartalommal kezdődik. A kép a Médiatárban marad, bármikor visszatehető.`,
+        indok: null,
+      },
+    ],
+    kihagyasok: [],
+  }
+}
+
+/**
+ * A `/szolgaltatasok` szekciósorának ÚJ első blokkja (üdvözlő blokk) a
+ * seed-builderből — a szakmai-harmonika `rolunkSzakmaiUjBlokkok` mintájára.
+ * Ha a builder alakja megváltozik (az első blokk nem `welcome`), `null`.
+ */
+export const szolgaltatasokUjBevezetoBlokk = (): SzekcioTipus<'welcome'> | null => {
+  const elso = buildSzolgaltatasokLayout()[0]
+  return elso !== undefined && elso.blockType === 'welcome' ? elso : null
+}
+
+/**
+ * 12b. javítás — a `/szolgaltatasok` első szekciójának cseréje üdvözlő blokkra.
+ *
+ * VÉDŐFELTÉTELEK:
+ *  - ha az 1. blokk MÁR `welcome`, nincs teendő (idempotencia);
+ *  - csere CSAK akkor, ha az 1. blokk `richText`, ÉS a tartalma byte-ra a
+ *    seedelt örökölt bevezető (kulcs-sorrendtől független összevetés, lásd
+ *    `stabilJson`) — ha a szerkesztő átírta, a blokk érintetlen marad;
+ *  - minden más eset hangos kihagyás (hiányzó előfeltétel).
+ */
+export const alkalmazSzolgaltatasokBevezeto = (input: {
+  layout: Page['layout']
+  /** A seedelt örökölt első blokk elvárt rich-text tartalma. */
+  orokoltTartalom: unknown
+  /** A seed-builderből vett ÚJ üdvözlő blokk. */
+  ujBlokk: SzekcioTipus<'welcome'> | null
+}): SzekciosorCsere => {
+  const { layout, orokoltTartalom, ujBlokk } = input
+  const uzenet = 'A /szolgaltatasok oldal bevezető szekciója'
+
+  const kihagyas = (indok: string, hangos = false): SzekciosorCsere => ({
+    layout: null,
+    modositasok: [],
+    kihagyasok: [{ szabaly: 'szolgaltatasok-bevezeto', uzenet, indok, hangos }],
+  })
+
+  if (ujBlokk === null) {
+    return kihagyas(
+      'a seed-builder (buildSzolgaltatasokLayout) első blokkja nem a várt üdvözlő (welcome) blokk — a kód és a csere-logika szétcsúszott, kézi átnézés kell',
+      true,
+    )
+  }
+  if (!Array.isArray(layout) || layout.length === 0) {
+    return kihagyas('a Szolgáltatások oldalnak nincs szekciósora — nincs mit lecserélni', true)
+  }
+
+  const regiBlokk = layout[0]
+
+  if (regiBlokk.blockType === 'welcome') {
+    return kihagyas('a lap első szekciója MÁR üdvözlő (welcome) blokk — nincs teendő')
+  }
+  if (regiBlokk.blockType !== 'richText') {
+    return kihagyas(
+      `a lap első szekciójának típusa „${regiBlokk.blockType}”, nem a cserélendő richText — a szerkesztő átrendezte a lapot, kézi átnézés kell`,
+      true,
+    )
+  }
+  if (stabilJson(regiBlokk.content) !== stabilJson(orokoltTartalom)) {
+    return kihagyas(
+      'a bevezető blokk tartalma eltér a seedelt örökölttől — a szerkesztő időközben átírta, a script nem nyúl hozzá (az új szerkezetet az adminban, kézzel érdemes bevezetni)',
+    )
+  }
+
+  const ujLayout: Szekciosor = [ujBlokk, ...layout.slice(1)]
+
+  return {
+    layout: ujLayout,
+    modositasok: [
+      {
+        szabaly: 'szolgaltatasok-bevezeto',
+        uzenet: `${uzenet}: az örökölt, folyó szöveges richText blokk → üdvözlő (welcome) blokk (${ertekCimke(
+          ujBlokk.title,
+        )}) — ugyanaz a szöveg, tagolt szerkezetben`,
+        indok: null,
+      },
+    ],
+    kihagyasok: [],
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Futtatás — a tiszta átalakításokat köti az adatbázishoz.
 // ---------------------------------------------------------------------------
 
@@ -1026,18 +1618,45 @@ async function futtat(): Promise<void> {
     )
     hiba = true
   } else {
-    const eredmeny = alkalmazKezdolapJavitasok(kezdolap.layout)
-    naplozdLepeseket(eredmeny, dryRun)
-    modositasokSzama += eredmeny.modositasok.length
-    kihagyasokSzama += eredmeny.kihagyasok.length
+    // A négy kezdőlapi javítás (1–2., 9., 10., 11.) LÁNCBAN fut: mindegyik az
+    // előző eredményén dolgozik, és a végén EGYETLEN frissítés megy ki — a
+    // Payload blokk-mezője részlegesen úgysem frissíthető.
+    const alap = alkalmazKezdolapJavitasok(kezdolap.layout)
+    naplozdLepeseket(alap, dryRun)
+    modositasokSzama += alap.modositasok.length
+    kihagyasokSzama += alap.kihagyasok.length
 
-    if (eredmeny.modositasok.length > 0 && !dryRun) {
+    let kezdolapLayout: Szekciosor = alap.layout
+    let kezdolapValtozott = alap.modositasok.length > 0
+
+    const kezdolapLepes = (eredmeny: SzekciosorCsere): void => {
+      naplozdLepeseket(eredmeny, dryRun)
+      modositasokSzama += eredmeny.modositasok.length
+      kihagyasokSzama += eredmeny.kihagyasok.length
+      if (eredmeny.layout !== null) {
+        kezdolapLayout = eredmeny.layout
+        kezdolapValtozott = true
+      }
+    }
+
+    // --- 9. javítás: a sajtó-logósor felirata --------------------------------
+    kezdolapLepes(
+      alkalmazPressLogosFejlec({ layout: kezdolapLayout, ujFejlec: pressLogosUjFejlec() }),
+    )
+    // --- 10. javítás: a „Három állapot” szekció bevezetője -------------------
+    kezdolapLepes(
+      alkalmazAllapotokBevezeto({ layout: kezdolapLayout, ujBevezeto: allapotokUjBevezeto() }),
+    )
+    // --- 11. javítás: a záró CTA-sáv -----------------------------------------
+    kezdolapLepes(alkalmazZaroCta({ layout: kezdolapLayout, seedBlokk: zaroCtaSeedBlokk() }))
+
+    if (kezdolapValtozott && !dryRun) {
       await payload.update({
         collection: 'pages',
         id: kezdolap.id,
         // A blokk-mező részlegesen nem frissíthető: a TELJES szekciósor megy
         // vissza, de a nem érintett blokkok objektumai változatlanok.
-        data: { layout: eredmeny.layout },
+        data: { layout: kezdolapLayout },
         depth: 0,
         overrideAccess: true,
       })
@@ -1140,14 +1759,27 @@ async function futtat(): Promise<void> {
     modositasokSzama += harmonika.modositasok.length
     kihagyasokSzama += harmonika.kihagyasok.length
 
-    // A két javítás EGY frissítésben megy ki (a heroImage és a layout külön
+    // 9b. javítás — a /rolunk sajtó-logósor felirata (láncban: a harmonika
+    // eredmény-layoutján fut, hogy az egyetlen írás mindkettőt vigye).
+    const rolunkPressAlap = harmonika.layout ?? rolunk.layout
+    const rolunkPress = alkalmazPressLogosFejlec({
+      layout: rolunkPressAlap,
+      ujFejlec: pressLogosUjFejlec(),
+      uzenetCimke: 'A Rólunk oldal sajtó-logósorának felirata',
+    })
+    naplozdLepeseket(rolunkPress, dryRun)
+    modositasokSzama += rolunkPress.modositasok.length
+    kihagyasokSzama += rolunkPress.kihagyasok.length
+
+    // A javítások EGY frissítésben mennek ki (a heroImage és a layout külön
     // mező, nem ütköznek), így egyetlen piszkozat-ellenőrzés elég.
     const irando: { heroImage?: number; layout?: Szekciosor } = {}
     if (eredmeny.heroImage !== null) {
       irando.heroImage = eredmeny.heroImage
     }
-    if (harmonika.layout !== null) {
-      irando.layout = harmonika.layout
+    const rolunkVegsoLayout = rolunkPress.layout ?? harmonika.layout
+    if (rolunkVegsoLayout !== null) {
+      irando.layout = rolunkVegsoLayout
     }
 
     if (Object.keys(irando).length > 0 && !dryRun) {
@@ -1250,7 +1882,7 @@ async function futtat(): Promise<void> {
     }
   }
 
-  // --- 8. javítás: a rendelői szekció horgonya ------------------------------
+  // --- 8. és 12. javítás: a /szolgaltatasok oldal --------------------------
   const szolgaltatasokTalalat = await payload.find({
     collection: 'pages',
     where: { slug: { equals: SZOLGALTATASOK_SLUG } },
@@ -1262,20 +1894,65 @@ async function futtat(): Promise<void> {
 
   if (szolgaltatasok === undefined) {
     logger.error(
-      `Tartalom-javítás: nem található a Szolgáltatások oldal (Pages, webcím: „${SZOLGALTATASOK_SLUG}”) — a rendelői horgony javítása kimaradt.`,
+      `Tartalom-javítás: nem található a Szolgáltatások oldal (Pages, webcím: „${SZOLGALTATASOK_SLUG}”) — a rendelői horgony javítása és a lap-tető redesignja kimaradt.`,
     )
     hiba = true
   } else {
-    const eredmeny = alkalmazRendeloiHorgony(szolgaltatasok.layout)
-    naplozdLepeseket(eredmeny, dryRun)
-    modositasokSzama += eredmeny.modositasok.length
-    kihagyasokSzama += eredmeny.kihagyasok.length
+    // A két szekciósor-javítás (8. horgony, 12b. bevezető blokk) LÁNCBAN fut, a
+    // fejléc-kép ürítése (12a) pedig külön mező — mindhárom EGYETLEN
+    // frissítésben megy ki.
+    let szolgaltatasokLayout: Szekciosor = Array.isArray(szolgaltatasok.layout)
+      ? szolgaltatasok.layout
+      : []
+    let layoutValtozott = false
 
-    if (eredmeny.layout !== null && !dryRun) {
+    const szolgaltatasokLepes = (eredmeny: SzekciosorCsere): void => {
+      naplozdLepeseket(eredmeny, dryRun)
+      modositasokSzama += eredmeny.modositasok.length
+      kihagyasokSzama += eredmeny.kihagyasok.length
+      if (eredmeny.layout !== null) {
+        szolgaltatasokLayout = eredmeny.layout
+        layoutValtozott = true
+      }
+    }
+
+    // --- 8. javítás: a rendelői szekció horgonya -----------------------------
+    szolgaltatasokLepes(alkalmazRendeloiHorgony(szolgaltatasokLayout))
+    // --- 12b. javítás: az örökölt bevezető → üdvözlő blokk -------------------
+    szolgaltatasokLepes(
+      alkalmazSzolgaltatasokBevezeto({
+        layout: szolgaltatasokLayout,
+        orokoltTartalom: szolgaltatasokRegiBevezetoTartalom(),
+        ujBlokk: szolgaltatasokUjBevezetoBlokk(),
+      }),
+    )
+
+    // --- 12a. javítás: a fejléc-kép ürítése ----------------------------------
+    const rendeloKep = await keresdMediat(payload, SZOLGALTATASOK_HERO_PREFIX)
+    logger.info('Tartalom-javítás: a /szolgaltatasok fejléc-képéhez tartozó média-rekord', {
+      rendelo: rendeloKep?.filename ?? '(nem található)',
+    })
+    const heroUrites = alkalmazSzolgaltatasokHeroKep({
+      jelenlegi: szolgaltatasok.heroImage,
+      regiMediaId: rendeloKep?.id ?? null,
+    })
+    naplozdLepeseket(heroUrites, dryRun)
+    modositasokSzama += heroUrites.modositasok.length
+    kihagyasokSzama += heroUrites.kihagyasok.length
+
+    const irandoSzolgaltatasok: { layout?: Szekciosor; heroImage?: null } = {}
+    if (layoutValtozott) {
+      irandoSzolgaltatasok.layout = szolgaltatasokLayout
+    }
+    if (heroUrites.uritendo) {
+      irandoSzolgaltatasok.heroImage = null
+    }
+
+    if (Object.keys(irandoSzolgaltatasok).length > 0 && !dryRun) {
       await payload.update({
         collection: 'pages',
         id: szolgaltatasok.id,
-        data: { layout: eredmeny.layout },
+        data: irandoSzolgaltatasok,
         depth: 0,
         overrideAccess: true,
       })

@@ -1131,7 +1131,10 @@ const buildRolunkLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['layo
       ? [
           {
             blockType: 'pressLogos' as const,
-            heading: 'Ismerhetsz minket innen',
+            // A felirat a kezdőlappal közös (tulajdonosi átnevezés, 2026-08-16):
+            // az igazságforrás a home-seed pressLogos blokkja — ha ott változik,
+            // az apply-owner-content 9. javítása az élő oldalakat is követi.
+            heading: 'Itt találkozhattál velünk',
             logos: sajtoLogok.map((image) => ({ image })),
             sectionSettings: { visible: true, hatter: 'feher' as const },
           },
@@ -1241,10 +1244,49 @@ const buildRolunkLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['layo
  * adnia, így a seed és a javítás nem csúszhat szét.
  */
 const buildSzolgaltatasokLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['layout']> => [
-  // Bevezető — a probléma és a kivezető út.
+  // Bevezető — a probléma és a kivezető út, ÜDVÖZLŐ (welcome) blokként.
+  //
+  // MIÉRT NEM richText: a lap teteje korábban EGYETLEN, folyó szöveges blokk
+  // volt (két h2-címsor és öt bekezdés egymás alatt) — a látogató a lap
+  // legfontosabb helyén szövegfalat kapott, tagolás és vizuális kapaszkodó
+  // nélkül. Ugyanez a tartalom a kezdőlapon már bevált szerkezetben áll
+  // (cím + felvezető, alatta pipás felsorolás és oldalsó összefoglaló), ezért
+  // a /szolgaltatasok teteje is ezt a blokkot kapja (redesign, 2026-08-16).
+  //
+  // A SZÖVEG BETŰHÍVEN a régi kineticare.hu bevezetője marad — ugyanaz, amit a
+  // `szolgaltatasokBevezetoNodes()` rich-text változata visz (az a lap
+  // `content` mezőjében tovább él): a szerkezet változik, tartalom nem vész el.
+  // A hosszú, kétállítású zárómondat kettéválik: az elvi rész a felsorolás
+  // utolsó tétele, a módszertani rész az oldalsó bekezdések záró tagja.
   {
-    blockType: 'richText',
-    content: richText(szolgaltatasokBevezetoNodes()),
+    blockType: 'welcome',
+    title: 'Fáj a kezed, csuklód, könyököd vagy vállad?',
+    lead: 'Van megoldás – ha tudod, merre indulj',
+    checklist: [
+      {
+        text: 'A legtöbb kéz-, csukló- vagy könyökprobléma megfelelő terápiával hatékonyan kezelhető – és akár a műtét is elkerülhető.',
+      },
+      {
+        text: 'Ehhez persze türelemre és kitartásra van szükség, de a test egy csodálatos „szerkezet”: ha segítünk neki, képes rendbehozni magát.',
+      },
+      {
+        text: 'A kézfájdalmak kezelésében nem hiszünk a gyors, felületes megoldásokban.',
+      },
+    ],
+    sideParagraphs: [
+      {
+        text: 'Tudjuk, hogy ez a probléma mennyire tud hátráltatni a munkában vagy a sportban, de még a hétköznapokban is.',
+        emphasized: false,
+      },
+      {
+        text: 'Ezért professzionális kezeléseinkkel és online programjainkkal abban segítünk, hogy minél gyorsabban visszanyerd a kezed erejét és mozgását – hosszú távú eredményekkel.',
+        emphasized: true,
+      },
+      {
+        text: 'A kezeléseink és programjaink a legmodernebb mozgásterápiás és manuálterápiás módszerekre épülnek, hogy segítsenek a gyökérok megszüntetésében, és a hosszú távú regenerációban.',
+        emphasized: false,
+      },
+    ],
     sectionSettings: { visible: true, hatter: 'feher' },
   },
 
@@ -2167,7 +2209,9 @@ async function restoreLegacyContent(): Promise<void> {
     excerpt:
       'Hatékony kezeléseket, otthon végezhető programokat és szakmai továbbképzéseket nyújtunk azoknak, akik biztos eredményeket szeretnének.',
     content: szolgaltatasokContent(),
-    heroImage: mediaId('67b3bd06f3936_Rendelo.png'),
+    // heroImage szándékosan NINCS (tulajdonosi redesign, 2026-08-16): a lap
+    // teteje kompakt hero + welcome-tábla, a nagy Rendelo-fotó kikerült. Az
+    // ÉLŐ oldalak mezőjét az apply-owner-content 12a. javítása üríti.
     seoTitle: 'Szolgáltatások – Kineticare',
     seoDescription:
       'Rendelői gyógytorna és manuálterápia Budapesten (50 perc 18 000 Ft, 20 perc 10 000 Ft), otthoni kézrehabilitációs program és akkreditált szakmai képzések.',
@@ -2322,6 +2366,16 @@ async function restoreLegacyContent(): Promise<void> {
 const rolunkSzakmaiOrokoltTartalom = (): RichTextContent =>
   richText([...rolunkSzakemberNodes(), ...rolunkReferenciaNodes()])
 
+/**
+ * A /szolgaltatasok lap-tetejének ÖRÖKÖLT (welcome-blokk előtti) rich-text
+ * alakja — pontosan az a tartalom, amit a 2026-08-16 előtti seed a szekciósor
+ * ELSŐ blokkjaként tett a lapra. Az apply-owner-content.ts ezzel veti össze az
+ * ÉLŐ adatbázis első blokkját: csak akkor cseréli üdvözlő (welcome) blokkra, ha
+ * a szerkesztő időközben nem nyúlt hozzá.
+ */
+const szolgaltatasokRegiBevezetoTartalom = (): RichTextContent =>
+  richText(szolgaltatasokBevezetoNodes())
+
 export {
   buildRolunkLayout,
   buildSzolgaltatasokLayout,
@@ -2329,6 +2383,7 @@ export {
   rolunkContent,
   rolunkSzakmaiOrokoltTartalom,
   szolgaltatasokContent,
+  szolgaltatasokRegiBevezetoTartalom,
 }
 
 /**

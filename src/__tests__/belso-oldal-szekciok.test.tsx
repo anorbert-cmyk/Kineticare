@@ -302,6 +302,20 @@ describe('/szolgaltatasok alap-szekciósora', () => {
     }
   })
 
+  it('a lap teteje ÜDVÖZLŐ blokk, a régi bevezető szövegével (redesign, 2026-08-16)', () => {
+    // A folyó szöveges bevezető helyére tagolt üdvözlő blokk került; a SZÖVEG
+    // betűhíven ugyanaz maradt — a renderelt kimeneten keresve.
+    expect(layout[0].blockType).toBe('welcome')
+    const markup = renderLayout(layout)
+
+    expect(markup).toContain('Fáj a kezed, csuklód, könyököd vagy vállad?')
+    expect(markup).toContain('Van megoldás – ha tudod, merre indulj')
+    expect(markup).toContain('a test egy csodálatos „szerkezet”')
+    expect(markup).toContain('akár a műtét is elkerülhető')
+    expect(markup).toContain('mennyire tud hátráltatni a munkában vagy a sportban')
+    expect(markup).toContain('a hosszú távú regenerációban')
+  })
+
   it('a három szolgáltatási ág EGY szekcióban, azonos mezőrenddel áll (5.3, B4.1)', () => {
     const services = layout.find((block) => block.blockType === 'services')
     expect(services).toBeDefined()
