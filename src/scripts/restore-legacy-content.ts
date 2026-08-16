@@ -1076,7 +1076,120 @@ interface OldalLayoutMedia {
   szolgaltatasokKep?: number
   /** A sajtó-logósor logói — ezeket a KEZDŐLAPI seed tölti fel (HOME_IMAGES). */
   sajtoLogok?: readonly number[]
+  /** Kocsis Kata portréja a bejelentkezés-szekcióhoz. */
+  kocsisPortre?: number
+  /** Kiss Kata portréja a bejelentkezés-szekcióhoz. */
+  kissPortre?: number
 }
+
+// ---------------------------------------------------------------------------
+// BEJELENTKEZÉS A SZAKEMBEREKHEZ — egy adatforrás, két oldal
+//
+// MIÉRT VAN EZ A SZEKCIÓ (tulajdonosi kérés, 2026-08-16): a régi kineticare.hu
+// sötétkék sávján két fehér kártya állt, mindegyikben a gyógytornász portréja,
+// neve, telefonszáma és egy „TOVÁBB" hivatkozás a végzettségekhez. Nálunk ez a
+// tartalom eddig KÉT hibás alakban élt:
+//   - a /rolunk szekciósorában folyó szövegként („… – telefon: +36 30 169
+//     2263"), tehát a szám NEM volt kattintható és NEM volt mellette arc,
+//   - a /szolgaltatasok oldalon SEHOGY: az `docs/informacios-architektura.md`
+//     5. fejezetének élő mérése szerint a lap `<main>`-jében nulla név, nulla
+//     arc és nulla telefonszám van, csak egy általános „Kapcsolat" szöveglink.
+//
+// A KÉT ADAT EGY FORRÁSBÓL jön (név, titulus, telefon), és a titulus magából a
+// szakmai önéletrajz-konstansból (`ROLUNK_ONELETRAJZOK`) olvasódik ki. Enélkül
+// pontosan az a hiba állna elő, amit az IA-leltár 6.4 D4 pontja mér a SOS
+// kurzuson: „három név, egy termék" — ugyanaz a személy oldalanként más
+// titulussal.
+// ---------------------------------------------------------------------------
+
+/** Egy szakember bejelentkezés-kártyája (a `teamMembers` blokk egy tagja). */
+interface SzakemberKartya {
+  nev: string
+  /** Rövid, 2 mondatos bemutatkozás — a teljes életút a harmonikában marad. */
+  bemutatkozas: string
+  /** A hívás-hivatkozás felirata (ige + tárgy, egyes szám második személy). */
+  hivasFelirat: string
+  telefon: string
+  /** A portré fájlneve a Médiatárban (LEGACY_IMAGES). */
+  portreFajl: string
+}
+
+const SZAKEMBER_KARTYAK: readonly SzakemberKartya[] = [
+  {
+    nev: 'Kocsis Kata',
+    bemutatkozas:
+      'Kézsérülésekkel, műtét utáni állapotokkal és sportolói panaszokkal foglalkozik. A kéz, a csukló és a könyök rehabilitációjáról szóló akkreditált kurzus oktatója.',
+    hivasFelirat: 'Hívd Kocsis Katát',
+    telefon: '+36 30 169 2263',
+    portreFajl: '67b3c6e9e315f_KocsisKatakozeli.png',
+  },
+  {
+    nev: 'Kiss Kata',
+    bemutatkozas:
+      'Manuálterapeutaként a csukló- és kézpanaszok hátterét keresi, a sportolói eseteket is beleértve. A Magyar Sportrehabilitációs Konferencián az ulnáris oldali csuklófájdalmakról tartott előadást.',
+    hivasFelirat: 'Hívd Kiss Katát',
+    telefon: '+36 20 357 3493',
+    portreFajl: '67c07def59ac2_KissKataelegans.png',
+  },
+]
+
+/** A szakember titulusa a szakmai önéletrajzból — hogy a kettő ne csúszhasson el. */
+const szakemberTitulus = (nev: string): string =>
+  ROLUNK_ONELETRAJZOK.find((cv) => cv.nev === nev)?.titulus ?? ''
+
+interface SzakemberSzekcioOpciok {
+  eyebrow: string
+  title: string
+  lead: string
+  anchorId: string
+  hatter: 'feher' | 'tint' | 'sotet'
+  /** A „szakmai háttér" hivatkozás célja (lapon belüli horgony vagy /rolunk-ra mutató). */
+  hatterUrl: string
+  /** Portré-azonosítók fájlnév szerint; hiányzó kép esetén a kártya kép nélkül áll. */
+  portrek?: Partial<Record<string, number | undefined>>
+}
+
+/**
+ * A bejelentkezés-szekció (teamMembers blokk) egy oldalra.
+ *
+ * A kártya-hivatkozás felirata MINDKÉT oldalon ugyanaz („Nézd meg a szakmai
+ * hátterét"), csak a célja tér el (lapon belüli horgony vs. /rolunk-ra mutató)
+ * — ez a `docs/ui-sztenderdek.md` C-1 szabálya: ugyanaz a cselekvés, ugyanaz a
+ * szó. Az írásos időpontkérés a /kapcsolat űrlapjára visz: az NN/g
+ * egészségügyi út-kutatása szerint a válaszadók többsége kifejezetten kerüli a
+ * telefonálást, mert az gyakran válasz nélkül marad
+ * (https://www.nngroup.com/articles/healthcare-customer-journeys/).
+ */
+const szakemberSzekcio = (opciok: SzakemberSzekcioOpciok): NonNullable<Page['layout']>[number] => ({
+  blockType: 'teamMembers',
+  eyebrow: opciok.eyebrow,
+  title: opciok.title,
+  lead: opciok.lead,
+  bookingLink: {
+    felirat: 'Kérj időpontot üzenetben',
+    url: '/kapcsolat',
+    ujAblakban: false,
+  },
+  members: SZAKEMBER_KARTYAK.map((kartya) => ({
+    photo: opciok.portrek?.[kartya.portreFajl],
+    name: kartya.nev,
+    role: szakemberTitulus(kartya.nev),
+    bio: kartya.bemutatkozas,
+    phone: kartya.telefon,
+    callLabel: kartya.hivasFelirat,
+    email: '',
+    // A rendelési idő és a helyszín szakemberenként NEM áll rendelkezésre a
+    // repóban, ezért a mező üres marad: kitalált nyitvatartás hazugság lenne.
+    // Az adminban tölthető (Szakemberek → Mikor és hol érhető el).
+    availability: '',
+    link: {
+      felirat: 'Nézd meg a szakmai hátterét',
+      url: opciok.hatterUrl,
+      ujAblakban: false,
+    },
+  })),
+  sectionSettings: { visible: true, anchorId: opciok.anchorId, hatter: opciok.hatter },
+})
 
 /**
  * A /rolunk alap-szekciósora.
@@ -1168,16 +1281,33 @@ const buildRolunkLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['layo
     },
 
     // Szakmai háttér, 1. rész — a RÖVID, MINDIG LÁTHATÓ tartalom: a két
-    // szakember elérhetősége és a partnerek sora. Ezek elolvasása másodpercek,
-    // és a telefonszám a lap egyik kapcsolatfelvételi útja (üzleti cél-sorrend
-    // 3. pontja) — lenyitó mögé rejteni hiba lenne.
+    // szakember elérhetősége. Ezek elolvasása másodpercek, és a telefonszám a
+    // lap egyik kapcsolatfelvételi útja (üzleti cél-sorrend 3. pontja) —
+    // lenyitó mögé rejteni hiba lenne.
+    //
+    // 2026-08-16 ÓTA BLOKKBAN, NEM FOLYÓ SZÖVEGBEN. Korábban itt egy richText
+    // bekezdés állt („… – telefon: +36 30 169 2263"): a szám nem volt
+    // kattintható, és nem volt mellette arc. A `teamMembers` blokk mindkettőt
+    // megadja, és a lap ALJÁN álló részletes önéletrajz-harmonikára mutat
+    // (#szakmai-hatter) ahelyett, hogy megismételné.
+    szakemberSzekcio({
+      eyebrow: 'Elérhetőség',
+      title: 'Így érsz el minket közvetlenül',
+      lead: 'Hívj minket, ha időpontot kérnél, vagy ha kérdésed van a kezelésekről.',
+      anchorId: 'elerhetoseg',
+      hatter: 'feher',
+      hatterUrl: '#szakmai-hatter',
+      portrek: {
+        '67b3c6e9e315f_KocsisKatakozeli.png': media.kocsisPortre,
+        '67c07def59ac2_KissKataelegans.png': media.kissPortre,
+      },
+    }),
+
+    // Partnerek — a lap külső, ellenőrizhető referencia-sora. Rövid, ezért
+    // ugyanabban a fehér régióban marad, a szakemberek alatt.
     {
       blockType: 'richText',
-      content: richText([
-        ...rolunkSzakemberNodes(),
-        heading('h2', 'Partnereink'),
-        para(ROLUNK_PARTNEREK),
-      ]),
+      content: richText([heading('h2', 'Partnereink'), para(ROLUNK_PARTNEREK)]),
       sectionSettings: { visible: true, hatter: 'feher' },
     },
 
@@ -1325,6 +1455,33 @@ const buildSzolgaltatasokLayout = (media: OldalLayoutMedia = {}): NonNullable<Pa
     sectionSettings: { visible: true, anchorId: CLINIC_TREATMENTS_ANCHOR, hatter: 'feher' },
   },
 
+  // „Kihez jössz, ha időpontot kérsz?" — a rendelői régió ZÁRÓ lépése.
+  //
+  // MIÉRT ITT (docs/informacios-architektura.md alapján): a 2.1 leltár szerint
+  // ez a lap a rendelői kezelések oldala, tehát ITT dől el a személyes
+  // bejelentkezés; az 5. fejezet élő mérése szerint viszont a `<main>`-ben ma
+  // egyetlen név, arc és telefonszám sincs, csak általános „Kapcsolat"
+  // szöveglink. Az NN/g hitelesség-kutatásának 2. tényezője (Upfront
+  // Disclosure) épp azt kéri, hogy a kapcsolati adat ott legyen kiírva, ahol a
+  // döntés születik, ne űrlap mögött
+  // (https://www.nngroup.com/articles/trustworthy-design/).
+  //
+  // A háttere SZÁNDÉKOSAN ugyanaz („feher"), mint az árlistáé: a kettő EGY
+  // régió (mit kapsz, mennyiért, kitől, hogyan jelentkezel be) — a sávváltás
+  // a régióhatárt jelöli, nem a szekcióhatárt (B2.2).
+  szakemberSzekcio({
+    eyebrow: 'Bejelentkezés',
+    title: 'Kihez jössz, ha időpontot kérsz?',
+    lead: 'A rendelői kezeléseket mi ketten tartjuk. Nézd meg, kihez jönnél szívesen, és hívd őt közvetlenül.',
+    anchorId: 'szakembereink',
+    hatter: 'feher',
+    hatterUrl: '/rolunk#szakmai-hatter',
+    portrek: {
+      '67b3c6e9e315f_KocsisKatakozeli.png': media.kocsisPortre,
+      '67c07def59ac2_KissKataelegans.png': media.kissPortre,
+    },
+  }),
+
   // Három párhuzamos érv → kártyarács (B3.1).
   {
     blockType: 'usps',
@@ -1381,7 +1538,12 @@ const kezrehabLongDescription = (): Product['longDescription'] =>
     ]),
     heading('h3', 'III. modul: A megoldás'),
     para('Technikák és gyakorlatok a különböző problémákra:'),
-    bulletList(['Könyökfájdalmak', 'Csuklófájdalom', 'Hüvelyk- és többi ujj panaszai', 'Zsibbadó ujjak']),
+    bulletList([
+      'Könyökfájdalmak',
+      'Csuklófájdalom',
+      'Hüvelyk- és többi ujj panaszai',
+      'Zsibbadó ujjak',
+    ]),
     heading('h3', 'IV. modul: A hosszú távú megelőzés'),
     bulletList([
       'Így tudod elkerülni, hogy kiújuljon a probléma',
@@ -1407,7 +1569,10 @@ const kezrehabLongDescription = (): Product['longDescription'] =>
     para(
       'Megtanulod, hogyan kell hüvelykujjat, csuklóízületet és könyökízületet hatékonyan tape-elni, hogyan készítsd elő a bőrfelületet a maximális eredmény érdekében, és mik a tipikus hibák, amiket érdemes elkerülni.',
     ),
-    heading('h3', '02 – Ergonómiai minikurzus kisbabás anyukáknak (értéke 19 900 Ft – most ajándék)'),
+    heading(
+      'h3',
+      '02 – Ergonómiai minikurzus kisbabás anyukáknak (értéke 19 900 Ft – most ajándék)',
+    ),
     para(
       'Tanácsok friss édesanyáknak: milyen testhelyzeteket érdemes kerülni, és hogyan tartsd a kezed, karod és törzsed a tipikusan megterhelő tevékenységeknél (etetés, fürdetés), hogy elkerüld a „friss szülők kézbetegségét”.',
     ),
@@ -1647,8 +1812,7 @@ const LEGACY_TESTIMONIALS: readonly LegacyTestimonial[] = [
     order: 12,
   },
   {
-    quote:
-      'A kurzusban gyors és egyszerű gyakorlatok voltak, amik tényleg SOS megoldások!',
+    quote: 'A kurzusban gyors és egyszerű gyakorlatok voltak, amik tényleg SOS megoldások!',
     authorName: 'D. Anna',
     authorTitle: 'logisztikus',
     featured: false,
@@ -2227,15 +2391,27 @@ async function restoreLegacyContent(): Promise<void> {
       'Legacy: sajtó-logó egyet sem találtam a Médiatárban (ezeket a `npm run seed` tölti fel) — a /rolunk logósora kimarad a szekciósorból.',
     )
   }
+  // A két portré a bejelentkezés-szekcióhoz (mindkét oldalra ugyanaz a kép).
+  const kocsisPortre = mediaId('67b3c6e9e315f_KocsisKatakozeli.png')
+  const kissPortre = mediaId('67c07def59ac2_KissKataelegans.png')
   await ensurePageLayout(
     payload,
     'rolunk',
-    buildRolunkLayout({ rolunkFoto: mediaId('680a69d078306_Katakfeherbenhattal.png'), sajtoLogok }),
+    buildRolunkLayout({
+      rolunkFoto: mediaId('680a69d078306_Katakfeherbenhattal.png'),
+      sajtoLogok,
+      kocsisPortre,
+      kissPortre,
+    }),
   )
   await ensurePageLayout(
     payload,
     'szolgaltatasok',
-    buildSzolgaltatasokLayout({ szolgaltatasokKep: mediaId('67b2668feae66_Kezeleskek.png') }),
+    buildSzolgaltatasokLayout({
+      szolgaltatasokKep: mediaId('67b2668feae66_Kezeleskek.png'),
+      kocsisPortre,
+      kissPortre,
+    }),
   )
 
   // --- Termékkategória ---------------------------------------------------------

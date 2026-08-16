@@ -1100,6 +1100,23 @@ export interface BlockTeamMembers {
    */
   lead?: string | null;
   /**
+   * Nem kötelező, a szekció alján jelenik meg, a kártyák alatt. A telefonálás melletti MÁSIK út (pl. „Kérj időpontot üzenetben" a /kapcsolat oldalra). Sok páciens nem szívesen telefonál, ezért érdemes írásos utat is kínálni.
+   */
+  bookingLink?: {
+    /**
+     * Ez a szöveg jelenik meg a linken (pl. „Kérj időpontot üzenetben").
+     */
+    felirat?: string | null;
+    /**
+     * Saját oldalra elég a perjellel kezdődő rész (pl. /kurzusok), másik weboldalra a teljes cím https://-sel kezdve.
+     */
+    url?: string | null;
+    /**
+     * Másik weboldalra mutató linknél szokás bekapcsolni, hogy a látogató ne hagyja el a Kineticare oldalát.
+     */
+    ujAblakban?: boolean | null;
+  };
+  /**
    * Pontosan két szakember fér ide, egymás mellett, egyenlő súllyal. A portrékat előbb töltsd fel a Tartalom → Képek közé; a legjobb, ha mindkét kép AZONOS képarányú és hasonló fejméretű (különben az egyik közelebbinek látszik).
    */
   members?:
@@ -1121,9 +1138,17 @@ export interface BlockTeamMembers {
          */
         bio?: string | null;
         /**
-         * Nem kötelező. Tagoltan írd (pl. „+36 30 169 2263") — mobilon kattintható hívás-linkké alakul.
+         * Nem kötelező. Nemzetközi alakban, csoportokra tagolva írd (pl. „+36 30 169 2263"): így külföldről is tárcsázható, és könnyen leolvasható. Mobilon kattintható hívás-linkké alakul.
          */
         phone?: string | null;
+        /**
+         * Nem kötelező. Rövid, cselekvő felirat a telefonszám fölé (pl. „Hívd Katát"). Ha üresen hagyod, csak a szám látszik. Telefonszám nélkül nincs hatása.
+         */
+        callLabel?: string | null;
+        /**
+         * Nem kötelező, egyetlen sor a hívás alá (pl. „Hétfőtől péntekig, a budapesti rendelőben"). Azt mondja meg, mire számítson a látogató, ha telefonál.
+         */
+        availability?: string | null;
         /**
          * Nem kötelező. Kattintható levélírás-linkké alakul.
          */
@@ -3070,6 +3095,13 @@ export interface BlockTeamMembersSelect<T extends boolean = true> {
   eyebrow?: T;
   title?: T;
   lead?: T;
+  bookingLink?:
+    | T
+    | {
+        felirat?: T;
+        url?: T;
+        ujAblakban?: T;
+      };
   members?:
     | T
     | {
@@ -3078,6 +3110,8 @@ export interface BlockTeamMembersSelect<T extends boolean = true> {
         role?: T;
         bio?: T;
         phone?: T;
+        callLabel?: T;
+        availability?: T;
         email?: T;
         cvSections?:
           | T

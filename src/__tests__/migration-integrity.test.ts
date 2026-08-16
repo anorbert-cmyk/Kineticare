@@ -52,11 +52,15 @@ function directoryNames(): string[] {
 }
 
 function datedTsNames(): string[] {
-  return directoryNames().filter((name) => DATED_TS.test(name)).sort()
+  return directoryNames()
+    .filter((name) => DATED_TS.test(name))
+    .sort()
 }
 
 function datedJsonNames(): string[] {
-  return directoryNames().filter((name) => DATED_JSON.test(name)).sort()
+  return directoryNames()
+    .filter((name) => DATED_JSON.test(name))
+    .sort()
 }
 
 describe('G4 — migráció-integritás (CLAUDE.md 3. tilos zóna)', () => {
@@ -65,7 +69,9 @@ describe('G4 — migráció-integritás (CLAUDE.md 3. tilos zóna)', () => {
     const violations: string[] = []
     for (const name of names.filter((candidate) => DATED_TS.test(candidate))) {
       if (!names.includes(name.replace(/\.ts$/, '.json'))) {
-        violations.push(`${name}: hiányzik a .json snapshot-pár — a migrate:create enélkül nem tud diffelni`)
+        violations.push(
+          `${name}: hiányzik a .json snapshot-pár — a migrate:create enélkül nem tud diffelni`,
+        )
       }
     }
     for (const name of names.filter((candidate) => DATED_JSON.test(candidate))) {
@@ -78,7 +84,9 @@ describe('G4 — migráció-integritás (CLAUDE.md 3. tilos zóna)', () => {
 
   it('(2) a könyvtár whitelist-tiszta: csak datált párak, index.ts, manifest és .DS_Store', () => {
     const violations = directoryNames()
-      .filter((name) => !DATED_TS.test(name) && !DATED_JSON.test(name) && !WHITELISTED_NAMES.has(name))
+      .filter(
+        (name) => !DATED_TS.test(name) && !DATED_JSON.test(name) && !WHITELISTED_NAMES.has(name),
+      )
       .map(
         (name) =>
           `${name}: nem engedélyezett fájl a src/migrations/ alatt — egy kóbor .ts-t a PROD éles futtatás ` +
@@ -93,7 +101,9 @@ describe('G4 — migráció-integritás (CLAUDE.md 3. tilos zóna)', () => {
     const prefixes = tsNames.map((name) => {
       const match = PREFIX.exec(name)
       if (!match) {
-        throw new Error(`a(z) ${name} nem datált nevű — a (2)-es whitelist-teszt ezt már buktatta volna`)
+        throw new Error(
+          `a(z) ${name} nem datált nevű — a (2)-es whitelist-teszt ezt már buktatta volna`,
+        )
       }
       return match[1]
     })
@@ -138,22 +148,35 @@ describe('G4 — migráció-integritás (CLAUDE.md 3. tilos zóna)', () => {
     expect(violations).toEqual([])
   })
 
-  it('(5) az index.ts migrations-tömbje PONTOSAN a rendezett könyvtári .ts-basename-lista', async () => {
-    const expected = datedTsNames().map((name) => name.replace(/\.ts$/, ''))
-    expect(expected.length).toBeGreaterThan(0)
+  /*
+   * IDŐKORLÁT (2026-08-16). A dinamikus `import('../migrations/index')` a
+   * TELJES migrációs láncot betölti és fordítja, tehát a futásideje a
+   * migrációk számával nő. 21 migrációnál mérve 7,9 mp — az 5 mp-es
+   * alapértelmezés fölött. Az őr nem lassú, hanem alapos (a VALÓDI index.ts-t
+   * importálja forráskód-minta helyett); a helyes válasz a korlát emelése,
+   * nem a vizsgálat szűkítése. Ugyanezért visel 60 mp-et a G1 három
+   * lánc-bejáró tesztje is.
+   */
+  it(
+    '(5) az index.ts migrations-tömbje PONTOSAN a rendezett könyvtári .ts-basename-lista',
+    { timeout: 60_000 },
+    async () => {
+      const expected = datedTsNames().map((name) => name.replace(/\.ts$/, ''))
+      expect(expected.length).toBeGreaterThan(0)
 
-    const indexPath = join(MIGRATIONS_DIR, 'index.ts')
-    expect(existsSync(indexPath), 'hiányzik az src/migrations/index.ts').toBe(true)
+      const indexPath = join(MIGRATIONS_DIR, 'index.ts')
+      expect(existsSync(indexPath), 'hiányzik az src/migrations/index.ts').toBe(true)
 
-    // Dinamikus import: a VALÓDI index.ts deklarált sorrendjét veti össze a
-    // könyvtárral — nem forráskód-mintát, így egy átszervezés is fennakad rajta.
-    const indexModule = await import('../migrations/index')
-    const declared = indexModule.migrations.map((migration) => migration.name)
-    expect(
-      declared,
-      'az index.ts migrations-sorrendje eltér a könyvtári rendezett listától — ' +
-        'a fejlesztői és az éles futtatás más láncot futtatna; ' +
-        'az index.ts-t a Payload migrációs eszköze írja, új migráció után ellenőrizd',
-    ).toEqual(expected)
-  })
+      // Dinamikus import: a VALÓDI index.ts deklarált sorrendjét veti össze a
+      // könyvtárral — nem forráskód-mintát, így egy átszervezés is fennakad rajta.
+      const indexModule = await import('../migrations/index')
+      const declared = indexModule.migrations.map((migration) => migration.name)
+      expect(
+        declared,
+        'az index.ts migrations-sorrendje eltér a könyvtári rendezett listától — ' +
+          'a fejlesztői és az éles futtatás más láncot futtatna; ' +
+          'az index.ts-t a Payload migrációs eszköze írja, új migráció után ellenőrizd',
+      ).toEqual(expected)
+    },
+  )
 })

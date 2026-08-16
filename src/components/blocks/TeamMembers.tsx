@@ -30,16 +30,45 @@ import '../../app/(frontend)/styles/blocks/team-members.css'
  * így sosem csúszhat el a listától, és a rejtés nem tünteti el a bizonyíték
  * mennyiségét (ux-belso-oldalak-kutatas.md 5.2).
  *
+ * BEJELENTKEZÉS-RÉTEG (2026-08-16). A kártya alsó harmada a „hogyan jutok el
+ * hozzá" kérdésé. Három, kutatásra visszavezetett döntés:
+ *
+ *  1. A TELEFONSZÁM SAJÁT FELÜLETET KAP, nem szöveglink-lábjegyzetet. Az NN/g
+ *     hitelesség-kutatásának 2. tényezője (Upfront Disclosure) szerint a
+ *     kapcsolati adatot ott kell kiírni, ahol a látogató dönt; a 3. tényező
+ *     pedig kifejezetten azt kéri, hogy a szolgáltatásnál látszódjon, KI fogja
+ *     a munkát végezni („who would be doing the cleaning").
+ *     https://www.nngroup.com/articles/trustworthy-design/
+ *  2. A PORTRÉ NEM DÍSZ. Az NN/g fotó-kutatásában a valódi munkatársak
+ *     portréját a felhasználók 10%-kal HOSSZABBAN nézték, mint amennyit a
+ *     mellette álló, sokkal nagyobb helyet elfoglaló életrajzot olvasták — az
+ *     általános stock-fotót viszont figyelmen kívül hagyták („users ignore
+ *     stock photos of generic people").
+ *     https://www.nngroup.com/articles/photos-as-web-content/
+ *  3. A HÍVÁS MELLETT ÍRÁSOS ÚT IS KELL. Az NN/g egészségügyi út-kutatásában a
+ *     válaszadók többsége kerüli a telefonálást, mert az gyakran válasz nélkül
+ *     marad („result in »phone tag«") — ezért a szekció alján a szerkesztő
+ *     megadhat egy aszinkron időpontkérési utat (`bookingLink`).
+ *     https://www.nngroup.com/articles/healthcare-customer-journeys/
+ *
+ * A hívás-felület LINK, nem gomb (projekt-skill 4. pont: ami navigál, az link)
+ * — a `tel:` a rendszer tárcsázójára navigál, tehát jobbklikk/másolás/új lap
+ * elvárt módon működik. Vizuálisan mégis felületet kap (2px keret, 3,5rem
+ * magasság), mert a súlya cselekvés-szintű; a TÖMÖR elsődleges gomb-kitöltést
+ * viszont szándékosan NEM viseli: az az oldal egyetlen elsődleges (vásárlási)
+ * cselekvésének a nyelve, és két szakemberrel két elsődleges gomb keletkezne.
+ *
  * TELJESEN CMS-VEZÉRELT (tulajdonosi elfogadási feltétel). Minden LÁTHATÓ szöveg
- * és minden kép a blokk mezőiből jön: név, titulus, portré, bio, telefon, e-mail,
- * szakmai listák, hivatkozás, sőt a megjelenési SORREND is (a tömb sorrendje =
+ * és minden kép a blokk mezőiből jön: név, titulus, portré, bio, telefon, a
+ * hívás felirata, elérhetőségi sor, e-mail, szakmai listák, hivatkozás, az
+ * írásos időpontkérés, sőt a megjelenési SORREND is (a tömb sorrendje =
  * a kártyák sorrendje, az adminban fogd-és-vidd módszerrel átrendezhető). Kódban
  * NINCS marketingszöveg, nincs helykitöltő és nincs beégetett kép — a hiányzó
  * mező egyszerűen kimarad a kimenetből (a szerkesztő azt látja, amit beírt).
  * Az egyetlen kódbeli szó a képernyőolvasónak szóló `aria-label` kötőszava és a
- * dekoratív nyíl (`aria-hidden`) — egyik sem látható tartalom. A képleírás (alt)
- * a Médiatárból jön, nem innen. Ezt a szerződést teszt őrzi
- * (src/__tests__/team-members-block.test.ts).
+ * két dekoratív jel (nyíl, telefon-ikon — mindkettő `aria-hidden`), egyik sem
+ * látható szöveges tartalom. A képleírás (alt) a Médiatárból jön, nem innen.
+ * Ezt a szerződést teszt őrzi (src/__tests__/team-members-block.test.ts).
  */
 export interface TeamMembersProps {
   block: BlockTeamMembers
@@ -62,12 +91,93 @@ export function telHref(phone: string): string | null {
   return `tel:${phone.trim().startsWith('+') ? '+' : ''}${digits}`
 }
 
+/**
+ * Dekoratív telefon-ikon a hívás-felületen.
+ *
+ * `aria-hidden`, mert a hivatkozásnak már van szöveges neve; a `focusable`
+ * kikapcsolása a régi Edge/IE-örökség miatt kell, hogy az SVG ne kerüljön külön
+ * tabsorrendbe. A színe `currentColor`, így a hover-inverzióban is együtt mozog
+ * a szöveggel (nem kell külön kontraszt-számolás rá).
+ */
+function PhoneGlyph() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="kc-team__call-icon"
+      focusable="false"
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 0 0-1.02.24l-2.2 2.2a15.05 15.05 0 0 1-6.59-6.59l2.2-2.2a1 1 0 0 0 .25-1.02A11.36 11.36 0 0 1 8.5 4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1c0 9.39 7.61 17 17 17a1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
 /** Egy szakmai lista sorai: soronként egy tétel, az üres sorok kimaradnak. */
 export function cvItemLines(items: string): string[] {
   return items
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
+}
+
+/** A blokk `linkGroup` mezőinek alakja (kártya-hivatkozás és időpontkérés). */
+type CmsLink = { felirat?: string | null; url?: string | null; ujAblakban?: boolean | null } | null
+
+/**
+ * CMS-hivatkozás előkészítése: allowlist-szűrés + a felirat megléte.
+ *
+ * `null`-t ad, ha a webcím tiltott sémájú vagy a felirat üres — ilyenkor a hívó
+ * egyszerűen NEM rendereli a linket (csendes elhagyás, a szerkesztő hibája nem
+ * ejti szét az oldalt).
+ */
+function resolveCmsLink(link: CmsLink) {
+  const url = sanitizeCmsUrl(link?.url) ?? ''
+  const label = link?.felirat?.trim() ?? ''
+  if (url.length === 0 || label.length === 0) {
+    return null
+  }
+  const newTab = link?.ujAblakban === true
+  return {
+    url,
+    label,
+    isExternal: /^https?:\/\//i.test(url),
+    linkProps: newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {},
+  }
+}
+
+/**
+ * Egy feloldott CMS-hivatkozás renderelése.
+ *
+ * Belső útvonalon `next/link` (kliens-oldali navigáció, előtöltés), külsőn sima
+ * `a` — a `next/link` külső címre fölösleges router-munkát végezne.
+ */
+function CmsLinkAnchor({
+  ariaLabel,
+  className,
+  link,
+}: {
+  ariaLabel?: string
+  className: string
+  link: NonNullable<ReturnType<typeof resolveCmsLink>>
+}) {
+  const content = (
+    <>
+      {link.label} <span aria-hidden="true">→</span>
+    </>
+  )
+  return link.isExternal ? (
+    <a aria-label={ariaLabel} className={className} href={link.url} {...link.linkProps}>
+      {content}
+    </a>
+  ) : (
+    <Link aria-label={ariaLabel} className={className} href={link.url} {...link.linkProps}>
+      {content}
+    </Link>
+  )
 }
 
 export function TeamMembers({ block }: TeamMembersProps) {
@@ -84,6 +194,7 @@ export function TeamMembers({ block }: TeamMembersProps) {
   const eyebrow = block.eyebrow?.trim() ?? ''
   const title = block.title?.trim() ?? ''
   const lead = block.lead?.trim() ?? ''
+  const bookingLink = resolveCmsLink(block.bookingLink ?? null)
 
   return (
     <Section
@@ -114,6 +225,16 @@ export function TeamMembers({ block }: TeamMembersProps) {
             </li>
           ))}
         </ul>
+        {/* Aszinkron időpontkérés a kártyák ALATT: a hívás marad az elsődleges,
+            de aki nem telefonál szívesen, itt talál írásos utat (NN/g
+            healthcare-customer-journeys). A hivatkozás saját felirata elég
+            beszédes, ezért nem kap külön `aria-label`-t (WCAG 2.5.3: a
+            hozzáférhető név és a látható felirat így pontosan egyezik). */}
+        {bookingLink ? (
+          <p className="kc-team__booking-note">
+            <CmsLinkAnchor className="kc-team__booking-link" link={bookingLink} />
+          </p>
+        ) : null}
       </Container>
     </Section>
   )
@@ -139,10 +260,21 @@ function TeamMemberCard({
   const photo = typeof member.photo === 'object' && member.photo !== null ? member.photo : null
   const phone = member.phone?.trim() ?? ''
   const phoneHref = phone.length > 0 ? telHref(phone) : null
+  const callLabel = member.callLabel?.trim() ?? ''
+  const availability = member.availability?.trim() ?? ''
   const email = member.email?.trim() ?? ''
   // A mailto: az allowlist engedélyezett sémája — a szerkesztő elgépelt vagy
   // szándékosan más sémájú értékét ugyanaz a szűrő ejti, mint a CTA-kat.
   const emailHref = email.length > 0 ? sanitizeCmsUrl(`mailto:${email}`) : null
+  /*
+   * A hívás hozzáférhető neve. WCAG 2.5.3 (Label in Name): a hozzáférhető
+   * névnek tartalmaznia kell a LÁTHATÓ feliratot — ezért ha van `callLabel`,
+   * az kerül elé, és a szám is benne marad. Felirat nélkül a puszta szám nem
+   * megkülönböztethető egy linklistában, ilyenkor a szakember neve azonosít.
+   * Elválasztónak kettőspont áll, nem gondolatjel (projekt-skill 2. pont).
+   */
+  const callAriaLabel =
+    callLabel.length > 0 ? `${callLabel}: ${phone}` : `${name} telefonszáma: ${phone}`
   const cvSections = (member.cvSections ?? [])
     .map((section) => ({
       id: section.id,
@@ -152,17 +284,7 @@ function TeamMemberCard({
     .filter((section) => section.heading.length > 0 && section.lines.length > 0)
 
   // CMS-webcím allowlist-szűrése: tiltott sémánál a kártya link NÉLKÜL renderel.
-  const linkUrl = sanitizeCmsUrl(member.link?.url) ?? ''
-  const linkLabel = member.link?.felirat?.trim() ?? ''
-  const hasLink = linkUrl.length > 0 && linkLabel.length > 0
-  const isExternalLink = /^https?:\/\//i.test(linkUrl)
-  const newTab = member.link?.ujAblakban === true
-  const linkProps = newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {}
-  const linkContent = (
-    <>
-      {linkLabel} <span aria-hidden="true">→</span>
-    </>
-  )
+  const cardLink = resolveCmsLink(member.link ?? null)
 
   return (
     <article className="kc-team__card">
@@ -177,25 +299,36 @@ function TeamMemberCard({
         <NameHeading className="kc-team__name">{name}</NameHeading>
         {role.length > 0 ? <p className="kc-team__role">{role}</p> : null}
         {bio.length > 0 ? <p className="kc-team__bio">{bio}</p> : null}
-        {phoneHref || emailHref ? (
-          <ul className="kc-team__contact">
+        {phoneHref || emailHref || availability.length > 0 ? (
+          <div className="kc-team__booking">
             {phoneHref ? (
-              <li className="kc-team__contact-item">
-                {/* A puszta szám nem megkülönböztethető a linklistában, ezért a
-                    hozzáférhető név a szakember nevét is tartalmazza. */}
-                <a aria-label={`${name} telefonszáma: ${phone}`} href={phoneHref}>
-                  {phone}
-                </a>
-              </li>
+              /* A `tel:` href-jét a telHref építi: a LÁTHATÓ szám tagolt marad
+                 (leolvasható, visszamondható), a hivatkozásba viszont csak a
+                 `+` és a számjegyek kerülnek — a nemzetközi alak az, ami minden
+                 készüléken és külföldről is tárcsáz (web.dev, Click to Call). */
+              <a aria-label={callAriaLabel} className="kc-team__call" href={phoneHref}>
+                <PhoneGlyph />
+                <span className="kc-team__call-text">
+                  {callLabel.length > 0 ? (
+                    <span className="kc-team__call-label">{callLabel}</span>
+                  ) : null}
+                  <span className="kc-team__call-number">{phone}</span>
+                </span>
+              </a>
+            ) : null}
+            {availability.length > 0 ? (
+              <p className="kc-team__availability">{availability}</p>
             ) : null}
             {emailHref ? (
-              <li className="kc-team__contact-item">
-                <a aria-label={`${name} e-mail-címe: ${email}`} href={emailHref}>
-                  {email}
-                </a>
-              </li>
+              <a
+                aria-label={`${name} e-mail-címe: ${email}`}
+                className="kc-team__email"
+                href={emailHref}
+              >
+                {email}
+              </a>
             ) : null}
-          </ul>
+          </div>
         ) : null}
         {cvSections.length > 0 ? (
           <div className="kc-team__cv">
@@ -221,26 +354,12 @@ function TeamMemberCard({
             ))}
           </div>
         ) : null}
-        {hasLink ? (
-          isExternalLink ? (
-            <a
-              aria-label={`${name}: ${linkLabel}`}
-              className="kc-team__link"
-              href={linkUrl}
-              {...linkProps}
-            >
-              {linkContent}
-            </a>
-          ) : (
-            <Link
-              aria-label={`${name}: ${linkLabel}`}
-              className="kc-team__link"
-              href={linkUrl}
-              {...linkProps}
-            >
-              {linkContent}
-            </Link>
-          )
+        {cardLink ? (
+          <CmsLinkAnchor
+            ariaLabel={`${name}: ${cardLink.label}`}
+            className="kc-team__link"
+            link={cardLink}
+          />
         ) : null}
       </div>
     </article>

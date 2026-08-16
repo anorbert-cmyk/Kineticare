@@ -47,20 +47,37 @@ import {
 } from './helpers/migration-schema'
 
 describe('G1 — séma-drift őr (migrációs lánc ↔ legutolsó snapshot)', () => {
-  it('minden migráció up()-ja tisztán statikus SQL, és migrációnként legalább 1 statementet tartalmaz', async () => {
-    const files = listDatedMigrationTs()
-    expect(files.length, 'a migrations könyvtárban nincs egyetlen datált migráció sem').toBeGreaterThan(0)
-
-    for (const fileName of files) {
-      // A capture maga dob, ha az sql template interpolált (nem StringChunk
-      // darab) vagy tartalmatlan — itt az statement-szám a maradék kontroll.
-      const statements = await captureMigrationStatements(fileName, 'up')
+  /*
+   * IDŐKORLÁT (2026-08-16). Ez a teszt MINDEN datált migráció up()-ját
+   * betölti és lefuttatja capture-módban, tehát a futásideje a migrációk
+   * számával nő. 21 migrációnál izoláltan mérve 4,6 mp — az 5 mp-es
+   * alapértelmezés alatt már csak 7% a tartalék, párhuzamos CI-terhelés
+   * mellett pedig időtúllépéssel bukott (mérve: teljes vitest-soron belül).
+   * Az őr nem lassú, hanem ALAPOS: a helyes válasz a korlát emelése, nem a
+   * vizsgálat szűkítése. A replay-t végző testvér-teszt (lentebb) ugyanezért
+   * visel 60 mp-et.
+   */
+  it(
+    'minden migráció up()-ja tisztán statikus SQL, és migrációnként legalább 1 statementet tartalmaz',
+    { timeout: 60_000 },
+    async () => {
+      const files = listDatedMigrationTs()
       expect(
-        statements.length,
-        `${fileName}: az up()-nak legalább 1 SQL-statementet kell kiadnia`,
-      ).toBeGreaterThanOrEqual(1)
-    }
-  })
+        files.length,
+        'a migrations könyvtárban nincs egyetlen datált migráció sem',
+      ).toBeGreaterThan(0)
+
+      for (const fileName of files) {
+        // A capture maga dob, ha az sql template interpolált (nem StringChunk
+        // darab) vagy tartalmatlan — itt az statement-szám a maradék kontroll.
+        const statements = await captureMigrationStatements(fileName, 'up')
+        expect(
+          statements.length,
+          `${fileName}: az up()-nak legalább 1 SQL-statementet kell kiadnia`,
+        ).toBeGreaterThanOrEqual(1)
+      }
+    },
+  )
 
   it(
     'az összes up() újrajátszott végsémája megegyezik a legutolsó kanonizált snapshot-tal',
@@ -89,25 +106,29 @@ describe('G1 — séma-drift őr (migrációs lánc ↔ legutolsó snapshot)', (
     },
   )
 
-  it('minden down() tisztán statikus, ismert statement-alakú (csak parse, replay nélkül)', async () => {
-    const files = listDatedMigrationTs()
-    expect(files.length).toBeGreaterThan(0)
+  it(
+    'minden down() tisztán statikus, ismert statement-alakú (csak parse, replay nélkül)',
+    { timeout: 60_000 },
+    async () => {
+      const files = listDatedMigrationTs()
+      expect(files.length).toBeGreaterThan(0)
 
-    for (const fileName of files) {
-      const statements = await captureMigrationStatements(fileName, 'down')
-      expect(
-        statements.length,
-        `${fileName}: a down()-nak legalább 1 SQL-statementet kell kiadnia`,
-      ).toBeGreaterThanOrEqual(1)
-      for (const statement of statements) {
-        const kind = classifyStatement(statement)
+      for (const fileName of files) {
+        const statements = await captureMigrationStatements(fileName, 'down')
         expect(
-          kind,
-          `${fileName} down(): ismeretlen statement-alak — a séma-őr csak whitelistelt családokat enged: ${statement.slice(0, 140)}`,
-        ).not.toBeNull()
+          statements.length,
+          `${fileName}: a down()-nak legalább 1 SQL-statementet kell kiadnia`,
+        ).toBeGreaterThanOrEqual(1)
+        for (const statement of statements) {
+          const kind = classifyStatement(statement)
+          expect(
+            kind,
+            `${fileName} down(): ismeretlen statement-alak — a séma-őr csak whitelistelt családokat enged: ${statement.slice(0, 140)}`,
+          ).not.toBeNull()
+        }
       }
-    }
-  })
+    },
+  )
 
   it('önkalibráció: a diff-motor egy elhagyott oszlopot hangosan jelez', () => {
     const snapshotSchema = canonicalizeSnapshot(readSnapshot(latestSnapshotPath()))
