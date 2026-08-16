@@ -8,6 +8,10 @@ import { cache } from 'react'
 
 import { TrackEvent } from '@/components/analytics/TrackEvent'
 import { JsonLd } from '@/components/content/JsonLd'
+import {
+  featuredTestimonials,
+  TestimonialsSection,
+} from '@/components/content/home/TestimonialsSection'
 import { CourseBuyBar } from '@/components/courses/CourseBuyBar'
 import { CourseBuybox } from '@/components/courses/CourseBuybox'
 import { CourseCurriculum } from '@/components/courses/CourseCurriculum'
@@ -15,13 +19,18 @@ import { CourseFaq } from '@/components/courses/CourseFaq'
 import { CourseFitCheck } from '@/components/courses/CourseFitCheck'
 import { CourseGuarantee } from '@/components/courses/CourseGuarantee'
 import { CourseHowItWorks } from '@/components/courses/CourseHowItWorks'
-import { CourseJumpNav, type CourseJumpTarget } from '@/components/courses/CourseJumpNav'
+import {
+  buildCourseJumpTargets,
+  CourseJumpNav,
+  type CourseJumpTarget,
+} from '@/components/courses/CourseJumpNav'
 import { LexicalContent } from '@/components/courses/LexicalContent'
 import { PreviewVideo, hasPreviewVideo } from '@/components/courses/PreviewVideo'
 import { RelatedCourses } from '@/components/courses/RelatedCourses'
 import { buildCourseSalesContent } from '@/components/courses/sales-content'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
+import { getTestimonials } from '@/lib/cms'
 import { resolveSingleCourseAccess } from '@/lib/course-access-lookup'
 import { AUDIENCE_LABELS, normalizeAudience } from '@/lib/course-audience'
 import {
@@ -92,6 +101,19 @@ import config from '../../../../payload.config'
  *     négy-öt egyforma gombot szórt szét, ami zajjá vált — a ragadós doboz
  *     ugyanazt a szerepet tölti be, folyamatosan, egyetlen példányban. Ez a
  *     fizetős ÉS az ingyenes (SOS) kurzusoldalra egyaránt így áll.
+ *  5. TÁRSADALMI BIZONYÍTÉK a teljes értékesítő tartalom UTÁN, az upsell ELŐTT
+ *     (docs/ertekesitesi-ux-skill.md M6: „max 2–3, RÖVID, a termék UTÁN"), a
+ *     KEZDŐLAPPAL AZONOS komponenssel és azonos felirattal — WCAG 2.2 SC 3.2.4
+ *     Consistent Identification. A szekció a `sections[]` tömbbe SZÁNDÉKOSAN
+ *     nem kerülhet: a `TestimonialsSection` gyökere teljes szélességű tábla
+ *     (`kc-board--edge`), a `sections[]` elemei viszont a Container 1120 px-es,
+ *     kéthasábos rácsának fő oszlopába (~600 px) rendereltek — ott a tábla
+ *     összenyomódna. Ezért a `<Section>`/`<Container>` LEZÁRÁSA UTÁN áll.
+ *     Sáv-ritmus: a lap törzse paper, a vélemények tint, ezért a kapcsolódó
+ *     kurzusok sávja ilyenkor paperre vált (két tint sáv egy folttá olvadna) —
+ *     ugyanaz a feltételes számítás, mint a kezdőlapon (HomeView.tsx).
+ *     A szekcióban NINCS vásárló-gomb: a 4. pont egyetlen-cél szabálya rá is
+ *     érvényes.
  *
  * ═══ TARTALOM-HATÁR ═══
  * Az oldal SEMMILYEN értékesítő szöveget nem hardcode-ol: minden megjelenő
@@ -249,7 +271,12 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
     permanentRedirect(withSearchParams(canonicalPath, (await searchParams) ?? {}))
   }
 
-  const user = await getCurrentUser()
+  // A két, egymástól FÜGGETLEN lekérdezés párhuzamosan fut: a `getCurrentUser`
+  // eddig is sorosan várt, a vélemény-lekérdezés így nem ad hozzá kör-időt.
+  // A `getTestimonials` `depth: 0` + `limit: 3` (cms.ts), tehát join és
+  // media-populate nélküli, egyetlen SELECT; `safeQuery` burkolja, ezért
+  // lekérdezési hibánál üres listát ad és a lap nem borul.
+  const [user, testimonials] = await Promise.all([getCurrentUser(), getTestimonials()])
   // Lejárt hozzáférés = a CTA szempontjából „még nem vevő": újra megvásárolható.
   const purchased =
     user !== null &&
@@ -381,16 +408,27 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
     <Fragment key={`szakasz-${index}`}>{section.node}</Fragment>
   ))
 
-  const jumpTargets = sections
+  const contentTargets = sections
     .map((section) => section.target)
     .filter((target): target is CourseJumpTarget => target !== null)
+
+  // Van-e egyáltalán megjeleníthető vélemény? A szűrés ugyanaz, mint amit a
+  // szekció maga alkalmaz (featured && visible), tehát a horgony-chip és a
+  // sáv-ritmus SOSEM tud szétcsúszni a ténylegesen renderelt szekcióval.
+  const testimonialsVisible = featuredTestimonials(testimonials).length > 0
+
   // A vásárlódoboz másodlagos, alacsonyabb súlyú útja: a legfontosabb
   // döntési szakaszra visz (kinek való → tananyag → az első létező szakasz).
+  // SZÁNDÉKOSAN a TARTALOM-célokból választ, a vélemény-cél hozzáfűzése ELŐTT:
+  // a vélemény bizonyíték, nem döntési szakasz. Enélkül egy szakasz nélküli
+  // terméknél a doboz másodlagos linkje a véleményekre vinne.
   const secondaryTarget =
-    jumpTargets.find((target) => target.id === 'kinek-valo') ??
-    jumpTargets.find((target) => target.id === 'tananyag') ??
-    jumpTargets[0] ??
+    contentTargets.find((target) => target.id === 'kinek-valo') ??
+    contentTargets.find((target) => target.id === 'tananyag') ??
+    contentTargets[0] ??
     null
+
+  const jumpTargets = buildCourseJumpTargets(contentTargets, testimonialsVisible)
 
   return (
     <>
@@ -504,7 +542,26 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
         />
       ) : null}
 
-      <RelatedCourses products={relatedProductsOf(product)} />
+      {/* Társadalmi bizonyíték a teljes értékesítő tartalom UTÁN (M6), az upsell
+          ELŐTT. A kezdőlappal AZONOS komponens, azonos felirattal és azonos
+          tint sávon (WCAG 2.2 SC 3.2.4) — a tulajdonos kifejezetten a kezdőlapi
+          stílust kérte. Egyetlen prop sem kerül rá a `testimonials`-on kívül: az
+          alapértékek adják a kezdőlapi megjelenést, az `id="velemenyek"` pedig
+          ezen a lapon egyedi.
+          A felirat SZÁNDÉKOSAN „Pácienseink mondták" és nem „a kurzus
+          értékelései": termék-kapcsolat híján ezek nem ennek a kurzusnak a
+          vevőitől származnak, és a fogyasztói értékelés valótlan bemutatása
+          feketelistás gyakorlat (Fttv. melléklet 35. pont). A mostani felirat
+          páciens-visszajelzést állít, ami igaz, tehát termék-értékelési
+          állítást nem tesz.
+          Üres listánál a komponens null-t ad (nincs helykitöltő, nincs
+          kitalált idézet). */}
+      <TestimonialsSection testimonials={testimonials} />
+
+      <RelatedCourses
+        products={relatedProductsOf(product)}
+        variant={testimonialsVisible ? 'default' : 'tint'}
+      />
     </>
   )
 }

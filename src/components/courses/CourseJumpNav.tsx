@@ -19,6 +19,41 @@ export interface CourseJumpTarget {
   label: string
 }
 
+/**
+ * A vélemény-szekció horgony-célja a kurzusoldalon.
+ *
+ * A felirat SZÓ SZERINT a `TestimonialsSection` felvezető sorával („Vélemények")
+ * egyezik: WCAG 2.2 SC 3.2.4 Consistent Identification — azonos funkciójú elem
+ * azonos azonosítást kap
+ * (https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html).
+ * N-3 (docs/ui-sztenderdek.md): a címke információt hordozó szóval kezd, tehát
+ * az első két szóból is érthető (NN/g F-mintázat).
+ *
+ * Ez NEM CTA, hanem navigációs címke, ezért a §3.2 CTA-szótár nem bővül.
+ */
+export const TESTIMONIALS_JUMP_TARGET: CourseJumpTarget = {
+  id: 'velemenyek',
+  label: 'Vélemények',
+}
+
+/**
+ * A chipek végleges listája.
+ *
+ * A vélemény-cél MINDIG a lista VÉGÉRE kerül, mert a szekció dokumentum-
+ * sorrendben is utolsó — WCAG 2.2 SC 3.2.3 Consistent Navigation: az ismétlődő
+ * navigáció sorrendje kövesse a lap sorrendjét
+ * (https://www.w3.org/WAI/WCAG22/Understanding/consistent-navigation.html).
+ *
+ * És CSAK akkor kerül be, ha van megjeleníthető vélemény (N-12: üresre vivő
+ * horgony nem rendelhető ki).
+ */
+export function buildCourseJumpTargets(
+  contentTargets: CourseJumpTarget[],
+  hasTestimonials: boolean,
+): CourseJumpTarget[] {
+  return hasTestimonials ? [...contentTargets, TESTIMONIALS_JUMP_TARGET] : [...contentTargets]
+}
+
 export interface CourseJumpNavProps {
   targets: CourseJumpTarget[]
 }
