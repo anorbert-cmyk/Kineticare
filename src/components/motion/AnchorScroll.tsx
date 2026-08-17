@@ -40,12 +40,44 @@ import { useEffect } from 'react'
 const INSTANT_CLASS = 'kc-scroll-instant'
 
 /**
- * Ennyi nézetablak-magasságnál hosszabb ugrás megy azonnal.
+ * Ennyi nézetablak-magasságnál hosszabb ugrás számít HOSSZÚNAK.
  *
  * 1 = pontosan egy képernyőnyi. A mért Chromium-görbén ez 483 ms-os
  * animációt jelent, ami még a NN/g 500 ms-os küszöbe alatt van.
  */
 const MAX_ANIMALT_NEZETABLAK = 1
+
+/**
+ * ═══ A HOSSZÚ, LAPON BELÜLI UGRÁS RÖVIDÍTÉSE ═══
+ *
+ * Tulajdonosi döntés (2026-08-17): „elsimítás nagyon fontos" — a mozgás tehát
+ * NEM tűnhet el, csak nem húzódhat el. A korábbi megoldás a hosszú ugrást
+ * azonnalivá tette (0 ms); ez megszüntette az „ugrálást", de a simítást is.
+ *
+ * A mostani megoldás a TÁVOLSÁGOT rövidíti, nem a mozgást tünteti el: a
+ * kattintás pillanatában azonnal a cél elé ugrunk fél képernyőnyire, és az
+ * utolsó szakaszt a böngésző saját sima görgetése teszi meg. A néző így nem
+ * lát elhúzódó, képkockát ejtő átsuhanást a lap közepén, viszont a célhoz
+ * érkezés SIMA marad, és látja, hova ért.
+ *
+ * A 0,5 érték MÉRT: a Chromium `scroll-behavior: smooth` animáció-hossza a
+ * távolság szerint (900 px-es nézetablak) 0,5× → 333 ms · 0,75× → 417 ms ·
+ * 1,0× → 483 ms · 2,0× és fölötte → 683 ms (befagy). A 333 ms a NN/g által
+ * ajánlott 100–500 ms-os sávban van, annak is a kényelmes közepén.
+ *
+ * MIÉRT NEM SAJÁT rAF-ANIMÁCIÓ: ahhoz el kellene nyelni a kattintást
+ * (`preventDefault`), és magunknak kellene görgetni. Azzal az útválasztó
+ * állapotkezelése, az előzmények és a horgonyra kerülő fókusz is ránk szállna
+ * (ui-sztenderdek N-13). Így viszont a böngésző végzi a görgetést, mi csak a
+ * kiindulópontot állítjuk át.
+ *
+ * FIGYELEM, MÉRT CSAPDA: a `behavior: 'auto'` NEM azonnalit jelent, hanem azt,
+ * hogy a böngésző a CSS `scroll-behavior`-t használja — ami itt `smooth`.
+ * Mérve: az `auto`-val kért előkészítő ugrás MAGA is végiganimálódott
+ * (0 → 1685 px, 698 ms), és a rákövetkező görgetés így ismét a teljes utat
+ * tette meg. A nem animált értéket kimondottan kérni kell: `'instant'`.
+ */
+const ELOKESZITO_NEZETABLAK = 0.5
 
 /**
  * Ennyi ideig marad fenn az azonnali mód, ha a böngésző nem ismeri a
@@ -67,6 +99,24 @@ export function hosszuUgras(tavolsagPx: number, nezetablakPx: number): boolean {
     return false
   }
   return Math.abs(tavolsagPx) > nezetablakPx * MAX_ANIMALT_NEZETABLAK
+}
+
+/**
+ * A rövidített ugrás KIINDULÓPONTJA: a cél előtt fél képernyővel, a mozgás
+ * irányában. Tiszta függvény, hogy DOM nélkül is őrizhető legyen.
+ *
+ * @param celPx a cél abszolút görgetés-pozíciója
+ * @param jelenlegiPx a jelenlegi görgetés-pozíció
+ * @param nezetablakPx a nézetablak magassága
+ * @returns az a pozíció, ahonnan a böngésző sima görgetése induljon
+ */
+export function elokeszitoPozicio(
+  celPx: number,
+  jelenlegiPx: number,
+  nezetablakPx: number,
+): number {
+  const irany = celPx < jelenlegiPx ? -1 : 1
+  return Math.max(0, celPx - irany * nezetablakPx * ELOKESZITO_NEZETABLAK)
 }
 
 /** A hash-ből a cél elem — üres, „#" és „#top" esetén a lap teteje. */
@@ -122,6 +172,21 @@ export function AnchorScroll() {
       visszaallitas = setTimeout(vissza, VISSZAALLITAS_MS)
     }
 
+    /**
+     * A LAPON BELÜLI hosszú ugrás rövidítése: azonnal a cél elé ugrunk fél
+     * képernyővel, a maradékot a böngésző sima görgetése teszi meg (~333 ms).
+     * Rövid ugrásnál nem csinál semmit — az eleve sima és rövid.
+     */
+    const rovidit = (pozicio: number) => {
+      if (!hosszuUgras(pozicio - window.scrollY, window.innerHeight)) {
+        return
+      }
+      window.scrollTo({
+        behavior: 'instant',
+        top: elokeszitoPozicio(pozicio, window.scrollY, window.innerHeight),
+      })
+    }
+
     /** Ugyanarra az útvonalra (csak horgonyban eltérő) mutat-e a hivatkozás? */
     const azonosOldal = (link: HTMLAnchorElement): boolean =>
       link.pathname === window.location.pathname && link.search === window.location.search
@@ -147,11 +212,13 @@ export function AnchorScroll() {
         return
       }
 
-      // (a) UGYANAZON az oldalon, horgonyra: a távolság MOST mérhető.
+      // (a) UGYANAZON az oldalon, horgonyra: a távolság MOST mérhető, tehát a
+      //     hosszú utat RÖVIDÍTJÜK, nem tüntetjük el. A látogató a lapot már
+      //     látta, a célhoz érkezés így sima marad (tulajdonosi döntés).
       if (azonosOldal(link) && link.hash.length > 0) {
         const pozicio = celPozicio(link.hash)
-        if (pozicio !== null && hosszuUgras(pozicio - window.scrollY, window.innerHeight)) {
-          azonnal()
+        if (pozicio !== null) {
+          rovidit(pozicio)
         }
         return
       }
@@ -175,16 +242,19 @@ export function AnchorScroll() {
       }
     }
 
+    // Hash-váltás a LAPON BELÜL (pl. böngésző vissza-gombja): a cél mérhető,
+    // tehát ugyanaz a rövidítés, mint a kattintásnál.
     const onHashChange = () => {
       const pozicio = celPozicio(window.location.hash)
-      if (pozicio !== null && hosszuUgras(pozicio - window.scrollY, window.innerHeight)) {
-        azonnal()
+      if (pozicio !== null) {
+        rovidit(pozicio)
       }
     }
 
     // Hideg betöltés horgonnyal: a böngésző a lap megjelenése UTÁN, késleltetve
-    // indítja az animált görgetést (mérve ~250 ms-mal a load után) — a
-    // csatoláskor tehát még idejében azonnali módba tudunk kapcsolni.
+    // indítja az animált görgetést (mérve ~250 ms-mal a load után). Itt a
+    // látogató az ÚJ lapot még sosem látta, tehát az érkezés azonnali — a
+    // (b) ággal azonos indoklás (WCAG 2.2 SC 2.3.3: nem lényegi mozgás).
     if (window.location.hash.length > 1) {
       const pozicio = celPozicio(window.location.hash)
       if (pozicio !== null && hosszuUgras(pozicio - window.scrollY, window.innerHeight)) {
