@@ -4,6 +4,7 @@
 export {
   getSzamlazzConfig,
   isDuplicateOrderError,
+  isSzamlazzEnabled,
   parseAgentResponse,
   postInvoiceXml,
   SZAMLAZZ_DEFAULT_API_URL,

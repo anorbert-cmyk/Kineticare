@@ -88,9 +88,35 @@ function invalidApiUrlError(rawApiUrl: string): Error {
 }
 
 /**
+ * Be van-e KAPCSOLVA a Számlázz.hu-integráció? Csak a kapcsolót
+ * (`SZAMLAZZ_AGENT_KEY` megléte) nézi, és SOSEM DOB.
+ *
+ * MIÉRT KÜLÖN FÜGGVÉNY (2026-08-17). A `getSzamlazzConfig` szándékosan dob
+ * hibás konfigurációnál (elgépelt API-URL, hiányzó áfakulcs) — a SZÁMLÁZÁSI
+ * műveleteknél pont ez a helyes: ott a hangos hiba a cél. Van viszont hívási
+ * hely, ahol csak az „lesz-e egyáltalán számla?" eldöntendő kérdés a tét, és
+ * ott a dobás KÁRT okoz: a rendelés-visszaigazoló levél best-effort
+ * try/catch-ében (src/lib/order-paid.ts) egy számlázási konfighiba az EGÉSZ
+ * levelet elvinné — pedig a levél a fizetés egyetlen visszajelzése a vevő felé,
+ * és a levélnek semmi köze a számla áfakulcsához. Egy MELLÉKES kérdést nem
+ * szabad olyan függvénnyel eldönteni, amelyik a FŐ folyamatot is elviheti.
+ *
+ * A visszaadott igaz érték ígéret marad akkor is, ha a konfig egyébként hibás:
+ * a számla a job újrapróbálásából, illetve az order-poll resweep-jéből a
+ * konfig javítása után is kiáll — a levélben tett „a számlát külön küldjük"
+ * mondat tehát nem válik hazuggá.
+ */
+export function isSzamlazzEnabled(env: SzamlazzEnv = process.env): boolean {
+  return readEnv(env, 'SZAMLAZZ_AGENT_KEY') !== undefined
+}
+
+/**
  * Környezetfeloldás. SZAMLAZZ_AGENT_KEY nélkül enabled=false (kikapcsolt
  * számlázás). Érvénytelen SZAMLAZZ_API_URL esetén dob — az elgépelt végpont
  * ne csendben működjön. Tiszta függvény (teszteléshez env-paraméteres).
+ *
+ * FIGYELEM: ez a függvény DOBHAT. Ha csak a be/ki állapot kell, használd az
+ * `isSzamlazzEnabled`-et — különösen olyan ágon, ahol a hiba elnyelődne.
  */
 export function getSzamlazzConfig(env: SzamlazzEnv = process.env): SzamlazzClientConfig {
   const agentKey = readEnv(env, 'SZAMLAZZ_AGENT_KEY')
@@ -160,7 +186,9 @@ export function getSzamlazzConfig(env: SzamlazzEnv = process.env): SzamlazzClien
   }
 
   return {
-    enabled: agentKey !== undefined,
+    // EGY forrásból: a be/ki állapot definíciója az `isSzamlazzEnabled`-ben él,
+    // hogy a két hívási út ne csúszhasson szét egy későbbi módosításnál.
+    enabled: isSzamlazzEnabled(env),
     apiUrl: normalizedApiUrl,
     ...(agentKey ? { agentKey } : {}),
     invoicePrefix: readEnv(env, 'SZAMLAZZ_INVOICE_PREFIX') ?? SZAMLAZZ_DEFAULT_INVOICE_PREFIX,
