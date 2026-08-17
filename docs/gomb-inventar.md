@@ -368,6 +368,7 @@ Ezek a `ui-sztenderdek.md` §6.3 **G-UI1** őrének kiegészítései, nem helyet
 | **Írásos időpontkérés (link)** | 1 | Kérj időpontot üzenetben | **#24** | `Kérj időpontot üzenetben` |
 | **Időpontkérő űrlap beküldése** | 1 | Időpontot kérek | **#25** | `Időpontot kérek` |
 | **Ingyenes kurzus igénylése (űrlap-beküldés)** | 1 | Kérem a kurzust | **#26** | `Kérem a kurzust` |
+| **Ugrás az igénylő űrlaphoz (lapon belül, a lap aljáról)** | 1 | Kérd az ingyenes kurzust | **#27** | `Kérd az ingyenes kurzust` |
 | Folyamatban | **6** | Feldolgozás… · Küldés… · Mentés… · Belépés… · Regisztráció… · Beállítás… | **L-1** | `Belépés…` `Regisztráció…` `Küldés…` `Mentés…` `Feldolgozás…` `Betöltés…` |
 
 **Mit mond ez a leképezés összesítve:** 17 mért cselekvésre **41 különböző felirat** él ma; a jóváhagyott szótárban ugyanezekre **21 felirat + 6 folyamatban-alak** van. A legnagyobb nyereség a kurzuslistánál (8 → 1) és a saját kurzusoknál (4 → 1) keletkezik – mindkettő WCAG 2.2 **3.2.4** sérülés ma.
@@ -415,6 +416,28 @@ A leltár négy olyan cselekvést talált, amire nem volt jóváhagyott sor. **A
 3. **A lista zárva marad.** A `Regisztráció…` viszont **felkerült** az L-1-re: ma is él a felületen, és a §3.2 #6 főnévi címkéjének (P-1c) szabályos folyamatban-párja. Az L-1 így pontosan **hat** elem, és a G-UI1 őr ezt a hatot méri.
 
 **Miért nem személyragozzuk a folyamatban-feliratot** (tehát miért nem `Mentem…`): ez **rendszerállapot-üzenet**, nem a látogató cselekvése – NN/g 1. heurisztika (*visibility of system status*), WCAG 2.2 **4.1.3 Status Messages**. A §3.2 P-1d sora rögzíti.
+
+### 5.3 A #27 sor felvétele (2026-08-17) – ugrás az igénylő űrlaphoz
+
+Az ingyenes kurzus igénylő űrlapja a lap TETEJÉN, a vásárlódobozban áll. 1024 px alatt a doboz
+nem ragadós (`kurzusok.css`, a `position: sticky` a `min-width: 1024px` ágban él), tehát a
+végigolvasó látogatónak a lap alján nincs visszaútja az űrlaphoz. A régi `/kezrelax` landing
+ugyanezt a belépőt **négyszer** ismételte lefelé haladva (`KÉREM A VILLÁMKURZUST` 4×,
+`KÉREM A PROGRAMOT` 2×, `KÉREM A HOZZÁFÉRÉST` 2× – mérve: `regi-oldal-osszehasonlitas.md` 3.1).
+
+**Amit a kutatás mond, és amit ebből átveszünk:** NN/g szerint a duplikált link költséggel jár
+(a látogató azon gondolkodik, ugyanoda visz-e a két hivatkozás), és „usually not necessary if
+your pages are 2–3 screens long"; hosszú lapon viszont – kifejezetten mobilon – időt spórol, és
+a ragadós megoldás a jobb, ahol van
+([NN/g, *The Same Link Twice on the Same Page*](https://www.nngroup.com/articles/duplicate-links/)).
+Nálunk pontosan így oszlik: 1024 px felett a ragadós vásárlódoboz VAN, tehát ott a másolat el is
+marad; alatta nincs, tehát ott megjelenik. Az elsődleges hely változatlanul a doboz
+([NN/g, *Scrolling and Attention*](https://www.nngroup.com/articles/scrolling-and-attention/):
+„Keep major CTAs above the fold", a nézési idő 42%-a a felső 20%-ra esik).
+
+**A felirat nem a #26 másolata:** a #26 a BEKÜLDÉS (E/1, „Kérem a kurzust"), a #27 a
+NAVIGÁCIÓ (E/2, „Kérd az ingyenes kurzust"). A WCAG 2.2 **3.2.4** azonos *funkciót* kér azonos
+néven; itt két különböző eredmény van, ahogy a #24 ↔ #25 párnál is.
 
 ---
 

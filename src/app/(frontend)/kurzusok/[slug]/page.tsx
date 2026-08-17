@@ -16,6 +16,7 @@ import { CourseFitCheck } from '@/components/courses/CourseFitCheck'
 import { CourseGuarantee } from '@/components/courses/CourseGuarantee'
 import { CourseHowItWorks } from '@/components/courses/CourseHowItWorks'
 import { CourseJumpNav, type CourseJumpTarget } from '@/components/courses/CourseJumpNav'
+import { FreeCourseFormLink } from '@/components/courses/FreeCourseFormLink'
 import { FreeCourseRequestForm } from '@/components/courses/FreeCourseRequestForm'
 import { LexicalContent } from '@/components/courses/LexicalContent'
 import { PreviewVideo, hasPreviewVideo } from '@/components/courses/PreviewVideo'
@@ -93,6 +94,13 @@ import config from '../../../../payload.config'
  *     négy-öt egyforma gombot szórt szét, ami zajjá vált — a ragadós doboz
  *     ugyanazt a szerepet tölti be, folyamatosan, egyetlen példányban. Ez a
  *     fizetős ÉS az ingyenes (SOS) kurzusoldalra egyaránt így áll.
+ *     PONTOSÍTÁS (2026-08-17): a tilalom az ismételt ELSŐDLEGES vásárló-gombra
+ *     szól. Az ingyenes ág a tartalom végén EGY darab, MÁSODLAGOS súlyú,
+ *     NAVIGÁCIÓS linket kap az igénylő űrlaphoz (`FreeCourseFormLink`,
+ *     §3.2 #27) — és azt is kizárólag 1024 px ALATT, ahol a doboz nem ragadós,
+ *     és ahol a `free` ágon ragadós alsó sáv sincs. 1024 px felett tehát a lap
+ *     BITRE a 2026-08-16-i felépítést hozza. Ez nem második vásárlási cél: a
+ *     link nem küld be semmit, csak az űrlaphoz visz.
  *
  * ═══ TARTALOM-HATÁR ═══
  * Az oldal SEMMILYEN értékesítő szöveget nem hardcode-ol: minden megjelenő
@@ -318,11 +326,12 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
   /**
    * A ragadós vásárlósáv a `free` ágon MEGSZŰNIK. A sáv egy LINK: `href`-re
    * navigál, az igénylés viszont ŰRLAP-BEKÜLDÉS, amit link nem tud elvégezni.
-   * Egy „ugorj az űrlaphoz" sáv más CSELEKVÉS lenne (navigáció), tehát saját
-   * CTA-szótári sort kívánna (§3.2, a #24 ↔ #25 mintájára) — azt a vezető
-   * vezeti, nem ez a kör. A látogató így sem marad út nélkül: az űrlap a
-   * DOM-ban a lap ELEJÉN áll (a vásárlódoboz a rács első eleme), mobilon
-   * tehát a legelső dolog a képernyőn.
+   * A látogató így sem marad út nélkül: az űrlap a DOM-ban a lap ELEJÉN áll
+   * (a vásárlódoboz a rács első eleme), mobilon tehát a legelső dolog a
+   * képernyőn, a tartalom VÉGÉN pedig ott az ISMÉTELT belépő (2026-08-17,
+   * `FreeCourseFormLink`) — az saját, jóváhagyott szótári sort kapott
+   * (§3.2 #27, `Kérd az ingyenes kurzust`, E/2 navigáció), pont a #24 ↔ #25
+   * minta szerint.
    */
   const showBuyBar = cta.kind === 'buy'
   const priceLabel =
@@ -527,6 +536,12 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
               <CourseJumpNav targets={jumpTargets} />
 
               {rendered}
+
+              {/* ISMÉTELT belépő az igénylő űrlaphoz, a tartalom VÉGÉN — csak
+                  az ingyenes ágon, és csak ott látszik, ahol ragadós doboz
+                  NINCS (1024px alatt, kurzusok.css). A hatókör indoklása és a
+                  forrásai: FreeCourseFormLink. */}
+              {showFreeRequestForm ? <FreeCourseFormLink formId={CTA_ID} /> : null}
             </div>
           </div>
         </Container>
@@ -549,7 +564,13 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
         />
       ) : null}
 
-      <RelatedCourses products={relatedProductsOf(product)} />
+      {/* Kapcsolódó kurzusok. Az INGYENES kurzus oldalán CROSS-SELL keretezést
+          kap (cím + felvezető: mi jön az ingyenes anyag után), a fizetős
+          kurzusoldalon a semleges sáv marad — a kapcsoló az ÁR-ÁLLAPOT, nem az
+          űrlap láthatósága, mert a már igényelt ingyenes kurzus oldalán is ez a
+          helyes keretezés. A megjelenő termékek forrása a `relatedProducts`
+          mező (a szerkesztő állítja); beállítás nélkül a sáv nem renderelődik. */}
+      <RelatedCourses crossSell={priceBadge === 'free'} products={relatedProductsOf(product)} />
     </>
   )
 }

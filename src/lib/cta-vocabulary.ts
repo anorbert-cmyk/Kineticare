@@ -70,6 +70,7 @@ export type CtaAction =
   | 'appointment-request-link'
   | 'appointment-submit'
   | 'free-course-request'
+  | 'free-course-request-link'
 
 /** A P-1 szabály szerinti nyelvtani alak – auditálható, ezért a szótár tárolja. */
 export type CtaPerson =
@@ -430,6 +431,30 @@ export const CTA_VOCABULARY = [
     person: 'e1',
     weight: 'primary',
     progress: 'send',
+    patterned: false,
+  },
+  {
+    // §3.2 #27 (ÚJ) – az ingyenes kurzus igénylő űrlapjához vivő, LAPON BELÜLI
+    // ugrás a hosszú kurzusoldal aljáról.
+    //
+    // P-1b → E/2: a kattintás után semmi nem változik a látogató dolgaiban,
+    // csak MÁSHOL lesz a lapon; a vállalás továbbra is a #26 gombnál történik.
+    // Ugyanaz a szándékos kettősség, mint a #24 ↔ #25 és a #3 ↔ #26 párnál.
+    //
+    // MIÉRT NEM sérti a WCAG 2.2 3.2.4-et a #3 („Elindítom ingyen") mellett:
+    // a #3 a KEZDŐLAPRÓL a kurzus OLDALÁRA visz (másik dokumentum), ez pedig az
+    // ÜGYELETES lapon belül az űrlaphoz. Két különböző eredmény, tehát nem
+    // „same functionality" (W3C Understanding SC 3.2.4).
+    //
+    // MIÉRT NEM „Ugorj az űrlaphoz": az „Ugrás" szót a felület a skip-linkre
+    // foglalja („Ugrás a tartalomra"), a C-4 szerint pedig egy szó egy jelentés
+    // (ugyanez az érv írta át a #9-et „Ugorj"-ról „Nyisd meg"-re).
+    section: '#27',
+    action: 'free-course-request-link',
+    label: 'Kérd az ingyenes kurzust',
+    person: 'e2',
+    weight: 'secondary',
+    progress: null,
     patterned: false,
   },
 ] as const satisfies readonly CtaEntry[]
