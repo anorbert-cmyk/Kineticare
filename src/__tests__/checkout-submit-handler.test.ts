@@ -102,6 +102,9 @@ function alapContext(billing = TELJES_BILLING): CheckoutSubmissionContext {
     waiverRequired: true,
     waiverStartAccepted: true,
     waiverLossAccepted: true,
+    // Az ÁSZF-elfogadás minden ágon kötelező; a saját tesztjei a
+    // penztar-aszf-elfogadas.test.tsx-ben.
+    termsAccepted: true,
     billing,
   }
 }

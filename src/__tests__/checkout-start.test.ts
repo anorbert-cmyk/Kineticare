@@ -186,6 +186,9 @@ const PROFILE_BILLING = {
 const happyInput = {
   productId: 42,
   consentWithdrawalWaiver: true,
+  // Az ÁSZF-elfogadás a szerveren is kötelező (a szerződés ettől jön létre,
+  // ÁSZF 22. bekezdés). Az őre: src/__tests__/penztar-aszf-elfogadas.test.tsx.
+  consentTerms: true,
   billing: PROFILE_BILLING,
 }
 
@@ -340,7 +343,7 @@ describe('startCheckout — számlázási adatok (B)', () => {
     const promise = startCheckout({
       payload,
       user: mockUser,
-      input: { productId: 42, consentWithdrawalWaiver: true },
+      input: { productId: 42, consentWithdrawalWaiver: true, consentTerms: true },
     })
 
     await expect(promise).rejects.toMatchObject({ status: 400 })
@@ -627,7 +630,7 @@ describe('startCheckout — termék- és inputellenőrzés', () => {
     const promise = startCheckout({
       payload,
       user: mockUser,
-      input: { productId: 42, consentWithdrawalWaiver: false },
+      input: { productId: 42, consentWithdrawalWaiver: false, consentTerms: true },
     })
     await expect(promise).rejects.toMatchObject({ status: 400 })
     await expect(promise).rejects.toThrowError(/elállási jog/)
@@ -639,7 +642,7 @@ describe('startCheckout — termék- és inputellenőrzés', () => {
     const promise = startCheckout({
       payload,
       user: mockUser,
-      input: { productId: 'abc', consentWithdrawalWaiver: true },
+      input: { productId: 'abc', consentWithdrawalWaiver: true, consentTerms: true },
     })
     await expect(promise).rejects.toMatchObject({ status: 400 })
     await expect(promise).rejects.toThrowError(/termékazonosító/)
@@ -895,6 +898,7 @@ describe('T-063 — plugin-adapter-kontroll', () => {
         cart: { items: [{ product: 42, quantity: 1 }] },
         currency: 'HUF',
         consentWithdrawalWaiver: true,
+        consentTerms: true,
       } as never,
       req: req as never,
       transactionsSlug: 'transactions',

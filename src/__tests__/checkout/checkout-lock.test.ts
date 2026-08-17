@@ -225,6 +225,7 @@ afterEach(() => {
 const happyInput = {
   productId: 42,
   consentWithdrawalWaiver: true,
+  consentTerms: true,
   billing: {
     name: 'Minta Mari',
     zip: '1011',

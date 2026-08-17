@@ -84,6 +84,21 @@ export interface CheckoutStartInput {
   /** Az elállási jogról való lemondás elfogadása — kötelező (true). */
   consentWithdrawalWaiver?: unknown
   /**
+   * AZ ÁSZF ELFOGADÁSA + az adatkezelési tájékoztató megismerése, EGY
+   * jelölőnégyzetből (az ÁSZF 22. bekezdése így írja le a szerződéskötést) —
+   * kötelező (true).
+   *
+   * MIÉRT ITT IS, nem csak a kliensen: a pénztár űrlapja megkerülhető (a
+   * végpont közvetlenül POST-olható), a szerződés viszont pontosan ettől a
+   * jelöléstől jön létre. Elfogadás nélkül létrejövő rendelés az ÁSZF saját
+   * szövegét tenné hamissá.
+   *
+   * A waivertől ELTÉRŐEN az ingyenes terméken is kötelező: a szerződés ott is
+   * létrejön, és az ÁSZF felhasználási korlátja (lementés, másolás tilalma) az
+   * ingyenes ismeretterjesztő videóra is vonatkozik.
+   */
+  consentTerms?: unknown
+  /**
    * A számlázási adatok (név/irsz/település/cím + opcionális adószám) —
    * KÖTELEZŐ. Ez a rendelésre rögzített IGAZSÁG: a `customerSnapshot` — és így
    * a számla — ebből készül. Hiányzó, hiányos vagy hibás adat → 400, a
@@ -194,6 +209,17 @@ function parseInput(input: CheckoutStartInput, hasSession: boolean): ParsedInput
     throw new CheckoutError(
       400,
       'A vásárláshoz el kell fogadnod, hogy a tartalom azonnali megnyitásával lemondasz az elállási jogodról (consentWithdrawalWaiver).',
+    )
+  }
+
+  // Az ÁSZF elfogadása (és az adatkezelési tájékoztató megismerése) — a
+  // szerződés ettől jön létre (ÁSZF 22. bekezdés), ezért a kliens-oldali
+  // jelölőnégyzet mellett a SZERVER is kikényszeríti. A mezőt a
+  // `buildCustomerSnapshot` időbélyeggel rögzíti a rendelésre.
+  if (input.consentTerms !== true) {
+    throw new CheckoutError(
+      400,
+      'A vásárláshoz el kell fogadnod az Általános szerződési feltételeket, és jelölnöd kell, hogy az Adatkezelési és adatvédelmi szabályzatot megismerted (consentTerms).',
     )
   }
 
@@ -446,12 +472,28 @@ interface CheckoutBuyer {
  *
  * A mező típusa JSON (src/plugins/ecommerce.ts), tehát a tartalma
  * sémaváltozás és migráció nélkül alakítható.
+ *
+ * ═══ AZ ÁSZF-ELFOGADÁS RÖGZÍTÉSE ═══
+ * A pénztár azt ígéri a vevőnek, hogy „az elfogadásodat a rendszer a
+ * rendelésen időbélyeggel rögzíti" — az ígéretet ez a két mező váltja be:
+ *   consentTerms ... az elfogadás TÉNYE (true),
+ *   consentTermsAt . az elfogadás ISO-időbélyege.
+ * SZÁNDÉKOSAN a JSON-snapshotba kerül, nem külön oszlopba: séma-változás és
+ * migráció nélkül rögzíthető, a rendeléshez kötött igazság része marad, és a
+ * számlázási snapshottal együtt, egyetlen íráson belül keletkezik.
+ *
+ * Az `acceptedAtIso` UGYANAZ az időbélyeg, mint a `consentWithdrawalWaiverAt`:
+ * a két nyilatkozat egyetlen beküldéssel, ugyanabban a pillanatban születik,
+ * és két, ezredmásodpercben eltérő időpont csak látszatpontosságot adna.
  */
 function buildCustomerSnapshot(
   buyer: CheckoutBuyer,
   billing: NormalizedBilling,
+  acceptedAtIso: string,
 ): Record<string, unknown> {
   return {
+    consentTerms: true,
+    consentTermsAt: acceptedAtIso,
     // Vendég-vásárlásnál még nincs fiók — a `null` itt tényállítás, nem hiány:
     // a fizetés utáni fiók-feloldás az `email` mezőből dolgozik.
     id: buyer.customerId,
@@ -585,7 +627,7 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
         items: [{ product: productId, quantity }],
         consentWithdrawalWaiver: true,
         consentWithdrawalWaiverAt: nowIso,
-        customerSnapshot: buildCustomerSnapshot(buyer, billing),
+        customerSnapshot: buildCustomerSnapshot(buyer, billing, nowIso),
         ...(options.ipAddress ? { ipAddress: options.ipAddress } : {}),
       },
       overrideAccess: true,

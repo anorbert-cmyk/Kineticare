@@ -5,7 +5,13 @@ import type { CheckoutGuestInput } from './checkout/guest'
  * Checkout-submit — a /penztar beküldése a T-021 checkout-start végpontra.
  *
  * API-szerződés (T-021): POST /api/checkout/start
- * - Törzs: { productId, quantity?, consentWithdrawalWaiver: true, billing, guest? }
+ * - Törzs: { productId, quantity?, consentWithdrawalWaiver: true, consentTerms: true,
+ *   billing, guest? }
+ * - A `consentTerms` az ÁSZF elfogadása (és az adatkezelési tájékoztató
+ *   megismerése) EGYETLEN jelölőnégyzetből — az ÁSZF 22. bekezdése így írja le
+ *   a szerződéskötést. MINDEN terméken kötelező, az ingyenesen is; hiánya →
+ *   400. A szerver a rendelés vevő-pillanatképére `consentTerms` +
+ *   `consentTermsAt` (ISO-időbélyeg) néven rögzíti.
  * - A kliens SOSEM küld árat — a végösszeg a szerver (T-021) számolja.
  * - A `billing` a pénztárban MEGADOTT számlázási adat (név/irsz/település/cím
  *   + opcionális adószám). Ez a rendelésre rögzített igazság: a szerver ebből
@@ -57,6 +63,12 @@ export interface CheckoutSubmitInput {
   productId: number
   quantity: number
   consentWithdrawalWaiver: boolean
+  /**
+   * Az ÁSZF elfogadása + az adatkezelési tájékoztató megismerése — EGY
+   * jelölőnégyzet, az ÁSZF 22. bekezdése szerint. Fizetős és ingyenes terméken
+   * egyaránt kötelező.
+   */
+  consentTerms: boolean
   /** A pénztárban megadott számlázási adatok — a számla ebből készül. */
   billing: CheckoutBillingInput
   /**

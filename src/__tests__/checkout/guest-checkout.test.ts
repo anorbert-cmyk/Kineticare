@@ -196,6 +196,9 @@ describe('planCheckoutSubmission — a vendég-blokk a törzsben', () => {
     waiverRequired: true,
     waiverStartAccepted: true,
     waiverLossAccepted: true,
+    // Az ÁSZF-elfogadás minden ágon kötelező; a saját tesztjei a
+    // penztar-aszf-elfogadas.test.tsx-ben.
+    termsAccepted: true,
     billing: { ...BILLING, taxNumber: '' },
   }
 
@@ -246,6 +249,7 @@ describe('startCheckout — vendég-vásárlás', () => {
       input: {
         productId: 42,
         consentWithdrawalWaiver: true,
+        consentTerms: true,
         billing: BILLING,
         guest: GUEST,
       },
@@ -269,7 +273,7 @@ describe('startCheckout — vendég-vásárlás', () => {
     await expect(
       startCheckout({
         payload,
-        input: { productId: 42, consentWithdrawalWaiver: true, billing: BILLING },
+        input: { productId: 42, consentWithdrawalWaiver: true, consentTerms: true, billing: BILLING },
       }),
     ).rejects.toMatchObject({ status: 400 })
     expect(calls.create).toHaveLength(0)
@@ -294,6 +298,7 @@ describe('startCheckout — vendég-vásárlás', () => {
         input: {
           productId: 42,
           consentWithdrawalWaiver: true,
+        consentTerms: true,
           billing: BILLING,
           guest: GUEST,
         },
@@ -317,7 +322,7 @@ describe('startCheckout — vendég-vásárlás', () => {
 
     await startCheckout({
       payload,
-      input: { productId: 42, consentWithdrawalWaiver: true, billing: BILLING, guest: GUEST },
+      input: { productId: 42, consentWithdrawalWaiver: true, consentTerms: true, billing: BILLING, guest: GUEST },
     })
 
     const created = calls.create[0]
@@ -340,6 +345,7 @@ describe('startCheckout — vendég-vásárlás', () => {
       input: {
         productId: 42,
         consentWithdrawalWaiver: true,
+        consentTerms: true,
         billing: BILLING,
         guest: { email: 'idegen@example.test', name: 'Idegen' },
       },
