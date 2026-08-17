@@ -7,6 +7,7 @@ import { PostHogPageView } from '@/components/analytics/PostHogPageView'
 import { PostHogProvider } from '@/components/analytics/PostHogProvider'
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
+import { AnchorScroll } from '@/components/motion/AnchorScroll'
 import { resolveServerUrl } from '@/env'
 
 import './styles.css'
@@ -78,6 +79,10 @@ export default function FrontendLayout({ children }: { children: ReactNode }) {
         <a className="kc-skip-link" href="#tartalom">
           Ugrás a tartalomra
         </a>
+        {/* Horgony-mozgás: az egy képernyőnél hosszabb ugrás azonnali, nem
+            animált (mérés és források a komponens fejlécében). A lapon
+            semmi mást nem érint, és JS nélkül a mai viselkedés marad. */}
+        <AnchorScroll />
         <PostHogProvider>
           {/* A useSearchParams miatt Suspense-határ kell (Next build-szabály). */}
           <Suspense fallback={null}>
