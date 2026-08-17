@@ -4,7 +4,12 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import { elokeszitoPozicio, hosszuUgras } from '../components/motion/AnchorScroll'
+import {
+  elokeszitoPozicio,
+  fokuszCelra,
+  hosszuUgras,
+  type FokuszCel,
+} from '../components/motion/AnchorScroll'
 
 /**
  * ŐR — a 2026-08-17-i tulajdonosi észrevételek. Mindhárom szabályt MÉRÉS
@@ -39,6 +44,20 @@ import { elokeszitoPozicio, hosszuUgras } from '../components/motion/AnchorScrol
  * (mért 333 ms). LAPVÁLTÁSNÁL (más útvonal, vagy hideg betöltés horgonnyal)
  * az érkezés azonnali marad: ott a látogató az új lapot még sosem látta,
  * a mozgásnak nincs mit összekötnie a szemében (WCAG 2.2 SC 2.3.3).
+ *
+ * ═══ 4. „A FÓKUSZ IS KÖVESSE A SZEMET" ═══
+ * Mérve (Chromium 1194, /szolgaltatasok#rendeloi, 1440×900): a menüpontra
+ * kattintva a lap a célhoz görgetett (y=2055), de a fókusz a fejléc
+ * menüpontján maradt, és a következő Tab a menü KÖVETKEZŐ pontjára vitt — az
+ * a cél ELŐTT áll a dokumentumban. Hideg betöltésnél az `activeElement` a
+ * `body` volt. Ez a WCAG 2.2 SC 2.4.3 (Focus Order) sérülése, és a repó saját
+ * N-13 szabályáé (docs/ui-sztenderdek.md).
+ *
+ * A javítás a GOV.UK Design System „skip link" `setFocus()` mintája: a cél
+ * ideiglenes `tabindex="-1"`-et kap (csak ha még nem fókuszálható), megkapja a
+ * fókuszt, és `blur`-kor a `tabindex` lekerül róla. A `preventScroll` a mi
+ * kiegészítésünk: enélkül a fókuszálás MÉG EGYSZER odagörgetne (mérve: 0 →
+ * 2347 px), és elrontaná az imént beállított pozíciót.
  */
 
 const REPO = fileURLToPath(new URL('..', import.meta.url))
@@ -212,9 +231,12 @@ describe('3. a hosszú horgony-ugrás rövidül, de sima marad', () => {
     expect(kommentNelkul(baseCss)).toContain('scroll-behavior: smooth')
   })
 
-  it('a komponens csökkentett mozgás mellett azonnal kilép', () => {
-    expect(anchorTsx).toContain("matchMedia('(prefers-reduced-motion: reduce)')")
-    expect(anchorTsx).toMatch(/\.matches\)\s*\{\s*\n\s*return/)
+  it('csökkentett mozgás mellett a MOZGÁS marad el, mégpedig ágankénti őrszemmel', () => {
+    const tiszta = kommentNelkul(anchorTsx)
+    expect(tiszta).toContain("matchMedia('(prefers-reduced-motion: reduce)')")
+    // Mindkét MOZGÁS-ág első lépése az őrszem.
+    expect(tiszta).toMatch(/const azonnal = \(\) => \{\s*if \(csokkentettMozgas\(\)\) \{/)
+    expect(tiszta).toMatch(/const rovidit = \(pozicio: number\) => \{\s*if \(csokkentettMozgas\(\)\) \{/)
   })
 
   it('a horgony NÉLKÜLI belső hivatkozás (lap tetejére görgetés) is fedve van', () => {
@@ -274,18 +296,17 @@ describe('3. a hosszú horgony-ugrás rövidül, de sima marad', () => {
     expect(kommentNelkul(anchorTsx)).toContain('link.host !== window.location.host')
   })
 
-  it('a komponens NEM nyeli el a kattintást (az útválasztó és a fókusz érintetlen)', () => {
+  it('a komponens NEM nyeli el a kattintást (az útválasztó és az előzmények érintetlenek)', () => {
     const tiszta = kommentNelkul(anchorTsx)
     expect(tiszta).not.toContain('preventDefault()')
+    // A görgetést nem a komponens végzi: a `scrollIntoView` az útválasztóé.
     expect(tiszta).not.toContain('scrollIntoView')
-    // A fókuszhoz sem nyúl: a horgonyra kerülő fókuszt a böngésző adja.
-    expect(tiszta).not.toContain('.focus(')
   })
 
   it('a görgetést a BÖNGÉSZŐ végzi: egyetlen scrollTo, és az is azonnali', () => {
     // A komponens NEM animál magától (nincs rAF-ciklus, nincs időzített
     // lépegetés): egyetlen `scrollTo`-t hív, a KIINDULÓPONT beállítására,
-    // explicit `behavior: 'auto'`-val. A tényleges mozgást a böngésző saját
+    // explicit `behavior: 'instant'`-tal. A tényleges mozgást a böngésző saját
     // sima görgetése teszi meg, tehát az útválasztó, az előzmények és a
     // horgonyra kerülő fókusz érintetlen marad.
     const tiszta = kommentNelkul(anchorTsx)
@@ -302,5 +323,202 @@ describe('3. a hosszú horgony-ugrás rövidül, de sima marad', () => {
   it('a storefront-elrendezés fel is csatolja', () => {
     expect(layoutTsx).toContain("from '@/components/motion/AnchorScroll'")
     expect(layoutTsx).toContain('<AnchorScroll />')
+  })
+})
+
+/**
+ * Próba-elem a `fokuszCelra` viselkedés-teszteléséhez. A projektben nincs
+ * jsdom (a vitest `environment: 'node'`), ezért a fókuszáláshoz szükséges
+ * elem-felületet itt utánozzuk. Minden valódi `HTMLElement` ugyanezt tudja.
+ */
+class ProbaElem implements FokuszCel {
+  private readonly attributumok = new Map<string, string>()
+  private blurKezelok: (() => void)[] = []
+  /** A `focus()` hívások opciói, sorrendben — ezt méri a teszt. */
+  readonly fokuszHivasok: { preventScroll: boolean }[] = []
+
+  /** @param alapFokuszalhatosag a natív `tabIndex` attribútum nélkül (section: −1, a[href]: 0) */
+  constructor(private readonly alapFokuszalhatosag: number = -1) {}
+
+  get tabIndex(): number {
+    const irt = this.attributumok.get('tabindex')
+    return irt === undefined ? this.alapFokuszalhatosag : Number.parseInt(irt, 10)
+  }
+
+  hasAttribute(nev: string): boolean {
+    return this.attributumok.has(nev)
+  }
+
+  getAttribute(nev: string): string | null {
+    return this.attributumok.get(nev) ?? null
+  }
+
+  setAttribute(nev: string, ertek: string): void {
+    this.attributumok.set(nev, ertek)
+  }
+
+  removeAttribute(nev: string): void {
+    this.attributumok.delete(nev)
+  }
+
+  /** Egyszeri-e a feliratkozás? A `{ once: true }` nélkül a kezelők halmoznának. */
+  egyszeriBlurFeliratkozas: boolean | null = null
+
+  addEventListener(_tipus: 'blur', kezelo: () => void, opciok: { once: true }): void {
+    this.egyszeriBlurFeliratkozas = opciok.once
+    this.blurKezelok.push(kezelo)
+  }
+
+  focus(opciok: { preventScroll: boolean }): void {
+    this.fokuszHivasok.push(opciok)
+  }
+
+  /** A fókusz elhagyása — a `{ once: true }` miatt minden kezelő egyszer fut. */
+  blur(): void {
+    const kezelok = this.blurKezelok
+    this.blurKezelok = []
+    for (const kezelo of kezelok) {
+      kezelo()
+    }
+  }
+}
+
+describe('4. a horgony-ugrás után a FÓKUSZ is a célra kerül (WCAG 2.2 SC 2.4.3, N-13)', () => {
+  it('a nem fókuszálható célt (section) fókuszálhatóvá teszi, és megfókuszálja', () => {
+    const szekcio = new ProbaElem(-1)
+    const ideiglenesek = new Set<FokuszCel>()
+    fokuszCelra(szekcio, ideiglenesek)
+    expect(szekcio.getAttribute('tabindex')).toBe('-1')
+    expect(szekcio.fokuszHivasok).toEqual([{ preventScroll: true }])
+    expect(ideiglenesek.has(szekcio)).toBe(true)
+  })
+
+  it('a fókuszálás NEM görget újra (preventScroll) — enélkül elromlana a beállított pozíció', () => {
+    const szekcio = new ProbaElem(-1)
+    fokuszCelra(szekcio, new Set<FokuszCel>())
+    expect(szekcio.fokuszHivasok[0].preventScroll).toBe(true)
+  })
+
+  it('a cél elhagyásakor az ideiglenes tabindex LEKERÜL (a DOM nem marad átírva)', () => {
+    const szekcio = new ProbaElem(-1)
+    const ideiglenesek = new Set<FokuszCel>()
+    fokuszCelra(szekcio, ideiglenesek)
+    // A feliratkozás egyszeri: enélkül minden ugrásnál újabb kezelő gyűlne.
+    expect(szekcio.egyszeriBlurFeliratkozas).toBe(true)
+    szekcio.blur()
+    expect(szekcio.hasAttribute('tabindex')).toBe(false)
+    expect(ideiglenesek.size).toBe(0)
+  })
+
+  it('a MÁR fókuszálható célra nem írunk tabindexet (nem vesszük ki a Tab-sorrendből)', () => {
+    // Natívan fókuszálható cél (pl. `a[href]` vagy `button`): `tabIndex` 0.
+    const gomb = new ProbaElem(0)
+    fokuszCelra(gomb, new Set<FokuszCel>())
+    expect(gomb.hasAttribute('tabindex')).toBe(false)
+    expect(gomb.fokuszHivasok).toEqual([{ preventScroll: true }])
+  })
+
+  it('a kézzel beállított tabindexhez sem nyúlunk hozzá', () => {
+    const sajatSorrendu = new ProbaElem(-1)
+    sajatSorrendu.setAttribute('tabindex', '0')
+    fokuszCelra(sajatSorrendu, new Set<FokuszCel>())
+    expect(sajatSorrendu.getAttribute('tabindex')).toBe('0')
+  })
+
+  it('ismételt ugrás ugyanarra a célra nem duplázza a nyilvántartást', () => {
+    const szekcio = new ProbaElem(-1)
+    const ideiglenesek = new Set<FokuszCel>()
+    fokuszCelra(szekcio, ideiglenesek)
+    fokuszCelra(szekcio, ideiglenesek)
+    expect(ideiglenesek.size).toBe(1)
+    expect(szekcio.fokuszHivasok).toHaveLength(2)
+  })
+
+  it('a LAPON BELÜLI ág fókuszál is, nemcsak görget', () => {
+    const tiszta = kommentNelkul(anchorTsx)
+    expect(tiszta).toMatch(
+      /azonosOldal\(link\) && link\.hash\.length > 0[\s\S]{0,700}fokuszCelra\(celPont, nyilvantartas\)/,
+    )
+  })
+
+  it('a lapon belüli fókusz FELTÉTLEN: nincs távolság-küszöb mögé zárva', () => {
+    /**
+     * MIÉRT KELL EZ A SOR (vezetői javítás, 2026-08-17): a fenti állítás csak a
+     * hívás JELENLÉTÉT nézi 700 karakteren belül, a FELTÉTLENSÉGÉT nem. Egy
+     * cáfoló ellenőrzés ezt kihasználva a fókuszt távolság-feltétel mögé zárta
+     *
+     *     if (celPont !== null && hosszuUgras(window.innerHeight * 2, …)) {
+     *       fokuszCelra(celPont, nyilvantartas)
+     *     }
+     *
+     * és a fájl 47/47 ZÖLD maradt, `tsc` 0 hibával — vagyis a rontás típushelyes
+     * és néma volt, miközben pontosan a hirdetett szabályt sértette.
+     *
+     * A szabály, amit ez a teszt őriz: a fókuszt a WCAG 2.2 SC 2.4.3 (Focus
+     * Order) kívánja, és az NEM ismer távolság-küszöböt. A MOZGÁS rövidítése
+     * távolságfüggő (`hosszuUgras`), a FÓKUSZ nem lehet az: rövid ugrásnál is a
+     * célra kell kerülnie, különben a billentyűzetes látogató Tab-ja a lap
+     * tetejéről folytatná.
+     *
+     * A vizsgálat a lapon belüli ág törzsét metszi ki, és megköveteli, hogy a
+     * `fokuszCelra` hívást körülvevő EGYETLEN feltétel a cél létezésének
+     * vizsgálata legyen.
+     */
+    const tiszta = kommentNelkul(anchorTsx)
+    const agKezdet = tiszta.indexOf('azonosOldal(link) && link.hash.length > 0')
+    expect(agKezdet, 'nincs meg a lapon belüli ág').toBeGreaterThan(-1)
+    const agVege = tiszta.indexOf('fokuszCelra(celPont, nyilvantartas)', agKezdet)
+    expect(agVege, 'nincs meg a fókusz-hívás az ágban').toBeGreaterThan(agKezdet)
+
+    // A hívás előtti utolsó feltétel: KIZÁRÓLAG a cél létezésének vizsgálata.
+    const elotte = tiszta.slice(agKezdet, agVege)
+    const feltetelek = [...elotte.matchAll(/if \(([^)]*)\)/gu)].map((t) => t[1].trim())
+    const utolso = feltetelek.at(-1)
+    expect(utolso, 'a fókusz-hívás előtt nincs feltétel').toBeDefined()
+    expect(utolso, 'a fókuszt csak a cél LÉTEZÉSE feltételezheti').toBe('celPont !== null')
+
+    // És a hívás előtti szakaszban NINCS távolság-vizsgálat a fókusz körül:
+    // a `hosszuUgras` csak a MOZGÁS ágában (a `rovidit`-en belül) élhet.
+    const celPontUtan = elotte.slice(elotte.indexOf('const celPont'))
+    expect(celPontUtan, 'távolság-küszöb került a fókusz elé').not.toContain('hosszuUgras')
+  })
+
+  it('a hash-váltás (böngésző vissza-gombja) is a célra teszi a fókuszt', () => {
+    const tiszta = kommentNelkul(anchorTsx)
+    expect(tiszta).toMatch(/const onHashChange = \(\) => \{[\s\S]{0,300}fokuszCelra\(/)
+  })
+
+  it('LAPVÁLTÁS és hideg betöltés: az útvonalra fűzött hatás fókuszál', () => {
+    // A komponens az elrendezésben ül, tehát útvonalváltáskor nem szerelődik
+    // újra — a cél a kattintás pillanatában még nincs is a DOM-ban.
+    const tiszta = kommentNelkul(anchorTsx)
+    expect(tiszta).toContain("import { usePathname } from 'next/navigation'")
+    expect(tiszta).toMatch(/fokuszCelra\(celPont, ideiglenesek\.current\)[\s\S]{0,60}\}, \[utvonal\]\)/)
+  })
+
+  it('a HIDEG betöltés kimarad: ott a böngésző már a célra állítja a kiindulópontot', () => {
+    // Mérve: hideg betöltés után az első Tab a célon BELÜLI gombra visz
+    // (sequential focus navigation starting point). Programozott fókusz ott
+    // csak kárt tenne: felhasználói esemény híján a böngésző gyűrűt rajzolna
+    // a szekció köré minden látogatónak (mérve: outline solid 3px).
+    const tiszta = kommentNelkul(anchorTsx)
+    expect(tiszta).toMatch(/if \(elsoFutas\.current\) \{\s*elsoFutas\.current = false\s*return/)
+  })
+
+  it('a fókusz-ág CSÖKKENTETT MOZGÁS mellett is fut (a két dolog nem ugyanaz)', () => {
+    const tiszta = kommentNelkul(anchorTsx)
+    // Nincs korai kilépés a hatás elején: a mozgás-korlát csak a mozgást veszi el.
+    expect(tiszta).not.toMatch(/\.matches\)\s*\{\s*\n\s*return/)
+    // A fókuszálás egyik hívási helye sincs mozgás-őrszem mögé zárva.
+    for (const [, elotte] of tiszta.matchAll(/([\s\S]{0,200})fokuszCelra\(/g)) {
+      expect(elotte).not.toContain('csokkentettMozgas()')
+    }
+  })
+
+  it('leszereléskor a bent maradt ideiglenes tabindexek is lekerülnek', () => {
+    const tiszta = kommentNelkul(anchorTsx)
+    expect(tiszta).toMatch(
+      /return \(\) => \{[\s\S]{0,400}for \(const elem of nyilvantartas\) \{\s*elem\.removeAttribute\('tabindex'\)/,
+    )
   })
 })

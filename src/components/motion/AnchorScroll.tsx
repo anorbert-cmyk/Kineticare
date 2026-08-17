@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect } from 'react'
+import { usePathname } from 'next/navigation'
+import { useEffect, useRef } from 'react'
 
 /**
- * AnchorScroll — a HOSSZÚ horgony-ugrás ne animálódjon.
+ * AnchorScroll — a HOSSZÚ horgony-ugrás ne animálódjon, és a fókusz kövesse a szemet.
  *
  * ═══ A MÉRT HIBA ═══
  * A `base.css` a gyökérre `scroll-behavior: smooth`-t tesz, ezért MINDEN
@@ -27,13 +28,80 @@ import { useEffect } from 'react'
  * A komponens NEM hívja meg a `preventDefault`-ot, és nem görget maga: csak
  * egy osztályt tesz a gyökérre a `styles/motion.css` `.kc-scroll-instant`
  * szabályához, mielőtt a böngésző (vagy a Next.js útválasztó) elindítaná a
- * görgetést. Így az útválasztó állapotkezelése, az előzmények és a
- * horgonyra kerülő fókusz (ui-sztenderdek N-13) érintetlen marad — csak a
- * mozgás módja változik. Ha a JS nem fut le, a lap pontosan a mai módon
- * viselkedik.
+ * görgetést. Így az útválasztó állapotkezelése és az előzmények érintetlenek
+ * maradnak — csak a mozgás módja változik. Ha a JS nem fut le, a lap pontosan
+ * a mai módon viselkedik. (A FÓKUSZT külön ág teszi a célra, lásd lent: azt a
+ * böngésző az útválasztón át futó ugrásnál nem mozdítja.)
  *
- * `prefers-reduced-motion: reduce` esetén a komponens azonnal kilép: ott a
- * base.css már `scroll-behavior: auto`-t ad, tehát nincs mit visszavenni.
+ * `prefers-reduced-motion: reduce` esetén a MOZGÁS-ág marad ki (ott a base.css
+ * már `scroll-behavior: auto`-t ad, tehát nincs mit visszavenni); a FÓKUSZ-ág
+ * ilyenkor is fut, mert a mozgás-korlát és az akadálymentesség nem ugyanaz —
+ * lásd lent.
+ *
+ * ═══ A FÓKUSZ IS KÖVESSE A SZEMET (2026-08-17) ═══
+ *
+ * MÉRT HIBA (Chromium 1194, /szolgaltatasok#rendeloi, 1440×900):
+ *   - a fejléc menüpontjára EGÉRREL kattintva a lap a célhoz görget (y=2055),
+ *     de a fókusz a menüponton marad, és a következő Tab a menü KÖVETKEZŐ
+ *     pontjára visz („Szakmai képzés") — az a cél ELŐTT áll a dokumentumban
+ *     (`compareDocumentPosition`: DOCUMENT_POSITION_PRECEDING);
+ *   - BILLENTYŰZETTEL ugyanez, ráadásul a látható fókuszgyűrű is a lap tetején,
+ *     a menüponton marad, miközben a szem a lap közepén jár;
+ *   - HIDEG betöltésnél a `document.activeElement` a `body`.
+ * Ez a WCAG 2.2 SC 2.4.3 (Focus Order, A) sérülése: a fókusz sorrendje nem
+ * őrzi meg a működés értelmét, ha a szem a lap közepén, a fókusz a tetején van.
+ * A repó saját szabálya (docs/ui-sztenderdek.md N-13) ugyanezt írja elő.
+ *
+ * MIÉRT NEM OLDJA MEG A BÖNGÉSZŐ MAGÁTÓL: a HTML-szabvány „scroll to the
+ * fragment" lépése beállítja a *sequential focus navigation starting point*-ot
+ * a célra, ezért NATÍV horgony-navigációnál a Tab már ma is a célnál folytatja
+ * (mérve: hideg betöltés után a Tab a célon BELÜLI „időpontot kérek" gombra
+ * visz). A Next.js útválasztója viszont nem natívan navigál: a
+ * `layout-router` a hash-célra `instance.scrollIntoView()`-t hív, és a saját
+ * megjegyzése szerint „This handler intentionally leaves focus untouched" —
+ * a `scrollIntoView` pedig sem fókuszt, sem kiindulópontot nem állít. Ezért a
+ * lapon belüli, útválasztón át futó ugrásnál a Tab a fejlécben marad.
+ *
+ * A MINTA: `tabindex="-1"` + `focus()` — a GOV.UK Design System „skip link"
+ * komponensének `setFocus()` segédlete pontosan ezt teszi (a célra csak akkor
+ * tesz `tabindex`-et, ha még nem fókuszálható, és `blur`-kor VISSZASZEDI, hogy
+ * a DOM ne maradjon átírva). Két eltérés a mi esetünkben:
+ *
+ *   1. `focus({ preventScroll: true })`. A `focus()` alapból „scroll the
+ *      element into view" — és mivel a lap `scroll-behavior: smooth`-t visz, ez
+ *      egy MÁSODIK, animált görgetést indítana az imént beállított pozícióról.
+ *      Mérve: `preventScroll` nélkül a fókuszálás 0-ról 2347 px-re görgetett,
+ *      `preventScroll: true`-val 0 px volt az elmozdulás.
+ *   2. A gyűrű: a repó minden fókusz-szabálya `:focus-visible`-re szól
+ *      (base.css), amit a böngésző heurisztikája vezérel. Mérve: egérrel
+ *      kattintva a célszekció `matches(':focus-visible')` értéke false, a
+ *      számított `outline` `none 0px` — tehát nem villan fel gyűrű. Billentyűs
+ *      úton (Enter a menüponton) a gyűrű megjelenik, és ott ez a KÍVÁNT
+ *      viselkedés (WCAG 2.2 SC 2.4.7 Focus Visible).
+ *
+ * MIÉRT A RÖVID UGRÁSNÁL IS: a fókusz-hiba nem a távolságtól függ, hanem attól,
+ * hogy az útválasztó nem mozdítja a fókuszt. Mérve: egy nézetablaknál rövidebb
+ * ugrásnál (1295 → 2055 px) is a menüponton maradt a fókusz. A SC 2.4.3 nem
+ * ismer távolság-küszöböt, ezért a fókusz-ág minden lapon belüli horgonyra fut,
+ * a mozgás-ág pedig változatlanul csak az egy nézetablaknál hosszabbra.
+ *
+ * MIÉRT NEM A HIDEG BETÖLTÉSNÉL: ott natív horgony-navigáció fut, tehát a
+ * böngésző már beállította a kiindulópontot — mérve: az első Tab a célon
+ * BELÜLI gombra visz. Programozott fókusz ott csak ártana: felhasználói
+ * esemény híján a böngésző `:focus-visible`-nek minősíti a fókuszt, és 3 px-es
+ * gyűrűt rajzol a szekció köré (mérve: `outline: solid 3px`) — MINDEN
+ * látogatónak, az egeresnek is. Márpedig az örökölt `/rendeloi-kezelesek` cím
+ * 308-cal pont ide, hideg betöltésre érkezik (src/lib/legacy-redirects.ts).
+ *
+ * MIÉRT CSÖKKENTETT MOZGÁS MELLETT IS: a `prefers-reduced-motion` a MOZGÁSRÓL
+ * szól (WCAG 2.2 SC 2.3.3), nem a fókuszról. Mérve: `reduce` mellett az érkezés
+ * azonnali (0 ms), a fókusz viszont ugyanúgy a menüponton maradt — a hiba tehát
+ * ott is fennáll. Ezért a komponens már nem lép ki korán: a mozgás-ág kap
+ * őrszemet (`csokkentettMozgas()`), a fókusz-ág feltétel nélkül fut.
+ *
+ * WCAG 2.2 SC 2.4.11 (Focus Not Obscured, AA): a fókuszált cél nem kerülhet a
+ * ragadós fejléc alá. Ezt a `scroll-padding-top` adja a gyökéren (base.css),
+ * és mérve is tartja magát: a szekció teteje a fejléc alsó éle alatt áll.
  */
 
 /** A gyökér-osztály, amely a görgetést azonnalivá teszi (motion.css). */
@@ -67,9 +135,8 @@ const MAX_ANIMALT_NEZETABLAK = 1
  *
  * MIÉRT NEM SAJÁT rAF-ANIMÁCIÓ: ahhoz el kellene nyelni a kattintást
  * (`preventDefault`), és magunknak kellene görgetni. Azzal az útválasztó
- * állapotkezelése, az előzmények és a horgonyra kerülő fókusz is ránk szállna
- * (ui-sztenderdek N-13). Így viszont a böngésző végzi a görgetést, mi csak a
- * kiindulópontot állítjuk át.
+ * állapotkezelése és az előzmények is ránk szállnának. Így viszont a böngésző
+ * végzi a görgetést, mi csak a kiindulópontot állítjuk át.
  *
  * FIGYELEM, MÉRT CSAPDA: a `behavior: 'auto'` NEM azonnalit jelent, hanem azt,
  * hogy a böngésző a CSS `scroll-behavior`-t használja — ami itt `smooth`.
@@ -119,6 +186,63 @@ export function elokeszitoPozicio(
   return Math.max(0, celPx - irany * nezetablakPx * ELOKESZITO_NEZETABLAK)
 }
 
+/**
+ * A fókuszáláshoz szükséges elem-felület. Azért ez, és nem `HTMLElement`, hogy
+ * a `fokuszCelra` DOM nélkül is futtatható legyen (a tesztkörnyezet `node`,
+ * jsdom nincs a projektben). Minden `HTMLElement` kielégíti.
+ */
+export interface FokuszCel {
+  readonly tabIndex: number
+  hasAttribute(nev: string): boolean
+  setAttribute(nev: string, ertek: string): void
+  removeAttribute(nev: string): void
+  addEventListener(tipus: 'blur', kezelo: () => void, opciok: { once: true }): void
+  focus(opciok: { preventScroll: boolean }): void
+}
+
+/**
+ * Kell-e a célra IDEIGLENES `tabindex`? Csak akkor, ha még nem fókuszálható.
+ *
+ * A `tabIndex` IDL-tulajdonság a HTML-szabvány szerint az elem alapértelmezett
+ * fókuszálhatóságát tükrözi: `a[href]`, `button`, `input` és társaik attribútum
+ * nélkül is 0-t adnak, egy sima `section` viszont −1-et. Így egy már
+ * fókuszálható célt (pl. ha valaki egy gombra tesz horgonyt) NEM veszünk ki a
+ * Tab-sorrendből azzal, hogy ráírunk egy `tabindex="-1"`-et.
+ */
+function ideiglenesTabindexKell(elem: FokuszCel): boolean {
+  return !elem.hasAttribute('tabindex') && elem.tabIndex < 0
+}
+
+/**
+ * A horgony CÉLJÁRA teszi a fókuszt, GÖRGETÉS NÉLKÜL.
+ *
+ * A GOV.UK Design System `setFocus()` segédletének mintája: ha a cél még nem
+ * fókuszálható, ideiglenes `tabindex="-1"`-et kap, és `blur`-kor visszaszedjük,
+ * hogy a lap DOM-ja ne maradjon tartósan átírva. A `preventScroll` a mi
+ * kiegészítésünk: enélkül a fókuszálás MÉG EGYSZER odagörgetne, mégpedig
+ * animálva (a lap `scroll-behavior: smooth`), és elrontaná az imént beállított
+ * pozíciót.
+ *
+ * @param elem a horgony célja
+ * @param ideiglenesek az átmeneti `tabindex`-ek nyilvántartása (leszereléskor
+ *   ebből takarítunk, ha a `blur` már nem futna le)
+ */
+export function fokuszCelra(elem: FokuszCel, ideiglenesek: Set<FokuszCel>): void {
+  if (ideiglenesTabindexKell(elem)) {
+    elem.setAttribute('tabindex', '-1')
+    ideiglenesek.add(elem)
+    elem.addEventListener(
+      'blur',
+      () => {
+        elem.removeAttribute('tabindex')
+        ideiglenesek.delete(elem)
+      },
+      { once: true },
+    )
+  }
+  elem.focus({ preventScroll: true })
+}
+
 /** A hash-ből a cél elem — üres, „#" és „#top" esetén a lap teteje. */
 function celElem(hash: string): HTMLElement | null {
   const azonosito = decodeURIComponent(hash.replace(/^#/, ''))
@@ -141,16 +265,29 @@ function celPozicio(hash: string): number | null {
 }
 
 export function AnchorScroll() {
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') {
-      return
-    }
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      return
-    }
+  /**
+   * A lapváltás jele. A komponens a storefront-elrendezésben ül, tehát
+   * útvonalváltáskor NEM szerelődik újra — a hash céljára kerülő fókuszt
+   * ezért az útvonalra fűzött hatás állítja be.
+   */
+  const utvonal = usePathname()
+  /** Az általunk kiosztott, átmeneti `tabindex`-ek — leszereléskor takarítunk. */
+  const ideiglenesek = useRef<Set<FokuszCel>>(new Set())
 
+  useEffect(() => {
     const gyoker = document.documentElement
+    const nyilvantartas = ideiglenesek.current
     let visszaallitas: ReturnType<typeof setTimeout> | null = null
+
+    /**
+     * Csökkentett mozgás: csak a MOZGÁS-ág marad el.
+     *
+     * Hívásonként kérdezünk rá (nem a felcsatoláskor egyszer), így az
+     * időközben átállított rendszer-beállítás azonnal érvényre jut.
+     */
+    const csokkentettMozgas = (): boolean =>
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     const vissza = () => {
       gyoker.classList.remove(INSTANT_CLASS)
@@ -163,6 +300,10 @@ export function AnchorScroll() {
 
     /** Azonnali módba kapcsol, és gondoskodik a visszaállásról. */
     const azonnal = () => {
+      if (csokkentettMozgas()) {
+        // Ott a base.css már `scroll-behavior: auto`-t ad: nincs mit átállítani.
+        return
+      }
       gyoker.classList.add(INSTANT_CLASS)
       if (visszaallitas !== null) {
         clearTimeout(visszaallitas)
@@ -178,6 +319,10 @@ export function AnchorScroll() {
      * Rövid ugrásnál nem csinál semmit — az eleve sima és rövid.
      */
     const rovidit = (pozicio: number) => {
+      if (csokkentettMozgas()) {
+        // Ott az érkezés eleve azonnali, tehát nincs mit rövidíteni.
+        return
+      }
       if (!hosszuUgras(pozicio - window.scrollY, window.innerHeight)) {
         return
       }
@@ -220,6 +365,16 @@ export function AnchorScroll() {
         if (pozicio !== null) {
           rovidit(pozicio)
         }
+        // A FÓKUSZ a célra kerül, hogy a következő Tab onnan folytassa.
+        // Sorrend: előbb a mozgás kiindulópontja, utána a fókusz — a
+        // `preventScroll` miatt a fókuszálás nem nyúl a pozícióhoz.
+        // Azért MÉG az alapértelmezett művelet előtt (elfogási szakasz), mert
+        // így a natív horgony-navigáció is a mi célunkat találja már
+        // fókuszálhatónak, és a saját lépése nem szedi le róla a fókuszt.
+        const celPont = celElem(link.hash)
+        if (celPont !== null) {
+          fokuszCelra(celPont, nyilvantartas)
+        }
         return
       }
 
@@ -249,6 +404,10 @@ export function AnchorScroll() {
       if (pozicio !== null) {
         rovidit(pozicio)
       }
+      const celPont = celElem(window.location.hash)
+      if (celPont !== null) {
+        fokuszCelra(celPont, nyilvantartas)
+      }
     }
 
     // Hideg betöltés horgonnyal: a böngésző a lap megjelenése UTÁN, késleltetve
@@ -272,8 +431,48 @@ export function AnchorScroll() {
       document.removeEventListener('click', onClick, true)
       window.removeEventListener('hashchange', onHashChange)
       vissza()
+      // Az általunk kiosztott `tabindex`-ek nem maradhatnak a DOM-ban, ha a
+      // `blur` már nem futna le (leszerelés fókuszban lévő céllal).
+      for (const elem of nyilvantartas) {
+        elem.removeAttribute('tabindex')
+      }
+      nyilvantartas.clear()
     }
   }, [])
+
+  /**
+   * LAPVÁLTÁS: a fókusz a hash céljára az ÚJ lapon.
+   *
+   * A kattintás-kezelő a lapon belüli ugrást fedi; lapváltásnál a cél a
+   * kattintás pillanatában még nincs a DOM-ban, ezért az új útvonal
+   * kirenderelése UTÁN kell fókuszálni. A Next.js a hash-célra
+   * `scrollIntoView()`-t hív egy elrendezés-hatásban, a fókuszt szándékosan nem
+   * mozdítja — ez a hatás fut utána, tehát a görgetés már megtörtént.
+   *
+   * A HIDEG BETÖLTÉS (első futás) KIMARAD. Ott natív horgony-navigáció történt,
+   * és a böngésző a szabvány szerint már beállította a *sequential focus
+   * navigation starting point*-ot a célra. Mérve is: hideg betöltés után az
+   * első Tab a célon BELÜLI „időpontot kérek" gombra visz, tehát nincs mit
+   * javítani. Fókuszálni viszont ott ÁRT: a lap még nem kapott felhasználói
+   * eseményt, ezért a böngésző heurisztikája `:focus-visible`-nek minősíti a
+   * programozott fókuszt, és 3 px-es gyűrűt rajzol a szekció köré (mérve:
+   * `outline: solid 3px`), MINDEN látogatónak, az egeresnek is. Márpedig az örökölt
+   * `/rendeloi-kezelesek` cím 308-cal pont ide, hideg betöltésre érkezik.
+   */
+  const elsoFutas = useRef(true)
+  useEffect(() => {
+    if (elsoFutas.current) {
+      elsoFutas.current = false
+      return
+    }
+    if (window.location.hash.length <= 1) {
+      return
+    }
+    const celPont = celElem(window.location.hash)
+    if (celPont !== null) {
+      fokuszCelra(celPont, ideiglenesek.current)
+    }
+  }, [utvonal])
 
   return null
 }
