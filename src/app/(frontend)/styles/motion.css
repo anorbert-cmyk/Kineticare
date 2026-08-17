@@ -56,6 +56,45 @@
   animation-delay: calc(var(--kc-reveal-stagger, 0) * 70ms);
 }
 
+/* ---- Horgony-ugrás: a HOSSZÚ görgetés nem animálódik ----------------------
+   MÉRT HIBA (2026-08-17, tulajdonosi hibajelzés — „a Rendelői kezelésekre
+   kattintva ugrál egy kicsit az oldal, furán animálódik"): a `base.css`
+   `scroll-behavior: smooth`-a MINDEN horgony-ugrást végiganimál, bármilyen
+   messze van a cél. A `/szolgaltatasok#rendeloi` ugrás 1440×900-on 2048 px
+   (2,3 nézetablak), 390×844-en 3138 px (3,7 nézetablak).
+
+   Chromiumban mérve, mennyi ideig tart az animáció a távolság függvényében
+   (900 px magas nézetablak, produkciós build):
+
+       200 px (0,22×) → 217 ms      1350 px (1,5×) → 600 ms
+       450 px (0,50×) → 333 ms      1800 px (2,0×) → 683 ms
+       675 px (0,75×) → 417 ms      2048 px (2,3×) → 683 ms
+       900 px (1,00×) → 483 ms      4000 px (4,4×) → 683 ms
+
+   A NN/g mérése szerint „at 500ms, animations start to feel like a real drag
+   for users — they become cumbersome and annoying"; az ajánlott sáv 100–500 ms
+   (Executing UX Animations: Duration and Motion Characteristics). A táblázat
+   szerint PONTOSAN egy nézetablaknyi ugrás az a leghosszabb táv, amely még
+   ezen a küszöb alatt marad (483 ms) — a küszöb tehát mérésből jön, nem
+   érzésből. Efölött a mozgás nem is segít tájékozódni: a kiindulási képernyő
+   minden eleme eltűnik, tehát a felhasználó nem tudja szemmel követni a
+   váltást. A WCAG 2.2 SC 2.3.3 (Animation from Interactions) éppen az ilyen,
+   interakcióra induló, nem lényegi mozgásra mondja ki: „Only add non-essential
+   animation to the scrolling interaction in a responsible way."
+
+   A megoldás: a hosszú ugrás idejére az `AnchorScroll` (src/components/motion)
+   ezt az osztályt teszi a gyökérre, és a görgetés AZONNALI lesz. A rövid
+   ugrások (egy nézetablakon belül) továbbra is simán úsznak, a felhasználó
+   kézi görgetését pedig ez a tulajdonság egyáltalán nem érinti.
+
+   JS nélkül semmi nem romlik el: az osztály sosem kerül fel, a viselkedés
+   pontosan a mai. `prefers-reduced-motion: reduce` esetén a base.css már
+   `auto`-ra állítja a görgetést, tehát ott ez a szabály eleve fölösleges. */
+
+.kc-scroll-instant {
+  scroll-behavior: auto;
+}
+
 /* ---- Nyitható szakaszok (details/summary) finom átmenete ------------------
    A `content-visibility` diszkrét tulajdonság, ezért `allow-discrete`-tel
    megy át; enélkül a tartalom a záráskor azonnal eltűnne, és a becsukódás

@@ -22,8 +22,10 @@
  *
  * MÉRETEK: minden betűméret a HÁROM-MÉRETES skáláról (`--kc-font-l/m/s`,
  * tokens.css) — elemre írt px/rem TILOS (UX-skill 4. pont). A tábla-cím az L
- * lépcsőn áll; a sorok címe és szövege a törzsméreten (M), a sorok
- * hierarchiáját a súly, a szín és a hajszálvonalas ritmus adja, nem a méret.
+ * lépcsőn áll (ugyanazon a sortávon, mint minden más szekció-H2); a sorok
+ * címe és szövege a törzsméreten (M), és a kettő között a SÚLY jelöli a
+ * szintet: a sor-cím 700-as törzsbetű, a sorszöveg 400-as. Lásd a két
+ * szabálynál álló mérési jegyzőkönyvet.
  *
  * AKCENT-KORLÁT (terv 3.1): a kis felső felirat, a sorszámok és a
  * sor-hivatkozás `accent-deep` (paperen 5,16:1, tinten 4,72:1 — AA felett);
@@ -126,13 +128,37 @@
   background-color: var(--kc-services-accent);
 }
 
+/* A TÁBLA-CÍM ÉS A TÖBBI SZEKCIÓ-CÍM AZONOS MÉRETŰ (2026-08-17, tulajdonosi
+   kérdés: „ugyanakkora-e az »Így tudunk segíteni«, mint az »Így működik az
+   online kurzus«?").
+
+   MÉRVE (Chromium, produkciós build): a betűméret MÁR AZELŐTT is azonos volt —
+   mindkét cím 46,4 px @1440 és 32,55 px @390, mert mindkettő a közös L lépcsőt
+   viseli. A szemnek mégis MÁS méretűnek látszottak, és ennek két MÉRHETŐ oka
+   volt, egyik sem a betűméret:
+
+     1. SORTÁV. Ez a cím a tábla-sortávot vitte (1,06 → 49,18 px), a
+        `.kc-section-title` viszont a címsor-sortávot (1,2 → 55,68 px). Két
+        azonos méretű H2 ugyanazon a lapon nem futhat kétféle sortávval.
+     2. MÉRTÉK. A 7,2ch a tükör ÓRIÁS (89 px-es) tábla-lépcsőjéhez volt szabva.
+        A három-méretes skálán (46,4 px) ez 199 px-es dobozt jelentett, ami a
+        19 karakteres címet HÁROM sorra törte („Így / tudunk / segíteni"), és a
+        keskeny, magas szövegtömb kisebbnek látszik, mint a szélesen futó
+        párja. Mérve 1440 px-en: 7,2ch → 199×148 px, 3 sor.
+
+   A 12ch-s mérték a mért döntés: 1440/1200/1024/900/390/320 px-en MINDENHOL
+   pontosan két sor lesz belőle (332×111 px @1440) — vagyis a blokk magassága
+   megegyezik a „Így működik az online kurzus" címével (361×111 px), a
+   tábla-jellegű, hasábba tördelt megjelenés pedig megmarad. A hosszú
+   CMS-címek fokozata (`--long`, 16ch) érintetlen, és továbbra is BŐVEBB
+   ennél, tehát a fokozat nem üresedett ki. */
 .kc-services__title {
   margin: var(--kc-space-6) 0 0;
-  max-width: 7.2ch;
+  max-width: 12ch;
   font-family: var(--kc-font-heading);
   font-size: var(--kc-font-l);
   font-weight: var(--kc-font-weight-normal);
-  line-height: var(--kc-leading-board);
+  line-height: var(--kc-leading-heading);
   color: var(--kc-services-ink);
   text-wrap: balance;
   /* 320 px-en a tábla-lépcsők alsó határán (3,2–4rem) egy hosszú magyar szó
@@ -252,13 +278,44 @@
   color: var(--kc-services-accent-text);
 }
 
+/* SOR-CÍM: A SÚLY HORDOZZA A SZINTET (2026-08-17, tulajdonosi hibajelzés —
+   „a »Rendelői kezelések« meg az »Otthoni program« jobban olvashatónak
+   kellene hogy legyenek").
+
+   MÉRVE (Chromium, produkciós build, 1440 px): a sor CÍME 18 px / 400 súly,
+   a sor SZÖVEGE ugyanúgy 18 px / 400 súly — a kettő között tehát sem méret-,
+   sem súlykülönbség NEM volt, egyedül a szín tért el (ink 14,79:1 vs
+   text-muted 8,80:1). Ráadásul a cím a Tenor Sans-t vitte, aminek vékonyabb
+   a vonalvastagsága, mint a törzsszöveg Nunito Sans-áé: a címsor emiatt
+   HALVÁNYABBNAK látszott, mint az alatta futó bekezdés — pontosan fordítva,
+   mint ahogy egy címsornak kell.
+
+   A javítás a SÚLY, mert a méret nem mozdulhat (három-méretes skála):
+     - a betűcsalád a TÖRZS-betűre vált. Ez nem stílus-kérdés, hanem mérés:
+       a Tenor Sans-nak CSAK 400-as metszete van (styles/fonts.css), a 700
+       kérése ezért szintetikus („faux") félkövért ad — mérve a 400/600/700
+       előtolás bitre azonos (166,23 px), vagyis a böngésző a vonalakat
+       vastagítja, a betűközöket nem tágítja, így a belső formák bezáródnak.
+       A Nunito Sans ezzel szemben VARIÁBILIS 400–700 (mérve: 153,94 /
+       156,42 / 159,33 px), tehát valódi metszetet ad. Ugyanez az indok
+       szerepel a `.kc-how__num` mellett is (how-it-works.css).
+     - a súly 700. Ez a GOV.UK Design System mintája: a `govuk-heading-s`
+       PONTOSAN akkora, mint a `govuk-body` (19 px), és kizárólag a
+       félkövér súly (`$govuk-font-weight-bold: 700`) különbözteti meg.
+     - a sortáv a közös címsor-sortávra vált (1,08 → 1,2). Az 1,08 a
+       tábla-tükörből maradt itt; magyar ékezetes címnél (ő, ű) tördeléskor a
+       felső sor betűi a következő sorhoz értek.
+     - a betűköz visszaáll normálra: a 0,005em a Tenor Sans-hoz volt kalibrálva.
+
+   A szín NEM változik (ink, 14,79:1 a paperen) — a kontraszt eddig is bőven
+   AA fölött volt, a hiba a hierarchiában volt, nem a kontrasztban. */
 .kc-services__row-title {
   margin: 0 0 var(--kc-space-4);
-  font-family: var(--kc-font-heading);
+  font-family: var(--kc-font-body);
   font-size: var(--kc-font-m);
-  font-weight: var(--kc-font-weight-normal);
-  letter-spacing: 0.005em;
-  line-height: 1.08;
+  font-weight: var(--kc-font-weight-bold);
+  letter-spacing: normal;
+  line-height: var(--kc-leading-heading);
   color: var(--kc-services-ink);
   text-wrap: balance;
 }
