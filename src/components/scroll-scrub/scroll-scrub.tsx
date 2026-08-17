@@ -94,7 +94,23 @@ export interface ScrollScrubTheme {
  */
 export interface ScrollScrubCaption {
   id: string
+  /** A felirat CÍME: egy tömör mondat, amit a néző egy pillantásra elolvas. */
   text: string
+  /**
+   * Rövid leírás a cím ALATT. Elhagyva a felirat egyetlen sorból áll (a mező
+   * bevezetése előtti viselkedés).
+   *
+   * MIÉRT KELL (tulajdonosi kérés, 2026-08-17): a cím önmagában „üres" — a
+   * néző megáll rajta, és nincs mit olvasnia tovább. Az NN/g eyetracking
+   * rétegtorta-mintája szerint a tekintet a címeken ugrál, és AZ ALATTA LÉVŐ
+   * törzsszöveget olvassa el, amint egy cím érdekli
+   * („The Layer-Cake Pattern of Scanning Content on the Web",
+   * https://www.nngroup.com/articles/layer-cake-pattern-scanning/ — „fixations
+   * made mostly on the page's headings and subheadings, with deliberate
+   * occasional fixations on the (body) text in between"). Cím alatti szöveg
+   * nélkül ez a lépés nem tud megtörténni.
+   */
+  body?: string
   /** Vízszintes elhelyezés a filmvásznon. */
   align: 'center' | 'right'
   /** A sáv kezdete a teljes scrub arányában (0..1). */
@@ -743,17 +759,28 @@ export function ScrollScrub({
 
         {/* Úszó feliratok (2. és 3. állás). Rendes DOM-szöveg a vásznon: a
             láthatóságot a görgetés adja, de a tartalom végig a fában marad,
-            így képernyőolvasóval és kereséssel is elérhető. */}
+            így képernyőolvasóval és kereséssel is elérhető.
+
+            MIÉRT NEM CÍMSOR a felirat címe: a vászon (`__stage`) a DOM-ban
+            MEGELŐZI a jelenet-szöveget (`__story`), ahol a lap egyetlen h1-e
+            áll. Egy h2-vel a lap első címsora a h1 ELŐTT jönne, tehát a
+            dokumentum-vázlat fordítva olvasódna. A cím és a leírás
+            összetartozását így az olvasási sorrend és a közös, egyben
+            elhalványuló doboz adja; az `aria-hidden` a burkolóra kerül, ezért
+            a két bekezdés mindig EGYÜTT jelenik meg a képernyőolvasónak. */}
         {captionList.length > 0 ? (
           <div className="scroll-scrub__captions">
             {captionList.map((caption) => (
-              <p
+              <div
                 className={`scroll-scrub__caption scroll-scrub__caption--${caption.align}`}
                 data-scroll-scrub-caption=""
                 key={caption.id}
               >
-                {caption.text}
-              </p>
+                <p className="scroll-scrub__caption-title">{caption.text}</p>
+                {caption.body ? (
+                  <p className="scroll-scrub__caption-body">{caption.body}</p>
+                ) : null}
+              </div>
             ))}
           </div>
         ) : null}

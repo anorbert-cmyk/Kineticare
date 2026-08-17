@@ -98,14 +98,27 @@ const CAPTION_END = { from: 0.84 * PINNED, to: 1 } as const
 /**
  * A 2. és 3. állás SZÖVEGE — kódban rögzített érték.
  *
+ * Mindkét állás CÍMBŐL és a cím alatti LEÍRÁSBÓL áll, ugyanúgy, ahogy az 1.
+ * állás szekciója (cím + bevezető). Gomb nincs alattuk: a filmsáv ott már a
+ * lap többi szekciója felé ad át, a két hero-CTA pedig az 1. állásban áll.
+ *
  * A filmsáv feliratai szándékosan NEM CMS-mezők: a blokk sémája nem bővült,
  * migráció sem kell hozzá. Az 1. állás szövege ezzel szemben CMS-tartalom: a
  * blokk `title` / `lead` / `tags` / `ctas` mezőiből jön.
  *
- * Tartsd rövidnek: egy tömör mondat, amit a néző egy pillantásra elolvas
- * görgetés közben. Üres string esetén az adott állás egyszerűen nem jelenik meg.
+ * Tartsd rövidnek: a cím egy tömör mondat, a leírás legfeljebb két rövid
+ * mondat (~120 karakter) — a néző görgetés közben olvassa. Üres címnél az
+ * adott állás egyszerűen nem jelenik meg; üres leírásnál csak a cím látszik.
  *
- * ═══ MIÉRT EZ A KÉT MONDAT (2026-08-16, tulajdonosi kérésre írva) ═══
+ * ═══ MIÉRT VAN LEÍRÁS IS (2026-08-17, tulajdonosi kérés) ═══
+ * A puszta cím „üres": a néző megáll rajta, és nincs mit olvasnia tovább. Az
+ * NN/g eyetracking-kutatásának rétegtorta-mintája szerint a tekintet a
+ * címeken ugrál, és a törzsszöveget akkor olvassa el, amikor egy cím érdekli
+ * („The Layer-Cake Pattern of Scanning Content on the Web",
+ * https://www.nngroup.com/articles/layer-cake-pattern-scanning/). Cím alatti
+ * szöveg nélkül ez a lépés nem tud megtörténni.
+ *
+ * ═══ MIÉRT EZ A KÉT CÍM (2026-08-16, tulajdonosi kérésre írva) ═══
  * A filmsáv a logó és a terápia közös ívét rajzolja ki: ZÁRT → NYÍLÓ →
  * NYITOTT (lásd a kezdőlap „Három állapot" szekcióját). A három felirat ezt az
  * ívet követi: az 1. állás a problémát mondja ki (CMS-ből), a 2. a
@@ -120,14 +133,25 @@ const CAPTION_END = { from: 0.84 * PINNED, to: 1 } as const
  * eredmény-ígéret a vásárlási döntés mellett megtévesztő benyomást kelt, és
  * ugyanaz a kifogás állna rá, ami miatt a kurzusoldali vélemény-szekciót is
  * megállítottuk. A haladás LEÍRÁSA igaz állítás; a gyógyulás ÍGÉRETE nem
- * lenne az.
+ * lenne az. Ezért írja le a 2. leírás a GYAKORLÁST (mit csinálsz), nem az
+ * eredményt (mi lesz tőle).
+ *
+ * A leírások állításai a lap saját, már jóváhagyott szövegeiből jönnek, nem
+ * újak: „naponta néhány perc is elég a haladáshoz" és „a gyakorlatok lépésről
+ * lépésre vezetnek" (howItWorks szekció), „Ha előbb kipróbálnád" (freeSos
+ * szekció), a 3. leírásban felsorolt két irány pedig a lentebbi Szolgáltatások
+ * szekció 01. és 02. sora („Rendelői kezelések", „Otthoni program").
  *
  * Mikroszöveg-szabályok (docs/ui-sztenderdek.md §3.1): natív magyar, töltelék
  * gondolatjel nélkül, felkiáltójel nélkül, a záró felirat tegez — a §3.2 P-1b
  * szerint ez nem CTA, hanem a néző felé forduló mondat.
  */
 const CAPTION_MID_TEXT = 'Minden alkalommal egy mozdulattal több'
+const CAPTION_MID_BODY =
+  'Napi néhány perc otthon, a saját tempódban. A gyakorlatok lépésről lépésre épülnek egymásra, ahogy a kéz bírja.'
 const CAPTION_END_TEXT = 'A következő mozdulat a tiéd'
+const CAPTION_END_BODY =
+  'Lentebb megtalálod a kurzusokat és a rendelői kezeléseket. Ha előbb kipróbálnád, ott vannak az ingyenes SOS gyakorlatok.'
 
 /** A fejezet-navigáció felirata — egyetlen jelenetnél nem is jelenik meg. */
 const FILM_LABEL = 'A kéz nyílása'
@@ -172,11 +196,23 @@ export function FilmHero({ block }: FilmHeroProps) {
   const captions: ScrollScrubCaption[] = []
   const midText = CAPTION_MID_TEXT.trim()
   if (midText) {
-    captions.push({ align: 'right', id: 'film-scrub-kozep', text: midText, ...CAPTION_MID })
+    captions.push({
+      align: 'right',
+      body: CAPTION_MID_BODY.trim() || undefined,
+      id: 'film-scrub-kozep',
+      text: midText,
+      ...CAPTION_MID,
+    })
   }
   const endText = CAPTION_END_TEXT.trim()
   if (endText) {
-    captions.push({ align: 'center', id: 'film-scrub-vege', text: endText, ...CAPTION_END })
+    captions.push({
+      align: 'center',
+      body: CAPTION_END_BODY.trim() || undefined,
+      id: 'film-scrub-vege',
+      text: endText,
+      ...CAPTION_END,
+    })
   }
 
   const scene: ScrollScrubScene = {
