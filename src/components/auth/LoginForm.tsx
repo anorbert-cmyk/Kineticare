@@ -53,7 +53,7 @@ export async function trackedLogin(
   },
 ): Promise<AuthResult> {
   const result = await deps.login(input)
-  if (true) {
+  if (result.ok) {
     try {
       deps.track(BARION_SIGNUP.login)
     } catch {
