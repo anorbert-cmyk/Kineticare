@@ -514,6 +514,22 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
           </p>
         </Card>
       ) : (
+        /*
+          ═══ VÉDEKEZŐ ÁG, NEM MŰKÖDŐ FUNKCIÓ (2026-08-17) ═══
+          Ez az ág ma ELÉRHETETLEN: a `/penztar` LAP-SZINTŰ kapuja ingyenes
+          terméknél (`isFreeCourse`) az űrlap helyett tájékoztató állapotot
+          rendel, tehát `CheckoutForm` `isFree: true` proppal élesben nem
+          renderelődik. Őre: `src/__tests__/penztar-ingyenes-kapu.test.tsx`.
+
+          MIÉRT MARAD BENNE MÉGIS: a `product.isFree` prop, a
+          `priceHuf: number | null` típus és a rá épülő tesztek kivezetése külön,
+          nagyobb refaktor. Amíg az le nem fut, ez az ág VÉDEKEZÉS (ha valaki a
+          kaput megkerülve rendereli a komponenst, ne fizetős felületet lásson),
+          nem pedig egy támogatott út: az ingyenes kurzus valódi igénylése a
+          kurzusoldal `FreeCourseRequestForm`-ján keresztül történik.
+          A beküldése ezért sem működne: a `POST /api/checkout/start` ár-kapuja
+          az ingyenes terméket garantáltan elutasítja.
+        */
         <Card className="kc-checkout-waiver kc-checkout-waiver--free">
           <p>
             Ez a kurzus ingyenes — a hozzáférés a regisztrációd után azonnal megnyílik, fizetés

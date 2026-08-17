@@ -4,11 +4,24 @@ import { getPayload } from 'payload'
 import { headers } from 'next/headers'
 
 import { TrackEvent } from '@/components/analytics/TrackEvent'
+import { Button } from '@/components/ui/Button'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { CheckoutForm } from '@/components/checkout/CheckoutForm'
+import { courseCtaHref } from '@/lib/course-url'
+import { ctaLabel } from '@/lib/cta-vocabulary'
+import {
+  FREE_COURSE_ALREADY_GRANTED_TEXT,
+  FREE_COURSE_NOT_CHECKOUT_TEXT,
+} from '@/lib/free-course/ui-text'
 import { logger } from '@/lib/logger'
-import { coursePriceHuf, courseTitle, hasUserPurchased } from '@/lib/courses'
+import {
+  MY_COURSES_PATH,
+  coursePriceHuf,
+  courseTitle,
+  hasUserPurchased,
+  isFreeCourse,
+} from '@/lib/courses'
 import type { Product, User } from '@/payload-types'
 
 import config from '../../../payload.config'
@@ -61,6 +74,9 @@ async function getProductById(id: number): Promise<Product | null> {
  *   checkouton keresztül.
  * - ARCHIVÁLT terméknél az űrlap helyett tájékoztató állapot jelenik meg (a
  *   beküldés úgyis 400-zal hasalna el).
+ * - INGYENES terméknél UGYANEZ a minta (2026-08-17): a pénztár nem az ő útja,
+ *   ezért tájékoztató állapot megy ki, egyetlen továbblépéssel a kurzusoldal
+ *   igénylő űrlapjára. Az indoklás és a források az `isFree` kapunál.
  * - A fizetési gomb felirata KÖTÖTT: „Megrendelés és fizetés".
  */
 export default async function PenztarPage({ searchParams }: PenztarPageProps) {
@@ -115,7 +131,69 @@ export default async function PenztarPage({ searchParams }: PenztarPageProps) {
   // fizetés indításakor (e-mail alapján) is ellenőrzi, 409-cel.
   const alreadyPurchased = user !== null && hasUserPurchased(user.purchases, product.id)
   const price = coursePriceHuf(product)
-  const isFree = product.priceInHUFEnabled === false
+  const isFree = isFreeCourse(product)
+
+  /**
+   * ═══ INGYENES KURZUS: A PÉNZTÁR NEM AZ Ő ÚTJA (2026-08-17) ═══
+   *
+   * A HIBA, AMIT BEZÁR. A `/penztar?termek=<ingyenes-id>` eddig teljes értékű
+   * űrlapot rendelt („Hozzáférés megnyitása" gombbal), a beküldés viszont a
+   * `POST /api/checkout/start`-ra ment, ahol az ár-kapu garantáltan elutasítja:
+   * `coursePriceHuf` az ingyenes terméken `null`, tehát „A termékhez nem
+   * tartozik érvényes ár, így nem vásárolható meg." (start-checkout.ts). A lap
+   * tehát egy működőnek LÁTSZÓ űrlapot mutatott, ami sosem járhatott sikerrel:
+   * a vevő kitöltötte a számlázási adatait és elfogadta a nyilatkozatokat, hogy
+   * a végén magyarázat nélküli hibát kapjon.
+   *
+   * MIÉRT ÁLLAPOT ÉS NEM ÁTIRÁNYÍTÁS. Ugyanaz az érv, amit a fenti archivált ág
+   * kommentje kimond: „a díszlet-űrlap a néma hiba kínosabbik fajtája". A néma
+   * átirányítás viszont az OKOT rejtené el — NN/g, Error-Message Guidelines:
+   * „Concisely and precisely describe the issue" és „Offer constructive
+   * advice. Merely stating the problem is also not enough; offer some potential
+   * remedies." https://www.nngroup.com/articles/error-message-guidelines/
+   * A lap másik két végállapota (nincs termék, archivált) szintén állapotot
+   * mutat, nem irányít át — a harmadik sem térhet el ettől (WCAG 2.2 SC 3.2.4,
+   * Consistent Identification).
+   *
+   * EGYETLEN TOVÁBBLÉPÉS. GOV.UK Design System, Button: „Avoid using multiple
+   * default buttons on a single page. Having more than one main call to action
+   * reduces their impact, and makes it harder for users to know what to do
+   * next." https://design-system.service.gov.uk/components/button/
+   *
+   * HOVA VISZ. Az ingyenes kurzus VALÓDI útja a kurzusoldal vásárlódobozában
+   * álló igénylő űrlap (`FreeCourseRequestForm`), aminek a horgonya a
+   * `COURSE_CTA_ANCHOR`. Aki már megkapta, annak nincs mit igényelnie: őt a
+   * Kurzusaim várja.
+   *
+   * A FELIRATOK a §3.2 CTA-szótárból jönnek (`cta-vocabulary.ts`), nem
+   * literálként — így a G-UI1 őr védi őket: #3 `Elindítom ingyen` (E/1,
+   * `secondary`) a másik dokumentumba vivő igénylés-belépőre, #9 `Nyisd meg a
+   * kurzusaidat` (E/2, `secondary`) a meglévő hozzáférésre. Mindkét sor súlya
+   * a szótárban `secondary` (C-2: ugyanaz a cselekvés = ugyanaz a súly); ezt
+   * az őr-teszt méri, hogy a lap és a szótár ne csúszhasson szét.
+   */
+  if (isFree) {
+    return (
+      <Section>
+        <Container size="narrow">
+          <h1>Pénztár</h1>
+          <div className="kc-cart-empty" role="status">
+            <p>
+              {alreadyPurchased
+                ? FREE_COURSE_ALREADY_GRANTED_TEXT
+                : FREE_COURSE_NOT_CHECKOUT_TEXT}
+            </p>
+            <Button
+              href={alreadyPurchased ? MY_COURSES_PATH : courseCtaHref(product)}
+              variant="secondary"
+            >
+              {ctaLabel(alreadyPurchased ? 'my-courses-open' : 'free-course-claim')}
+            </Button>
+          </div>
+        </Container>
+      </Section>
+    )
+  }
 
   return (
     <Section>

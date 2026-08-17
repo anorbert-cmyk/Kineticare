@@ -141,3 +141,40 @@ export const FREE_COURSE_TURNSTILE_PENDING_ERROR =
 
 /** Az űrlap fölött álló hiba-összefoglaló általános sora (mezőhibáknál). */
 export const FREE_COURSE_ERROR_SUMMARY = 'Nézd át a megjelölt mezőket, majd küldd el újra.'
+
+/**
+ * ═══ A PÉNZTÁR INGYENES-KAPUJA (2026-08-17) ═══
+ *
+ * A `/penztar?termek=<ingyenes-id>` eddig teljes értékű, de SOSEM sikerülő
+ * űrlapot rendelt: a beküldést a `POST /api/checkout/start` ár-kapuja
+ * garantáltan elutasítja („A termékhez nem tartozik érvényes ár…"), mert az
+ * ingyenes terméken a `coursePriceHuf` `null`. A lap most az űrlap helyett
+ * tájékoztató állapotot mutat, egyetlen továbblépéssel.
+ *
+ * A SZÖVEG SZABÁLYAI (a modul fejlécében felsoroltakon túl):
+ *  - NN/g, Error-Message Guidelines: „Concisely and precisely describe the
+ *    issue"; „Take a positive tone and don't blame the user"; „Offer
+ *    constructive advice. Merely stating the problem is also not enough; offer
+ *    some potential remedies." A mondat ezért ELŐBB az okot mondja ki (ingyenes,
+ *    tehát nincs mit fizetni), UTÁNA az utat.
+ *    https://www.nngroup.com/articles/error-message-guidelines/
+ *  - GOV.UK Design System, Button: „Avoid using multiple default buttons on a
+ *    single page." Egyetlen továbblépés van, a §3.2 szótárból.
+ *    https://design-system.service.gov.uk/components/button/
+ *  - A MEZŐKET SZÁNDÉKOSAN NEM SOROLJA FEL. Ugyanaz a vezetői javítás, ami a
+ *    `FREE_COURSE_FORM_LINK_TEXT`-et átírta: az űrlapnak HÁROM kötelező eleme
+ *    van (név, e-mail, adatkezelési jelölőnégyzet), a kettőt említő mondat tehát
+ *    ALULMONDANÁ a ráfordítást. Helyette az marad, ami minden mezőre igaz és
+ *    ellenőrizhető: rövid, és fizetni nem kell.
+ */
+export const FREE_COURSE_NOT_CHECKOUT_TEXT =
+  'Ez a kurzus ingyenes, ezért nem a pénztáron át jár. A kurzus oldalán igényelheted: az űrlap rövid, és fizetned nem kell érte.'
+
+/**
+ * Ugyanaz az állapot annak, aki a hozzáférést MÁR megkapta. Igényelnie nincs
+ * mit, tehát a továbblépés a Kurzusaim (§3.2 #9) — a mondat pedig megmondja,
+ * hol találja meg. Vendégként ez az ág nem fut: fiók nélkül nincs mihez
+ * hasonlítani (a lap `alreadyPurchased`-e bejelentkezés nélkül mindig hamis).
+ */
+export const FREE_COURSE_ALREADY_GRANTED_TEXT =
+  'Ez a kurzus ingyenes, és a hozzáférésed már megvan. A Kurzusaim oldalon éred el.'
