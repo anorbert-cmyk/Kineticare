@@ -32,21 +32,12 @@
   font-size: var(--kc-font-s);
 }
 
-.kc-auth-form__billing {
-  padding: var(--kc-space-4);
-  border: 1px solid var(--kc-color-border);
-  border-radius: var(--kc-radius-md);
-}
-
-.kc-auth-form__billing summary {
-  cursor: pointer;
-  font-weight: var(--kc-font-weight-bold);
-  color: var(--kc-color-primary);
-}
-
-.kc-auth-form__billing summary:hover {
-  text-decoration: underline;
-}
+/* A `.kc-auth-form__billing` összecsukható számlázási blokk 2026-08-17-én
+   kikerült a regisztrációból (tulajdonosi döntés: számlázási adatot ott kérünk,
+   ahol számla készül belőle — a fizetés során). A szabályok azért törlődtek, és
+   nem maradtak „hátha kell": a gomb-kontraszt őr elárvult célfelület-kivételt
+   sem tűr meg, holt CSS-t pedig végképp. Az indoklás és a három hivatkozott
+   forrás a RegisterForm.tsx fejlécében áll. */
 
 .kc-auth-alt {
   margin-top: var(--kc-space-6);
