@@ -76,12 +76,21 @@ async function getContactFormId(): Promise<string | null> {
 }
 
 /**
- * /kapcsolat — a lap két, egymástól világosan elváló feladatot kínál:
+ * /kapcsolat — a lap HÁROM, egymástól világosan elváló utat kínál, a
+ * leggyorsabbtól a legáltalánosabbig:
  *
  *  1. IDŐPONTKÉRÉS rendelői kezelésre (szerkeszthető szekció a CMS-ből). Ez az
  *     üzleti cél-sorrendben előrébb áll (bevételt hozó szolgáltatás), ezért a
- *     lap tetején, a cím alatt kap helyet.
- *  2. ÁLTALÁNOS ÜZENET a csapatnak (a meglévő T-016 űrlap), saját címsorral.
+ *     lap tetején, a cím alatt kap helyet. A bal hasábja kiírja a rendelők
+ *     címét, mindkét telefonszámot és az e-mail-címet, mobilon az űrlap FÖLÖTT
+ *     — az NN/g kapcsolat-oldal irányelve szerint az űrlap csak a telefonszám
+ *     MELLETT állhat, nem helyette
+ *     (https://www.nngroup.com/articles/contact-us-pages/).
+ *  2. SZAKEMBER-ELÉRHETŐSÉG (szintén CMS-szekció, 2026-08-16 óta): a két
+ *     gyógytornász arca, titulusa, rövid bemutatkozása és kattintható
+ *     telefonszáma. Az 1. pont telefonlistája két nevet ad; ez a szekció mondja
+ *     meg, melyik szám kihez tartozik és ki mivel foglalkozik.
+ *  3. ÁLTALÁNOS ÜZENET a csapatnak (a meglévő T-016 űrlap), saját címsorral.
  *
  * A GOV.UK „question pages" elve szerint egy képernyőn egy feladat legyen a
  * fókusz (https://design-system.service.gov.uk/patterns/question-pages/); két
@@ -90,8 +99,10 @@ async function getContactFormId(): Promise<string | null> {
  * bevezetője ezért a saját szekciójába költözött (korábban a lap-bevezető
  * volt): az így nem ígér mást, mint amit az alatta lévő űrlap tud.
  *
- * A sávritmus: a lapfej fehér, az időpontkérő szekció alapból világoskék, az
- * üzenetküldő rész újra fehér — a szomszédos szekciók így elválnak egymástól.
+ * A sávritmus: a lapfej fehér, az időpontkérő szekció alapból világoskék, a
+ * szakember-szekció és az üzenetküldő rész pedig fehér. A két fehér szakasz
+ * SZÁNDÉKOSAN egy régiót alkot („a másik két út: hívj minket, vagy írj
+ * nekünk"), a sávváltás a régióhatárt jelöli, nem a szekcióhatárt.
  */
 export default async function KapcsolatPage() {
   const [formId, page] = await Promise.all([

@@ -2,9 +2,9 @@
  * Tulajdonos által jóváhagyott, EGYSZERI szerkesztői tartalom-javítások.
  *
  * ═══ MIT JAVÍT ═══
- * Tizenkét, 2026-08-16-án jóváhagyott tartalom-javítás. Mind KIZÁRÓLAG pontos
- * egyezésnél (illetve üres mezőnél, hiányzó oldalnál) fut le, tehát a lányok
- * időközbeni szerkesztését egyik sem írja felül:
+ * Tizenhat, 2026-08-16-án jóváhagyott tartalom-javítás. Mind KIZÁRÓLAG pontos
+ * egyezésnél (illetve üres mezőnél, hiányzó blokknál, hiányzó oldalnál) fut le,
+ * tehát a lányok időközbeni szerkesztését egyik sem írja felül:
  *
  *  1. Kezdőlap → Kurzuskártyák szekció címe: „Így tudunk neked segíteni” →
  *     „Kurzusaink”. Ok: az eredeti cím ÜTKÖZÖTT a lentebbi Szolgáltatások
@@ -111,6 +111,22 @@
  *         ha az élő blokk tartalma byte-ra a seedelt örökölt (kulcs-sorrendtől
  *         független összevetés — `szolgaltatasokRegiBevezetoTartalom`); ha az
  *         1. blokk már `welcome`, nincs teendő.
+ * 15. A kurzuslistára vivő gombok EGYSÉGES felirata a kezdőlap élő
+ *     szekciósorában: a `/kurzusok` címre mutató, ismert régi feliratú
+ *     hivatkozások a §3.2 #10 jóváhagyott feliratára (`Nézd meg a kurzusokat`)
+ *     állnak át. Egy cselekvés, egy szó (WCAG 2.2 · 3.2.4). A szerkesztő saját
+ *     szövegeit a script sosem írja át; a lánc VÉGÉN fut, hogy a 11. javítás
+ *     által beszúrt záró CTA-sávot is elérje.
+ * 16. A `/kapcsolat` lap HIÁNYZÓ szekciói. A lapot dedikált route szolgálja ki,
+ *     de a szekciósorát az ilyen slugú CMS-oldalról olvassa; a seed viszont
+ *     meglévő szekciósort sosem ír felül, ezért az élő lapon ma EGYETLEN
+ *     szekció sincs — se időpontkérő, se szakember-elérhetőség. A javítás a
+ *     seed-builderből (`buildKapcsolatLayout`) pótolja a hiányzókat: az
+ *     időpontkérőt a szekciósor végére, a szakember-elérhetőséget közvetlenül
+ *     utána (tulajdonosi kérés, 2026-08-16: „lányok elérhetősége kell a
+ *     kapcsolat menüpontba is"). Ami MÁR ott van, azt csendben kihagyja
+ *     (idempotencia); ha a lapon MÁS nevekkel álló szakember-szekció van, a
+ *     script HANGOSAN kihagy és nem duplikál.
  *
  * ═══ KAPU ═══
  * Alapértelmezésben PRÓBAFUTÁS (dry-run): a script mindent kiszámol és
@@ -137,8 +153,8 @@
  * adja tovább — így a többi szekció tartalma bitre azonos marad.
  *
  * ═══ EGY OLDAL, TÖBB JAVÍTÁS ═══
- * A kezdőlapra négy (1–2., 9., 10., 11.), a /szolgaltatasok oldalra három (8.,
- * 12a., 12b.) javítás vonatkozik. Ezek LÁNCBAN futnak — mindegyik az előző
+ * A kezdőlapra öt (1–2., 9., 10., 11., 15.), a /szolgaltatasok oldalra három
+ * (8., 12a., 12b.) javítás vonatkozik. Ezek LÁNCBAN futnak — mindegyik az előző
  * eredményén dolgozik —, és oldalanként EGYETLEN `payload.update` megy ki, egy
  * piszkozat-ellenőrzéssel. A lánc konvergenciáját (második futásra nulla
  * módosítás) teszt méri, adatbázis nélkül.
@@ -167,6 +183,7 @@ import type { Page, Product } from '../payload-types'
 // seed-builderből veszi az ÚJ blokkokat, és az örökölt tartalommal veti össze
 // az élő blokkot.
 import {
+  buildKapcsolatLayout,
   buildRolunkLayout,
   buildSzolgaltatasokLayout,
   rolunkSzakmaiOrokoltTartalom,
@@ -299,6 +316,7 @@ export type JavitasSzabaly =
   | 'sos-ingyenes-jelolo'
   | 'kurzuslista-feliratok'
   | 'aszf-adatvedelem-link'
+  | 'kapcsolat-szakemberek'
 
 /** Egy elvégzett módosítás vagy egy indokolt kihagyás gépileg is vizsgálható leírása. */
 export interface JavitasLepes {
@@ -1872,6 +1890,183 @@ export const alkalmazSzolgaltatasokBevezeto = (input: {
 }
 
 // ---------------------------------------------------------------------------
+// 16. javítás — a /kapcsolat lap HIÁNYZÓ szekciói: a szakember-elérhetőség
+// (tulajdonosi kérés) és — ha az is hiányzik — az időpontkérő.
+// ---------------------------------------------------------------------------
+
+/** A `/kapcsolat` oldal webcíme (Pages.slug) — a route innen olvassa a szekciósorát. */
+export const KAPCSOLAT_SLUG = 'kapcsolat'
+
+/**
+ * A két portré fájlnév-prefixe.
+ *
+ * Prefix és futásidejű feloldás a 4. és a 12a. javítás mintájára: a Média
+ * collection webp-re konvertál, ezért a kiterjesztés környezetenként eltér, fix
+ * azonosítót pedig nem használhatunk.
+ */
+export const KOCSIS_PORTRE_PREFIX = '67b3c6e9e315f_KocsisKatakozeli'
+export const KISS_PORTRE_PREFIX = '67c07def59ac2_KissKataelegans'
+
+/**
+ * A /kapcsolat seedelt szekciósorának két blokkja, típus szerint szétszedve.
+ *
+ * MIÉRT A BUILDERBŐL: ugyanaz az elv, mint a szakmai harmonikánál
+ * (`rolunkSzakmaiUjBlokkok`) és a záró CTA-sávnál — a beszúrt blokk pontosan az
+ * legyen, amit egy friss adatbázisban a seed építene, hogy a kód-szintű
+ * alapállapot és az élő javítás ne csúszhasson szét. Ha a builder alakja
+ * megváltozik (nem pontosan egy-egy ilyen blokkot ad), `null` jön vissza, és a
+ * hívó HANGOSAN kihagy — vaktában sosem írunk.
+ */
+export const kapcsolatSeedBlokkok = (
+  portrek: { kocsisPortre?: number; kissPortre?: number } = {},
+): {
+  idopontkeres: SzekcioTipus<'appointment'> | null
+  szakemberek: SzekcioTipus<'teamMembers'> | null
+} => {
+  const layout = buildKapcsolatLayout(portrek)
+  const egyetlen = <T extends Szekciosor[number]['blockType']>(
+    blockType: T,
+  ): SzekcioTipus<T> | null => {
+    const talalatok = layout.filter((blokk) => blokk.blockType === blockType)
+    return talalatok.length === 1 ? (talalatok[0] as SzekcioTipus<T>) : null
+  }
+  return { idopontkeres: egyetlen('appointment'), szakemberek: egyetlen('teamMembers') }
+}
+
+/**
+ * Egy szakember-szekció NÉV-halmaza — ebből dől el, hogy a lapon álló blokk a
+ * miénk-e, vagy a szerkesztő sajátja.
+ *
+ * MIÉRT A NEVEK, ÉS NEM A TELJES BLOKK ÖSSZEVETÉSE: a Payload a mentéskor
+ * minden blokkhoz és tömb-sorhoz saját `id`-t generál, a visszaolvasott blokk
+ * tehát SOSEM egyezik byte-ra a kódból épített változattal — a mély összevetés
+ * (`stabilJson`) itt minden második futáson hamis „a szerkesztő átírta"
+ * eredményt adna, és elbukna az idempotencia. A nevek viszont a szerkesztés
+ * után is a helyükön maradnak, és pontosan azt a kérdést döntik el, ami számít:
+ * ugyanazt a két embert mutatja-e a szekció.
+ */
+const szakemberNevek = (blokk: SzekcioTipus<'teamMembers'>): string[] =>
+  (blokk.members ?? [])
+    .map((tag) => (tag.name ?? '').trim())
+    .filter((nev) => nev.length > 0)
+    .sort()
+
+/**
+ * A /kapcsolat szekciósorának kiegészítése a HIÁNYZÓ blokkokkal.
+ *
+ * ═══ A MÉRT HIBA ═══
+ * A /kapcsolat dedikált route, de a szekciósorát az ilyen slugú CMS-oldalról
+ * olvassa (src/app/(frontend)/kapcsolat/page.tsx). A seed (`ensurePageLayout`)
+ * MEGLÉVŐ szekciósort sosem ír felül, ezért az élő lapon ma egyetlen szekció
+ * sincs: se időpontkérő, se szakember-elérhetőség — csak a route saját
+ * üzenetküldő űrlapja. A tulajdonos kérése („lányok elérhetősége kell a
+ * kapcsolat menüpontba is") kód-szinten a seed-builderben teljesül, az ÉLŐ
+ * laphoz viszont ez a javítás kell.
+ *
+ * ═══ MIT SZÚR BE, ÉS MIT NEM ═══
+ *  - hiányzó időpontkérő → beszúrás a szekciósor végére (a lap elsődleges
+ *    feladata, és a /szolgaltatasok `#idopontkeres` hivatkozásának célja);
+ *  - hiányzó szakember-szekció → beszúrás KÖZVETLENÜL az időpontkérő UTÁN (a
+ *    seed-builder sorrendje: az időpontkérő telefonlistája veti fel a „ki
+ *    melyik szám?" kérdést, ez a szekció válaszol rá);
+ *  - MÁR ott lévő szakember-szekció ugyanazokkal a nevekkel → csendes kihagyás
+ *    (idempotencia: a második futás nem módosít semmit);
+ *  - MÁS nevekkel álló szakember-szekció → HANGOS kihagyás, beszúrás NÉLKÜL: a
+ *    szerkesztő saját szekcióját nem duplikáljuk, de az üzemeltetőnek látnia
+ *    kell, hogy a lapon nem a seedelt tartalom áll.
+ *
+ * A blokkok a seed-builderből jönnek, nem külön literálból (lásd
+ * `kapcsolatSeedBlokkok`).
+ */
+export const alkalmazKapcsolatSzakemberek = (input: {
+  layout: Page['layout']
+  idopontkeresBlokk: SzekcioTipus<'appointment'> | null
+  szakemberBlokk: SzekcioTipus<'teamMembers'> | null
+}): SzekciosorCsere => {
+  const { layout, idopontkeresBlokk, szakemberBlokk } = input
+  const uzenet = 'A /kapcsolat lap szekciói'
+
+  const kihagyas = (indok: string, hangos = false): SzekciosorCsere => ({
+    layout: null,
+    modositasok: [],
+    kihagyasok: [{ szabaly: 'kapcsolat-szakemberek', uzenet, indok, hangos }],
+  })
+
+  if (idopontkeresBlokk === null || szakemberBlokk === null) {
+    return kihagyas(
+      'a seed-builder (buildKapcsolatLayout) nem pontosan egy időpontkérő és egy szakember-szekciót ad — a kód és a javítás szétcsúszott, kézi átnézés kell',
+      true,
+    )
+  }
+
+  const jelenlegi: Szekciosor = Array.isArray(layout) ? layout : []
+  const modositasok: JavitasLepes[] = []
+  const kihagyasok: JavitasLepes[] = []
+  const ujLayout: Szekciosor = [...jelenlegi]
+
+  // --- Időpontkérő -----------------------------------------------------------
+  if (ujLayout.some((blokk) => blokk.blockType === 'appointment')) {
+    kihagyasok.push({
+      szabaly: 'kapcsolat-szakemberek',
+      uzenet: `${uzenet}: az időpontkérő szekció`,
+      indok: 'MÁR ott van a szekciósorban — nincs teendő',
+    })
+  } else {
+    ujLayout.push(idopontkeresBlokk)
+    modositasok.push({
+      szabaly: 'kapcsolat-szakemberek',
+      uzenet: `${uzenet}: az időpontkérő szekció BESZÚRVA (${
+        ujLayout.length
+      }. szekció), ${ertekCimke(idopontkeresBlokk.title)} címmel — a lapon eddig egyetlen szekció sem volt, csak az üzenetküldő űrlap`,
+      indok: null,
+    })
+  }
+
+  // --- Szakember-elérhetőség -------------------------------------------------
+  const meglevoSzakember = ujLayout.find((blokk) => blokk.blockType === 'teamMembers')
+
+  if (meglevoSzakember !== undefined && meglevoSzakember.blockType === 'teamMembers') {
+    const ottNevek = szakemberNevek(meglevoSzakember)
+    const seedNevek = szakemberNevek(szakemberBlokk)
+    const azonos =
+      ottNevek.length === seedNevek.length && ottNevek.every((nev, i) => nev === seedNevek[i])
+
+    kihagyasok.push({
+      szabaly: 'kapcsolat-szakemberek',
+      uzenet: `${uzenet}: a szakember-elérhetőség`,
+      indok: azonos
+        ? `MÁR ott van a szekciósorban (${seedNevek.join(', ')}) — nincs teendő`
+        : `a lapon MÁR áll egy szakember-szekció, de MÁS nevekkel (ott: ${
+            ottNevek.length > 0 ? ottNevek.join(', ') : '(nincs név)'
+          }; a seedelt: ${seedNevek.join(
+            ', ',
+          )}) — a szerkesztő sajátját nem duplikáljuk, nézd át az adminban`,
+      hangos: !azonos,
+    })
+  } else {
+    // Az időpontkérő fölött van: a telefonlistája veti fel a kérdést, amire ez a
+    // szekció válaszol. A `findIndex` az ESETLEG MOST beszúrt blokkot is
+    // megtalálja, tehát a sorrend üres szekciósorból indulva is helyes.
+    const idopontIndex = ujLayout.findIndex((blokk) => blokk.blockType === 'appointment')
+    const hova = idopontIndex === -1 ? ujLayout.length : idopontIndex + 1
+    ujLayout.splice(hova, 0, szakemberBlokk)
+    modositasok.push({
+      szabaly: 'kapcsolat-szakemberek',
+      uzenet: `${uzenet}: a szakember-elérhetőség BESZÚRVA (${
+        hova + 1
+      }. szekció), ${ertekCimke(szakemberBlokk.title)} címmel — a két gyógytornász neve, titulusa, portréja és kattintható telefonszáma`,
+      indok: null,
+    })
+  }
+
+  return {
+    layout: modositasok.length > 0 ? ujLayout : null,
+    modositasok,
+    kihagyasok,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Futtatás — a tiszta átalakításokat köti az adatbázishoz.
 // ---------------------------------------------------------------------------
 
@@ -2390,6 +2585,78 @@ async function futtat(): Promise<void> {
         szolgaltatasok.updatedAt,
         piszkozat?.updatedAt,
       )
+    }
+  }
+
+  // --- 16. javítás: a /kapcsolat lap szekciói -------------------------------
+  const kapcsolatTalalat = await payload.find({
+    collection: 'pages',
+    where: { slug: { equals: KAPCSOLAT_SLUG } },
+    limit: 1,
+    depth: 0,
+    overrideAccess: true,
+  })
+  const kapcsolat = kapcsolatTalalat.docs[0]
+
+  if (kapcsolat === undefined) {
+    logger.error(
+      `Tartalom-javítás: nem található a Kapcsolat oldal (Pages, webcím: „${KAPCSOLAT_SLUG}”) — a /kapcsolat szekcióinak beszúrása kimaradt. Ezt az oldalt a legacy-visszaépítő hozza létre: npm run seed:legacy`,
+    )
+    hiba = true
+  } else {
+    const kocsisPortre = await keresdMediat(payload, KOCSIS_PORTRE_PREFIX)
+    const kissPortre = await keresdMediat(payload, KISS_PORTRE_PREFIX)
+    logger.info('Tartalom-javítás: a /kapcsolat szakember-portréi', {
+      kocsis: kocsisPortre?.filename ?? '(nem található)',
+      kiss: kissPortre?.filename ?? '(nem található)',
+    })
+    // A portré HIÁNYA nem blokkolja a beszúrást: a szekció név, titulus, rövid
+    // bemutatkozás és kattintható telefonszám nélkül is értéktelen lenne, kép
+    // nélkül viszont csak szegényebb (a renderelő a hiányzó képet kihagyja).
+    // Hangosan naplózzuk, mert a portré a szekció fele — az NN/g fotó-kutatása
+    // szerint a valódi munkatárs arcát a látogatók hosszabban nézik, mint a
+    // mellette álló életrajzot (https://www.nngroup.com/articles/photos-as-web-content/).
+    if (kocsisPortre === null || kissPortre === null) {
+      logger.error(
+        `Tartalom-javítás: a /kapcsolat szakember-szekciójához hiányzik portré (${KOCSIS_PORTRE_PREFIX}: ${
+          kocsisPortre === null ? 'NINCS' : 'megvan'
+        }, ${KISS_PORTRE_PREFIX}: ${
+          kissPortre === null ? 'NINCS' : 'megvan'
+        }). A szekció ettől még kikerül, de arc nélkül — a képeket a legacy-visszaépítő tölti fel: npm run seed:legacy`,
+      )
+    }
+
+    const seedBlokkok = kapcsolatSeedBlokkok({
+      kocsisPortre: kocsisPortre?.id,
+      kissPortre: kissPortre?.id,
+    })
+    const kapcsolatEredmeny = alkalmazKapcsolatSzakemberek({
+      layout: kapcsolat.layout,
+      idopontkeresBlokk: seedBlokkok.idopontkeres,
+      szakemberBlokk: seedBlokkok.szakemberek,
+    })
+    naplozdLepeseket(kapcsolatEredmeny, dryRun)
+    modositasokSzama += kapcsolatEredmeny.modositasok.length
+    kihagyasokSzama += kapcsolatEredmeny.kihagyasok.length
+
+    if (kapcsolatEredmeny.layout !== null && !dryRun) {
+      await payload.update({
+        collection: 'pages',
+        id: kapcsolat.id,
+        data: { layout: kapcsolatEredmeny.layout },
+        depth: 0,
+        overrideAccess: true,
+      })
+      const piszkozat = await payload
+        .findByID({
+          collection: 'pages',
+          id: kapcsolat.id,
+          depth: 0,
+          draft: true,
+          overrideAccess: true,
+        })
+        .catch(() => null)
+      figyelmeztessPiszkozatra('Kapcsolat oldal', kapcsolat.updatedAt, piszkozat?.updatedAt)
     }
   }
 
