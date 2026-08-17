@@ -1,4 +1,5 @@
 import type { BlockAppointment } from '../../payload-types'
+import { appointmentShowsForm } from '../../lib/appointment/context'
 import { sanitizeCmsUrl } from '../../lib/safe-url'
 import { telHref } from '../../lib/tel-href'
 import { Container } from '../ui/Container'
@@ -26,6 +27,19 @@ import '../../app/(frontend)/styles/blocks/appointment.css'
  * tanulsága, hogy a hosszabb űrlapot sokan nem töltik ki; ha ilyenkor nincs
  * alternatív út, a lead elvész. A telefonszám tehát nem díszítés, hanem a
  * második, teljes értékű csatorna.
+ *
+ * ŰRLAP NÉLKÜLI VÁLTOZAT (`urlapMutatasa: false`, tulajdonosi döntés
+ * 2026-08-17): ahol az időpontot telefonon egyeztetik, a jobb hasáb egyszerűen
+ * NEM renderel, a rács egyhasábos lesz, és a telefonszám marad az egyetlen út.
+ * Ez az NN/g irányelv megengedett iránya: az űrlap a KIEGÉSZÍTŐ csatorna, a
+ * telefonszám a kötelező („Offer a contact form only in addition to telephone
+ * numbers, not as a replacement" — https://www.nngroup.com/articles/contact-us-pages/).
+ * Ilyenkor az elérhetőség-lista kapja a `--fo` módosítót: a hívás- és
+ * levél-linkek 44 CSS px magas célfelületet kapnak, mert már nem folyószövegbe
+ * ágyazott hivatkozások, hanem a szekció cselekvései. A WCAG 2.2 2.5.8
+ * (AA, 24×24 px) „inline" kivétele enélkül is mentené őket, de cselekvésként a
+ * 2.5.5 (AAA, 44×44 px) a helyes mérce
+ * (https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html).
  *
  * TELJESEN CMS-VEZÉRELT: a szekció-fej és a rendelő-adatok MINDEN látható
  * szövege a blokk mezőiből jön (a `AppointmentIntro` őr-tesztje ezt rögzíti).
@@ -89,6 +103,12 @@ export function AppointmentIntro({ block, headingId }: AppointmentIntroProps) {
 
   const hasContact = helyszinek.length > 0 || telefonok.length > 0 || email.length > 0
 
+  // Űrlap nélkül az elérhetőség nem kísérő adat, hanem A cselekvés — ezért kap
+  // saját módosítót, amin a CSS a 44 px-es célfelületet adja (lásd a fájl fejét).
+  const contactClass = appointmentShowsForm(block)
+    ? 'kc-appointment__contact'
+    : 'kc-appointment__contact kc-appointment__contact--fo'
+
   return (
     <div className="kc-appointment__intro">
       {eyebrow.length > 0 ? <p className="kc-appointment__eyebrow">{eyebrow}</p> : null}
@@ -103,7 +123,7 @@ export function AppointmentIntro({ block, headingId }: AppointmentIntroProps) {
       ) : null}
 
       {hasContact ? (
-        <dl className="kc-appointment__contact">
+        <dl className={contactClass}>
           {helyszinek.length > 0 ? (
             <div className="kc-appointment__contact-group">
               {helyszinekFelirat.length > 0 ? <dt>{helyszinekFelirat}</dt> : null}
@@ -164,6 +184,8 @@ export function Appointment({ block, formId, turnstileSiteKey }: AppointmentSect
     .map((row) => row.felirat?.trim() ?? '')
     .filter((felirat) => felirat.length > 0)
 
+  const urlapLatszik = appointmentShowsForm(block)
+
   return (
     <Section
       aria-labelledby={title.length > 0 ? headingId : undefined}
@@ -172,22 +194,30 @@ export function Appointment({ block, formId, turnstileSiteKey }: AppointmentSect
       variant={variant}
     >
       <Container>
-        <div className="kc-appointment__grid">
+        <div
+          className={
+            urlapLatszik
+              ? 'kc-appointment__grid'
+              : 'kc-appointment__grid kc-appointment__grid--egyhasabos'
+          }
+        >
           <AppointmentIntro block={block} headingId={headingId} />
-          <div className="kc-appointment__panel">
-            {urlapCim.length > 0 ? (
-              <h3 className="kc-appointment__panel-title">{urlapCim}</h3>
-            ) : null}
-            <AppointmentForm
-              formId={formId}
-              gombFelirat={block.gombFelirat ?? undefined}
-              idopontSavok={idopontSavok}
-              sikerCim={block.sikerCim ?? undefined}
-              sikerSzoveg={block.sikerSzoveg ?? undefined}
-              telefonok={appointmentPhones(block)}
-              turnstileSiteKey={turnstileSiteKey}
-            />
-          </div>
+          {urlapLatszik ? (
+            <div className="kc-appointment__panel">
+              {urlapCim.length > 0 ? (
+                <h3 className="kc-appointment__panel-title">{urlapCim}</h3>
+              ) : null}
+              <AppointmentForm
+                formId={formId}
+                gombFelirat={block.gombFelirat ?? undefined}
+                idopontSavok={idopontSavok}
+                sikerCim={block.sikerCim ?? undefined}
+                sikerSzoveg={block.sikerSzoveg ?? undefined}
+                telefonok={appointmentPhones(block)}
+                turnstileSiteKey={turnstileSiteKey}
+              />
+            </div>
+          ) : null}
         </div>
       </Container>
     </Section>

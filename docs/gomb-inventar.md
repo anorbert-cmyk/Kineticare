@@ -365,7 +365,7 @@ Ezek a `ui-sztenderdek.md` §6.3 **G-UI1** őrének kiegészítései, nem helyet
 | **Visszaállító link kérése** | 1 | Visszaállító link küldése | **#21** | `Kérem a visszaállító linket` |
 | **Új jelszó beállítása** | 1 | Jelszó beállítása | **#22** | `Beállítom az új jelszót` |
 | **Hívás a szakembernek** | 2 | Hívd Kocsis Katát · Hívd Kiss Katát | **#23** | `Hívd Kocsis Katát` |
-| **Írásos időpontkérés (link)** | 1 | Kérj időpontot üzenetben | **#24** | `Kérj időpontot üzenetben` |
+| **Ugrás a rendelő elérhetőségeihez (link)** | 1 | Nézd meg az elérhetőségeinket | **#24** | `Nézd meg az elérhetőségeinket` |
 | **Időpontkérő űrlap beküldése** | 1 | Időpontot kérek | **#25** | `Időpontot kérek` |
 | **Ingyenes kurzus igénylése (űrlap-beküldés)** | 1 | Kérem a kurzust | **#26** | `Kérem a kurzust` |
 | **Ugrás az igénylő űrlaphoz (lapon belül, a lap aljáról)** | 1 | Kérd az ingyenes kurzust | **#27** | `Kérd az ingyenes kurzust` |
@@ -382,8 +382,8 @@ feliratok **ma ütköznek** (WCAG 2.2 · 3.2.4 Consistent Identification):
 
 | Hol | Mai felirat | Milyen funkció | Melyik sor szerint helyes |
 | --- | --- | --- | --- |
-| `/szolgaltatasok` hivatkozás (`restore-legacy-content.ts:562, 606`) | `Időpontot kérek` | **navigáció** a `/kapcsolat#idopontkeres` szekcióra | **#24** → `Kérj időpontot üzenetben` |
-| Szakember-szekció hivatkozása (`restore-legacy-content.ts:1180`) | `Kérj időpontot üzenetben` | navigáció ugyanoda | **#24** ✓ helyes |
+| `/szolgaltatasok` hivatkozás (`restore-legacy-content.ts:562, 606`) | `Időpontot kérek` | **navigáció** a `/kapcsolat#idopontkeres` szekcióra | **#24** → `Nézd meg az elérhetőségeinket` |
+| Szakember-szekció hivatkozása (`restore-legacy-content.ts:1180`) | `Nézd meg az elérhetőségeinket` | navigáció ugyanoda | **#24** ✓ helyes. A /kapcsolat lapon a hivatkozás 2026-08-17 óta KIMARAD: az időpontkérő szekció közvetlenül fölötte áll, a kártyák pedig maguk is hívás-linket viselnek. |
 | Az időpontkérő űrlap beküldő gombja (`restore-legacy-content.ts:1555`) | `Időpontot kérek` | **beküldés** (időpontkérés keletkezik) | **#25** ✓ helyes |
 
 Két hiba egyszerre: (1) ugyanarra a **navigációs** funkcióra két különböző felirat él, (2) a
@@ -392,7 +392,7 @@ szöveget látja a linken és a gombon, pedig az egyik csak odavisz, a másik t�
 kérést.
 
 **A javítás a hívóhely-csere körébe tartozik** (lásd §10/3.), nem ide: a seed-builderben a
-`/szolgaltatasok` hivatkozás feliratát `Kérj időpontot üzenetben`-re kell állítani. Az ÉLŐ
+`/szolgaltatasok` hivatkozás feliratát `Nézd meg az elérhetőségeinket`-re kell állítani. Az ÉLŐ
 szekciósorokat ez nem írja át — azokat az adminban kell javítani, mert a seed sosem ír felül
 meglévő szekciósort.
 

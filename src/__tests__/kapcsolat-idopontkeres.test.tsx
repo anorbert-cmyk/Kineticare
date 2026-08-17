@@ -91,25 +91,41 @@ describe('/kapcsolat alap-szekciósor', () => {
     expect(szolgaltatasok).toContain(IDOPONTKERES_URL)
   })
 
-  it('a magyarázat kimondja, hogy NEM foglalás, és megmondja a visszahívás idejét', () => {
+  it('a magyarázat a TELEFONOS utat írja le, és nem ígér foglalást', () => {
+    /**
+     * SZERZŐDÉS-VÁLTÁS (tulajdonosi döntés, 2026-08-17): az időpontot telefonon
+     * egyeztetik, nem üzenetben. A korábbi állítás („nem foglalás" + „két
+     * munkanapon belül") az ŰRLAP folyamatát írta le — űrlap nélkül mindkettő
+     * hamis lenne, ezért a magyarázat a hívásra mutat. Ami NEM változott: a
+     * szekció továbbra sem ígér naptár-foglalást.
+     */
     const html = renderKapcsolatLayout()
-    expect(html).toContain('nem foglalás')
-    expect(html).toContain('két munkanapon belül')
+    expect(html).toContain('Hívd az alábbi számok egyikét')
+    expect(html).toContain('50 perces vizsgálattal')
+    expect(html).not.toContain('két munkanapon belül')
+    // Naptár-foglalás nincs a rendszerben, tehát ígérni sem szabad. A szótő
+    // önmagában nem használható: a szakember-kártyák „ki mivel FOGLALkozik"
+    // mondata is illeszkedne rá (mérve) — a tiltás a foglalás FŐNÉVRE szól.
+    expect(html.toLowerCase()).not.toContain('foglalás')
+    expect(html.toLowerCase()).not.toContain('foglalj')
   })
 
-  it('a felkínált időpont-sávok között nincs olyan, amit nem tudunk tartani', () => {
+  it('nincs időpontkérő űrlap, se időpont-sáv, se beküldő gomb', () => {
     const html = renderKapcsolatLayout()
-    expect(html).toContain('Hétköznap délelőtt')
-    expect(html).toContain('Hétköznap délután')
-    expect(html).toContain('Rugalmas vagyok')
-    // Hétvégi rendelést a repó semmilyen forrása nem igazol.
-    expect(html.toLowerCase()).not.toContain('hétvég')
+    expect(html).not.toContain('kc-appointment__form')
+    expect(html).not.toContain('Időpontot kérek')
+    expect(html).not.toContain('Hétköznap délelőtt')
+    expect(html).not.toContain('<form')
   })
 
-  it('az űrlap ott van, és a hozzájárulás az adatvédelmi tájékoztatóra linkel', () => {
+  it('a szekció ettől NEM lesz zsákutca: minden elérhetőség kattintható marad', () => {
     const html = renderKapcsolatLayout()
-    expect(html).toContain('kc-appointment__form')
-    expect(html).toContain('href="/adatvedelem"')
+    // NN/g: „Never hide or remove phone numbers from the Contact Us Page."
+    // (https://www.nngroup.com/articles/contact-us-pages/)
+    expect(html).toContain('href="tel:+36301692263"')
+    expect(html).toContain('href="tel:+36203573493"')
+    expect(html).toContain('href="mailto:info@kineticare.hu"')
+    expect(html).toContain('kc-appointment__contact--fo')
   })
 })
 
@@ -184,18 +200,24 @@ describe('/kapcsolat szakember-elérhetőség', () => {
     expect((kepNelkul.members ?? []).map((tag) => tag.photo)).toEqual([undefined, undefined])
   })
 
-  it('az írásos időpontkérés NEM önmagára mutat, hanem a lapon belüli horgonyra', () => {
+  it('a szekció alján NINCS odaugró hivatkozás, mert fölösleges lenne', () => {
+    /**
+     * SZERZŐDÉS-VÁLTÁS (2026-08-17): korábban itt egy „Kérj időpontot
+     * üzenetben" link vitt a lap tetején álló ŰRLAPRA. Az űrlap megszűnt, tehát
+     * a felirat hazugság lenne; a link CÉLJA pedig (a rendelő elérhetőségei)
+     * innen két szekcióval feljebb, ráadásul a kártyákon is ott van saját
+     * hívás-linkkel. Az odaugrás így olyan adathoz vinne, ami már a látogató
+     * szeme előtt van.
+     */
     const blokk = kapcsolatSzakember()
-    expect(blokk.bookingLink?.url).toBe(`#${IDOPONTKERES_HORGONY}`)
-    // A felirat a §3.2 szótár #24 sora — a cselekvés ugyanaz, csak a cél
-    // kifejezése lapon belüli (WCAG 2.2 · 3.2.4 Consistent Identification).
-    expect(blokk.bookingLink?.felirat).toBe('Kérj időpontot üzenetben')
-    // A horgony célja tényleg ezen a lapon van.
+    expect(blokk.bookingLink).toBeUndefined()
+
+    // A horgony maga MARAD: a /szolgaltatasok „Időpontot kérek" hivatkozása ide
+    // érkezik, tehát a célnak léteznie kell.
     const horgonyok = buildKapcsolatLayout().map((elem) => elem.sectionSettings?.anchorId)
     expect(horgonyok).toContain(IDOPONTKERES_HORGONY)
 
     const html = renderKapcsolatLayout()
-    expect(html).toContain(`href="#${IDOPONTKERES_HORGONY}"`)
     // Körkörös link (a lap önmagára) sehol nem keletkezik.
     expect(html).not.toContain('href="/kapcsolat"')
   })

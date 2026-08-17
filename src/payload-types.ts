@@ -1297,11 +1297,15 @@ export interface BlockAppointment {
    */
   title?: string | null;
   /**
-   * Egy-két mondat a cím alá: kinek való, mire számítson. Ez az a szöveg, ami eldönti, kitölti-e valaki az űrlapot.
+   * Bekapcsolva a látogató űrlapon hagyja itt az elérhetőségét, és ti hívjátok vissza. Kikapcsolva a szekció csak a rendelő adatait mutatja, és a telefonszám lesz az egyetlen út — ezt válaszd, ha az időpontot telefonon egyeztetitek. Kikapcsolás után nézd át a bevezetőt és a „hogyan megy tovább" szöveget: ne hivatkozzanak űrlapra.
+   */
+  urlapMutatasa?: boolean | null;
+  /**
+   * Egy-két mondat a cím alá: kinek való, mire számítson. Ez az a szöveg, ami eldönti, megkeres-e valaki. Ha nincs űrlap, itt már ne kérj adatot („hagyd itt az elérhetőséged"), mert nincs hova beírni.
    */
   lead?: string | null;
   /**
-   * Írd le, hogyan megy tovább a folyamat (pl. hogy telefonon egyeztetitek a pontos időpontot, és mennyi időn belül hívtok vissza). Fontos: naptár-foglalás NINCS a rendszerben, ezért itt se ígérj azonnali foglalást.
+   * Írd le, hogyan jut a látogató időponthoz. Űrlappal: mennyi időn belül hívjátok vissza. Űrlap nélkül: hogy hívja a lenti számok egyikét, és ott rögtön egyeztettek. Fontos: naptár-foglalás NINCS a rendszerben, ezért itt se ígérj azonnali foglalást.
    */
   magyarazat?: string | null;
   /**
@@ -3292,6 +3296,7 @@ export interface BlockAccordionSelect<T extends boolean = true> {
 export interface BlockAppointmentSelect<T extends boolean = true> {
   eyebrow?: T;
   title?: T;
+  urlapMutatasa?: T;
   lead?: T;
   magyarazat?: T;
   urlapCim?: T;

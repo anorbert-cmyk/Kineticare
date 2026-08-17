@@ -262,9 +262,18 @@ describe('/rolunk alap-szekciósora', () => {
     }
   })
 
-  it('a szekció írásos időpontkérési utat is kínál a /kapcsolat oldalra', () => {
+  it('a szekció a /kapcsolat elérhetőségeire is átvisz', () => {
+    /**
+     * SZERZŐDÉS-VÁLTÁS (tulajdonosi döntés, 2026-08-17): az időpontot telefonon
+     * egyeztetik, nem üzenetben, ezért a /kapcsolat lapon nincs időpontkérő
+     * űrlap. A korábbi „Kérj időpontot üzenetben" felirat tehát olyat ígért,
+     * ami a kattintás után nem létezik. A hivatkozás MEGMARAD (a /rolunk lapon
+     * nincsenek rendelő-címek, tehát valódi dolga van), csak azt mondja, ami
+     * ténylegesen történik. Szótár: `docs/ui-sztenderdek.md` §3.2 #24.
+     */
     const markup = renderLayout(buildRolunkLayout())
-    expect(markup).toContain('Kérj időpontot üzenetben')
+    expect(markup).toContain('Nézd meg az elérhetőségeinket')
+    expect(markup).not.toContain('Kérj időpontot üzenetben')
     expect(markup).toContain('href="/kapcsolat"')
   })
 

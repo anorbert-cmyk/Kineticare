@@ -33,7 +33,15 @@
  * ÉRINTŐCÉL (WCAG 2.2 2.5.8, minimum 24×24 CSS px; a projekt célja 44×44):
  * a jelölőnégyzetek 1,5rem (24px) élűek, a kattintható sor (négyzet + felirat)
  * viszont legalább 2,75rem (44px) magas, és a felirat a `label` révén a
- * célfelület része.
+ * célfelület része. ŰRLAP NÉLKÜLI változatban (`--fo` módosító) a hívás- és a
+ * levél-link is 2,75rem magas: ott már azok a szekció cselekvései.
+ *
+ * KÉT VÁLTOZAT (a blokk `urlapMutatasa` kapcsolója szerint):
+ *   BE  … a mai, kéthasábos elrendezés, jobb oldalt az űrlapkártya;
+ *   KI  … egyhasábos szekció, űrlapkártya nélkül; az elérhetőség-lista kapja a
+ *         `--fo` módosítót, és 600 px felett hasábokra bomlik.
+ * A kapcsoló hiánya (meglévő, még nem mentett blokk) a BE ágat jelenti, hogy a
+ * migráció ne tüntessen el űrlapot senki kérése nélkül.
  *
  * MOZGÁS: egyetlen finom keret- és háttér-átmenet; `prefers-reduced-motion:
  * reduce` esetén kikapcsol.
@@ -162,6 +170,39 @@
 .kc-appointment__contact-note {
   margin-inline-start: var(--kc-space-2);
   color: var(--kc-appointment-muted);
+}
+
+/* ---- Elérhetőség ŰRLAP NÉLKÜL (`urlapMutatasa: false`) --------------------
+   Ilyenkor a hívás- és a levél-link nem folyószövegbe ágyazott hivatkozás,
+   hanem A szekció cselekvése, ezért nagyobb célfelületet kap. Az `inline-flex`
+   + `min-height` a link SAJÁT dobozát növeli (nem a sorét), tehát a mért
+   érintőcél tényleg 44 CSS px magas.
+
+   MÉRCE: a WCAG 2.2 2.5.8 (AA) 24×24 px minimuma alól az „inline" kivétel
+   enélkül is mentené a linket, mert szövegsorban áll
+   (https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html) —
+   cselekvésként viszont a 2.5.5 (AAA) 44×44 px a helyes mérce
+   (https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html),
+   és a projekt saját célja is 44.
+
+   A SZÍN, a BETŰMÉRET és az ALÁHÚZÁS változatlan: a kontraszt-jegyzőkönyv
+   (fájlfej) érvényben marad, új méret-token pedig nem keletkezik. */
+.kc-appointment__contact--fo dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--kc-space-2);
+}
+
+.kc-appointment__contact--fo dd a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+}
+
+/* A térközt a `dd` `gap`-je adja, a saját margó duplázna. */
+.kc-appointment__contact--fo .kc-appointment__contact-note {
+  margin-inline-start: 0;
 }
 
 /* ---- Jobb hasáb: az űrlap kártyája ---------------------------------------- */
@@ -356,12 +397,30 @@
 
 /* ---- Nagyobb képernyő ----------------------------------------------------- */
 
+/* Űrlap nélkül az adatcsoportok (rendelők, telefon, e-mail) egymás mellé
+   állnak, amint elférnek: egy hasábban, teljes szélességen a lista ritka és
+   hosszan görgethető lenne. A `minmax(14rem, …)` miatt 320 px-en marad az
+   egyhasábos elrendezés, tehát vízszintes görgetés nem keletkezik. */
+@media (min-width: 600px) {
+  .kc-appointment__contact--fo {
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: var(--kc-space-5);
+  }
+}
+
 @media (min-width: 900px) {
   .kc-appointment__grid {
     /* A bal hasáb rugalmas, az űrlap felső szélessége kötött: a mezők így nem
        nyúlnak olvashatatlanul szélesre nagy kijelzőn. */
     grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);
     gap: var(--kc-space-7);
+  }
+
+  /* Űrlap nélkül nincs második hasáb, amihez igazodni kellene: a rács marad
+     egyhasábos. A szövegek saját `max-width: var(--kc-measure)` korlátja tartja
+     a sorhosszt, tehát a szélesség nem nyúlik olvashatatlanra. */
+  .kc-appointment__grid--egyhasabos {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .kc-appointment__panel {

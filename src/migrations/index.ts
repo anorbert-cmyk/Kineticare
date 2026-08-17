@@ -20,6 +20,7 @@ import * as migration_20260815_233751_kurzus_ertekesito_mezok from './20260815_2
 import * as migration_20260816_075958_nyithato_szekcio_blokk from './20260816_075958_nyithato_szekcio_blokk';
 import * as migration_20260816_181452_szakerto_bejelentkezes_mezok from './20260816_181452_szakerto_bejelentkezes_mezok';
 import * as migration_20260816_192821_idopontkero_szekcio_blokk from './20260816_192821_idopontkero_szekcio_blokk';
+import * as migration_20260817_122044_idopontkero_urlap_kapcsolo from './20260817_122044_idopontkero_urlap_kapcsolo';
 
 export const migrations = [
   {
@@ -130,6 +131,11 @@ export const migrations = [
   {
     up: migration_20260816_192821_idopontkero_szekcio_blokk.up,
     down: migration_20260816_192821_idopontkero_szekcio_blokk.down,
-    name: '20260816_192821_idopontkero_szekcio_blokk'
+    name: '20260816_192821_idopontkero_szekcio_blokk',
+  },
+  {
+    up: migration_20260817_122044_idopontkero_urlap_kapcsolo.up,
+    down: migration_20260817_122044_idopontkero_urlap_kapcsolo.down,
+    name: '20260817_122044_idopontkero_urlap_kapcsolo'
   },
 ];

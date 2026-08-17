@@ -199,6 +199,10 @@ import {
   buildKapcsolatLayout,
   buildRolunkLayout,
   buildSzolgaltatasokLayout,
+  KAPCSOLAT_IDOPONT_LEAD,
+  KAPCSOLAT_IDOPONT_MAGYARAZAT,
+  KAPCSOLAT_SZAKEMBER_CIM,
+  KAPCSOLAT_SZAKEMBER_LEAD,
   rolunkSzakmaiOrokoltTartalom,
   szolgaltatasokRegiBevezetoTartalom,
 } from './restore-legacy-content'
@@ -343,6 +347,7 @@ export type JavitasSzabaly =
   | 'aszf-adatvedelem-link'
   | 'kapcsolat-szakemberek'
   | 'sos-kapcsolodo-kurzus'
+  | 'kapcsolat-telefonos-idopont'
 
 /** Egy elvégzett módosítás vagy egy indokolt kihagyás gépileg is vizsgálható leírása. */
 export interface JavitasLepes {
@@ -2213,6 +2218,187 @@ export const alkalmazKapcsolatSzakemberek = (input: {
 }
 
 // ---------------------------------------------------------------------------
+// 18. javítás — a /kapcsolat lap időpontkérése TELEFONOS lesz.
+// ---------------------------------------------------------------------------
+
+/**
+ * A ma élő szövegek, amiket ez a javítás lecserél.
+ *
+ * MIÉRT KELLENEK PONTOSAN: a javítás CSAK akkor ír, ha a mezőben tényleg ez a
+ * szöveg áll. Ha a szerkesztő időközben mást írt bele, HANGOSAN kihagyjuk — a
+ * saját munkáját nem tapossuk le, de az üzemeltető látja, hogy maradt teendő.
+ */
+const KAPCSOLAT_REGI_IDOPONT_LEAD =
+  'Gyógytorna, manuálterápia és kiegészítő terápiák akut sérülésre, műtét utáni állapotra és krónikus fájdalomra. Hagyd itt az elérhetőséged, és megkeressük a neked megfelelő időpontot.'
+
+const KAPCSOLAT_REGI_IDOPONT_MAGYARAZAT =
+  'Ez az űrlap nem foglalás. Miután elküldted, két munkanapon belül telefonon keresünk, és közösen egyeztetjük a pontos időpontot. Az első alkalom minden esetben 50 perces vizsgálattal kezdődik.'
+
+const KAPCSOLAT_REGI_SZAKEMBER_CIM = 'Kit hívj, ha nem várnál a visszahívásra?'
+
+const KAPCSOLAT_REGI_SZAKEMBER_LEAD =
+  'Az időpontkérésre két munkanapon belül telefonálunk. Ha ennél gyorsabb választ szeretnél, hívj minket közvetlenül: alább látod, ki mivel foglalkozik, és melyik szám kié.'
+
+/**
+ * A /kapcsolat lap átállítása TELEFONOS időpontkérésre.
+ *
+ * ═══ MIÉRT ═══
+ * A tulajdonos döntése (2026-08-17): „Az időpont kérése az telefonon történik
+ * nem üzenetben, szóval a kapcsolat részből a fölső formot ki kell szedni."
+ *
+ * ═══ MIÉRT NEM ELÉG A KAPCSOLÓ ═══
+ * Az űrlap eltüntetése önmagában HAZUG lapot hagyna hátra: négy szöveg
+ * kifejezetten az űrlapról és a visszahívásról beszél („Hagyd itt az
+ * elérhetőséged", „Ez az űrlap nem foglalás. Miután elküldted…", „Kit hívj, ha
+ * nem várnál a visszahívásra?", „Az időpontkérésre két munkanapon belül
+ * telefonálunk"), a szakember-szekció alján pedig egy „Kérj időpontot
+ * üzenetben" hivatkozás áll — olyan útra, ami megszűnt. A javítás ezért a
+ * kapcsolót ÉS a négy szöveget ÉS a hivatkozást egyszerre rendezi.
+ *
+ * ═══ MIT NEM VESZ EL ═══
+ * A rendelők címét, a telefonszámokat és az e-mail-címet SEMMI nem érinti.
+ * Ezek a látogató egyetlen útjává válnak, tehát a javítás akkor sem ír, ha
+ * bármelyikük hiányozna — ez az NN/g kapcsolat-oldal irányelvének kemény
+ * pontja: „Never hide or remove phone numbers from the Contact Us Page"
+ * (https://www.nngroup.com/articles/contact-us-pages/).
+ *
+ * IDEMPOTENS: a saját eredményén futtatva egyetlen mezőt sem ír újra.
+ */
+export const alkalmazKapcsolatTelefonosIdopont = (layout: Page['layout']): SzekciosorCsere => {
+  const uzenet = 'A /kapcsolat időpontkérése telefonos lesz'
+  const modositasok: JavitasLepes[] = []
+  const kihagyasok: JavitasLepes[] = []
+
+  const kihagyas = (indok: string, hangos = false): SzekciosorCsere => ({
+    layout: null,
+    modositasok: [],
+    kihagyasok: [{ szabaly: 'kapcsolat-telefonos-idopont', uzenet, indok, hangos }],
+  })
+
+  if (!Array.isArray(layout) || layout.length === 0) {
+    return kihagyas('a /kapcsolat lapnak nincs szekciósora — nincs mit átállítani', true)
+  }
+
+  const idopontIndex = layout.findIndex((blokk) => blokk.blockType === 'appointment')
+  const szakemberIndex = layout.findIndex((blokk) => blokk.blockType === 'teamMembers')
+  if (idopontIndex === -1) {
+    return kihagyas('a lapon nincs időpontkérő szekció — kézi átnézés kell', true)
+  }
+  if (layout.filter((blokk) => blokk.blockType === 'appointment').length > 1) {
+    return kihagyas('a lapon EGYNÉL TÖBB időpontkérő szekció áll — nem egyértelmű, melyiket kellene átállítani', true)
+  }
+
+  /**
+   * Egy szövegmező cseréje, három ággal: már kész (csendes), a régi szöveg áll
+   * ott (írunk), vagy valaki más írta át (HANGOS kihagyás, írás nélkül).
+   */
+  const szovegCsere = (
+    mezoNev: string,
+    jelenlegi: string | null | undefined,
+    regi: string,
+    uj: string,
+  ): string | null => {
+    const ertek = (jelenlegi ?? '').trim()
+    if (ertek === uj) {
+      return null
+    }
+    if (ertek !== regi.trim()) {
+      kihagyasok.push({
+        szabaly: 'kapcsolat-telefonos-idopont',
+        uzenet: `${uzenet}: a(z) „${mezoNev}" mező`,
+        indok: `a szerkesztő MÁST írt bele (${ertekCimke(ertek.slice(0, 60))}) — a script nem írja felül, nézd át az adminban`,
+        hangos: true,
+      })
+      return null
+    }
+    modositasok.push({
+      szabaly: 'kapcsolat-telefonos-idopont',
+      uzenet: `${uzenet}: a(z) „${mezoNev}" mező a telefonos folyamatot írja le`,
+      indok: null,
+    })
+    return uj
+  }
+
+  const ujLayout: Szekciosor = layout.map((blokk, index) => {
+    if (index === idopontIndex && blokk.blockType === 'appointment') {
+      const valtozas: Record<string, unknown> = {}
+      if (blokk.urlapMutatasa !== false) {
+        valtozas.urlapMutatasa = false
+        modositasok.push({
+          szabaly: 'kapcsolat-telefonos-idopont',
+          uzenet: `${uzenet}: az időpontkérő ŰRLAP kikapcsolva (a rendelők címe, a telefonszámok és az e-mail-cím marad)`,
+          indok: null,
+        })
+      }
+      const lead = szovegCsere(
+        'Bevezető szöveg',
+        blokk.lead,
+        KAPCSOLAT_REGI_IDOPONT_LEAD,
+        KAPCSOLAT_IDOPONT_LEAD,
+      )
+      if (lead !== null) {
+        valtozas.lead = lead
+      }
+      const magyarazat = szovegCsere(
+        'Hogyan megy tovább?',
+        blokk.magyarazat,
+        KAPCSOLAT_REGI_IDOPONT_MAGYARAZAT,
+        KAPCSOLAT_IDOPONT_MAGYARAZAT,
+      )
+      if (magyarazat !== null) {
+        valtozas.magyarazat = magyarazat
+      }
+      return Object.keys(valtozas).length > 0 ? { ...blokk, ...valtozas } : blokk
+    }
+
+    if (index === szakemberIndex && blokk.blockType === 'teamMembers') {
+      const valtozas: Record<string, unknown> = {}
+      const cim = szovegCsere(
+        'Szakember-szekció címe',
+        blokk.title,
+        KAPCSOLAT_REGI_SZAKEMBER_CIM,
+        KAPCSOLAT_SZAKEMBER_CIM,
+      )
+      if (cim !== null) {
+        valtozas.title = cim
+      }
+      const lead = szovegCsere(
+        'Szakember-szekció bevezetője',
+        blokk.lead,
+        KAPCSOLAT_REGI_SZAKEMBER_LEAD,
+        KAPCSOLAT_SZAKEMBER_LEAD,
+      )
+      if (lead !== null) {
+        valtozas.lead = lead
+      }
+      if (blokk.bookingLink?.felirat != null || blokk.bookingLink?.url != null) {
+        valtozas.bookingLink = null
+        modositasok.push({
+          szabaly: 'kapcsolat-telefonos-idopont',
+          uzenet: `${uzenet}: a szekció alji „${blokk.bookingLink?.felirat ?? ''}" hivatkozás törölve (megszűnt útra vitt, a célja pedig két szekcióval feljebb áll)`,
+          indok: null,
+        })
+      }
+      return Object.keys(valtozas).length > 0 ? { ...blokk, ...valtozas } : blokk
+    }
+
+    return blokk
+  })
+
+  if (modositasok.length === 0) {
+    kihagyasok.unshift({
+      szabaly: 'kapcsolat-telefonos-idopont',
+      uzenet,
+      indok: 'a lap MÁR a telefonos folyamatot írja le — nincs teendő',
+      hangos: false,
+    })
+    return { layout: null, modositasok: [], kihagyasok }
+  }
+
+  return { layout: ujLayout, modositasok, kihagyasok }
+}
+
+// ---------------------------------------------------------------------------
 // Futtatás — a tiszta átalakításokat köti az adatbázishoz.
 // ---------------------------------------------------------------------------
 
@@ -2820,11 +3006,24 @@ async function futtat(): Promise<void> {
     modositasokSzama += kapcsolatEredmeny.modositasok.length
     kihagyasokSzama += kapcsolatEredmeny.kihagyasok.length
 
-    if (kapcsolatEredmeny.layout !== null && !dryRun) {
+    // --- 18. javítás: telefonos időpontkérés ---------------------------------
+    // LÁNCBAN a 16. után: az a szekciókat PÓTOLJA (ha hiányoznak), ez pedig a
+    // meglévő (vagy épp most pótolt) szekciókat állítja át telefonosra —
+    // mindkettő ugyanabba az EGY frissítésbe megy ki.
+    const kapcsolatLayout: Szekciosor =
+      kapcsolatEredmeny.layout ?? (Array.isArray(kapcsolat.layout) ? kapcsolat.layout : [])
+    const telefonosEredmeny = alkalmazKapcsolatTelefonosIdopont(kapcsolatLayout)
+    naplozdLepeseket(telefonosEredmeny, dryRun)
+    modositasokSzama += telefonosEredmeny.modositasok.length
+    kihagyasokSzama += telefonosEredmeny.kihagyasok.length
+
+    const kapcsolatIrandoLayout = telefonosEredmeny.layout ?? kapcsolatEredmeny.layout
+
+    if (kapcsolatIrandoLayout !== null && !dryRun) {
       await payload.update({
         collection: 'pages',
         id: kapcsolat.id,
-        data: { layout: kapcsolatEredmeny.layout },
+        data: { layout: kapcsolatIrandoLayout },
         depth: 0,
         overrideAccess: true,
       })

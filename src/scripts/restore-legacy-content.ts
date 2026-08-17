@@ -1175,8 +1175,14 @@ interface SzakemberSzekcioOpciok {
    * horgony, mert az önmagára mutató link a látogatót sehova nem viszi, csak
    * újratölti a lapot („the current document should never link to itself" —
    * https://www.w3.org/wiki/Creating_multiple_pages_with_navigation_menus).
+   *
+   * `null` = a szekció NEM kap ilyen hivatkozást. Ez a /kapcsolat lap esete
+   * (tulajdonosi döntés, 2026-08-17): ott az időpontkérő szekció közvetlenül a
+   * kártyák FÖLÖTT áll, kiírja a rendelők címét és mindkét telefonszámot, a
+   * kártyák pedig maguk is hívás-linket viselnek. Egy odaugró link tehát olyan
+   * adathoz vinne, ami már a látogató szeme előtt van.
    */
-  idopontkeresUrl?: string
+  idopontkeresUrl?: string | null
   /** Portré-azonosítók fájlnév szerint; hiányzó kép esetén a kártya kép nélkül áll. */
   portrek?: Partial<Record<string, number | undefined>>
 }
@@ -1187,21 +1193,36 @@ interface SzakemberSzekcioOpciok {
  * A kártya-hivatkozás felirata MINDKÉT oldalon ugyanaz („Nézd meg a szakmai
  * hátterét"), csak a célja tér el (lapon belüli horgony vs. /rolunk-ra mutató)
  * — ez a `docs/ui-sztenderdek.md` C-1 szabálya: ugyanaz a cselekvés, ugyanaz a
- * szó. Az írásos időpontkérés a /kapcsolat űrlapjára visz: az NN/g
- * egészségügyi út-kutatása szerint a válaszadók többsége kifejezetten kerüli a
- * telefonálást, mert az gyakran válasz nélkül marad
- * (https://www.nngroup.com/articles/healthcare-customer-journeys/).
+ * szó.
+ *
+ * A SZEKCIÓ ALJI HIVATKOZÁS felirata 2026-08-17-én megváltozott. Korábban
+ * „Kérj időpontot üzenetben" volt, mert a /kapcsolat lapon írásban is lehetett
+ * időpontot kérni. A tulajdonos döntése óta az időpontot TELEFONON egyeztetik,
+ * tehát írásos időpontkérés nincs sehol: a régi felirat olyat ígérne, ami a
+ * kattintás után nem létezik. Az új felirat azt mondja, ami a kattintás után
+ * TÉNYLEG történik (a látogató a rendelők elérhetőségeihez jut) — a szótár
+ * szabálya szerint „a gomb megmondja, MI TÖRTÉNIK", és „a felirat legyen igaz"
+ * (`docs/ui-sztenderdek.md` §3.2 #24). A telefonálást kerülő látogatót az
+ * e-mail-cím és a lap alján álló üzenetküldő űrlap szolgálja ki, tehát az NN/g
+ * egészségügyi út-kutatásának tanulsága (a válaszadók egy része kerüli a
+ * telefonálást, https://www.nngroup.com/articles/healthcare-customer-journeys/)
+ * továbbra is teljesül, csak nem időpontkérésnek álcázva.
  */
 const szakemberSzekcio = (opciok: SzakemberSzekcioOpciok): NonNullable<Page['layout']>[number] => ({
   blockType: 'teamMembers',
   eyebrow: opciok.eyebrow,
   title: opciok.title,
   lead: opciok.lead,
-  bookingLink: {
-    felirat: 'Kérj időpontot üzenetben',
-    url: opciok.idopontkeresUrl ?? '/kapcsolat',
-    ujAblakban: false,
-  },
+  ...(opciok.idopontkeresUrl === null
+    ? {}
+    : {
+        bookingLink: {
+          // CTA-felirat: docs/ui-sztenderdek.md §3.2 #24
+          felirat: 'Nézd meg az elérhetőségeinket',
+          url: opciok.idopontkeresUrl ?? '/kapcsolat',
+          ujAblakban: false,
+        },
+      }),
   members: SZAKEMBER_KARTYAK.map((kartya) => ({
     photo: opciok.portrek?.[kartya.portreFajl],
     name: kartya.nev,
@@ -1568,20 +1589,26 @@ const buildSzolgaltatasokLayout = (media: OldalLayoutMedia = {}): NonNullable<Pa
  * pedig ígéret lenne. Ha van hétvégi rendelés, a sávot az adminban egy sorral
  * lehet hozzáadni.
  */
+export const KAPCSOLAT_IDOPONT_LEAD =
+  'Gyógytorna, manuálterápia és kiegészítő terápiák akut sérülésre, műtét utáni állapotra és krónikus fájdalomra. Az időpontot telefonon beszéljük meg, így rögtön tudod, mikor tudunk fogadni.'
+
+export const KAPCSOLAT_IDOPONT_MAGYARAZAT =
+  'Hívd az alábbi számok egyikét, és a hívásban megbeszéljük a pontos időpontot. Az első alkalom minden esetben 50 perces vizsgálattal kezdődik.'
+
 const KAPCSOLAT_IDOPONTKERES = {
   blockType: 'appointment' as const,
   eyebrow: 'Rendelői kezelés',
   title: 'Kérj időpontot a rendelőbe',
-  lead: 'Gyógytorna, manuálterápia és kiegészítő terápiák akut sérülésre, műtét utáni állapotra és krónikus fájdalomra. Hagyd itt az elérhetőséged, és megkeressük a neked megfelelő időpontot.',
-  magyarazat:
-    'Ez az űrlap nem foglalás. Miután elküldted, két munkanapon belül telefonon keresünk, és közösen egyeztetjük a pontos időpontot. Az első alkalom minden esetben 50 perces vizsgálattal kezdődik.',
-  urlapCim: 'Időpontkérés',
-  gombFelirat: 'Időpontot kérek',
-  idopontSavok: [
-    { felirat: 'Hétköznap délelőtt' },
-    { felirat: 'Hétköznap délután' },
-    { felirat: 'Rugalmas vagyok' },
-  ],
+  lead: KAPCSOLAT_IDOPONT_LEAD,
+  magyarazat: KAPCSOLAT_IDOPONT_MAGYARAZAT,
+  // A tulajdonos döntése (2026-08-17): az időpontot TELEFONON egyeztetik, nem
+  // üzenetben, ezért ezen a lapon nincs időpontkérő űrlap. A szekció marad: a
+  // rendelők címe, a telefonszámok és az e-mail-cím a látogató útja. Az űrlap
+  // KÓD-szinten megmarad (a kapcsoló az adminban visszakapcsolható), csak itt
+  // nem látszik — ezért a csak-űrlaphoz tartozó mezőket (űrlapcím, gombfelirat,
+  // időpont-sávok, siker-szövegek) itt SZÁNDÉKOSAN nem töltjük ki: olyan
+  // szöveget, ami sehol nem jelenik meg, nem tartunk karban.
+  urlapMutatasa: false,
   helyszinekFelirat: 'Rendelőink',
   helyszinek: [
     { cim: '1117 Budapest, Nádorliget u. 7/b' },
@@ -1594,9 +1621,6 @@ const KAPCSOLAT_IDOPONTKERES = {
   ],
   emailFelirat: 'E-mail',
   email: 'info@kineticare.hu',
-  sikerCim: 'Megkaptuk az időpontkérésed',
-  sikerSzoveg:
-    'Két munkanapon belül telefonon keresünk, és egyeztetjük a pontos időpontot. Ha addig megváltozna valami, hívj minket nyugodtan.',
   sectionSettings: {
     visible: true,
     anchorId: IDOPONTKERES_HORGONY,
@@ -1653,17 +1677,24 @@ const KAPCSOLAT_IDOPONTKERES = {
  * az `availability` mező itt is ÜRES marad (kitalált nyitvatartás hazugság
  * lenne); az adminban egy sorral pótolható.
  */
+export const KAPCSOLAT_SZAKEMBER_CIM = 'Kit hívj időpontért?'
+
+export const KAPCSOLAT_SZAKEMBER_LEAD =
+  'Alább látod, ki mivel foglalkozik, és melyik szám kié. Hívd azt, akihez a panaszod tartozik, vagy ha bizonytalan vagy, bármelyik számot.'
+
 const kapcsolatSzakemberSzekcio = (
   media: OldalLayoutMedia = {},
 ): NonNullable<Page['layout']>[number] =>
   szakemberSzekcio({
     eyebrow: 'Közvetlen elérhetőség',
-    title: 'Kit hívj, ha nem várnál a visszahívásra?',
-    lead: 'Az időpontkérésre két munkanapon belül telefonálunk. Ha ennél gyorsabb választ szeretnél, hívj minket közvetlenül: alább látod, ki mivel foglalkozik, és melyik szám kié.',
+    title: KAPCSOLAT_SZAKEMBER_CIM,
+    lead: KAPCSOLAT_SZAKEMBER_LEAD,
     anchorId: 'elerhetoseg',
     hatter: 'feher',
     hatterUrl: SZAKMAI_HATTER_URL,
-    idopontkeresUrl: `#${IDOPONTKERES_HORGONY}`,
+    // Nincs szekció-alji hivatkozás: az időpontkérő szekció közvetlenül FÖLÖTTE
+    // áll, és a kártyák maguk is hívás-linket viselnek (lásd a mező doksiját).
+    idopontkeresUrl: null,
     portrek: {
       '67b3c6e9e315f_KocsisKatakozeli.png': media.kocsisPortre,
       '67c07def59ac2_KissKataelegans.png': media.kissPortre,
@@ -1692,7 +1723,7 @@ const buildKapcsolatLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['l
 const kapcsolatContent = (): RichTextContent =>
   richText([
     para(
-      'Rendelői kezelésre az időpontkérő szekcióban tudsz jelentkezni: hagyd meg a neved és a telefonszámod, és két munkanapon belül visszahívunk. Minden más kérdésre az üzenetküldő űrlapon válaszolunk.',
+      'Rendelői kezelésre telefonon tudsz időpontot kérni: a számokat az időpontkérő szekcióban találod, és a hívásban rögtön megbeszélitek a pontos időpontot. Minden más kérdésre az üzenetküldő űrlapon válaszolunk.',
     ),
   ])
 
