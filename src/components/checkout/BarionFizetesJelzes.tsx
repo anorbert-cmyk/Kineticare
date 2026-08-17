@@ -146,6 +146,7 @@ function BarionLogosor() {
   // next/image raszter-pipeline-ja SVG-re amúgy sem optimalizál. A repó más
   // helyein is ez a minta (HeroVideo poszter, CourseCard).
   return (
+    // eslint-disable-next-line @next/next/no-img-element -- a hivatalos SVG-t változtatás és újrakódolás nélkül kell kiszolgálni (Barion: „módosítás nélkül"), a next/image raszter-pipeline-ja SVG-re amúgy sem optimalizál
     <img
       alt={BARION_LOGOSOR_ALT}
       className="kc-barion__logosor"

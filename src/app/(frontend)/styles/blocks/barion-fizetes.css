@@ -44,6 +44,15 @@
  *                  = 222 px → a logósor 222 × 42,3 px
  * Felül `max-width: 22rem` (352 px) fékezi, hogy asztali szélességen se
  * nőjön szekció-méretűvé; 352 px-nél a magassága 67,0 px.
+ *
+ * ═══ SORHOSSZ — SZÁMOLT KARAKTERSZÁM ═══
+ * A repó mért állandója: a Nunito Sans 400 átlagos karaktere 0,4542em
+ * (tokens.css „Mérték" szakasza, n = 5981 karakter).
+ *   kezdőlapi csík (S, 14px, 30rem = 480px) ... 480 / 6,36 = 75,5 karakter
+ *   pénztári kártya (M, 18px, 34rem = 544px) .. 544 / 8,18 = 66,5 karakter
+ * Mindkettő a 45–85-ös sávban, és a WCAG 2.2 SC 1.4.8 (AAA) 80-as plafonja
+ * alatt. 320 px-en a nézetablak szab határt (46, illetve 31 karakter) — ez a
+ * lap MINDEN bekezdésére igaz, nem ennek a blokknak a sajátja.
  */
 
 /* ---- Közös rész ---------------------------------------------------------- */
@@ -81,7 +90,14 @@
   border-top: 1px solid var(--kc-color-border);
 }
 
+/* A csík szövege a KIEGÉSZÍTŐ (S) lépcsőn áll, ezért SZŰKEBB mértéket kap.
+   A mérték karakterben számol, nem pixelben: a repó saját mérése szerint a
+   Nunito Sans 400 átlagos karaktere 0,4542em (tokens.css „Mérték" szakasza).
+   S felső végén (14px) egy karakter 6,36px, tehát a 34rem-es --kc-measure már
+   85,5 karaktert engedne — a sáv fölött. A 30rem-es comfort-mérték ugyanott
+   75,5 karakter, a WCAG 2.2 SC 1.4.8 (AAA) 80-as plafonja alatt. */
 .kc-barion--kezdolap .kc-barion__szoveg {
+  max-width: var(--kc-measure-comfort);
   font-size: var(--kc-font-s);
 }
 

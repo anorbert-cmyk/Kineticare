@@ -42,6 +42,40 @@ ezért a `light` változat került be. Ha valaha sötét sávra kerül a logóso
 
 A PNG-k szándékosan maradtak ki: az SVG minden méretben éles, és 17 kB.
 
+## A csomag fejlesztői útmutatója (Dev guide.pdf) — visszafejtve
+
+A ZIP `Dev guide.pdf` fájlja („Smart Payment Banner Developer Guidelines",
+2025. október) beágyazott betűi **részhalmaz-kódoltak**, ezért a szöveg csak
+betűtípusonként külön `ToUnicode`-táblával fejthető vissza; egy összevont
+táblával kevert, olvashatatlan eredmény jön ki. A visszafejtett, szó szerinti
+kikötések, amelyeket a felület betart (végrehajtható őr:
+`src/__tests__/barion-fizetes-jelzes.test.tsx`, „A Barion fejlesztői
+útmutatójának mért betartása" szakasz):
+
+| Kikötés | Ahogy teljesül |
+| --- | --- |
+| „Place the banner in close proximity to the payment methods section" | A pénztárban közvetlenül a fizetőgomb előtt áll. |
+| „Do not stretch, crop, or distort the logos." / „Maintain original aspect ratios." | `width: 100%` + `aspect-ratio: 567 / 108` + `height: auto`; `object-fit: cover`, `clip-path` és `transform: scale` tiltva. |
+| „Do not add shadows, borders, or effects." | A logósor szabályában `box-shadow`, `border`, `outline`, `filter` nem lehet. |
+| „Maintain clear spacing around the banner (at least 8px padding from other elements)." | Mindkét helyen `--kc-space-4` (16 px) rés, a kezdőlapi csík saját függőleges tere `--kc-space-6` (32 px). |
+| „Optimize image files for web (use SVG or high-resolution PNG)." | SVG. |
+| „Light mode banners: Use on white or light-colored backgrounds." | A `light` változat világos földön (`#f6f9fc` / `#ffffff`). |
+
+**„On smaller screens, switch to the medium or small banner version."** — a
+csomag három mérete (Large 1133×215, Medium 892×165, Small 602×108)
+**kizárólag PNG-ként** létezik; az `svg/` mappában méretenkénti változat
+nincs, csak `barion-smart-banner-light.svg` és `-dark.svg`. A kikötés tehát a
+raszteres útra vonatkozik: az útmutató által kifejezetten ajánlott SVG-nél
+ugyanezt az arányos kicsinyítés adja, veszteség nélkül. Ezt itt rögzítjük,
+hogy egy későbbi „rakjuk be a PNG-ket is" kör ne látszódjon hibajavításnak.
+
+**Nyitott pont a tulajdonosnak:** az útmutató azt is mondja, „Ensure it is
+clearly visible **without scrolling** in the checkout page." A jelzés ma a
+fizetőgomb közvetlen közelében áll (a Baymard mérése szerint ott hat a
+legjobban a bizalomra), ami hosszabb űrlapon görgetést kíván. Ha a bírálat
+emiatt kifogást emel, a jelzés az űrlap tetejére is felvihető — a döntés a
+bizalmi hatás és a betű szerinti megfelelés között választ.
+
 ## Hol jelenik meg
 
 `src/components/checkout/BarionFizetesJelzes.tsx` — a kezdőlapon (a lábléc
