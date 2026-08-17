@@ -1,5 +1,8 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { CheckoutErrorRegion } from '../components/checkout/CheckoutForm'
 import type { CheckoutSubmitInput, CheckoutSubmitResult } from '../lib/checkout-submit'
 import {
   BILLING_TAX_NUMBER_ERROR,
@@ -9,6 +12,7 @@ import {
 import {
   CHECKOUT_WAIVER_ERROR,
   billingInputId,
+  CHECKOUT_ERROR_REGION_ID,
   createCheckoutSubmitHandler,
   type BillingFieldErrors,
   type CheckoutSubmissionContext,
@@ -163,6 +167,41 @@ describe('checkout beküldés-huzalozás', () => {
     expect(naplo.errors).toContain('A fizetés indítása nem sikerült.')
     expect(naplo.submitting).toEqual([true, false])
   })
+
+  it('szerverhibánál a HIBÁRA viszi a fókuszt (különben a hiba néma marad)', async () => {
+    /**
+     * A folyamat-audit mérése: szerverhiba után a hibadoboz `top` értéke
+     * asztalon −753 px, mobilon −1343 px, `lathatoE: false`, a
+     * `document.activeElement` pedig `BODY` — vagyis a felületen SEMMI nem
+     * jelezte a hibát, a gomb is visszaállt alapállásba. A vevő azt hitte, a
+     * gomb nem reagált, és újra nyomta. A hibadoboz `role="alert"`, tehát a
+     * képernyőolvasó megkapta; a LÁTÓ felhasználó nem. A fókusz odamozgatásával
+     * a böngésző a dobozt a képernyőre görgeti.
+     *
+     * Nem elég a hívás JELENLÉTE: azt is rögzítjük, hogy a hibaüzenet UTÁN
+     * történik, különben a fókusz egy még üres dobozra menne.
+     */
+    const { futtat, naplo } = felepit(alapContext(), {
+      ok: false,
+      message: 'A fizetés indítása nem sikerült.',
+    })
+
+    await futtat()
+
+    expect(naplo.focused).toEqual([CHECKOUT_ERROR_REGION_ID])
+  })
+
+  it('sikeres beküldésnél NEM mozgatja a fókuszt (nincs mit mutatni)', async () => {
+    const { futtat, naplo } = felepit(alapContext(), {
+      ok: true,
+      orderNumber: 'KH-2026-000001',
+      gatewayUrl: 'https://barion.example/pay',
+    })
+
+    await futtat()
+
+    expect(naplo.focused).toEqual([])
+  })
 })
 
 describe('adószám-súgószöveg önellenőrzése', () => {
@@ -180,5 +219,31 @@ describe('adószám-súgószöveg önellenőrzése', () => {
       const eredmeny = validateBilling({ ...TELJES_BILLING, taxNumber: pelda })
       expect({ pelda, ok: eredmeny.ok }).toEqual({ pelda, ok: true })
     }
+  })
+})
+
+describe('a hibarégió fókuszálható is, nem csak felolvasható', () => {
+  /**
+   * MIÉRT KÜLÖN ŐR: a beküldés-kezelő hiába viszi a fókuszt a hibarégióra, ha a
+   * doboz nem fókuszálható — a `focus()` egy sima `<div>`-en NO-OP, és a hiba
+   * ugyanúgy néma marad. A mutációs próba ezt ki is mutatta: a `tabIndex`
+   * eltávolításával a handler-tesztek VÉGIG zöldek maradtak. Ez az állítás
+   * pontosan azt a rést zárja: az azonosítót ÉS a fókuszálhatóságot együtt
+   * rögzíti a renderelt kimeneten.
+   */
+  it('a renderelt doboz viseli az azonosítót és a tabindex="-1"-et', () => {
+    const html = renderToStaticMarkup(
+      createElement(CheckoutErrorRegion, { error: 'A fizetés indítása nem sikerült.' }),
+    )
+    expect(html).toContain(`id="${CHECKOUT_ERROR_REGION_ID}"`)
+    expect(html).toContain('tabindex="-1"')
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('A fizetés indítása nem sikerült.')
+  })
+
+  it('hiba nélkül is fókuszálható marad (az azonosító nem tűnhet el)', () => {
+    const html = renderToStaticMarkup(createElement(CheckoutErrorRegion, { error: null }))
+    expect(html).toContain(`id="${CHECKOUT_ERROR_REGION_ID}"`)
+    expect(html).toContain('tabindex="-1"')
   })
 })
