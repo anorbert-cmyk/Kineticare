@@ -385,20 +385,15 @@ export const CTA_VOCABULARY = [
     patterned: true,
   },
   {
-    // §3.2 #24 – navigáció a szakember-szekcióból a rendelő elérhetőségeihez.
-    // P-1b → E/2: a kattintás a /kapcsolat időpontkérő szekciójára VISZ, ahol a
-    // rendelők címe, a telefonszámok és az e-mail-cím áll.
-    //
-    // FELIRAT-CSERE 2026-08-17: korábban „Kérj időpontot üzenetben" volt. A
-    // tulajdonos döntése óta az időpontot TELEFONON egyeztetik, tehát írásos
-    // időpontkérés SEHOL nincs a felületen — a régi felirat olyat ígért, ami a
-    // kattintás után nem létezik („a felirat legyen igaz", §3.1). Az új felirat
-    // azt mondja, ami ténylegesen történik. A #25 (űrlap-beküldés) sor
-    // megmarad: az űrlap kód-szinten él, a szekció kapcsolójával
-    // visszakapcsolható, csak a /kapcsolat lapon van kikapcsolva.
+    // §3.2 #24 – írásos időpontkérés a szakember-szekcióból. P-1b → E/2:
+    // a kattintás a /kapcsolat időpontkérő szekciójára VISZ, maga a vállalás
+    // ott, a #25 gombbal történik. A kettő SZÁNDÉKOSAN külön sor: aki
+    // „egységesítené", az a navigációt és a beküldést mosná össze.
+    // NN/g egészségügyi kutatás: az írásos út a hívás mellett kötelező, mert a
+    // válaszadók jelentős része kerüli a telefonálást.
     section: '#24',
     action: 'appointment-request-link',
-    label: 'Nézd meg az elérhetőségeinket',
+    label: 'Kérj időpontot üzenetben',
     person: 'e2',
     weight: 'secondary',
     progress: null,
