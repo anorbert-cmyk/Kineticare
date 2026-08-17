@@ -3,11 +3,20 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
+import { sendBarionConsent } from '@/lib/analytics/barion-consent'
 import {
+  CONSENT_DENIED,
   CONSENT_EVENT,
+  CONSENT_GRANTED,
   CONSENT_OPEN_EVENT,
+  CONSENT_UNKNOWN,
   consentBannerVisible,
+  consentSnapshotStale,
+  consentSnapshotState,
+  consentStateFromEvent,
   readConsent,
+  readConsentSnapshot,
+  type ConsentSnapshot,
   type ConsentState,
 } from '@/lib/analytics/consent'
 import { optInToAnalytics, optOutOfAnalytics } from '@/lib/analytics/posthog'
@@ -36,6 +45,29 @@ import '../../app/(frontend)/styles/consent-banner.css'
  * 2,87:1-es fókuszgyűrűt (1.4.11 + 2.4.7 bukás minden oldalon). A sáv a
  * lap egyetlen olyan sötét felülete volt, ami nem `.kc-section--dark`.
  *
+ * ═══ IDŐSZAKOS ÚJRAKÉRDEZÉS (2026-08-17) ═══
+ * A tárolt döntés LEJÁR (consent.ts · CONSENT_MAX_AGE_DAYS = 365 nap, az
+ * indoklás forrásokkal ott áll), és a sáv ilyenkor magától visszatér — a
+ * Barion hozzájáruláskezelési követelménye szerint a kezelőnek „minimum minden
+ * 13. hónapban … meg kell jelennie az előzőleg mentett beállításokkal".
+ * Ezért NEM üresen jön vissza: a szöveg megmondja, mi a jelenlegi beállítás
+ * (a GOV.UK Design System süti-sáv mintájának megerősítő mondata ugyanezt
+ * teszi: „You've accepted analytics cookies. You can change your cookie
+ * settings at any time." — design-system.service.gov.uk/components/cookie-banner/).
+ * A régi döntés a lejárat után is ÉRVÉNYBEN marad, amíg a látogató nem dönt
+ * újra; a lejárat csak kérdez, nem von vissza.
+ *
+ * A mondat a MEGLÉVŐ bekezdésbe kerül, új CSS és új betűméret nélkül (a
+ * kontraszt- és érintőcél-mérések így érvényben maradnak); a sáv magasabb
+ * lesz tőle, de a 2.4.11-es eltolás MÉRT érték, tehát magától követi.
+ *
+ * ═══ BARION PIXEL HOZZÁJÁRULÁS-JELZÉS ═══
+ * A döntés a Barion Pixelnek is kimegy (`bp('consent','grantConsent'|
+ * 'rejectConsent')`) — a GoogleAnalytics.tsx mintájára: betöltéskor a TÁROLT
+ * döntés, utána a 'kc:analytics-consent' esemény. Az ALAP pixelt ez NEM
+ * érinti: az a csalásmegelőzés jogos érdekén hozzájárulás nélkül is fut, itt
+ * csak a marketing célú FELHASZNÁLÁS engedélye/tiltása utazik.
+ *
  * A sáv `position: fixed` a lap alján, ezért eltakarhatta a fókuszált elemet
  * (WCAG 2.2 SC 2.4.11 Focus Not Obscured, AA). Amíg látszik, a
  * dokumentumgyökér `kc-has-consent-banner` osztályt kap, és a MÉRT magasság a
@@ -59,9 +91,13 @@ function subscribeToConsent(onStoreChange: () => void): () => void {
   return () => window.removeEventListener(CONSENT_EVENT, onStoreChange)
 }
 
-/** Kliens-pillanatkép: primitív string, tehát hivatkozás-stabil (nem ciklizál). */
-function getConsentSnapshot(): ConsentState {
-  return readConsent()
+/**
+ * Kliens-pillanatkép: primitív string (`"<állapot>:<frissesség>"`), tehát
+ * hivatkozás-stabil (nem ciklizál). A frissesség az újrakérdezési küszöbhöz
+ * mért kor — ettől tér vissza a sáv magától.
+ */
+function getConsentSnapshot(): ConsentSnapshot {
+  return readConsentSnapshot()
 }
 
 /**
@@ -70,17 +106,45 @@ function getConsentSnapshot(): ConsentState {
  * kliens-render egyaránt semmit sem renderel, a tárolt érték csak a
  * hidratálás UTÁN kerül be — így a szerver- és kliens-HTML nem térhet el.
  */
-function getServerConsentSnapshot(): ConsentState | null {
+function getServerConsentSnapshot(): ConsentSnapshot | null {
   return null
+}
+
+/**
+ * A visszatérő sáv első mondata: mi a JELENLEGI beállítás, és miért kérdezünk
+ * újra. Magázó hang, mert a sáv többi mondata is az (WCAG 3.2.4 — ugyanaz a
+ * dolog ugyanúgy szólal meg); gondolatjel nélküli, natív magyar mondatok.
+ * Döntés nélkül ('unknown') nincs mit mutatni — ilyenkor null.
+ *
+ * Azért EXPORTÁLT, mert így a szöveg viselkedése valódi teszttel őrizhető
+ * (a repó tesztkörnyezete node, a sáv interakciója nem játszható le).
+ */
+export function jelenlegiBeallitasSzovege(
+  consent: ConsentState | null,
+  lejart: boolean,
+): string | null {
+  if (consent !== CONSENT_GRANTED && consent !== CONSENT_DENIED) {
+    return null
+  }
+  const beallitas =
+    consent === CONSENT_GRANTED ? 'elfogadta az analitikát' : 'elutasította az analitikát'
+  if (lejart) {
+    return `Jelenlegi beállítása: ${beallitas}. Évente egyszer rákérdezünk, hogy ez továbbra is így legyen.`
+  }
+  return `Jelenlegi beállítása: ${beallitas}. Alább módosíthatja.`
 }
 
 export function ConsentBanner() {
   // null = még nem olvastuk a tárolót (SSR + első kliens-render) → null render.
-  const storedConsent = useSyncExternalStore<ConsentState | null>(
+  const snapshot = useSyncExternalStore<ConsentSnapshot | null>(
     subscribeToConsent,
     getConsentSnapshot,
     getServerConsentSnapshot,
   )
+  const storedConsent: ConsentState | null =
+    snapshot === null ? null : consentSnapshotState(snapshot)
+  // Lejárt-e a tárolt döntés (kötelező időszakos újrakérdezés).
+  const stale = snapshot !== null && consentSnapshotStale(snapshot)
   // A gombnyomás helyi döntése akkor is elrejti a sávot, ha a tárolóba írás
   // nem sikerült (letiltott localStorage) — a korábbi setConsent pontosan így
   // viselkedett, ezért marad meg külön állapotként.
@@ -90,7 +154,10 @@ export function ConsentBanner() {
   const [reopened, setReopened] = useState(false)
   const consent = decision ?? storedConsent
   const bannerRef = useRef<HTMLDivElement>(null)
-  const visible = consentBannerVisible(consent, reopened)
+  // A lejárat CSAK addig nyitja a sávot, amíg a látogató most nem döntött:
+  // egy friss gombnyomás után a sávnak akkor is el kell tűnnie, ha a tárolóba
+  // írás nem sikerült (letiltott localStorage → a pillanatkép lejárt marad).
+  const visible = consentBannerVisible(consent, reopened, decision === null && stale)
 
   /**
    * A sáv TÉNYLEGES magasságának mérése (2.4.11). Fix érték itt nem elég: a
@@ -127,6 +194,28 @@ export function ConsentBanner() {
     }
   }, [visible])
 
+  /**
+   * A Barion Pixel FELHASZNÁLÁSI hozzájárulásának jelzése — a
+   * GoogleAnalytics.tsx mintája: betöltéskor a TÁROLT döntés megy ki, utána a
+   * 'kc:analytics-consent' esemény kapcsol át (elfogadás, elutasítás és a
+   * későbbi módosítás egyaránt ezen az egy úton fut). Döntés nélkül
+   * ('unknown') semmi nem megy ki, azonosító nélkül szintén semmi.
+   * A lemondó függvény a pixel megjelenésére váró újrapróbálkozást állítja le.
+   */
+  useEffect(() => {
+    let cancelBarionConsent = sendBarionConsent(readConsent())
+    const onConsent = (event: Event): void => {
+      const state = consentStateFromEvent(event)
+      cancelBarionConsent()
+      cancelBarionConsent = sendBarionConsent(state === CONSENT_UNKNOWN ? readConsent() : state)
+    }
+    window.addEventListener(CONSENT_EVENT, onConsent)
+    return () => {
+      window.removeEventListener(CONSENT_EVENT, onConsent)
+      cancelBarionConsent()
+    }
+  }, [])
+
   useEffect(() => {
     const onOpen = (): void => {
       // A korábbi helyi döntés-jelölést is töröljük, hogy a TÁROLT állapot
@@ -141,6 +230,10 @@ export function ConsentBanner() {
   if (!visible) {
     return null
   }
+
+  // A visszatérő sávon a KORÁBBI beállítás is látszik (Barion-követelmény:
+  // „az előzőleg mentett beállításokkal"); első látogatáskor ez null.
+  const jelenlegiBeallitas = jelenlegiBeallitasSzovege(consent, stale)
 
   const onAccept = (): void => {
     optInToAnalytics()
@@ -158,6 +251,7 @@ export function ConsentBanner() {
     <div aria-label="Süti-hozzájárulás" className="kc-consent-banner" ref={bannerRef} role="region">
       <div className="kc-consent-banner__inner">
         <p className="kc-consent-banner__text">
+          {jelenlegiBeallitas === null ? null : `${jelenlegiBeallitas} `}
           Sütiket használunk a felhasználói élmény javításához és a látogatottsági statisztikák
           készítéséhez. Az analitika csak a hozzájárulásával kapcsol be. Részletek az{' '}
           <Link href="/adatvedelem">adatvédelmi tájékoztatóban</Link>.

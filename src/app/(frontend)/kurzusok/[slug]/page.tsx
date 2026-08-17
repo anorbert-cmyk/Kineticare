@@ -8,6 +8,7 @@ import { cache } from 'react'
 
 import { TrackEvent } from '@/components/analytics/TrackEvent'
 import { JsonLd } from '@/components/content/JsonLd'
+import { CourseBarionView } from '@/components/courses/CourseBarionView'
 import { CourseBuyBar } from '@/components/courses/CourseBuyBar'
 import { CourseBuybox } from '@/components/courses/CourseBuybox'
 import { CourseCurriculum } from '@/components/courses/CourseCurriculum'
@@ -438,6 +439,20 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
     <>
       {/* PostHog funnel-lépés: a kurzus-oldal megnyitása (no-op consent nélkül). */}
       <TrackEvent event="course_viewed" properties={{ courseId: product.id, courseSku: product.sku ?? undefined }} />
+      {/* Barion Pixel `contentView` (termékoldal). Az ár ugyanabból a
+          forrásból jön, mint a kiírt PriceTag és a strukturált adat: az
+          `ingyenes` ág 0-t, a hiányos konfiguráció NaN-t ad — utóbbinál az
+          esemény magától kimarad (barion-events.ts). */}
+      <CourseBarionView
+        course={{
+          id: product.id,
+          name: title,
+          priceHuf: priceBadge === 'free' ? 0 : (price ?? Number.NaN),
+          quantity: 1,
+          ...(category !== null ? { category } : {}),
+          ...(cover ? { imageUrl: absoluteUrl(cover.url) } : {}),
+        }}
+      />
       {/* Strukturált adat: Course + Product (egy entitás, kettős @type) és a
           hozzá tartozó Offer. Minden mezője a LÁTHATÓ tartalomból jön — a név a
           H1, a leírás a hero lead, a kép a buybox borítóképe, az ár pedig a
