@@ -367,6 +367,7 @@ Ezek a `ui-sztenderdek.md` §6.3 **G-UI1** őrének kiegészítései, nem helyet
 | **Hívás a szakembernek** | 2 | Hívd Kocsis Katát · Hívd Kiss Katát | **#23** | `Hívd Kocsis Katát` |
 | **Írásos időpontkérés (link)** | 1 | Kérj időpontot üzenetben | **#24** | `Kérj időpontot üzenetben` |
 | **Időpontkérő űrlap beküldése** | 1 | Időpontot kérek | **#25** | `Időpontot kérek` |
+| **Ingyenes kurzus igénylése (űrlap-beküldés)** | 1 | Kérem a kurzust | **#26** | `Kérem a kurzust` |
 | Folyamatban | **6** | Feldolgozás… · Küldés… · Mentés… · Belépés… · Regisztráció… · Beállítás… | **L-1** | `Belépés…` `Regisztráció…` `Küldés…` `Mentés…` `Feldolgozás…` `Betöltés…` |
 
 **Mit mond ez a leképezés összesítve:** 17 mért cselekvésre **41 különböző felirat** él ma; a jóváhagyott szótárban ugyanezekre **21 felirat + 6 folyamatban-alak** van. A legnagyobb nyereség a kurzuslistánál (8 → 1) és a saját kurzusoknál (4 → 1) keletkezik – mindkettő WCAG 2.2 **3.2.4** sérülés ma.

@@ -459,6 +459,160 @@
   font-size: var(--kc-font-s);
 }
 
+/* ---- Ingyenes kurzus: igénylő űrlap (a CTA helyén) -------------------------
+   A vásárlódoboz CTA-területén álló, kétmezős űrlap (név + e-mail). Minden
+   primitív a közös ui.css-ből jön (kc-field, kc-button), itt csak az
+   elrendezés és a doboz-specifikus kiegészítések élnek — a kapcsolat-űrlap
+   (kapcsolat.css) NYELVÉT követve, hogy a két űrlap ne csússzon szét.
+
+   BETŰMÉRET: kizárólag a három token. A bevezető és a hozzájárulás az S
+   lépcsőn áll (kiegészítő szöveg), a mezők az M-en (az ui.css adja).
+
+   MÉRTÉK: a doboz maga ~24rem széles hasáb, a bevezető sora ezen belül
+   45–85 karakter közé esik, ezért külön max-width nem kell. A mezők súgója az
+   ui.css `--kc-measure-comfort` plafonját viszi tovább. */
+
+.kc-free-course {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-4);
+}
+
+/* A bevezető a doboz halkabb hangján szól (magyarázat, nem cselekvés).
+   #33495f a fehér dobozon 9,25:1 — bőven az AA 4,5:1 felett. */
+.kc-free-course__intro {
+  margin: 0;
+  font-size: var(--kc-font-s);
+  color: var(--kc-color-text-muted);
+}
+
+/* Hiba-összefoglaló: a kapcsolat-űrlap `kc-contact-form__summary` mintája
+   (danger keret + danger felület + danger szöveg). #b3261e a #fdecea
+   felületen 5,72:1 — AA. */
+.kc-free-course__summary {
+  padding: var(--kc-space-3) var(--kc-space-4);
+  border: 1px solid var(--kc-color-danger);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-danger-surface);
+  color: var(--kc-color-danger);
+  font-size: var(--kc-font-s);
+  font-weight: var(--kc-font-weight-bold);
+}
+
+.kc-free-course__summary:focus-visible {
+  outline: 2px solid var(--kc-color-danger);
+  outline-offset: 2px;
+}
+
+/* Honeypot — vizuálisan és a képernyőolvasó/billentyű-útvonalból is rejtett. */
+.kc-free-course__hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Adatkezelési hozzájárulás — checkbox + szöveg egymás mellett. */
+.kc-free-course__consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--kc-space-3);
+}
+
+/* ÉRINTŐCÉL: a jelölőnégyzet MAGA 24×24 CSS px, tehát a WCAG 2.2 SC 2.5.8
+   minimumát kivétel nélkül teljesíti (mérve Chromiumban 320/390/1280 px-en).
+   A kapcsolat- és az időpontkérő űrlap ma 1,25rem-et (20 px) használ, és ott a
+   megfelelés a 2.5.8 „Equivalent" kivételén múlik (a `label for` ugyanazt a
+   vezérlőt kapcsolja, és 24 px-nél magasabb). Itt szándékosan a SZIGORÚBB
+   utat visszük: a kivételre hivatkozás helyett maga a doboz elég nagy.
+   A 44 px-es szabály (Ü3) a GOMBOKRA vonatkozik, jelölőnégyzetre nem. */
+.kc-free-course__checkbox {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-block-start: 0.1rem;
+  accent-color: var(--kc-color-primary);
+}
+
+.kc-free-course__checkbox:focus-visible {
+  outline: 2px solid var(--kc-color-focus);
+  outline-offset: 2px;
+}
+
+.kc-free-course__consent-label {
+  font-size: var(--kc-font-s);
+  line-height: var(--kc-leading-body);
+}
+
+/* A hozzájárulás-szövegbe ÁGYAZOTT link. Szabály nélkül a base.css alapnyelvét
+   örökölné (ink + aláhúzás nélkül), vagyis a környező mondattól 1,00:1-re
+   lenne megkülönböztethető → WCAG 1.4.1 bukás. Ugyanaz a nyelv, mint a
+   kapcsolat-űrlapon: ink + aláhúzás (a paperen 14,79:1), hoveren akcent-mély. */
+.kc-free-course__consent-label a {
+  color: var(--kc-color-text);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+.kc-free-course__consent-label a:hover {
+  color: var(--kc-color-link-hover);
+}
+
+.kc-free-course__turnstile {
+  min-height: 65px; /* a widget helyfoglalása — ugrálás (CLS) nélkül */
+}
+
+/* A doboz cselekvő gombja a teljes szélességet kapja, ugyanúgy, mint a
+   vásárló CTA (a 44 px-es célfelület így a legnagyobb). */
+.kc-course-buybox .kc-free-course > .kc-button {
+  width: 100%;
+}
+
+/* Siker-nézet: az űrlap helyére kerül. A kapcsolat-űrlap köszönő-dobozának
+   nyelve (success keret + success felület), de a doboz belsejébe illesztve,
+   ezért szerényebb belső térközzel. */
+.kc-free-course__success {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-space-3);
+  padding: var(--kc-space-4);
+  border: 1px solid var(--kc-color-success);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-success-surface);
+}
+
+/* A LEVÉL NÉLKÜLI ág: a hozzáférés megvan, a belépő link viszont nem ment ki.
+   Ez nem tiszta siker, ezért nem sikerzöld, hanem a figyelem-tokenpár
+   (`warning`) viseli — a szín is mondjon igazat (NN/g: a rendszerállapot
+   legyen látható és pontos). A dobozt továbbra is `role="status"` jelöli:
+   állapot, nem hiba. */
+.kc-free-course__success--figyelem {
+  border-color: var(--kc-color-warning);
+  background-color: var(--kc-color-warning-surface);
+}
+
+/* A siker CÍME nem `<h2>`: a doboz H1-e alatt egy önálló címsor-szint
+   megtörné a lap címsor-hierarchiáját (a kurzusoldalon a H2-k a szakaszoké).
+   Vizuálisan viszont címként viselkedik: törzsméret + 700-as súly, ahogy a
+   három-méretes skálán a hangsúly általában is súlyból jön. */
+.kc-free-course__success-title {
+  margin: 0;
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+  color: var(--kc-color-text);
+}
+
+.kc-free-course__success-title:focus-visible {
+  outline: none;
+}
+
+.kc-free-course__success-body {
+  margin: 0;
+  font-size: var(--kc-font-s);
+  color: var(--kc-color-text);
+}
+
 /* ---- Pipás listák (előnyök, „kinek való / kinek nem") ----------------------
    A belépő animáció szándékosan halk: 8px-es emelkedés és áttűnés, soronként
    60ms késleltetéssel. `animation-fill-mode: both` — csökkentett mozgásnál a

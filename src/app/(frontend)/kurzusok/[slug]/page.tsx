@@ -16,6 +16,7 @@ import { CourseFitCheck } from '@/components/courses/CourseFitCheck'
 import { CourseGuarantee } from '@/components/courses/CourseGuarantee'
 import { CourseHowItWorks } from '@/components/courses/CourseHowItWorks'
 import { CourseJumpNav, type CourseJumpTarget } from '@/components/courses/CourseJumpNav'
+import { FreeCourseRequestForm } from '@/components/courses/FreeCourseRequestForm'
 import { LexicalContent } from '@/components/courses/LexicalContent'
 import { PreviewVideo, hasPreviewVideo } from '@/components/courses/PreviewVideo'
 import { RelatedCourses } from '@/components/courses/RelatedCourses'
@@ -291,7 +292,39 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
   // állapotban jelenik meg: „már megvetted" vagy „nem vásárolható" mellett
   // egyedül a vásárlódoboz jelzése marad.
   const cta = resolveCourseCta(product, purchased)
-  const showBuyBar = cta.kind === 'buy' || cta.kind === 'free'
+
+  /**
+   * ═══ INGYENES KURZUS: IGÉNYLŐ ŰRLAP A CTA HELYÉN (2026-08-17) ═══
+   * A `free` ág (published + `isFreeCourse` + még nem a vevőé) eddig egy
+   * linket adott a `/kurzusaim` oldalra. Be nem jelentkezett látogatónak ez
+   * ZSÁKUTCA: fiókja nincs, a lista bejelentkezést kér, a kurzushoz sosem jut
+   * hozzá — pedig ez az ingyenes anyag a teljes értékesítési tölcsér teteje.
+   * A régi `www.kineticare.hu` ugyanitt űrlapot adott („KÉREM A
+   * VILLÁMKURZUST" → név + e-mail → a link e-mailben), tehát a visszatérő
+   * látogató ezt a mintát ismeri (Jakob törvénye, NN/g; mérés:
+   * `docs/regi-oldal-osszehasonlitas.md` 3.1 és 3.4).
+   *
+   * Az űrlap a vásárlódoboz CTA-helyére kerül (`ctaSlot`), tehát a doboz
+   * kutatás szerinti sorrendje (ár → cselekvés → előnyök) változatlan.
+   * A fizetős kurzus felülete BITRE ugyanaz marad, mint eddig.
+   */
+  const showFreeRequestForm = cta.kind === 'free'
+  // A site key szerver-oldalon olvasott (nem NEXT_PUBLIC): a spam-ellenőrző
+  // widget csak beállított kulcs mellett jelenik meg — kulcs nélkül a szerver
+  // sem ellenőriz, tehát a widget hamis biztonságérzet lenne (a kapcsolat-
+  // űrlap ugyanezt a szabályt követi).
+  const turnstileSiteKey = process.env.TURNSTILE_SITE_KEY ?? null
+
+  /**
+   * A ragadós vásárlósáv a `free` ágon MEGSZŰNIK. A sáv egy LINK: `href`-re
+   * navigál, az igénylés viszont ŰRLAP-BEKÜLDÉS, amit link nem tud elvégezni.
+   * Egy „ugorj az űrlaphoz" sáv más CSELEKVÉS lenne (navigáció), tehát saját
+   * CTA-szótári sort kívánna (§3.2, a #24 ↔ #25 mintájára) — azt a vezető
+   * vezeti, nem ez a kör. A látogató így sem marad út nélkül: az űrlap a
+   * DOM-ban a lap ELEJÉN áll (a vásárlódoboz a rács első eleme), mobilon
+   * tehát a legelső dolog a képernyőn.
+   */
+  const showBuyBar = cta.kind === 'buy'
   const priceLabel =
     priceBadge === 'price' && price !== null
       ? formatPriceHuf(price)
@@ -442,6 +475,18 @@ export default async function CoursePage({ params, searchParams }: CoursePagePro
                 audienceLabel={audienceLabel}
                 categoryLabel={category}
                 ctaId={CTA_ID}
+                ctaSlot={
+                  showFreeRequestForm ? (
+                    <FreeCourseRequestForm
+                      courseTitle={title}
+                      id={CTA_ID}
+                      productId={product.id}
+                      turnstileSiteKey={turnstileSiteKey}
+                      {...(user?.name ? { defaultName: user.name } : {})}
+                      {...(user?.email ? { defaultEmail: user.email } : {})}
+                    />
+                  ) : null
+                }
                 guaranteeLabel={guaranteeLabel}
                 hasPurchased={purchased}
                 highlights={sales.highlights}
