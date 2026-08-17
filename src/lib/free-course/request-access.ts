@@ -3,7 +3,6 @@ import type { Payload } from 'payload'
 import type { Product, User } from '../../payload-types'
 import { withAdvisoryLock } from '../advisory-lock'
 import { isFreeCourse, courseTitle, hasUserPurchased } from '../courses'
-import { INVITE_TOKEN_TTL_MS } from '../customer-import/invite'
 import { maskEmail } from '../email/mask'
 import { resolveEmailProvider, type EmailEnv } from '../email/provider'
 import { grantFreeCoursesToUser } from '../free-course-grant'
@@ -69,14 +68,29 @@ import { freeCourseEmail } from './email'
  */
 
 /**
- * A belépő link élettartama. SZÁNDÉKOSAN a vásárló-import TTL-jét (30 nap)
- * használjuk: ugyanaz a helyzet (rendszer által létrehozott fiók, amelyhez a
- * címzett még nem választott jelszót), és két külön élettartam a
- * `/jelszo-visszaallitas` oldalon megmagyarázhatatlan lenne. A Payload
- * alapértelmezése (1 óra) egy lead-magnethez kevés: a levelet gyakran csak
- * napokkal később nyitják meg.
+ * A belépő link élettartama: 7 nap.
+ *
+ * VEZETŐI DÖNTÉS (2026-08-17, tulajdonosi jóváhagyással). A link
+ * gyakorlatilag JELSZÓBEÁLLÍTÓ token: aki megkapja, a fiók gazdájává válik.
+ * A vásárló-import 30 napos TTL-je ehhez túl hosszú kitettség, mert:
+ *  - az igénylés NYILVÁNOS végpontról, önkiszolgálóan indul, tehát a lánc
+ *    egyetlen bizalmi pontja a postafiók;
+ *  - ha a postafiókhoz később bárki hozzáfér (megosztott gép, továbbított
+ *    levél, elhagyott céges cím), a régi levél még hetekig élő belépő.
+ * Az import 30 napja MÁS helyzet: ott a staff küld meghívót egy ismert
+ * vevőnek, és az újraküldés KÉZI lépés, tehát a hosszú ablak indokolt.
+ * Itt az újraküldés a látogatónak EGYETLEN űrlap-beküldés (a folyamat
+ * idempotens: meglévő fióknál is új tokent ír és újra kiküldi a levelet),
+ * ezért a rövidítés nem ront a használhatóságon.
+ *
+ * A Payload alapértelmezése (1 óra) viszont kevés lenne: a lead-magnet
+ * levelét gyakran csak napokkal később nyitják meg.
+ *
+ * A `/jelszo-visszaallitas` oldal nem magyarázza a napok számát, tehát a két
+ * eltérő élettartam ott nem ütközik; a levél a saját TTL-jét írja ki
+ * (`FREE_COURSE_TOKEN_TTL_DAYS`).
  */
-export const FREE_COURSE_TOKEN_TTL_MS = INVITE_TOKEN_TTL_MS
+export const FREE_COURSE_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 /** A TTL napokban — a levélszöveghez. */
 export const FREE_COURSE_TOKEN_TTL_DAYS = Math.round(
