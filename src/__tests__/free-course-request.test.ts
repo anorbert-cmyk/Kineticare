@@ -14,7 +14,9 @@ import {
 import {
   requestFreeCourseAccess,
   FREE_COURSE_TOKEN_TTL_DAYS,
+  FREE_COURSE_TOKEN_TTL_MS,
 } from '../lib/free-course/request-access'
+import { INVITE_TOKEN_TTL_MS } from '@/lib/customer-import/invite'
 import { FREE_COURSE_GENERIC_ERROR } from '../lib/free-course/ui-text'
 import {
   parseFreeCourseRequestBody,
@@ -745,6 +747,35 @@ describe('spam- és visszaélés-védelem', () => {
 // ---------------------------------------------------------------------------
 // A levél szövege
 // ---------------------------------------------------------------------------
+
+describe('a belépő link élettartama', () => {
+  it('7 nap, és NEM a vásárló-import 30 napos TTL-je', () => {
+    // Vezetői döntés (2026-08-17, tulajdonosi jóváhagyással): a link
+    // gyakorlatilag jelszóbeállító token egy NYILVÁNOS, önkiszolgáló
+    // végpontról, tehát a 30 napos ablak túl hosszú kitettség. Az
+    // újraküldés itt egyetlen űrlap-beküldés, ezért a rövidítés nem ront
+    // a használhatóságon. Az import 30 napja MÁS helyzet (staff küld
+    // meghívót, az újraküldés kézi lépés), ezért az érintetlen marad.
+    expect(FREE_COURSE_TOKEN_TTL_DAYS).toBe(7)
+    expect(FREE_COURSE_TOKEN_TTL_MS).toBe(7 * 24 * 60 * 60 * 1000)
+    expect(FREE_COURSE_TOKEN_TTL_MS).toBeLessThan(INVITE_TOKEN_TTL_MS)
+  })
+
+  it('a Payload 1 órás alapértelmezésénél BŐVEN hosszabb (a levelet napokkal később nyitják)', () => {
+    expect(FREE_COURSE_TOKEN_TTL_MS).toBeGreaterThan(24 * 60 * 60 * 1000)
+  })
+
+  it('a levél a TÉNYLEGES élettartamot írja ki, nem beégetett számot', () => {
+    const sablon = freeCourseEmail({
+      name: 'Kis Piroska',
+      courseTitle: 'SOS KézRelax villámkurzus',
+      activationUrl: 'https://pelda.kineticare.hu/jelszo-visszaallitas?token=abc',
+      email: 'piroska@pelda.hu',
+      expiresInDays: FREE_COURSE_TOKEN_TTL_DAYS,
+    })
+    expect(sablon.text).toContain(String(FREE_COURSE_TOKEN_TTL_DAYS))
+  })
+})
 
 describe('belépő levél', () => {
   const template = freeCourseEmail({
