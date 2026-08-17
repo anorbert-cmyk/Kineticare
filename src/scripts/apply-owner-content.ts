@@ -2,7 +2,8 @@
  * Tulajdonos által jóváhagyott, EGYSZERI szerkesztői tartalom-javítások.
  *
  * ═══ MIT JAVÍT ═══
- * Tizenhat, 2026-08-16-án jóváhagyott tartalom-javítás. Mind KIZÁRÓLAG pontos
+ * Tizenhét jóváhagyott tartalom-javítás (1–16.: 2026-08-16; 17.: 2026-08-17).
+ * Mind KIZÁRÓLAG pontos
  * egyezésnél (illetve üres mezőnél, hiányzó blokknál, hiányzó oldalnál) fut le,
  * tehát a lányok időközbeni szerkesztését egyik sem írja felül:
  *
@@ -127,6 +128,18 @@
  *     kapcsolat menüpontba is"). Ami MÁR ott van, azt csendben kihagyja
  *     (idempotencia); ha a lapon MÁS nevekkel álló szakember-szekció van, a
  *     script HANGOSAN kihagy és nem duplikál.
+ * 17. Az SOS villámkurzus KAPCSOLÓDÓ kurzusa (`products.relatedProducts`): a
+ *     fizetős „Otthoni KézRehab Program”. Ok: a régi oldalon az ingyenes anyag
+ *     igénylése után a látogató AZONNAL egy fizetős ajánlatra ment
+ *     (`urlRedirect: /oto-kezrehab-akcio` — „ez a lánc üzleti lényege”,
+ *     docs/regi-oldal-osszehasonlitas.md 5.1), ma viszont az ingyenes kurzus
+ *     után SEMMILYEN továbblépés nincs (ugyanott 5.2). A kurzusoldal alján álló
+ *     cross-sell sáv KIZÁRÓLAG ebből a mezőből dolgozik, tehát a hiányzó
+ *     lépést ez a mező pótolja. A cél kurzust WEBCÍM alapján keressük (nem
+ *     beégetett azonosítóval), és a script HANGOSAN kihagy, ha a cél nem
+ *     található, ha önmagára mutatna, ha a kapcsolat MÁR be van állítva, vagy
+ *     ha a szerkesztő már felvett másik kurzust. Sürgetés (visszaszámláló,
+ *     „csak ma") SEHOL: a régi oldal visszaszámlálóját tudatosan nem hozzuk át.
  *
  * ═══ KAPU ═══
  * Alapértelmezésben PRÓBAFUTÁS (dry-run): a script mindent kiszámol és
@@ -242,6 +255,18 @@ export const UJ_ROLUNK_HERO_PREFIX = 'katak-team'
  */
 export const SOS_KURZUS_SLUG = 'sos-kezrelax-villamkurzus'
 
+/**
+ * A FIZETŐS „Otthoni KézRehab Program” webcíme (`products.slug`).
+ *
+ * A 17. javítás (cross-sell) CÉLJA. Webcím alapján keressük, nem beégetett
+ * azonosító alapján: az id környezetenként (éles, demo, helyi) más, a webcím
+ * viszont a kurzus nyilvános, stabil azonosítója — a mért éles cím
+ * `/kurzusok/otthoni-kezrehab-program` (`docs/regi-oldal-osszehasonlitas.md`
+ * 3.2). A `sku`-ból is pontosan ez adódik (`buildCourseSlug`), ezért a mező
+ * automatikus generátorától sem tud elcsúszni; teszt őrzi.
+ */
+export const OTTHONI_KURZUS_SLUG = 'otthoni-kezrehab-program'
+
 /** A `/szolgaltatasok` oldal webcíme (Pages.slug). */
 export const SZOLGALTATASOK_SLUG = 'szolgaltatasok'
 
@@ -317,6 +342,7 @@ export type JavitasSzabaly =
   | 'kurzuslista-feliratok'
   | 'aszf-adatvedelem-link'
   | 'kapcsolat-szakemberek'
+  | 'sos-kapcsolodo-kurzus'
 
 /** Egy elvégzett módosítás vagy egy indokolt kihagyás gépileg is vizsgálható leírása. */
 export interface JavitasLepes {
@@ -1152,6 +1178,118 @@ export const alkalmazSosIngyenesJelolo = (
       {
         szabaly: 'sos-ingyenes-jelolo',
         uzenet: `${uzenet}: (nincs kimondva) → INGYENES. Enélkül a kurzusoldal „Megveszem" gombot mutat, a pénztár viszont elutasítja („A termékhez nem tartozik érvényes ár…") — pontosan ezt a hibát jelentette a tulajdonos.`,
+        indok: null,
+      },
+    ],
+    kihagyasok: [],
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 17. javítás — az SOS villámkurzus KAPCSOLÓDÓ kurzusa (cross-sell).
+// ---------------------------------------------------------------------------
+
+/** A kapcsolódó-kurzus javítás eredménye. */
+export interface KapcsolodoKurzusAtalakitas {
+  /** A beírandó kapcsolat-lista, vagy `null`, ha nem szabad írni. */
+  relatedProducts: number[] | null
+  modositasok: JavitasLepes[]
+  kihagyasok: JavitasLepes[]
+}
+
+/**
+ * A `relatedProducts` mező azonosítói. A mező típusa `(number | Product)[]`:
+ * `depth: 0` mellett szám, mélyebb lekérdezésnél objektum — mindkettőt
+ * kezeljük, hogy a függvény a hívó lekérdezési mélységétől független legyen.
+ */
+export const kapcsolodoAzonositok = (ertek: Product['relatedProducts']): number[] => {
+  if (!Array.isArray(ertek)) {
+    return []
+  }
+  const azonositok: number[] = []
+  for (const elem of ertek) {
+    if (typeof elem === 'number') {
+      azonositok.push(elem)
+      continue
+    }
+    if (typeof elem === 'object' && elem !== null && typeof elem.id === 'number') {
+      azonositok.push(elem.id)
+    }
+  }
+  return azonositok
+}
+
+/**
+ * Az SOS villámkurzus `relatedProducts` mezőjének beállítása a fizetős
+ * „Otthoni KézRehab Program”-ra.
+ *
+ * ═══ MIT PÓTOL ═══
+ * A régi `www.kineticare.hu` ingyenes lánca NEM ért véget az e-mail
+ * megadásával: a beküldés után a látogató azonnal egy fizetős ajánlatra ment
+ * (`urlRedirect: /oto-kezrehab-akcio`) — „ez a lánc üzleti lényege"
+ * (`docs/regi-oldal-osszehasonlitas.md` 5.1). Ma ez a lépés HIÁNYZIK: ugyanott
+ * az 5.2 táblázat mérése szerint „Következő ajánlat (a régi OTO helye): NINCS.
+ * Az ingyenes anyag után semmilyen továbblépés nincs beépítve."
+ *
+ * A pótlás a mai, tisztességes formája: a kurzusoldal alján álló cross-sell sáv
+ * (`RelatedCourses`), ami KIZÁRÓLAG a `relatedProducts` mezőből dolgozik.
+ * Visszaszámláló és ál-sürgetés nélkül — a régi oldal 3 napos, látogatónként
+ * újrainduló visszaszámlálója (`docs/regi-oldal-valaszok.md` 21.) NEM jön át.
+ *
+ * ═══ MIÉRT BIZTONSÁGOS ═══
+ * Négy ágon áll meg, mindegyik HANGOS naplósorral:
+ *  1. a cél kurzus nem található webcím alapján → nem találgat azonosítót;
+ *  2. a cél maga az SOS kurzus lenne → önhivatkozást nem írunk be;
+ *  3. a mező MÁR tartalmazza a célt → idempotencia (második futás semmit nem tesz);
+ *  4. a mezőben MÁS kurzus áll → a szerkesztő döntését a script sosem írja felül.
+ */
+export const alkalmazSosKapcsolodoKurzus = (input: {
+  jelenlegi: Product['relatedProducts']
+  /** Az SOS kurzus azonosítója — az önhivatkozás kizárásához. */
+  sosId: number
+  /** A fizetős program azonosítója, vagy `null`, ha a webcím nem található. */
+  celId: number | null
+}): KapcsolodoKurzusAtalakitas => {
+  const uzenet = `Az SOS kurzus kapcsolódó kurzusa („${SOS_COURSE_SKU}” → „${KURZUS_SKU}”)`
+  const nincsIras = (indok: string, hangos: boolean): KapcsolodoKurzusAtalakitas => ({
+    relatedProducts: null,
+    modositasok: [],
+    kihagyasok: [{ szabaly: 'sos-kapcsolodo-kurzus', uzenet, indok, hangos }],
+  })
+
+  if (input.celId === null) {
+    return nincsIras(
+      `a fizetős program nem található a „${OTTHONI_KURZUS_SLUG}” webcímen — a cross-sell sáv így üres marad; a kurzus webcímét az adminban kell beállítani`,
+      true,
+    )
+  }
+
+  if (input.celId === input.sosId) {
+    return nincsIras(
+      'a keresett webcím MAGÁRA az SOS kurzusra mutat — önhivatkozást nem írunk be (a sáv a saját oldalát ajánlaná)',
+      true,
+    )
+  }
+
+  const jelenlegiAzonositok = kapcsolodoAzonositok(input.jelenlegi)
+
+  if (jelenlegiAzonositok.includes(input.celId)) {
+    return nincsIras('a kapcsolódó kurzus MÁR be van állítva — nincs teendő', true)
+  }
+
+  if (jelenlegiAzonositok.length > 0) {
+    return nincsIras(
+      `a mezőben már ${jelenlegiAzonositok.length} másik kurzus áll (azonosító: ${jelenlegiAzonositok.join(', ')}) — a szerkesztő beállítását a script sosem írja felül; ha kell, az adminban vedd fel mellé`,
+      true,
+    )
+  }
+
+  return {
+    relatedProducts: [input.celId],
+    modositasok: [
+      {
+        szabaly: 'sos-kapcsolodo-kurzus',
+        uzenet: `${uzenet}: (üres) → a fizetős program. Enélkül az ingyenes kurzus után SEMMILYEN továbblépés nincs a lapon (a régi oldal ezen a ponton ajánlatra irányított át).`,
         indok: null,
       },
     ],
@@ -2464,12 +2602,47 @@ async function futtat(): Promise<void> {
     modositasokSzama += ingyenes.modositasok.length
     kihagyasokSzama += ingyenes.kihagyasok.length
 
-    const sosAdat: Partial<Pick<Product, 'slug' | 'priceInHUFEnabled'>> = {}
+    // --- 17. javítás: az SOS kurzus kapcsolódó (cross-sell) kurzusa ---------
+    // A cél kurzust WEBCÍM alapján keressük: az azonosító környezetenként más,
+    // a webcím a kurzus stabil, nyilvános azonosítója. A `draft: true` azért
+    // kell, mert a még nem publikált program is LÉTEZŐ kurzus — ilyenkor a
+    // kapcsolat helyes adat, csak a sáv nem jelenik meg, amíg publikálatlan
+    // (RelatedCourses csak published terméket renderel), és ezt hangosan
+    // kiírjuk, hogy ne tűnjön néma hibának.
+    const celTalalat = await payload.find({
+      collection: 'products',
+      where: { slug: { equals: OTTHONI_KURZUS_SLUG } },
+      limit: 1,
+      depth: 0,
+      draft: true,
+      overrideAccess: true,
+    })
+    const celKurzus = celTalalat.docs[0]
+    if (celKurzus !== undefined && celKurzus.status !== 'published') {
+      logger.error(
+        `Tartalom-javítás: a cross-sell cél kurzus („${OTTHONI_KURZUS_SLUG}”) állapota „${
+          celKurzus.status ?? '(nincs)'
+        }”, nem „published” — a kapcsolat beíródik, de a sáv addig NEM jelenik meg a látogatónak, amíg a kurzust nem teszed közzé.`,
+      )
+    }
+    const kapcsolodo = alkalmazSosKapcsolodoKurzus({
+      jelenlegi: sosKurzus.relatedProducts,
+      sosId: sosKurzus.id,
+      celId: celKurzus?.id ?? null,
+    })
+    naplozdLepeseket(kapcsolodo, dryRun)
+    modositasokSzama += kapcsolodo.modositasok.length
+    kihagyasokSzama += kapcsolodo.kihagyasok.length
+
+    const sosAdat: Partial<Pick<Product, 'slug' | 'priceInHUFEnabled' | 'relatedProducts'>> = {}
     if (eredmeny.slug !== null) {
       sosAdat.slug = eredmeny.slug
     }
     if (ingyenes.priceInHUFEnabled !== null) {
       sosAdat.priceInHUFEnabled = ingyenes.priceInHUFEnabled
+    }
+    if (kapcsolodo.relatedProducts !== null) {
+      sosAdat.relatedProducts = kapcsolodo.relatedProducts
     }
 
     if (Object.keys(sosAdat).length > 0 && !dryRun) {
