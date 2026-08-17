@@ -32,6 +32,60 @@ type ViewState =
   | { kind: 'unauthorized' }
   | { kind: 'not-found' }
 
+/**
+ * ═══ MIÉRT NEM „Köszönjük a vásárlást!" ═══
+ * A Barion EGYETLEN visszatérési címet ismer: a hivatalos leírás szerint a
+ * `RedirectUrl` az a cím, ahova a fizető „after the payment is completed OR
+ * CANCELED" kerül. Vagyis ide fut be a sikeres, a megszakított ÉS az
+ * elutasított fizetés is. A vendég-vásárlónak pedig nincs munkamenete, tehát
+ * az állapot-lekérdezés neki mindig 401 — ezen az ágon a lap SOSEM tudja,
+ * mi történt.
+ *
+ * A folyamat-audit ezt négy állapoton mérte ki (valós fiókos és valós
+ * VENDÉG `payment_failed`, valós `paid`, és egy KITALÁLT rendelésszám):
+ * mind a négy ugyanazt a „Köszönjük a vásárlást! … Több teendőd nincs."
+ * képernyőt kapta. Akinek a kártyáját elutasították, azt a rendszer
+ * tájékoztatta, hogy vásárolt, és várjon egy e-mailt, ami sosem jön.
+ *
+ * Ez a szöveg ezért nem állít semmit a kimenetelről, csak azt mondja el, ami
+ * IGAZ: belépés nélkül nem látjuk az állapotot, és mindkét lehetséges
+ * kimenetelre megmondja a következő lépést. NN/g #1 (a rendszer állapotát
+ * őszintén kell közölni) és a projekt „a felirat legyen igaz" szabálya.
+ *
+ * A fizetési állapotgéphez ez a javítás NEM nyúl (tilos zóna): kizárólag
+ * ennek az ágnak a SZÖVEGE változik.
+ */export function ThankYouUnauthorized({ orderNumber }: { orderNumber: string }) {
+  return (
+    <div className="kc-thankyou" role="status">
+      <h1>Nem látjuk, mi történt a fizetéssel</h1>
+      <p>
+        Ehhez a rendeléshez be kell lépned, különben nem tudjuk megmutatni, sikerült-e a
+        fizetés.
+      </p>
+      <p>
+        <strong>Ha sikerült:</strong> a visszaigazolót e-mailben küldjük. Ha vendégként
+        vásároltál, a levélben egy jelszó-beállító link is lesz, azzal nyílik meg a fiókod a
+        kurzussal.
+      </p>
+      <p>
+        <strong>Ha megszakítottad vagy elutasították:</strong> a fizetés nem történt meg, és
+        nyugodtan újrapróbálhatod.
+      </p>
+      <p className="kc-thankyou__order">
+        Rendelésszám: <strong>{orderNumber}</strong>
+      </p>
+      <div className="kc-thankyou__actions">
+        <Button href={`/belepes?returnUrl=${encodeURIComponent('/fizetes/koszonom?order=' + orderNumber)}`}>
+          Belépés
+        </Button>
+        <Button href="/kurzusok" variant="secondary">
+          Vissza a kurzusokhoz
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export function ThankYouView({ orderNumber }: ThankYouViewProps) {
   const [state, setState] = useState<ViewState>({ kind: 'polling', attempts: 0 })
 
@@ -178,25 +232,7 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
   //  - lejárt munkamenet egy meglévő fióknál: neki a belépés a helyes út.
   // A korábbi, feltétel nélküli „jelentkezz be" a vendégnek zsákutca volt.
   if (state.kind === 'unauthorized') {
-    return (
-      <div className="kc-thankyou" role="status">
-        <h1>Köszönjük a vásárlást!</h1>
-        <p>
-          A fizetésed feldolgozzuk, és a visszaigazolót e-mailben küldjük. Ha vendégként
-          vásároltál, a levélben egy <strong>jelszó-beállító link</strong> is lesz — azzal
-          nyílik meg a fiókod, benne a kurzussal. Több teendőd nincs.
-        </p>
-        <p className="kc-thankyou__order">
-          Rendelésszám: <strong>{orderNumber}</strong>
-        </p>
-        <div className="kc-thankyou__actions">
-          <Button href={`/belepes?returnUrl=${encodeURIComponent('/fizetes/koszonom?order=' + orderNumber)}`}>
-            Belépés (ha van fiókod)
-          </Button>
-          <Button href="/" variant="secondary">Vissza a kezdőlapra</Button>
-        </div>
-      </div>
-    )
+    return <ThankYouUnauthorized orderNumber={orderNumber} />
   }
 
   if (state.kind === 'not-found') {

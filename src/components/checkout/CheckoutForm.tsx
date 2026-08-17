@@ -15,6 +15,7 @@ import {
   WAIVER_LOSS_INPUT_ID,
   WAIVER_START_INPUT_ID,
   createCheckoutSubmitHandler,
+  CHECKOUT_ERROR_REGION_ID,
   emptyGuestForm,
   prefillBillingForm,
   withBillingValue,
@@ -106,7 +107,11 @@ export function CheckoutErrorRegion({ error }: { error: string | null }) {
       aria-live="assertive"
       className="kc-checkout-form__error"
       data-visible={error !== null ? 'true' : 'false'}
+      id={CHECKOUT_ERROR_REGION_ID}
       role="alert"
+      // A `-1` azért kell, hogy a beküldés-kezelő PROGRAMBÓL ide tudja vinni a
+      // fókuszt (a Tab-sorrendbe így sem kerül be). Enélkül a `focus()` no-op.
+      tabIndex={-1}
     >
       {error}
     </div>

@@ -19,6 +19,7 @@ import {
 } from '../lib/checkout/billing'
 import {
   CHECKOUT_ALREADY_PURCHASED_ERROR,
+  CHECKOUT_ERROR_REGION_ID,
   CHECKOUT_WAIVER_ERROR,
   WAIVER_LOSS_INPUT_ID,
   WAIVER_START_INPUT_ID,
@@ -456,7 +457,14 @@ describe('planCheckoutSubmission — a beküldés a MÓDOSÍTOTT állapotból é
     expect(plan.kind === 'invalid' && plan.focusElementId).toBe('kc-field-billingZip')
   })
 
-  it('már megvett kurzus: a beküldés meg sem indul', () => {
+  it('már megvett kurzus: a beküldés meg sem indul, ÉS a hibára megy a fókusz', () => {
+    /**
+     * SZERZŐDÉS-VÁLTÁS (folyamat-audit, 2026-08-17): a `focusElementId` itt
+     * korábban `null` volt, amitől a `focusElement` no-op lett — vagyis ez az ág
+     * ugyanolyan NÉMA volt, mint a szerverhiba-ág: az üzenet a képernyőn kívül
+     * maradt, a fókusz a `body`-n. Most a hibarégió kapja a fókuszt, és a
+     * böngésző odagörget.
+     */
     const plan = planCheckoutSubmission({
       ...context(prefillBillingForm(PROFILE)),
       alreadyPurchased: true,
@@ -464,7 +472,7 @@ describe('planCheckoutSubmission — a beküldés a MÓDOSÍTOTT állapotból é
     expect(plan).toEqual({
       kind: 'blocked',
       message: CHECKOUT_ALREADY_PURCHASED_ERROR,
-      focusElementId: null,
+      focusElementId: CHECKOUT_ERROR_REGION_ID,
     })
   })
 

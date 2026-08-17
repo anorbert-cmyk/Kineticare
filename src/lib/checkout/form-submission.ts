@@ -89,6 +89,19 @@ export const CHECKOUT_ALREADY_PURCHASED_ERROR =
 export const CHECKOUT_WAIVER_ERROR = 'A vásárláshoz mindkét hozzájárulást el kell fogadnod.'
 
 /** Az elállási-nyilatkozat két jelölőnégyzetének elem-azonosítója. */
+/**
+ * A pénztár élő hibarégiójának azonosítója.
+ *
+ * MIÉRT KELL AZONOSÍTÓ EGY `role="alert"` DOBOZNAK: az élő régiót a
+ * képernyőolvasó felolvassa, a LÁTÓ felhasználó viszont nem látja, ha a doboz a
+ * képernyőn kívül van. Mérve: szerverhiba után a hibadoboz `top` értéke asztalon
+ * −753 px, mobilon −1343 px, a `document.activeElement` pedig `BODY` maradt —
+ * vagyis a felületen SEMMI nem jelezte a hibát, a gomb is visszaállt alapállásba.
+ * A fókusz ide mozgatásával a böngésző a dobozt a képernyőre görgeti, és a
+ * billentyűzetes olvasás is innen folytatódik.
+ */
+export const CHECKOUT_ERROR_REGION_ID = 'kc-checkout-hiba'
+
 export const WAIVER_START_INPUT_ID = 'waiver-start'
 export const WAIVER_LOSS_INPUT_ID = 'waiver-loss'
 
@@ -208,7 +221,7 @@ export function planCheckoutSubmission(
     return {
       kind: 'blocked',
       message: CHECKOUT_ALREADY_PURCHASED_ERROR,
-      focusElementId: null,
+      focusElementId: CHECKOUT_ERROR_REGION_ID,
     }
   }
   if (context.waiverRequired && !(context.waiverStartAccepted && context.waiverLossAccepted)) {
@@ -331,7 +344,10 @@ export function createCheckoutSubmitHandler(
         deps.redirect(result.gatewayUrl)
         return
       }
+      // A hibaüzenet ONNAN kap fókuszt, ahol a felhasználó látja is: enélkül a
+      // doboz a képernyőn kívül maradt, és a beküldés némán elhalt (B1).
       deps.setError(result.message)
+      deps.focusElement(CHECKOUT_ERROR_REGION_ID)
     } finally {
       deps.setSubmitting(false)
     }

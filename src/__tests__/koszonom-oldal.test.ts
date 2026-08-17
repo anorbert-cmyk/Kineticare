@@ -1,8 +1,9 @@
-import type { ReactElement } from 'react'
+import { createElement, type ReactElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import KoszonjukPage from '../app/(frontend)/fizetes/koszonom/page'
-import { ThankYouView } from '../components/checkout/ThankYouView'
+import { ThankYouUnauthorized, ThankYouView } from '../components/checkout/ThankYouView'
 
 /**
  * REGRESSZIÓ-ŐR: a köszönőoldal NEM dönthet szerver-oldali hitelesítésből.
@@ -109,5 +110,52 @@ describe('köszönőoldal (Barion-visszatérés)', () => {
     expect(ThankYouView.length).toBe(1)
     const source = ThankYouView.toString()
     expect(source).not.toContain('isLoggedIn')
+  })
+})
+
+describe('vendég visszatérése a Barionból — NEM állítunk sikert', () => {
+  /**
+   * A folyamat-audit MÉRÉSE: a Barion egyetlen visszatérési címet ismer
+   * („after the payment is completed OR CANCELED"), a vendégnek pedig nincs
+   * munkamenete, tehát az állapot-lekérdezés neki mindig 401. Négy állapoton
+   * mérve — valós fiókos `payment_failed`, valós VENDÉG `payment_failed`, valós
+   * `paid`, és egy KITALÁLT rendelésszám — mind a négy ugyanazt a „Köszönjük a
+   * vásárlást! … Több teendőd nincs." képernyőt kapta.
+   *
+   * Akinek a kártyáját elutasították, azt a rendszer tájékoztatta, hogy
+   * vásárolt, és várjon egy e-mailt, ami sosem jön. Ez az őr azt rögzíti, hogy
+   * ezen az ágon SEMMILYEN kimenetelt nem állítunk.
+   */
+  const markup = () =>
+    renderToStaticMarkup(
+      createElement(ThankYouUnauthorized, { orderNumber: 'KH-2026-000009' }),
+    )
+
+  it('nem mondja, hogy megtörtént a vásárlás', () => {
+    const html = markup()
+    expect(html).not.toContain('Köszönjük a vásárlást')
+    expect(html).not.toContain('Több teendőd nincs')
+    // „A fizetésed feldolgozzuk" is állítás lenne arról, hogy van mit feldolgozni.
+    expect(html).not.toContain('A fizetésed feldolgozzuk')
+  })
+
+  it('kimondja, hogy belépés nélkül nem látjuk az állapotot', () => {
+    const html = markup()
+    expect(html).toContain('Nem látjuk, mi történt a fizetéssel')
+    expect(html).toContain('be kell lépned')
+  })
+
+  it('MINDKÉT lehetséges kimenetelre megmondja a következő lépést', () => {
+    const html = markup()
+    expect(html).toContain('Ha sikerült')
+    expect(html).toContain('Ha megszakítottad vagy elutasították')
+    expect(html).toContain('újrapróbálhatod')
+  })
+
+  it('a rendelésszám és a két kiút megmarad (nem lesz zsákutca)', () => {
+    const html = markup()
+    expect(html).toContain('KH-2026-000009')
+    expect(html).toContain('/belepes?returnUrl=')
+    expect(html).toContain('/kurzusok')
   })
 })
