@@ -15,9 +15,40 @@ import { registerUser, type AuthResult, type RegisterInput } from '../../lib/aut
 /**
  * RegisterForm — a regisztrációs űrlap (Payload auth REST-re).
  *
- * A számlázási mezők is rögzíthetők a profilhoz (billingName/Zip/City/Street,
- * taxNumber) — a Users-séma ezeket tárolja, a checkout előtölti őket.
- * Magyar hibaüzenetek (foglalt e-mail, gyenge jelszó — min. 12 karakter).
+ * HÁROM MEZŐ, TÖBB NINCS: név, e-mail-cím, jelszó. Magyar hibaüzenetek
+ * (foglalt e-mail, gyenge jelszó — min. 12 karakter).
+ *
+ * ═══ MIÉRT NINCS ITT SZÁMLÁZÁSI ADAT (tulajdonosi döntés, 2026-08-17) ═══
+ * Korábban egy összecsukható „Számlázási adatok (opcionális)" blokk állt itt.
+ * Kikerült: a számlázási adatot ott kérjük, ahol számla készül belőle — a
+ * fizetés során.
+ *
+ * A döntés nem ízlés kérdése, hanem három forrás egybehangzó szabálya:
+ *
+ * 1. GOV.UK Service Manual, „Ask users for information": „Only ask for
+ *    information you need… Every question you ask makes it harder for users to
+ *    complete the service." A regisztrációhoz számlázási cím nem kell.
+ *    https://www.gov.uk/service-manual/design/collecting-personal-information
+ * 2. NN/g, „Website Forms Usability: Top 10 Recommendations": „Keep it short.
+ *    Eliminate unnecessary fields" — a hosszabb űrlap kevesebb befejezett
+ *    beküldést jelent, akkor is, ha a többlet mező opcionális, mert a
+ *    felhasználó a HOSSZÁT látja, mielőtt olvasna.
+ *    https://www.nngroup.com/articles/web-form-design/
+ * 3. Baymard Institute, checkout-kutatás: az elhagyás egyik vezető oka a „too
+ *    long / complicated" folyamat; a mezőszám csökkentése közvetlenül javítja a
+ *    befejezési arányt. https://baymard.com/blog/checkout-flow-average-form-fields
+ *
+ * NEM VÉSZ EL SEMMI. Ugyanezek a mezők két helyen élnek tovább:
+ *   - a pénztárban (`CheckoutForm` + `src/lib/checkout/form-submission.ts`),
+ *     ahol a számla ténylegesen készül, és
+ *   - a fiók „Adataim" lapján (`AccountView`), ahol a vevő bármikor elmentheti
+ *     őket, és onnan a pénztár előtölti (WCAG 2.2 · 3.3.7 Redundant Entry).
+ * A `RegisterInput` továbbra is ismeri a mezőket — az API-szerződéshez nem
+ * nyúltunk, csak a regisztrációs FELÜLET nem kérdezi őket.
+ *
+ * RÁADÁS: ezzel megszűnt a `.kc-auth-form__billing summary` célfelület-kivétele
+ * is (natív <summary>, ~27–30px: a 2.5.8 AA teljesült, a projekt 44px-es célja
+ * nem — nyitott tételként volt jelentve a gomb-kontraszt őrben).
  */
 export interface RegisterFormProps {
   /** Gyökér-relatív útvonal; a hívó oldal `sanitizeReturnUrl`-lel szűri. */
@@ -128,43 +159,6 @@ export function RegisterForm({ returnUrl }: RegisterFormProps) {
         type="password"
         value={values.password}
       />
-
-      <details className="kc-auth-form__billing">
-        <summary>Számlázási adatok (opcionális — a checkout előtölti)</summary>
-        <Field
-          label="Számlázási név"
-          name="billingName"
-          onChange={(event) => update('billingName', event.target.value)}
-          value={values.billingName ?? ''}
-        />
-        <div className="kc-checkout-billing__grid">
-          <Field
-            label="Irányítószám"
-            name="billingZip"
-            onChange={(event) => update('billingZip', event.target.value)}
-            value={values.billingZip ?? ''}
-          />
-          <Field
-            label="Település"
-            name="billingCity"
-            onChange={(event) => update('billingCity', event.target.value)}
-            value={values.billingCity ?? ''}
-          />
-        </div>
-        <Field
-          label="Cím"
-          name="billingStreet"
-          onChange={(event) => update('billingStreet', event.target.value)}
-          value={values.billingStreet ?? ''}
-        />
-        <Field
-          hint="Csak céges vásárlás esetén."
-          label="Adószám (céges vásárlásnál)"
-          name="taxNumber"
-          onChange={(event) => update('taxNumber', event.target.value)}
-          value={values.taxNumber ?? ''}
-        />
-      </details>
 
       {error ? (
         <div aria-live="assertive" className="kc-auth-form__error" role="alert">

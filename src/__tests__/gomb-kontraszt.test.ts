@@ -758,13 +758,6 @@ describe('G-K5 — célfelület: minden `cursor: pointer` elem mérete indokolt'
         'programozottan fókuszálható (tabIndex -1). A `cursor: pointer` itt a ' +
         'natív <summary> öröksége — célfelület-követelmény nem vonatkozik rá.',
     ],
-    [
-      '.kc-auth-form__billing summary',
-      'Natív <summary> nyitó a regisztrációs űrlapon: a magassága a sortávból ' +
-        'jön (~27–30px). A 2.5.8 (AA, 24px) így teljesül, a projekt 44px-es ' +
-        'célja nem — BÖNGÉSZŐS MÉRÉST kér (docs/gomb-kontraszt-audit.md 10.1). ' +
-        'Nyitott tétel, a vezetőnek jelentve.',
-    ],
   ])
 
   const mutatoSzabalyok = MINDEN_SZABALY.filter((sz) => /cursor\s*:\s*pointer/.test(sz.torzs))
