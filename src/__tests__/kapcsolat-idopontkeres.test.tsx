@@ -214,12 +214,31 @@ describe('/kapcsolat szakember-elérhetőség', () => {
     expect(buildKapcsolatLayout().some((blokk) => blokk.blockType === 'accordion')).toBe(false)
   })
 
-  it('NEM talál ki rendelési időt vagy helyszínt (az `availability` üres marad)', () => {
+  it('NEM talál ki rendelési időt vagy címet', () => {
+    // ═══ MIT VÉD EZ AZ ŐR ═══
+    // A szabály SOSEM az volt, hogy a mező maradjon üres, hanem hogy ne
+    // találjunk ki adatot. A tulajdonos 2026-08-17-én megadta a valós
+    // folyamatot (a helyszínt telefonon egyeztetik), ezért a mező már nem
+    // üres — de kitalált NYITVATARTÁS és CÍM továbbra sem kerülhet bele.
+    // Ezért az őr mostantól a tényleges tilalmat méri, nem az ürességet:
+    // enélkül a következő szerkesztés csendben beírhatna egy kitalált
+    // „H–P 8–16, Fő utca 1." sort, és a teszt zöld maradna.
+    const idoMintak = [
+      /\d{1,2}[:.]\d{2}/, //  8:00, 8.00
+      /\d{1,2}\s*[–-]\s*\d{1,2}\s*(óra|h\b)/i, //  8–16 óra
+      /\b(hétfő|kedd|szerda|csütörtök|péntek|szombat|vasárnap)/i,
+    ]
+    const cimMintak = [/\b(utca|út|tér|körút|krt\.|hrsz|emelet|házszám)\b/i, /\b\d{4}\s+[A-ZÁÉÍÓÖŐÚÜŰ]/]
+
     for (const tag of kapcsolatSzakember().members ?? []) {
-      expect((tag.availability ?? '').trim()).toBe('')
+      const szoveg = (tag.availability ?? '').trim()
+      for (const minta of idoMintak) {
+        expect(szoveg, `kitalált rendelési idő: „${szoveg}"`).not.toMatch(minta)
+      }
+      for (const minta of cimMintak) {
+        expect(szoveg, `kitalált cím: „${szoveg}"`).not.toMatch(minta)
+      }
     }
-    const html = renderKapcsolatLayout()
-    expect(html).not.toContain('kc-team__availability')
   })
 
   it('a felvezetője kapcsolat-fókuszú, és eltér a másik két lapétól', () => {

@@ -1210,10 +1210,13 @@ const szakemberSzekcio = (opciok: SzakemberSzekcioOpciok): NonNullable<Page['lay
     phone: kartya.telefon,
     callLabel: kartya.hivasFelirat,
     email: '',
-    // A rendelési idő és a helyszín szakemberenként NEM áll rendelkezésre a
-    // repóban, ezért a mező üres marad: kitalált nyitvatartás hazugság lenne.
-    // Az adminban tölthető (Szakemberek → Mikor és hol érhető el).
-    availability: '',
+    // A tulajdonos 2026-08-17-i válasza a korábban nyitva hagyott kérdésre:
+    // NINCS közzétehető rendelési idő és fix helyszín, mert a helyszínt a
+    // szakember a pácienssel TELEFONON egyezteti. Ezért nem nyitvatartást
+    // írunk (az kitalált adat lenne), hanem azt, ami IGAZ: a hívás után derül
+    // ki, hova kell menni. Így a mező a valódi folyamatot írja le, és a
+    // látogató sem vár hiába egy címet a lapon.
+    availability: 'A hívás során megbeszélitek, melyik rendelőbe érdemes jönnöd.',
     link: {
       felirat: 'Nézd meg a szakmai hátterét',
       url: opciok.hatterUrl,
