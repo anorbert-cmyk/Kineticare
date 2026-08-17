@@ -87,6 +87,10 @@ export function freeCourseEmail(input: FreeCourseEmailInput): EmailTemplate {
   return {
     subject: `Itt a belépő linked: ${input.courseTitle}`,
     ...renderLayout({
+      // A postaláda LISTÁJÁBAN a tárgy mellett álló szöveg. Enélkül a kliens a
+      // levél első szavait húzná be, ami itt a wordmark lenne.
+      preheader: `A(z) ${input.courseTitle} elérhető, már csak egy jelszó kell hozzá.`,
+      eyebrow: 'Ingyenes hozzáférés',
       heading: 'Állítsd be a jelszavad, és indul a kurzus',
       paragraphsHtml: bodyHtml,
       paragraphsText: bodyText,

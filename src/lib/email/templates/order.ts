@@ -60,35 +60,50 @@ export function orderConfirmationEmail(input: {
   account?: OrderConfirmationAccount
 }): EmailTemplate {
   const greeting = input.buyerName?.trim() ? `Kedves ${input.buyerName.trim()}!` : 'Szia!'
-  const itemLinesHtml = input.items.map(
-    (item) =>
-      `<strong>${escapeHtml(item.title)}</strong> — ${item.quantity} db — ${escapeHtml(
-        formatPriceHuf(item.totalHuf),
-      )}`,
-  )
-  const itemLinesText = input.items.map(
-    (item) => `${item.title} — ${item.quantity} db — ${formatPriceHuf(item.totalHuf)}`,
-  )
 
+  /**
+   * A RENDELÉS ADATAI SZERKEZETBEN, nem bekezdésekben.
+   *
+   * Korábban a rendelésszám, a tétellista és a végösszeg is `<strong>`-gal
+   * megjelölt bekezdés volt. Ez a levél LEGFONTOSABB adata, és a bekezdésfolyam
+   * pont attól fosztja meg, ami visszakereshetővé teszi: a kiemelt paneltől és
+   * a jobbra igazított, összeadható összegoszloptól. A váz `summary` és `items`
+   * blokkja ezt adja meg, ugyanazokkal a tokenekkel, amiket a pénztár használ.
+   * Minden érték escape-elve megy át (a váz escape-eli a strukturált mezőket).
+   */
   const paragraphsHtml = [
     escapeHtml(greeting),
-    `Köszönjük a vásárlásod! A fizetésed sikeres, a kurzushozzáférésed aktív.`,
-    `<strong>Rendelésszám:</strong> ${escapeHtml(input.orderNumber)}`,
-    `<strong>Tételek:</strong><br />${itemLinesHtml.join('<br />')}`,
-    `<strong>Végösszeg:</strong> ${escapeHtml(formatPriceHuf(input.totalHuf))}`,
+    'Köszönjük a vásárlásod! A fizetésed sikeres, a kurzushozzáférésed aktív.',
   ]
   const paragraphsText = [
     greeting,
     'Köszönjük a vásárlásod! A fizetésed sikeres, a kurzushozzáférésed aktív.',
-    `Rendelésszám: ${input.orderNumber}`,
-    'Tételek:',
-    ...itemLinesText,
-    `Végösszeg: ${formatPriceHuf(input.totalHuf)}`,
   ]
-  if (input.invoiceNote) {
-    paragraphsHtml.push('A számlát a Számlázz.hu rendszeréből külön e-mailben küldjük el.')
-    paragraphsText.push('A számlát a Számlázz.hu rendszeréből külön e-mailben küldjük el.')
+
+  const summary = {
+    rows: [{ label: 'Rendelésszám', value: input.orderNumber }],
   }
+
+  const items = {
+    title: 'Amit megvettél',
+    rows: input.items.map((item) => ({
+      title: item.title,
+      meta: `${item.quantity} db`,
+      amount: formatPriceHuf(item.totalHuf),
+    })),
+    totalLabel: 'Végösszeg',
+    totalValue: formatPriceHuf(input.totalHuf),
+  }
+
+  /**
+   * A számla-mondat a levél VÉGÉRE való, nem a rendelés adatai elé.
+   * Ez másodlagos, tájékoztató információ: nem kér cselekvést, és nem a
+   * vásárlás tényéről szól. A záró jegyzet (elválasztó vonal alatt, halkabb
+   * szedéssel) pontosan az ilyen mondatok helye.
+   */
+  const note = input.invoiceNote
+    ? 'A számlát a Számlázz.hu rendszeréből külön e-mailben küldjük el.'
+    : undefined
 
   let cta = { label: 'Kurzusaim megnyitása', url: input.coursesUrl }
 
@@ -120,10 +135,17 @@ export function orderConfirmationEmail(input: {
   return {
     subject: `Sikeres vásárlás — ${input.orderNumber}`,
     ...renderLayout({
+      // Az előnézeti szöveg a postaláda LISTÁJÁBAN áll a tárgy mellett. Enélkül
+      // a kliens a levél első szavait húzná be, ami itt a wordmark lenne.
+      preheader: `A ${input.orderNumber} rendelésed megérkezett, a kurzusod elérhető.`,
+      eyebrow: 'Visszaigazolás',
       heading: 'Sikeres vásárlás',
       paragraphsHtml,
       paragraphsText,
+      summary,
+      items,
       cta,
+      ...(note ? { note } : {}),
     }),
   }
 }
