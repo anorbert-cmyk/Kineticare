@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
+
 import { createElement, Fragment, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -91,41 +94,25 @@ describe('/kapcsolat alap-szekciósor', () => {
     expect(szolgaltatasok).toContain(IDOPONTKERES_URL)
   })
 
-  it('a magyarázat a TELEFONOS utat írja le, és nem ígér foglalást', () => {
-    /**
-     * SZERZŐDÉS-VÁLTÁS (tulajdonosi döntés, 2026-08-17): az időpontot telefonon
-     * egyeztetik, nem üzenetben. A korábbi állítás („nem foglalás" + „két
-     * munkanapon belül") az ŰRLAP folyamatát írta le — űrlap nélkül mindkettő
-     * hamis lenne, ezért a magyarázat a hívásra mutat. Ami NEM változott: a
-     * szekció továbbra sem ígér naptár-foglalást.
-     */
+  it('a magyarázat kimondja, hogy NEM foglalás, és megmondja a visszahívás idejét', () => {
     const html = renderKapcsolatLayout()
-    expect(html).toContain('Hívd az alábbi számok egyikét')
-    expect(html).toContain('50 perces vizsgálattal')
-    expect(html).not.toContain('két munkanapon belül')
-    // Naptár-foglalás nincs a rendszerben, tehát ígérni sem szabad. A szótő
-    // önmagában nem használható: a szakember-kártyák „ki mivel FOGLALkozik"
-    // mondata is illeszkedne rá (mérve) — a tiltás a foglalás FŐNÉVRE szól.
-    expect(html.toLowerCase()).not.toContain('foglalás')
-    expect(html.toLowerCase()).not.toContain('foglalj')
+    expect(html).toContain('nem foglalás')
+    expect(html).toContain('két munkanapon belül')
   })
 
-  it('nincs időpontkérő űrlap, se időpont-sáv, se beküldő gomb', () => {
+  it('a felkínált időpont-sávok között nincs olyan, amit nem tudunk tartani', () => {
     const html = renderKapcsolatLayout()
-    expect(html).not.toContain('kc-appointment__form')
-    expect(html).not.toContain('Időpontot kérek')
-    expect(html).not.toContain('Hétköznap délelőtt')
-    expect(html).not.toContain('<form')
+    expect(html).toContain('Hétköznap délelőtt')
+    expect(html).toContain('Hétköznap délután')
+    expect(html).toContain('Rugalmas vagyok')
+    // Hétvégi rendelést a repó semmilyen forrása nem igazol.
+    expect(html.toLowerCase()).not.toContain('hétvég')
   })
 
-  it('a szekció ettől NEM lesz zsákutca: minden elérhetőség kattintható marad', () => {
+  it('az űrlap ott van, és a hozzájárulás az adatvédelmi tájékoztatóra linkel', () => {
     const html = renderKapcsolatLayout()
-    // NN/g: „Never hide or remove phone numbers from the Contact Us Page."
-    // (https://www.nngroup.com/articles/contact-us-pages/)
-    expect(html).toContain('href="tel:+36301692263"')
-    expect(html).toContain('href="tel:+36203573493"')
-    expect(html).toContain('href="mailto:info@kineticare.hu"')
-    expect(html).toContain('kc-appointment__contact--fo')
+    expect(html).toContain('kc-appointment__form')
+    expect(html).toContain('href="/adatvedelem"')
   })
 })
 
@@ -200,24 +187,18 @@ describe('/kapcsolat szakember-elérhetőség', () => {
     expect((kepNelkul.members ?? []).map((tag) => tag.photo)).toEqual([undefined, undefined])
   })
 
-  it('a szekció alján NINCS odaugró hivatkozás, mert fölösleges lenne', () => {
-    /**
-     * SZERZŐDÉS-VÁLTÁS (2026-08-17): korábban itt egy „Kérj időpontot
-     * üzenetben" link vitt a lap tetején álló ŰRLAPRA. Az űrlap megszűnt, tehát
-     * a felirat hazugság lenne; a link CÉLJA pedig (a rendelő elérhetőségei)
-     * innen két szekcióval feljebb, ráadásul a kártyákon is ott van saját
-     * hívás-linkkel. Az odaugrás így olyan adathoz vinne, ami már a látogató
-     * szeme előtt van.
-     */
+  it('az írásos időpontkérés NEM önmagára mutat, hanem a lapon belüli horgonyra', () => {
     const blokk = kapcsolatSzakember()
-    expect(blokk.bookingLink).toBeUndefined()
-
-    // A horgony maga MARAD: a /szolgaltatasok „Időpontot kérek" hivatkozása ide
-    // érkezik, tehát a célnak léteznie kell.
+    expect(blokk.bookingLink?.url).toBe(`#${IDOPONTKERES_HORGONY}`)
+    // A felirat a §3.2 szótár #24 sora — a cselekvés ugyanaz, csak a cél
+    // kifejezése lapon belüli (WCAG 2.2 · 3.2.4 Consistent Identification).
+    expect(blokk.bookingLink?.felirat).toBe('Kérj időpontot üzenetben')
+    // A horgony célja tényleg ezen a lapon van.
     const horgonyok = buildKapcsolatLayout().map((elem) => elem.sectionSettings?.anchorId)
     expect(horgonyok).toContain(IDOPONTKERES_HORGONY)
 
     const html = renderKapcsolatLayout()
+    expect(html).toContain(`href="#${IDOPONTKERES_HORGONY}"`)
     // Körkörös link (a lap önmagára) sehol nem keletkezik.
     expect(html).not.toContain('href="/kapcsolat"')
   })
@@ -312,5 +293,47 @@ describe('/kapcsolat szakember-elérhetőség', () => {
 
   it('nem visz saját h1-et (a lap h1-e a route „Kapcsolat" címe marad)', () => {
     expect(renderKapcsolatLayout()).not.toContain('<h1')
+  })
+})
+
+describe('/kapcsolat route — MELYIK űrlap van a lapon', () => {
+  /**
+   * A tulajdonos két lépésben pontosította, mit akar (2026-08-17):
+   *  1. „a kapcsolat részből a fölső formot ki kell szedni" → ezt előbb az
+   *     IDŐPONTKÉRŐ űrlapra értettük, és ki is vettük;
+   *  2. „mégis kell a kapcsolat űrlap, a kapcsolat menüpontra lehet üzenetben
+   *     időpontot foglalni… csak az »írj nekünk üzenetet« alsó kapcsolati
+   *     űrlap nem kell, arra gondoltam."
+   *
+   * A végleges állapot tehát: az IDŐPONTKÉRŐ űrlap MARAD, az általános
+   * üzenetküldő doboz KIKERÜL. Ez a teszt pontosan ezt a két állítást rögzíti,
+   * hogy a következő kör ne fordítsa meg megint.
+   *
+   * A GOV.UK „question pages" elve mögötte: egy képernyőn egy feladat legyen a
+   * fókusz. Két párhuzamos, hasonló kinézetű űrlap éppen ezt rontotta el — a
+   * látogatónak kellett kitalálnia, melyikbe írjon.
+   */
+  it('az IDŐPONTKÉRŐ űrlap ott van', () => {
+    const html = renderKapcsolatLayout()
+    expect(html).toContain('kc-appointment__form')
+    expect(html).toContain('Időpontot kérek')
+  })
+
+  it('a route forrása NEM rendereli az általános üzenetküldő szekciót', async () => {
+    const forras = await readFile(
+      fileURLToPath(new URL('../app/(frontend)/kapcsolat/page.tsx', import.meta.url)),
+      'utf8',
+    )
+    expect(forras).not.toContain('<ContactForm')
+    expect(forras).not.toContain('Írj nekünk üzenetet')
+  })
+
+  it('a lap leírása sem ígér általános üzenetküldést', async () => {
+    const forras = await readFile(
+      fileURLToPath(new URL('../app/(frontend)/kapcsolat/page.tsx', import.meta.url)),
+      'utf8',
+    )
+    // „a felirat legyen igaz": a metaleírás a keresőben is látszik.
+    expect(forras).not.toContain('írj üzenetet a Kineticare csapatának')
   })
 })

@@ -9,19 +9,17 @@ import { appointment } from '../blocks'
 import { Appointment } from '../components/blocks/Appointment'
 import { appointmentShowsForm, layoutHasAppointmentBlock } from '../lib/appointment/context'
 import { HOME_IMAGES } from '../lib/home-seed'
-import {
-  alkalmazKapcsolatTelefonosIdopont,
-  alkalmazSzolgaltatasBlokkKep,
-} from '../scripts/apply-owner-content'
+import { alkalmazSzolgaltatasBlokkKep } from '../scripts/apply-owner-content'
 import type { BlockAppointment, Page } from '../payload-types'
 
 /**
- * Időpontkérés TELEFONON — az űrlap nélküli változat őre.
+ * Az időpontkérő szekció ŰRLAP-KAPCSOLÓJÁNAK őre (`urlapMutatasa`).
  *
- * A tulajdonos döntése (2026-08-17): a rendelői időpontot telefonon egyeztetik,
- * nem üzenetben, ezért a /kapcsolat lapról az időpontkérő ŰRLAP kikerül. A
- * szekció maga marad: a rendelők címe, a telefonszámok és az e-mail-cím a
- * látogató egyetlen útja, tehát ezeknek MINDIG látszaniuk kell.
+ * A kapcsoló alapból BE van kapcsolva, és a /kapcsolat lapon BEKAPCSOLVA is
+ * marad: a tulajdonos 2026-08-17-i pontosítása szerint ott IGENIS lehet
+ * üzenetben időpontot foglalni. A kapcsoló mégis értékes: ha valaha egy
+ * szekcióban csak telefonos utat akarunk, egy pipával megoldható — és akkor a
+ * rendelők címe, a telefonszámok és az e-mail-cím MINDIG látszik tovább.
  *
  * Ez az NN/g kapcsolat-oldal irányelvének megengedett iránya: „Offer a contact
  * form only in addition to telephone numbers, not as a replacement" — az űrlap
@@ -291,113 +289,7 @@ describe('appointment.css — az űrlap nélküli változat szabályai', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 5. Az ÉLES tartalom-javítás (18. javítás)
-// ---------------------------------------------------------------------------
-
-describe('18. tartalom-javítás: a /kapcsolat átállítása telefonosra', () => {
-  const REGI_IDOPONT = {
-    blockType: 'appointment' as const,
-    urlapMutatasa: true,
-    lead: 'Gyógytorna, manuálterápia és kiegészítő terápiák akut sérülésre, műtét utáni állapotra és krónikus fájdalomra. Hagyd itt az elérhetőséged, és megkeressük a neked megfelelő időpontot.',
-    magyarazat:
-      'Ez az űrlap nem foglalás. Miután elküldted, két munkanapon belül telefonon keresünk, és közösen egyeztetjük a pontos időpontot. Az első alkalom minden esetben 50 perces vizsgálattal kezdődik.',
-    helyszinek: [{ cim: '1117 Budapest, Nádorliget u. 7/b' }],
-    telefonszamok: [{ nev: 'Kocsis Kata', szam: '+36 30 169 2263' }],
-    email: 'info@kineticare.hu',
-  }
-  const REGI_SZAKEMBER = {
-    blockType: 'teamMembers' as const,
-    title: 'Kit hívj, ha nem várnál a visszahívásra?',
-    lead: 'Az időpontkérésre két munkanapon belül telefonálunk. Ha ennél gyorsabb választ szeretnél, hívj minket közvetlenül: alább látod, ki mivel foglalkozik, és melyik szám kié.',
-    bookingLink: { felirat: 'Kérj időpontot üzenetben', url: '#idopontkeres', ujAblakban: false },
-  }
-  const elesLayout = () =>
-    [{ ...REGI_IDOPONT }, { ...REGI_SZAKEMBER }] as unknown as NonNullable<Page['layout']>
-
-  const idopont = (layout: NonNullable<Page['layout']> | null) =>
-    layout?.find((blokk) => blokk.blockType === 'appointment')
-  const szakember = (layout: NonNullable<Page['layout']> | null) =>
-    layout?.find((blokk) => blokk.blockType === 'teamMembers')
-
-  it('kikapcsolja az űrlapot, és mind a négy hamissá váló szöveget átírja', () => {
-    const e = alkalmazKapcsolatTelefonosIdopont(elesLayout())
-    const i = idopont(e.layout)
-    const sz = szakember(e.layout)
-    expect(i?.blockType === 'appointment' ? i.urlapMutatasa : null).toBe(false)
-    expect(i?.blockType === 'appointment' ? i.lead : '').not.toContain('Hagyd itt az elérhetőséged')
-    expect(i?.blockType === 'appointment' ? i.magyarazat : '').not.toContain('Ez az űrlap')
-    expect(sz?.blockType === 'teamMembers' ? sz.title : '').not.toContain('visszahívásra')
-    expect(sz?.blockType === 'teamMembers' ? sz.lead : '').not.toContain('két munkanapon belül')
-    expect(e.kihagyasok).toEqual([])
-  })
-
-  it('törli a megszűnt útra vivő „Kérj időpontot üzenetben" hivatkozást', () => {
-    const sz = szakember(alkalmazKapcsolatTelefonosIdopont(elesLayout()).layout)
-    expect(sz?.blockType === 'teamMembers' ? sz.bookingLink : undefined).toBeNull()
-  })
-
-  it('a rendelő elérhetőségeihez HOZZÁ SEM NYÚL (NN/g: a telefonszám nem tűnhet el)', () => {
-    const i = idopont(alkalmazKapcsolatTelefonosIdopont(elesLayout()).layout)
-    if (i?.blockType !== 'appointment') {
-      throw new Error('Az időpontkérő szekció eltűnt a szekciósorból.')
-    }
-    expect(i.helyszinek).toEqual(REGI_IDOPONT.helyszinek)
-    expect(i.telefonszamok).toEqual(REGI_IDOPONT.telefonszamok)
-    expect(i.email).toBe('info@kineticare.hu')
-  })
-
-  it('IDEMPOTENS: a saját eredményén futtatva már nem ír, és csendben hagy ki', () => {
-    const elso = alkalmazKapcsolatTelefonosIdopont(elesLayout())
-    const masodik = alkalmazKapcsolatTelefonosIdopont(elso.layout)
-    expect(masodik.layout).toBeNull()
-    expect(masodik.modositasok).toEqual([])
-    expect(masodik.kihagyasok[0]?.hangos).toBe(false)
-    expect(masodik.kihagyasok[0]?.indok).toContain('MÁR a telefonos folyamatot')
-  })
-
-  it('a szerkesztő saját szövegét NEM írja felül, de HANGOSAN jelzi', () => {
-    const layout = elesLayout()
-    const elso = layout[0]
-    if (elso.blockType !== 'appointment') {
-      throw new Error('A fixture első blokkja nem időpontkérő.')
-    }
-    elso.lead = 'Ezt a bevezetőt a szerkesztő írta át, kérlek ne bántsd.'
-
-    const e = alkalmazKapcsolatTelefonosIdopont(layout)
-    const i = idopont(e.layout)
-    expect(i?.blockType === 'appointment' ? i.lead : '').toBe(
-      'Ezt a bevezetőt a szerkesztő írta át, kérlek ne bántsd.',
-    )
-    const hangos = e.kihagyasok.filter((k) => k.hangos === true)
-    expect(hangos).toHaveLength(1)
-    expect(hangos[0]?.indok).toContain('a szerkesztő MÁST írt bele')
-    // A többi mező ettől még javul: egy rossz mező nem blokkolja a lapot.
-    expect(i?.blockType === 'appointment' ? i.urlapMutatasa : null).toBe(false)
-  })
-
-  it('hiányzó vagy kétszeres időpontkérő szekciónál HANGOSAN kihagy, írás nélkül', () => {
-    const nincs = alkalmazKapcsolatTelefonosIdopont([REGI_SZAKEMBER] as unknown as NonNullable<
-      Page['layout']
-    >)
-    expect(nincs.layout).toBeNull()
-    expect(nincs.kihagyasok[0]?.hangos).toBe(true)
-
-    const ketto = alkalmazKapcsolatTelefonosIdopont([
-      { ...REGI_IDOPONT },
-      { ...REGI_IDOPONT },
-      { ...REGI_SZAKEMBER },
-    ] as unknown as NonNullable<Page['layout']>)
-    expect(ketto.layout).toBeNull()
-    expect(ketto.kihagyasok[0]?.hangos).toBe(true)
-
-    const ures = alkalmazKapcsolatTelefonosIdopont([])
-    expect(ures.layout).toBeNull()
-    expect(ures.kihagyasok[0]?.hangos).toBe(true)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// 6. A 19. javítás — fotó a szolgáltatás-szekciókba
+// 5. A 19. javítás — fotó a szolgáltatás-szekciókba
 // ---------------------------------------------------------------------------
 
 describe('19. tartalom-javítás: fotó a szolgáltatás-szekcióba', () => {
