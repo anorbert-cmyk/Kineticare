@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import { hosszuUgras } from '../components/motion/AnchorScroll'
+import { elokeszitoPozicio, hosszuUgras } from '../components/motion/AnchorScroll'
 
 /**
  * ŐR — a 2026-08-17-i tulajdonosi észrevételek. Mindhárom szabályt MÉRÉS
@@ -30,10 +30,15 @@ import { hosszuUgras } from '../components/motion/AnchorScroll'
  * ═══ 3. „FURÁN ANIMÁLÓDIK AZ OLDAL A HORGONYRA UGRÁSKOR" ═══
  * A globális `scroll-behavior: smooth` minden horgony-ugrást végiganimál:
  * `/szolgaltatasok#rendeloi` 2048 px @1440×900 (2,3 nézetablak), 3138 px
- * @390×844 (3,7 nézetablak), 661–790 ms hosszan. Az egy nézetablaknál
- * hosszabb ugrás innentől AZONNALI (AnchorScroll + `.kc-scroll-instant`),
- * a rövid pedig továbbra is sima — a küszöb mérésből jön (lásd a komponens
- * és a motion.css fejlécét).
+ * @390×844 (3,7 nézetablak), 661–790 ms hosszan.
+ *
+ * TULAJDONOSI DÖNTÉS (2026-08-17): „elsimítás nagyon fontos" — a mozgás
+ * tehát nem tűnhet el, csak nem húzódhat el. Az egy nézetablaknál hosszabb,
+ * LAPON BELÜLI ugrás ezért RÖVIDÜL: a kattintáskor azonnal a cél elé ugrunk
+ * fél képernyővel, az utolsó szakaszt a böngésző sima görgetése teszi meg
+ * (mért 333 ms). LAPVÁLTÁSNÁL (más útvonal, vagy hideg betöltés horgonnyal)
+ * az érkezés azonnali marad: ott a látogató az új lapot még sosem látta,
+ * a mozgásnak nincs mit összekötnie a szemében (WCAG 2.2 SC 2.3.3).
  */
 
 const REPO = fileURLToPath(new URL('..', import.meta.url))
@@ -172,7 +177,7 @@ describe('2. a számozott sorok címét a SÚLY emeli ki, nem a méret', () => {
   })
 })
 
-describe('3. a hosszú horgony-ugrás nem animálódik', () => {
+describe('3. a hosszú horgony-ugrás rövidül, de sima marad', () => {
   it('egy nézetablaknál rövidebb ugrás MARAD sima', () => {
     expect(hosszuUgras(0, 900)).toBe(false)
     expect(hosszuUgras(450, 900)).toBe(false)
@@ -182,7 +187,7 @@ describe('3. a hosszú horgony-ugrás nem animálódik', () => {
     expect(hosszuUgras(900, 900)).toBe(false)
   })
 
-  it('egy nézetablaknál hosszabb ugrás AZONNALI', () => {
+  it('egy nézetablaknál hosszabb ugrás RÖVIDÍTENDŐ', () => {
     expect(hosszuUgras(901, 900)).toBe(true)
     // A tulajdonos által jelzett eset: /szolgaltatasok#rendeloi.
     expect(hosszuUgras(2048, 900)).toBe(true)
@@ -225,6 +230,46 @@ describe('3. a hosszú horgony-ugrás nem animálódik', () => {
     expect(tiszta).toMatch(/if \(link\.hash\.length > 0\) \{\s*\n\s*azonnal\(\)/)
   })
 
+  it('a LAPON BELÜLI hosszú ugrás a cél elé fél képernyővel indul', () => {
+    // Lefelé: a cél 3000, a nézetablak 900 → 3000 - 450 = 2550-től sima.
+    expect(elokeszitoPozicio(3000, 0, 900)).toBe(2550)
+    // Felfelé: a cél 0, a jelenlegi 2500 → 0 + 450 = 450-től sima.
+    expect(elokeszitoPozicio(0, 2500, 900)).toBe(450)
+    // A lap teteje fölé nem mehet.
+    expect(elokeszitoPozicio(100, 3000, 900)).toBe(550)
+    expect(elokeszitoPozicio(200, 0, 900)).toBe(0)
+  })
+
+  it('a maradék út PONTOSAN fél nézetablak, tehát a mért 333 ms-os sávban van', () => {
+    // A NN/g ajánlott sávja 100–500 ms; a Chromium mért görbéjén 0,5
+    // nézetablak = 333 ms. Ez a teszt azt őrzi, hogy az arány ne csússzon el.
+    for (const [cel, jelenlegi, nezet] of [
+      [3000, 0, 900],
+      [0, 3138, 844],
+      [5000, 100, 568],
+    ] as const) {
+      const indulo = elokeszitoPozicio(cel, jelenlegi, nezet)
+      expect(Math.abs(cel - indulo)).toBeCloseTo(nezet * 0.5, 5)
+    }
+  })
+
+  it('a KIINDULÓPONT beállítása `instant`, nem `auto` (mért csapda)', () => {
+    // Az `auto` NEM azonnalit jelent, hanem azt, hogy a böngésző a CSS
+    // `scroll-behavior`-t használja — ami itt `smooth`. Mérve: az `auto`-val
+    // kért előkészítő ugrás MAGA is végiganimálódott (0 → 1685 px, 698 ms),
+    // és a rákövetkező görgetés ismét a teljes utat tette meg.
+    const tiszta = kommentNelkul(anchorTsx)
+    expect(tiszta).not.toMatch(/scrollTo\([^)]*behavior: 'auto'/)
+  })
+
+  it('a lapon belüli ág a RÖVIDÍTÉST hívja, nem az azonnali módot', () => {
+    const tiszta = kommentNelkul(anchorTsx)
+    expect(tiszta).toMatch(/azonosOldal\(link\) && link\.hash\.length > 0[\s\S]{0,200}rovidit\(pozicio\)/)
+    // A rövidítés a böngésző saját sima görgetésére bízza a maradékot:
+    // a KIINDULÓPONT beállítása explicit `behavior: 'instant'`.
+    expect(tiszta).toContain("behavior: 'instant'")
+  })
+
   it('a külső hivatkozás kimarad (ott nincs mit görgetni)', () => {
     expect(kommentNelkul(anchorTsx)).toContain('link.host !== window.location.host')
   })
@@ -233,7 +278,21 @@ describe('3. a hosszú horgony-ugrás nem animálódik', () => {
     const tiszta = kommentNelkul(anchorTsx)
     expect(tiszta).not.toContain('preventDefault()')
     expect(tiszta).not.toContain('scrollIntoView')
-    expect(tiszta).not.toContain('window.scrollTo')
+    // A fókuszhoz sem nyúl: a horgonyra kerülő fókuszt a böngésző adja.
+    expect(tiszta).not.toContain('.focus(')
+  })
+
+  it('a görgetést a BÖNGÉSZŐ végzi: egyetlen scrollTo, és az is azonnali', () => {
+    // A komponens NEM animál magától (nincs rAF-ciklus, nincs időzített
+    // lépegetés): egyetlen `scrollTo`-t hív, a KIINDULÓPONT beállítására,
+    // explicit `behavior: 'auto'`-val. A tényleges mozgást a böngésző saját
+    // sima görgetése teszi meg, tehát az útválasztó, az előzmények és a
+    // horgonyra kerülő fókusz érintetlen marad.
+    const tiszta = kommentNelkul(anchorTsx)
+    expect(tiszta.match(/window\.scrollTo/g)).toHaveLength(1)
+    expect(tiszta).toMatch(/window\.scrollTo\(\{\s*\n?\s*behavior: 'instant',/)
+    expect(tiszta).not.toContain('requestAnimationFrame')
+    expect(tiszta).not.toContain('setInterval')
   })
 
   it('a kattintást ELFOGÁSI szakaszban figyeli (a görgetés indulása előtt kell átállni)', () => {
