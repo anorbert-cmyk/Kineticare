@@ -330,6 +330,133 @@ describe('startCheckout — vendég-vásárlás', () => {
     expect(created.customerEmail).toBe(GUEST.email)
   })
 
+  /**
+   * P1 — AZ E-MAIL-HATÓKÖRŰ DUPLAVÁSÁRLÁS-BLOKK (start-checkout.ts:
+   * `if (buyer.customerId === null) assertNoDuplicatePurchase({ kind: 'email' })`).
+   *
+   * MIÉRT NEM FOGTA MEG A FENTI, „LÉTEZŐ e-mail" TESZT: ott a
+   * `findExistingUserIdByEmail` TALÁL fiókot, tehát a CUSTOMER-hatókörű
+   * ellenőrzés fut le — az e-mail-hatókörű ág soha nem került mérés alá. A
+   * feltételt `if (false)`-ra cserélve a teljes tesztkészlet zöld maradt.
+   *
+   * AZ E-MAIL-HATÓKÖR PONTOSAN AKKOR SZÁMÍT, amikor MÉG NINCS FIÓK: a vendég
+   * elindít egy fizetést (a rendelés `customer` nélkül, `customerEmail`-lel jön
+   * létre), majd a fizetési ablakon belül újra beküld. Blokk nélkül két aktív
+   * `payment_pending` rendelés áll ugyanarra a kurzusra, MINDKETTŐ kifizethető.
+   * A másodikat már csak a paid-átmenet K5-őre fogná meg — akkor viszont a pénz
+   * MÁR le van vonva, és kézi visszatérítés kell.
+   */
+
+  /** A rendelés-lekérdezés hatóköre a where-ből (a mock döntéséhez). */
+  function orderQuery(where: unknown): { text: string; wantsPaid: boolean; wantsPending: boolean } {
+    const text = JSON.stringify(where ?? {})
+    return {
+      text,
+      wantsPaid: text.includes('"paid"'),
+      wantsPending: text.includes('"payment_pending"'),
+    }
+  }
+
+  it('VENDÉG, fiók NÉLKÜL, aktív payment_pending rendeléssel az e-mailre → 409, rendelés és fizetés NÉLKÜL', async () => {
+    const seenWhere: string[] = []
+    const { payload, calls } = createMockPayload({
+      // Az e-mailhez NINCS fiók — az e-mail-hatókörű ellenőrzés az EGYETLEN védelem.
+      existingUser: null,
+      findOrders: (where) => {
+        const query = orderQuery(where)
+        seenWhere.push(query.text)
+        return query.wantsPending ? { docs: [{ id: 77 }], totalDocs: 1 } : { docs: [], totalDocs: 0 }
+      },
+    })
+
+    const promise = startCheckout({
+      payload,
+      input: { productId: 42, consentWithdrawalWaiver: true, billing: BILLING, guest: GUEST },
+    })
+
+    await expect(promise).rejects.toBeInstanceOf(CheckoutError)
+    await expect(promise).rejects.toMatchObject({ status: 409 })
+    await expect(promise).rejects.toThrowError(/folyamatban van egy fizetés/)
+
+    // Se rendelés, se Barion-hívás: a blokk a pénz levonása ELŐTT áll meg.
+    expect(calls.create).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    // A szűrés a `customerEmail`-re ment (a fiókhoz még nem kötött rendeléseket
+    // KIZÁRÓLAG ez találja meg), és nem a `customer` mezőre.
+    const asText = seenWhere.join('\n')
+    expect(asText).toContain('"customerEmail"')
+    expect(asText).toContain(GUEST.email)
+    expect(asText).not.toContain('"customer"')
+  })
+
+  it('VENDÉG, fiók NÉLKÜL, MÁR kifizetett rendeléssel az e-mailre → 409 („már megvásároltad")', async () => {
+    const { payload, calls } = createMockPayload({
+      existingUser: null,
+      findOrders: (where) =>
+        orderQuery(where).wantsPaid ? { docs: [{ id: 55 }], totalDocs: 1 } : { docs: [], totalDocs: 0 },
+    })
+
+    const promise = startCheckout({
+      payload,
+      input: { productId: 42, consentWithdrawalWaiver: true, billing: BILLING, guest: GUEST },
+    })
+
+    await expect(promise).rejects.toMatchObject({ status: 409 })
+    await expect(promise).rejects.toThrowError(/már megvásároltad/)
+    expect(calls.create).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  /**
+   * NEGATÍV KONTROLL: a blokk nem lehet túlbuzgó. Egy LEJÁRT (a Barion-fizetési
+   * ablakon kívüli) payment_pending nem akadályozhatja meg az új próbálkozást —
+   * a szűrő `createdAt > cutoff` feltétele pont ezt zárja ki, és a lekérdezés
+   * ilyenkor üresen tér vissza.
+   */
+  it('LEJÁRT fizetési ablak (a szűrő nem talál aktívat) → a vásárlás indulhat', async () => {
+    fetchMock.mockResolvedValueOnce(barionStartSuccess())
+    const { payload, calls } = createMockPayload({
+      existingUser: null,
+      findOrders: () => ({ docs: [], totalDocs: 0 }),
+    })
+
+    const result = await startCheckout({
+      payload,
+      input: { productId: 42, consentWithdrawalWaiver: true, billing: BILLING, guest: GUEST },
+    })
+
+    expect(result.orderNumber).toBe(ORDER_NUMBER)
+    expect(calls.create).toHaveLength(1)
+  })
+
+  /**
+   * A LEKÉRDEZÉS ALAKJA is őrizve: az aktív-fizetés szűrő a Barion-fizetési
+   * ablakra vág (`createdAt > cutoff`). Enélkül egy régi, félbehagyott fizetés
+   * ÖRÖKRE blokkolná a vevőt.
+   */
+  it('az aktív payment_pending szűrő a fizetési ablakra vág (createdAt-cutoff)', async () => {
+    const seenWhere: string[] = []
+    const { payload } = createMockPayload({
+      existingUser: null,
+      findOrders: (where) => {
+        seenWhere.push(JSON.stringify(where ?? {}))
+        return { docs: [], totalDocs: 0 }
+      },
+    })
+    fetchMock.mockResolvedValueOnce(barionStartSuccess())
+
+    await startCheckout({
+      payload,
+      input: { productId: 42, consentWithdrawalWaiver: true, billing: BILLING, guest: GUEST },
+    })
+
+    const pendingQuery = seenWhere.find((text) => text.includes('"payment_pending"'))
+    expect(pendingQuery).toBeDefined()
+    expect(pendingQuery).toContain('"createdAt"')
+    expect(pendingQuery).toContain('greater_than')
+  })
+
   it('BEJELENTKEZVE a törzs `guest` mezője figyelmen kívül marad (nem lehet idegen címre rendelni)', async () => {
     fetchMock.mockResolvedValueOnce(barionStartSuccess())
     const { payload, calls } = createMockPayload()

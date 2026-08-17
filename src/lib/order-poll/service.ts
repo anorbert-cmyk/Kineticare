@@ -62,8 +62,17 @@ export const INVOICE_PENDING_STALE_MS = 10 * 60 * 1000 // 10 perc
  * - `done` — a resweep lefutott (a sorba állítások száma: invoiceRequeued)
  * - `skipped-disabled` — nincs SZAMLAZZ_AGENT_KEY, az integráció kikapcsolva
  * - `skipped-config-error` — a Számlázz.hu-konfiguráció hibás (RIASZTÁS a naplóban)
+ * - `queue-unavailable` — volt mit sorba állítani, de EGYETLEN sorba állítás sem
+ *   sikerült (jellemzően hiányzó `payload.jobs.queue`). Enélkül ez az eset
+ *   `done` + `invoiceRequeued: 0` lenne, ami megkülönböztethetetlen a „nincs
+ *   teendő" esettől — pedig a kettő között az a különbség, hogy itt a vevők
+ *   számlája NEM készül el. RIASZTÁS is megy a naplóba.
  */
-export type InvoiceResweepStatus = 'done' | 'skipped-disabled' | 'skipped-config-error'
+export type InvoiceResweepStatus =
+  | 'done'
+  | 'skipped-disabled'
+  | 'skipped-config-error'
+  | 'queue-unavailable'
 
 export interface OrderPollSummary {
   scanned: number
@@ -235,6 +244,12 @@ async function resweepInvoices(
   const queueInvoice =
     deps.queueInvoice ?? ((orderId: number) => queueInvoiceIssueJob(deps.payload, orderId, log))
 
+  // A megpróbált és az elbukott sorba állítások száma. A kettő egyezése az
+  // EGYETLEN jel arról, hogy a job-sor maga nem működik: ilyenkor a
+  // `invoiceRequeued: 0` NEM azt jelenti, hogy nem volt teendő.
+  let attempted = 0
+  let refused = 0
+
   for (const order of candidates.docs as Order[]) {
     if (order.invoiceStatus === 'pending') {
       const updatedAtMs = Date.parse(order.updatedAt ?? '')
@@ -242,10 +257,23 @@ async function resweepInvoices(
         continue // friss pending — valószínűleg most dolgozik rajta egy worker
       }
     }
+    attempted += 1
     const queued = await queueInvoice(order.id)
     if (queued) {
       summary.invoiceRequeued += 1
+    } else {
+      refused += 1
     }
+  }
+
+  if (attempted > 0 && refused === attempted) {
+    summary.invoiceResweep = 'queue-unavailable'
+    log.error(
+      'RIASZTÁS: a számla-resweep egyetlen jobot sem tudott sorba állítani — a kiesett ' +
+        'számlák NEM készülnek el (a vevők viszont már kaptak számlát ígérő visszaigazolást). ' +
+        'Legvalószínűbb ok: a Payload job-sor nem érhető el. Emberi beavatkozás szükséges.',
+      { candidates: attempted },
+    )
   }
 }
 
