@@ -37,6 +37,7 @@ import {
 } from './lib/appointment/validation'
 import { validateContactSubmissionData } from './lib/contact-submission'
 import {
+  appointmentCustomerEmail,
   appointmentStaffEmail,
   contactStaffEmail,
   kineticareEmailAdapter,
@@ -300,6 +301,35 @@ const notifyStaffOnSubmission = async ({
         retryable: result.retryable,
         error: result.error,
       })
+    }
+
+    /**
+     * VISSZAIGAZOLÁS A BEKÜLDŐNEK — időpontkérésnél, ha megadott e-mail-címet.
+     *
+     * Az űrlap e-mail-mezője alatt ez áll: „Ide küldünk visszaigazolást, ha
+     * telefonon nem érünk el." Ez eddig nem teljesült: csak a stáb kapott
+     * levelet. A mező OPCIONÁLIS, ezért cím nélkül nincs mit küldeni — az nem
+     * hiba, csak nincs teendő.
+     *
+     * Best-effort, a stáb-értesítő UTÁN: ha a visszaigazolás elakadna, a
+     * visszahíváshoz szükséges stáb-levél már kiment.
+     */
+    const beküldőEmail = fieldValue(APPOINTMENT_EMAIL_FIELD).trim()
+    if (formKind === 'appointment' && beküldőEmail.length > 0) {
+      const serverUrl = (process.env.NEXT_PUBLIC_SERVER_URL ?? '').replace(/\/+$/, '')
+      const visszaigazolas = appointmentCustomerEmail({
+        name: fieldValue(APPOINTMENT_NAME_FIELD),
+        phone: fieldValue(APPOINTMENT_PHONE_FIELD),
+        availability: fieldValue(APPOINTMENT_AVAILABILITY_FIELD),
+        ...(serverUrl ? { contactUrl: `${serverUrl}/kapcsolat` } : {}),
+      })
+      const vissza = await sendMail({ to: beküldőEmail, ...visszaigazolas })
+      if (!vissza.ok) {
+        logger.warn('időpontkérés-visszaigazoló küldése sikertelen (best-effort)', {
+          retryable: vissza.retryable,
+          error: vissza.error,
+        })
+      }
     }
   } catch (error) {
     logger.warn('staff-értesítő feldolgozása sikertelen (best-effort)', {
