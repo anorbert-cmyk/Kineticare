@@ -357,7 +357,7 @@ describe('7. 17. tartalom-javítás — a kapcsolódó kurzus beállítása', ()
     expect(eredmeny.kihagyasok).toEqual([])
   })
 
-  it('IDEMPOTENS: a saját eredményén futtatva már nem ír, és hangosan kihagy', () => {
+  it('IDEMPOTENS: a saját eredményén futtatva már nem ír', () => {
     const elso = alkalmazSosKapcsolodoKurzus({ jelenlegi: null, sosId: SOS, celId: CEL })
     const masodik = alkalmazSosKapcsolodoKurzus({
       jelenlegi: elso.relatedProducts,
@@ -366,8 +366,48 @@ describe('7. 17. tartalom-javítás — a kapcsolódó kurzus beállítása', ()
     })
     expect(masodik.relatedProducts).toBeNull()
     expect(masodik.modositasok).toEqual([])
-    expect(masodik.kihagyasok[0]?.hangos).toBe(true)
     expect(masodik.kihagyasok[0]?.indok).toContain('MÁR be van állítva')
+  })
+
+  it('az idempotens kihagyás NEM hangos (nincs emberi teendő)', () => {
+    /**
+     * MIÉRT (vezetői javítás, 2026-08-17, ÉLES NAPLÓ alapján): a `hangos: true`
+     * `logger.error`-t ír. Az éles tartalom-job futásában emiatt EGYETLEN
+     * `error` sor állt a 21 `warn` mellett — pont a legjobb kimenetnél:
+     *
+     *   „Az SOS kurzus kapcsolódó kurzusa (…) (a kapcsolódó kurzus MÁR be van
+     *    állítva — nincs teendő)"  ← severity: error
+     *
+     * Ez zaj: minden további futás hibásnak látszik, és a valódi hibák
+     * elvesznek benne. A hangos ág azoknak az eseteknek való, ahol EMBERI
+     * TEENDŐ van. Ez a teszt a két csoportot szétválasztva rögzíti.
+     */
+    const idempotens = alkalmazSosKapcsolodoKurzus({
+      jelenlegi: [CEL],
+      sosId: SOS,
+      celId: CEL,
+    })
+    expect(idempotens.kihagyasok[0]?.hangos).toBe(false)
+  })
+
+  it('viszont MINDEN emberi teendőt igénylő kihagyás hangos marad', () => {
+    const esetek = [
+      {
+        nev: 'a cél kurzus nincs meg',
+        eredmeny: alkalmazSosKapcsolodoKurzus({ jelenlegi: [], sosId: SOS, celId: null }),
+      },
+      {
+        nev: 'önhivatkozás',
+        eredmeny: alkalmazSosKapcsolodoKurzus({ jelenlegi: [], sosId: SOS, celId: SOS }),
+      },
+      {
+        nev: 'a szerkesztő mást állított be',
+        eredmeny: alkalmazSosKapcsolodoKurzus({ jelenlegi: [999], sosId: SOS, celId: CEL }),
+      },
+    ]
+    for (const { nev, eredmeny } of esetek) {
+      expect(eredmeny.kihagyasok[0]?.hangos, nev).toBe(true)
+    }
   })
 
   it('a cél kurzus HIÁNYÁT hangosan jelzi, és nem találgat azonosítót', () => {
