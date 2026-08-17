@@ -348,6 +348,7 @@ export type JavitasSzabaly =
   | 'kapcsolat-szakemberek'
   | 'sos-kapcsolodo-kurzus'
   | 'kapcsolat-telefonos-idopont'
+  | 'szolgaltatas-blokk-kep'
 
 /** Egy elvégzett módosítás vagy egy indokolt kihagyás gépileg is vizsgálható leírása. */
 export interface JavitasLepes {
@@ -2399,6 +2400,107 @@ export const alkalmazKapcsolatTelefonosIdopont = (layout: Page['layout']): Szekc
 }
 
 // ---------------------------------------------------------------------------
+// 19. javítás — fotó a „Miben segíthetünk?" / „Válaszd ki…" szolgáltatás-
+// szekciókba, a tulajdonos által kiválogatott anyagból.
+// ---------------------------------------------------------------------------
+
+/** A két új fotó fájlnév-prefixe (a Média webp-re konvertál, ezért prefix). */
+export const KEZELES_FOTO_PREFIX = 'kezeles-kezen'
+export const KATAK_LABDAVAL_PREFIX = 'katak-labdaval'
+
+/**
+ * Kép beállítása egy oldal EGYETLEN `services` szekciójára.
+ *
+ * ═══ MIÉRT ÉPP IDE ═══
+ * A tulajdonos 25 fotót adott át; a mérés szerint az oldalak képhelyei egy
+ * kivétellel ki vannak töltve (24/26). A `/rolunk` „Miben segíthetünk?"
+ * szekciója az EGYETLEN valóban üres képhely — a `/szolgaltatasok` fejléc-képe
+ * pedig SZÁNDÉKOSAN üres (12a. javítás: a lap tetején álló fotó csak lejjebb
+ * tolta a tartalmat), azt tehát nem töltjük vissza.
+ *
+ * ═══ MIÉRT CSERÉLHETŐ AZ EGYIK ═══
+ * A `/szolgaltatasok` szolgáltatás-szekciójában ma egy örökölt, 940×788-as
+ * kép áll. A helyére a rendelői kezelést TÉNYLEGESEN mutató fotó kerül: az
+ * NN/g fotó-kutatása szerint a valódi munkát mutató kép tartalom, a dekoratív
+ * pedig átugorható zaj (https://www.nngroup.com/articles/photos-as-web-content/).
+ * A régi kép a Médiatárban MARAD, tehát a csere egy kattintással visszavonható.
+ */
+export const alkalmazSzolgaltatasBlokkKep = (input: {
+  layout: Page['layout']
+  /** Az új kép média-azonosítója, vagy `null`, ha nincs ilyen rekord. */
+  mediaId: number | null
+  /** Naplócímke (pl. „/rolunk"). */
+  oldalCimke: string
+  /** `false` = csak ÜRES mezőt tölt ki; `true` = meglévő képet is lecserél. */
+  cserelheto: boolean
+}): SzekciosorCsere => {
+  const { layout, mediaId, oldalCimke, cserelheto } = input
+  const uzenet = `A ${oldalCimke} szolgáltatás-szekciójának képe`
+  const szabaly: JavitasSzabaly = 'szolgaltatas-blokk-kep'
+
+  const kihagyas = (indok: string, hangos = false): SzekciosorCsere => ({
+    layout: null,
+    modositasok: [],
+    kihagyasok: [{ szabaly, uzenet, indok, hangos }],
+  })
+
+  if (!Array.isArray(layout) || layout.length === 0) {
+    return kihagyas('az oldalnak nincs szekciósora', true)
+  }
+  if (mediaId === null) {
+    return kihagyas('a Médiatárban nincs meg a kép — előbb az appnak fel kell töltenie', true)
+  }
+
+  const indexek = layout
+    .map((blokk, index) => (blokk.blockType === 'services' ? index : -1))
+    .filter((index) => index !== -1)
+  if (indexek.length === 0) {
+    return kihagyas('a lapon nincs szolgáltatás-szekció', true)
+  }
+  if (indexek.length > 1) {
+    return kihagyas(
+      `a lapon ${indexek.length} szolgáltatás-szekció áll — nem egyértelmű, melyikbe való a kép`,
+      true,
+    )
+  }
+
+  const index = indexek[0]
+  const blokk = layout[index]
+  if (blokk.blockType !== 'services') {
+    return kihagyas('a talált szekció típusa nem szolgáltatás-szekció', true)
+  }
+  const jelenlegiId = heroKepAzonosito(blokk.image ?? null)
+
+  if (jelenlegiId === mediaId) {
+    return kihagyas('a szekció MÁR ezt a képet viseli — nincs teendő')
+  }
+  if (jelenlegiId !== null && !cserelheto) {
+    return kihagyas(
+      `a szekciónak MÁR van képe (azonosító: ${jelenlegiId}) — a script csak üres mezőt tölt ki`,
+    )
+  }
+
+  const ujLayout: Szekciosor = layout.map((elem, elemIndex) =>
+    elemIndex === index ? { ...elem, image: mediaId } : elem,
+  )
+
+  return {
+    layout: ujLayout,
+    modositasok: [
+      {
+        szabaly,
+        uzenet:
+          jelenlegiId === null
+            ? `${uzenet}: az üres képhely kitöltve (azonosító: ${mediaId})`
+            : `${uzenet}: az örökölt kép (azonosító: ${jelenlegiId}) helyére a rendelői kezelést mutató fotó került (azonosító: ${mediaId}). A régi kép a Médiatárban marad.`,
+        indok: null,
+      },
+    ],
+    kihagyasok: [],
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Futtatás — a tiszta átalakításokat köti az adatbázishoz.
 // ---------------------------------------------------------------------------
 
@@ -2671,13 +2773,27 @@ async function futtat(): Promise<void> {
     modositasokSzama += rolunkPress.modositasok.length
     kihagyasokSzama += rolunkPress.kihagyasok.length
 
+    // --- 19a. javítás: fotó a „Miben segíthetünk?" szekcióba ------------------
+    // A lánc VÉGÉN, hogy a korábbi lépések eredmény-layoutján dolgozzon.
+    const rolunkKep = await keresdMediat(payload, KATAK_LABDAVAL_PREFIX)
+    const rolunkKepLepes = alkalmazSzolgaltatasBlokkKep({
+      layout: rolunkPress.layout ?? rolunkPressAlap,
+      mediaId: rolunkKep?.id ?? null,
+      oldalCimke: '/rolunk',
+      // Üres képhely: meglévő képet NEM írunk felül.
+      cserelheto: false,
+    })
+    naplozdLepeseket(rolunkKepLepes, dryRun)
+    modositasokSzama += rolunkKepLepes.modositasok.length
+    kihagyasokSzama += rolunkKepLepes.kihagyasok.length
+
     // A javítások EGY frissítésben mennek ki (a heroImage és a layout külön
     // mező, nem ütköznek), így egyetlen piszkozat-ellenőrzés elég.
     const irando: { heroImage?: number; layout?: Szekciosor } = {}
     if (eredmeny.heroImage !== null) {
       irando.heroImage = eredmeny.heroImage
     }
-    const rolunkVegsoLayout = rolunkPress.layout ?? harmonika.layout
+    const rolunkVegsoLayout = rolunkKepLepes.layout ?? rolunkPress.layout ?? harmonika.layout
     if (rolunkVegsoLayout !== null) {
       irando.layout = rolunkVegsoLayout
     }
@@ -2906,6 +3022,19 @@ async function futtat(): Promise<void> {
         layout: szolgaltatasokLayout,
         orokoltTartalom: szolgaltatasokRegiBevezetoTartalom(),
         ujBlokk: szolgaltatasokUjBevezetoBlokk(),
+      }),
+    )
+
+    // --- 19b. javítás: a rendelői kezelést mutató fotó a szolgáltatás-szekcióba
+    const kezelesKep = await keresdMediat(payload, KEZELES_FOTO_PREFIX)
+    szolgaltatasokLepes(
+      alkalmazSzolgaltatasBlokkKep({
+        layout: szolgaltatasokLayout,
+        mediaId: kezelesKep?.id ?? null,
+        oldalCimke: '/szolgaltatasok',
+        // Itt SZÁNDÉKOS a csere: az örökölt 940×788-as kép helyére valódi
+        // kezelés-fotó kerül. A régi a Médiatárban marad.
+        cserelheto: true,
       }),
     )
 
