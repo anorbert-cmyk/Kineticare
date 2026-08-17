@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RenderBlocks } from '../components/blocks/RenderBlocks'
 import {
   buildKapcsolatLayout,
+  buildRolunkLayout,
   buildSzolgaltatasokLayout,
   IDOPONTKERES_HORGONY,
   IDOPONTKERES_URL,
+  SZAKMAI_HATTER_URL,
 } from '../scripts/restore-legacy-content'
 import type { Page } from '../payload-types'
 
@@ -28,6 +30,9 @@ import type { Page } from '../payload-types'
  *  4. A sávok között NINCS hétvégi lehetőség: a repóban semmi nem igazolja,
  *     hogy hétvégén van rendelés, egy nem tartható sáv felkínálása pedig
  *     ígéret. (Ha van, az adminban egy sorral pótolható.)
+ *  5. A lap SZAKEMBER-ELÉRHETŐSÉGET is visz (tulajdonosi kérés, 2026-08-16:
+ *     „lányok elérhetősége kell a kapcsolat menüpontba is"), az időpontkérő
+ *     UTÁN, kapcsolat-fókuszú felvezetővel, önmagára mutató link nélkül.
  *
  * HÁLÓZAT: a globális fetch hangosan dobó mock (CLAUDE.md 15. tanulság).
  */
@@ -60,10 +65,9 @@ function renderKapcsolatLayout(): string {
 }
 
 describe('/kapcsolat alap-szekciósor', () => {
-  it('pontosan egy szekcióból áll: az időpontkérőből', () => {
+  it('két szekcióból áll: az időpontkérőből, utána a szakember-elérhetőségből', () => {
     const layout = buildKapcsolatLayout()
-    expect(layout).toHaveLength(1)
-    expect(layout[0].blockType).toBe('appointment')
+    expect(layout.map((blokk) => blokk.blockType)).toEqual(['appointment', 'teamMembers'])
   })
 
   it('a rendelő MINDEN elérhetősége megjelenik a renderelt kimeneten', () => {
@@ -106,5 +110,166 @@ describe('/kapcsolat alap-szekciósor', () => {
     const html = renderKapcsolatLayout()
     expect(html).toContain('kc-appointment__form')
     expect(html).toContain('href="/adatvedelem"')
+  })
+})
+
+/**
+ * A /kapcsolat SZAKEMBER-ELÉRHETŐSÉGE (tulajdonosi kérés, 2026-08-16: „lányok
+ * elérhetősége kell a kapcsolat menüpontba is").
+ *
+ * ═══ MIT ŐRIZ ═══
+ *  1. SORREND. A szekció az időpontkérő UTÁN áll: az időpontkérő bal hasábja
+ *     már kiírja mindkét telefonszámot (NN/g kapcsolat-oldal irányelve: az
+ *     űrlap csak a telefonszám MELLETT állhat, nem helyette), ez a szekció
+ *     pedig az általa felvetett kérdésre válaszol — melyik szám kihez tartozik.
+ *  2. NINCS ÖNMAGÁRA MUTATÓ LINK. Az írásos időpontkérés a lapon belüli
+ *     `#idopontkeres` horgonyra megy, nem a `/kapcsolat` címre: az önmagára
+ *     mutató link csak újratölti a lapot („the current document should never
+ *     link to itself" — W3C wiki).
+ *  3. A SZAKMAI HÁTTÉR a /rolunk harmonikájára mutat, mert ezen a lapon nincs
+ *     önéletrajz — lapon belüli horgony törött linket adna.
+ *  4. NINCS KITALÁLT ADAT: az `availability` („Mikor és hol érhető el") ÜRES,
+ *     mert a rendelési idő és a helyszín szakemberenként nincs a repóban.
+ *  5. A FELVEZETŐ kapcsolat-fókuszú, és eltér a másik két lapétól (a /rolunk-on
+ *     bemutatkozás, a /szolgaltatasok-on bejelentkezés).
+ */
+describe('/kapcsolat szakember-elérhetőség', () => {
+  const kapcsolatSzakember = () => {
+    const blokk = buildKapcsolatLayout({ kocsisPortre: 31, kissPortre: 32 }).find(
+      (elem) => elem.blockType === 'teamMembers',
+    )
+    if (blokk?.blockType !== 'teamMembers') {
+      throw new Error('A szakember-szekció hiányzik a /kapcsolat szekciósorból.')
+    }
+    return blokk
+  }
+
+  it('az időpontkérő UTÁN áll, és megtartja a sávritmust (tint → fehér)', () => {
+    const layout = buildKapcsolatLayout()
+    const idopont = layout.findIndex((blokk) => blokk.blockType === 'appointment')
+    const szakember = layout.findIndex((blokk) => blokk.blockType === 'teamMembers')
+    expect(idopont).toBeGreaterThanOrEqual(0)
+    expect(szakember).toBe(idopont + 1)
+
+    // A sávritmus: az időpontkérő világoskék, a szakember-szekció fehér — az
+    // utána következő üzenetküldő szekcióval EGY régiót alkotva (B2.2).
+    const idopontBlokk = layout[idopont]
+    const szakemberBlokk = layout[szakember]
+    if (idopontBlokk.blockType !== 'appointment' || szakemberBlokk.blockType !== 'teamMembers') {
+      throw new Error('A /kapcsolat szekciósor nem a várt két blokkot adta.')
+    }
+    expect(idopontBlokk.sectionSettings?.hatter).toBe('tint')
+    expect(szakemberBlokk.sectionSettings?.hatter).toBe('feher')
+  })
+
+  it('mindkét gyógytornász neve, titulusa és kattintható száma megjelenik', () => {
+    const html = renderKapcsolatLayout()
+    expect(html).toContain('Kocsis Kata')
+    expect(html).toContain('Kiss Kata')
+    expect(html).toContain('Hívd Kocsis Katát')
+    expect(html).toContain('Hívd Kiss Katát')
+    // A szekció saját, kattintható hívás-felülete (az időpontkérő listáján felül).
+    expect((html.match(/class="kc-team__call"/g) ?? []).length).toBe(2)
+    for (const tag of kapcsolatSzakember().members ?? []) {
+      expect((tag.role ?? '').trim().length).toBeGreaterThan(0)
+    }
+  })
+
+  it('a portrék bekerülnek, de kép nélkül is felépül a szekció', () => {
+    expect((kapcsolatSzakember().members ?? []).map((tag) => tag.photo)).toEqual([31, 32])
+    const kepNelkul = buildKapcsolatLayout().find((blokk) => blokk.blockType === 'teamMembers')
+    if (kepNelkul?.blockType !== 'teamMembers') {
+      throw new Error('A szakember-szekció kép nélkül eltűnt a szekciósorból.')
+    }
+    expect((kepNelkul.members ?? []).map((tag) => tag.photo)).toEqual([undefined, undefined])
+  })
+
+  it('az írásos időpontkérés NEM önmagára mutat, hanem a lapon belüli horgonyra', () => {
+    const blokk = kapcsolatSzakember()
+    expect(blokk.bookingLink?.url).toBe(`#${IDOPONTKERES_HORGONY}`)
+    // A felirat a §3.2 szótár #24 sora — a cselekvés ugyanaz, csak a cél
+    // kifejezése lapon belüli (WCAG 2.2 · 3.2.4 Consistent Identification).
+    expect(blokk.bookingLink?.felirat).toBe('Kérj időpontot üzenetben')
+    // A horgony célja tényleg ezen a lapon van.
+    const horgonyok = buildKapcsolatLayout().map((elem) => elem.sectionSettings?.anchorId)
+    expect(horgonyok).toContain(IDOPONTKERES_HORGONY)
+
+    const html = renderKapcsolatLayout()
+    expect(html).toContain(`href="#${IDOPONTKERES_HORGONY}"`)
+    // Körkörös link (a lap önmagára) sehol nem keletkezik.
+    expect(html).not.toContain('href="/kapcsolat"')
+  })
+
+  it('a szakmai háttér a /rolunk harmonikájára mutat, és az a horgony létezik ott', () => {
+    expect(SZAKMAI_HATTER_URL).toBe('/rolunk#szakmai-hatter')
+    for (const tag of kapcsolatSzakember().members ?? []) {
+      expect(tag.link?.url).toBe(SZAKMAI_HATTER_URL)
+      expect(tag.link?.felirat).toBe('Nézd meg a szakmai hátterét')
+    }
+    // A cél ténylegesen létező horgony a /rolunk szekciósorában.
+    const rolunkHorgonyok = buildRolunkLayout().map((blokk) => blokk.sectionSettings?.anchorId)
+    expect(rolunkHorgonyok).toContain(SZAKMAI_HATTER_URL.split('#')[1])
+    // A /kapcsolat lapon NINCS önéletrajz-harmonika, tehát lapon belüli horgony
+    // törött linket adna — ezt méri ez a sor.
+    expect(buildKapcsolatLayout().some((blokk) => blokk.blockType === 'accordion')).toBe(false)
+  })
+
+  it('NEM talál ki rendelési időt vagy helyszínt (az `availability` üres marad)', () => {
+    for (const tag of kapcsolatSzakember().members ?? []) {
+      expect((tag.availability ?? '').trim()).toBe('')
+    }
+    const html = renderKapcsolatLayout()
+    expect(html).not.toContain('kc-team__availability')
+  })
+
+  it('a felvezetője kapcsolat-fókuszú, és eltér a másik két lapétól', () => {
+    const kapcsolat = kapcsolatSzakember()
+    const mezok = (blokk: typeof kapcsolat) => [blokk.eyebrow, blokk.title, blokk.lead]
+    const masik = [buildRolunkLayout(), buildSzolgaltatasokLayout()].map((layout) => {
+      const blokk = layout.find((elem) => elem.blockType === 'teamMembers')
+      if (blokk?.blockType !== 'teamMembers') {
+        throw new Error('A szakember-szekció hiányzik az egyik belső oldal szekciósorából.')
+      }
+      return mezok(blokk)
+    })
+
+    for (const [eyebrow, title, lead] of masik) {
+      expect(kapcsolat.eyebrow).not.toBe(eyebrow)
+      expect(kapcsolat.title).not.toBe(title)
+      expect(kapcsolat.lead).not.toBe(lead)
+    }
+    // A titulus továbbra is EGY forrásból jön (nem csúszhat el oldalanként).
+    const rolunk = buildRolunkLayout().find((blokk) => blokk.blockType === 'teamMembers')
+    if (rolunk?.blockType !== 'teamMembers') {
+      throw new Error('A szakember-szekció hiányzik a /rolunk szekciósorból.')
+    }
+    expect((kapcsolat.members ?? []).map((tag) => tag.role)).toEqual(
+      (rolunk.members ?? []).map((tag) => tag.role),
+    )
+  })
+
+  it('a vevőnek szóló szövegeiben nincs gondolatjel-halmozás', () => {
+    const blokk = kapcsolatSzakember()
+    const szovegek = [
+      blokk.eyebrow ?? '',
+      blokk.title ?? '',
+      blokk.lead ?? '',
+      blokk.bookingLink?.felirat ?? '',
+      ...(blokk.members ?? []).flatMap((tag) => [
+        tag.name,
+        tag.role ?? '',
+        tag.bio ?? '',
+        tag.callLabel ?? '',
+        tag.link?.felirat ?? '',
+      ]),
+    ]
+    for (const szoveg of szovegek) {
+      expect(szoveg).not.toContain('—')
+      expect(szoveg).not.toContain('–')
+    }
+  })
+
+  it('nem visz saját h1-et (a lap h1-e a route „Kapcsolat" címe marad)', () => {
+    expect(renderKapcsolatLayout()).not.toContain('<h1')
   })
 })

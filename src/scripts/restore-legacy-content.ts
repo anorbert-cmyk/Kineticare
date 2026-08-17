@@ -523,6 +523,18 @@ const szolgaltatasokBevezetoNodes = (): BlockNode[] => [
 const IDOPONTKERES_HORGONY = 'idopontkeres'
 const IDOPONTKERES_URL = `/kapcsolat#${IDOPONTKERES_HORGONY}`
 
+/**
+ * A RÉSZLETES szakmai önéletrajz célcíme, ha az nincs ugyanazon a lapon.
+ *
+ * A /rolunk lap alján álló harmonika horgonya (`szakmai-hatter`); a
+ * /szolgaltatasok és a /kapcsolat szakember-szekciója EGYARÁNT ide mutat,
+ * mert azokon a lapokon nincs önéletrajz — a tartalom egy helyen él (az
+ * IA-leltár 6.4 D3 „két felület, egy funkció" hibája ellen). A horgony nevét
+ * az élő javítás (`src/scripts/apply-owner-content.ts` `SZAKMAI_HATTER_HORGONY`)
+ * is ismeri; a kettő egyezését teszt őrzi.
+ */
+const SZAKMAI_HATTER_URL = '/rolunk#szakmai-hatter'
+
 /** Rendelői kezelések — a részletes leírás és a technikák felsorolása. */
 const rendeloiKezelesekNodes = (): BlockNode[] => [
   heading('h3', 'Rendelői kezelések – személyes terápiás megoldások'),
@@ -1156,6 +1168,15 @@ interface SzakemberSzekcioOpciok {
   hatter: 'feher' | 'tint' | 'sotet'
   /** A „szakmai háttér" hivatkozás célja (lapon belüli horgony vagy /rolunk-ra mutató). */
   hatterUrl: string
+  /**
+   * Az ÍRÁSOS időpontkérés célcíme (a szekció alján, a kártyák alatt).
+   *
+   * Alapból a /kapcsolat lap; MAGÁN a /kapcsolat lapon viszont lapon belüli
+   * horgony, mert az önmagára mutató link a látogatót sehova nem viszi, csak
+   * újratölti a lapot („the current document should never link to itself" —
+   * https://www.w3.org/wiki/Creating_multiple_pages_with_navigation_menus).
+   */
+  idopontkeresUrl?: string
   /** Portré-azonosítók fájlnév szerint; hiányzó kép esetén a kártya kép nélkül áll. */
   portrek?: Partial<Record<string, number | undefined>>
 }
@@ -1178,7 +1199,7 @@ const szakemberSzekcio = (opciok: SzakemberSzekcioOpciok): NonNullable<Page['lay
   lead: opciok.lead,
   bookingLink: {
     felirat: 'Kérj időpontot üzenetben',
-    url: '/kapcsolat',
+    url: opciok.idopontkeresUrl ?? '/kapcsolat',
     ujAblakban: false,
   },
   members: SZAKEMBER_KARTYAK.map((kartya) => ({
@@ -1486,7 +1507,7 @@ const buildSzolgaltatasokLayout = (media: OldalLayoutMedia = {}): NonNullable<Pa
     lead: 'A rendelői kezeléseket mi ketten tartjuk. Nézd meg, kihez jönnél szívesen, és hívd őt közvetlenül.',
     anchorId: 'szakembereink',
     hatter: 'feher',
-    hatterUrl: '/rolunk#szakmai-hatter',
+    hatterUrl: SZAKMAI_HATTER_URL,
     portrek: {
       '67b3c6e9e315f_KocsisKatakozeli.png': media.kocsisPortre,
       '67c07def59ac2_KissKataelegans.png': media.kissPortre,
@@ -1580,7 +1601,85 @@ const KAPCSOLAT_IDOPONTKERES = {
   },
 }
 
-const buildKapcsolatLayout = (): NonNullable<Page['layout']> => [KAPCSOLAT_IDOPONTKERES]
+/**
+ * A /kapcsolat SZAKEMBER-szekciója (tulajdonosi kérés, 2026-08-16: „lányok
+ * elérhetősége kell a kapcsolat menüpontba is").
+ *
+ * ═══ MIÉRT AZ IDŐPONTKÉRŐ UTÁN ÁLL ═══
+ * A lap feladata, hogy a látogató ELÉRJEN VALAKIT. Az NN/g kapcsolat-oldal
+ * irányelve szerint a telefonszám kötelező tartalom, és az űrlap csak MELLETTE
+ * állhat, nem helyette („Offer a contact form only in addition to telephone
+ * numbers, not as a replacement" —
+ * https://www.nngroup.com/articles/contact-us-pages/). Ez a lapon MÁR
+ * teljesül: az időpontkérő szekció bal hasábja kiírja mindkét rendelő címét,
+ * mindkét telefonszámot (névvel, kattinthatóan) és az e-mail-címet — mobilon az
+ * űrlap FÖLÖTT. A számok tehát nincsenek űrlap mögé rejtve.
+ *
+ * Amit viszont az a lista NEM mond meg: KI a két név, és melyikükhöz tartozik a
+ * panaszom. Ez a szekció pontosan erre a kérdésre válaszol, ezért közvetlenül a
+ * kérdést felvető lista UTÁN áll — ugyanaz a felállás, mint a /szolgaltatasok
+ * lapon („Kihez jössz, ha időpontot kérsz?"), és így a lap elsődleges feladata
+ * (az időpontkérés) sem csúszik lejjebb. Az arc és a rövid bemutatkozás nem
+ * dísz: az NN/g fotó-kutatásában a valódi munkatársak portréját a felhasználók
+ * hosszabban nézték, mint a mellette álló életrajzot
+ * (https://www.nngroup.com/articles/photos-as-web-content/), a hitelesség-kutatás
+ * 3. tényezője pedig kifejezetten azt kéri, hogy látszódjon, KI végzi a munkát
+ * (https://www.nngroup.com/articles/trustworthy-design/).
+ *
+ * ═══ HÁROM ELTÉRÉS A MÁSIK KÉT LAPTÓL ═══
+ *  1. A FELVEZETŐ kapcsolat-fókuszú, nem bemutatkozás: a /rolunk-on ez a szekció
+ *     a csapatot mutatja be, itt viszont a látogató már elérni akar valakit,
+ *     ezért a szöveg a VÁLASZIDŐK különbségét mondja ki (visszahívás két
+ *     munkanapon belül vs. azonnali hívás).
+ *  2. A „szakmai háttér" hivatkozás a /rolunk harmonikájára megy
+ *     (SZAKMAI_HATTER_URL), mert ezen a lapon nincs önéletrajz — lapon belüli
+ *     horgony törött linket adna.
+ *  3. Az írásos időpontkérés LAPON BELÜLI horgony (`#idopontkeres`), nem
+ *     `/kapcsolat`: az önmagára mutató link a látogatót sehova nem viszi, csak
+ *     újratölti a lapot („A link to the document you are already looking at is
+ *     redundant and confusing… the current document should never link to
+ *     itself" — https://www.w3.org/wiki/Creating_multiple_pages_with_navigation_menus).
+ *     Horgonyként viszont valódi dolga van: a szekció ALJÁRÓL visszaugrik az
+ *     űrlapra, amit a látogató addigra már elgörgetett — az NN/g szerint a
+ *     lapon belüli ugrás haszna pont a kis képernyőn nő
+ *     (https://www.nngroup.com/articles/in-page-links-content-navigation/).
+ *     A felirat változatlanul a §3.2 szótár #24 sora, mert a cselekvés
+ *     ugyanaz, csak a cél kifejezése lapon belüli (WCAG 2.2 · 3.2.4).
+ *
+ * A rendelési idő és a helyszín szakemberenként továbbra sincs a repóban, ezért
+ * az `availability` mező itt is ÜRES marad (kitalált nyitvatartás hazugság
+ * lenne); az adminban egy sorral pótolható.
+ */
+const kapcsolatSzakemberSzekcio = (
+  media: OldalLayoutMedia = {},
+): NonNullable<Page['layout']>[number] =>
+  szakemberSzekcio({
+    eyebrow: 'Közvetlen elérhetőség',
+    title: 'Kit hívj, ha nem várnál a visszahívásra?',
+    lead: 'Az időpontkérésre két munkanapon belül telefonálunk. Ha ennél gyorsabb választ szeretnél, hívj minket közvetlenül: alább látod, ki mivel foglalkozik, és melyik szám kié.',
+    anchorId: 'elerhetoseg',
+    hatter: 'feher',
+    hatterUrl: SZAKMAI_HATTER_URL,
+    idopontkeresUrl: `#${IDOPONTKERES_HORGONY}`,
+    portrek: {
+      '67b3c6e9e315f_KocsisKatakozeli.png': media.kocsisPortre,
+      '67c07def59ac2_KissKataelegans.png': media.kissPortre,
+    },
+  })
+
+/**
+ * A /kapcsolat szekciósora: időpontkérő + szakember-elérhetőség.
+ *
+ * A sávritmus: a lapfej fehér, az időpontkérő világoskék (`tint`), a
+ * szakember-szekció újra fehér — és az utána következő üzenetküldő szekció is
+ * fehér. Ez SZÁNDÉKOS: a két fehér szakasz EGY régiót alkot („a másik két út:
+ * hívj minket, vagy írj nekünk"), a sávváltás pedig a régióhatárt jelöli, nem a
+ * szekcióhatárt (belső-oldali kutatás B2.2).
+ */
+const buildKapcsolatLayout = (media: OldalLayoutMedia = {}): NonNullable<Page['layout']> => [
+  KAPCSOLAT_IDOPONTKERES,
+  kapcsolatSzakemberSzekcio(media),
+]
 
 /**
  * A /kapcsolat CMS-oldal rich-text törzse. A route NEM jeleníti meg (a lap
@@ -2514,7 +2613,9 @@ async function restoreLegacyContent(): Promise<void> {
     seoDescription:
       'Időpontkérés rendelői gyógytornára és manuálterápiára Budapesten (Nádorliget u. 7/b, Fadrusz utca 15.), telefonos egyeztetéssel.',
   })
-  await ensurePageLayout(payload, 'kapcsolat', buildKapcsolatLayout())
+  // A két portré ugyanaz, mint a /rolunk és a /szolgaltatasok szakember-
+  // szekciójában (egy kép, egy hely) — a fenti feloldást használjuk újra.
+  await ensurePageLayout(payload, 'kapcsolat', buildKapcsolatLayout({ kocsisPortre, kissPortre }))
 
   // --- Termékkategória ---------------------------------------------------------
   const productCategoryId = await ensureProductCategory(payload)
@@ -2663,6 +2764,7 @@ export {
   kezdolapContent,
   rolunkContent,
   rolunkSzakmaiOrokoltTartalom,
+  SZAKMAI_HATTER_URL,
   szolgaltatasokContent,
   szolgaltatasokRegiBevezetoTartalom,
 }

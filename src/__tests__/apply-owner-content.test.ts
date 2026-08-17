@@ -17,6 +17,7 @@ import {
   alkalmazAllapotokBevezeto,
   alkalmazAszfAdatvedelemLink,
   alkalmazJogiOldalak,
+  alkalmazKapcsolatSzakemberek,
   alkalmazKezdolapJavitasok,
   alkalmazKurzuslistaFeliratok,
   alkalmazKurzusElonyok,
@@ -31,6 +32,7 @@ import {
   alkalmazZaroCta,
   allapotokUjBevezeto,
   heroKepAzonosito,
+  kapcsolatSeedBlokkok,
   pressLogosUjFejlec,
   rolunkSzakmaiUjBlokkok,
   stabilJson,
@@ -40,11 +42,13 @@ import {
 } from '../scripts/apply-owner-content'
 import { buildHomeLayout } from '../lib/home-seed'
 import {
+  buildKapcsolatLayout,
   buildSzolgaltatasokLayout,
   heading,
   para,
   richText,
   rolunkSzakmaiOrokoltTartalom,
+  SZAKMAI_HATTER_URL,
   szolgaltatasokRegiBevezetoTartalom,
 } from '../scripts/restore-legacy-content'
 import { DEFAULT_HEADING as PRESS_ALAPFELIRAT } from '../components/blocks/PressLogos'
@@ -1763,5 +1767,172 @@ describe('a /szolgaltatasok javításainak lánca (8., 12b.)', () => {
 
     expect(masodik.modositasok).toHaveLength(0)
     expect(masodik.layout).toEqual(elso.layout)
+  })
+})
+
+/**
+ * 16. javítás — a /kapcsolat lap HIÁNYZÓ szekciói.
+ *
+ * ═══ MIÉRT KELL EGYÁLTALÁN ═══
+ * A /kapcsolat dedikált Next.js-route, de a szekciósorát az ilyen slugú
+ * CMS-oldalról olvassa. A seed (`ensurePageLayout`) MEGLÉVŐ szekciósort sosem
+ * ír felül, ezért az élő lapon ma egyetlen szekció sincs — a tulajdonos kérése
+ * („lányok elérhetősége kell a kapcsolat menüpontba is") kód-szinten teljesül,
+ * az ÉLŐ laphoz viszont ez a javítás kell.
+ *
+ * ═══ MIT MÉR EZ A TESZT ═══
+ *  (a) üres szekciósorba beszúrja MINDKÉT hiányzó szekciót, a helyes sorrendben;
+ *  (b) idempotens: másodszorra NULLA módosítás;
+ *  (c) a szerkesztő SAJÁT szakember-szekcióját nem duplikálja (hangos kihagyás);
+ *  (d) csak a szakember-szekció hiányzik → csak azt szúrja be, az időpontkérő
+ *      UTÁN, a lap többi blokkját érintetlenül hagyva.
+ */
+describe('alkalmazKapcsolatSzakemberek — a /kapcsolat hiányzó szekciói', () => {
+  const seed = () => kapcsolatSeedBlokkok({ kocsisPortre: 31, kissPortre: 32 })
+
+  const futtat = (layout: Page['layout']) => {
+    const blokkok = seed()
+    return alkalmazKapcsolatSzakemberek({
+      layout,
+      idopontkeresBlokk: blokkok.idopontkeres,
+      szakemberBlokk: blokkok.szakemberek,
+    })
+  }
+
+  it('a seed-builderből pontosan egy időpontkérő és egy szakember-szekció jön', () => {
+    const blokkok = seed()
+    expect(blokkok.idopontkeres?.blockType).toBe('appointment')
+    expect(blokkok.szakemberek?.blockType).toBe('teamMembers')
+    // A portrék tényleg átmennek a builderen (a javítás futásidőben oldja fel).
+    if (blokkok.szakemberek?.blockType !== 'teamMembers') {
+      throw new Error('A seed-builder nem adott szakember-szekciót.')
+    }
+    expect((blokkok.szakemberek.members ?? []).map((tag) => tag.photo)).toEqual([31, 32])
+  })
+
+  it('(a) ÜRES szekciósorba beszúrja mindkét szekciót, időpontkérő → szakemberek sorrendben', () => {
+    const eredmeny = futtat([])
+
+    expect(eredmeny.modositasok).toHaveLength(2)
+    expect(eredmeny.modositasok.every((lepes) => lepes.szabaly === 'kapcsolat-szakemberek')).toBe(
+      true,
+    )
+    expect(eredmeny.layout?.map((blokk) => blokk.blockType)).toEqual([
+      'appointment',
+      'teamMembers',
+    ])
+    // A beszúrt sor a kód-szintű alapállapottal egyezik.
+    expect(stabilJson(eredmeny.layout)).toBe(
+      stabilJson(buildKapcsolatLayout({ kocsisPortre: 31, kissPortre: 32 })),
+    )
+  })
+
+  it('(a) hiányzó szekciósor (null/undefined) ugyanígy viselkedik', () => {
+    for (const ures of [null, undefined]) {
+      const eredmeny = futtat(ures)
+      expect(eredmeny.modositasok).toHaveLength(2)
+      expect(eredmeny.layout?.map((blokk) => blokk.blockType)).toEqual([
+        'appointment',
+        'teamMembers',
+      ])
+    }
+  })
+
+  it('(b) IDEMPOTENS: a második futás nulla módosítást ad, és nem ír', () => {
+    const elso = futtat([])
+    // A Payload a mentéskor minden blokkhoz és tömb-sorhoz `id`-t generál — az
+    // élő visszaolvasás ezért SOSEM byte-azonos a kódból épített blokkal. A
+    // második futás EZT az alakot kapja, mégsem szabad módosítania.
+    const mentettAlak: Szekciosor = (elso.layout ?? []).map((blokk, index) => ({
+      ...blokk,
+      id: `blokk-${index}`,
+      ...(blokk.blockType === 'teamMembers'
+        ? {
+            members: (blokk.members ?? []).map((tag, tagIndex) => ({
+              ...tag,
+              id: `tag-${tagIndex}`,
+            })),
+          }
+        : {}),
+    })) as Szekciosor
+
+    const masodik = futtat(mentettAlak)
+
+    expect(masodik.modositasok).toHaveLength(0)
+    expect(masodik.layout).toBeNull()
+    expect(masodik.kihagyasok).toHaveLength(2)
+    expect(masodik.kihagyasok.every((lepes) => lepes.hangos !== true)).toBe(true)
+    expect(masodik.kihagyasok.map((lepes) => lepes.indok).join(' ')).toContain('MÁR ott van')
+  })
+
+  it('(c) a szerkesztő SAJÁT szakember-szekcióját nem duplikálja — hangos kihagyás', () => {
+    const sajat: Szekcio = {
+      blockType: 'teamMembers',
+      id: 'szerkesztoi',
+      title: 'A rendelő csapata',
+      members: [{ id: 'x1', name: 'Nagy Anna' }],
+      sectionSettings: { visible: true, hatter: 'feher' },
+    } as Szekcio
+    const idopont = seed().idopontkeres
+    if (idopont === null) {
+      throw new Error('A seed-builder nem adott időpontkérő szekciót.')
+    }
+
+    const eredmeny = futtat([idopont, sajat])
+
+    expect(eredmeny.modositasok).toHaveLength(0)
+    expect(eredmeny.layout).toBeNull()
+    const hangos = eredmeny.kihagyasok.filter((lepes) => lepes.hangos === true)
+    expect(hangos).toHaveLength(1)
+    expect(hangos[0].indok).toContain('Nagy Anna')
+    expect(hangos[0].indok).toContain('nem duplikáljuk')
+  })
+
+  it('(d) csak a szakember-szekció hiányzik → csak azt szúrja be, az időpontkérő UTÁN', () => {
+    const idopont = seed().idopontkeres
+    if (idopont === null) {
+      throw new Error('A seed-builder nem adott időpontkérő szekciót.')
+    }
+    const idegen: Szekcio = {
+      blockType: 'richText',
+      id: 'szerkesztoi-szoveg',
+      content: richText([para('A szerkesztő saját szakasza.')]),
+      sectionSettings: { visible: true, hatter: 'feher' },
+    } as Szekcio
+
+    const eredmeny = futtat([idegen, idopont])
+
+    expect(eredmeny.modositasok).toHaveLength(1)
+    expect(eredmeny.layout?.map((blokk) => blokk.blockType)).toEqual([
+      'richText',
+      'appointment',
+      'teamMembers',
+    ])
+    // A szerkesztő blokkja VÁLTOZATLAN objektum-referenciaként megy tovább.
+    expect(eredmeny.layout?.[0]).toBe(idegen)
+  })
+
+  it('a seed-builder alakjának elcsúszása HANGOS kihagyás, írás nélkül', () => {
+    const eredmeny = alkalmazKapcsolatSzakemberek({
+      layout: [],
+      idopontkeresBlokk: null,
+      szakemberBlokk: null,
+    })
+    expect(eredmeny.layout).toBeNull()
+    expect(eredmeny.modositasok).toHaveLength(0)
+    expect(eredmeny.kihagyasok[0].hangos).toBe(true)
+  })
+
+  it('a szakmai háttér horgonya egyezik a 5. javításéval (nem csúszhatnak szét)', () => {
+    // A seed-builder a /rolunk harmonikájára mutat; a horgony nevét az 5.
+    // javítás konstansa (SZAKMAI_HATTER_HORGONY) is ismeri.
+    expect(SZAKMAI_HATTER_URL).toBe(`/rolunk#${SZAKMAI_HATTER_HORGONY}`)
+    const szakemberek = seed().szakemberek
+    if (szakemberek?.blockType !== 'teamMembers') {
+      throw new Error('A seed-builder nem adott szakember-szekciót.')
+    }
+    for (const tag of szakemberek.members ?? []) {
+      expect(tag.link?.url).toBe(SZAKMAI_HATTER_URL)
+    }
   })
 })
