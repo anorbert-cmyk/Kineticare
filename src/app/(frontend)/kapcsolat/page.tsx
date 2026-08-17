@@ -69,8 +69,36 @@ export default async function KapcsolatPage() {
 
   return (
     <>
+      {/*
+       * A LAPFEJ UGYANABBAN A SZÉLES KONTÉNERBEN ÁLL, mint alatta minden más.
+       *
+       * Korábban `size="narrow"` (720 px) volt, miközben a lap összes szekciója
+       * a széles (1120 px) konténert használja. Mérve (Chromium, az éles
+       * markupon és CSS-en) a cím bal széle ennyivel csúszott el a tartalomtól:
+       *   390 px:   0 px (mindkét konténer keskenyebb a képernyőnél)
+       *   768 px:  24 px
+       *  1280 px: 200 px
+       *  1440 px: 200 px
+       * Vagyis a hiba mobilon nem látszik, asztalon viszont a cím látványosan
+       * beljebb kezdődött, mint az alatta lévő szekciók.
+       *
+       * MIÉRT SZÁMÍT. NN/g, „Why Does a Design Look Good?": „A column grid
+       * provides vertical anchoring lines to which objects are aligned", és
+       * „A design will look unprofessional and lack polish when visual elements
+       * are used inconsistently or sporadically."
+       * https://www.nngroup.com/articles/why-does-design-look-good/
+       * A GOV.UK Design System ugyanezt szerkezetben mondja ki: a lap tartalmát
+       * EGY szélesség-konténer fogja össze (`govuk-width-container`), a
+       * hasábok ezen BELÜL szűkítenek.
+       * https://design-system.service.gov.uk/styles/layout/
+       *
+       * A keskeny konténer sorhossz-korlátozásra való — itt viszont nincs
+       * folyószöveg, csak egy cím, tehát semmit nem nyertünk vele, a rácsból
+       * viszont kiesett. A `/kurzusok` lapfeje eleve a széles konténert
+       * használja; ez a változás ahhoz igazít.
+       */}
       <Section>
-        <Container size="narrow">
+        <Container>
           <h1>Kapcsolat</h1>
         </Container>
       </Section>

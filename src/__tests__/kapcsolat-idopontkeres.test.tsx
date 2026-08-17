@@ -328,6 +328,36 @@ describe('/kapcsolat route — MELYIK űrlap van a lapon', () => {
     expect(forras).not.toContain('Írj nekünk üzenetet')
   })
 
+  /**
+   * A LAPFEJ ÉS A TARTALOM EGY RÁCSON ÁLL.
+   *
+   * A tulajdonos jelezte, hogy „a header is fura helyen van". Mérve (Chromium,
+   * az éles markupon és CSS-en) a cím bal széle ennyivel csúszott el az alatta
+   * lévő szekciókétól: 390 px → 0, 768 px → 24 px, 1280 px → 200 px,
+   * 1440 px → 200 px. Az ok: a lapfej `Container size="narrow"` (720 px) volt,
+   * a lap többi szekciója viszont a széles (1120 px) konténert használja.
+   *
+   * NN/g, „Why Does a Design Look Good?": „A column grid provides vertical
+   * anchoring lines to which objects are aligned"; és „A design will look
+   * unprofessional and lack polish when visual elements are used
+   * inconsistently or sporadically."
+   * https://www.nngroup.com/articles/why-does-design-look-good/
+   */
+  it('a lapfej a SZÉLES konténerben áll, a tartalommal egy rácson', async () => {
+    const forras = await readFile(
+      fileURLToPath(new URL('../app/(frontend)/kapcsolat/page.tsx', import.meta.url)),
+      'utf8',
+    )
+    /**
+     * A KOMMENTEKET KIVESSZÜK. A javítás fölé írt magyarázat maga is
+     * tartalmazza a `size="narrow"` szöveget (épp azt mondja el, miért nem
+     * szabad úgy) — enélkül ez az őr HAMISAN bukna a helyes kódon is.
+     */
+    const kod = forras.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, '').replace(/^\s*\/\/.*$/gm, '')
+    expect(kod).toContain('<h1>Kapcsolat</h1>')
+    expect(kod).not.toContain('narrow')
+  })
+
   it('a lap leírása sem ígér általános üzenetküldést', async () => {
     const forras = await readFile(
       fileURLToPath(new URL('../app/(frontend)/kapcsolat/page.tsx', import.meta.url)),
