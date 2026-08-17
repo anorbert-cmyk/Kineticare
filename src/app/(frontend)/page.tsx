@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import { draftMode } from 'next/headers'
 
+import { BarionPageView } from '@/components/analytics/BarionPageView'
 import { HomeView } from '@/components/content/HomeView'
 import { KNOWLEDGE_POSTS_FETCH_LIMIT } from '@/components/content/home/KnowledgeSection'
 import { PreviewBar } from '@/components/preview/PreviewBar'
+import { BARION_PAGE_VIEW } from '@/lib/analytics/barion-events'
 import { getAppointmentSectionContext } from '@/lib/appointment/section'
 import { getHomePage, getLatestPosts, getPublishedProducts, getTestimonials } from '@/lib/cms'
 import { withDraftRobots } from '@/lib/preview/draft-metadata'
@@ -55,6 +57,14 @@ export default async function HomePage() {
   return (
     <>
       {isDraft ? <PreviewBar path="/" /> : null}
+      {/* Barion Pixel `contentView` (contentType: 'Page'). A termékoldal SAJÁT
+          Product-ágú eseményt küld (CourseBarionView) — a kettő sosem fut
+          ugyanazon az oldalon, ezért nincs duplikált megtekintés. */}
+      <BarionPageView
+        list={BARION_PAGE_VIEW.home.list}
+        pageId={BARION_PAGE_VIEW.home.id}
+        pageName={BARION_PAGE_VIEW.home.name}
+      />
       <HomeView
         appointment={appointment}
         home={home}

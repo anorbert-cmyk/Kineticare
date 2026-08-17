@@ -4,8 +4,13 @@ import { useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
+import {
+  BARION_SIGNUP,
+  trackAccountSignUp,
+  type BarionSignUpEvent,
+} from '@/lib/analytics/barion-events'
 import { DEFAULT_AUTH_RETURN_URL, sanitizeReturnUrl } from '@/lib/return-url'
-import { registerUser, type RegisterInput } from '../../lib/auth-client'
+import { registerUser, type AuthResult, type RegisterInput } from '../../lib/auth-client'
 
 /**
  * RegisterForm — a regisztrációs űrlap (Payload auth REST-re).
@@ -17,6 +22,44 @@ import { registerUser, type RegisterInput } from '../../lib/auth-client'
 export interface RegisterFormProps {
   /** Gyökér-relatív útvonal; a hívó oldal `sanitizeReturnUrl`-lel szűri. */
   returnUrl: string
+}
+
+/** A `trackedRegister` injektálható függőségei (a teszt kémeket ad be). */
+export interface TrackedRegisterDeps {
+  register: (input: RegisterInput) => Promise<AuthResult>
+  track: (event: BarionSignUpEvent) => boolean
+}
+
+/**
+ * Regisztráció + Barion `signUp`.
+ *
+ * Az esemény a SIKERES válasz után megy ki: a foglalt e-mail-cím vagy a túl
+ * rövid jelszó miatt elutasított próbálkozás nem regisztráció, és nem is
+ * szabad annak látszania a Barion riportjában.
+ *
+ * A `trackAccountSignUp` a munkamenet signUp-reteszét is elfoglalja: a
+ * regisztráció utáni átirányításkor a fejléc implicit, munkamenet-nyitó
+ * signUp-ja már ugyanazt az eseményt jelentené másodszor.
+ *
+ * A `track` hívás saját `try/catch`-ben fut — a mérés hibája nem ronthatja el
+ * a regisztrációt (lásd a LoginForm azonos indoklását).
+ */
+export async function trackedRegister(
+  input: RegisterInput,
+  deps: TrackedRegisterDeps = {
+    register: registerUser,
+    track: (event) => trackAccountSignUp(event),
+  },
+): Promise<AuthResult> {
+  const result = await deps.register(input)
+  if (result.ok) {
+    try {
+      deps.track(BARION_SIGNUP.registration)
+    } catch {
+      // A mérés hibája nem érheti el a felhasználót.
+    }
+  }
+  return result
 }
 
 export function RegisterForm({ returnUrl }: RegisterFormProps) {
@@ -44,7 +87,7 @@ export function RegisterForm({ returnUrl }: RegisterFormProps) {
       return
     }
     setSubmitting(true)
-    const result = await registerUser(values)
+    const result = await trackedRegister(values)
     setSubmitting(false)
     if (result.ok) {
       // A szűrés a sinknél is megismétlődik (lásd LoginForm): a prop a szerver

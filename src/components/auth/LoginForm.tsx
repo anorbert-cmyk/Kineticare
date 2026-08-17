@@ -4,8 +4,13 @@ import { useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
+import {
+  BARION_SIGNUP,
+  trackAccountSignUp,
+  type BarionSignUpEvent,
+} from '@/lib/analytics/barion-events'
 import { DEFAULT_AUTH_RETURN_URL, sanitizeReturnUrl } from '@/lib/return-url'
-import { loginUser } from '../../lib/auth-client'
+import { loginUser, type AuthResult } from '../../lib/auth-client'
 
 /**
  * LoginForm — a bejelentkezés űrlapja (Payload auth REST-re).
@@ -16,6 +21,46 @@ import { loginUser } from '../../lib/auth-client'
 export interface LoginFormProps {
   /** Gyökér-relatív útvonal; a hívó oldal `sanitizeReturnUrl`-lel szűri. */
   returnUrl: string
+}
+
+/** A `trackedLogin` injektálható függőségei (a teszt kémeket ad be). */
+export interface TrackedLoginDeps {
+  login: (input: { email: string; password: string }) => Promise<AuthResult>
+  track: (event: BarionSignUpEvent) => boolean
+}
+
+/**
+ * Belépés + Barion `signUp`.
+ *
+ * ═══ MIÉRT A SIKERES VÁLASZ UTÁN, ÉS NEM MOUNTKOR ═══
+ * A belépés a hivatalos leírás szerint is `signUp`-esemény, DE csak akkor, ha
+ * meg is történt. A mountkor (vagy a beküldés pillanatában) küldött esemény a
+ * rossz jelszóval próbálkozót is belépőnek számolná — a Barion felé némán
+ * felnagyítva a belépés-számot.
+ *
+ * ═══ A KÖVETÉS NEM RONTHATJA EL A BELÉPÉST ═══
+ * A `track` hívás saját `try/catch`-ben fut. A gyártásban használt
+ * `trackAccountSignUp` maga sem dob (a `sendBarionEvent` elnyeli a pixel
+ * hibáit), de a burkoló így akkor is tartja a garanciát, ha a követő láncba
+ * később bármi bekerül: a visszaadott `AuthResult` és vele az átirányítás
+ * változatlan marad.
+ */
+export async function trackedLogin(
+  input: { email: string; password: string },
+  deps: TrackedLoginDeps = {
+    login: loginUser,
+    track: (event) => trackAccountSignUp(event),
+  },
+): Promise<AuthResult> {
+  const result = await deps.login(input)
+  if (result.ok) {
+    try {
+      deps.track(BARION_SIGNUP.login)
+    } catch {
+      // A mérés hibája nem érheti el a felhasználót.
+    }
+  }
+  return result
 }
 
 export function LoginForm({ returnUrl }: LoginFormProps) {
@@ -32,7 +77,7 @@ export function LoginForm({ returnUrl }: LoginFormProps) {
       return
     }
     setSubmitting(true)
-    const result = await loginUser({ email: email.trim(), password })
+    const result = await trackedLogin({ email: email.trim(), password })
     setSubmitting(false)
     if (result.ok) {
       // A tényleges átirányítás itt történik, ezért a szűrés a sinknél is

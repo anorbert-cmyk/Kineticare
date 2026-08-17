@@ -2,7 +2,8 @@
  * Tulajdonos által jóváhagyott, EGYSZERI szerkesztői tartalom-javítások.
  *
  * ═══ MIT JAVÍT ═══
- * Tizenhét jóváhagyott tartalom-javítás (1–16.: 2026-08-16; 17.: 2026-08-17).
+ * Tizenkilenc jóváhagyott tartalom-javítás (1–16.: 2026-08-16; 17–19.:
+ * 2026-08-17).
  * Mind KIZÁRÓLAG pontos
  * egyezésnél (illetve üres mezőnél, hiányzó blokknál, hiányzó oldalnál) fut le,
  * tehát a lányok időközbeni szerkesztését egyik sem írja felül:
@@ -140,6 +141,38 @@
  *     található, ha önmagára mutatna, ha a kapcsolat MÁR be van állítva, vagy
  *     ha a szerkesztő már felvett másik kurzust. Sürgetés (visszaszámláló,
  *     „csak ma") SEHOL: a régi oldal visszaszámlálóját tudatosan nem hozzuk át.
+ * 18. Az ÉLŐ ÁSZF KÉT TÉNYBELI HIBÁJA (tulajdonosi döntés, 2026-08-17; a
+ *     forrásfájl `src/lib/legal-source/aszf.txt` már javítva, az élő oldal
+ *     viszont az adatbázisból jön, amit a 6. javítás CSAK LÉTREHOZ):
+ *     (a) a fizetési szolgáltató neve STRIPE, holott a fizetés Barionon megy.
+ *         A Barion elfogadóhely-jóváhagyás bírálója az ÉLŐ ÁSZF-et nézi meg,
+ *         tehát ez a legvalószínűbb elutasítási ok.
+ *     (b) a „hozzáférés három hónap időtartamra garantált” kikötés és a
+ *         lezárási jogot kimondó mondat helyére a végleges hozzáférést mondó
+ *         egyetlen mondat kerül — ez oldja fel az ellentmondást az
+ *         értékesítési oldal „Örökös hozzáférés” ígéretével is.
+ *     A csere BEKEZDÉS-ELEJI (prefix) illesztéssel megy: a bekezdés maradéka
+ *     (pl. a másolás tilalmáról szóló mondat) byte-ra változatlan marad. A
+ *     27%-os áfa-mondathoz a script SZÁNDÉKOSAN nem nyúl (az AAM/27 kérdés
+ *     tulajdonosi döntésre vár). A két bekezdés EGYMÁSTÓL FÜGGETLENÜL bírálódik
+ *     el: az egyik kihagyása nem blokkolja a másikat. Szerkesztett szövegnél a
+ *     script HANGOSAN kihagy, és kiírja, mit talált a helyén.
+ * 19. A BARION ELFOGADÓHELY-JÓVÁHAGYÁS két HIÁNYZÓ ÁSZF-eleme (2026-08-17). A
+ *     jóváhagyási lista megköveteli, hogy az ÁSZF tartalmazza „a Barion
+ *     fizetési módról szóló leírást” és „a rendelések teljesítésének
+ *     (kiszállításának) átlagos idejét”. Mérve: a javítás előtt a Barion neve
+ *     EGYETLEN mondatban szerepelt (a fizetési felület megnevezéseként), a
+ *     teljesítés idejéről pedig sehol nem esett szó — a „teljesítés” szó
+ *     mindenütt jogi értelemben (hibás teljesítés, kellékszavatosság) állt.
+ *     A javítás HÁROM bekezdést SZÚR BE a fizetési bekezdés után: a Barion
+ *     sztenderd tájékoztatóját (MNB-engedélyszámmal), a fizetési mód
+ *     gyakorlati leírását, és a teljesítés idejét — digitális terméknél
+ *     kimondva, hogy postai kiszállítás nincs, a hozzáférés pedig a fizetés
+ *     visszaigazolása után azonnal aktív a felhasználói fiókban. A lépés CSAK
+ *     BESZÚR: meglévő csomópontot nem módosít és nem töröl (a 27%-os
+ *     áfa-mondathoz így sem ér hozzá). Részleges állapotban (a háromból csak
+ *     néhány van meg) HANGOSAN kihagy, hogy duplikált jogi bekezdés ne
+ *     keletkezzen.
  *
  * ═══ KAPU ═══
  * Alapértelmezésben PRÓBAFUTÁS (dry-run): a script mindent kiszámol és
@@ -199,6 +232,7 @@ import {
   buildKapcsolatLayout,
   buildRolunkLayout,
   buildSzolgaltatasokLayout,
+  para,
   rolunkSzakmaiOrokoltTartalom,
   szolgaltatasokRegiBevezetoTartalom,
 } from './restore-legacy-content'
@@ -341,6 +375,9 @@ export type JavitasSzabaly =
   | 'sos-ingyenes-jelolo'
   | 'kurzuslista-feliratok'
   | 'aszf-adatvedelem-link'
+  | 'aszf-fizetesi-szolgaltato'
+  | 'aszf-hozzaferes-idotartam'
+  | 'aszf-barion-es-teljesites'
   | 'kapcsolat-szakemberek'
   | 'sos-kapcsolodo-kurzus'
   | 'szolgaltatas-blokk-kep'
@@ -1105,6 +1142,375 @@ const bekezdesSzovegCsere = (csomopont: unknown, ujSzoveg: string): unknown => {
   const alap =
     typeof elsoGyerek === 'object' && elsoGyerek !== null ? (elsoGyerek as object) : {}
   return { ...(csomopont as object), children: [{ ...alap, text: ujSzoveg }] }
+}
+
+// ---------------------------------------------------------------------------
+// 18. javítás — az élő ÁSZF két ténybeli hibája (fizetési szolgáltató neve,
+// a hozzáférés időtartama).
+// ---------------------------------------------------------------------------
+
+/**
+ * A fizetési szolgáltatót megnevező bekezdés RÉGI kezdete (élesben ma ez áll).
+ *
+ * A mondat egy MÁSIK szolgáltatót (STRIPE) nevez meg, holott a fizetés a
+ * Barion Smart Gateway-en megy. A Barion elfogadóhely-jóváhagyás bírálója az
+ * ÉLŐ ÁSZF-et nézi át, tehát ez közvetlen elutasítási ok.
+ */
+export const ASZF_FIZETO_REGI_KEZDET =
+  'A fizetés titkosított csatornán megy végbe, a Weboldaltól függetlenül, a STRIPE fizetési felületén.'
+
+/** A fizetési szolgáltatót megnevező bekezdés jóváhagyott ÚJ kezdete. */
+export const ASZF_FIZETO_UJ_KEZDET =
+  'A fizetés titkosított csatornán megy végbe, a Weboldaltól függetlenül, a Barion Payment Zrt. által üzemeltetett Barion Smart Gateway fizetési felületén.'
+
+/**
+ * A hozzáférés időtartamáról szóló bekezdés RÉGI kezdete — KÉT mondat.
+ *
+ * Az első a hozzáférést három hónapra korlátozza, a második kimondja a
+ * KINETICARE lezárási jogát. A tulajdonos döntése szerint a megvásárolt
+ * tartalom véglegesen a vevőé, ezért MINDKÉT mondat helyére EGYETLEN új mondat
+ * kerül. A bekezdés maradéka (a másolás tilalmáról szóló mondat) érintetlen.
+ */
+export const ASZF_HOZZAFERES_REGI_KEZDET =
+  'A szolgáltatás egyszeri fizetéssel jár, a hozzáférés három hónap időtartamra garantált, azt követően addig tart, amíg a tartalomhoz történő hozzáférést a KINETICARE biztosítja. A KINETICARE bármikor jogosult a harmadik hónap letelte után a felvétel elérését korlátozni, véglegesen lezárni, vagy a felvételt magát a KINETICARE weboldaláról törölni.'
+
+/** A hozzáférés időtartamáról szóló bekezdés jóváhagyott ÚJ, egyetlen mondata. */
+export const ASZF_HOZZAFERES_UJ_KEZDET =
+  'A szolgáltatás egyszeri fizetéssel jár, a megvásárolt tartalom pedig időbeli korlátozás nélkül, véglegesen elérhető marad a Vásárló számára a felhasználói fiókjában.'
+
+/** Egy jóváhagyott bekezdés-eleji (prefix) csere leírása. */
+export interface AszfBekezdesCsere {
+  /** Melyik szabály naplózza — javításonként külön, hogy külön is elbírálható legyen. */
+  szabaly: JavitasSzabaly
+  /** Napló-címke (magyar, a naplósor eleje). */
+  cimke: string
+  /** A cserélendő bekezdés-kezdet — BETŰRE ennek kell állnia a bekezdés elején. */
+  regiKezdet: string
+  /** A helyére kerülő szöveg. */
+  ujKezdet: string
+  /**
+   * Rövid, jellemző szófordulat a bekezdés AZONOSÍTÁSÁHOZ, ha se a régi, se az
+   * új alak nem található. Csak a HANGOS kihagyás naplósorába kerül, hogy az
+   * üzemeltető lássa, mi áll ma a helyén — döntést sosem alapozunk rá.
+   */
+  nyom: string
+}
+
+/** A 18. javítás két, egymástól függetlenül elbírált bekezdés-cseréje. */
+export const ASZF_BEKEZDES_CSEREK: readonly AszfBekezdesCsere[] = [
+  {
+    szabaly: 'aszf-fizetesi-szolgaltato',
+    cimke: 'Az ÁSZF fizetési szolgáltatója',
+    regiKezdet: ASZF_FIZETO_REGI_KEZDET,
+    ujKezdet: ASZF_FIZETO_UJ_KEZDET,
+    nyom: 'A fizetés titkosított csatornán megy végbe',
+  },
+  {
+    szabaly: 'aszf-hozzaferes-idotartam',
+    cimke: 'Az ÁSZF hozzáférési időtartama',
+    regiKezdet: ASZF_HOZZAFERES_REGI_KEZDET,
+    ujKezdet: ASZF_HOZZAFERES_UJ_KEZDET,
+    nyom: 'A szolgáltatás egyszeri fizetéssel jár',
+  },
+]
+
+/** Naplóba írható, rövidített idézet egy élő bekezdésből. */
+const roviditettIdezet = (szoveg: string, hossz = 160): string => {
+  const egysoros = szoveg.replace(/\s+/g, ' ').trim()
+  return egysoros.length <= hossz ? `„${egysoros}”` : `„${egysoros.slice(0, hossz)}…”`
+}
+
+/**
+ * Az élő ÁSZF-oldal két ténybeli hibájának javítása bekezdés-eleji cserével.
+ *
+ * ═══ MIÉRT SZABAD EHHEZ HOZZÁNYÚLNI ═══
+ * A 6. javítás szabálya (jogi oldalt a script sosem ír felül) a szöveg
+ * ÖNKÉNYES átírását tiltja. Ez a lépés a TULAJDONOS KIFEJEZETT, tételes
+ * utasítását hajtja végre: a forrásfájl (`src/lib/legal-source/aszf.txt`) már a
+ * javított mondatokat tartalmazza, az élő oldal viszont az adatbázisból jön,
+ * amit a 6. javítás create-only szabálya sosem frissít. Enélkül a repó és az
+ * élő oldal tartósan szétcsúszik — és az élő ÁSZF egy olyan fizetési
+ * szolgáltatót nevez meg, amelyik nem is fogadja a pénzt.
+ *
+ * ═══ MIÉRT NEM TUD KÁRT OKOZNI ═══
+ *  - PREFIX-illesztés: csak az a bekezdés cserélődik, amelynek a szövege BETŰRE
+ *    a régi kezdettel indul; a bekezdés MARADÉKA byte-ra változatlan marad
+ *    (ezért marad meg pl. a másolás tilalmáról szóló mondat);
+ *  - IDEMPOTENS: ha már az új alak áll, HALKAN kihagy (nincs teendő) — a
+ *    második futás semmit nem ír;
+ *  - a szerkesztő saját szövegét sosem írja felül: ha se a régi, se az új alak
+ *    nincs meg, HANGOSAN kihagy, és a naplóba kiírja, mit talált a helyén;
+ *  - több egyforma találatnál nem dönt: hangosan kihagy;
+ *  - a két bekezdés FÜGGETLEN: az egyik kihagyása nem blokkolja a másikat;
+ *  - a 27%-os áfáról szóló mondat egyik cserében sem szerepel, tehát a script
+ *    hozzá sem ér.
+ */
+export const alkalmazAszfBekezdesCserek = (
+  content: unknown,
+  cserek: readonly AszfBekezdesCsere[] = ASZF_BEKEZDES_CSEREK,
+): AszfLinkAtalakitas => {
+  const modositasok: JavitasLepes[] = []
+  const kihagyasok: JavitasLepes[] = []
+
+  const gyoker =
+    typeof content === 'object' && content !== null
+      ? (content as { root?: { children?: unknown[] } }).root
+      : undefined
+  const gyerekek = Array.isArray(gyoker?.children) ? gyoker.children : null
+
+  if (gyerekek === null) {
+    for (const csere of cserek) {
+      kihagyasok.push({
+        szabaly: csere.szabaly,
+        uzenet: csere.cimke,
+        indok: 'az ÁSZF tartalma nem a várt rich-text szerkezet — a script nem nyúl hozzá',
+        hangos: true,
+      })
+    }
+    return { content: null, modositasok, kihagyasok }
+  }
+
+  let aktualisGyerekek = gyerekek
+  let voltIras = false
+
+  for (const csere of cserek) {
+    const szovegek = aktualisGyerekek.map(bekezdesSzovege)
+    const talalatok = szovegek
+      .map((szoveg, index) => ({ szoveg, index }))
+      .filter(
+        (elem): elem is { szoveg: string; index: number } =>
+          elem.szoveg !== null && elem.szoveg.startsWith(csere.regiKezdet),
+      )
+
+    if (talalatok.length > 1) {
+      kihagyasok.push({
+        szabaly: csere.szabaly,
+        uzenet: csere.cimke,
+        indok: `${talalatok.length} bekezdés is a cserélendő mondattal kezdődik — nem egyértelmű, melyiket kellene javítani; emberi döntés kell`,
+        hangos: true,
+      })
+      continue
+    }
+
+    if (talalatok.length === 0) {
+      const marJavitva = szovegek.some(
+        (szoveg) => szoveg !== null && szoveg.startsWith(csere.ujKezdet),
+      )
+      if (marJavitva) {
+        kihagyasok.push({
+          szabaly: csere.szabaly,
+          uzenet: csere.cimke,
+          indok: 'a bekezdés MÁR a javított szöveggel kezdődik — nincs teendő',
+        })
+        continue
+      }
+      const nyomok = szovegek.filter(
+        (szoveg): szoveg is string => szoveg !== null && szoveg.includes(csere.nyom),
+      )
+      kihagyasok.push({
+        szabaly: csere.szabaly,
+        uzenet: csere.cimke,
+        indok:
+          nyomok.length === 0
+            ? `a bekezdés se a régi, se a javított alakjában nem található, és „${csere.nyom}…” kezdetű bekezdés sincs a lapon — a szöveget azóta átírták, a script nem tippel`
+            : `a bekezdés se a régi, se a javított alakjában nem található; a helyén ez áll: ${nyomok
+                .map((szoveg) => roviditettIdezet(szoveg))
+                .join(' | ')} — szerkesztői szöveget a script sosem ír felül`,
+        hangos: true,
+      })
+      continue
+    }
+
+    const { index, szoveg } = talalatok[0]
+    const maradek = szoveg.slice(csere.regiKezdet.length)
+    aktualisGyerekek = aktualisGyerekek.map((csomopont, i) =>
+      i === index ? bekezdesSzovegCsere(csomopont, `${csere.ujKezdet}${maradek}`) : csomopont,
+    )
+    voltIras = true
+    modositasok.push({
+      szabaly: csere.szabaly,
+      uzenet: `${csere.cimke}: ${roviditettIdezet(csere.regiKezdet)} → ${roviditettIdezet(
+        csere.ujKezdet,
+      )}. A bekezdés maradéka (${
+        maradek.trim().length === 0 ? 'nincs ilyen' : roviditettIdezet(maradek, 60)
+      }) változatlan.`,
+      indok: null,
+    })
+  }
+
+  return {
+    content: voltIras
+      ? { ...(content as object), root: { ...gyoker, children: aktualisGyerekek } }
+      : null,
+    modositasok,
+    kihagyasok,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 19. javítás — a Barion elfogadóhely-jóváhagyás két HIÁNYZÓ ÁSZF-eleme:
+// a Barion fizetési módról szóló leírás és a teljesítés átlagos ideje.
+// ---------------------------------------------------------------------------
+
+/**
+ * A HORGONY-bekezdés kezdete, ami UTÁN az új bekezdések beszúródnak.
+ *
+ * Szándékosan a 18. javítás ÚJ (Barion-os) mondata: az élő szövegben ez a
+ * fizetési felületet megnevező bekezdés, tehát a Barion-leírás pontosan ide
+ * kívánkozik. A lánc emiatt sorrendfüggő: a 18. javítás ELŐBB fut, így a
+ * horgony akkor is megvan, ha az élő oldalon még a STRIPE-os mondat állt.
+ */
+export const ASZF_BARION_HORGONY_KEZDET = ASZF_FIZETO_UJ_KEZDET
+
+/**
+ * A beszúrandó HÁROM bekezdés, EBBEN a sorrendben.
+ *
+ * ═══ MIÉRT PONTOSAN EZ A HÁROM ═══
+ * A Barion elfogadóhely-jóváhagyás tartalmi listája megköveteli, hogy az ÁSZF
+ * tartalmazza „a Barion fizetési módról szóló leírást” és „a rendelések
+ * teljesítésének (kiszállításának) átlagos idejét”. A javítás előtti szöveg
+ * egyiket sem tartalmazta: a Barion neve EGYETLEN mondatban szerepelt (a
+ * fizetési felület megnevezéseként), a teljesítés idejéről pedig sehol nem
+ * esett szó — a „teljesítés” szó a lapon végig jogi értelemben (hibás
+ * teljesítés, kellékszavatosság) állt.
+ *
+ *  1. bekezdés: a Barion által közzétett, sztenderd tájékoztató mondatok
+ *     (a rendszer, a kártyaadatok útja, az MNB-engedélyszám). Betűre az a
+ *     szöveg, amit a Barion a kereskedőknek közzétételre ad.
+ *  2. bekezdés: a fizetési mód GYAKORLATI leírása (mivel lehet fizetni, kell-e
+ *     regisztráció, mit lát a kereskedő, van-e felár). A `FundingSources: ['All']`
+ *     beállítás (src/lib/barion/start.ts) miatt a bankkártya MELLETT a
+ *     Barion-egyenleg is fizetőeszköz — ezért mondja ki mindkettőt.
+ *  3. bekezdés: a TELJESÍTÉS ideje. Digitális terméknél a „kiszállítás” fogalma
+ *     félrevezető, ezért a szöveg kimondja, hogy postai kiszállítás nincs, és
+ *     megnevezi a tényleges teljesítést: a hozzáférés megnyitását a
+ *     felhasználói fiókban. Az időadat MÉRT: a hozzáférést a Barion
+ *     szerver-szerver visszaigazolása (callback) nyitja meg másodpercek alatt,
+ *     elmaradó callback esetén pedig az 5 percenként futó lekérdező job
+ *     (src/lib/order-poll/service.ts) hozza be — innen a „legfeljebb néhány
+ *     perc”. A 24 órás kézi tartalék a fogyasztónak ad kiutat, és NEM mond
+ *     ellent a Vegyes rendelkezések pénzvisszafizetési kikötésének.
+ *
+ * A szövegek IGAZSÁGFORRÁSA a `src/lib/legal-source/aszf.txt`: ezek a
+ * konstansok betűre az ottani sorok. Az összhangot teszt őrzi — ha a forrásfájl
+ * és a konstans elcsúszik, a frissen létrehozott ÁSZF-en a javításnak lenne
+ * teendője, és a teszt bukik.
+ */
+export const ASZF_BARION_UJ_BEKEZDESEK: readonly string[] = [
+  'Az online bankkártyás fizetések a Barion rendszerén keresztül valósulnak meg. A bankkártya adatok a kereskedőhöz nem jutnak el. A szolgáltatást nyújtó Barion Payment Zrt. a Magyar Nemzeti Bank felügyelete alatt álló intézmény, engedélyének száma: H-EN-I-1064/2013.',
+  'A Barion fizetési felületén bankkártyával és a Barion-egyenleg terhére is lehet fizetni. Bankkártyás fizetéshez nem kell Barion-fiókot létrehozni: elég megadni a kártya számát, a lejárati dátumot, a kártya hátoldalán található ellenőrző kódot és egy működő e-mail címet. A KINETICARE a fizetésről kizárólag a tranzakció eredményét kapja meg, a kártyaadatokat nem ismeri meg és nem tárolja. A bankkártyás fizetésnek a Vásárló felé nincs felára.',
+  'A megrendelés teljesítésének, azaz a hozzáférés megnyitásának átlagos ideje: az Ismeretterjesztő Videó digitális tartalom, ezért postai kiszállítás nincs. A KINETICARE a sikeres fizetés Barion-visszaigazolása után azonnal, átlagosan néhány másodperc, legfeljebb néhány perc alatt megnyitja a hozzáférést, és a megvásárolt Ismeretterjesztő Videó ettől kezdve a Vásárló felhasználói fiókjában, bejelentkezés után bármikor megtekinthető. A fizetésről szóló visszaigazolást és a számlát a Vásárló ugyanekkor, a megadott e-mail címre kapja meg. Ha a hozzáférés technikai okból a fizetéstől számított 24 órán belül sem válna elérhetővé, kérjük, jelezze a fenti elérhetőségeink valamelyikén: a KINETICARE legkésőbb a következő munkanapon manuálisan megnyitja a hozzáférést.',
+]
+
+/**
+ * A Barion-leírás és a teljesítési idő BESZÚRÁSA az élő ÁSZF-be.
+ *
+ * ═══ MIÉRT SZABAD EHHEZ HOZZÁNYÚLNI ═══
+ * A 6. javítás create-only szabálya (jogi oldalt a script sosem ír felül) a
+ * szöveg ÖNKÉNYES átírását tiltja. Ez a lépés a tulajdonos tételes
+ * utasítására, a Barion elfogadóhely-jóváhagyás KÖTELEZŐ tartalmi listája
+ * alapján PÓTOL hiányzó elemeket; a forrásfájl (`legal-source/aszf.txt`) már
+ * tartalmazza őket, az élő oldal viszont az adatbázisból jön, amit a 6.
+ * javítás sosem frissít.
+ *
+ * ═══ MIÉRT NEM TUD KÁRT OKOZNI ═══
+ *  - CSAK BESZÚR: egyetlen meglévő csomópontot sem módosít és nem távolít el.
+ *    A meglévő bekezdések VÁLTOZATLAN objektum-referenciaként kerülnek át,
+ *    tehát a 27%-os áfáról szóló mondathoz (és minden máshoz) hozzá sem ér.
+ *  - IDEMPOTENS: ha MINDHÁROM bekezdés már ott van, HALKAN kihagy.
+ *  - RÉSZLEGES állapotban nem dönt: ha a háromból csak néhány van meg (valaki
+ *    kézzel bemásolt egyet, vagy egy futás félbeszakadt), HANGOSAN kihagy —
+ *    duplikált jogi bekezdést sosem gyárt.
+ *  - a horgony csak akkor jó, ha PONTOSAN EGY bekezdés kezdődik vele; nulla
+ *    vagy több találatnál hangosan kihagy, és nem tippel.
+ */
+export const alkalmazAszfBarionKiegeszites = (
+  content: unknown,
+  ujBekezdesek: readonly string[] = ASZF_BARION_UJ_BEKEZDESEK,
+  horgonyKezdet: string = ASZF_BARION_HORGONY_KEZDET,
+): AszfLinkAtalakitas => {
+  const uzenet = 'Az ÁSZF Barion-leírása és teljesítési ideje'
+
+  const kihagyas = (indok: string, hangos = false): AszfLinkAtalakitas => ({
+    content: null,
+    modositasok: [],
+    kihagyasok: [{ szabaly: 'aszf-barion-es-teljesites', uzenet, indok, hangos }],
+  })
+
+  const gyoker =
+    typeof content === 'object' && content !== null
+      ? (content as { root?: { children?: unknown[] } }).root
+      : undefined
+  const gyerekek = Array.isArray(gyoker?.children) ? gyoker.children : null
+
+  if (gyerekek === null) {
+    return kihagyas(
+      'az ÁSZF tartalma nem a várt rich-text szerkezet — a script nem nyúl hozzá',
+      true,
+    )
+  }
+
+  const szovegek = gyerekek.map(bekezdesSzovege)
+  const meglevok = ujBekezdesek.filter((uj) => szovegek.includes(uj))
+
+  if (meglevok.length === ujBekezdesek.length) {
+    return kihagyas(
+      `mind a ${ujBekezdesek.length} bekezdés MÁR az ÁSZF-ben van (Barion-leírás és teljesítési idő) — nincs teendő`,
+    )
+  }
+  if (meglevok.length > 0) {
+    return kihagyas(
+      `a ${ujBekezdesek.length} bekezdésből ${meglevok.length} MÁR az ÁSZF-ben van, ${
+        ujBekezdesek.length - meglevok.length
+      } viszont hiányzik — részleges állapotban a script nem szúr be, mert duplikált jogi bekezdést gyártana; emberi átnézés kell`,
+      true,
+    )
+  }
+
+  const horgonyok = szovegek
+    .map((szoveg, index) => ({ szoveg, index }))
+    .filter(
+      (elem): elem is { szoveg: string; index: number } =>
+        elem.szoveg !== null && elem.szoveg.startsWith(horgonyKezdet),
+    )
+
+  if (horgonyok.length === 0) {
+    return kihagyas(
+      `a beszúrás horgonya (a ${roviditettIdezet(
+        horgonyKezdet,
+        80,
+      )} kezdetű bekezdés) nem található — a fizetési bekezdést azóta átírták, a script nem tippel, hova tegye a Barion-leírást`,
+      true,
+    )
+  }
+  if (horgonyok.length > 1) {
+    return kihagyas(
+      `${horgonyok.length} bekezdés is a horgony mondattal kezdődik — nem egyértelmű, melyik után kellene beszúrni; emberi döntés kell`,
+      true,
+    )
+  }
+
+  const { index } = horgonyok[0]
+  const ujCsomopontok = ujBekezdesek.map((szoveg) => para(szoveg))
+  const ujGyerekek = [
+    ...gyerekek.slice(0, index + 1),
+    ...ujCsomopontok,
+    ...gyerekek.slice(index + 1),
+  ]
+
+  return {
+    content: { ...(content as object), root: { ...gyoker, children: ujGyerekek } },
+    modositasok: [
+      {
+        szabaly: 'aszf-barion-es-teljesites',
+        uzenet: `${uzenet}: ${ujBekezdesek.length} ÚJ bekezdés beszúrása a ${
+          index + 1
+        }. bekezdés után (Barion-tájékoztató az MNB-engedélyszámmal, a fizetési mód gyakorlati leírása, és a teljesítés átlagos ideje). Meglévő bekezdés NEM módosul.`,
+        indok: null,
+      },
+    ],
+    kihagyasok: [],
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2666,9 +3072,17 @@ async function futtat(): Promise<void> {
     }
   }
 
-  // --- 14. javítás: az ÁSZF `[xxx]` helykitöltője ---------------------------
-  // Csak a MÁR LÉTEZŐ ÁSZF-oldalra vonatkozik: ha a lapot ez a futás hozta
-  // létre, a szöveg a forrásfájlból már a javított hivatkozással érkezett.
+  // --- 14. + 18. + 19. javítás: az ÁSZF élő szövegének javításai ------------
+  // Csak a MÁR LÉTEZŐ ÁSZF-oldalra vonatkoznak: ha a lapot ez a futás hozta
+  // létre, a szöveg a forrásfájlból már javítva érkezett.
+  //
+  // A három javítás LÁNCBAN fut (mindegyik az előző eredményén dolgozik), és
+  // EGYETLEN `payload.update` megy ki — külön írások külön verzió-bejegyzést
+  // hoznának létre ugyanarra a jogi oldalra.
+  //
+  // A SORREND KÖTÖTT: a 19. javítás horgonya a 18. javítás ÚJ, Barion-os
+  // mondata, ezért a 18. javításnak előbb kell lefutnia — különben egy még
+  // javítatlan (STRIPE-os) élő oldalon a beszúrásnak nem lenne horgonya.
   const aszfOldal = jogiTalalat.docs.find((doc) => doc.slug === 'aszf')
   if (aszfOldal !== undefined) {
     const aszfEredmeny = alkalmazAszfAdatvedelemLink(aszfOldal.content)
@@ -2676,11 +3090,25 @@ async function futtat(): Promise<void> {
     modositasokSzama += aszfEredmeny.modositasok.length
     kihagyasokSzama += aszfEredmeny.kihagyasok.length
 
-    if (aszfEredmeny.content !== null && !dryRun) {
+    const aszfTenyek = alkalmazAszfBekezdesCserek(aszfEredmeny.content ?? aszfOldal.content)
+    naplozdLepeseket(aszfTenyek, dryRun)
+    modositasokSzama += aszfTenyek.modositasok.length
+    kihagyasokSzama += aszfTenyek.kihagyasok.length
+
+    const aszfBarion = alkalmazAszfBarionKiegeszites(
+      aszfTenyek.content ?? aszfEredmeny.content ?? aszfOldal.content,
+    )
+    naplozdLepeseket(aszfBarion, dryRun)
+    modositasokSzama += aszfBarion.modositasok.length
+    kihagyasokSzama += aszfBarion.kihagyasok.length
+
+    const aszfVegsoTartalom = aszfBarion.content ?? aszfTenyek.content ?? aszfEredmeny.content
+
+    if (aszfVegsoTartalom !== null && !dryRun) {
       await payload.update({
         collection: 'pages',
         id: aszfOldal.id,
-        data: { content: aszfEredmeny.content as typeof aszfOldal.content },
+        data: { content: aszfVegsoTartalom as typeof aszfOldal.content },
         depth: 0,
         overrideAccess: true,
       })

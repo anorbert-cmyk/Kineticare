@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { BarionSessionSignUp } from '../analytics/BarionSessionSignUp'
 import { Button } from '../ui/Button'
 import { Container } from '../ui/Container'
 import { getNavTree } from '../../lib/menus'
@@ -52,6 +53,12 @@ export async function Header() {
   return (
     <header className="kc-site-header">
       <HeaderScrollFx />
+      {/* Barion Pixel: az ÁLLANDÓ (megjegyzett) bejelentkezéssel érkező
+          látogató munkamenet-nyitó, implicit `signUp`-ja — munkamenetenként
+          EGYSZER. A fejléc az egyetlen olyan, minden oldalon jelen lévő elem,
+          amely szerver-oldalon ismeri a hitelesítési bitet; a komponens semmit
+          nem renderel. Az indoklás a komponens fejkommentjében. */}
+      <BarionSessionSignUp signedIn={auth.signedIn} />
       <Container>
         <div className="kc-site-header__bar">
           <Link aria-label="Kineticare kezdőlap" className="kc-site-header__brand" href="/">

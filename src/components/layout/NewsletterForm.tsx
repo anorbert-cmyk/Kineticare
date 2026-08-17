@@ -6,6 +6,7 @@ import { useCallback, useState, type FormEvent } from 'react'
 import { TurnstileWidget } from '@/app/(frontend)/kapcsolat/_components/TurnstileWidget'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
+import { BARION_SIGNUP, trackSignUp, type BarionSignUpEvent } from '@/lib/analytics/barion-events'
 import { NEWSLETTER_CONSENT_TEXT, PRIVACY_POLICY_PATH } from '@/lib/newsletter/consent-text'
 import {
   buildNewsletterPayload,
@@ -13,6 +14,8 @@ import {
   NEWSLETTER_SUCCESS_MESSAGE,
   NEWSLETTER_TURNSTILE_PENDING_ERROR,
   submitNewsletterForm,
+  type NewsletterSubmissionPayload,
+  type NewsletterSubmitResult,
 } from '@/lib/newsletter/submit'
 import {
   EMPTY_NEWSLETTER_VALUES,
@@ -51,6 +54,51 @@ export interface NewsletterFormProps {
   formId: string
   /** TURNSTILE_SITE_KEY (szerver-oldalon olvasva); null/üres = widget rejtve. */
   turnstileSiteKey: string | null
+}
+
+/** A `trackedSubmitNewsletter` injektálható függőségei (a teszt kémeket ad be). */
+export interface TrackedNewsletterDeps {
+  submit: (payload: NewsletterSubmissionPayload) => Promise<NewsletterSubmitResult>
+  track: (event: BarionSignUpEvent) => boolean
+}
+
+/**
+ * Hírlevél-beküldés + Barion `signUp`.
+ *
+ * ═══ MIÉRT SIGNUP A FELIRATKOZÁS ═══
+ * A hivatalos leírás a hírlevél-feliratkozást is `signUp`-eseménynek tekinti
+ * („subscription”) — ugyanaz a szerződés, `contentType: 'Page'`, `step` nélkül.
+ *
+ * ═══ MIÉRT NEM FOGLAL MUNKAMENET-RETESZT ═══
+ * A feliratkozás NEM beléptetés: a látogató továbbra is kijelentkezve marad.
+ * A `trackAccountSignUp` (retesz-foglaló) változat itt hibás lenne — elnyelné
+ * a később, ugyanabban a munkamenetben történő valódi belépés implicit
+ * jelzését.
+ *
+ * ═══ MI MARAD KÍVÜL ═══
+ * A honeypot-ág (bot-gyanú) az űrlapban ELŐBB tér vissza, hálózati hívás
+ * nélkül — oda ez a függvény el sem jut, tehát botra sosem megy ki signUp.
+ * Ugyanígy a hiányzó Turnstile-token ága.
+ *
+ * A `track` hívás saját `try/catch`-ben fut: a mérés hibája nem ronthatja el a
+ * feliratkozást.
+ */
+export async function trackedSubmitNewsletter(
+  payload: NewsletterSubmissionPayload,
+  deps: TrackedNewsletterDeps = {
+    submit: submitNewsletterForm,
+    track: (event) => trackSignUp(event),
+  },
+): Promise<NewsletterSubmitResult> {
+  const result = await deps.submit(payload)
+  if (result.ok) {
+    try {
+      deps.track(BARION_SIGNUP.newsletter)
+    } catch {
+      // A mérés hibája nem érheti el a felhasználót.
+    }
+  }
+  return result
 }
 
 export function NewsletterForm({ formId, turnstileSiteKey }: NewsletterFormProps) {
@@ -104,7 +152,7 @@ export function NewsletterForm({ formId, turnstileSiteKey }: NewsletterFormProps
     }
 
     setSubmitting(true)
-    const result = await submitNewsletterForm(
+    const result = await trackedSubmitNewsletter(
       buildNewsletterPayload(values, formId, turnstileToken),
     )
     setSubmitting(false)

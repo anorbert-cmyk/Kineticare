@@ -193,6 +193,73 @@ export interface BarionSignUpPayload {
 }
 
 /**
+ * Egy NEM termék oldal `contentView` törzse (`contentType: 'Page'`).
+ *
+ * A termék-ág többlet-kötelezői (unitPrice, unit, currency, quantity) itt
+ * SZÁNDÉKOSAN nincsenek: a bp.js `validate` csak akkor kéri őket, ha a
+ * `contentType` értéke `'Product'` (a forrásban: `if (content_type ===
+ * 'Product') { … content_view_product_mandatory_attrs … }`). Egy kezdőlapra
+ * kitalált „egységár" hazug adat lenne a Barion riportjában.
+ */
+export interface BarionPageViewPayload {
+  contentType: 'Page'
+  id: string
+  name: string
+  list?: BarionList
+}
+
+/** Egy jelentendő signUp-esemény azonosítója és beszédes neve. */
+export interface BarionSignUpEvent {
+  id: string
+  name: string
+}
+
+/**
+ * A `signUp` eseményeink szótára.
+ *
+ * ═══ MIÉRT SIGNUP A BELÉPÉS IS ═══
+ * A hivatalos leírás szerint a `signUp` eseményt nemcsak az első
+ * regisztrációkor kell elküldeni, hanem a KÉSŐBBI belépéseknél is, és állandó
+ * (megjegyzett) bejelentkezésnél munkamenetenként EGYSZER egy implicit
+ * signUp-ot is — ez jelzi, hogy a munkamenetet bejelentkezett felhasználó
+ * nyitotta. A dokumentáció külön kimondja, hogy „it is more important for all
+ * signings up to send an event than for each signup to be sent only once”,
+ * tehát az ismétlődés kisebb baj, mint a hiányzó esemény.
+ *
+ * ═══ AZ AZONOSÍTÓK ═══
+ * Az `id` rövid, ÚTVONALTÓL FÜGGETLEN kulcs (nem URL): a Barion riportjában
+ * ez a sorok azonosítója, és nem szabad elmozdulnia attól, hogy egy oldal
+ * címe megváltozik. A `name` a magyar, emberi felirat.
+ *
+ * A `persistentLogin` neve szándékosan ugyanaz („Belépés”), mint a
+ * kifejezetté: a felhasználó szempontjából mindkettő belépés. Az `id`
+ * viszont különbözik, hogy a riportban elváljon a most beírt jelszóval
+ * történt belépés a megjegyzett munkamenettől.
+ */
+export const BARION_SIGNUP = {
+  registration: { id: 'regisztracio', name: 'Regisztráció' },
+  login: { id: 'belepes', name: 'Belépés' },
+  newsletter: { id: 'hirlevel-feliratkozas', name: 'Hírlevél feliratkozás' },
+  persistentLogin: { id: 'belepes-munkamenet', name: 'Belépés' },
+} as const satisfies Record<string, BarionSignUpEvent>
+
+/**
+ * A NEM termék oldalak `contentView` bemenetei.
+ *
+ * A `list` csak ott szerepel, ahol a bp.js kötött listájából
+ * (`['HomePage','SearchPage','ProductPage','Recommendation','ComparisonPage',
+ * 'BasketPage','Checkout','Misc']`) van RÁILLŐ érték. A kurzuslistára és a
+ * Tudástárra egyik felsorolt érték sem illik pontosan, és a `'Misc'` nem mond
+ * többet a hiányzó mezőnél — a találgatás helyett inkább elhagyjuk. A
+ * `'ProductPage'` a kurzus-oldalé (CourseBarionView), ide nem való.
+ */
+export const BARION_PAGE_VIEW = {
+  home: { id: 'kezdolap', name: 'Kezdőlap', list: 'HomePage' },
+  courseList: { id: 'kurzusok', name: 'Kurzusok' },
+  knowledgeBase: { id: 'tudastar', name: 'Tudástár' },
+} as const satisfies Record<string, BarionPageViewInput>
+
+/**
  * Érvényes-e a pénzösszeg. A `null`/`undefined`/NaN/negatív értéket elutasítjuk:
  * a pixel `to_float` mezői valódi számot várnak, és a hibás összeg a
  * bevétel-riportot rontaná el.
@@ -373,6 +440,37 @@ export function buildSignUpPayload(input: {
   return { contentType: 'Page', id, name }
 }
 
+/** Egy NEM termék oldal megtekintésének bemenete. */
+export interface BarionPageViewInput {
+  id: string
+  name: string
+  list?: BarionList
+}
+
+/**
+ * `contentView` a NEM termék oldalakra (`contentType: 'Page'`).
+ *
+ * A `unitPrice` / `unit` / `currency` / `quantity` KIMARAD: a bp.js ezeket
+ * csak a `'Product'` ágon követeli meg, viszont a `contentView`
+ * `type_conversion` táblája ismeri őket, tehát elküldve NEM hibáznának — csak
+ * hazudnának (egy kezdőlapnak nincs ára). A `totalItemPrice` és a `revenue`
+ * ellenben ISMERETLEN kulcs a `contentView`-ban: azokat a pixel 13-as hibával
+ * eldobná.
+ */
+export function buildPageViewPayload(input: BarionPageViewInput): BarionPageViewPayload | null {
+  const id = cleanText(input.id)
+  const name = cleanText(input.name)
+  if (id === null || name === null) {
+    return null
+  }
+  return {
+    contentType: 'Page',
+    id,
+    name,
+    ...(input.list !== undefined ? { list: input.list } : {}),
+  }
+}
+
 /**
  * A KIMENŐ hívás egyetlen kapuja.
  *
@@ -384,6 +482,7 @@ export function buildSignUpPayload(input: {
 export type BarionEventPayload =
   | BarionContentViewPayload
   | BarionFunnelPayload
+  | BarionPageViewPayload
   | BarionPaymentInfoPayload
   | BarionSignUpPayload
 
@@ -463,6 +562,21 @@ export function trackSignUp(
   send: BarionPixelSend = bp,
 ): boolean {
   return sendBarionEvent('signUp', buildSignUpPayload(input), send)
+}
+
+/**
+ * NEM termék oldal megtekintésének küldése.
+ *
+ * A termékoldal `contentView`-ját NEM ez adja, hanem a `trackContentView`
+ * (`components/courses/CourseBarionView.tsx`). A két küldő szándékosan külön
+ * van: egy oldalon PONTOSAN az egyik fut, így a termékoldalon nem mehet ki két
+ * `contentView`.
+ */
+export function trackPageView(
+  input: BarionPageViewInput,
+  send: BarionPixelSend = bp,
+): boolean {
+  return sendBarionEvent('contentView', buildPageViewPayload(input), send)
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -592,4 +706,100 @@ export function browserSnapshotStorage(): BarionSnapshotStorage | null {
   } catch {
     return null
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   MUNKAMENETENKÉNT EGYSZER — AZ IMPLICIT (ÁLLANDÓ BEJELENTKEZÉSŰ) SIGNUP
+   ════════════════════════════════════════════════════════════════════════
+
+   Megjegyzett bejelentkezésnél a látogató belépési űrlap NÉLKÜL érkezik, tehát
+   a fejlécnek kell jeleznie, hogy a munkamenetet bejelentkezett felhasználó
+   nyitotta. Ez azonban MUNKAMENETENKÉNT EGY esemény, nem oldalletöltésenként
+   egy: az utóbbi a Barion riportjában néma zajjá tenné a belépés-számot.
+
+   A retesz KÉT rétegű, mert egyik réteg sem elég önmagában:
+    - `sessionStorage` — túléli a teljes oldalletöltéseket (a Next.js
+      szerver-renderelt navigációit), és a fül bezárásakor magától elmúlik.
+      Pontosan a „munkamenet” fogalmát fedi. Viszont hiányozhat: kikapcsolt
+      tároló, privát mód kvótahibája, SSR.
+    - modul-szintű memória — a tároló hiányában is megfogja az ugyanazon a
+      dokumentumon belüli ismétlést (kliensoldali útvonalváltás, React
+      StrictMode kettős effekt-futása fejlesztésben).
+
+   A retesz sosem dob: a `getItem`/`setItem` hibája a mérés ügye, nem a
+   látogatóé. */
+
+/**
+ * A munkamenet-retesz `sessionStorage`-kulcsa. SAJÁT előtag: a kosár-pillanatkép
+ * (`kc_barion_checkout:`) más életciklusú adat, a két kulcstér nem keveredhet.
+ */
+export const BARION_SESSION_SIGNUP_KEY = 'kc_barion_signup:session'
+
+/** A memória-retesztől elvárt felület (a `Set<string>` metszete). */
+export interface BarionOnceLatch {
+  has: (key: string) => boolean
+  add: (key: string) => void
+}
+
+/**
+ * A modul-szintű memória-retesz. SZÁNDÉKOSAN nem exportált: a tesztek a
+ * `claimBarionSessionSignUp` utolsó paraméterén adnak be sajátot, így nem kell
+ * teszt-célú „reset” függvényt közzétenni, és két teszt sem szennyezi egymást.
+ */
+const barionMemoryLatch: BarionOnceLatch = new Set<string>()
+
+/**
+ * Elfoglalja a munkamenet signUp-reteszét.
+ *
+ * @returns `true`, ha MOST kell elküldeni a signUp-ot (ebben a munkamenetben
+ *   még nem ment ki), `false`, ha már megtörtént.
+ */
+export function claimBarionSessionSignUp(
+  storage: BarionSnapshotStorage | null,
+  latch: BarionOnceLatch = barionMemoryLatch,
+): boolean {
+  if (latch.has(BARION_SESSION_SIGNUP_KEY)) {
+    return false
+  }
+  latch.add(BARION_SESSION_SIGNUP_KEY)
+  if (storage === null) {
+    return true
+  }
+  try {
+    if (storage.getItem(BARION_SESSION_SIGNUP_KEY) !== null) {
+      return false
+    }
+  } catch {
+    // Olvashatatlan tároló: marad a memória-retesz — inkább egy esemény
+    // dokumentumonként, mint egy sem.
+    return true
+  }
+  try {
+    storage.setItem(BARION_SESSION_SIGNUP_KEY, '1')
+  } catch {
+    // Kvótahiba/privát mód: a memória-retesz így is megfogja az ismétlést.
+  }
+  return true
+}
+
+/**
+ * A KIFEJEZETT belépés/regisztráció signUp-ja.
+ *
+ * Az esemény MINDIG kimegy (ez a felhasználó tényleges cselekvése), és mellette
+ * elfoglalja a munkamenet-reteszt is: a beléptetés utáni átirányításkor a
+ * fejléc implicit, munkamenet-nyitó signUp-ja már ugyanazt a belépést
+ * jelentené másodszor.
+ *
+ * A hírlevél-feliratkozás NEM ezen megy: az nem beléptetés, tehát nem foglalhat
+ * munkamenet-reteszt.
+ */
+export function trackAccountSignUp(
+  event: BarionSignUpEvent,
+  send: BarionPixelSend = bp,
+  storage: BarionSnapshotStorage | null = browserSnapshotStorage(),
+  latch: BarionOnceLatch = barionMemoryLatch,
+): boolean {
+  const sent = trackSignUp(event, send)
+  claimBarionSessionSignUp(storage, latch)
+  return sent
 }

@@ -12,6 +12,7 @@ import {
   type BarionCourseInput,
   type BarionSnapshotStorage,
 } from '@/lib/analytics/barion-events'
+import { BarionFizetesJelzes } from '@/components/checkout/BarionFizetesJelzes'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Field } from '@/components/ui/Field'
@@ -493,6 +494,23 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
           </p>
         </Card>
       )}
+
+      {/*
+        FIZETÉSI SZOLGÁLTATÓ — a hivatalos Barion logósor és a folyamat
+        leírása, KÖZVETLENÜL a fizetőgomb fölött.
+
+        Miért itt: ez az utolsó dolog, amit a vevő a kattintás előtt elolvas, és
+        itt derül ki neki, hogy elhagyja az oldalt. Baymard („placing 1-2 icons
+        within the encapsulated area performs well…") és NN/g Upfront Disclosure
+        — a hivatkozások és az idézetek a BarionFizetesJelzes fejkommentjében.
+        Egyben a Barion elfogadóhely-jóváhagyás kötelező tétele a fizetési
+        oldalon.
+
+        INGYENES terméknél NEM jelenik meg: ott nincs fizetés, nem megy Barion
+        felé semmi, és a jelzés hazugság lenne (docs/ui-sztenderdek.md: „a
+        felirat legyen igaz").
+      */}
+      {product.isFree ? null : <BarionFizetesJelzes hely="penztar" />}
 
       {/*
         A FIZETŐGOMB LETILTÁSA — mit tiltunk le és mit nem (2026-08-16-i

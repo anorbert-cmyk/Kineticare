@@ -3,6 +3,7 @@ import type { AppointmentSectionContext } from '../../lib/appointment/context'
 import { faqPageJsonLd, organizationJsonLd } from '../../lib/seo'
 import { HERO_VIDEO_STREAM_ID } from '../../lib/hero-video'
 import { SectionReveal } from '../motion/SectionReveal'
+import { BarionFizetesJelzes } from '../checkout/BarionFizetesJelzes'
 import { RenderBlocks } from '../blocks/RenderBlocks'
 import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
@@ -54,6 +55,12 @@ import { RichText } from '../lexical/RichText'
  * M8 Gyakori kérdések — ellenérv-kezelés a lap alján (Faq; a FAQPage JSON-LD
  *    miatt a szekció főoldali jelenléte SEO-kötelezettség, lásd
  *    docs/seo-geo-llm.md).
+ * M9 Fizetési bizalmi csík (BarionFizetesJelzes) — a hivatalos Barion logósor
+ *    és a fizetés menete, a lábléc FÖLÖTT. Halk, hajszálvonalas csík: bizalmi
+ *    jelzés, nem értékesítő szekció, ezért nem előzheti meg a kurzus-blokkot.
+ *    A Barion elfogadóhely-jóváhagyásának kötelező tétele a FŐOLDALON, ezért
+ *    MINDKÉT ágon (rögzített M1–M8 és CMS-szekciósor) renderelődik: a
+ *    szerkesztő a szekciósorral nem tudja véletlenül kikapcsolni.
  * A kapcsolat/footer a layoutban él, itt érintetlen.
  *
  * MOZGÁS: a szekciók halk belépőt kapnak (SectionReveal + styles/motion.css) —
@@ -138,6 +145,7 @@ export function HomeView({
           products={products}
           testimonials={testimonials}
         />
+        <BarionFizetesJelzes hely="kezdolap" />
         <SectionReveal />
       </>
     )
@@ -193,6 +201,8 @@ export function HomeView({
       />
 
       <Faq />
+
+      <BarionFizetesJelzes hely="kezdolap" />
 
       <SectionReveal />
     </>
