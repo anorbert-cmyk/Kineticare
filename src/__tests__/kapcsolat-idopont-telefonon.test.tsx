@@ -8,7 +8,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { appointment } from '../blocks'
 import { Appointment } from '../components/blocks/Appointment'
 import { appointmentShowsForm, layoutHasAppointmentBlock } from '../lib/appointment/context'
-import { alkalmazKapcsolatTelefonosIdopont } from '../scripts/apply-owner-content'
+import { HOME_IMAGES } from '../lib/home-seed'
+import {
+  alkalmazKapcsolatTelefonosIdopont,
+  alkalmazSzolgaltatasBlokkKep,
+} from '../scripts/apply-owner-content'
 import type { BlockAppointment, Page } from '../payload-types'
 
 /**
@@ -389,5 +393,107 @@ describe('18. tartalom-javítás: a /kapcsolat átállítása telefonosra', () =
     const ures = alkalmazKapcsolatTelefonosIdopont([])
     expect(ures.layout).toBeNull()
     expect(ures.kihagyasok[0]?.hangos).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 6. A 19. javítás — fotó a szolgáltatás-szekciókba
+// ---------------------------------------------------------------------------
+
+describe('19. tartalom-javítás: fotó a szolgáltatás-szekcióba', () => {
+  const layoutKeppel = (kep: number | null) =>
+    [
+      { blockType: 'welcome' as const, title: 'Bevezető' },
+      { blockType: 'services' as const, title: 'Miben segíthetünk?', image: kep },
+    ] as unknown as NonNullable<Page['layout']>
+
+  const kep = (layout: NonNullable<Page['layout']> | null) => {
+    const blokk = layout?.find((b) => b.blockType === 'services')
+    return blokk?.blockType === 'services' ? blokk.image : undefined
+  }
+
+  it('ÜRES képhelyet kitölt', () => {
+    const e = alkalmazSzolgaltatasBlokkKep({
+      layout: layoutKeppel(null),
+      mediaId: 77,
+      oldalCimke: '/rolunk',
+      cserelheto: false,
+    })
+    expect(kep(e.layout)).toBe(77)
+    expect(e.modositasok).toHaveLength(1)
+  })
+
+  it('MEGLÉVŐ képet csak akkor cserél, ha ezt kifejezetten kérik', () => {
+    const ovatos = alkalmazSzolgaltatasBlokkKep({
+      layout: layoutKeppel(12),
+      mediaId: 77,
+      oldalCimke: '/rolunk',
+      cserelheto: false,
+    })
+    expect(ovatos.layout).toBeNull()
+    expect(ovatos.kihagyasok[0]?.hangos).toBe(false)
+
+    const csere = alkalmazSzolgaltatasBlokkKep({
+      layout: layoutKeppel(12),
+      mediaId: 77,
+      oldalCimke: '/szolgaltatasok',
+      cserelheto: true,
+    })
+    expect(kep(csere.layout)).toBe(77)
+    expect(csere.modositasok[0]?.uzenet).toContain('a Médiatárban marad')
+  })
+
+  it('IDEMPOTENS: ugyanazzal a képpel már nem ír', () => {
+    const e = alkalmazSzolgaltatasBlokkKep({
+      layout: layoutKeppel(77),
+      mediaId: 77,
+      oldalCimke: '/rolunk',
+      cserelheto: true,
+    })
+    expect(e.layout).toBeNull()
+    expect(e.kihagyasok[0]?.hangos).toBe(false)
+    expect(e.kihagyasok[0]?.indok).toContain('MÁR ezt a képet')
+  })
+
+  it('hiányzó média, hiányzó vagy kétszeres szekció esetén HANGOSAN kihagy', () => {
+    const nincsMedia = alkalmazSzolgaltatasBlokkKep({
+      layout: layoutKeppel(null),
+      mediaId: null,
+      oldalCimke: '/rolunk',
+      cserelheto: false,
+    })
+    expect(nincsMedia.layout).toBeNull()
+    expect(nincsMedia.kihagyasok[0]?.hangos).toBe(true)
+
+    const nincsSzekcio = alkalmazSzolgaltatasBlokkKep({
+      layout: [{ blockType: 'welcome' }] as unknown as NonNullable<Page['layout']>,
+      mediaId: 77,
+      oldalCimke: '/rolunk',
+      cserelheto: false,
+    })
+    expect(nincsSzekcio.layout).toBeNull()
+    expect(nincsSzekcio.kihagyasok[0]?.hangos).toBe(true)
+
+    const ketto = alkalmazSzolgaltatasBlokkKep({
+      layout: [
+        { blockType: 'services', image: null },
+        { blockType: 'services', image: null },
+      ] as unknown as NonNullable<Page['layout']>,
+      mediaId: 77,
+      oldalCimke: '/rolunk',
+      cserelheto: false,
+    })
+    expect(ketto.layout).toBeNull()
+    expect(ketto.kihagyasok[0]?.hangos).toBe(true)
+  })
+
+  it('a két fotó a seed képlistájában van, magyar alt-szöveggel', () => {
+    for (const fajl of ['kezeles-kezen.jpg', 'katak-labdaval.jpg']) {
+      const bejegyzes = HOME_IMAGES.find((kepSor) => kepSor.file === fajl)
+      expect(bejegyzes, `${fajl}: a HOME_IMAGES-ben kell lennie`).toBeDefined()
+      // Enélkül az induláskori önjavítás nem tudná visszatölteni kötetvesztés
+      // után, és a kép a Médiatárból pótolhatatlanul eltűnne.
+      expect(bejegyzes?.alt.length ?? 0).toBeGreaterThan(20)
+    }
   })
 })

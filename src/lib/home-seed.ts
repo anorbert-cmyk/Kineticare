@@ -114,6 +114,21 @@ export const HOME_IMAGES = [
     dir: 'site',
     alt: 'Kiss Kata és Kocsis Kata, a KinetiCare gyógytornászai',
   },
+  // A tulajdonos által kiválogatott fotóanyagból (2026-08-17). A kezdőlap nem
+  // hivatkozik rájuk, de a listában a helyük: innen dolgozik az induláskori
+  // média-feltöltés ÉS a fájl-szintű önjavítás is (src/lib/media-restore.ts) —
+  // vagyis a repó a forrásuk, tehát egy kötetvesztés után is visszaállnak.
+  // Ugyanez az elv, ami miatt a /rolunk fejlécképe (`katak-team.jpg`) is itt él.
+  {
+    file: 'kezeles-kezen.jpg',
+    dir: 'brand',
+    alt: 'Gyógytornász a páciens kezét kezeli a rendelőben, kék terápiás alátéten',
+  },
+  {
+    file: 'katak-labdaval.jpg',
+    dir: 'brand',
+    alt: 'Kiss Kata és Kocsis Kata gyakorlat közben, tornalabdával és habhengerrel',
+  },
   { file: 'press-noklapja.png', dir: 'site', alt: 'A Nők Lapja logója' },
   { file: 'press-karc.png', dir: 'site', alt: 'A Karc FM logója' },
   { file: 'press-hazipatika.png', dir: 'site', alt: 'A Házipatika logója' },
