@@ -4,6 +4,14 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/Button'
+import {
+  browserSnapshotStorage,
+  forgetCheckoutSnapshot,
+  readCheckoutSnapshot,
+  trackPurchase,
+  type BarionCourseInput,
+  type BarionSnapshotStorage,
+} from '@/lib/analytics/barion-events'
 import { captureAnalyticsEvent } from '@/lib/analytics/posthog'
 import { checkoutHref } from '../../lib/courses'
 import { pollOrderStatus } from '../../lib/order-status-poll'
@@ -18,6 +26,59 @@ import { pollOrderStatus } from '../../lib/order-status-poll'
  */
 export interface ThankYouViewProps {
   orderNumber: string | null
+}
+
+/** A `purchase` esemény injektálható függőségei (teszthez). */
+export interface BarionPurchaseDeps {
+  storage: () => BarionSnapshotStorage | null
+  read: (storage: BarionSnapshotStorage | null, orderNumber: string) => BarionCourseInput | null
+  track: (
+    course: BarionCourseInput,
+    input: { orderNumber: string | null; succeeded: boolean },
+  ) => boolean
+  forget: (storage: BarionSnapshotStorage | null, orderNumber: string) => void
+}
+
+/**
+ * ═══ BARION PIXEL — `purchase`, a folyamat ZÁRÓ eseménye ═══
+ *
+ * A `step` hordozza a kimenetelt: sikeres fizetésnél a lezáró lépés,
+ * SIKERTELENNÉL `-1`. Enélkül a Barion a meghiúsult fizetést is bevételnek
+ * látná — ez a fajta hiba néma, ezért van rá külön őr-teszt.
+ *
+ * A kosár-adat a pénztárban eltett PILLANATKÉPBŐL jön: a státusz-végpont csak
+ * a státuszt és a termék-id-t adja vissza, a `purchase`-nek viszont kötelező a
+ * `contents`, a `revenue` és a `currency`. Ha a pillanatkép hiányzik — más
+ * fülön/eszközön nyitott köszönőoldal, kikapcsolt tároló —, az esemény
+ * KIMARAD: csonka, kötelező kulcsok nélküli eseményt küldeni rosszabb, mint
+ * nem küldeni semmit (a pixel úgyis eldobná, csak hibát naplózva).
+ *
+ * A pillanatképet a kiküldés után eldobjuk, hogy az oldal újratöltése ne
+ * duplázza meg a konverziót.
+ *
+ * KÜLÖN, EXPORTÁLT FÜGGVÉNY: a köszönőoldal állapotgépe a poll-effekt
+ * belsejében fut, amit DOM nélkül (jsdom nincs telepítve) nem lehet
+ * lefuttatni — így viszont mindkét ág (siker / bukás) valódi állítással
+ * ellenőrizhető.
+ */
+export function emitBarionPurchase(
+  orderNumber: string,
+  succeeded: boolean,
+  deps: BarionPurchaseDeps = {
+    storage: browserSnapshotStorage,
+    read: readCheckoutSnapshot,
+    track: trackPurchase,
+    forget: forgetCheckoutSnapshot,
+  },
+): boolean {
+  const storage = deps.storage()
+  const course = deps.read(storage, orderNumber)
+  if (course === null) {
+    return false
+  }
+  const sent = deps.track(course, { orderNumber, succeeded })
+  deps.forget(storage, orderNumber)
+  return sent
 }
 
 const POLL_INTERVAL_MS = 2000
@@ -108,6 +169,12 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
     let attempts = 0
     const startedAt = Date.now()
 
+    // A Barion `purchase` a kimenetel ELDŐLTEKOR megy ki (a szerződést és az
+    // indoklást a modul-szintű `emitBarionPurchase` fejkommentje írja le). Az
+    // alias azért kell, mert a `tick` zárványában a `string | null` prop
+    // szűkítése már nem él.
+    const pixelOrderNumber: string = orderNumber
+
     const tick = async (): Promise<void> => {
       if (cancelled) {
         return
@@ -124,10 +191,12 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
           setState({ kind: 'paid' })
           // PostHog funnel-záró esemény (no-op consent nélkül).
           captureAnalyticsEvent('purchase_confirmed', { orderNumber })
+          emitBarionPurchase(pixelOrderNumber, true)
           return
         }
         if (status === 'cancelled' || status === 'payment_failed') {
           setState({ kind: 'failed', status, productId: result.productId })
+          emitBarionPurchase(pixelOrderNumber, false)
           return
         }
       } else if (result.kind === 'not-found') {

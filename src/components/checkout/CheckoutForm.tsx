@@ -1,8 +1,17 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 
+import {
+  browserSnapshotStorage,
+  rememberCheckoutSnapshot,
+  trackAddPaymentInfo,
+  trackInitiateCheckout,
+  trackInitiatePurchase,
+  type BarionCourseInput,
+  type BarionSnapshotStorage,
+} from '@/lib/analytics/barion-events'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Field } from '@/components/ui/Field'
@@ -25,7 +34,13 @@ import {
   type BillingFieldErrors,
   type GuestFieldErrors,
 } from '../../lib/checkout/form-submission'
-import { submitCheckout, type CheckoutUser, type CheckoutProduct } from '../../lib/checkout-submit'
+import {
+  submitCheckout,
+  type CheckoutProduct,
+  type CheckoutSubmitInput,
+  type CheckoutSubmitResult,
+  type CheckoutUser,
+} from '../../lib/checkout-submit'
 
 /**
  * A beküldést gátló feltétel magyarázatának elem-azonosítója. A gomb
@@ -83,6 +98,88 @@ const redirectToGateway = (gatewayUrl: string): void => {
 }
 
 /**
+ * A pénztár terméke → a Barion Pixel tétel-leírása.
+ *
+ * Az ár hiánya KÉT külön eset. Ingyenes kurzusnál a 0 a valós érték (a
+ * `revenue: 0` legitim adat). Fizetős kurzusnál a hiányzó ár konfigurációs
+ * hiba: ilyenkor `NaN` megy tovább, amit a `barion-events` érvénytelennek lát,
+ * és az eseményt EL SEM KÜLDI. Kitalált (pl. 0 forintos) ár helyett a csend a
+ * helyes válasz — az hamis bevételi adatot rögzítene.
+ */
+export function checkoutBarionCourse(product: CheckoutProduct): BarionCourseInput {
+  return {
+    id: product.id,
+    name: product.sku,
+    priceHuf: product.priceHuf ?? (product.isFree ? 0 : Number.NaN),
+    quantity: 1,
+  }
+}
+
+/** A követéssel BURKOLT beküldés injektálható függőségei (teszthez). */
+export interface TrackedSubmitDeps {
+  submit: (body: CheckoutSubmitInput) => Promise<CheckoutSubmitResult>
+  storage: () => BarionSnapshotStorage | null
+  addPaymentInfo: (course: BarionCourseInput) => boolean
+  initiatePurchase: (course: BarionCourseInput, orderNumber: string | null) => boolean
+  remember: (
+    storage: BarionSnapshotStorage | null,
+    orderNumber: string,
+    course: BarionCourseInput,
+  ) => boolean
+}
+
+/**
+ * A beküldés Barion-követéssel BURKOLT változata.
+ *
+ * KÜLÖN, EXPORTÁLT GYÁR, szándékosan: a `form-submission.ts` fejkommentje
+ * rögzíti a tanulságot — a MAG és a KOMPONENS KÖZTI huzalozás az a pont, amit
+ * mutációval el lehet rontani úgy, hogy a teljes suite zöld marad. Ha ez a
+ * burkoló a `deps`-objektumba beágyazott névtelen függvény lenne, a
+ * „valóban kimegy-e az `addPaymentInfo` és az `initiatePurchase`" kérdésre
+ * DOM nélkül nem lehetne állítást írni (jsdom nincs telepítve).
+ *
+ * A követés BURKOL, nem helyettesít: a `submitCheckout` eredménye
+ * változatlanul megy tovább, és egyetlen Pixel-hívás sem dobhat (a
+ * `barion-events` `sendBarionEvent`-je elnyeli a hibát) — a vásárlás így
+ * akkor is végigmegy, ha a mérés elszáll. Az átirányítás útvonala
+ * (`redirect`) érintetlen.
+ *
+ * MIÉRT ITT MEGY KI AZ `initiatePurchase`: a rendelésszám CSAK a szerver
+ * válaszából derül ki, a `createCheckoutSubmitHandler` pedig az `ok`
+ * eredményre feltétel nélkül, azonnal meghívja a `redirect`-et — ez tehát
+ * pontosan az a pillanat, amikor a vevőt a Barion Smart Gateway-re küldjük.
+ * (Refben átadni a rendelésszámot nem lehet: a `deps` objektum a
+ * render-scope-ban készül, ref olvasása onnan a React-fordító szabályába
+ * ütközik.)
+ *
+ * Ugyanitt tesszük el a kosár PILLANATKÉPÉT: a köszönőoldal a visszatérés
+ * után már nem tudná, mit vettek (a státusz-végpont csak a státuszt és a
+ * termék-id-t adja), a `purchase` eseménynek viszont KÖTELEZŐ a `contents`,
+ * a `revenue` és a `currency`.
+ */
+export function trackedSubmitCheckout(
+  product: CheckoutProduct,
+  deps: TrackedSubmitDeps = {
+    submit: submitCheckout,
+    storage: browserSnapshotStorage,
+    addPaymentInfo: trackAddPaymentInfo,
+    initiatePurchase: trackInitiatePurchase,
+    remember: rememberCheckoutSnapshot,
+  },
+): (body: CheckoutSubmitInput) => Promise<CheckoutSubmitResult> {
+  return async (body) => {
+    const course = checkoutBarionCourse(product)
+    deps.addPaymentInfo(course)
+    const result = await deps.submit(body)
+    if (result.ok) {
+      deps.remember(deps.storage(), result.orderNumber, course)
+      deps.initiatePurchase(course, result.orderNumber)
+    }
+    return result
+  }
+}
+
+/**
  * A beküldési hiba élő régiója — az űrlap tetején.
  *
  * MINDIG renderelődik (üresen is), nem csak hibakor: a dinamikusan BESZÚRT
@@ -132,6 +229,26 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
   const isGuest = user === null
   const [guest, setGuest] = useState(emptyGuestForm)
   const [guestErrors, setGuestErrors] = useState<GuestFieldErrors>({})
+
+  /**
+   * ═══ BARION PIXEL — a tölcsér középső szakasza ═══
+   * A pénztár MEGNYITÁSA az `initiateCheckout` (1. lépés). A `contentView` a
+   * kurzusoldalon, a `purchase` a köszönőoldalon megy ki; a köztes két lépés
+   * (`addPaymentInfo`, `initiatePurchase`) itt, a beküldési láncba fűzve — a
+   * `createCheckoutSubmitHandler` viselkedésének módosítása NÉLKÜL: a követés
+   * a `submit` függvényt BURKOLJA, nem írja át, és az átirányítás útvonala
+   * (`redirect`) érintetlen marad.
+   */
+  useEffect(() => {
+    trackInitiateCheckout(
+      checkoutBarionCourse({
+        id: product.id,
+        sku: product.sku,
+        priceHuf: product.priceHuf,
+        isFree: product.isFree,
+      }),
+    )
+  }, [product.id, product.sku, product.priceHuf, product.isFree])
 
   const requiresWaiver = !product.isFree
   const waiverComplete = !requiresWaiver || (waiverStart && waiverLoss)
@@ -189,7 +306,7 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
     setGuestErrors,
     setSubmitting,
     focusElement,
-    submit: submitCheckout,
+    submit: trackedSubmitCheckout(product),
     redirect: redirectToGateway,
   })
 
