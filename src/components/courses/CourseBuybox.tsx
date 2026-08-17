@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 import type { Product } from '../../payload-types'
 import { Badge } from '../ui/Badge'
@@ -67,6 +67,20 @@ export interface CourseBuyboxProps {
    */
   product: Pick<Product, 'id' | 'status' | 'priceInHUF' | 'priceInHUFEnabled'>
   hasPurchased: boolean
+  /**
+   * A CTA HELYÉRE kerülő egyedi tartalom. Megadva a `CourseCta` állapotgép
+   * helyett ez renderelődik, ugyanazon a helyen és ugyanabban a sorrendben
+   * (ár → cselekvés → előnyök), tehát a kutatás szerinti felépítés nem sérül.
+   *
+   * MA EGY HÍVÓJA VAN: az INGYENES kurzus igénylő űrlapja
+   * (`FreeCourseRequestForm`). Ott a cselekvés nem link, hanem beküldés (név +
+   * e-mail → hozzáférés + belépő link), amit egy `href`-alapú gomb nem tud
+   * kifejezni. A doboz többi eleme (cím, lead, „Ingyenes" címke, előnyök,
+   * garancia) változatlan marad — ezért slot, nem külön doboz.
+   *
+   * Ha nincs megadva, a viselkedés BITRE a korábbi: `CourseCta`.
+   */
+  ctaSlot?: ReactNode
 }
 
 export function CourseBuybox({
@@ -84,6 +98,7 @@ export function CourseBuybox({
   secondaryLabel,
   product,
   hasPurchased,
+  ctaSlot,
 }: CourseBuyboxProps) {
   return (
     <div className="kc-card kc-card--padded kc-course-buybox" id={id}>
@@ -103,7 +118,7 @@ export function CourseBuybox({
         <p className="kc-course-buybox__price kc-course-buybox__price--free">Ingyenes</p>
       ) : null}
 
-      <CourseCta hasPurchased={hasPurchased} id={ctaId} product={product} />
+      {ctaSlot ?? <CourseCta hasPurchased={hasPurchased} id={ctaId} product={product} />}
 
       {highlights.length > 0 ? (
         <ul className="kc-course-checklist" role="list">

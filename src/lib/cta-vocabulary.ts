@@ -69,6 +69,7 @@ export type CtaAction =
   | 'call-specialist'
   | 'appointment-request-link'
   | 'appointment-submit'
+  | 'free-course-request'
 
 /** A P-1 szabály szerinti nyelvtani alak – auditálható, ezért a szótár tárolja. */
 export type CtaPerson =
@@ -404,6 +405,28 @@ export const CTA_VOCABULARY = [
     section: '#25',
     action: 'appointment-submit',
     label: 'Időpontot kérek',
+    person: 'e1',
+    weight: 'primary',
+    progress: 'send',
+    patterned: false,
+  },
+  {
+    // §3.2 #26 (ÚJ) – az INGYENES kurzus igénylő űrlapjának BEKÜLDÉSE.
+    // P-1a → E/1: a beküldéssel hozzáférés keletkezik és levél indul a
+    // látogatónak, tehát a nála lévő dolgokban változik valami.
+    //
+    // MIÉRT NEM a #3 (`Elindítom ingyen`): az NAVIGÁCIÓS gomb (a kezdőlapról a
+    // kurzus oldalára visz), ez pedig a VÁLLALÁS gombja. Ugyanaz a kettősség,
+    // mint a #24 ↔ #25 párnál, tehát a WCAG 2.2 3.2.4 nem sérül: két
+    // különböző funkció, két felirat.
+    //
+    // A régi www.kineticare.hu ugyanezt a szerkezetet vitte a `/kezrelax`
+    // landingen (`KÉREM A VILLÁMKURZUST`, mérve: docs/regi-oldal-
+    // osszehasonlitas.md 3.1) — Jakob törvénye. A tárgy SZÁNDÉKOSAN általános
+    // („a kurzust"), mert az űrlap minden ingyenes terméken megjelenhet.
+    section: '#26',
+    action: 'free-course-request',
+    label: 'Kérem a kurzust',
     person: 'e1',
     weight: 'primary',
     progress: 'send',
