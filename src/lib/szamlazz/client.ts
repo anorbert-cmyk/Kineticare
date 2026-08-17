@@ -122,7 +122,32 @@ export function getSzamlazzConfig(env: SzamlazzEnv = process.env): SzamlazzClien
   // (A fragment szándékosan kimarad — a hálózatra amúgy sem megy ki.)
   const normalizedApiUrl = parsed.origin + parsed.pathname.replace(/\/*$/, '/') + parsed.search
 
-  const rawVatMode = readEnv(env, 'SZAMLAZZ_AFAKULCS') ?? '27'
+  /**
+   * ÁFAKULCS — élesben KÖTELEZŐ, alapértelmezés nélkül.
+   *
+   * MIÉRT NINCS CSENDES ALAPÉRTELMEZÉS (2026-08-17): korábban a hiányzó kulcs
+   * némán `'27'`-re esett. Egy alanyi adómentes eladónál ez a legrosszabb fajta
+   * hiba: nem száll el semmi, nem naplóz semmit, csak minden kiállított számla
+   * rossz áfakulccsal megy ki, és a bizonylat utólag csak helyesbítővel
+   * javítható. Egy adószámot senki nem gépel be „véletlenül helyesen" —
+   * az áfakulcsot viszont pont ilyen könnyű elfelejteni.
+   *
+   * A szigor CSAK akkor él, ha a számlázás TÉNYLEG be van kapcsolva (van
+   * agent-kulcs). Kikapcsolt számlázásnál nincs bizonylat, tehát nincs mit
+   * elrontani — a fejlesztői és teszt-környezetek így nem kényszerülnek egy
+   * olyan érték megadására, aminek ott semmi szerepe.
+   */
+  const rawVatMode = readEnv(env, 'SZAMLAZZ_AFAKULCS') ?? (agentKey === undefined ? '27' : null)
+  if (rawVatMode === null) {
+    throw new Error(
+      'Számlázz.hu-konfigurációs hiba: a SZAMLAZZ_AFAKULCS nincs beállítva, ' +
+        'miközben a számlázás be van kapcsolva (van SZAMLAZZ_AGENT_KEY). ' +
+        `Add meg kifejezetten: ${szamlazzVatModes.map((mode) => `'${mode}'`).join(' vagy ')}. ` +
+        'Alanyi adómentes eladóként az „AAM” a jogszerű, általános áfás esetben a „27”. ' +
+        'Alapértelmezést itt SZÁNDÉKOSAN nem adunk: a rossz áfakulcs minden ' +
+        'számlát elront, és utólag csak helyesbítő számlával javítható.',
+    )
+  }
   if (!isSzamlazzVatMode(rawVatMode)) {
     // Hangos hiba: egy elgépelt áfakulcs minden számlát rossz kulccsal állítana
     // ki — azt nem szabad csendben az alapértelmezésre ejteni. (Ugyanez a
@@ -130,7 +155,7 @@ export function getSzamlazzConfig(env: SzamlazzEnv = process.env): SzamlazzClien
     throw new Error(
       `Számlázz.hu-konfigurációs hiba: a SZAMLAZZ_AFAKULCS értéke csak ` +
         `${szamlazzVatModes.map((mode) => `'${mode}'`).join(' vagy ')} lehet ('${rawVatMode}'). ` +
-        `Alanyi adómentes eladóként az 'AAM' a jogszerű; általános esetben hagyd üresen (alapértelmezés: 27).`,
+        `Alanyi adómentes eladóként az 'AAM' a jogszerű, általános áfás esetben a '27'.`,
     )
   }
 

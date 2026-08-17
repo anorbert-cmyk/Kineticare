@@ -53,9 +53,37 @@ describe('getSzamlazzConfig', () => {
     expect(() => getSzamlazzConfig({ SZAMLAZZ_AFAKULCS: 'TAM' })).toThrowError(/AAM/)
   })
 
+  it('BEKAPCSOLT számlázásnál a hiányzó áfakulcs HANGOSAN dob, nem esik 27-re', () => {
+    /**
+     * MIÉRT ŐRIZZÜK: a csendes `'27'` alapértelmezés egy alanyi adómentes
+     * eladónál minden bizonylatot elrontana, ráadásul némán — utólag csak
+     * helyesbítő számlával javítható. A tulajdonos 2026-08-17-i jelzése
+     * (a gyógytornászok AAM-ben dolgoznak) pont ezt a kockázatot élesítette.
+     */
+    expect(() => getSzamlazzConfig({ SZAMLAZZ_AGENT_KEY: DUMMY_AGENT_KEY })).toThrowError(
+      /SZAMLAZZ_AFAKULCS nincs beállítva/,
+    )
+    // …de megadva rendben elindul, és pontosan azt a kulcsot használja.
+    expect(
+      getSzamlazzConfig({ SZAMLAZZ_AGENT_KEY: DUMMY_AGENT_KEY, SZAMLAZZ_AFAKULCS: 'AAM' }).vatMode,
+    ).toBe('AAM')
+    expect(
+      getSzamlazzConfig({ SZAMLAZZ_AGENT_KEY: DUMMY_AGENT_KEY, SZAMLAZZ_AFAKULCS: '27' }).vatMode,
+    ).toBe('27')
+  })
+
+  it('KIKAPCSOLT számlázásnál viszont nem kényszerít semmit (nincs bizonylat)', () => {
+    // Fejlesztői és teszt-környezet: agent-kulcs nélkül számla nem keletkezik,
+    // tehát nincs mit elrontani — az alapértelmezés ott ártalmatlan.
+    const config = getSzamlazzConfig({})
+    expect(config.enabled).toBe(false)
+    expect(config.vatMode).toBe('27')
+  })
+
   it('kulccsal enabled; prefix és timeout felülírható', () => {
     const config = getSzamlazzConfig({
       SZAMLAZZ_AGENT_KEY: DUMMY_AGENT_KEY,
+      SZAMLAZZ_AFAKULCS: '27',
       SZAMLAZZ_INVOICE_PREFIX: 'TESZT',
       SZAMLAZZ_TIMEOUT_MS: '5000',
     })
@@ -595,7 +623,12 @@ function createMockPayload(order: Order | null) {
   return { payload: payload as never, updates, order }
 }
 
-const ENABLED_CONFIG = getSzamlazzConfig({ SZAMLAZZ_AGENT_KEY: DUMMY_AGENT_KEY })
+// Az áfakulcs 2026-08-17 óta KÖTELEZŐ, ha a számlázás be van kapcsolva — a
+// folyamat-tesztek fixtúrája ezért kimondja (a korábbi csendes '27' megszűnt).
+const ENABLED_CONFIG = getSzamlazzConfig({
+  SZAMLAZZ_AGENT_KEY: DUMMY_AGENT_KEY,
+  SZAMLAZZ_AFAKULCS: '27',
+})
 
 /**
  * A bizonylat-lekérdezés MINDEN folyamat-tesztben injektált: injektálás nélkül a

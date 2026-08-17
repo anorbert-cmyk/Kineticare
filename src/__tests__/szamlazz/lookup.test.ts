@@ -26,7 +26,12 @@ const FOUND_INVOICE_NUMBER = 'KIN-2026-7'
 /** A lekérdező XML multipart-mezőneve (a kiállítóé az action-xmlagentxmlfile). */
 const LOOKUP_FIELD = 'action-szamla_agent_pdf'
 
-const ENABLED_CONFIG = getSzamlazzConfig({ SZAMLAZZ_AGENT_KEY: DUMMY_AGENT_KEY })
+// Az áfakulcs 2026-08-17 óta KÖTELEZŐ bekapcsolt számlázásnál (a csendes '27'
+// alapértelmezés megszűnt) — a fixtúra ezért kimondja.
+const ENABLED_CONFIG = getSzamlazzConfig({
+  SZAMLAZZ_AGENT_KEY: DUMMY_AGENT_KEY,
+  SZAMLAZZ_AFAKULCS: '27',
+})
 
 interface RecordedFetch {
   url: string
