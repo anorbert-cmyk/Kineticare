@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { INVITE_TOKEN_TTL_MS } from '../lib/customer-import/invite'
 import { orderConfirmationEmail } from '../lib/email/templates/order'
 import { onOrderPaid } from '../lib/order-paid'
+import { getSzamlazzConfig, isSzamlazzEnabled } from '../lib/szamlazz'
 import type { Order } from '../payload-types'
 
 /**
@@ -306,5 +307,75 @@ describe('onOrderPaid — a levél változata a fiók állapotából', () => {
     const output = logOutput(logSpy)
     expect(output).not.toContain(ACTIVATION_TOKEN)
     expect(output).not.toContain('jelszo-visszaallitas')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A visszaigazoló levelet nem viheti el egy SZÁMLÁZÁSI konfighiba
+// ---------------------------------------------------------------------------
+
+/**
+ * REGRESSZIÓS ŐR egy VALÓS élesítési pillanatra (2026-08-17). Amikor a
+ * Számla Agent kulcsa már be van állítva, de az áfakulcs még könyvelői
+ * döntésre vár, a `getSzamlazzConfig()` SZÁNDÉKOSAN dob. Az `onOrderPaid`
+ * viszont best-effort try/catch-ben küldi a levelet — ha a levél tartalma a
+ * dobó konfigfeloldásból jönne, ez a dobás CSENDBEN elvinné a vásárló
+ * EGYETLEN visszajelzését a sikeres fizetésről.
+ *
+ * A teszt ELŐBB bizonyítja, hogy a veszély valódi (a konfigfeloldás tényleg
+ * dob ebben a környezetben), és csak UTÁNA várja el, hogy a levél mégis
+ * kimenjen — különben egy későbbi „a konfig már nem dob" változtatás némán
+ * kiürítené az őrt.
+ */
+describe('onOrderPaid — számlázási konfighiba mellett is kimegy a levél', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('agent-kulcs beállítva, áfakulcs hiányzik: a levél kimegy, benne a számla-ígéret', async () => {
+    // DUMMY érték, egyértelműen jelölve — NEM valódi Számla Agent kulcs.
+    vi.stubEnv('SZAMLAZZ_AGENT_KEY', 'DUMMY-AGENT-KULCS-NEM-VALODI')
+    vi.stubEnv('SZAMLAZZ_AFAKULCS', '')
+
+    // 1. A veszély valódi: ebben a környezetben a konfigfeloldás dob.
+    expect(() => getSzamlazzConfig()).toThrow(/SZAMLAZZ_AFAKULCS/)
+    // 2. A be/ki kérdés viszont dobás nélkül is megválaszolható.
+    expect(isSzamlazzEnabled()).toBe(true)
+
+    // 3. És a levél emiatt épségben kimegy, a számla-ígérettel együtt.
+    const sent: Array<{ to: string; html: string }> = []
+    await onOrderPaid({
+      payload: {} as never,
+      order: createOrder(),
+      queueInvoice: async () => true,
+      send: async (input) => {
+        sent.push({ to: input.to, html: input.html })
+        return { ok: true, provider: 'noop' }
+      },
+    })
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.to).toBe('anna@example.test')
+    expect(sent[0]?.html).toContain('Számlázz.hu')
+  })
+
+  it('agent-kulcs nélkül nincs számla-ígéret a levélben', async () => {
+    vi.stubEnv('SZAMLAZZ_AGENT_KEY', '')
+
+    expect(isSzamlazzEnabled()).toBe(false)
+
+    const sent: string[] = []
+    await onOrderPaid({
+      payload: {} as never,
+      order: createOrder(),
+      queueInvoice: async () => true,
+      send: async (input) => {
+        sent.push(input.html)
+        return { ok: true, provider: 'noop' }
+      },
+    })
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).not.toContain('Számlázz.hu')
   })
 })

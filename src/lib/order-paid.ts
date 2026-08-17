@@ -1,7 +1,7 @@
 import type { Payload } from 'payload'
 
 import type { Order } from '../payload-types'
-import { getSzamlazzConfig } from './szamlazz'
+import { isSzamlazzEnabled } from './szamlazz'
 import { ORDER_MAINTENANCE_QUEUE } from '../jobs/queues'
 import { INVITE_TOKEN_TTL_MS } from './customer-import/invite'
 import { INVITE_TOKEN_TTL_DAYS } from './customer-import/send-invites'
@@ -239,7 +239,12 @@ export async function onOrderPaid(deps: OnOrderPaidDeps): Promise<void> {
       items,
       totalHuf,
       coursesUrl: `${serverUrl}/kurzusaim`,
-      invoiceNote: getSzamlazzConfig().enabled,
+      // SZÁNDÉKOSAN a nem dobó változat: a levél sorsa nem függhet attól, hogy
+      // a SZÁMLÁZÁSI konfig hibátlan-e. A `getSzamlazzConfig()` dob például
+      // hiányzó SZAMLAZZ_AFAKULCS mellett, és a dobás ITT az alábbi
+      // best-effort catch-be esne — vagyis egy áfakulcs-beállítási hiba némán
+      // elvinné a vásárló EGYETLEN visszajelzését a sikeres fizetésről.
+      invoiceNote: isSzamlazzEnabled(),
       ...(account ? { account } : {}),
     })
 
