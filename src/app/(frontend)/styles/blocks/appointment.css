@@ -332,14 +332,34 @@
 }
 
 .kc-appointment__consent-label {
-  /* Ugyanaz az indok, mint az időpont-sáv feliratánál: a célfelület a
-     kattintható elemen deklarált. Itt a szöveg többsoros lehet, ezért a
-     min-height csak alsó korlát. */
+  /* EZ A FELIRAT FOLYÓSZÖVEG, NEM ELRENDEZÉS — ezért NEM flex-konténer.
+     Flexként a felirat SZÉTESETT: a mondat szövegrészei és a beágyazott
+     hivatkozás külön-külön flex-elemmé váltak (a névtelen szövegdobozok is),
+     a `flex-wrap` alapértéke pedig `nowrap`, tehát egymás MELLÉ kerültek,
+     mindegyik a saját min-content szélességére zsugorodva. A hozzájárulás
+     mondata így öt hasábra tört szét, és túlcsordult a lapon.
+     Mérve (Chromium, az éles markupon és CSS-en, a fix előtt → után):
+       320 px: 107 px vízszintes túlcsordulás → 0
+       360 px:  67 px → 0
+       390 px:  38 px → 0
+       768 px: a lap nem csordult túl, de a szöveg ott is 5 hasáb volt
+     A 320 px-es vízszintes görgetés a WCAG 2.2 1.4.10 (Reflow, AA) sérülése:
+     a tartalom 320 CSS px szélességen nem kívánhat kétirányú görgetést.
+     https://www.w3.org/WAI/WCAG22/Understanding/reflow.html
+     A pénztár hozzájárulás-feliratai (kc-checkout-waiver__item label) eleve
+     sima folyószövegként állnak — ez a javítás ahhoz igazítja vissza.
+
+     A min-height marad: a 44 px-es célfelületet ez adja rövid felirat esetén
+     is (WCAG 2.2 2.5.5, Target Size Enhanced, AAA).
+     Függőleges igazítás NEM kell: a sor `align-items: flex-start`-ja a
+     négyzetet a felirat ELSŐ sorához illeszti, ami többsoros szövegnél a
+     helyes viselkedés. */
+  display: block;
   min-height: 2.75rem;
-  display: flex;
-  align-items: center;
   line-height: var(--kc-leading-body);
   cursor: pointer;
+  /* Biztonsági háló szűk konténerre: csak akkor tör szót, ha másképp kilógna. */
+  overflow-wrap: break-word;
 }
 
 /* ---- Turnstile ------------------------------------------------------------
