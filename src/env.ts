@@ -284,6 +284,36 @@ export function assertRequiredEnv(
     )
   }
 
+  /**
+   * EMAIL_FROM — akkor KÖTELEZŐ, ha van valódi levélküldő.
+   *
+   * ═══ A CSAPDA ═══
+   * A `parseFromAddress` (src/lib/email/mask.ts) hiányzó `EMAIL_FROM` esetén a
+   * `noreply@localhost` tartalékra esik. Ez fejlesztésben ártalmatlan, mert ott
+   * a `noop`-provider fut. Amint viszont valaki beállítja a `RESEND_API_KEY`-t,
+   * a provider átvált — és minden levél egy LÉTEZŐ küldő helyett a
+   * `noreply@localhost` címről indulna, amit a Resend elutasít. A `sendMail`
+   * pedig SOSEM dob: a hibát strukturált `SendResult`-ként adja vissza, tehát a
+   * jelszó-beállító és a rendelés-visszaigazoló levelek CSENDBEN nem érkeznének
+   * meg — pontosan az a hibakép, amit az audit az ingyenes kurzusnál mért.
+   *
+   * Ezért itt, induláskor bukik el, hangosan, minden környezetben. A levélküldő
+   * NÉLKÜLI állapot változatlanul rendben van: a kulcs hiánya ilyenkor nem hiba.
+   */
+  const emailFrom = process.env.EMAIL_FROM?.trim()
+  const vanLevelkuldo = isEnvSet('RESEND_API_KEY') || isEnvSet('SMTP_HOST')
+  if (vanLevelkuldo && (emailFrom === undefined || !emailFrom.includes('@'))) {
+    throw new Error(
+      'Az alkalmazás nem indulhat el. Be van állítva levélküldő ' +
+        '(RESEND_API_KEY vagy SMTP_HOST), de az EMAIL_FROM hiányzik vagy nem ' +
+        `e-mail-cím ('${emailFrom ?? ''}'). Enélkül a levelek a 'noreply@localhost' ` +
+        'tartalék címről indulnának, amit a szolgáltató elutasít — és mivel a ' +
+        'küldés sosem dob hibát, a levelek CSENDBEN nem érkeznének meg. ' +
+        "Add meg a küldő címet, pl. EMAIL_FROM=\"Kineticare <noreply@kineticare.hu>\", " +
+        'olyan tartománnyal, amit a levélküldőben igazoltál.',
+    )
+  }
+
   if (isProductionRuntime()) {
     /**
      * BARION_ENVIRONMENT — ÉLESBEN KÖTELEZŐ.
