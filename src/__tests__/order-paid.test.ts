@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 import { INVITE_TOKEN_TTL_MS } from '../lib/customer-import/invite'
 import { orderConfirmationEmail } from '../lib/email/templates/order'
-import { onOrderPaid } from '../lib/order-paid'
+import type { LogContext, Logger } from '../lib/logger'
+import { onOrderPaid, queueInvoiceIssueJob } from '../lib/order-paid'
 import { getSzamlazzConfig, isSzamlazzEnabled } from '../lib/szamlazz'
 import type { Order } from '../payload-types'
 
@@ -377,5 +378,130 @@ describe('onOrderPaid — számlázási konfighiba mellett is kimegy a levél', 
 
     expect(sent).toHaveLength(1)
     expect(sent[0]).not.toContain('Számlázz.hu')
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// P2 — a NÉMA számla-kimaradás nem maradhat néma
+// ---------------------------------------------------------------------------
+
+/**
+ * A MÉRÉS, ami ezt az őrt kikényszerítette. A `queueInvoiceIssueJob` a
+ * `payload.jobs.queue` meglétét STRUKTURÁLISAN (`as unknown as`) ellenőrzi,
+ * mert a generált típusok nem ismerik az invoice-issue taskot — egy
+ * Payload-frissítés tehát FORDÍTÁSI HIBA NÉLKÜL kapcsolhatja ki a számlázást.
+ * A segéd ilyenkor `false`-szal lépett ki EGYETLEN naplósor nélkül, a hívó
+ * (`onOrderPaid`) pedig eldobja a visszatérést: a vevő megkapja a levelet
+ * (benne a számla ígéretével), számla viszont sosem készül, és semmi nem jelzi.
+ *
+ * Az őr azt méri, hogy a kiesés MOST hangos: `error`-szintű, magyar RIASZTÁS a
+ * rendelés azonosítójával — injektált loggerrel ÉS logger nélkül (root-logger
+ * fallback) is.
+ */
+
+interface CapturedLogEntry {
+  level: 'debug' | 'info' | 'warn' | 'error'
+  msg: string
+  context?: LogContext
+}
+
+/** Naplóba író helyett gyűjtő Logger — a szint és a kontextus is mérhető. */
+function createCapturingLogger(entries: CapturedLogEntry[] = []): {
+  log: Logger
+  entries: CapturedLogEntry[]
+} {
+  const write =
+    (level: CapturedLogEntry['level']) =>
+    (msg: string, context?: LogContext): void => {
+      entries.push(context === undefined ? { level, msg } : { level, msg, context })
+    }
+  const log: Logger = {
+    debug: write('debug'),
+    info: write('info'),
+    warn: write('warn'),
+    error: write('error'),
+    child: () => log,
+  }
+  return { log, entries }
+}
+
+describe('queueInvoiceIssueJob — a hiányzó job-sor RIASZTÁST ad, nem csendet', () => {
+  it('payload.jobs nélkül: false + error-szintű RIASZTÁS a rendelés azonosítójával', async () => {
+    const { log, entries } = createCapturingLogger()
+
+    const queued = await queueInvoiceIssueJob({} as unknown as Payload, 101, log)
+
+    expect(queued).toBe(false)
+    const alerts = entries.filter((entry) => entry.level === 'error')
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].msg).toContain('RIASZTÁS')
+    expect(alerts[0].msg).toContain('számlakiállítási job')
+    expect(alerts[0].context).toMatchObject({ orderId: 101 })
+  })
+
+  it('a `jobs.queue` NEM függvény (pl. típusváltozás után) — szintén RIASZTÁS', async () => {
+    const { log, entries } = createCapturingLogger()
+
+    const queued = await queueInvoiceIssueJob(
+      { jobs: { queue: 'ez nem függvény' } } as unknown as Payload,
+      202,
+      log,
+    )
+
+    expect(queued).toBe(false)
+    expect(entries.filter((entry) => entry.level === 'error')).toHaveLength(1)
+  })
+
+  it('logger NÉLKÜL is naplóz (root-logger fallback) — a kiesés sosem néma', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const queued = await queueInvoiceIssueJob({} as unknown as Payload, 303)
+
+    expect(queued).toBe(false)
+    const errorLines = logSpy.mock.calls
+      .map((call) => String(call[0]))
+      .filter((line) => line.includes('"level":"error"'))
+    expect(errorLines).toHaveLength(1)
+    expect(errorLines[0]).toContain('RIASZTÁS')
+    expect(errorLines[0]).toContain('"orderId":303')
+  })
+
+  it('működő job-sor mellett NINCS riasztás (negatív kontroll)', async () => {
+    const { log, entries } = createCapturingLogger()
+    const queue = vi.fn(async () => ({ id: 1 }))
+
+    const queued = await queueInvoiceIssueJob({ jobs: { queue } } as unknown as Payload, 404, log)
+
+    expect(queued).toBe(true)
+    expect(queue).toHaveBeenCalledTimes(1)
+    expect(entries.filter((entry) => entry.level === 'error')).toHaveLength(0)
+  })
+
+  /**
+   * A TELJES HÍVÁSI LÁNC az audit futtatott bizonyítéka szerint: az
+   * `onOrderPaid` eldobja a `queueInvoice` visszatérését, tehát a levél kimegy
+   * (a számla ígéretével), a számla viszont nem áll sorba. A levél KIMENETELE
+   * szándékosan változatlan — ami változik: a kiesés MOST látszik a naplóban.
+   */
+  it('onOrderPaid job-sor nélkül: a levél kimegy, de a kiesés RIASZTÁST kap', async () => {
+    const { log, entries } = createCapturingLogger()
+    const sent: string[] = []
+
+    await onOrderPaid({
+      payload: {} as unknown as Payload,
+      order: createOrder(),
+      logger: log,
+      send: async (input) => {
+        sent.push(input.to)
+        return { ok: true, provider: 'noop' }
+      },
+    })
+
+    expect(sent).toEqual(['anna@example.test'])
+    const alerts = entries.filter((entry) => entry.level === 'error')
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].msg).toContain('RIASZTÁS')
+    expect(alerts[0].context).toMatchObject({ orderId: 101 })
   })
 })
