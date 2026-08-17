@@ -87,6 +87,7 @@ const nextConfig: NextConfig = {
             value: buildContentSecurityPolicy(
               process.env.NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST,
               process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
+              process.env.NEXT_PUBLIC_BARION_PIXEL_ID,
             ),
           },
         ],

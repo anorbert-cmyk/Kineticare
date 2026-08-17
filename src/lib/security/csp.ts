@@ -12,6 +12,7 @@
  * „a SUCCESS deploy nem jelenti, hogy az új kód fut").
  */
 
+import { BARION_PIXEL_ORIGIN, getBarionPixelId } from '../analytics/barion-pixel'
 import { GA_TAG_MANAGER_ORIGIN, normalizeGaMeasurementId } from '../analytics/ga4'
 
 /** A Bunny Stream lejátszó (iframe-embed) hostja — fix, nem env-függő. */
@@ -90,12 +91,44 @@ export function bunnyPullZoneSource(rawHost: string | undefined): string {
  *   állítva. A Google hostjai KIZÁRÓLAG ekkor kerülnek a fejlécbe: GA nélkül
  *   (és formailag hibás azonosító esetén) a politika marad a lehető
  *   legszűkebb. Ugyanaz a szigorítás, mint a pull-zone hosztnál.
+ * @param barionPixelId a Barion Pixel azonosítója (env), ha be van állítva.
+ *   A `pixel.barion.com` KIZÁRÓLAG ekkor nyílik meg — pontosan ugyanaz az
+ *   ellenőrzés dönt, mint ami a snippetet kirakja (BarionPixel.tsx), így a
+ *   fejléc és a lap tartalma nem tud szétcsúszni.
  */
 export function buildContentSecurityPolicy(
   bunnyPullZoneHost?: string,
   googleAnalyticsMeasurementId?: string,
+  barionPixelId?: string,
 ): string {
   const pullZone = bunnyPullZoneSource(bunnyPullZoneHost)
+
+  // ═══ BARION PIXEL — MÉRT, NEM BECSÜLT FORRÁSLISTA ═══
+  // A bp.js (0.4.0-s verzió, letöltve és átolvasva) HÁROM direktívát érint:
+  //  - script-src: maga a https://pixel.barion.com/bp.js,
+  //  - frame-src: a bp.js REJTETT IFRAME-eket szúr a body-ba ugyanerről a
+  //    hostról — `barion.html` (create_iframe, a `load` eseményre), majd
+  //    `barionbase.html` VAGY `barionmarketing.html` (create_base_iframe /
+  //    create_marketing_iframe). frame-src nélkül a Pixel NÉMÁN elhal: a
+  //    tényleges adatküldés ezekbe az iframe-ekbe megy,
+  //  - img-src: a JS nélküli tartalék-képpont (`/a.gif`, BarionPixel.tsx).
+  //
+  // AMI MÉRÉS ALAPJÁN NEM KELL:
+  //  - connect-src: a bp.js-ben NINCS `XMLHttpRequest`, `fetch(`,
+  //    `sendBeacon`, `new Image` és `WebSocket` (mind 0 találat) — az
+  //    üzenetváltás KIZÁRÓLAG `postMessage`-dzsel megy a saját iframe-jébe,
+  //    amire a CSP nem vonatkozik. Ezért a connect-src marad 'self'.
+  //  - 'unsafe-eval': a fájl egyetlen `eval(`-ja a beágyazott js-sha1
+  //    könyvtár NODE-ágában van (`eval("require('crypto')")`), ami böngészőben
+  //    sosem fut le (a `process.versions.node` vizsgálat zárja ki).
+  //
+  // A feloldás SZÁNDÉKOSAN a `getBarionPixelId`-vel megy (nem külön
+  // ellenőrzéssel): így a fejléc pontosan akkor nyílik, amikor a snippet is
+  // kikerül — egy szóközös vagy elgépelt env mindkét helyen ugyanúgy „nincs”.
+  const barionPixelSource =
+    getBarionPixelId({ NEXT_PUBLIC_BARION_PIXEL_ID: barionPixelId }) === null
+      ? ''
+      : ` ${BARION_PIXEL_ORIGIN}`
 
   // A GA4 csak érvényes mérési azonosítóval tölt be (src/lib/analytics/ga4.ts),
   // ezért a CSP-t is pontosan ugyanaz az ellenőrzés nyitja.
@@ -146,7 +179,12 @@ export function buildContentSecurityPolicy(
     // (a lejátszó kerete) továbbra is külön, a frame-src-ben él, és az
     // iframe-en belüli scriptekre a beágyazott dokumentum saját CSP-je
     // vonatkozik — arra innen továbbra sem adunk engedélyt.
-    `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com ${BUNNY_PLAYERJS_SOURCE}${gaScriptSource}`,
+    //
+    // pixel.barion.com → az ALAP Barion Pixel (bp.js). Nem marketing-extra:
+    // a Barion Smart Gateway használatának feltétele, ezért a fizetés
+    // működéséhez tartozik. A részletes forrás-indoklás fent, a
+    // `barionPixelSource` melletti mérési jegyzetben.
+    `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com ${BUNNY_PLAYERJS_SOURCE}${gaScriptSource}${barionPixelSource}`,
 
     // Beágyazott keretek:
     //  - iframe.mediadelivery.net → a Bunny Stream lejátszó: publikus
@@ -156,14 +194,18 @@ export function buildContentSecurityPolicy(
     //    hostról jön, csak a library-id és a token/expires más,
     //  - youtube-nocookie / player.vimeo → a szerkesztő által beilleszthető
     //    publikus videó-előzetes (src/components/lexical/serialize.tsx),
-    //  - challenges.cloudflare.com → Turnstile-widget.
-    `frame-src 'self' ${BUNNY_STREAM_IFRAME_SOURCE} https://www.youtube-nocookie.com https://player.vimeo.com https://challenges.cloudflare.com`,
+    //  - challenges.cloudflare.com → Turnstile-widget,
+    //  - pixel.barion.com → a bp.js REJTETT, 0×0-s iframe-jei (barion.html,
+    //    barionbase.html / barionmarketing.html). Ezek a Pixel tényleges
+    //    adatcsatornái: nélkülük a Pixel betöltődik, de semmit nem mér.
+    `frame-src 'self' ${BUNNY_STREAM_IFRAME_SOURCE} https://www.youtube-nocookie.com https://player.vimeo.com https://challenges.cloudflare.com${barionPixelSource}`,
 
     // data: a beágyazott SVG-/base64-ikonokhoz. A videó-poszterképek a Bunny
     // pull-zone hosztjáról jönnek (vz-….b-cdn.net). A GA4 tartalék-útja
     // képpont-kérés (a sendBeacon/fetch helyett), ezért a gyűjtőhostok a
-    // Google dokumentációja szerint az img-src-be is kellenek.
-    `img-src 'self' data: ${pullZone}${gaImgSources}`,
+    // Google dokumentációja szerint az img-src-be is kellenek. A
+    // pixel.barion.com a JS nélküli tartalék-képpont (`/a.gif`) miatt kell.
+    `img-src 'self' data: ${pullZone}${gaImgSources}${barionPixelSource}`,
 
     // blob: KÖTELEZŐ — a kezdőlap filmsávja (ScrollScrub/FilmHero) a LOKÁLIS
     // klipet (public/media/film) fetch-csel tölti le, majd

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Suspense, type ReactNode } from 'react'
 
+import { BarionPixel, BarionPixelNoscript } from '@/components/analytics/BarionPixel'
 import { ConsentBanner } from '@/components/analytics/ConsentBanner'
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics'
 import { PostHogPageView } from '@/components/analytics/PostHogPageView'
@@ -56,6 +57,15 @@ export default function FrontendLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="hu">
       <head>
+        {/* ALAP Barion Pixel — a `<head>` LEGELSŐ eleme, ahogy a hivatalos
+            dokumentáció kéri. NEM marketing-eszköz: a Barion Smart Gateway
+            használatának feltétele, és csalásmegelőzési célból SÜTI-
+            HOZZÁJÁRULÁSTÓL FÜGGETLENÜL be kell töltődnie („the Base Barion
+            Pixel should be loaded irrespective of other marketing consent
+            management software”). Ezért NEM kerülhet consent-kapu mögé és nem
+            kerülhet a PostHogProvider alá sem. A hozzájárulás a Pixel
+            FELHASZNÁLÁSÁT szabályozza, `bp('consent', …)` hívásokkal. */}
+        <BarionPixel />
         {/* Kritikus betű-metszetek előtöltése (terv 3.2). Csak a LATIN vágatok:
             ezeket minden oldal használja, így nincs kihasználatlan preload. A
             latin-ext (ő, ű) fájlokat a böngésző akkor kéri le, amikor a lapon
@@ -96,6 +106,11 @@ export default function FrontendLayout({ children }: { children: ReactNode }) {
           {/* GDPR consent-sáv: csak 'unknown' állapotban látszik, a body végén, a többi elem fölött. */}
           <ConsentBanner />
         </PostHogProvider>
+        {/* A Barion Pixel JS nélküli tartalék-képpontja. A `<head>`-be nem
+            tehető (ott a <noscript> csak link/style/meta elemet vehet fel), a
+            lap elejére pedig azért nem, hogy JS nélkül se előzze meg az
+            „Ugrás a tartalomra” ugrólinket. */}
+        <BarionPixelNoscript />
       </body>
     </html>
   )
