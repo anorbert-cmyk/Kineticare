@@ -474,3 +474,42 @@ describe('buildOriginAllowlist', () => {
     expect(second).toEqual(['https://pelda.hu'])
   })
 })
+
+describe('EMAIL_FROM — levélküldő mellett kötelező', () => {
+  /**
+   * MIÉRT ŐRIZZÜK: az `EMAIL_FROM` hiánya a `noreply@localhost` tartalékra esik
+   * (src/lib/email/mask.ts). Levélküldő nélkül ez ártalmatlan, DE amint valaki
+   * beállítja a RESEND_API_KEY-t, minden levél egy nem létező címről indulna,
+   * a `sendMail` pedig sosem dob — a levelek CSENDBEN nem érkeznének meg.
+   * Pontosan ez a hibakép, amit az audit az ingyenes kurzusnál mért.
+   */
+  it('RESEND_API_KEY mellett EMAIL_FROM nélkül HANGOSAN megáll', () => {
+    vi.stubEnv('RESEND_API_KEY', DUMMY_ENV_VALUE)
+    vi.stubEnv('EMAIL_FROM', '')
+    expect(() => assertRequiredEnv()).toThrowError(/EMAIL_FROM/)
+  })
+
+  it('SMTP_HOST mellett ugyanígy', () => {
+    vi.stubEnv('SMTP_HOST', 'dummy.example')
+    vi.stubEnv('EMAIL_FROM', '')
+    expect(() => assertRequiredEnv()).toThrowError(/EMAIL_FROM/)
+  })
+
+  it('e-mail-címnek NEM látszó értéket sem fogad el', () => {
+    vi.stubEnv('RESEND_API_KEY', DUMMY_ENV_VALUE)
+    vi.stubEnv('EMAIL_FROM', 'Kineticare')
+    expect(() => assertRequiredEnv()).toThrowError(/EMAIL_FROM/)
+  })
+
+  it('rendes küldő-címmel elindul (név + cím alak is jó)', () => {
+    vi.stubEnv('RESEND_API_KEY', DUMMY_ENV_VALUE)
+    vi.stubEnv('EMAIL_FROM', 'Kineticare <noreply@dummy.example>')
+    expect(() => assertRequiredEnv()).not.toThrow()
+  })
+
+  it('levélküldő NÉLKÜL az EMAIL_FROM továbbra sem kötelező', () => {
+    // Fejlesztés és CI: a noop-provider fut, nincs mit elrontani.
+    vi.stubEnv('EMAIL_FROM', '')
+    expect(() => assertRequiredEnv()).not.toThrow()
+  })
+})
