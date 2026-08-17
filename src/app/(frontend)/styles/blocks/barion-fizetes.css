@@ -1,0 +1,137 @@
+/**
+ * Barion fizetési jelzés (BarionFizetesJelzes) — kezdőlapi bizalmi csík és
+ * pénztári, fizetőgomb melletti kártya.
+ *
+ * Betöltés: src/components/checkout/BarionFizetesJelzes.tsx (a komponens
+ * importálja, a CredentialsStrip mintájára).
+ *
+ * A szín, a méret és a térköz KIZÁRÓLAG szerep-tokenről jön (tokens.css) —
+ * nyers hex nincs. A betűméret a három-méretes skála M és S lépcsője
+ * (őr: src/__tests__/tipografia-harom-meret.test.ts).
+ *
+ * ═══ KONTRASZT — SZÁMOLT ÉRTÉKEK ═══
+ * (WCAG 2.2 relatív luminancia és kontraszt-arány definíciója szerint,
+ *  https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio; a számokat a
+ *  barion-fizetes-jelzes.test.tsx őre újraszámolja minden futáskor)
+ *
+ *   KEZDŐLAPI CSÍK (lap-háttér, paper #f6f9fc)
+ *     címsor    primary  #2f6e9f  a paperen ......  5,16:1   AA ✓ (S méret is átmegy)
+ *     szöveg    muted    #33495f  a paperen ......  8,80:1   AA/AAA ✓
+ *     hajszálvonal (border) #d8e2eb a paperen ....  1,24:1   DEKORÁCIÓ, nem UI-határ
+ *
+ *   PÉNZTÁRI KÁRTYA (fehér kártyafelület #ffffff)
+ *     címsor    ink      #10243e  fehéren ........ 15,63:1   AA/AAA ✓
+ *     szöveg    muted    #33495f  fehéren ........  9,30:1   AA/AAA ✓
+ *
+ * A LOGÓSOR maga mentes a kontraszt-követelmény alól: WCAG 2.2 SC 1.4.11
+ * Understanding, „Logos are exempted from contrast requirements…" — és nem is
+ * interaktív, tehát az ottani fenntartás („logos act as user interface
+ * components") sem áll fenn. Tájékoztatásul mérve fehéren: VISA #1434cb
+ * 8,81:1 · Google Pay szürke #3c4043 10,47:1 · Mastercard piros #e41b24
+ * 4,69:1 · Apple Pay fekete #000000 a paperen 19,87:1.
+ *
+ * ═══ ELRENDEZÉS ÉS 320 PX ═══
+ * A logósor `width: 100%` + `aspect-ratio` + `height: auto`, tehát ARÁNYOSAN
+ * kicsinyedik és sosem lóg ki (a Barion „módosítás nélkül" kikötése az
+ * arányos méretezést nem érinti, a torzítás viszont tilos lenne). Fix
+ * `min-width` szándékosan NINCS: az lenne az egyetlen mód, ahogy 320 px-en
+ * vízszintes görgetés keletkezhetne (WCAG 2.2 SC 1.4.10 Reflow).
+ *
+ * Számolt szélességek 320 px-es nézetablakon (kc-container oldal-margó
+ * 2 × --kc-space-5 = 48 px):
+ *   kezdőlap ..... 320 − 48 = 272 px → a logósor 272 × 51,8 px
+ *   pénztár ...... 272 − 2 × 24 px kártya-belsőmargó − 2 × 1 px keret
+ *                  = 222 px → a logósor 222 × 42,3 px
+ * Felül `max-width: 22rem` (352 px) fékezi, hogy asztali szélességen se
+ * nőjön szekció-méretűvé; 352 px-nél a magassága 67,0 px.
+ */
+
+/* ---- Közös rész ---------------------------------------------------------- */
+
+/* A hivatalos logósor eredeti rajzaránya 567 : 108. Az `aspect-ratio` azért
+   kell a `width`/`height` attribútumok MELLETT is, mert a `width: 100%`
+   felülírja az attribútumból számolt belső arányt, és enélkül a kép a
+   betöltés pillanatában ugrana egyet — közvetlenül a fizetőgomb fölött. */
+.kc-barion__logosor {
+  display: block;
+  width: 100%;
+  max-width: 22rem;
+  height: auto;
+  aspect-ratio: 567 / 108;
+}
+
+.kc-barion__szoveg {
+  max-width: var(--kc-measure);
+  margin: 0;
+  color: var(--kc-color-text-muted);
+  line-height: var(--kc-leading-body);
+}
+
+/* ---- Kezdőlapi bizalmi csík ---------------------------------------------- */
+
+/* Felső hajszálvonal, saját függőleges térköz (a szekció `flush`). Azért csak
+   FELÜL van vonal, mert a lábléc a sajátját már hozza (styles/layout.css) —
+   két egymás alatti vonal fölösleges dupla szegélyt rajzolna. */
+.kc-barion--kezdolap .kc-barion__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--kc-space-4);
+  padding-block: var(--kc-space-6);
+  border-top: 1px solid var(--kc-color-border);
+}
+
+.kc-barion--kezdolap .kc-barion__szoveg {
+  font-size: var(--kc-font-s);
+}
+
+/* Asztali szélességen a csík egy sorba rendeződik: balra a felvezető címsor és
+   a logósor, jobbra a magyarázat. Az `align-items: center` a logósort a
+   szöveghez igazítja. A rács CSAK 900 px felett lép be — alatta a függőleges
+   sorrend marad, tehát a 320 px-es reflow-t ez a szabály nem érinti. */
+@media (min-width: 900px) {
+  .kc-barion--kezdolap .kc-barion__inner {
+    display: grid;
+    align-items: center;
+    gap: var(--kc-space-3) var(--kc-space-7);
+    grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+  }
+
+  .kc-barion--kezdolap .kc-barion__cim {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .kc-barion--kezdolap .kc-barion__logosor {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .kc-barion--kezdolap .kc-barion__szoveg {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* ---- Pénztári kártya ------------------------------------------------------ */
+
+/* A kártya a form többi blokkjának nyelvét viszi (Card = fehér lap, hairline
+   keret). A belső ritmus flex-szel, hogy a címsor, a logósor és a magyarázat
+   térköze azonos legyen a szomszédos blokkokéval. */
+.kc-barion--penztar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--kc-space-4);
+}
+
+/* Az osztály nélküli kártyacímsor tipográfiáját a közös
+   `.kc-card > :is(h2…):not([class])` szabály adja (styles/ui.css) — itt csak a
+   böngésző alap-margóját nullázzuk, hogy a flex-rés legyen az egyetlen térköz. */
+.kc-barion--penztar > h2 {
+  margin: 0;
+}
+
+.kc-barion--penztar .kc-barion__szoveg {
+  font-size: var(--kc-font-m);
+}

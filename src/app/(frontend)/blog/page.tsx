@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
 
+import { BarionPageView } from '@/components/analytics/BarionPageView'
 import { CategoryFilter } from '@/components/content/CategoryFilter'
 import { JsonLd } from '@/components/content/JsonLd'
 import { PostCard } from '@/components/content/PostCard'
 import { PostsEmptyState } from '@/components/content/PostsEmptyState'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
+import { BARION_PAGE_VIEW } from '@/lib/analytics/barion-events'
 import { getCategoryBySlug, getContentCategories, getPosts, getPublishedProducts } from '@/lib/cms'
 import { blogJsonLd } from '@/lib/seo'
 import { freeCourseHref } from '@/lib/tudastar'
@@ -88,6 +90,13 @@ export default async function BlogPage({ searchParams }: Props) {
 
   return (
     <Section>
+      {/* Barion Pixel `contentView` (contentType: 'Page'). A `list` kimarad: a
+          bp.js kötött listájában nincs a Tudástárra illő érték, és a 'Misc'
+          nem mond többet a hiányzó mezőnél. */}
+      <BarionPageView
+        pageId={BARION_PAGE_VIEW.knowledgeBase.id}
+        pageName={BARION_PAGE_VIEW.knowledgeBase.name}
+      />
       <Container>
         {/* A gyűjtemény-séma csak a KANONIKUS (szűretlen) címen jelenik meg:
             a `?kategoria=` nézet canonicalja a dedikált kategória-oldalra

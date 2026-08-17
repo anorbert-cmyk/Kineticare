@@ -2,9 +2,11 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getPayload } from 'payload'
 
+import { BarionPageView } from '@/components/analytics/BarionPageView'
 import { CourseAudienceBand } from '@/components/courses/CourseAudienceBand'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
+import { BARION_PAGE_VIEW } from '@/lib/analytics/barion-events'
 import { AUDIENCE_BANDS, groupProductsByAudience } from '@/lib/course-audience'
 import {
   CATEGORY_QUERY_PARAM,
@@ -86,6 +88,13 @@ export default async function KurzusokPage({ searchParams }: KurzusokPageProps) 
 
   return (
     <Section>
+      {/* Barion Pixel `contentView` (contentType: 'Page'). A KURZUS-OLDAL
+          (/kurzusok/[slug]) ezt NEM kapja meg: ott a Product-ágú
+          CourseBarionView fut, és két contentView némán duplázna. */}
+      <BarionPageView
+        pageId={BARION_PAGE_VIEW.courseList.id}
+        pageName={BARION_PAGE_VIEW.courseList.name}
+      />
       <Container>
         <header className="kc-course-list__header">
           <h1>Kurzusok</h1>
