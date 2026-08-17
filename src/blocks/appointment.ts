@@ -1,6 +1,20 @@
 import type { Block } from 'payload'
 
+import { appointmentShowsForm } from '../lib/appointment/context'
+
 import { sectionSettings } from './section-settings'
+
+/**
+ * Admin-feltétel: az ŰRLAPHOZ tartozó mezők csak akkor jelennek meg a
+ * szerkesztőben, ha van űrlap. Enélkül a szerkesztő olyan mezőket töltene
+ * (gombfelirat, siker-szöveg, időpont-sávok), amik sehol nem látszanak — ez a
+ * repó saját, már megtanult „néma közzétételi csapda" hibája, csak fordítva.
+ *
+ * A `siblingData` a BLOKK saját mezőit hozza (a blokk a `layout` tömb egy
+ * eleme), ezért a kapcsolót itt kell keresni, nem a lap gyökerében.
+ */
+const urlapLatszik = (_data: unknown, siblingData: { urlapMutatasa?: boolean | null }): boolean =>
+  appointmentShowsForm(siblingData)
 
 /**
  * Időpontkérő szekció — a RENDELŐI kezelések (gyógytorna, manuálterápia)
@@ -71,21 +85,31 @@ export const appointment: Block = {
       },
     },
     {
+      name: 'urlapMutatasa',
+      type: 'checkbox',
+      defaultValue: true,
+      label: 'Legyen űrlap a szekcióban',
+      admin: {
+        description:
+          'Bekapcsolva a látogató űrlapon hagyja itt az elérhetőségét, és ti hívjátok vissza. Kikapcsolva a szekció csak a rendelő adatait mutatja, és a telefonszám lesz az egyetlen út — ezt válaszd, ha az időpontot telefonon egyeztetitek. Kikapcsolás után nézd át a bevezetőt és a „hogyan megy tovább" szöveget: ne hivatkozzanak űrlapra.',
+      },
+    },
+    {
       name: 'lead',
       type: 'textarea',
       label: 'Bevezető szöveg',
       admin: {
         description:
-          'Egy-két mondat a cím alá: kinek való, mire számítson. Ez az a szöveg, ami eldönti, kitölti-e valaki az űrlapot.',
+          'Egy-két mondat a cím alá: kinek való, mire számítson. Ez az a szöveg, ami eldönti, megkeres-e valaki. Ha nincs űrlap, itt már ne kérj adatot („hagyd itt az elérhetőséged"), mert nincs hova beírni.',
       },
     },
     {
       name: 'magyarazat',
       type: 'textarea',
-      label: 'Mi történik a beküldés után?',
+      label: 'Hogyan megy tovább?',
       admin: {
         description:
-          'Írd le, hogyan megy tovább a folyamat (pl. hogy telefonon egyeztetitek a pontos időpontot, és mennyi időn belül hívtok vissza). Fontos: naptár-foglalás NINCS a rendszerben, ezért itt se ígérj azonnali foglalást.',
+          'Írd le, hogyan jut a látogató időponthoz. Űrlappal: mennyi időn belül hívjátok vissza. Űrlap nélkül: hogy hívja a lenti számok egyikét, és ott rögtön egyeztettek. Fontos: naptár-foglalás NINCS a rendszerben, ezért itt se ígérj azonnali foglalást.',
       },
     },
     {
@@ -93,6 +117,7 @@ export const appointment: Block = {
       type: 'text',
       label: 'Az űrlap címe',
       admin: {
+        condition: urlapLatszik,
         description: 'Az űrlapdoboz fölötti cím (pl. „Időpontkérés"). Nem kötelező.',
       },
     },
@@ -101,6 +126,7 @@ export const appointment: Block = {
       type: 'text',
       label: 'A gomb felirata',
       admin: {
+        condition: urlapLatszik,
         description:
           'Az elküldő gomb felirata. Ige + tárgy alakban a legjobb (pl. „Időpontot kérek"). Üresen hagyva az alapértelmezett felirat jelenik meg.',
       },
@@ -112,6 +138,7 @@ export const appointment: Block = {
       maxRows: 6,
       labels: { singular: 'Időpont-sáv', plural: 'Időpont-sávok' },
       admin: {
+        condition: urlapLatszik,
         description:
           'Ezek közül jelölhet be a látogató, hogy MIKOR alkalmas neki. Csak olyan sávot vegyél fel, amit tényleg tudtok tartani (pl. „Hétköznap délelőtt"). Ha üresen hagyod, a kérdés egyszerűen kimarad az űrlapból.',
         initCollapsed: true,
@@ -219,6 +246,7 @@ export const appointment: Block = {
       type: 'text',
       label: 'A sikeres beküldés címe',
       admin: {
+        condition: urlapLatszik,
         description:
           'Ez jelenik meg az űrlap helyén a sikeres beküldés után (pl. „Megkaptuk az időpontkérésed"). Üresen hagyva az alapértelmezett szöveg jelenik meg.',
       },
@@ -228,6 +256,7 @@ export const appointment: Block = {
       type: 'textarea',
       label: 'A sikeres beküldés szövege',
       admin: {
+        condition: urlapLatszik,
         description:
           'Mi történik most, és mikor keresitek vissza a látogatót. Konkrét határidőt írj (pl. „két munkanapon belül"), mert a bizonytalanság új üzenetet szül.',
       },
