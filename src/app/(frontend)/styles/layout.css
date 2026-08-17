@@ -823,6 +823,36 @@
   overflow-y: auto;
 }
 
+/* ---- 2.4.11: a süti-sáv ne takarhassa el a menü alsó pontjait -------------
+   A LYUK, AMIT BEZÁR. A `consent-banner.css` már véd a takarás ellen, de a
+   védelme `body { padding-bottom }` és `scroll-padding-bottom` — a fiók viszont
+   `position: fixed` (lásd fent), ezért a body belső margója RÁ NEM HAT, a saját
+   görgetősávjára pedig a lap `scroll-padding`-je nem vonatkozik. Mérve: a body
+   megkapta a 274 px-et, a fiók alja mégis a képernyő alján maradt, és 320 px-en
+   13 fókuszált menüelemből 7 TELJESEN takart volt a süti-sáv alatt (360 px-en
+   3). Koppintással 4 menüpont volt elérhetetlen.
+
+   A SZABÁLY. WCAG 2.2 · 2.4.11 Focus Not Obscured (Minimum), AA: „When a user
+   interface component receives keyboard focus, the component is not entirely
+   hidden due to author-created content." Az Understanding kifejezetten nevesíti
+   az esetünket: „A notification implemented as sticky content, such as a cookie
+   banner, will fail this success criterion if it entirely obscures a component
+   receiving focus."
+   https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html
+
+   MIÉRT A LISTA ÉS NEM A FIÓK. A görgethető doboz a lista (`overflow-y: auto`),
+   tehát a belső margónak ott kell lennie: így a legalsó menüpont FÖLÉ tud
+   görögni a sávnak. A fiókra tett margó csak a doboz alját tolná feljebb.
+
+   A `--kc-consent-offset` a sáv MÉRT magassága (ResizeObserver, lásd
+   consent-banner.css); süti-sáv nélkül 0px, tehát ez a szabály ilyenkor csak a
+   szokásos térközt adja. Ugyanezt a változót használja a mobil vásárlósáv is —
+   az a felület emiatt már ma is helyesen viselkedik. */
+.kc-nav-mobile__list {
+  padding-bottom: calc(var(--kc-space-3) + var(--kc-consent-offset));
+  scroll-padding-bottom: var(--kc-consent-offset);
+}
+
 .kc-nav-mobile__link {
   display: flex;
   align-items: center;
