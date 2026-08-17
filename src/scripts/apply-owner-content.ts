@@ -1274,7 +1274,15 @@ export const alkalmazSosKapcsolodoKurzus = (input: {
   const jelenlegiAzonositok = kapcsolodoAzonositok(input.jelenlegi)
 
   if (jelenlegiAzonositok.includes(input.celId)) {
-    return nincsIras('a kapcsolódó kurzus MÁR be van állítva — nincs teendő', true)
+    // NEM hangos (vezetői javítás, 2026-08-17, éles napló alapján). Ez a
+    // MÁSODIK futás normális kimenete: a mező már a helyén van, tehát a script
+    // dolga elkészült. A `hangos: true` `logger.error`-t ír, amitől minden
+    // további tartalom-job futás HIBÁSNAK látszik — élesben pontosan ez
+    // történt: egyetlen `error` sor állt a 21 `warn` mellett, holott ez volt a
+    // legjobb lehetséges kimenet. A hangos ág azoknak az eseteknek marad,
+    // ahol EMBERI TEENDŐ van (a cél nincs meg, önhivatkozás, vagy a szerkesztő
+    // mást állított be).
+    return nincsIras('a kapcsolódó kurzus MÁR be van állítva — nincs teendő', false)
   }
 
   if (jelenlegiAzonositok.length > 0) {
