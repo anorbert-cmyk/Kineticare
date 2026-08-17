@@ -30,7 +30,12 @@ const ORIGINAL_INVOICE_NUMBER = 'KIN-2026-7'
 const TOTAL_HUF = 19990
 const REFUND_HUF = 5000
 
-const ENABLED_CONFIG = getSzamlazzConfig({ SZAMLAZZ_AGENT_KEY: DUMMY_AGENT_KEY })
+// Az áfakulcs 2026-08-17 óta KÖTELEZŐ bekapcsolt számlázásnál (a csendes '27'
+// alapértelmezés megszűnt) — a fixtúra ezért kimondja.
+const ENABLED_CONFIG = getSzamlazzConfig({
+  SZAMLAZZ_AGENT_KEY: DUMMY_AGENT_KEY,
+  SZAMLAZZ_AFAKULCS: '27',
+})
 
 /**
  * A bizonylat-lekérdezés MINDEN folyamat-tesztben injektált: injektálás nélkül a

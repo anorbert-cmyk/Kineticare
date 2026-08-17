@@ -32,14 +32,29 @@ function reqWith(order: Order | null) {
   return { req: { payload: { findByID } }, findByID }
 }
 
+/**
+ * Bekapcsolt számlázás a job-tesztekhez.
+ *
+ * Az ÁFAKULCS is kell: 2026-08-17 óta a bekapcsolt számlázás kifejezett
+ * `SZAMLAZZ_AFAKULCS`-ot követel (a csendes '27' alapértelmezés megszűnt, mert
+ * alanyi adómentes eladónál minden bizonylatot elrontott volna). A jobok a
+ * VALÓDI `process.env`-ből olvasnak, ezért itt is oda kell tenni.
+ */
 function withAgentKey(): () => void {
-  const previous = process.env.SZAMLAZZ_AGENT_KEY
+  const previousKey = process.env.SZAMLAZZ_AGENT_KEY
+  const previousVat = process.env.SZAMLAZZ_AFAKULCS
   process.env.SZAMLAZZ_AGENT_KEY = DUMMY_AGENT_KEY
+  process.env.SZAMLAZZ_AFAKULCS = '27'
   return () => {
-    if (previous === undefined) {
+    if (previousKey === undefined) {
       delete process.env.SZAMLAZZ_AGENT_KEY
     } else {
-      process.env.SZAMLAZZ_AGENT_KEY = previous
+      process.env.SZAMLAZZ_AGENT_KEY = previousKey
+    }
+    if (previousVat === undefined) {
+      delete process.env.SZAMLAZZ_AFAKULCS
+    } else {
+      process.env.SZAMLAZZ_AFAKULCS = previousVat
     }
   }
 }
