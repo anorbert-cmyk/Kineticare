@@ -108,12 +108,8 @@
      elfér fölötte a süti-sáv is (az első látogatásnál az alsó ~90px-et takarja). */
   bottom: clamp(6rem, 14vh, 9rem);
   width: min(34rem, 40vw);
-  margin: 0;
   opacity: 0;
   color: var(--ss-ink);
-  font-size: var(--kc-font-m);
-  line-height: var(--kc-leading-tight);
-  text-wrap: balance;
 }
 
 /* 2. állás — jobb oldalt. */
@@ -128,6 +124,48 @@
   width: min(42rem, 72vw);
   text-align: center;
   transform: translateX(-50%);
+}
+
+/**
+ * A felirat CÍME. Mérete a közös skála M lépcsője — a jelenet H1-e (L) fölé
+ * nem nőhet, különben a filmsávon két, egyenrangúnak látszó cím versenyezne.
+ */
+.scroll-scrub__caption-title {
+  margin: 0;
+  font-size: var(--kc-font-m);
+  line-height: var(--kc-leading-tight);
+  text-wrap: balance;
+}
+
+/**
+ * A felirat LEÍRÁSA a cím alatt.
+ *
+ * A `max-width: 44ch` a sorhossz-korlát: a 3. állás doboza 42rem széles, ami
+ * S-méreten 90+ karakteres sorokat adna — az NN/g olvashatósági ajánlása
+ * (45–85 karakter) fölött. A `ch` az adott betű „0"-jának szélessége, magyar
+ * kisbetűs szövegre kissé bőven mér, így a 44ch a gyakorlatban ~50 karakter.
+ *
+ * A szín a `--ss-muted`, ami ebben a témában SZÁNDÉKOSAN ugyanaz a teli erejű
+ * `ink`, mint a címé (lásd FilmHero FILM_THEME): filmkockán a hierarchiát a
+ * méret adja, nem a halványítás — halvány szürkével a mért 5,78:1 / 7,25:1
+ * AA-tartalék azonnal elfogyna.
+ */
+.scroll-scrub__caption-body {
+  max-width: 44ch;
+  margin: 0.75rem 0 0;
+  color: var(--ss-muted);
+  font-size: var(--kc-font-s);
+  line-height: 1.55;
+}
+
+/* A szűkített leírás a cím szélével marad egy vonalban: jobbra igazított
+   feliratnál a jobb, középre igazítottnál a doboz közepe a viszonyítás. */
+.scroll-scrub__caption--right .scroll-scrub__caption-body {
+  margin-inline-start: auto;
+}
+
+.scroll-scrub__caption--center .scroll-scrub__caption-body {
+  margin-inline: auto;
 }
 
 .scroll-scrub__progress {
@@ -326,8 +364,13 @@
     max-width: 14ch;
   }
 
+  /* A `100% - 2.5rem` a vászon két oldalán hagy sávot. A korábbi `100%` a
+     jobbra igazított feliratnál a `right` behúzás miatt a BAL képernyőszélen
+     túllógott (320 px-en 20 px-cel), a középre igazítottnál pedig szegélyig
+     ért a szöveg. Így 320 px-en mindkét oldalon 20 px marad, vízszintes
+     görgetés nélkül (WCAG 2.2 1.4.10 Reflow). */
   .scroll-scrub__caption {
-    width: min(100%, 30rem);
+    width: min(100% - 2.5rem, 30rem);
   }
 }
 

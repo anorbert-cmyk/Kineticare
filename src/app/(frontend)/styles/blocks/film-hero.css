@@ -81,14 +81,27 @@ main > .kc-film-hero:first-of-type {
  *   réteg                       fedés   régió                 ink kontraszt
  *   1. fejléc-sáv ............... 0,50   fejléc-sáv ........... 5,13:1  AA ✓
  *   2. bal lejtő ................ 0,64   hero cím + bevezető .. 6,00:1  AA ✓
- *   3+4. alsó lejtők ............ 0,60   2. felirat ........... 5,78:1  AA ✓
- *   3+4. alsó lejtők ............ 0,60   3. felirat ........... 7,25:1  AA ✓
  *
  * A számítás konzervatív: minden régiónál CSAK az ott biztosan jelen lévő
  * réteg(ek) fedését vettük — az átfedő lejtők (pl. a bal lejtő a fejléc-sávban)
  * tovább javítanak. A fejléc-sáv fölé jövő fejléc-fátyol (layout.css) szintén
  * csak hozzáad. RÉTEGSORREND: a CSS a legelöl felsorolt réteget rajzolja
  * legfelülre, ezért a tükör két rétege maradt a lista végén.
+ *
+ * ÚJRAMÉRÉS a 2. és 3. FELIRAT alatt (2026-08-17, miután a feliratok CÍM +
+ * LEÍRÁS párra bővültek, tehát a szövegdoboz magasabb lett). A mérés a fenti
+ * módszerrel, de a felirat MINDEN SORÁNAK dobozára külön, mind a 9 kockán, a
+ * renderelt lapról vett képpontokból (Chromium, deviceScaleFactor 1):
+ *
+ *   nézetablak     legrosszabb sor          kontraszt
+ *   1440x900 ..... 3. felirat, cím ........ 7,47:1  AA ✓
+ *   1280x800 ..... 3. felirat, cím ........ 7,21:1  AA ✓
+ *   390x844 ...... 2. felirat, cím ........ 7,48:1  AA ✓
+ *   320x568 ...... 2. felirat, cím ........ 5,04:1  AA ✓
+ *
+ * A 320x568 a szűk keresztmetszet: ott a szövegdoboz a vászon 16,9%–36,1%-át
+ * foglalja el. A százalékos 3. réteggel ugyanez a sor 3,18:1 volt (AA-bukás) —
+ * ezért lett rem-mértékű, lásd a réteg saját jegyzetét.
  */
 .kc-film-hero .scroll-scrub__stage::after {
   position: absolute;
@@ -118,12 +131,28 @@ main > .kc-film-hero:first-of-type {
         transparent 64rem
       ),
     /* 3. Alsó pára: a 2. és 3. felirat sávját emeli meg a tükör alsó
-       összeolvadása FELETT — enélkül a felirat teteje AA alá esne. */
+       összeolvadása FELETT — enélkül a felirat teteje AA alá esne.
+
+       A MÉRTÉK REM, NEM SZÁZALÉK (2026-08-17). A felirat magassága
+       TARTALOM-vezérelt (cím + leírás), tehát fizikai méret; a százalékos
+       lépcső viszont a vászon magasságához kötött, ezért alacsony
+       nézetablakon ÖSSZEZSUGORODIK pont ott, ahol a szövegdoboz a
+       képernyő nagyobb hányadát foglalja el. Mérve (320x568, a filmből
+       2 mp-enként kivett kockákon): a felirat CÍME 3,18:1-re esett — AA-bukás.
+       A rem-lépcső ezt a sávot fizikai magasságban rögzíti.
+
+       A LÉPCSŐK HITELESÍTÉSE 900 px magas vásznon (a korábbi profil):
+         40% @ 0%   → 40% @ 0
+         30% @ 30%  = 270 px → a mai 14rem (224 px) / 30rem (480 px) lépcső
+         0%  @ 55%  = 495 px → 480 px
+       Vagyis a felső ág gyakorlatilag változatlan; az erősítés (52/42%) a
+       vászon alsó ~220 px-ére szorítkozik, ahol a 4. réteg (lap-háttérbe
+       olvadás) amúgy is 69%-ban fed, tehát a filmkocka látványa nem hígul. */
       linear-gradient(
         to top,
-        color-mix(in srgb, var(--kc-color-bg) 40%, transparent) 0%,
-        color-mix(in srgb, var(--kc-color-bg) 30%, transparent) 30%,
-        transparent 55%
+        color-mix(in srgb, var(--kc-color-bg) 52%, transparent) 0,
+        color-mix(in srgb, var(--kc-color-bg) 42%, transparent) 14rem,
+        transparent 30rem
       ),
     /* 4–5. A TÜKÖR két rétege, változatlanul: alul a lap-háttérbe olvadás
        (nincs éles vágás a következő szekcióig), fölötte a hűvös hangulat. */
@@ -136,10 +165,12 @@ main > .kc-film-hero:first-of-type {
   pointer-events: none;
 }
 
-/* A feliratok a márka display-betűjét viszik, a hero-címmel egy nyelven. A
+/* A feliratok CÍME a márka display-betűjét viszi, a hero-címmel egy nyelven. A
    méret a közös skáláról jön (scroll-scrub.css: törzsméret) — itt csak a
-   metszet, ahogy a címsornál is. */
-.kc-film-hero .scroll-scrub__caption {
+   metszet, ahogy a címsornál is. A cím alatti leírás SZÁNDÉKOSAN marad a lap
+   kenyérbetűjén: a display-betű S-méretben (13–14 px) apró szemmagassággal és
+   erős kontrasztváltással rajzol, ott a Nunito Sans olvashatóbb. */
+.kc-film-hero .scroll-scrub__caption-title {
   font-family: var(--kc-font-heading);
   font-weight: var(--kc-font-weight-normal);
   letter-spacing: 0.01em;
