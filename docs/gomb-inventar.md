@@ -369,9 +369,22 @@ Ezek a `ui-sztenderdek.md` §6.3 **G-UI1** őrének kiegészítései, nem helyet
 | **Időpontkérő űrlap beküldése** | 1 | Időpontot kérek | **#25** | `Időpontot kérek` |
 | **Ingyenes kurzus igénylése (űrlap-beküldés)** | 1 | Kérem a kurzust | **#26** | `Kérem a kurzust` |
 | **Ugrás az igénylő űrlaphoz (lapon belül, a lap aljáról)** | 1 | Kérd az ingyenes kurzust | **#27** | `Kérd az ingyenes kurzust` |
-| Folyamatban | **6** | Feldolgozás… · Küldés… · Mentés… · Belépés… · Regisztráció… · Beállítás… | **L-1** | `Belépés…` `Regisztráció…` `Küldés…` `Mentés…` `Feldolgozás…` `Betöltés…` |
+| **A kurzus saját (értékesítő) oldalára** | **3** | Megnézem a programot · A kurzus megtekintése (lejátszó-kapu) · A kurzus megtekintése (lejárt kártya) | **#28** | `Nyisd meg a kurzusoldalt` |
+| **Befejezett kurzus újranézése** | 1 | Újranézés | **#29** | `Nézd újra a kurzust` |
+| **A kurzus befejezése a lejátszóban** | 1 | Kurzus befejezése | **#30** | `Befejezem a kurzust` |
+| **Fiókadatok mentése** | 1 | Mentés | **#31** | `Mentés` |
+| **Kijelentkezés** | 1 | Kijelentkezés | **#32** | `Kijelentkezés` |
+| **Kapcsolatfelvételi oldalra lépés** | **3** | Kapcsolat · Segítséget kérek · Írj nekünk a kapcsolati oldalon | **#33** | `Írj nekünk` |
+| **A „rólunk" oldalra lépés** | 1 | Bővebben a szakmai hátterünkről | **#34** | `Ismerd meg a hátterünket` |
+| **A tudástár listájára lépés** | 1 | Összes bejegyzés a tudástárban | **#35** | `Nézd meg a tudástárat` |
+| **Süti-beállítások újranyitása** | 1 | Süti-beállítások | **#36** | `Süti-beállítások` |
+| **Jelszó-visszaállítás kezdeményezése** | **2** | Elfelejtetted a jelszavad? · Új link kérése | **#37** | `Elfelejtetted a jelszavad?` |
+| **Ugrás a kezdőlap ingyenes sávjára** | 1 | Ingyenes SOS gyakorlatok | **#38** | `Nézd meg az SOS-kurzust` |
+| Folyamatban | **7** | Feldolgozás… · Küldés… · Mentés… · Belépés… · Regisztráció… · Beállítás… · Kijelentkezés… · Újratöltés folyamatban… | **L-1** | `Belépés…` `Regisztráció…` `Kijelentkezés…` `Küldés…` `Mentés…` `Feldolgozás…` `Betöltés…` |
 
-**Mit mond ez a leképezés összesítve:** 17 mért cselekvésre **41 különböző felirat** él ma; a jóváhagyott szótárban ugyanezekre **21 felirat + 6 folyamatban-alak** van. A legnagyobb nyereség a kurzuslistánál (8 → 1) és a saját kurzusoknál (4 → 1) keletkezik – mindkettő WCAG 2.2 **3.2.4** sérülés ma.
+**Mit mond ez a leképezés összesítve:** 28 mért cselekvésre **63 különböző felirat** élt; a jóváhagyott szótárban ugyanezekre **32 felirat + 7 folyamatban-alak** van. A legnagyobb nyereség a kurzuslistánál (8 → 1) és a saját kurzusoknál (4 → 1) keletkezett – mindkettő WCAG 2.2 **3.2.4** sérülés volt.
+
+> **A hívóhelyek átírása 2026-08-18-án MEGTÖRTÉNT** – lásd az 5.4 szakaszt. A fenti „mért feliratok" oszlop innentől TÖRTÉNETI: azt rögzíti, mi állt a felületen a javítás előtt. Az élő állapotot a **G-UI2** őr méri (`src/__tests__/cta-a-termekben.test.ts`), nem ez a doksi.
 
 **Amit a döntés NEM változtatott meg** (a felirat ma is helyes, kódot nem kell írni): `Belépés`, `Feliratkozom`. **Ami csak a személy miatt maradt E/1-ben, de a szótári alakra pontosítandó:** `Megveszem` → `Megveszem a kurzust`, `Újrapróbálom` (marad, de a másik két alak megszűnik), `Elfogadom` → `Elfogadom mindet`.
 
@@ -438,6 +451,38 @@ marad; alatta nincs, tehát ott megjelenik. Az elsődleges hely változatlanul a
 **A felirat nem a #26 másolata:** a #26 a BEKÜLDÉS (E/1, „Kérem a kurzust"), a #27 a
 NAVIGÁCIÓ (E/2, „Kérd az ingyenes kurzust"). A WCAG 2.2 **3.2.4** azonos *funkciót* kér azonos
 néven; itt két különböző eredmény van, ahogy a #24 ↔ #25 párnál is.
+
+### 5.4 A hívóhelyek átírása (2026-08-18) – a 67 eltérés rendezése
+
+Ez a szakasz a **mérőszámot** rögzíti. A 2026-08-17-i audit a felületen **136 élő
+gombfeliratot** talált, ebből **67 tért el** a jóváhagyott §3.2 szótártól. A termék-oldali őr
+(`src/__tests__/cta-a-termekben.test.ts`, **G-UI2**) ezt **96 soros kivétel-listával** rögzítette.
+
+**A lista 96 → 42 sorra csökkent**, kategóriánként:
+
+| Kategória | Előtte | Utána | Mi történt |
+| --- | --- | --- | --- |
+| `szotartol-elter` | 27 | **1** | 26 hívóhely a §3.2 szótárból olvas (`ctaLabel(...)`). A maradék EGY a `CartView` „Belépés a fizetéshez" felirata: a fájlt ugyanabban a körben másik ügynök birtokolta, ezért csak jelentve van. |
+| `mintazat-jelolt` | 9 | **0** | A kategória MEGSZŰNT: a §3.2 C-6 mintázatai gépi alakot kaptak (`CtaEntry.pattern`), így az őr maga ismeri fel a `Vissza a <hova>` változatokat. |
+| `nincs-szotari-sor` | 20 | **0** | Mind a húsz feliratra szótári sor lett: **#28–#38** (tizenegy új sor), a L-1 lista `Kijelentkezés…` eleme, és a pénztár ingyenes ága a meglévő **#26**-ra. |
+| `nem-cta` | 40 | **41** | Nem csökkenhet: ezek menücímkék, morzsák, folyószöveges hivatkozások, logók, jogi dokumentumnevek. Az egy sor növekedés a `ThankYouView` „Kurzusaim" folyószöveges hivatkozása, amely a `szotartol-elter` kategóriából ide sorolódott át (a komponens három CTA-gombja viszont a #9 alakjára javult). |
+| **Összesen** | **96** | **42** | |
+
+**Két szűk kivétel-lista KIÜRÜLT.** A „Tovább…"-sértéseké (`TOVABB_KIVETELEK`, 2 sor → 0) és a
+kvirtmínuszos feliratoké (`GONDOLATJEL_KIVETELEK`, 2 sor → 0). A felületen innentől **egyetlen**
+„Tovább…" kezdetű és **egyetlen** U+2014-et tartalmazó vevői felirat sincs.
+
+**A WCAG 2.2 · 3.2.4 cél-ütközések 6-ról 4-re csökkentek**, és a maradék négy mind a
+BÖNGÉSZÉS ↔ VISSZALÉPÉS szándékos kettőssége (`/kurzusaim`, `/kurzusok`, `/belepes`, `/blog`),
+nem meg nem javított szinonima. A `/kapcsolat` (3 felirat) és az `/elfelejtett-jelszo`
+(2 felirat) ütközése teljesen megszűnt.
+
+**Amit a kód NEM tud megjavítani.** A szekciósorok (`pages.layout`) az ADATBÁZISBÓL jönnek, és a
+seed sosem ír felül meglévő tartalmat. A `src/lib/home-seed.ts` javított feliratai ezért csak
+FRISS adatbázison érvényesülnek; az élő lapon a `src/scripts/apply-owner-content.ts` külön köre
+kell hozzá. Érintett feliratok: `Tovább a kezelésekre` → `Nézd meg a kezeléseket`,
+`Tovább a kéz workshopra` → `Nézd meg a kézworkshopot`, `Ingyenes SOS gyakorlatok` →
+`Nézd meg az SOS-kurzust`, `Bővebben a szakmai hátterünkről` → `Ismerd meg a hátterünket`.
 
 ---
 

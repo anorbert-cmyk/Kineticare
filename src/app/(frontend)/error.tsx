@@ -6,6 +6,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
+import { CTA_PROGRESS_LABELS, ctaLabel } from '@/lib/cta-vocabulary'
 import { logger } from '@/lib/logger'
 
 /**
@@ -72,8 +73,13 @@ export default function ErrorPage({
           Az oldal betöltése most nem sikerült. Próbáld meg újra, vagy térj vissza rá kicsit később.
         </p>
         <div className="kc-error-page__actions">
+          {/* §3.2 #17: a művelet újraindítása a látogató vállalása (P-1a → E/1);
+              a folyamatban-felirat a ZÁRT L-1 lista `Betöltés…` eleme. Korábban
+              itt „Próbáld újra" + „Újratöltés folyamatban…" állt — egyik sem
+              volt a szótárban, és a felület három alakot használt ugyanerre a
+              cselekvésre (WCAG 2.2 · 3.2.4). */}
           <Button disabled={isPending} onClick={handleRetry}>
-            {isPending ? 'Újratöltés folyamatban…' : 'Próbáld újra'}
+            {isPending ? CTA_PROGRESS_LABELS.loading : ctaLabel('retry')}
           </Button>
           <Button href="/" variant="secondary">
             Vissza a kezdőlapra

@@ -5,6 +5,7 @@ import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
 import { forgotPassword, GENERIC_AUTH_ERROR } from '../../lib/auth-client'
+import { ctaLabel, ctaProgressLabel } from '../../lib/cta-vocabulary'
 
 /**
  * ForgotPasswordForm — jelszó-visszaállító link kérése.
@@ -64,8 +65,10 @@ export function ForgotPasswordForm() {
           {error}
         </div>
       ) : null}
+      {/* §3.2 #21: e-mail indul a látogatónak, tehát elkötelezés (P-1a → E/1).
+          A korábbi „Visszaállító link küldése" deverbális főnévi alak volt. */}
       <Button disabled={submitting || !email.trim()} type="submit">
-        {submitting ? 'Küldés…' : 'Visszaállító link küldése'}
+        {submitting ? ctaProgressLabel('password-reset-request') : ctaLabel('password-reset-request')}
       </Button>
     </form>
   )

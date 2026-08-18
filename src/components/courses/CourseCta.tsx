@@ -8,8 +8,8 @@ import { Button } from '../ui/Button'
  * Állapotgép: src/lib/courses.ts `resolveCourseCta` (egységtesztelve). A
  * komponens NEM dönt, csak megjelenít:
  *
- * - `buy` → „Megveszem" gomb a pénztárra;
- * - `free` → „Ingyenes — azonnal eléred" a kurzusaim oldalra;
+ * - `buy` → §3.2 #1 („Megveszem a kurzust") gomb a pénztárra;
+ * - `free` → §3.2 #3 („Elindítom ingyen") a kurzus saját igénylő űrlapjához;
  * - `purchased` → másodlagos súlyú link a kurzusaimhoz + „Már megvetted" sor;
  * - `archived` / `unavailable` → **NINCS GOMB**, csak a magyarázó mondat.
  *
@@ -35,7 +35,7 @@ export interface CourseCtaProps {
    * ár-pipát — enélkül a hiányos konfigurációjú termék megint „Megveszem"
    * gombot kapna, és a checkout 400-zal utasítaná el.
    */
-  product: Pick<Product, 'id' | 'status' | 'priceInHUF' | 'priceInHUFEnabled'>
+  product: Pick<Product, 'id' | 'slug' | 'status' | 'priceInHUF' | 'priceInHUFEnabled'>
   /** Bejelentkezett felhasználó purchases-listája alapján (csak olvasás). */
   hasPurchased: boolean
   /**

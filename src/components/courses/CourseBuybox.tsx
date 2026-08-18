@@ -65,7 +65,7 @@ export interface CourseBuyboxProps {
    * (nem csak az ár-pipát), különben a hiányosan konfigurált termék olyan
    * vásárlást kínálna, amit a checkout 400-zal elutasít.
    */
-  product: Pick<Product, 'id' | 'status' | 'priceInHUF' | 'priceInHUFEnabled'>
+  product: Pick<Product, 'id' | 'slug' | 'status' | 'priceInHUF' | 'priceInHUFEnabled'>
   hasPurchased: boolean
   /**
    * A CTA HELYÉRE kerülő egyedi tartalom. Megadva a `CourseCta` állapotgép

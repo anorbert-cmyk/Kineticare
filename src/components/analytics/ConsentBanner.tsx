@@ -20,6 +20,7 @@ import {
   type ConsentState,
 } from '@/lib/analytics/consent'
 import { optInToAnalytics, optOutOfAnalytics } from '@/lib/analytics/posthog'
+import { ctaLabel } from '@/lib/cta-vocabulary'
 
 import '../../app/(frontend)/styles/consent-banner.css'
 
@@ -256,20 +257,26 @@ export function ConsentBanner() {
           készítéséhez. Az analitika csak a hozzájárulásával kapcsol be. Részletek az{' '}
           <Link href="/adatvedelem">adatvédelmi tájékoztatóban</Link>.
         </p>
+        {/* A KÉT FELIRAT A SZÓTÁRBÓL (§3.2 #18, 2026-08-18). A korábbi
+            „Elfogadom" nem mondta meg, MIRE vonatkozik az elfogadás (NN/g,
+            Better Link Labels — „Substantial"), az „Elutasítom" pedig
+            FÉLREVEZETETT: a működéshez szükséges sütik nem utasíthatók el, a
+            gomb valójában „csak a szükségeseket" hagyja bekapcsolva.
+            A két gomb SÚLYA változatlanul azonos (nem dark pattern). */}
         <div className="kc-consent-banner__actions">
           <button
             className="kc-consent-banner__button kc-consent-banner__button--accept"
             onClick={onAccept}
             type="button"
           >
-            Elfogadom
+            {ctaLabel('consent-accept-all')}
           </button>
           <button
             className="kc-consent-banner__button kc-consent-banner__button--decline"
             onClick={onDecline}
             type="button"
           >
-            Elutasítom
+            {ctaLabel('consent-essential-only')}
           </button>
         </div>
       </div>

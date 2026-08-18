@@ -13,14 +13,14 @@
  * ─────────────────────────────────────────────────────────────────────────────
  *   törzsszöveg fehér az ink sávon ............................ 15,63:1  T ✓
  *   „adatvédelmi tájékoztató" accent-quiet + aláhúzás az inken .  8,49:1  T ✓
- *   „Elfogadom": ink felirat a fehér kitöltésen ............... 15,63:1  T ✓
- *   „Elfogadom" kitöltése a sávhoz (a komponens határa) ....... 15,63:1  N ✓
- *   „Elutasítom": fehér felirat + 2px fehér keret az inken .... 15,63:1  T/N ✓
+ *   „Elfogadom mindet": ink felirat a fehér kitöltésen ........ 15,63:1  T ✓
+ *   „Elfogadom mindet" kitöltése a sávhoz (a komponens határa)  15,63:1  N ✓
+ *   „Csak a szükségeseket": fehér felirat + 2px keret az inken  15,63:1  T/N ✓
  *   FÓKUSZGYŰRŰ (javítva): fehér az ink sávon ................. 15,63:1  N ✓
  *     — a globális accent-deep gyűrű itt csak 2,87:1 volt (1.4.11 + 2.4.7
  *       bukás); a `--kc-color-focus-on-dark` ugyanaz a szerep-token, amit a
  *       `.kc-section--dark` és a lejátszó sötét felülete is használ.
- *     — a FEHÉR „Elfogadom" gombon a gyűrű a 2px-es offset miatt a SÁVRA esik,
+ *     — a FEHÉR „Elfogadom mindet" gombon a gyűrű a 2px-es offset miatt a SÁVRA esik,
  *       nem a gomb lapjára: mindkét éle 15,63:1 (ink↔fehér).
  *
  * ─────────────────────────────────────────────────────────────────────────────

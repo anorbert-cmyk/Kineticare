@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { ctaLabel } from '../../../lib/cta-vocabulary'
 import { sanitizeCmsUrl } from '../../../lib/safe-url'
 import { Container } from '../../ui/Container'
 import { Section } from '../../ui/Section'
@@ -29,8 +30,15 @@ const CREDENTIALS: string[] = [
   'Szakmai egyesületi tagság',
 ]
 
+/**
+ * A csík alapértelmezett hivatkozása. A felirat a §3.2 #34 szótári sora: a
+ * korábbi „Bővebben a szakmai hátterünkről" öt szó volt (M-3: legfeljebb négy),
+ * nem igével kezdett, és a „Bővebben" a GOV.UK által kifejezetten kerülendő
+ * általános linkszöveg magyar párja („avoid generic text like 'click here' or
+ * 'more'").
+ */
 const DEFAULT_LINK: CredentialsLink = {
-  label: 'Bővebben a szakmai hátterünkről',
+  label: ctaLabel('about-open'),
   href: '/rolunk',
 }
 

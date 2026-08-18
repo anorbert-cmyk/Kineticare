@@ -9,7 +9,9 @@ import {
   buildCtaIndex,
   ctaEntry,
   ctaLabel,
+  ctaPatternEntry,
   ctaProgressLabel,
+  isApprovedCtaLabel,
   type CtaAction,
   type CtaEntry,
 } from '@/lib/cta-vocabulary'
@@ -220,6 +222,47 @@ describe('G-UI1 – CTA-szótár: egy cselekvés = egy felirat (WCAG 2.2 SC 3.2.
   it('minden bejegyzés hivatkozik a §3.2 sorszámára (visszakereshetőség)', () => {
     const offenders = CTA_VOCABULARY.filter((entry) => !entry.section.startsWith('#'))
     expect(offenders.map((entry) => entry.action)).toEqual([])
+  })
+
+  it('a `patterned` és a `pattern` mező EGYÜTT jár (C-6, 2026-08-18)', () => {
+    // A `patterned: true` 2026-08-18 előtt csak EMBERNEK szóló jelölés volt,
+    // ezért a termék-oldali őr kilenc szabályos `Vissza a …` feliratot
+    // kivétel-sorként vezetett. A gépi alak (`pattern`) ezt zárja be — de csak
+    // akkor, ha a kettő nem tud szétcsúszni.
+    const szetcsuszott = CTA_VOCABULARY.filter(
+      (entry) => entry.patterned !== (entry.pattern !== null),
+    ).map((entry) => `${entry.section} ${entry.action}`)
+    expect(
+      szetcsuszott,
+      '`patterned: true` mellett KÖTELEZŐ a `pattern`, és fordítva',
+    ).toEqual([])
+  })
+
+  it('minden MINTÁZATOS sor saját felirata illeszkedik a saját mintázatára', () => {
+    // Enélkül egy elgépelt mintázat („^Vissza az …") némán elfogadna mindent,
+    // amit nem kellene, és elutasítaná a kanonikus alakot.
+    const nemIllik = CTA_VOCABULARY.filter(
+      (entry) => entry.pattern !== null && !new RegExp(entry.pattern, 'u').test(entry.label),
+    ).map((entry) => `${entry.section} „${entry.label}" ↛ /${entry.pattern ?? ''}/`)
+    expect(nemIllik, 'a mintázat nem ismeri fel a saját kanonikus feliratát').toEqual([])
+  })
+
+  it('a mintázat KÖTELEZŐ, nem üres tárgyat kér (a puszta alak nem „Substantial")', () => {
+    expect(ctaPatternEntry('Vissza a kezdőlapra')?.action).toBe('back-to-courses')
+    expect(ctaPatternEntry('Letöltöm az igazolást')?.action).toBe('invoice-download')
+    expect(ctaPatternEntry('Hívd Kiss Katát')?.action).toBe('call-specialist')
+
+    for (const puszta of ['Vissza', 'Vissza a', 'Vissza a ', 'Letöltöm', 'Hívd', 'Hívd ']) {
+      expect(ctaPatternEntry(puszta), `a puszta „${puszta}" nem lehet mintázatos alak`).toBeNull()
+    }
+  })
+
+  it('`isApprovedCtaLabel`: szótári VAGY mintázatos, más nem', () => {
+    expect(isApprovedCtaLabel('Megveszem a kurzust')).toBe(true)
+    expect(isApprovedCtaLabel('Küldés…')).toBe(false) // L-1, nem §3.2-felirat
+    expect(isApprovedCtaLabel('Vissza a Tudástárba')).toBe(true)
+    expect(isApprovedCtaLabel('Tovább a kurzusaimhoz')).toBe(false)
+    expect(isApprovedCtaLabel('Megveszem')).toBe(false)
   })
 
   it('a lekérdező függvények a szótárból dolgoznak, ismeretlen kulcsra pedig hangosan buknak', () => {

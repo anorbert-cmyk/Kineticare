@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { courseHref } from '../../lib/course-url'
 import { AUDIENCE_LABELS, normalizeAudience } from '../../lib/course-audience'
 import { coursePriceBadgeKind, courseTitle } from '../../lib/courses'
+import { ctaLabel } from '../../lib/cta-vocabulary'
 import type { Product } from '../../payload-types'
 import { Badge } from '../ui/Badge'
 import { Card } from '../ui/Card'
@@ -59,8 +60,19 @@ import '../../app/(frontend)/styles/blocks/course-cards.css'
  * se másik akadálymentességi minta nem tartozik hozzá.
  */
 
-/** A CTA-gomb beépített felirata — a blokk `ctaLabel` mezője felülírja. */
-export const DEFAULT_CTA_LABEL = 'Megnézem a programot'
+/**
+ * A kártya affordancia-feliratának alapértéke — a blokk `ctaLabel` mezője
+ * felülírja.
+ *
+ * A SZÓTÁRBÓL olvas (§3.2 #28, `course-sales-open`), nem literálként: a kártya
+ * a kurzus SAJÁT oldalára visz, ugyanoda, ahova a lejátszó „lejárt a
+ * hozzáférésed" kapuja és a /kurzusaim lejárt kártyája — egy cselekvés, egy
+ * felirat (WCAG 2.2 · 3.2.4). A korábbi „Megnézem a programot" a mért nyolc
+ * párhuzamos „kurzus felé" felirat egyike volt (docs/gomb-inventar.md §5), és
+ * ráadásul „program"-nak nevezte azt, amit a felület mindenhol máshol
+ * „kurzus"-nak hív (C-4: egy fogalom, egy szó).
+ */
+export const DEFAULT_CTA_LABEL = ctaLabel('course-sales-open')
 
 export interface ProductCardProps {
   // A megjelenített név a displayTitle → sku lánc (courseTitle), az URL pedig a

@@ -11,6 +11,7 @@ import {
 } from '@/lib/analytics/barion-events'
 import { DEFAULT_AUTH_RETURN_URL, sanitizeReturnUrl } from '@/lib/return-url'
 import { loginUser, type AuthResult } from '../../lib/auth-client'
+import { ctaLabel, ctaProgressLabel } from '../../lib/cta-vocabulary'
 
 /**
  * LoginForm — a bejelentkezés űrlapja (Payload auth REST-re).
@@ -116,7 +117,7 @@ export function LoginForm({ returnUrl }: LoginFormProps) {
         </div>
       ) : null}
       <Button disabled={submitting} type="submit">
-        {submitting ? 'Belépés…' : 'Belépés'}
+        {submitting ? ctaProgressLabel('sign-in') : ctaLabel('sign-in')}
       </Button>
     </form>
   )

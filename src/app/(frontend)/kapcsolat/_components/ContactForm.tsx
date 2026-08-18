@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
+import { ctaLabel, ctaProgressLabel } from '@/lib/cta-vocabulary'
 
 import {
   buildSubmissionPayload,
@@ -289,8 +290,12 @@ export function ContactForm({ formId, turnstileSiteKey }: ContactFormProps) {
         </p>
       ) : null}
 
+      {/* §3.2 #12: adat megy el, tehát elkötelezés (P-1a → E/1). A régi
+          kineticare.hu kapcsolat-űrlapján szó szerint ELKÜLDÖM állt (mérve:
+          docs/regi-oldal-osszehasonlitas.md 3.1) — Jakob törvénye. A korábbi
+          „Üzenet küldése" deverbális főnévi alak volt (M-1). */}
       <Button disabled={!formAvailable || submitting} type="submit">
-        {submitting ? 'Küldés…' : 'Üzenet küldése'}
+        {submitting ? ctaProgressLabel('contact-submit') : ctaLabel('contact-submit')}
       </Button>
     </form>
   )

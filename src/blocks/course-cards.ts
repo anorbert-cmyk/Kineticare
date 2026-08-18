@@ -57,8 +57,11 @@ export const courseCards: Block = {
       type: 'text',
       label: 'Gombfelirat a kártyákon',
       admin: {
+        // A súgó a JÓVÁHAGYOTT alakot mutatja (§3.2 #28), nem a régi
+        // „Megnézem a programot"-ot: a mezősúgó a szerkesztő mintája, tehát
+        // amit itt írunk, azt fogja írni ő is.
         description:
-          'A kurzuskártyák alján megjelenő gomb felirata. Nem kötelező — üresen a beépített felirat marad („Megnézem a programot”). A gomb dekoratív: maga a KÁRTYA a link.',
+          'A kurzuskártyák alján megjelenő gomb felirata. Nem kötelező — üresen a beépített, jóváhagyott felirat marad („Nyisd meg a kurzusoldalt”). A gomb dekoratív: maga a KÁRTYA a link.',
       },
     },
     sectionSettings(),

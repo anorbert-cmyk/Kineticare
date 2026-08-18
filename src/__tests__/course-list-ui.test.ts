@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { CourseList } from '../components/account/CourseList'
 import {
   buildCourseCardView,
+  courseCtaContext,
   courseCtaLabel,
   courseListSummary,
   courseMetaLine,
@@ -15,6 +16,7 @@ import {
   type CourseCardView,
 } from '../components/account/course-list-order'
 import { ACCESS_EXPIRED_TITLE, accessExpiredMessage } from '../lib/course-access'
+import { ctaLabel } from '../lib/cta-vocabulary'
 import { buildCurriculum } from '../lib/curriculum/curriculum'
 import { NO_LESSONS_LABEL } from '../lib/curriculum/progress'
 import type { Product } from '../payload-types'
@@ -200,45 +202,68 @@ describe('resolveCourseCardStatus — az állapotgép', () => {
   })
 })
 
-describe('courseCtaLabel — a gombfelirat-állapotgép', () => {
-  it('el nem kezdett kurzus → „Kezdés"', () => {
-    expect(courseCtaLabel({ status: 'not-started', totalLessons: 3, resumeLessonTitle: null })).toBe(
-      'Kezdés',
+describe('courseCtaLabel — a gombfelirat-állapotgép (kizárólag §3.2 szótári alakok)', () => {
+  it('el nem kezdett kurzus → §3.2 #8', () => {
+    expect(courseCtaLabel({ status: 'not-started', totalLessons: 3 })).toBe(
+      ctaLabel('course-start'),
     )
   })
 
-  it('folyamatban → a KÖVETKEZŐ lecke címével', () => {
+  it('folyamatban → §3.2 #7, a lecke címe NÉLKÜL (az a hozzáférhető névbe való)', () => {
+    expect(courseCtaLabel({ status: 'in-progress', totalLessons: 3 })).toBe(
+      ctaLabel('course-continue'),
+    )
+  })
+
+  it('befejezett → §3.2 #29', () => {
+    expect(courseCtaLabel({ status: 'completed', totalLessons: 3 })).toBe(
+      ctaLabel('course-rewatch'),
+    )
+  })
+
+  it('lejárt → §3.2 #28 (a kurzus saját oldala)', () => {
+    expect(courseCtaLabel({ status: 'expired', totalLessons: 3 })).toBe(
+      ctaLabel('course-sales-open'),
+    )
+  })
+
+  it('tananyag nélküli kurzus ugyanazt a cselekvést kapja, mint az el nem kezdett (#8)', () => {
+    expect(courseCtaLabel({ status: 'not-started', totalLessons: 0 })).toBe(
+      ctaLabel('course-start'),
+    )
+  })
+})
+
+describe('courseCtaContext — a lecke neve a HOZZÁFÉRHETŐ névbe kerül (WCAG 2.2 · 2.5.3)', () => {
+  it('folyamatban lévő kurzuson a következő lecke neve is benne van', () => {
     expect(
-      courseCtaLabel({
+      courseCtaContext({
         status: 'in-progress',
-        totalLessons: 3,
+        title: 'Kéztorna otthon',
         resumeLessonTitle: 'Csuklóhajlítás alapjai',
       }),
-    ).toBe('Folytatás: Csuklóhajlítás alapjai')
+    ).toBe('Kéztorna otthon, következő lecke: Csuklóhajlítás alapjai')
   })
 
-  it('folyamatban, ismeretlen lecke-cím → puszta „Folytatás"', () => {
+  it('ismeretlen lecke-címnél csak a kurzus neve marad (kitalált címet nem írunk)', () => {
     expect(
-      courseCtaLabel({ status: 'in-progress', totalLessons: 3, resumeLessonTitle: null }),
-    ).toBe('Folytatás')
+      courseCtaContext({ status: 'in-progress', title: 'Kéztorna otthon', resumeLessonTitle: null }),
+    ).toBe('Kéztorna otthon')
   })
 
-  it('befejezett → „Újranézés"', () => {
-    expect(courseCtaLabel({ status: 'completed', totalLessons: 3, resumeLessonTitle: 'X' })).toBe(
-      'Újranézés',
-    )
+  it('nem folyamatban lévő kurzuson a lecke neve nem jelenik meg', () => {
+    expect(
+      courseCtaContext({ status: 'completed', title: 'Kéztorna otthon', resumeLessonTitle: 'X' }),
+    ).toBe('Kéztorna otthon')
   })
 
-  it('lejárt → „A kurzus megtekintése"', () => {
-    expect(courseCtaLabel({ status: 'expired', totalLessons: 3, resumeLessonTitle: 'X' })).toBe(
-      'A kurzus megtekintése',
-    )
-  })
-
-  it('tananyag nélküli kurzuson nincs mit „kezdeni"', () => {
-    expect(courseCtaLabel({ status: 'not-started', totalLessons: 0, resumeLessonTitle: null })).toBe(
-      'A kurzus megnyitása',
-    )
+  it('a kiegészítésben nincs kvirtmínusz (§3.1.1)', () => {
+    const context = courseCtaContext({
+      status: 'in-progress',
+      title: 'Kéztorna otthon',
+      resumeLessonTitle: 'Csuklóhajlítás alapjai',
+    })
+    expect(context.includes(String.fromCharCode(0x2014))).toBe(false)
   })
 })
 
@@ -288,17 +313,18 @@ describe('buildCourseCardView — a kész kártya-nézet', () => {
     expect(view.percent).toBe(33)
     expect(view.showProgress).toBe(true)
     expect(view.metaLine).toBe('1/3 lecke · kb. 42 perc van hátra')
-    expect(view.ctaLabel).toBe('Folytatás: Csuklóhajlítás alapjai')
+    expect(view.ctaLabel).toBe(ctaLabel('course-continue'))
+    expect(view.ctaContext).toBe('Otthoni KézRehab, következő lecke: Csuklóhajlítás alapjai')
     expect(view.progressValueText).toBe('1/3 lecke kész')
   })
 
-  it('befejezett kurzus: 100%, „Újranézés", hátralévő idő nélkül', () => {
+  it('befejezett kurzus: 100%, §3.2 #29 felirat, hátralévő idő nélkül', () => {
     const view = card({ watched: MINDEN_LECKE })
 
     expect(view.status).toBe('completed')
     expect(view.percent).toBe(100)
     expect(view.metaLine).toBe('3/3 lecke')
-    expect(view.ctaLabel).toBe('Újranézés')
+    expect(view.ctaLabel).toBe(ctaLabel('course-rewatch'))
   })
 
   it('lejárt hozzáférés: nincs haladás-rajz, a felirat a kurzusoldalra visz', () => {
@@ -306,7 +332,7 @@ describe('buildCourseCardView — a kész kártya-nézet', () => {
 
     expect(view.status).toBe('expired')
     expect(view.showProgress).toBe(false)
-    expect(view.ctaLabel).toBe('A kurzus megtekintése')
+    expect(view.ctaLabel).toBe(ctaLabel('course-sales-open'))
     expect(view.href).toBe('/kurzusok/42')
   })
 
@@ -384,7 +410,7 @@ describe('CourseList — megjelenítés', () => {
     const html = render([])
 
     expect(html).toContain('Itt jelennek meg a kurzusaid')
-    expect(html).toContain('Kurzusok megnézése')
+    expect(html).toContain(ctaLabel('course-list-open'))
     expect(hrefValues(html)).toContain('/kurzusok')
   })
 
@@ -397,12 +423,15 @@ describe('CourseList — megjelenítés', () => {
     expect(html).not.toContain('<button')
   })
 
-  it('a gomb akadálymentes neve tartalmazza a kurzus nevét is', () => {
+  it('a gomb akadálymentes neve tartalmazza a kurzus ÉS a következő lecke nevét is', () => {
     const html = render([card({ watched: ['lecke-1'] })])
 
-    expect(html).toContain('Folytatás: Csuklóhajlítás alapjai')
+    // A LÁTHATÓ felirat a szótári alak; a megkülönböztetés (melyik kurzus,
+    // melyik lecke) rejtett szövegben él — §3.2 #17 minta, WCAG 2.2 · 2.5.3
+    // (a hozzáférhető név a látható felirattal KEZDŐDIK).
+    expect(html).toContain(ctaLabel('course-continue'))
     expect(html).toContain('kc-visually-hidden')
-    expect(html).toContain(' — Otthoni KézRehab')
+    expect(html).toContain(': Otthoni KézRehab, következő lecke: Csuklóhajlítás alapjai')
   })
 
   it('a haladás szövegesen IS ott van (a kör dekoratív)', () => {

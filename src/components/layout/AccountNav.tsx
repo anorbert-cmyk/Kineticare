@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 
+import { CTA_PROGRESS_LABELS, ctaLabel } from '../../lib/cta-vocabulary'
 import { logoutUser } from '../../lib/logout-client'
 
 /**
@@ -93,11 +94,14 @@ export interface AccountNavProps {
 }
 
 export const ACCOUNT_NAV_LABELS = {
-  signIn: 'Belépés',
+  /** §3.2 #5 – bevett, egyszavas címke (P-1c). */
+  signIn: ctaLabel('sign-in'),
+  /** A fiókmenü menüpontjának NEVE (N-3: menücímke, nem CTA) — nem szótári sor. */
   myCourses: 'Kurzusaim',
-  signOut: 'Kijelentkezés',
-  /** Folyamatban-felirat: három pont, gondolatjel nélkül (ui-sztenderdek §3.1.3, L-1). */
-  signOutPending: 'Kijelentkezés…',
+  /** §3.2 #32 – a #5 szabályos párja, ugyanaz a P-1c kivétel. */
+  signOut: ctaLabel('sign-out'),
+  /** L-1 folyamatban-felirat: három pont (U+2026), gondolatjel nélkül. */
+  signOutPending: CTA_PROGRESS_LABELS['sign-out'],
 } as const
 
 export function AccountNav({ signedIn, variant, onNavigate }: AccountNavProps) {

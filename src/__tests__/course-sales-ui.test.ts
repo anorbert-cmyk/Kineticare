@@ -144,7 +144,11 @@ describe('CourseBuybox — a lap egyetlen elsődleges célja', () => {
     })
 
     expect(archived).not.toContain('Megveszem')
-    expect(archived).toContain('Ez a kurzus jelenleg nem vásárolható.')
+    // A §3.2 #16 mondata + a NN/g Error-Message Guidelines szerinti
+    // továbblépés („Merely stating the problem is also not enough; offer some
+    // potential remedies") — 2026-08-18 óta az archivált ág sem zsákutca.
+    expect(archived).toContain('Ez a kurzus jelenleg nem vásárolható meg.')
+    expect(archived).toContain('Nézd meg a többi kurzusunkat')
   })
 
   it('a VÁSÁROLHATÓ termék gombja változatlanul megjelenik (nincs túlfogás)', () => {

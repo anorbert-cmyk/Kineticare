@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { ctaLabel } from '../../../lib/cta-vocabulary'
 import type { Post } from '../../../payload-types'
 import { Container } from '../../ui/Container'
 import { Section } from '../../ui/Section'
@@ -68,7 +69,11 @@ export function KnowledgeSection({
         </div>
         <p className="kc-section-more">
           <Link className="kc-text-link kc-knowledge__link" href="/blog">
-            <span className="kc-text-link__label">Összes bejegyzés a tudástárban</span>
+            {/* §3.2 #35 — a tudástár BÖNGÉSZÉSE. A „Vissza a Tudástárba" (a
+                #15 mintázata) SZÁNDÉKOSAN marad külön: az visszalépés, ez
+                belépés — ugyanaz a kettősség, mint a #10 ↔ #15 párnál a
+                /kurzusok célon. */}
+            <span className="kc-text-link__label">{ctaLabel('knowledge-list-open')}</span>
             <span aria-hidden="true" className="kc-text-link__arrow">
               →
             </span>
