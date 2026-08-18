@@ -7,6 +7,7 @@ import { headers } from 'next/headers'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { LoginForm } from '@/components/auth/LoginForm'
+import { ctaLabel } from '@/lib/cta-vocabulary'
 import { DEFAULT_AUTH_RETURN_URL, sanitizeReturnUrl } from '@/lib/return-url'
 import type { User } from '@/payload-types'
 
@@ -59,11 +60,19 @@ export default async function BelepesPage({ searchParams }: BelepesPageProps) {
           Lépj be a fiókodba a kurzusaid, a rendeléseid és a lejátszásaid eléréséhez.
         </p>
         <LoginForm returnUrl={returnUrl} />
+        {/* A két hivatkozás felirata a §3.2 szótárból: #6 („Regisztráció" —
+            a nav-menü és a beküldő gomb is így nevezi, WCAG 2.2 · 3.2.4) és
+            #37 („Elfelejtetted a jelszavad?" — a cél oldal H1 címe, GOV.UK:
+            „Consider using the title of the page the link goes to as your
+            link text"). A korábbi „Regisztrálj" harmadik alak volt ugyanarra a
+            cselekvésre. */}
         <p className="kc-auth-alt">
           Még nincs fiókod?{' '}
-          <Link href={`/regisztracio?returnUrl=${encodeURIComponent(returnUrl)}`}>Regisztrálj</Link>
+          <Link href={`/regisztracio?returnUrl=${encodeURIComponent(returnUrl)}`}>
+            {ctaLabel('sign-up')}
+          </Link>
           {' · '}
-          <Link href="/elfelejtett-jelszo">Elfelejtetted a jelszavad?</Link>
+          <Link href="/elfelejtett-jelszo">{ctaLabel('password-reset-start')}</Link>
         </p>
       </Container>
     </Section>

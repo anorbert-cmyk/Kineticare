@@ -129,7 +129,16 @@ export const FREE_COURSE_SUCCESS_BODY =
 export const FREE_COURSE_NO_EMAIL_TITLE = 'A hozzáférésed elkészült'
 export const FREE_COURSE_NO_EMAIL_BODY =
   'A belépő linket viszont most nem tudjuk kiküldeni, mert a levélküldésünk éppen nem működik. Írj nekünk ugyanerről az e-mail-címről, és kézzel elküldjük a linket.'
-export const FREE_COURSE_NO_EMAIL_LINK_LABEL = 'Írj nekünk a kapcsolati oldalon'
+/**
+ * A „nem ment ki a levél" ág kisegítő hivatkozásának felirata.
+ *
+ * A §3.2 #33 szótári sorából olvas: a `/kapcsolat` oldalra vivő cselekvés
+ * felirata a felület MINDEN pontján ugyanaz (WCAG 2.2 · 3.2.4). A korábbi
+ * „Írj nekünk a kapcsolati oldalon" öt szó volt (M-3), és a köszönőoldal
+ * „Segítséget kérek" / „Kapcsolat" gombjaival együtt HÁROM feliratot adott
+ * ugyanarra a célra.
+ */
+export const FREE_COURSE_NO_EMAIL_LINK_LABEL = ctaLabel('contact-open')
 
 /** Általános szerverhiba — a szerver válasza felülírhatja. */
 export const FREE_COURSE_GENERIC_ERROR =

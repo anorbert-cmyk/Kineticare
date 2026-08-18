@@ -148,7 +148,17 @@ const kommentNelkul = (forras: string): string =>
 const VART = {
   nemVasarolhatoSzoveg:
     'Ez a kurzus jelenleg nem vásárolható meg. Nézd meg a többi kurzusunkat, vagy írj nekünk, ha kérdésed van.',
-  archivaltTetelSzoveg: 'Ez a kurzus jelenleg nem vásárolható.',
+  /**
+   * 2026-08-18: az archivált ág szövege a NEM VÁSÁROLHATÓ ággal EGYEZŐRE
+   * változott. A korábbi „Ez a kurzus jelenleg nem vásárolható." egyetlen
+   * mondat volt, továbblépés nélkül — NN/g, Error-Message Guidelines: „Merely
+   * stating the problem is also not enough; offer some potential remedies."
+   * (https://www.nngroup.com/articles/error-message-guidelines/). A látogató
+   * szemszögéből a két állapot ugyanaz, ezért ugyanazt is olvassa
+   * (WCAG 2.2 · 3.2.4).
+   */
+  archivaltTetelSzoveg:
+    'Ez a kurzus jelenleg nem vásárolható meg. Nézd meg a többi kurzusunkat, vagy írj nekünk, ha kérdésed van.',
   kurzuslistaFelirat: 'Nézd meg a kurzusokat',
   penztarFelirat: 'Menj a pénztárhoz',
   kivetelFelirat: 'Kiveszem a kosárból',

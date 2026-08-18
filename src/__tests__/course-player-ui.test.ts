@@ -23,6 +23,7 @@ import {
   writeModuleState,
   type ModuleStateStorage,
 } from '../components/account/player/navigation'
+import { ctaLabel } from '../lib/cta-vocabulary'
 import { buildCurriculum, type Curriculum } from '../lib/curriculum/curriculum'
 import type { Product } from '../payload-types'
 
@@ -160,10 +161,14 @@ describe('primaryAction — a gombfeliratok állapotgépe', () => {
     expect(primaryAction(curriculum, 'l4', new Set())?.moduleHint).toBeNull()
   })
 
-  it('utolsó lecke, még nem kész: „Kurzus befejezése", lépés nélkül', () => {
+  it('utolsó lecke, még nem kész: §3.2 #30 felirat, lépés nélkül', () => {
     const action = primaryAction(curriculum, 'l5', new Set(['l1', 'l3', 'l4']))
     expect(action?.kind).toBe('complete-course')
-    expect(action?.label).toBe('Kurzus befejezése')
+    expect(action?.label).toBe(ctaLabel('course-finish'))
+    // A hozzáférhető név a LÁTHATÓ felirattal kezdődik (WCAG 2.2 · 2.5.3), és a
+    // lecke nevét kettőspont vezeti be — a korábbi kvirtmínusz tiltott (§3.1.1).
+    expect(action?.ariaLabel.startsWith(`${ctaLabel('course-finish')}: `)).toBe(true)
+    expect(action?.ariaLabel.includes(String.fromCharCode(0x2014))).toBe(false)
     expect(action?.marksWatched).toBe(true)
     expect(action?.targetRef).toBeNull()
     expect(action?.disabled).toBe(false)

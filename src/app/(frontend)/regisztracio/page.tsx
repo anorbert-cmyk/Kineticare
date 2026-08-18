@@ -7,6 +7,7 @@ import { headers } from 'next/headers'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { RegisterForm } from '@/components/auth/RegisterForm'
+import { ctaLabel } from '@/lib/cta-vocabulary'
 import { DEFAULT_AUTH_RETURN_URL, sanitizeReturnUrl } from '@/lib/return-url'
 import type { User } from '@/payload-types'
 
@@ -56,9 +57,14 @@ export default async function RegisztracioPage({ searchParams }: RegisztracioPag
           Hozd létre a fiókodat: a kurzusaid, a rendeléseid és a lejátszásaid egy helyen lesznek.
         </p>
         <RegisterForm returnUrl={returnUrl} />
+        {/* §3.2 #5: a belépés felirata MINDENHOL „Belépés" (P-1c, bevett
+            egyszavas címke) — a fejlécben, a beküldő gombon és itt is
+            (WCAG 2.2 · 3.2.4). A korábbi „Lépj be" negyedik alak volt. */}
         <p className="kc-auth-alt">
           Már van fiókod?{' '}
-          <Link href={`/belepes?returnUrl=${encodeURIComponent(returnUrl)}`}>Lépj be</Link>
+          <Link href={`/belepes?returnUrl=${encodeURIComponent(returnUrl)}`}>
+            {ctaLabel('sign-in')}
+          </Link>
         </p>
       </Container>
     </Section>

@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url'
 
 import type { Payload } from 'payload'
 
+import { ctaLabel } from './cta-vocabulary'
 import { logger } from './logger'
 
 import { HOME_PAGE_SLUG } from './content-slugs'
@@ -276,13 +277,15 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
     title: HOME_HERO_TITLE,
     lead: HOME_HERO_LEAD,
     tags: [{ label: 'Kéz' }, { label: 'Csukló' }, { label: 'Könyök' }, { label: 'Váll' }],
-    // A felirat a jóváhagyott szótárból jön (docs/ui-sztenderdek.md §3.2 #10,
-    // kódbeli szótár: src/lib/cta-vocabulary.ts `course-list-open`). Egy
-    // cselekvésre EGY felirat az egész lapon — WCAG 2.2 3.2.4 Consistent
-    // Identification.
+    // MINDKÉT felirat a jóváhagyott szótárból jön (docs/ui-sztenderdek.md
+    // §3.2 #10 `course-list-open` és #38 `free-strip-jump`; kódbeli szótár:
+    // src/lib/cta-vocabulary.ts). Egy cselekvésre EGY felirat az egész lapon —
+    // WCAG 2.2 3.2.4 Consistent Identification. A hero másodlagos gombja a
+    // `HeroCta` komponens párja: a kettő ugyanoda (`#ingyenes`) visz, ezért
+    // ugyanazt is mondja.
     ctas: [
-      { felirat: 'Nézd meg a kurzusokat', url: '/kurzusok', ujAblakban: false },
-      { felirat: 'Ingyenes SOS gyakorlatok', url: '#ingyenes', ujAblakban: false },
+      { felirat: ctaLabel('course-list-open'), url: '/kurzusok', ujAblakban: false },
+      { felirat: ctaLabel('free-strip-jump'), url: '#ingyenes', ujAblakban: false },
     ],
     sectionSettings: { visible: true },
   },
@@ -296,7 +299,11 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
       { text: 'Sportolók és olimpikonok is hozzánk fordulnak' },
       { text: 'Szakmai egyesületi tagság' },
     ],
-    link: { felirat: 'Bővebben a szakmai hátterünkről', url: '/rolunk', ujAblakban: false },
+    // A felirat a jóváhagyott szótárból (docs/ui-sztenderdek.md §3.2 #34,
+    // `about-open`). A korábbi „Bővebben a szakmai hátterünkről" öt szó volt
+    // (M-3 korlátja négy), és a „Bővebben" a GOV.UK által kerülendő általános
+    // linkszöveg magyar párja.
+    link: { felirat: ctaLabel('about-open'), url: '/rolunk', ujAblakban: false },
     sectionSettings: { visible: true, hatter: 'feher' },
   },
 
@@ -461,7 +468,12 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
         number: '01',
         title: 'Rendelői kezelések',
         body: 'Akut sérülések, műtét utáni állapotok és krónikus fájdalmak esetén a mozgásterápia a gyógyulás alappillére. Gyógytornával, manuálterápiával és egy sor kiegészítő terápiával várunk a stúdiónkban.',
-        felirat: 'Tovább a kezelésekre',
+        // A korábbi „Tovább a kezelésekre" puszta „Tovább"-bal kezdett, amit a
+        // §3.1.4 M-7 tilt (a felirat nem mondja meg, mi történik). Az igei alak
+        // a GOV.UK írásmódját követi: „If your link takes the user to a page
+        // where they can start a task, start your link with a verb."
+        // https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/writing-guidelines/add-links/
+        felirat: 'Nézd meg a kezeléseket',
         url: '/szolgaltatasok',
         ujAblakban: false,
       },
@@ -483,7 +495,12 @@ export const buildHomeLayout = (media: HomeMediaIds = {}): NonNullable<Page['lay
         number: '03',
         title: 'Szakmai képzések',
         body: 'Akkreditált tantermi kézkurzusunkat a ProBody Stúdióval együttműködve hoztuk létre a kéz, a csukló- és könyökízület rehabilitációs lehetőségeiről gyógytornászoknak, orvosoknak, erőnléti és szakági edzőknek.',
-        felirat: 'Tovább a kéz workshopra',
+        // Ua. a M-7 miatt: a puszta „Tovább" helyett ige + megnevezett cél.
+        // A sor KÜLSŐ oldalra visz, ezért a felirat a partner anyagát nevezi
+        // meg (NN/g, Better Link Labels — „Specific": a felirat mondja meg,
+        // mit talál a látogató a kattintás túloldalán).
+        // https://www.nngroup.com/articles/better-link-labels/
+        felirat: 'Nézd meg a kézworkshopot',
         url: 'https://probodystudio.hu/kez-workshop/',
         ujAblakban: true,
       },

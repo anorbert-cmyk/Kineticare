@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { AccountView } from '../components/account/AccountView'
+import { ctaLabel } from '../lib/cta-vocabulary'
 import type { Order, User } from '../payload-types'
 
 /**
@@ -48,8 +49,13 @@ function renderAccount(invoicePdfUrl: string | null): string {
   )
 }
 
-/** A számlalink szövege — ennek megléte/hiánya a diszkrimináló jel. */
-const INVOICE_LINK_LABEL = 'Számla letöltése'
+/**
+ * A számlalink szövege — ennek megléte/hiánya a diszkrimináló jel.
+ * A §3.2 #14 szótári sorából olvas (2026-08-18): a korábbi „Számla letöltése"
+ * deverbális főnévi alak volt, pedig a letöltés a látogató gépén hoz létre
+ * fájlt (P-1a → E/1).
+ */
+const INVOICE_LINK_LABEL = ctaLabel('invoice-download')
 
 describe('AccountView — számlalink allowlist a renderelés helyén', () => {
   it('POZITÍV KONTROLL: megbízható szamlazz.hu cím linkként renderelődik', () => {

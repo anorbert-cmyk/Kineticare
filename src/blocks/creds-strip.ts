@@ -48,8 +48,12 @@ export const credsStrip: Block = {
     linkGroup({
       name: 'link',
       label: 'Link a csík végén',
+      // A súgó a JÓVÁHAGYOTT alakot mutatja (§3.2 #34): a korábbi példa
+      // („Bővebben a szakmai hátterünkről") a szerkesztőnek pontosan azt a
+      // „Bővebben"-nel kezdődő, öt szavas alakot tanította, amit az M-3 és a
+      // GOV.UK linkszöveg-útmutatója egyaránt kizár.
       description:
-        'Nem kötelező. Ide szokott kerülni a „Bővebben a szakmai hátterünkről" hivatkozás a Rólunk oldalra.',
+        'Nem kötelező. Ide a Rólunk oldalra vivő hivatkozás kerül; a jóváhagyott felirat: „Ismerd meg a hátterünket".',
     }),
     sectionSettings(),
   ],

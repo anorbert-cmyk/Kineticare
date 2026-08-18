@@ -9,6 +9,7 @@
 
 import { useEffect } from 'react'
 
+import { ctaLabel } from '@/lib/cta-vocabulary'
 import { logger } from '@/lib/logger'
 
 import './(frontend)/styles.css'
@@ -63,8 +64,10 @@ export default function GlobalError({
               később.
             </p>
             <div className="kc-error-page__actions">
+              {/* §3.2 #17 — ugyanaz a cselekvés, ugyanaz a szó, mint a
+                  `(frontend)/error.tsx`-en (WCAG 2.2 · 3.2.4). */}
               <button className="kc-button kc-button--primary" onClick={reset} type="button">
-                Próbáld újra
+                {ctaLabel('retry')}
               </button>
               <a className="kc-button kc-button--secondary" href="/">
                 Vissza a kezdőlapra

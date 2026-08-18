@@ -11,6 +11,7 @@ import {
 } from '@/lib/analytics/barion-events'
 import { DEFAULT_AUTH_RETURN_URL, sanitizeReturnUrl } from '@/lib/return-url'
 import { registerUser, type AuthResult, type RegisterInput } from '../../lib/auth-client'
+import { ctaLabel, ctaProgressLabel } from '../../lib/cta-vocabulary'
 
 /**
  * RegisterForm — a regisztrációs űrlap (Payload auth REST-re).
@@ -166,7 +167,7 @@ export function RegisterForm({ returnUrl }: RegisterFormProps) {
         </div>
       ) : null}
       <Button disabled={submitting} type="submit">
-        {submitting ? 'Regisztráció…' : 'Regisztráció'}
+        {submitting ? ctaProgressLabel('sign-up') : ctaLabel('sign-up')}
       </Button>
     </form>
   )

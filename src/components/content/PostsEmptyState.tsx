@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { ctaLabel } from '../../lib/cta-vocabulary'
 import { Button } from '../ui/Button'
 
 import '../../app/(frontend)/styles/blocks/empty-state.css'
@@ -117,24 +118,27 @@ export function PostsEmptyState({
         )}
         <li>
           <Button href="/kurzusok" variant={isHub ? 'primary' : 'secondary'}>
-            Nézd meg a kurzusokat
+            {ctaLabel('course-list-open')}
           </Button>
         </li>
         {isHub && freeHref !== null ? (
           <li>
             <Button href={freeHref} variant="secondary">
-              Elindítom ingyen
+              {ctaLabel('free-course-claim')}
             </Button>
           </li>
         ) : null}
       </ul>
 
+      {/* §3.2 #33: a /kapcsolat oldalra vivő CSELEKVÉS felirata mindenhol
+          „Írj nekünk". A puszta „Kapcsolat" menücímke (N-3), és gombként nem
+          mondja meg, mi történik (M-7). */}
       <p className="kc-empty-panel__contact">
-        Ha kérdésed van a felépülésről, írj nekünk a{' '}
+        Ha kérdésed van a felépülésről,{' '}
         <Link className="kc-empty-panel__contact-link" href="/kapcsolat">
-          Kapcsolat
+          {ctaLabel('contact-open')}
         </Link>{' '}
-        oldalon.
+        a kapcsolati oldalon.
       </p>
     </section>
   )

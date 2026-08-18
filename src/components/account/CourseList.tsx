@@ -113,7 +113,11 @@ function CourseCard({ card }: { card: CourseCardView }) {
             variant={expired ? 'secondary' : 'primary'}
           >
             {card.ctaLabel}
-            <span className="kc-visually-hidden">{` — ${card.ctaContext}`}</span>
+            {/* Kettőspont, nem kvirtmínusz: a hozzáférhető NÉV is vevői szöveg,
+                és a magyar tipográfiában az U+2014 nem írásjel
+                (docs/ui-sztenderdek.md §3.1.1). A `CartView` rejtett szövege
+                ugyanezt a kettőspontos alakot használja. */}
+            <span className="kc-visually-hidden">{`: ${card.ctaContext}`}</span>
           </Button>
         </div>
       </Card>

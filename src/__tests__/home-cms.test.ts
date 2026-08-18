@@ -13,6 +13,7 @@ import {
 import { formatPostDate } from '../components/content/PostCard'
 import { PostView, visibleRelatedPosts } from '../components/content/PostView'
 import { PUBLISHED_WHERE } from '../lib/cms'
+import { ctaLabel } from '../lib/cta-vocabulary'
 import { estimateReadingMinutes } from '../lib/reading-time'
 import {
   articleJsonLd,
@@ -213,10 +214,12 @@ describe('HomeView (kezdőlap-render)', () => {
     const html = render(createElement(HomeView, { home: null, products: [], posts: [] }))
     // EGY elsődleges CTA a fizetős kurzusok oldalára (audit K3). A felirat a
     // jóváhagyott szótárból jön (docs/ui-sztenderdek.md §3.2 #10).
-    expect(html).toContain('Nézd meg a kurzusokat')
+    expect(html).toContain(ctaLabel('course-list-open'))
     expect(html).toContain('href="/kurzusok"')
-    // A lead-magnet csak visszafogott, lapon belüli link (audit K2).
-    expect(html).toContain('Ingyenes SOS gyakorlatok')
+    // A lead-magnet csak visszafogott, lapon belüli link (audit K2). A felirat
+    // 2026-08-18 óta a §3.2 #38 szótári sora (a korábbi „Ingyenes SOS
+    // gyakorlatok" főnévi volt, és nem mondta meg, mi történik — M-7).
+    expect(html).toContain(ctaLabel('free-strip-jump'))
     expect(html).toContain('href="#ingyenes"')
   })
 
@@ -521,7 +524,7 @@ describe('HomeView (kezdőlap-render)', () => {
     )
     const order = [
       'kc-hero__title',
-      'Bővebben a szakmai hátterünkről',
+      ctaLabel('about-open'),
       'id="kurzusok"',
       'id="ingyenes"',
       'Így működik az online kurzus',

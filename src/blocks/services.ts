@@ -80,8 +80,18 @@ export const services: Block = {
           label: 'Szöveg',
           admin: { description: '2–4 mondat arról, kinek és miben segít.' },
         },
+        // A MEZŐSÚGÓ MAGA TANÍTOTTA A TILTOTT ALAKOT (2026-08-18-i javítás).
+        // A korábbi példa szó szerint „Tovább a kezelésekre" volt — vagyis a
+        // szerkesztő pontosan azt a puszta „Tovább…" kezdést kapta mintául,
+        // amit a `docs/ui-sztenderdek.md` §3.1.4 M-7 tilt. A súgó ezért most
+        // az igével kezdődő, célt megnevező alakot mutatja:
+        // GOV.UK, Add links — „If your link takes the user to a page where they
+        // can start a task, start your link with a verb", és „make it
+        // descriptive and avoid generic text like 'click here' or 'more'".
+        // https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/writing-guidelines/add-links/
         ...linkFields({
-          labelDescription: 'A sor végi hivatkozás szövege (pl. „Tovább a kezelésekre").',
+          labelDescription:
+            'A sor végi hivatkozás szövege. Igével kezdd, és nevezd meg a célt (pl. „Nézd meg a kezeléseket"). A puszta „Tovább…" nem mondja meg, mi történik, ezért nem használható.',
         }),
       ],
     },
