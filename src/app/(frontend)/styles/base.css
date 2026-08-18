@@ -35,6 +35,56 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* VÉGSZÜKSÉG-TÖRDELÉS A LAP GYÖKERÉN — WCAG 2.2, 1.4.10 Reflow (AA), C33
+     technika: „Allowing for Reflow with Long URLs and Strings of Text",
+     https://www.w3.org/WAI/WCAG22/Techniques/css/C33
+
+     MIÉRT KELL. Az L lépcső 320 px-en 32 px (--kc-font-l alsó clamp-értéke),
+     a szűk hasáb 272 px (320 − 2 × --kc-space-5). Ebbe a Tenor Sans 400
+     metszetén, 0,01em betűközzel 17 magyar karakter fér (16,90 px/karakter,
+     a public/fonts metszet hmtx-táblájából mérve) — minden ennél hosszabb
+     szó túlcsordul. A magyar összetett szó ezt rutinszerűen átlépi: a repó
+     SAJÁT szövegében a „tárhelyszolgáltatójának" (src/lib/legal-content.ts)
+     357 px-t kér. MÉRVE (Chromium 141, headless, a repó saját CSS-ével és
+     valódi markupjával, 320 px): ez a szó a `.kc-section-title`-ben 357 px-t
+     kért egy 272 px-es dobozban, és a DOKUMENTUM 381 px szélesre nyílt —
+     vízszintes görgetés, 1.4.10 bukás. A javítás után ugyanez 272/272 és
+     320 px. Ugyanez a mérés a mai, VALÓDI kezdőlapon egyetlen túlcsorduló
+     elemet talált (`.kc-about__stat-label`: 94 px-es doboz, 114 px-es
+     tartalom — a „mozgásszabadsága" szó lógott ki); a szabály ezt is megszünteti.
+
+     MIÉRT A `body` ÉS NEM A `:root` VAGY EGY SZELEKTOR-LISTA.
+     Az `overflow-wrap` ÖRÖKLŐDŐ (CSS Text 3, 5.2), tehát egyetlen ősre írva
+     az egész fát lefedi. A `body` azért pontosabb hely a `:root`-nál, mert a
+     repóban a TÖRZS-tipográfia öröklődési gyökere is a `body` (font-family,
+     font-size, line-height, color mind itt áll): a szöveg viselkedését leíró
+     szabályok így EGY helyen olvashatók és EGY helyen írhatók felül. A
+     `:root` ráadásul osztály-fajsúlyú szelektor (0-1-0), a `body` elem-fajsúlyú
+     (0-0-1) — az utóbbit bármely komponens-osztály felülírja anélkül, hogy
+     `!important`-hoz kellene nyúlni. Szelektor-lista NEM jöhet szóba: pontosan
+     az bukott meg a folyószövegen (a bekezdés törte a szót, a címsor nem), és
+     a lapon MA 30+ olyan osztály van, amely az L lépcsőt viszi — a felsorolás
+     az első új szekciónál elavul.
+
+     MIÉRT `break-word` ÉS NEM `anywhere`. A `break-word` a min-content
+     belső méretet SZÁNDÉKOSAN nem befolyásolja (CSS Text 3, 5.5), az
+     `anywhere` igen — utóbbi tehát bármely jövőbeli rács- vagy flex-sávot
+     némán összenyomhatna. MÉRVE: a valódi kezdőlap és az /aszf mind a 199,
+     illetve 114 szöveg-elemének doboza BITRE AZONOS a szabály előtt és után
+     320 / 390 / 768 / 1440 px-en — az egyetlen kivétel a fent említett,
+     korábban túlcsorduló `.kc-about__stat-label`, amely most egy sorral
+     magasabb. A `break-word` csak akkor nyit törési lehetőséget, ha a szó a
+     saját sorában sem fér ki; rendes sortörésnél nem aktiválódik.
+
+     AMIT NEM OLD MEG. A rács- és flex-elemek automatikus minimum mérete
+     (CSS Grid 6.6) a tartalom min-content szélessége — ezt a `break-word`
+     nem csökkenti, ezért az AUTO sávban álló címsornál nem a szöveg csordul
+     túl, hanem a SÁV nyílik szét. A repóban ma egyetlen ilyen hely van
+     (`.kc-hero__grid` → `.kc-hero__content`); az őr külön, nevesítve tartja
+     számon (src/__tests__/reflow-hasabmeres.test.ts).
+
+     Az őr ezt MÉRI, nem a fájlban keresi. */
+  overflow-wrap: break-word;
 }
 
 /* Kijelölés: halvány akcent + ink (8,49:1 — AA/AAA). */
