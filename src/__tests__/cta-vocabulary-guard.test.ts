@@ -14,6 +14,14 @@ import {
   type CtaEntry,
 } from '@/lib/cta-vocabulary'
 
+import {
+  BARE_FORBIDDEN_LABELS,
+  ELLIPSIS,
+  EM_DASH,
+  EN_DASH,
+  pusztaAlak,
+} from './helpers/cta-mikroszoveg'
+
 /**
  * G-UI1 – CTA-SZÓTÁR ŐR (`docs/ui-sztenderdek.md` §6.3).
  *
@@ -40,29 +48,20 @@ import {
  * („a két doksi szótárának bitre egyeznie kell"), és emberi figyelemre bízva
  * ez néma módon csúszna szét.
  *
- * A tiltott karaktereket ez a fájl SAJÁT MAGA építi kódpontból, hogy az őr ne
- * a védett modulból vegye a szabályt (különben a modul gyengítése az őrt is
- * gyengítené), és hogy maga az őrfájl se bukjon meg a saját szabályán.
+ * A tiltott karakterek és a puszta feliratok listája a
+ * `src/__tests__/helpers/cta-mikroszoveg.ts`-ben él: TESZT-oldalon, nem a védett
+ * modulban (különben a modul gyengítése az őrt is gyengítené), kódpontból
+ * építve (hogy maga az őrfájl se bukjon meg a saját szabályán). Ugyanezt a
+ * listát használja a termék-oldali őr is — a szabályból EGY példány van.
+ *
+ * ═══ AMIT EZ AZ ŐR NEM MÉR (2026-08-17) ═══
+ * Ez a fájl HÁROM fájlt olvas: a szótárt és a két doksit. **Egyetlen
+ * komponenst sem.** Vagyis a szótár és a doksik egyezését bizonyítja, nem azt,
+ * hogy a felületen tényleg a jóváhagyott feliratok állnak. Mutációs mérés: a
+ * `CartView.tsx` és a `ThankYouView.tsx` gombfeliratát elrontva a teljes
+ * tesztkészlet zöld maradt. Ezt a rést a `src/__tests__/cta-a-termekben.test.ts`
+ * (G-UI2) zárja be: az a termék forrásából olvassa ki az élő feliratokat.
  */
-
-/** U+2014 – kvirtmínusz (em dash). Magyar szövegben nem írásjel. */
-const EM_DASH = String.fromCharCode(0x2014)
-/** U+2013 – nagykötőjel / gondolatjel. Gomb- és címkeszövegben tiltott (§3.1.2). */
-const EN_DASH = String.fromCharCode(0x2013)
-/** U+2026 – a folyamatban-feliratok három pontja (nem három darab pont). */
-const ELLIPSIS = String.fromCharCode(0x2026)
-
-/** M-7: a puszta, célt nem nevező feliratok. Kiegészítés nélkül egyik sem lehet CTA. */
-const BARE_FORBIDDEN_LABELS = [
-  'tovább',
-  'küldés',
-  'ok',
-  'mehet',
-  'kattints ide',
-  'bővebben',
-  'részletek',
-  'submit',
-]
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const UI_STANDARDS_PATH = `${REPO_ROOT}docs/ui-sztenderdek.md`
@@ -157,9 +156,7 @@ describe('G-UI1 – CTA-szótár: mikroszöveg-szabályok (docs/ui-sztenderdek.m
   })
 
   it('egyetlen felirat sem puszta tiltott szó (M-7: Küldés, OK, Bővebben, Részletek…)', () => {
-    const offenders = ALL_LABELS.filter((label) =>
-      BARE_FORBIDDEN_LABELS.includes(label.toLocaleLowerCase('hu').replace(/[.…!?]+$/u, '')),
-    )
+    const offenders = ALL_LABELS.filter((label) => BARE_FORBIDDEN_LABELS.includes(pusztaAlak(label)))
     expect(offenders, 'puszta, célt nem nevező felirat').toEqual([])
   })
 
