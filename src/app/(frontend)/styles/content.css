@@ -167,6 +167,42 @@
   align-items: center;
 }
 
+/* A RÁCS-ELEM ENGEDJE EL A SAJÁT SÁVJÁT — WCAG 2.2, 1.4.10 Reflow (AA).
+
+   MIÉRT KELL, HA A LAPON MÁR VAN VÉGSZÜKSÉG-TÖRDELÉS. A `body`-ra írt
+   `overflow-wrap: break-word` (base.css) a SZÖVEGET töri, de a rács-sáv
+   szélességét nem szabja meg: a `break-word` szándékosan NEM csökkenti a
+   min-content belső méretet (CSS Text 3, 5.5), a `.kc-hero__grid` egyetlen
+   automatikus sávjának alsó mérete viszont pontosan a rács-elem AUTOMATIKUS
+   MINIMUM MÉRETE, vagyis a tartalom min-content szélessége (CSS Grid 1, 6.6).
+   Emiatt 900 px alatt nem a szöveg csordult ki a dobozból, hanem maga a DOBOZ
+   lett szélesebb a konténernél — a lap pedig oldalra görgethető.
+
+   MÉRVE (Chromium 141, headless, `--hide-scrollbars`, a repó saját CSS-ével és
+   a HomeView hero-markupjával, a „tárhelyszolgáltatójának" szóval, 2026-08-18);
+   a két szám a 320, illetve a 390 px-es nézetablak:
+
+     | változat                       | .kc-hero__title doboza | dokumentum |
+     |--------------------------------|------------------------|------------|
+     | tördelés nélkül (a mai előtti) | 356,97 / 363,06 px     | 381 / 390  |
+     | csak a body-szintű break-word  | 356,97 / 363,06 px     | 381 / 390  |
+     | + ez a szabály (min-width: 0)  | 272 / 342 px           | 320 / 390  |
+
+   A `min-width: 0` a rács-elem minimális hozzájárulását nullázza, így a sáv a
+   rendelkezésre álló helyre szorul, a szöveg pedig a lap-szintű `break-word`-del
+   tördel. Ezzel a hero címe ugyanúgy viselkedik, mint a többi szekció-címsor.
+
+   MIÉRT NEM `overflow-wrap: anywhere` A LAPON. Az `anywhere` a min-content
+   méretet is csökkentené, tehát ezt a szabályt megspórolná — de MINDEN
+   jövőbeli rács- és flex-sávot is összenyomhatna, némán. A célzott
+   `min-width: 0` egyetlen dobozra hat, és mérve semmi mást nem mozdít: a
+   valódi kezdőlap 199 és az /aszf 114 szöveg-elemének doboza változatlan
+   320 / 390 / 768 / 1440 px-en. Az őr ezt méri:
+   src/__tests__/reflow-hasabmeres.test.ts. */
+.kc-hero__content {
+  min-width: 0;
+}
+
 .kc-hero__title {
   margin: 0 0 var(--kc-space-4);
   font-family: var(--kc-font-heading);
