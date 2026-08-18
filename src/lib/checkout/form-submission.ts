@@ -88,6 +88,118 @@ export const CHECKOUT_ALREADY_PURCHASED_ERROR =
   'Ezt a kurzust már megvetted — a Kurzusaim oldalon éred el.'
 export const CHECKOUT_WAIVER_ERROR = 'A vásárláshoz mindkét hozzájárulást el kell fogadnod.'
 
+/**
+ * ═══ ÁSZF-ELFOGADÁS A PÉNZTÁRBAN ═══
+ *
+ * MIÉRT LÉTEZIK. A saját ÁSZF-ünk 22. bekezdése (élő szöveg,
+ * `src/lib/legal-source/aszf.txt`) SZÓ SZERINT így írja le a szerződéskötést:
+ * a Vásárló „megadja személyes adatait, bejelöli az Általános Szerződési
+ * feltételek elfogadására és az Adatvédelmi Tájékoztató megismerésére
+ * vonatkozó jelölőnégyzetet, majd megnyomja a »VÁSÁRLÁS« gombot". Ilyen
+ * jelölőnégyzet 2026-08-17-ig NEM létezett a felületen, tehát a szerződéskötés
+ * leírt módja nem valósult meg. Egyben a Barion elfogadóhely-bírálat elvárása
+ * is, hogy az ÁSZF elfogadása a vásárlás előfeltétele legyen.
+ *
+ * MIÉRT EGY NÉGYZET, KÉT HIVATKOZÁSSAL (és nem kettő). Az ÁSZF maga EGYETLEN
+ * jelölőnégyzetről beszél, ami egyszerre fedi az ÁSZF ELFOGADÁSÁT és az
+ * adatvédelmi tájékoztató MEGISMERÉSÉT — két külön négyzet ugyanúgy eltérne a
+ * szerződés szövegétől, mint a mai nulla. A pénztári súrlódás ellen is ez
+ * szól: Baymard szerint a pénztár bonyolultsága miatt a felhasználók 17%-a
+ * hagyja ott a vásárlást, és a mezőszám számít, nem a lépésszám.
+ * https://baymard.com/blog/checkout-flow-average-form-fields
+ *
+ * MIÉRT ÜRESEN INDUL. Előre bepipált elfogadás jogilag érvénytelen és sötét
+ * minta. GOV.UK Design System, Checkboxes: „Do not pre-select checkbox options
+ * as this makes it more likely that users will not realise they've missed a
+ * question." https://design-system.service.gov.uk/components/checkboxes/
+ * NN/g, Checkbox Design Guidelines: „ensure legal checkboxes are unchecked by
+ * default to respect user consent."
+ * https://www.nngroup.com/videos/checkbox-design-guidelines/
+ *
+ * MIÉRT INGYENES TERMÉKEN IS. A szerződés ingyenes hozzáférésnél is létrejön,
+ * és az ÁSZF a felhasználási korlátot (lementés, másolás tilalma) kimondottan
+ * az ismeretterjesztő videóra is kiterjeszti. Egységes viselkedés, elágazás
+ * nélkül — WCAG 2.2 SC 3.2.4 (Consistent Identification).
+ * https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html
+ */
+
+/** A jelölőnégyzet elem-azonosítója (a `label for` és a fókuszcél is ez). */
+export const TERMS_INPUT_ID = 'kc-checkout-terms'
+
+/** A jelölőnégyzethez tartozó súgó elem-azonosítója (`aria-describedby`). */
+export const TERMS_HINT_ID = 'kc-checkout-terms-hint'
+
+/** Az ÁSZF útvonala (a lábléc jogi linkjeivel és a waiver-blokkal azonos). */
+export const TERMS_ASZF_PATH = '/aszf'
+
+/**
+ * Az adatkezelési tájékoztató útvonala. Ugyanaz, amit a hírlevél-, az
+ * időpontkérő- és az ingyenes kurzus űrlapja használ (`PRIVACY_POLICY_PATH`);
+ * a `penztar-aszf-elfogadas.test.tsx` állítása méri, hogy a kettő nem csúszik
+ * szét. A modul FÜGGŐSÉGMENTES marad (lásd a fájl fejkommentjét), ezért a
+ * konstans itt is ki van írva, nem importáljuk.
+ */
+export const TERMS_PRIVACY_PATH = '/adatvedelem'
+
+/**
+ * A felirat darabjai — a két hivatkozás a mondatba ÁGYAZVA áll.
+ *
+ * A SZÓHASZNÁLAT az ÁSZF 22. bekezdését követi: az ÁSZF-et ELFOGADJUK, az
+ * adatkezelési tájékoztatót MEGISMERJÜK (az adatkezelés nem szerződés, azt nem
+ * „elfogadni" kell). A dokumentum NEVE viszont a felület saját, mindenhol
+ * használt megnevezése („Adatkezelési és adatvédelmi szabályzat" — így hívja a
+ * lábléc, a hírlevél-, az időpontkérő- és az ingyenes kurzus űrlapja is): ha
+ * ugyanaz a hivatkozás a pénztárban máshogy szólna, az a WCAG 2.2 SC 3.2.4-be
+ * ütközne.
+ *
+ * A hivatkozás-feliratok TÁRGYESETBEN állnak, mert magyarul a mondat csak így
+ * nyelvhelyes („megismertem az Adatkezelési és adatvédelmi szabályzatot"). A
+ * szótári alak beerőltetése fordítás-ízű, magyartalan mondatot adna, amit a
+ * tulajdonos kifejezetten tiltott (docs/ui-sztenderdek.md §3.1).
+ */
+export const CHECKOUT_TERMS_LABEL = {
+  before: 'Elfogadom az ',
+  aszfLabel: 'Általános szerződési feltételeket',
+  between: ', és megismertem az ',
+  privacyLabel: 'Adatkezelési és adatvédelmi szabályzatot',
+  after: '.',
+} as const
+
+/** Link nélküli, összefűzött változat (naplóhoz, teszthez, adminhoz). */
+export const CHECKOUT_TERMS_LABEL_TEXT = `${CHECKOUT_TERMS_LABEL.before}${CHECKOUT_TERMS_LABEL.aszfLabel}${CHECKOUT_TERMS_LABEL.between}${CHECKOUT_TERMS_LABEL.privacyLabel}${CHECKOUT_TERMS_LABEL.after}`
+
+/**
+ * A KÉPERNYŐOLVASÓNAK szóló figyelmeztetés: a jogi linkek ÚJ LAPON nyílnak.
+ *
+ * Miért új lap: a pénztár űrlapállapota kliens-oldali React-state, tehát a
+ * saját lapon való elnavigálás ELVESZTENÉ a már kitöltött számlázási adatokat.
+ * Miért kell kimondani: WCAG 2.2 SC 3.2.5 (Change on Request) — az ablaknyitás
+ * nem tekinthető felhasználó által kezdeményezettnek előzetes jelzés nélkül; a
+ * G201 technika kifejezetten az előzetes figyelmeztetést ajánlja.
+ * https://www.w3.org/WAI/WCAG22/Understanding/change-on-request.html
+ */
+export const TERMS_NEW_TAB_HINT = ' (új lapon nyílik)'
+
+/**
+ * A rögzítés ígérete a vevőnek — ugyanaz a mondatforma, mint a waiver-blokké
+ * („A hozzájárulásodat a rendszer a rendelésen időbélyeggel rögzíti."). Az
+ * ígéretet a szerver `buildCustomerSnapshot`-ja váltja be: a rendelés
+ * vevő-pillanatképére `consentTerms` + `consentTermsAt` kerül.
+ */
+export const CHECKOUT_TERMS_HINT =
+  'Az elfogadásodat a rendszer a rendelésen időbélyeggel rögzíti.'
+
+/** A blokk címsora (a kártya h2-je). */
+export const CHECKOUT_TERMS_HEADING = 'Szerződési feltételek'
+
+/**
+ * A hiányzó elfogadás üzenete az élő hibarégióba. A GOV.UK hibaszöveg-mintáját
+ * követi: a hibaüzenet MEGMONDJA A TEENDŐT, nem csak a hiányt állapítja meg.
+ * https://design-system.service.gov.uk/components/checkboxes/
+ */
+export const CHECKOUT_TERMS_ERROR =
+  'A vásárláshoz fogadd el az Általános szerződési feltételeket, és jelöld, hogy az Adatkezelési és adatvédelmi szabályzatot megismerted.'
+
 /** Az elállási-nyilatkozat két jelölőnégyzetének elem-azonosítója. */
 /**
  * A pénztár élő hibarégiójának azonosítója.
@@ -186,6 +298,12 @@ export interface CheckoutSubmissionContext {
   waiverRequired: boolean
   waiverStartAccepted: boolean
   waiverLossAccepted: boolean
+  /**
+   * Az ÁSZF-elfogadás (és az adatkezelési tájékoztató megismerésének)
+   * jelölőnégyzete. MINDEN terméken kötelező — az ingyenesen is, mert a
+   * szerződés ott is létrejön (lásd a CHECKOUT_TERMS_* konstansok fejkommentjét).
+   */
+  termsAccepted: boolean
   billing: BillingFormValues
   /**
    * VENDÉG-VÁSÁRLÁS: az azonosító mezők állapota. Bejelentkezett vásárlásnál
@@ -229,6 +347,19 @@ export function planCheckoutSubmission(
       kind: 'blocked',
       message: CHECKOUT_WAIVER_ERROR,
       focusElementId: context.waiverStartAccepted ? WAIVER_LOSS_INPUT_ID : WAIVER_START_INPUT_ID,
+    }
+  }
+  /**
+   * ÁSZF-ELFOGADÁS — a waiver UTÁN ellenőrizve, mert az űrlapon is utána áll:
+   * a fókusz így mindig az ELSŐ hiányzó jelölőnégyzetre kerül, nem egy
+   * feljebb/lejjebb lévőre. Az ág ingyenes terméken is fut (nincs
+   * `termsRequired` kapcsoló — a konzisztens viselkedés maga a döntés).
+   */
+  if (!context.termsAccepted) {
+    return {
+      kind: 'blocked',
+      message: CHECKOUT_TERMS_ERROR,
+      focusElementId: TERMS_INPUT_ID,
     }
   }
 
@@ -275,6 +406,10 @@ export function planCheckoutSubmission(
       productId: context.productId,
       quantity: context.quantity ?? 1,
       consentWithdrawalWaiver: true,
+      // Ide CSAK a fenti `blocked` ág átengedésével juthatunk el, tehát a
+      // `true` itt TÉNYÁLLÍTÁS. A szerver ettől függetlenül újra ellenőrzi
+      // (start-checkout.ts): a kliens megkerülhető.
+      consentTerms: true,
       billing: toBillingPayload(result.value),
       // A vendég-blokk KIZÁRÓLAG bejelentkezés nélkül megy ki (belépve a
       // szerver úgyis figyelmen kívül hagyná).

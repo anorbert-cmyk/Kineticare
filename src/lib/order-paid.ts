@@ -51,6 +51,16 @@ type JobsQueueLike = {
  * Az invoice-issue job sorba állítása. A payload-types a konsolidációs loopig
  * még nem ismeri az új taskot — a TypedJobs-generálás frissüléséig a hívás
  * strukturálisan castolt (a runtime jobs.queue létezik).
+ *
+ * A HIÁNYZÓ JOB-SOR NEM LEHET NÉMA (P2). A `payload.jobs.queue` megléte
+ * strukturálisan (`as unknown as`) ellenőrzött, mert a generált típusok nem
+ * ismerik a taskot — vagyis egy Payload-frissítés FORDÍTÁSI HIBA NÉLKÜL
+ * kikapcsolhatja a számlázást. A visszatérési értéket ráadásul az onOrderPaid
+ * hívási helye eldobja, tehát a `false` önmagában senkinek nem tűnne fel:
+ * a vevő MEGKAPJA a visszaigazoló levelet (benne a számla ígéretével), számla
+ * viszont sosem készül, és semmi nem jelzi. Ezért a kiesés `error`-szintű,
+ * magyar RIASZTÁS-sort kap a rendelés azonosítójával — akkor is, ha a hívó nem
+ * adott loggert (a napló a root loggerre esik vissza).
  */
 export async function queueInvoiceIssueJob(
   payload: Payload,
@@ -60,6 +70,14 @@ export async function queueInvoiceIssueJob(
   try {
     const jobs = (payload as unknown as { jobs?: JobsQueueLike }).jobs
     if (typeof jobs?.queue !== 'function') {
+      const alertLog = log ?? rootLogger
+      alertLog.error(
+        'RIASZTÁS: a Payload job-sor nem érhető el (payload.jobs.queue hiányzik) — a ' +
+          'számlakiállítási job NEM állt sorba, a vevő számlája elmarad, holott a ' +
+          'visszaigazoló levél ígéri. Ellenőrizd a Payload jobs-konfigurációt és az ' +
+          'invoice-issue task regisztrációját.',
+        { orderId },
+      )
       return false
     }
     await jobs.queue({ task: 'invoice-issue', input: { orderId }, queue: ORDER_MAINTENANCE_QUEUE })

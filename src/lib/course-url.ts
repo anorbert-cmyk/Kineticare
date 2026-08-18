@@ -98,6 +98,29 @@ export function courseHref(product: CourseUrlDoc): string {
   return `${COURSE_BASE_PATH}/${slug.length > 0 ? slug : product.id}`
 }
 
+/**
+ * A kurzusoldal CSELEKVŐ elemének (vásárlógomb, illetve ingyenes kurzusnál az
+ * igénylő űrlap) horgonya.
+ *
+ * MIÉRT ITT ÉL: a horgonyra MÁS oldalról is mutatni kell — az ingyenes termék
+ * `/penztar`-ja innen küldi tovább a látogatót az igénylő űrlaphoz. A
+ * kurzusoldal saját `CTA_ID` konstansa modul-szintű marad (a `page.tsx` nem
+ * megosztható modul), ezért a két érték BITRE EGYEZÉSÉT őr-teszt méri
+ * (`src/__tests__/penztar-ingyenes-kapu.test.tsx`) — a néma elcsúszás
+ * ugyanis csak élesben, egy nem működő horgonyugrásban látszana meg.
+ */
+export const COURSE_CTA_ANCHOR = 'kurzus-vasarlas-gomb'
+
+/**
+ * A kurzus kanonikus címe a CSELEKVŐ elemre mutató horgonnyal.
+ *
+ * SZÁNDÉKOSAN a `courseHref`-re épül, nem külön útvonal-képzésre: a slugos és
+ * a régi, id-alapú alak közti választás így egyetlen helyen dől el.
+ */
+export function courseCtaHref(product: CourseUrlDoc): string {
+  return `${courseHref(product)}#${COURSE_CTA_ANCHOR}`
+}
+
 export type CourseRouteParam = { kind: 'id'; id: number } | { kind: 'slug'; slug: string }
 
 /**

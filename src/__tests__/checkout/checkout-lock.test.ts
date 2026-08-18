@@ -225,6 +225,7 @@ afterEach(() => {
 const happyInput = {
   productId: 42,
   consentWithdrawalWaiver: true,
+  consentTerms: true,
   billing: {
     name: 'Minta Mari',
     zip: '1011',
@@ -288,6 +289,64 @@ describe('checkout-zár — sorosítás (TOCTOU)', () => {
     expect(fetchDuringLock).toBe(false)
     // A védett szakasz már lezárult, mire a Barion-hívás elindult.
     expect(lockState.events).toEqual(['enter:checkout:7:42', 'exit:checkout:7:42'])
+  })
+})
+
+/**
+ * VENDÉG-ÁG (P1) — a fiókhoz még nem kötött rendelést KIZÁRÓLAG az e-mail
+ * azonosítja, ezért a zárkulcs és a duplavásárlás-blokk is e-mail-hatókörű.
+ *
+ * A HIÁNYZÓ MÉRÉS, amit ez pótol: a `start-checkout.ts`
+ * `if (buyer.customerId === null) assertNoDuplicatePurchase({ kind: 'email' })`
+ * blokkját `if (false)`-ra cserélve a teljes tesztkészlet zöld maradt. Két
+ * egyidejű vendég-fizetés így KÉT aktív `payment_pending` rendelést hagyna
+ * ugyanarra a kurzusra — mindkettő kifizethető, a másodikat pedig már csak a
+ * paid-átmenet K5-őre fogná meg, amikor a pénz MÁR le van vonva.
+ */
+describe('checkout-zár — VENDÉG (fiók nélküli) vásárlás', () => {
+  const guestInput = {
+    ...happyInput,
+    guest: { email: 'vendeg@example.test', name: 'Vendég Vevő' },
+  }
+
+  it('két párhuzamos vendég-kérés UGYANARRA az e-mailre: egy rendelés, a második 409', async () => {
+    fetchMock.mockResolvedValue(barionStartSuccess())
+    const { payload, orders, calls } = createStatefulPayload()
+
+    const results = await Promise.allSettled([
+      startCheckout({ payload, input: guestInput }),
+      startCheckout({ payload, input: guestInput }),
+    ])
+
+    // A zár soros, és a kulcs a VENDÉG e-mailjére szól (nincs fiókazonosító).
+    expect(lockState.maxConcurrent).toBe(1)
+    expect(lockState.events).toEqual([
+      'enter:checkout:guest:vendeg@example.test:42',
+      'exit:checkout:guest:vendeg@example.test:42',
+      'enter:checkout:guest:vendeg@example.test:42',
+      'exit:checkout:guest:vendeg@example.test:42',
+    ])
+
+    // Pontosan EGY rendelés jött létre — a második a fizetés ELŐTT elakadt.
+    expect(calls.create).toBe(1)
+    expect(orders).toHaveLength(1)
+    const rejected = results.filter((result) => result.status === 'rejected')
+    expect(rejected).toHaveLength(1)
+    const reason = (rejected[0] as PromiseRejectedResult).reason as CheckoutError
+    expect(reason).toBeInstanceOf(CheckoutError)
+    expect(reason.status).toBe(409)
+    expect(reason.message).toContain('folyamatban van egy fizetés')
+    // Csak az EGYETLEN sikeres rendeléshez indult Barion-fizetés.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a vendég zárkulcsa e-mail + termék páronkénti (checkout:guest:<email>:<productId>)', async () => {
+    fetchMock.mockResolvedValue(barionStartSuccess())
+    const { payload } = createStatefulPayload()
+
+    await startCheckout({ payload, input: guestInput })
+
+    expect(lockState.events[0]).toBe('enter:checkout:guest:vendeg@example.test:42')
   })
 })
 

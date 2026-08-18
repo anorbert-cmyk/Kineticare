@@ -6,9 +6,15 @@ import { headers } from 'next/headers'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { CartView } from '@/components/checkout/CartView'
-import type { CartItem } from '@/lib/cart'
+import type { CartItem, CartItemAvailability } from '@/lib/cart'
 import { logger } from '@/lib/logger'
-import { coursePriceHuf, courseTitle, hasUserPurchased } from '@/lib/courses'
+import {
+  coursePriceHuf,
+  courseTitle,
+  hasUserPurchased,
+  isFreeCourse,
+  isPaidCourse,
+} from '@/lib/courses'
 import type { Product, User } from '@/payload-types'
 
 import config from '../../../payload.config'
@@ -43,6 +49,32 @@ async function getProductById(id: number): Promise<Product | null> {
 }
 
 /**
+ * A tétel VÁSÁROLHATÓSÁGA — a kurzusoldal CTA-állapotgépével AZONOS sorrendben.
+ *
+ * A sorrend nem közömbös: az archivált termék akkor sem igényelhető és nem
+ * vehető meg, ha egyébként ingyenesnek van jelölve, ezért az archivált ág dönt
+ * először (ugyanaz a sorrend, mint a `resolveCourseCta`-ban és a /penztar
+ * kapuiban). A „fizetős" feltétel az `isPaidCourse` (ÉRVÉNYES ár), NEM a
+ * `!isFreeCourse`: a `priceInHUFEnabled: true` + üres/0/negatív ár, illetve a
+ * beállítatlan ár-pipa HIÁNYOS KONFIGURÁCIÓ, amit a checkout ár-kapuja
+ * (`coursePriceHuf`, src/lib/checkout/start-checkout.ts) garantáltan elutasít.
+ *
+ * Új fogalmat SZÁNDÉKOSAN nem vezet be: mindhárom kérdést a `courses.ts`
+ * egyetlen igazságforrásaitól kérdezi.
+ */
+function resolveCartAvailability(
+  product: Pick<Product, 'status' | 'priceInHUF' | 'priceInHUFEnabled'>,
+): CartItemAvailability {
+  if (product.status === 'archived') {
+    return 'archived'
+  }
+  if (isFreeCourse(product)) {
+    return 'free'
+  }
+  return isPaidCourse(product) ? 'paid' : 'unavailable'
+}
+
+/**
  * /kosar — a kosár megjelenítése.
  *
  * A tényleges tételek a kliens-oldali cart-state-ből jönnek (egy termék =
@@ -50,6 +82,11 @@ async function getProductById(id: number): Promise<Product | null> {
  * fogadja: ha a query-ben termék van, azt a listához adjuk (a kliens-state
  * is kezeli a duplikációt). A végösszeg MINDIG a szerver (T-021) válaszából
  * igazolódik vissza a checkout során.
+ *
+ * A tétel a HÁROM ÁR-ÁLLAPOTOT is magával viszi (`availability`): a
+ * `CartView` ebből dönti el, kap-e a tétel pénztár-gombot, igénylő-linket vagy
+ * magyarázó mondatot. Az ARCHIVÁLT termék SZÁNDÉKOSAN bekerülhet a kosárba (a
+ * néma eldobás elrejtené, hogy mi történt), de nem vásárolhatóként.
  */
 export default async function KosarPage({ searchParams }: KosarPageProps) {
   const params = await searchParams
@@ -74,7 +111,12 @@ export default async function KosarPage({ searchParams }: KosarPageProps) {
         slug: product.slug ?? null,
         shortDescription: product.shortDescription ?? null,
         priceHuf: price,
-        isFree: product.priceInHUFEnabled === false,
+        // Az „ingyenes" EGYETLEN igazságforrása a courses.ts (a fejkommentje
+        // szerint „Új fogyasztó is KIZÁRÓLAG innen kérdezze") — a korábbi
+        // inline `priceInHUFEnabled === false` másolat pont az a negyedik
+        // igazság volt, amit a 2026-08-16-i átvizsgálás felszámolt.
+        isFree: isFreeCourse(product),
+        availability: resolveCartAvailability(product),
       }
     }
   }

@@ -16,15 +16,23 @@
   padding: 0;
 }
 
+/* A sor HÁROM sávja: adat, ár, cselekvések. A `flex-wrap` nem díszítés: 320
+   px-en a kártya belső sávja 320 − 2×24 (oldal-margó) − 2×24 (kártya-belső)
+   = 224 px, amibe a két sor-gomb egymás mellett nem fér be. Mérve, a repó
+   0,4542 em/karakter állandójával, 18 px-es törzsön: „Kiveszem a kosárból"
+   19 kar → 155 px + 2×12 px ghost-margó = 179 px; „Elindítom ingyen" 16 kar
+   → 131 px + 2×16 px margó + 4 px keret = 167 px; a kettő a 8 px-es réssel
+   354 px. Tördelés nélkül ez vízszintes görgetés lenne (WCAG 2.2 SC 1.4.10). */
 .kc-cart__row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--kc-space-4);
   justify-content: space-between;
 }
 
 .kc-cart__info {
-  flex: 1;
+  flex: 1 1 12rem;
 }
 
 /* A kosártétel címe LINK a kurzusoldalra. Alapállapotban semmi nem jelezte,
@@ -51,7 +59,31 @@
   font-size: var(--kc-font-m);
 }
 
+/* A nem vásárolható tétel (archivált vagy hiányos ár-konfigurációjú) magyarázó
+   mondata. TELJES tintával áll, nem tompítva, mint a leírás: ez a mondat az
+   EGYETLEN hely, ahol a látogató megtudja, miért nincs fizetés-gomb — a
+   blokkoló okot elrejteni pontosan az a néma hiba, amit ez a kör bezár.
+   FOLYÓSZÖVEG (semmilyen flex/grid): a `.kc-appointment__consent-label` mért
+   csapdája után szabály, hogy folyószövegre nem kerül flex (ott 320 px-en
+   107 px-es túlcsordulást okozott, WCAG 2.2 SC 1.4.10). */
+.kc-cart__note {
+  margin: var(--kc-space-2) 0 0;
+  color: var(--kc-color-text);
+  font-size: var(--kc-font-m);
+}
+
 .kc-cart__price {
+  flex-shrink: 0;
+}
+
+/* A TÉTEL SAJÁT cselekvései (ingyenes tételnél az igénylés, minden tételnél a
+   kivétel). Csoportban állnak, hogy a sor tördelésekor együtt maradjanak, és
+   maguk is tördelhetők a 320 px-es sávban. */
+.kc-cart__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--kc-space-2);
   flex-shrink: 0;
 }
 
@@ -73,8 +105,28 @@
   font-weight: var(--kc-font-weight-bold);
 }
 
+/* A fizetés HATÓKÖRE vegyes kosárban. TELJES tintával áll, nem tompítva: ez a
+   mondat mondja meg, hogy a kosárban maradó többi tételért most nem fizet a
+   látogató — pénzről szóló állítás, nem lábjegyzet.
+   FOLYÓSZÖVEG (semmilyen flex/grid): a `.kc-appointment__consent-label` mért
+   csapdája után szabály, hogy folyószövegre nem kerül flex (ott 320 px-en
+   107 px-es túlcsordulást okozott, WCAG 2.2 SC 1.4.10).
+   A `max-width` a mért sorhossz-korlát: 34rem = 544 px ≈ 66 karakter (a repó
+   0,4542 em/karakter állandójával, 18 px-es törzsön). */
+.kc-cart__scope {
+  margin: 0 0 var(--kc-space-2);
+  max-width: var(--kc-measure);
+  color: var(--kc-color-text);
+  font-size: var(--kc-font-m);
+  /* Biztonsági háló: a mondatba a KURZUS CÍME kerül, ami szerkesztői tartalom,
+     tehát lehet benne hosszú, tördelhetetlen szó. Csak akkor tör, ha másképp
+     kilógna (a `.kc-checkout-terms__label` bevált mintája). */
+  overflow-wrap: break-word;
+}
+
 .kc-cart__total-note {
   margin: 0 0 var(--kc-space-5);
+  max-width: var(--kc-measure);
   color: var(--kc-color-text-muted);
   font-size: var(--kc-font-s);
 }
@@ -117,6 +169,7 @@
    számlázási és az elállási blokk — a pénztár címsor-hierarchiája nem változik. */
 .kc-checkout-guest h2,
 .kc-checkout-billing h2,
+.kc-checkout-terms h2,
 .kc-checkout-waiver h2 {
   margin: 0 0 var(--kc-space-4);
   font-size: var(--kc-font-m);
@@ -163,6 +216,72 @@
 .kc-checkout-waiver--free p {
   margin: 0;
   color: var(--kc-color-success);
+}
+
+/* ---- Szerződési feltételek (ÁSZF-elfogadás) -------------------------------
+   EGY jelölőnégyzet, KÉT beágyazott hivatkozással. Az indoklás és a források a
+   src/lib/checkout/form-submission.ts CHECKOUT_TERMS_* konstansainál. */
+
+.kc-checkout-terms__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--kc-space-3);
+}
+
+/* ÉRINTŐCÉL: a négyzet MAGA 1,5rem = 24 CSS px, tehát a WCAG 2.2 SC 2.5.8
+   (Target Size, Minimum) küszöbét kivétel nélkül teljesíti — nem a „label for"
+   kivételére támaszkodik. A `label`-lel együtt a kattintható sáv legalább
+   2,75rem = 44 px magas (SC 2.5.5, AAA).
+   https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html */
+.kc-checkout-terms__checkbox {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-block-start: 0.15rem;
+  accent-color: var(--kc-color-primary);
+}
+
+.kc-checkout-terms__checkbox:focus-visible {
+  outline: 2px solid var(--kc-color-focus);
+  outline-offset: 2px;
+}
+
+.kc-checkout-terms__label {
+  /* EZ A FELIRAT FOLYÓSZÖVEG, NEM ELRENDEZÉS — ezért NEM flex-konténer.
+     A `.kc-appointment__consent-label` pontosan ettől esett szét ÖT HASÁBRA:
+     flexként a mondat szövegdarabjai és a beágyazott hivatkozás külön-külön
+     flex-elemmé válnak, a `flex-wrap` alapértéke pedig `nowrap`. Mérve akkor:
+     320 px-en 107 px vízszintes túlcsordulás, ami WCAG 2.2 SC 1.4.10 (Reflow)
+     bukás. https://www.w3.org/WAI/WCAG22/Understanding/reflow.html
+     Itt KÉT beágyazott link van, tehát a hiba még durvább lenne. */
+  display: block;
+  max-width: var(--kc-measure);
+  min-height: 2.75rem;
+  color: var(--kc-color-text);
+  font-size: var(--kc-font-m);
+  line-height: var(--kc-leading-body);
+  cursor: pointer;
+  /* Biztonsági háló szűk konténerre: csak akkor tör szót, ha másképp kilógna. */
+  overflow-wrap: break-word;
+}
+
+/* A mondatba ÁGYAZOTT jogi linkek. Szabály nélkül a base.css alapnyelvét
+   örökölnék (ink, aláhúzás nélkül), vagyis a környező mondattól 1,00:1-re
+   lennének megkülönböztethetők → WCAG 2.2 SC 1.4.1 bukás. Ugyanaz a nyelv,
+   mint az ingyenes kurzus és a kapcsolat űrlapján: ink + aláhúzás. */
+.kc-checkout-terms__label a {
+  color: var(--kc-color-text);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+.kc-checkout-terms__label a:hover {
+  color: var(--kc-color-link-hover);
+}
+
+.kc-checkout-terms__label a:focus-visible {
+  outline: 2px solid var(--kc-color-focus);
+  outline-offset: 2px;
 }
 
 .kc-checkout-form__error {

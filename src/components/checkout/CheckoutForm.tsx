@@ -21,7 +21,15 @@ import type { BillingFieldName } from '../../lib/checkout/billing'
 import type { GuestFieldName } from '../../lib/checkout/guest'
 import {
   BILLING_INPUT_NAME,
+  CHECKOUT_TERMS_HEADING,
+  CHECKOUT_TERMS_HINT,
+  CHECKOUT_TERMS_LABEL,
   GUEST_INPUT_NAME,
+  TERMS_ASZF_PATH,
+  TERMS_HINT_ID,
+  TERMS_INPUT_ID,
+  TERMS_NEW_TAB_HINT,
+  TERMS_PRIVACY_PATH,
   WAIVER_LOSS_INPUT_ID,
   WAIVER_START_INPUT_ID,
   createCheckoutSubmitHandler,
@@ -56,6 +64,11 @@ export const CHECKOUT_BLOCK_HINT_ID = 'kc-checkout-block-hint'
  * 29. § (1) m) SZÓ SZERINTI szövegekkel, NEM előre kipipálva — mindkettő
  * kötelező a submit-hoz (a fizetős termékekre; az ingyenes tétel nem igényli).
  * A fizetési gomb felirata KÖTÖTT: „Megrendelés és fizetés".
+ *
+ * A HARMADIK jelölőnégyzet az ÁSZF-ELFOGADÁS (egy négyzet, két hivatkozással),
+ * ami az ÁSZF 22. bekezdése szerint MAGA A SZERZŐDÉSKÖTÉS mozzanata — ez
+ * MINDEN terméken kötelező, az ingyenesen is. A szövegek, útvonalak és a
+ * döntés indoklása a form-submission.ts CHECKOUT_TERMS_* konstansainál.
  *
  * SZÁMLÁZÁSI ADATOK — kontrollált mezők, szándékosan:
  * a `Field` alapból kontrollálatlan, de a natív input-attribútumokat átadja,
@@ -219,6 +232,14 @@ export function CheckoutErrorRegion({ error }: { error: string | null }) {
 export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormProps) {
   const [waiverStart, setWaiverStart] = useState(false)
   const [waiverLoss, setWaiverLoss] = useState(false)
+  /**
+   * ÁSZF-elfogadás. A kezdőérték KÖTELEZŐEN `false`: az előre bepipált
+   * elfogadás jogilag érvénytelen és sötét minta (GOV.UK Design System,
+   * Checkboxes: „Do not pre-select checkbox options…"; NN/g: a jogi
+   * jelölőnégyzet alapból üres). A hivatkozásokat a
+   * `form-submission.ts` CHECKOUT_TERMS_* konstansainak fejkommentje sorolja.
+   */
+  const [termsAccepted, setTermsAccepted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // A profil mezői kizárólag ELŐKITÖLTÉSKÉNT szolgálnak: innentől a state az
@@ -263,7 +284,12 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
     ? 'Ezt a kurzust már megvetted, ezért új rendelés nem indítható. A kurzusaid között éred el.'
     : !waiverComplete
       ? 'A fizetéshez pipáld ki mindkét nyilatkozatot az „Elállási jog” résznél.'
-      : null
+      : // Az akadályok sorrendje az ŰRLAP sorrendjét követi (waiver, majd
+        // ÁSZF), hogy a magyarázat mindig a legelső hiányra mutasson — ez
+        // ugyanaz a sorrend, amit a `planCheckoutSubmission` fókuszcélja visz.
+        !termsAccepted
+        ? `A vásárláshoz pipáld ki a nyilatkozatot a „${CHECKOUT_TERMS_HEADING}” résznél.`
+        : null
 
   const updateBilling = (field: BillingFieldName, value: string): void => {
     setBilling((previous) => withBillingValue(previous, field, value))
@@ -299,6 +325,7 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
       waiverRequired: requiresWaiver,
       waiverStartAccepted: waiverStart,
       waiverLossAccepted: waiverLoss,
+      termsAccepted,
       billing,
       ...(isGuest ? { guest } : {}),
     }),
@@ -487,6 +514,22 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
           </p>
         </Card>
       ) : (
+        /*
+          ═══ VÉDEKEZŐ ÁG, NEM MŰKÖDŐ FUNKCIÓ (2026-08-17) ═══
+          Ez az ág ma ELÉRHETETLEN: a `/penztar` LAP-SZINTŰ kapuja ingyenes
+          terméknél (`isFreeCourse`) az űrlap helyett tájékoztató állapotot
+          rendel, tehát `CheckoutForm` `isFree: true` proppal élesben nem
+          renderelődik. Őre: `src/__tests__/penztar-ingyenes-kapu.test.tsx`.
+
+          MIÉRT MARAD BENNE MÉGIS: a `product.isFree` prop, a
+          `priceHuf: number | null` típus és a rá épülő tesztek kivezetése külön,
+          nagyobb refaktor. Amíg az le nem fut, ez az ág VÉDEKEZÉS (ha valaki a
+          kaput megkerülve rendereli a komponenst, ne fizetős felületet lásson),
+          nem pedig egy támogatott út: az ingyenes kurzus valódi igénylése a
+          kurzusoldal `FreeCourseRequestForm`-ján keresztül történik.
+          A beküldése ezért sem működne: a `POST /api/checkout/start` ár-kapuja
+          az ingyenes terméket garantáltan elutasítja.
+        */
         <Card className="kc-checkout-waiver kc-checkout-waiver--free">
           <p>
             Ez a kurzus ingyenes — a hozzáférés a regisztrációd után azonnal megnyílik, fizetés
@@ -494,6 +537,62 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
           </p>
         </Card>
       )}
+
+      {/*
+        ═══ SZERZŐDÉSI FELTÉTELEK — EGY jelölőnégyzet, KÉT hivatkozással ═══
+
+        MIÉRT ITT ÁLL: az ÁSZF 22. bekezdése maga adja meg a sorrendet — a
+        Vásárló „megadja személyes adatait, bejelöli az … jelölőnégyzetet,
+        majd megnyomja a »VÁSÁRLÁS« gombot". A blokk ezért az adatmezők UTÁN,
+        a beküldőgomb ELŐTT áll; ez egyben az utolsó dolog, amit a vevő a
+        döntés előtt elolvas.
+
+        MIÉRT AZ INGYENES ÁGON IS: a szerződés ingyenes hozzáférésnél is
+        létrejön, és az ÁSZF felhasználási korlátja az ismeretterjesztő videóra
+        is vonatkozik. Elágazás nélkül, egységesen — WCAG 2.2 SC 3.2.4.
+
+        ÚJ LAPON NYÍLÓ LINKEK: a pénztár űrlapállapota kliens-oldali React-state,
+        a saját lapon való elnavigálás tehát elvesztené a beírt számlázási
+        adatokat. Az `új lapon nyílik` a link SZÖVEGÉNEK része (vizuálisan
+        rejtve), hogy a képernyőolvasó is előre jelezze — WCAG 2.2 SC 3.2.5,
+        G201 technika.
+
+        A jelölőnégyzet a felirat BAL oldalán áll (GOV.UK Design System,
+        Checkboxes: „Always position checkboxes to the left of their labels."),
+        és a `label for` miatt maga a felirat is kattintható (NN/g:
+        „clickable labels").
+      */}
+      <Card className="kc-checkout-terms">
+        <h2>{CHECKOUT_TERMS_HEADING}</h2>
+        <div className="kc-checkout-terms__row">
+          <input
+            aria-describedby={TERMS_HINT_ID}
+            checked={termsAccepted}
+            className="kc-checkout-terms__checkbox"
+            id={TERMS_INPUT_ID}
+            name="consentTerms"
+            onChange={(event) => setTermsAccepted(event.target.checked)}
+            required
+            type="checkbox"
+          />
+          <label className="kc-checkout-terms__label" htmlFor={TERMS_INPUT_ID}>
+            {CHECKOUT_TERMS_LABEL.before}
+            <a href={TERMS_ASZF_PATH} rel="noopener noreferrer" target="_blank">
+              {CHECKOUT_TERMS_LABEL.aszfLabel}
+              <span className="kc-visually-hidden">{TERMS_NEW_TAB_HINT}</span>
+            </a>
+            {CHECKOUT_TERMS_LABEL.between}
+            <a href={TERMS_PRIVACY_PATH} rel="noopener noreferrer" target="_blank">
+              {CHECKOUT_TERMS_LABEL.privacyLabel}
+              <span className="kc-visually-hidden">{TERMS_NEW_TAB_HINT}</span>
+            </a>
+            {CHECKOUT_TERMS_LABEL.after}
+          </label>
+        </div>
+        <p className="kc-field__hint" id={TERMS_HINT_ID}>
+          {CHECKOUT_TERMS_HINT}
+        </p>
+      </Card>
 
       {/*
         FIZETÉSI SZOLGÁLTATÓ — a hivatalos Barion logósor és a folyamat

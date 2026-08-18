@@ -119,6 +119,11 @@ export const barionPaymentAdapter: PaymentAdapter = {
         quantity: firstItem?.quantity ?? 1,
         consentWithdrawalWaiver:
           (data as Record<string, unknown>).consentWithdrawalWaiver === true,
+        // Az ÁSZF-elfogadás a szerveren KÖTELEZŐ (start-checkout.ts): a
+        // szerződés ettől jön létre (ÁSZF 22. bekezdés). Az adapter a hívó
+        // adatából adja tovább, saját `true`-t NEM talál ki — különben ez az
+        // út némán megkerülné az elfogadást.
+        consentTerms: (data as Record<string, unknown>).consentTerms === true,
         billing: billingFromProfile(user),
       },
     })

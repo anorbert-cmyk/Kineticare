@@ -234,6 +234,45 @@ describe('order-poll — elveszett callback-mentés', () => {
     expect(base.paidCalls).toEqual([101])
   })
 
+  /**
+   * P1 — A MELLÉKHATÁS-LÁNC ISMÉTLŐDÉS-VÉDELME.
+   *
+   * A poll a futás ELEJÉN olvassa be a függő rendeléseket; mire a rendelés-
+   * szintű zárra rákerül a sor, egy párhuzamos Barion-callback már paid-re
+   * állíthatta. Az állapotgép ilyenkor `{ action: 'paid', duplicate: true,
+   * transitionedToPaid: false }`-t ad — az onPaid tehát NEM futhat.
+   *
+   * MI A TÉT: az onOrderPaid újrafutása ismételt visszaigazoló levelet és
+   * ismételt számla-jobot jelent, vendégnél pedig ÚJ jelszó-beállító tokent
+   * (`payload.forgotPassword`) — a korábban kiküldött, még fel nem használt
+   * aktiváló link érvénytelenné válna, és a vevő kizárhatná magát a kifizetett
+   * kurzusából.
+   *
+   * A summary SZÁNDÉKOSAN változatlan (`transitionedPaid: 1`): a `duplicate`
+   * ág külön ágon számol. Ezért a feltétel elrontása (`transitionedToPaid` →
+   * `action === 'paid'`) KIZÁRÓLAG az onPaid-kémen látszik — a számlálókon nem.
+   */
+  it('MÁR paid rendelésre futó poll (verseny a callback-kel) → az onPaid NEM fut újra', async () => {
+    // A poll a payment_pending listából kapta, de a záron belüli újraolvasás
+    // már paid rendelést lát — pontosan a versenyhelyzet alakja.
+    const order = createPendingOrder({ status: 'paid' })
+    const { payload, fetchState, onPaid, queueInvoice, user, paidCalls, orderUpdates } = setup({
+      pending: [order],
+      stateStatus: 'Succeeded',
+    })
+    user.purchases = [42]
+
+    const summary = await pollPendingOrders({ payload, fetchState, onPaid, queueInvoice, now: NOW })
+
+    // A MELLÉKHATÁS-LÁNC egyszer sem indult el.
+    expect(paidCalls).toEqual([])
+    // Státusz-írás sincs (az átmenet no-op), a rendelés paid marad.
+    expect(orderUpdates).toHaveLength(0)
+    expect(order.status).toBe('paid')
+    // A számláló változatlan — ez az, amitől a régi teszt vak volt.
+    expect(summary.transitionedPaid).toBe(1)
+  })
+
   it.each([['Canceled'], ['Expired']])('Barion %s → a rendelés cancelled lesz', async (status) => {
     const order = createPendingOrder()
     const { payload, fetchState, onPaid, queueInvoice, paidCalls } = setup({
@@ -468,6 +507,78 @@ describe('order-poll — számla-resweep', () => {
    * Hibás Számlázz.hu-konfiguráció (a feloldás DOB). A poll fő feladatát ez nem
    * viheti el, de az ok a summaryben és RIASZTÁS-szintű naplósorban is megjelenik.
    */
+  /**
+   * P2 — A NÉMA SZÁMLA-KIMARADÁS. Ha a job-sor nem érhető el (a
+   * `queueInvoiceIssueJob` `payload.jobs.queue` nélkül `false`-szal lép ki), a
+   * resweep VÉGIGMEGY a jelölteken, de egyet sem tud sorba állítani. Korábban
+   * ez `invoiceRequeued: 0` + `invoiceResweep: 'done'` volt — vagyis
+   * MEGKÜLÖNBÖZTETHETETLEN a „nincs teendő" esettől, holott itt a vevők
+   * számlája nem készül el.
+   */
+  it('a job-sor nem fogad be semmit → queue-unavailable (nem néma 0)', async () => {
+    const paidOrder = createPendingOrder({ id: 202, status: 'paid', invoiceStatus: 'none' })
+    const { payload, fetchState, onPaid, invoicingEnabled } = setup({
+      pending: [],
+      paidResweep: [paidOrder],
+    })
+    // A valódi queueInvoiceIssueJob viselkedése hiányzó payload.jobs mellett.
+    const queueInvoice = async (): Promise<boolean> => false
+
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      invoicingEnabled,
+      now: NOW,
+    })
+
+    expect(summary.invoiceRequeued).toBe(0)
+    expect(summary.invoiceResweep).toBe('queue-unavailable')
+  })
+
+  it('NINCS jelölt (tényleg nincs teendő) → done marad, nem queue-unavailable', async () => {
+    const { payload, fetchState, onPaid, invoicingEnabled } = setup({
+      pending: [],
+      paidResweep: [],
+    })
+    const queueInvoice = async (): Promise<boolean> => false
+
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      invoicingEnabled,
+      now: NOW,
+    })
+
+    expect(summary.invoiceRequeued).toBe(0)
+    expect(summary.invoiceResweep).toBe('done')
+  })
+
+  it('RÉSZLEGES sikertelenség (egy megy, egy nem) → done marad', async () => {
+    const first = createPendingOrder({ id: 202, status: 'paid', invoiceStatus: 'none' })
+    const second = createPendingOrder({ id: 203, status: 'paid', invoiceStatus: 'none' })
+    const { payload, fetchState, onPaid, invoicingEnabled } = setup({
+      pending: [],
+      paidResweep: [first, second],
+    })
+    const queueInvoice = async (orderId: number): Promise<boolean> => orderId === 202
+
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      invoicingEnabled,
+      now: NOW,
+    })
+
+    expect(summary.invoiceRequeued).toBe(1)
+    expect(summary.invoiceResweep).toBe('done')
+  })
+
   it('hibás Számlázz.hu-konfiguráció → skipped-config-error, a poll nem hasal el', async () => {
     const paidOrder = createPendingOrder({ id: 202, status: 'paid', invoiceStatus: 'none' })
     const { payload, fetchState, onPaid, queueInvoice, queuedInvoices } = setup({

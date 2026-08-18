@@ -14,6 +14,7 @@ const INPUT: CheckoutSubmitInput = {
   productId: 1,
   quantity: 1,
   consentWithdrawalWaiver: true,
+  consentTerms: true,
   billing: BILLING,
 }
 

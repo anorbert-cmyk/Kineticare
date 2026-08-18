@@ -4,7 +4,29 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi, type MockInst
 import { createBarionCallbackProcessor } from '../lib/barion-callback/process-callback'
 import { createBarionCallbackHandler } from '../lib/barion-callback/route-handler'
 import { processWebhook, type WebhookEventDoc, type WebhookEventStore } from '../lib/idempotency'
+import { onOrderPaid } from '../lib/order-paid'
 import type { Order, User } from '../payload-types'
+
+/**
+ * P1 — A PAID-MELLÉKHATÁS-LÁNC KÉME.
+ *
+ * Az `onOrderPaid` (számla-job + visszaigazoló/aktiváló e-mail) a processzor
+ * KÖZVETLEN hívása, injektálni nem lehet — ezért a modul mockolt, a valódi
+ * lánc pedig kémre cserélt. Két dolgot mérünk vele:
+ *  - friss paid-átmenetnél PONTOSAN EGYSZER fut,
+ *  - MÁR paid rendelésre érkező (duplikált / késői) callbacknél EGYSZER SEM.
+ *
+ * A mockolás mellékesen azt is garantálja, hogy a tesztből semmilyen valódi
+ * e-mail- vagy job-mellékhatás nem indulhat (CLAUDE.md 15. tanulság).
+ */
+const orderPaidSpy = vi.hoisted(() => ({
+  onOrderPaid: vi.fn<(deps: unknown) => Promise<void>>(async () => {}),
+}))
+
+vi.mock('../lib/order-paid', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/order-paid')>()
+  return { ...actual, onOrderPaid: orderPaidSpy.onOrderPaid }
+})
 
 /**
  * T-022 Barion-callback egységtesztek — mockolt fetch-csel (GetState), mockolt
@@ -55,6 +77,10 @@ afterAll(() => {
 afterEach(() => {
   fetchMock.mockReset()
   vi.restoreAllMocks()
+  // A kém hívás-naplója NEM szivároghat át a következő tesztre, és a
+  // restoreAllMocks után is működő (Promise-t adó) implementációval kell állnia.
+  orderPaidSpy.onOrderPaid.mockReset()
+  orderPaidSpy.onOrderPaid.mockImplementation(async () => {})
 })
 
 /** Állapottartó in-memory webhook-events tárhely (unique-kényszerrel) — idempotency.test.ts minta. */
@@ -513,6 +539,23 @@ describe('(a) boldog út — paid', () => {
     // Webhook-events: processed + processedAt + result='paid'.
     expect(docs[0]).toMatchObject({ status: 'processed', result: 'paid', attempts: 1 })
     expect(typeof docs[0]?.processedAt).toBe('string')
+
+    // POZITÍV KONTROLL a mellékhatás-lánc kéméhez: friss paid-átmenetnél az
+    // onOrderPaid PONTOSAN EGYSZER fut (enélkül a lentebbi „nem hívódott"
+    // állítások vakon is teljesülnének).
+    expect(orderPaidSpy.onOrderPaid).toHaveBeenCalledTimes(1)
+    expect(orderPaidSpy.onOrderPaid.mock.calls[0]?.[0]).toMatchObject({
+      order: expect.objectContaining({ id: 101 }),
+    })
+  })
+
+  /**
+   * VAKTESZT-VÉDELEM: ha a modul-mock elcsúszna (átnevezett fájl, elrontott
+   * factory), a kém sosem kapna hívást — és MINDEN „nem hívódott" állítás
+   * vakon teljesülne. Ez a sor köti a kémet a valódi modul-exporthoz.
+   */
+  it('a kém tényleg a `../lib/order-paid` modul-exportjára van kötve', () => {
+    expect(onOrderPaid).toBe(orderPaidSpy.onOrderPaid)
   })
 })
 
@@ -537,6 +580,9 @@ describe('(b) duplikált callback — EXACTLY ONCE', () => {
     expect(order?.status).toBe('paid')
     expect(user.purchases).toEqual([42])
     expect(docs).toHaveLength(1)
+    // A MELLÉKHATÁS-LÁNC is pontosan egyszer futott: nincs második számla-job
+    // és nincs második visszaigazoló levél.
+    expect(orderPaidSpy.onOrderPaid).toHaveBeenCalledTimes(1)
   })
 
   it('feldolgozás alatt érkező ismétlés (received) → 200, újabb ütemezés nélkül', async () => {
@@ -554,7 +600,24 @@ describe('(b) duplikált callback — EXACTLY ONCE', () => {
     capture.tasks.length = 0
   })
 
-  it('már paid rendelésre érkező callback: átmenet no-op (NEM hiba), purchases idempotens', async () => {
+  /**
+   * P1 — A MELLÉKHATÁS-LÁNC ISMÉTLŐDÉS-VÉDELME.
+   *
+   * A már kifizetett rendelésre érkező (késői vagy más PaymentId-vel újra
+   * kézbesített) callbackre az állapotgép `{ action: 'paid', duplicate: true,
+   * transitionedToPaid: false }`-t ad. A processzor CSAK a `transitionedToPaid`
+   * jelzőre futtathatja az onOrderPaid-et.
+   *
+   * MI A TÉT, ha mégis lefutna: ismételt visszaigazoló levél, ismételt
+   * számla-job, vendégnél pedig ÚJ jelszó-beállító token
+   * (`payload.forgotPassword`) — amitől a korábban kiküldött, még fel nem
+   * használt aktiváló link ÉRVÉNYTELENNÉ válna, és a vevő kizárhatná magát a
+   * kifizetett kurzusából.
+   *
+   * A DB-írások hiánya ezt NEM méri (az átmenet amúgy sem ír), ezért az őr a
+   * mellékhatás-lánc kémjén áll.
+   */
+  it('már paid rendelésre érkező callback: átmenet no-op, és a mellékhatás-lánc SEM indul újra', async () => {
     const { POST, calls, order, user, capture } = setup({
       order: createOrder({ status: 'paid' }),
       user: createUser([42]),
@@ -570,6 +633,10 @@ describe('(b) duplikált callback — EXACTLY ONCE', () => {
     expect(calls.update.filter((call) => call.collection === 'users')).toHaveLength(0)
     expect(order?.status).toBe('paid')
     expect(user.purchases).toEqual([42])
+
+    // ÉS a mellékhatás-lánc egyszer sem indult el: se számla-job, se levél,
+    // se új jelszó-beállító token.
+    expect(orderPaidSpy.onOrderPaid).not.toHaveBeenCalled()
   })
 })
 

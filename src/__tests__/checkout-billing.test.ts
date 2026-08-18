@@ -388,6 +388,9 @@ describe('planCheckoutSubmission — a beküldés a MÓDOSÍTOTT állapotból é
     waiverRequired: true,
     waiverStartAccepted: true,
     waiverLossAccepted: true,
+    // Az ÁSZF-elfogadás minden ágon kötelező (start-checkout.ts + a pénztár
+    // jelölőnégyzete); a saját tesztjei a penztar-aszf-elfogadas.test.tsx-ben.
+    termsAccepted: true,
     billing,
   })
 
@@ -418,6 +421,7 @@ describe('planCheckoutSubmission — a beküldés a MÓDOSÍTOTT állapotból é
       productId: 42,
       quantity: 1,
       consentWithdrawalWaiver: true,
+      consentTerms: true,
       billing: {
         name: 'Példa Kft.',
         zip: '9700',

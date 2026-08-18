@@ -13,11 +13,80 @@ import net from 'node:net'
  * fogad kapcsolatot (vagy 1,5 mp-en belül nem válaszol), a DB-tesztek
  * kihagyásra kerülnek — pontosan úgy, mint env nélkül. Elutasított kapcsolat
  * (ECONNREFUSED) azonnal visszatér, tehát a próba nem lassítja a futást.
+ *
+ * ═══ FAIL-CLOSED: CI-BAN A KIHAGYÁS TILOS (2026-08-18) ═══
+ *
+ * A csendes kihagyás HELYBEN kényelmi funkció, CI-ban viszont NÉMA
+ * lefedettség-vesztés volt. Mérve: a `verify` job Postgres és DATABASE_URI
+ * nélkül futott, ezért ez a segéd minden futásnál azonnal `false`-ot adott,
+ * és a `describe.skipIf(!hasDb)` 3 tesztfájlt (order-snapshots,
+ * products-status, webhook-audit-db) plusz az order-number fele-részét — 11
+ * tesztet — kihagyott. Minden zöld volt. Az egyik így kiiktatott őr azt védi,
+ * hogy a KLIENS által küldött ár sosem írja felül a szerver árát
+ * (order-integrity.ts → totalHufSnapshot): ez az egyetlen szám, amiből a
+ * Barion-fizetés összege épül, ÉS amihez az összeg-ellenőrzés hasonlít. A
+ * védelmet mutációval kiiktatva a teljes tesztsor zöld maradt.
+ *
+ * Ezért: ha `CI` be van állítva, az adatbázis elérhetősége KÖVETELMÉNY, nem
+ * lehetőség — hiányában ez a függvény DOB, tehát a tesztfájl betöltése
+ * hangosan elhasal, ahelyett hogy a `skipIf` szépen kihagyná. A hiba a
+ * KONKRÉT okot is megnevezi (hiányzó env / nem fogadó host:port), hogy a
+ * CI-log magától diagnosztizálja magát.
+ *
+ * A hibaüzenetbe SOSEM kerül bele a nyers DATABASE_URI: a kapcsolati sztring
+ * jelszót tartalmazhat (a logger redact-listájának ugyanez az elve). Csak a
+ * host:port kerül bele — az nem titok, és pont az kell a diagnózishoz.
+ *
+ * Helyben (CI nélkül) minden változatlan: adatbázis híján a DB-tesztek
+ * csendben kimaradnak, a fejlesztői futás nem igényel Postgres-t.
  */
-export async function isDatabaseAvailable(): Promise<boolean> {
-  const uri = process.env.DATABASE_URI
-  if (!uri || !process.env.PAYLOAD_SECRET) {
+
+/** A CI-fail-closed hibaüzenet állandó előtagja — a teszt-őr erre illeszt. */
+export const CI_DB_REQUIRED_PREFIX =
+  'A DB-függő tesztek CI-ban nem hagyhatók ki, de az adatbázis nem érhető el:'
+
+/** A hibaüzenet záró, teendőt megnevező része. */
+const CI_DB_REQUIRED_HINT =
+  'A CI `verify` jobjában Postgres service-konténer fut, a DATABASE_URI és a PAYLOAD_SECRET ' +
+  'a job env-jéből jön, a sémát pedig az `npx payload migrate` lépés hozza létre ' +
+  '(a dev-módú séma-push ki van kapcsolva, tehát séma CSAK migrációból keletkezik). ' +
+  'Ellenőrizd, hogy mindhárom megvan-e a .github/workflows/ci.yml `verify` jobjában. ' +
+  'A kihagyás azért nem engedhető meg, mert némán csökkentené a lefedettséget: ' +
+  'az így kiiktatott őrök egyike a rendelés ár-snapshotját védi (a kliens ára sosem ' +
+  'írhatja felül a szerver árát), ami a Barion-fizetés összegének egyetlen forrása.'
+
+interface ProbeResult {
+  readonly reachable: boolean
+  /** Miért NEM érhető el — titkot sosem tartalmaz (a DATABASE_URI-t nem). */
+  readonly reason?: string
+}
+
+/**
+ * CI-futás-e?
+ *
+ * A GitHub Actions minden lépésnél `CI=true`-t exportál; más futtatók is ezt a
+ * de facto szabványt követik. Az üres, `'false'` és `'0'` értéket
+ * KIKAPCSOLTNAK vesszük — némelyik eszköz így jelzi a nem-CI futást, és egy
+ * ilyen érték nem foszthatja meg a fejlesztőt a helyi, adatbázis nélküli
+ * futástól.
+ */
+export function isContinuousIntegration(): boolean {
+  const raw = process.env.CI
+  if (typeof raw !== 'string') {
     return false
+  }
+  const value = raw.trim().toLowerCase()
+  return value.length > 0 && value !== 'false' && value !== '0'
+}
+
+/** A tényleges elérhetőség-vizsgálat — env-ellenőrzés + TCP-próba. */
+async function probeDatabase(): Promise<ProbeResult> {
+  const uri = process.env.DATABASE_URI
+  if (!uri) {
+    return { reachable: false, reason: 'a DATABASE_URI környezeti változó nincs beállítva' }
+  }
+  if (!process.env.PAYLOAD_SECRET) {
+    return { reachable: false, reason: 'a PAYLOAD_SECRET környezeti változó nincs beállítva' }
   }
 
   let host: string
@@ -27,10 +96,12 @@ export async function isDatabaseAvailable(): Promise<boolean> {
     host = parsed.hostname || '127.0.0.1'
     port = parsed.port ? Number(parsed.port) : 5432
   } catch {
-    return false
+    // A nyers érték SZÁNDÉKOSAN nem kerül az üzenetbe: jelszót tartalmazhat.
+    return { reachable: false, reason: 'a DATABASE_URI nem értelmezhető kapcsolati URL-ként' }
   }
 
-  return new Promise<boolean>((resolve) => {
+  const target = `${host}:${port}`
+  const reachable = await new Promise<boolean>((resolve) => {
     const socket = net.connect({ host, port })
     const finish = (result: boolean): void => {
       socket.destroy()
@@ -40,4 +111,24 @@ export async function isDatabaseAvailable(): Promise<boolean> {
     socket.once('connect', () => finish(true))
     socket.once('error', () => finish(false))
   })
+
+  return reachable
+    ? { reachable: true }
+    : { reachable: false, reason: `a(z) ${target} címen nem fogad kapcsolatot adatbázis` }
+}
+
+/**
+ * Elérhető-e a teszt-adatbázis?
+ *
+ * Helyben: `false` = a hívó `describe.skipIf`-je csendben kihagyja a blokkot.
+ * CI-ban: nincs `false` — az elérhetetlen adatbázis DOB (lásd a fájl fejlécét).
+ */
+export async function isDatabaseAvailable(): Promise<boolean> {
+  const { reachable, reason } = await probeDatabase()
+
+  if (!reachable && isContinuousIntegration()) {
+    throw new Error(`${CI_DB_REQUIRED_PREFIX} ${reason}. ${CI_DB_REQUIRED_HINT}`)
+  }
+
+  return reachable
 }
