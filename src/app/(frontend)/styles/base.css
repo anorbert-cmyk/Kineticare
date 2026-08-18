@@ -76,12 +76,15 @@ body {
      magasabb. A `break-word` csak akkor nyit törési lehetőséget, ha a szó a
      saját sorában sem fér ki; rendes sortörésnél nem aktiválódik.
 
-     AMIT NEM OLD MEG. A rács- és flex-elemek automatikus minimum mérete
-     (CSS Grid 6.6) a tartalom min-content szélessége — ezt a `break-word`
-     nem csökkenti, ezért az AUTO sávban álló címsornál nem a szöveg csordul
-     túl, hanem a SÁV nyílik szét. A repóban ma egyetlen ilyen hely van
-     (`.kc-hero__grid` → `.kc-hero__content`); az őr külön, nevesítve tartja
-     számon (src/__tests__/reflow-hasabmeres.test.ts).
+     AMIT ÖNMAGÁBAN NEM OLD MEG. A rács- és flex-elemek automatikus minimum
+     mérete (CSS Grid 6.6) a tartalom min-content szélessége — ezt a
+     `break-word` nem csökkenti, ezért az AUTO sávban álló címsornál nem a
+     szöveg csordul túl, hanem a SÁV nyílik szét. Ehhez a hordozó elemen
+     `min-width: 0` kell; a repóban két ilyen hely van, és mindkettő megkapta:
+     `.kc-hero__content` (content.css) és `.kc-player__course-title`
+     (player.css). Mérve, a hero-szabály nélkül a `.kc-hero__title` doboza
+     320 px-en 356,97 px volt egy 272 px-es konténerben, a dokumentum 381 px;
+     a szabállyal 272 px, illetve 320 px.
 
      Az őr ezt MÉRI, nem a fájlban keresi. */
   overflow-wrap: break-word;

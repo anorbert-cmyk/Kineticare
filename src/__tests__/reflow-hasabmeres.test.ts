@@ -608,9 +608,12 @@ describe('sorhossz — a mérték-korlát a folyószövegen, mérve', () => {
  * ═══ AMIT NEM MODELLEZ ═══
  * A rács- és flex-sávok min-content alapú automatikus minimum méretét
  * (CSS Grid 1, 6.6). Ott nem a szöveg csordul túl, hanem a SÁV nyílik szét, és
- * ezt a `break-word` szándékosan nem orvosolja (CSS Text 3, 5.5). A repóban ma
- * egyetlen ilyen hely van; a „NYITOTT kérdés" blokk nevesíti, a számok
- * böngészős mérésből valók.
+ * ezt a `break-word` szándékosan nem orvosolja (CSS Text 3, 5.5) — a `mert`
+ * oszlop böngészős mérései viszont EZT IS mutatják, mert a valódi dobozból
+ * származnak. A repóban két ilyen hely van, és mindkettő a saját CSS-ében
+ * kap kiutat: a hero rács-eleme (`.kc-hero__content { min-width: 0 }`,
+ * content.css) és a lejátszó címsora (`min-inline-size: 0`, player.css);
+ * a 4.4 blokk mindkettőt ellenőrzi, tehát ha valaki kiveszi, az őr megszólal.
  *
  * ═══ FORRÁSOK ═══
  * - WCAG 2.2, 1.4.10 Reflow (AA), https://www.w3.org/TR/WCAG22/#reflow
@@ -743,8 +746,14 @@ type CimsorOsztaly = {
   readonly mert: readonly [number, number]
   /** Egy sorba vágott, ellipszissel csonkolt címsor — nem tud túlcsordulni. */
   readonly csonkolt?: true
-  /** A doboza rács-sávból nyílik szét: a modell ezt nem látja (lásd 4.5). */
-  readonly racsSzivargas?: true
+  /**
+   * A címsort hordozó RÁCS- vagy FLEX-elem szelektora. A sáv alsó mérete a
+   * min-content (CSS Grid 1, 6.6), amit a `break-word` szándékosan nem
+   * csökkent (CSS Text 3, 5.5) — ezért ezen az elemen `min-width: 0` kell,
+   * különben nem a szöveg tördel, hanem a DOBOZ nyílik szét. A 4.4 blokk
+   * ellenőrzi, hogy a kiút tényleg ott van.
+   */
+  readonly savElem?: string
 }
 
 /**
@@ -775,13 +784,19 @@ const CIMSOR_OSZTALYOK: readonly CimsorOsztaly[] = [
     mert: [272, 342],
   },
   {
+    // A hero címe RÁCS-elemben áll: a `break-word` a sáv min-content alsó
+    // méretét nem csökkenti, ezért a `.kc-hero__content { min-width: 0 }`
+    // (content.css) nélkül nem a szöveg csordulna túl, hanem a DOBOZ nyílna
+    // szét. MÉRVE, a szabály nélkül: 356,97 / 363,06 px; a szabállyal az
+    // alábbi 272 / 342 px — azaz pontosan úgy viselkedik, mint a többi
+    // széles konténeri címsor.
     osztaly: '.kc-hero__title',
     elemnev: 'h1',
     ostag: null,
     konteneri: 'szeles',
     beljebb: [],
-    mert: [356.969, 363.063],
-    racsSzivargas: true,
+    mert: [272, 342],
+    savElem: '.kc-hero__content',
   },
   {
     osztaly: '.kc-cta-banner__title',
@@ -864,6 +879,8 @@ const CIMSOR_OSZTALYOK: readonly CimsorOsztaly[] = [
     mert: [222, 292],
   },
   {
+    // A lejátszó címsora MAGA a flex-elem (`flex: 1 1 auto`), ezért a
+    // `min-inline-size: 0` rajta áll, nem a szülőjén.
     osztaly: '.kc-player__course-title',
     elemnev: 'h1',
     ostag: null,
@@ -871,6 +888,7 @@ const CIMSOR_OSZTALYOK: readonly CimsorOsztaly[] = [
     beljebb: [],
     mert: [320, 390],
     csonkolt: true,
+    savElem: '.kc-player__course-title',
   },
 ]
 
@@ -1140,87 +1158,48 @@ describe('elavulás ellen — a végszükség-tördelés a lap gyökerén áll',
     ).toEqual([])
   })
 
-  it('a csonkolt címsor tényleg VÁG (nowrap + hidden + ellipszis + 0 minimum)', () => {
+  it('a csonkolt címsor tényleg VÁG (nowrap + hidden + ellipszis)', () => {
     const lap = teljesLap(320)
     for (const c of CIMSOR_OSZTALYOK.filter((x) => x.csonkolt === true)) {
       const elem = cimsorElem(c)
       expect(sajatErtek(lap, elem, 'white-space'), c.osztaly).toBe('nowrap')
       expect(sajatErtek(lap, elem, 'overflow'), c.osztaly).toBe('hidden')
       expect(sajatErtek(lap, elem, 'text-overflow'), c.osztaly).toBe('ellipsis')
-      // Flex-elemként a saját sávját is el kell tudnia engedni, különben nem a
-      // szöveg vágódik, hanem a SÁV nyílik szét (CSS Grid 1, 6.6).
-      expect(
-        sajatErtekTobbNeven(lap, elem, ['min-width', 'min-inline-size']),
-        `${c.osztaly}: a csonkolás csak akkor fog, ha a flex-elem minimuma 0`,
-      ).toBe('0')
     }
   })
-})
 
-// ---------------------------------------------------------------------------
-// 4.5 NYITOTT kérdés — a rács-sáv szétnyílása
-// ---------------------------------------------------------------------------
-
-/**
- * MÉRVE (Chromium 141, headless, `--hide-scrollbars`, 320 px, a repó saját
- * CSS-ével és a `HomeView` hero-markupjával, a „tárhelyszolgáltatójának"
- * szóval, 2026-08-18):
- *
- * | változat | `.kc-hero__title` doboza | dokumentum |
- * |---|---|---|
- * | mai CSS                                | 356,97 px | 381 px |
- * | `body { overflow-wrap: break-word }`   | 356,97 px | 381 px |
- * | + `.kc-hero__content { min-width: 0 }` | 272 px    | 320 px |
- *
- * MIÉRT. A `.kc-hero__grid` 900 px alatt EGY automatikus rács-sáv, a sáv alsó
- * mérete pedig a rács-elem AUTOMATIKUS MINIMUM MÉRETE (CSS Grid 1, 6.6) —
- * vagyis a tartalom min-content szélessége. A `break-word` a min-content
- * méretet SZÁNDÉKOSAN nem csökkenti (CSS Text 3, 5.5), ezért nem a szöveg
- * csordul ki a dobozból: maga a DOBOZ lesz szélesebb a konténernél. Ezt a
- * számoló modell nem látja, ezért áll itt böngészős mérésként.
- *
- * A javítás egysoros és mérve hatásos (`min-width: 0` a rács-elemen), de a
- * `content.css`-be tartozik, amit ez a kör nem szerkeszthetett — a tulajdonos
- * döntésére vár. Amíg a szabály nincs ott, ez a blokk NEVESÍTVE tartja a
- * kivételt; ha valaki beteszi, a teszt megszólal, és akkor ezt a blokkot és a
- * `racsSzivargas` jelölőt törölni kell.
- */
-describe('NYITOTT — a hero rács-sávja szétnyílik (a vezető döntésére vár)', () => {
-  const RACS = '.kc-hero__grid'
-  const RACS_ELEM = '.kc-hero__content'
-
-  it('pontosan EGY címsor-osztály van a rács-szivárgás kivétellistáján', () => {
-    const kivetelek = CIMSOR_OSZTALYOK.filter((c) => c.racsSzivargas === true).map((c) => c.osztaly)
-    expect(
-      kivetelek,
-      'a lista csak csökkenhet: új sor csak akkor kerülhet ide, ha a vezető jóváhagyta.',
-    ).toEqual(['.kc-hero__title'])
-  })
-
-  it('a hero rács-eleme MA nem engedi el a saját sávját (a kivétel él)', () => {
-    const elem: Elem = { elemnev: '', szulo: null, osztaly: RACS_ELEM, ostagOsztaly: null }
-    expect(
-      sajatErtekTobbNeven(teljesLap(320), elem, ['min-width', 'min-inline-size']),
-      `JÓ HÍR, ha ez bukik: valaki betette a ${RACS_ELEM} { min-width: 0 } szabályt. ` +
-        'Ekkor töröld ezt a describe-blokkot és a .kc-hero__title racsSzivargas jelölőjét — ' +
-        'a lap-szintű tördelés innentől ott is fog.',
-    ).toBeNull()
-  })
-
-  it('a hero rácsa auto sávot használ (ezért szivárog a min-content)', () => {
-    const racs: Elem = { elemnev: '', szulo: null, osztaly: RACS, ostagOsztaly: null }
+  /**
+   * A LAP-SZINTŰ TÖRDELÉS KIEGÉSZÍTŐJE. A `break-word` szándékosan nem
+   * csökkenti a min-content belső méretet (CSS Text 3, 5.5), a rács- és
+   * flex-sávok alsó mérete viszont pontosan a benne álló elem automatikus
+   * minimum mérete, vagyis a min-content (CSS Grid 1, 6.6). Ahol tehát a
+   * címsor rács- vagy flex-elemben áll, ott a szövegtördelés ÖNMAGÁBAN nem
+   * elég: nem a szöveg csordul túl, hanem a DOBOZ nyílik szét.
+   *
+   * MÉRVE (Chromium 141, headless, 320 px, „tárhelyszolgáltatójának"): a
+   * `.kc-hero__content { min-width: 0 }` nélkül a `.kc-hero__title` doboza
+   * 356,97 px volt egy 272 px-es konténerben, és a dokumentum 381 px-re nyílt;
+   * a szabállyal 272 px, illetve 320 px.
+   */
+  it('a rács- és flex-elemben álló címsorok sávja elengedhető (min-width: 0)', () => {
     const lap = teljesLap(320)
-    expect(sajatErtek(lap, racs, 'display')).toBe('grid')
-    const savok = sajatErtek(lap, racs, 'grid-template-columns')
+    const hianyzik: string[] = []
+    for (const c of CIMSOR_OSZTALYOK) {
+      if (c.savElem === undefined) continue
+      const elem: Elem = { elemnev: '', szulo: null, osztaly: c.savElem, ostagOsztaly: null }
+      const minimum = sajatErtekTobbNeven(lap, elem, ['min-width', 'min-inline-size'])
+      if (minimum !== '0') hianyzik.push(`${c.osztaly} → ${c.savElem} (min-width: ${minimum})`)
+    }
     expect(
-      savok === null || !savok.includes('minmax(0'),
-      'ha a hero rácsa `minmax(0, …)` sávot kapott, a szivárgás megszűnt — töröld a kivételt.',
-    ).toBe(true)
+      hianyzik,
+      'ezeknél a sáv min-content alsó mérete szétnyitja a dobozt, hiába tördel a szöveg ' +
+        `(CSS Grid 1, 6.6): ${hianyzik.join(', ')}. A kiút a hordozó elemen: min-width: 0.`,
+    ).toEqual([])
   })
 })
 
 // ---------------------------------------------------------------------------
-// 4.6 Kalibráció — a címsor-modellt is böngészős mérés hitelesíti
+// 4.5 Kalibráció — a címsor-modellt is böngészős mérés hitelesíti
 // ---------------------------------------------------------------------------
 
 describe('kalibráció — a címsor-hasábok egyeznek a böngészős méréssel', () => {
@@ -1230,21 +1209,16 @@ describe('kalibráció — a címsor-hasábok egyeznek a böngészős méréssel
    * lapot az `Emulation.setDeviceMetricsOverride` állította 320, illetve
    * 390 px-re; az értékek a `getBoundingClientRect().width` kimenetei.
    *
-   * Az egyetlen eltérő sor a `.kc-hero__title`: ott a böngésző a rács-sávból
-   * kinyílt, 356,97 px-es dobozt mérte, a modell a konténer 272 px-ét adja —
-   * a különbség PONTOSAN a 4.5 blokkban leírt min-content szivárgás.
+   * A `.kc-hero__title` sora is MÉRT szám, nem a modellből vezetve: a
+   * `.kc-hero__content { min-width: 0 }` (content.css) előtt a böngésző
+   * 356,97 / 363,06 px-es dobozt adott — a rács-sáv min-content szivárgása —,
+   * utána 272 / 342 px-t, vagyis pontosan annyit, mint a többi széles
+   * konténeri címsornál. A modell ezért ma minden sorra egyezik a mérttel.
    */
   for (const c of CIMSOR_OSZTALYOK) {
     for (const [i, nezetablak] of NEZETABLAKOK.entries()) {
       it(`${c.osztaly} @${nezetablak}px: a számolt hasáb a mért dobozt adja`, () => {
-        const g = cimsorGeometria(c, nezetablak)
-        if (c.racsSzivargas === true) {
-          // A modell a konténer-hasábot adja; a mért doboz ennél SZÉLESEBB.
-          expect(g.hasab).toBeLessThan(c.mert[i])
-          expect(g.hasab).toBeCloseTo(nezetablak === 320 ? 272 : 342, 1)
-          return
-        }
-        expect(g.hasab).toBeCloseTo(c.mert[i], 1)
+        expect(cimsorGeometria(c, nezetablak).hasab).toBeCloseTo(c.mert[i], 1)
       })
     }
   }
