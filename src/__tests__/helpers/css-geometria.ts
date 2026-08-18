@@ -9,20 +9,24 @@
  * szabály elmozdulhatna a CSS-ben úgy, hogy az őr nem veszi észre; ez pontosan
  * az a hibaosztály, ami miatt ez a fájl készült.
  *
- * MIT MODELLEZ. Annyi CSS-t, amennyi a folyószöveg-hasáb geometriájához kell:
+ * MIT MODELLEZ. Annyi CSS-t, amennyi a szöveg-hasáb geometriájához kell:
  *   - `:root` egyéni tulajdonságok és a `var()` feloldása (rekurzívan),
  *   - `clamp(min, alap, max)` kiértékelése adott nézetablak-szélességen,
- *     benne a `rem`/`px`/`em`/`vw` és az összeadás,
- *   - kaszkád három szelektor-alakra: puszta elemnév (`h2`), osztály
- *     (`.kc-richtext`) és osztály + elemnév (`.kc-richtext h2`),
- *   - öröklődés: ha az elemre nincs deklaráció, a szülő értéke jön.
+ *     benne a `rem`/`px`/`em`/`ch`/`vw` és az összeadás,
+ *   - kaszkád négy szelektor-alakra: puszta elemnév (`h2`), osztály
+ *     (`.kc-richtext`), osztály + elemnév (`.kc-richtext h2`) és osztály +
+ *     osztály (`.kc-product-card .kc-product-card__title`),
+ *   - öröklődés: ha az elemre nincs deklaráció, a szülő értéke jön,
+ *   - `@media` kiértékelése adott nézetablakra (`stilusLapNezetablakra`), hogy
+ *     a média-blokkba zárt deklarációk ne legyenek feltétel nélkül érvényesek.
  *
- * MIT NEM MODELLEZ (és miért nem baj). Nincs média-lekérdezés-kiértékelés a
- * hívón kívül, nincs `:hover`/`:focus`, nincs `calc()` a `clamp()`-en kívül,
- * nincs kombinátor a leszármazotton kívül. A folyószöveg-hasáb ezek egyikét sem
- * használja — a modell által számolt geometriát pedig a hívó teszt egy
- * BÖNGÉSZŐS MÉRÉSHEZ hitelesíti (Chromium, 320/390 px), tehát ha a modell
- * eltérne a valóságtól, az a hitelesítésen bukna.
+ * MIT NEM MODELLEZ (és miért nem baj). Nincs `:hover`/`:focus`, nincs `calc()`
+ * a `clamp()`-en kívül, nincs kombinátor a leszármazotton kívül, és — ami a
+ * legfontosabb — NINCS rács- és flex-sáv méretezés: a min-content alapú
+ * automatikus minimum méret (CSS Grid 1, 6.6) itt nem számolható. Ahol ez
+ * számít, azt a hívó teszt böngészős méréssel nevesíti. A modell által
+ * számolt geometriát egyébként is BÖNGÉSZŐS MÉRÉS hitelesíti (Chromium,
+ * 320/390 px), tehát ha a modell eltérne a valóságtól, az a hitelesítésen bukna.
  */
 
 import { readFileSync } from 'node:fs'
@@ -77,6 +81,92 @@ export function stilusLap(fajlok: readonly string[]): readonly Szabaly[] {
   return fajlok.flatMap((fajl) => szabalyok(readFileSync(fajl, 'utf8')))
 }
 
+/**
+ * Egy média-lekérdezés érvényes-e adott nézetablak-szélességen.
+ *
+ * A vessző VAGY, az `and` ÉS (Media Queries 4, 3.1 és 3.2). Csak azt a néhány
+ * jellemzőt ismeri, amit a repó ténylegesen használ; bármi másra HANGOSAN dob,
+ * mert egy fel nem ismert lekérdezést némán érvényesnek (vagy érvénytelennek)
+ * venni pontosan az a hibaosztály, ami ellen ezek az őrök készültek.
+ * A `print` és a `prefers-reduced-motion: reduce` a képernyős, alapbeállítású
+ * mérésben nem érvényes.
+ */
+function mediaErvenyes(prelude: string, nezetablakPx: number): boolean {
+  return prelude.split(',').some((ag) =>
+    ag
+      .split(/\s+and\s+/i)
+      .every((feltetel) => {
+        const t = feltetel.trim().toLowerCase()
+        if (t === 'screen' || t === 'all') return true
+        if (t === 'print') return false
+        const m = /^\(\s*(min|max)-width\s*:\s*(\d*\.?\d+)px\s*\)$/.exec(t)
+        if (m) {
+          const hatar = Number(m[2])
+          return m[1] === 'min' ? nezetablakPx >= hatar : nezetablakPx <= hatar
+        }
+        if (/^\(\s*prefers-reduced-motion\s*:/.test(t)) return false
+        throw new Error(`ismeretlen média-jellemző: „${feltetel.trim()}" — az őr nem tud dönteni`)
+      }),
+  )
+}
+
+/**
+ * At-szabályok kilapítása adott nézetablakra: az érvényes `@media` és a
+ * `@supports` TÖRZSE a lapba kerül, a nem érvényes `@media`, a `@font-face` és
+ * a `@keyframes` kimarad. Enélkül a szabály-olvasó a média-blokkokba zárt
+ * deklarációkat feltétel nélkül érvényesnek venné.
+ */
+function lapit(css: string, nezetablakPx: number): string {
+  const tiszta = css.replace(KOMMENT, '')
+  let ki = ''
+  let i = 0
+  while (i < tiszta.length) {
+    const kukac = tiszta.indexOf('@', i)
+    if (kukac < 0) {
+      ki += tiszta.slice(i)
+      break
+    }
+    ki += tiszta.slice(i, kukac)
+    let j = kukac
+    while (j < tiszta.length && tiszta[j] !== '{' && tiszta[j] !== ';') j++
+    if (j >= tiszta.length || tiszta[j] === ';') {
+      // `@import`, `@charset` — nincs törzse.
+      i = j + 1
+      continue
+    }
+    const fej = tiszta.slice(kukac + 1, j).trim()
+    const nev = fej.split(/\s+/)[0].toLowerCase()
+    const prelude = fej.slice(nev.length).trim()
+    let szint = 0
+    let k = j
+    for (; k < tiszta.length; k++) {
+      if (tiszta[k] === '{') szint++
+      else if (tiszta[k] === '}') {
+        szint--
+        if (szint === 0) break
+      }
+    }
+    const torzs = tiszta.slice(j + 1, k)
+    if (nev === 'media') {
+      if (mediaErvenyes(prelude, nezetablakPx)) ki += lapit(torzs, nezetablakPx)
+    } else if (nev === 'supports' || nev === 'layer') {
+      ki += lapit(torzs, nezetablakPx)
+    } else if (nev !== 'font-face' && nev !== 'keyframes' && nev !== 'page' && nev !== 'property') {
+      throw new Error(`ismeretlen at-szabály: @${nev} — az őr nem tudja, érvényes-e`)
+    }
+    i = k + 1
+  }
+  return ki
+}
+
+/** Több stíluslap egy kaszkáddá fűzve, ADOTT nézetablakra kiértékelt @media-kkal. */
+export function stilusLapNezetablakra(
+  fajlok: readonly string[],
+  nezetablakPx: number,
+): readonly Szabaly[] {
+  return fajlok.flatMap((fajl) => szabalyok(lapit(readFileSync(fajl, 'utf8'), nezetablakPx)))
+}
+
 /** A `:root` alatt deklarált egyéni tulajdonságok (`--kc-*`). */
 export function tokenek(lap: readonly Szabaly[]): ReadonlyMap<string, string> {
   const map = new Map<string, string>()
@@ -118,26 +208,37 @@ export function varFeloldas(ertek: string, map: ReadonlyMap<string, string>, mel
   )
 }
 
-/** Hossz-kifejezés pixelben: `px`, `rem`, `em`, `vw`, összeadás és `clamp()`. */
+/**
+ * Hossz-kifejezés pixelben: `px`, `rem`, `em`, `ch`, `vw`, összeadás és
+ * `clamp()`.
+ *
+ * A `ch` a „0" (U+0030) glif ELŐRETOLÁSA az elem saját betűjén (CSS Values 4,
+ * 5.1.1), ezért a hívónak a valódi metszetből mért `chPx`-et kell átadnia; a
+ * címsor-osztályok mértéke (`max-width: 30ch`, `62ch`) enélkül nem oldható fel.
+ * Ha a kifejezés `ch`-t tartalmaz, de `chPx` nincs megadva, HANGOSAN dob — az
+ * őr nem becsülhet ott, ahol mérni kell.
+ */
 export function hosszPx(
   kifejezes: string,
   nezetablakPx: number,
   szuloBetumeretPx: number,
   gyokerBetumeretPx = 16,
+  chPx: number | null = null,
 ): number {
   const szoveg = kifejezes.trim()
   if (szoveg === 'normal' || szoveg === '0') return 0
+  if (szoveg === 'none') return Infinity
   if (szoveg.startsWith('clamp(')) {
     const reszek = felsoSzintuVesszok(szoveg.slice(6, -1))
     if (reszek.length !== 3) throw new Error(`hibás clamp(): ${szoveg}`)
     const [also, alap, felso] = reszek.map((r) =>
-      hosszPx(r, nezetablakPx, szuloBetumeretPx, gyokerBetumeretPx),
+      hosszPx(r, nezetablakPx, szuloBetumeretPx, gyokerBetumeretPx, chPx),
     )
     return Math.min(Math.max(alap, also), felso)
   }
   if (szoveg.startsWith('min(') || szoveg.startsWith('max(')) {
     const reszek = felsoSzintuVesszok(szoveg.slice(4, -1)).map((r) =>
-      hosszPx(r, nezetablakPx, szuloBetumeretPx, gyokerBetumeretPx),
+      hosszPx(r, nezetablakPx, szuloBetumeretPx, gyokerBetumeretPx, chPx),
     )
     return szoveg.startsWith('min(') ? Math.min(...reszek) : Math.max(...reszek)
   }
@@ -145,7 +246,7 @@ export function hosszPx(
   let osszeg = 0
   for (const tag of szoveg.split('+')) {
     const t = tag.trim()
-    const m = /^(-?\d*\.?\d+)(px|rem|em|vw|vh|%)?$/.exec(t)
+    const m = /^(-?\d*\.?\d+)(px|rem|em|ch|vw|vh|%)?$/.exec(t)
     if (!m) throw new Error(`nem értelmezhető hossz: „${t}" (${kifejezes})`)
     const szam = Number(m[1])
     switch (m[2]) {
@@ -161,6 +262,12 @@ export function hosszPx(
       case 'em':
         osszeg += szam * szuloBetumeretPx
         break
+      case 'ch':
+        if (chPx === null) {
+          throw new Error(`„ch" egység chPx nélkül nem oldható fel: ${kifejezes}`)
+        }
+        osszeg += szam * chPx
+        break
       case 'vw':
         osszeg += (szam / 100) * nezetablakPx
         break
@@ -169,6 +276,17 @@ export function hosszPx(
     }
   }
   return osszeg
+}
+
+/**
+ * Egy rövidítéses érték ELSŐ hossz-tagja (`border: 1px solid var(--x)` → `1px`).
+ * A kártya-hasáb kiszámításához a keret vastagsága kell, a `border` rövidítésből.
+ */
+export function elsoHossz(ertek: string): string | null {
+  for (const tag of ertek.trim().split(/\s+/)) {
+    if (/^-?\d*\.?\d+(px|rem|em|ch|vw)$/.test(tag)) return tag
+  }
+  return null
 }
 
 /** Vesszős lista bontása a legfelső zárójel-szinten. */
@@ -192,6 +310,16 @@ function felsoSzintuVesszok(szoveg: string): string[] {
 /** Egy szelektor illeszkedik-e az elemre, és ha igen, milyen fajsúllyal. */
 function fajsuly(szelektor: string, elem: Elem): readonly [number, number, number] | null {
   if (elem.osztaly !== null && szelektor === elem.osztaly) return [0, 1, 0]
+  // Osztály + osztály leszármazott-szelektor (`.kc-product-card .kc-product-card__title`).
+  // Enélkül a kártya-címsorra írt `overflow-wrap: anywhere` LÁTHATATLAN lenne a
+  // modellnek, és az őr olyan elemet jelentene tördeletlennek, amelyik törik.
+  if (
+    elem.osztaly !== null &&
+    elem.ostagOsztaly !== null &&
+    szelektor === `${elem.ostagOsztaly} ${elem.osztaly}`
+  ) {
+    return [0, 2, 0]
+  }
   if (elem.elemnev.length === 0) return null
   if (szelektor === elem.elemnev) return [0, 0, 1]
   if (elem.ostagOsztaly !== null && szelektor === `${elem.ostagOsztaly} ${elem.elemnev}`) {
