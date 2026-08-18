@@ -114,32 +114,11 @@ const PARHUZAMOS =
 const FELIRAT_KIVETELEK: readonly FeliratKivetel[] = [
   // ── 1. SZÓTÁRTÓL ELTÉRŐ CTA-k — a javítandók listája ───────────────────────
   {
-    felirat: 'Tovább a penztárhoz',
-    fajl: 'components/checkout/CartView.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'cart-to-checkout',
-    indok: `Elgépelés (hiányzó ékezet) ÉS puszta „Tovább"-bal kezd (M-7); a §3.2 #20 szerint „Menj a pénztárhoz". ${PARHUZAMOS}`,
-  },
-  {
     felirat: 'Belépés a fizetéshez',
     fajl: 'components/checkout/CartView.tsx',
     kategoria: 'szotartol-elter',
     celzottAkcio: 'sign-in',
     indok: `A §3.2 #5 szerint a belépés felirata „Belépés"; a cél megnevezése a környező szövegbe való. ${PARHUZAMOS}`,
-  },
-  {
-    felirat: 'Nézd meg a kurzusainkat',
-    fajl: 'components/checkout/CartView.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'course-list-open',
-    indok: `A §3.2 #10 szerint „Nézd meg a kurzusokat"; a birtokos alak ugyanarra a célra másodikfeliratot csinál (WCAG 2.2 · 3.2.4). ${PARHUZAMOS}`,
-  },
-  {
-    felirat: 'Törlés',
-    fajl: 'components/checkout/CartView.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'cart-remove-item',
-    indok: `A §3.2 #19 szerint „Kiveszem a kosárból" — a Carbon szerint a remove ≠ delete, a kosárból kivett tétel nem semmisül meg. ${PARHUZAMOS}`,
   },
   {
     felirat: 'Tovább a kurzusaimhoz',
@@ -301,13 +280,6 @@ const FELIRAT_KIVETELEK: readonly FeliratKivetel[] = [
     celzottAkcio: 'retry',
     indok:
       'A §3.2 #17 `patterned: false`, tehát a tárgy nem cserélhető; a cél megnevezése a hozzáférhető névbe való (WCAG 2.5.3).',
-  },
-  {
-    felirat: 'Válassz kurzust',
-    fajl: 'app/(frontend)/penztar/page.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'course-list-open',
-    indok: `A §3.2 #10 szerint „Nézd meg a kurzusokat"; ugyanezen a lapon már áll a jóváhagyott alak is. ${PARHUZAMOS}`,
   },
   {
     felirat: 'Kezdés',
@@ -786,14 +758,27 @@ const FELIRAT_KIVETELEK: readonly FeliratKivetel[] = [
     kategoria: 'nem-cta',
     indok: 'E-mail-cím `mailto:` hivatkozásként a 404-oldalon.',
   },
+  {
+    felirat: 'Általános szerződési feltételeket (új lapon nyílik)',
+    fajl: 'components/checkout/CheckoutForm.tsx',
+    kategoria: 'nem-cta',
+    indok:
+      'A pénztári ÁSZF-elfogadó jelölőnégyzet FELIRATÁBA ágyazott jogi hivatkozás, nem cselekvés-gomb: a mondat tárgya, nem CTA. A zárójeles toldat a képernyőolvasónak szóló rejtett figyelmeztetés (WCAG 2.2 · 3.2.5, G201), nem látható felirat.',
+  },
+  {
+    felirat: 'Adatkezelési és adatvédelmi szabályzatot (új lapon nyílik)',
+    fajl: 'components/checkout/CheckoutForm.tsx',
+    kategoria: 'nem-cta',
+    indok:
+      'Ugyanannak a jelölőnégyzet-feliratnak a második beágyazott jogi hivatkozása. Az ÁSZF 22. bekezdése EGY jelölőnégyzetet ír le két dokumentumra, ezért a felirat két linket tartalmaz.',
+  },
 ]
-
 /**
  * FELSŐ KORLÁT. A 2026-08-17-i mérés 98 sort talált; ezt a számot csak LEFELÉ
  * szabad átírni. Ha egy javítás elfogyaszt egy sort, a korlát is csökken —
  * így a lista visszahízása külön, látható mozdulatot kíván.
  */
-const KIVETEL_LISTA_FELSO_KORLAT = 98
+const KIVETEL_LISTA_FELSO_KORLAT = 96
 
 /**
  * A „Tovább…"-tilalom (M-7) MAI sértései. SZŰK lista: az őr megköveteli, hogy
@@ -802,7 +787,6 @@ const KIVETEL_LISTA_FELSO_KORLAT = 98
  * legitimálható „nem CTA"-ként — legfeljebb elismerhető, hogy még nem javult.
  */
 const TOVABB_KIVETELEK: readonly { readonly felirat: string; readonly fajl: string }[] = [
-  { felirat: 'Tovább a penztárhoz', fajl: 'components/checkout/CartView.tsx' },
   { felirat: 'Tovább a kurzusaimhoz', fajl: 'components/checkout/ThankYouView.tsx' },
   { felirat: 'Tovább a kurzusaimhoz', fajl: 'lib/courses.ts' },
 ]
@@ -851,7 +835,6 @@ const HREF_UTKOZES_KIVETELEK: readonly {
       'Nézd meg a kurzusainkat',
       'Nézd meg a kurzusokat',
       'Vissza a kurzusokhoz',
-      'Válassz kurzust',
     ],
     indok:
       'A mért „NYOLC felirat egy célra" hiba maradéka. A `Nézd meg a kurzusokat` (#10) és a `Vissza a kurzusokhoz` (#15) SZÁNDÉKOSAN két sor: böngészés vs. visszalépés — a többi három javítandó.',
