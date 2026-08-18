@@ -10,6 +10,7 @@ import {
   CART_FREE_LABEL,
   cartItemAvailability,
   cartItemNote,
+  cartScopeNote,
   useCart,
   type CartItem,
 } from '../../lib/cart'
@@ -30,16 +31,34 @@ import { ctaLabel } from '../../lib/cta-vocabulary'
  *   szerver (T-021) válaszából igazolódik vissza.
  * - Üres kosár: segítő szöveg + CTA a kurzusokra.
  *
- * ═══ A HÁROM ÁR-ÁLLAPOT (2026-08-17) ═══
- * A sáv nem „gomb vagy nem gomb" kérdést tesz fel, hanem a `cartSummary`
- * állapotát követi (src/lib/cart.ts):
- *  - `amount`  — van fizetendő végösszeg → a pénztár útja (§3.2 #20);
- *  - `free`    — minden tétel ingyenes → a KURZUSOLDAL igénylő űrlapja
- *                (`courseCtaHref`), mert az ingyenes kurzus nem a pénztáron át
- *                jár, és a /penztar is oda küldi tovább a látogatót;
- *  - `blocked` — van archivált vagy hiányos konfigurációjú tétel → NINCS
- *                fizetés-gomb, helyette a tétel melletti magyarázó mondat és
- *                EGY alternatíva (kurzuslista).
+ * ═══ TÉTELENKÉNTI CSELEKVÉS (2026-08-18) ═══
+ * A felület KÉT SZINTEN beszél, és a kettő nem keveredik:
+ *
+ *  1. A TÉTEL SORA mindent elmond, ami csak arra a tételre igaz: az árát vagy
+ *     az „Ingyenes" címkéjét, a magyarázatot, ha nem vásárolható, és a SAJÁT
+ *     cselekvését. Az ingyenes tétel útja az igénylő űrlap (`courseCtaHref`),
+ *     a nem vásárolhatóé a kivétel a kosárból. Minden sor kivehető.
+ *  2. A SÁV a pénzről és a következő lépésről beszél: mennyit fizetsz most,
+ *     miért annyit, és hova mész tovább.
+ *
+ * MIÉRT ÍGY: a 2026-08-17-i változatban egyetlen archivált tétel elvette az
+ * EGÉSZ kosár fizetés-gombját. Baymard mérése szerint ha a látogatót csak
+ * annyival intézik el, hogy a termék nem kapható, 30% azonnal máshol keresi
+ * tovább (https://baymard.com/blog/handling-out-of-stock-products), és a
+ * javaslat kifejezetten az, hogy a vásárlás maradjon nyitva. NN/g,
+ * Error-Message Guidelines: „Display the error message close to the error's
+ * source." és „Merely stating the problem is also not enough; offer some
+ * potential remedies." (https://www.nngroup.com/articles/error-message-guidelines/)
+ * — a magyarázat ezért a SORBAN áll, nem a sáv aljában.
+ *
+ * A sáv állapotai (`cartSummary`, src/lib/cart.ts):
+ *  - `amount`  — van megvehető tétel → a pénztár útja (§3.2 #20). Ha a
+ *                kosárban más is van, a sáv KIMONDJA, mire vonatkozik a
+ *                fizetés (`cartScopeNote`);
+ *  - `free`    — nincs megvehető, de van ingyenes tétel → a sávnak nincs
+ *                gombja, mert az igénylés a tétel saját sorában áll;
+ *  - `blocked` — EGYETLEN tétel sem vásárolható és nem is igényelhető → nincs
+ *                végösszeg, és a sáv EGY alternatívát ad (kurzuslista).
  *
  * MIÉRT NEM LETILTOTT GOMB a blokkolt ág: GOV.UK Design System, Button —
  * „Disabled buttons have poor contrast and can confuse some users, so avoid
@@ -49,12 +68,10 @@ import { ctaLabel } from '../../lib/cta-vocabulary'
  * SZÁNDÉKOSAN nincs feliratú CTA-ja — a kosár nem mondhat mást ugyanarról a
  * termékről (WCAG 2.2 SC 3.2.4 Consistent Identification).
  *
- * MIÉRT VAN MÉGIS TOVÁBBLÉPÉS: Baymard mérése szerint ha a látogatót csak
- * annyival intézik el, hogy a termék nem kapható, 30% azonnal máshol keresi
- * tovább (https://baymard.com/blog/handling-out-of-stock-products); NN/g,
- * Error-Message Guidelines: „Merely stating the problem is also not enough;
- * offer some potential remedies."
- * (https://www.nngroup.com/articles/error-message-guidelines/).
+ * EGY ELSŐDLEGES GOMB A LAPON: a sáv `primary` gombja (pénztár VAGY
+ * kurzuslista, sosem mindkettő) mellett a sorok cselekvései `secondary` és
+ * `ghost` súlyt kapnak — a §3.2 C-2 szabálya szerinti súlyokat, tehát a
+ * súly-választás nem ízlés kérdése.
  *
  * ═══ A FELIRATOK ═══
  * Mind a §3.2 CTA-szótárból (`cta-vocabulary.ts`) olvasva, nem literálként —
@@ -72,7 +89,12 @@ export interface CartViewProps {
   isLoggedIn: boolean
 }
 
-/** Egy kosártétel sora — a saját ár-állapotával. */
+/**
+ * Egy kosártétel sora — a saját ár-állapotával, magyarázatával és cselekvésével.
+ *
+ * A sor SOSEM mutat árat a nem vásárolható tételre: ez az első a négy rétegből,
+ * ami megakadályozza, hogy a látogató azt higgye, azért is fizet.
+ */
 function CartRow({ item, onRemove }: { item: CartItem; onRemove: () => void }) {
   const availability = cartItemAvailability(item)
   const note = cartItemNote(item)
@@ -102,13 +124,29 @@ function CartRow({ item, onRemove }: { item: CartItem; onRemove: () => void }) {
               <PriceTag priceHuf={item.priceHuf} />
             ) : null}
           </div>
-          {/* A tétel neve REJTETT szövegként a gombon belül: több tételnél a
+          {/* A tétel neve REJTETT szövegként a gombokon belül: több tételnél a
               puszta felirat nem egyedi (WCAG 2.2 SC 2.4.4), a `Button` pedig
               az `aria-label`-t nem adja tovább a DOM-nak. */}
-          <Button onClick={onRemove} size="sm" variant="ghost">
-            {ctaLabel('cart-remove-item')}
-            <span className="kc-visually-hidden">: {item.sku}</span>
-          </Button>
+          <div className="kc-cart__actions">
+            {availability === 'free' ? (
+              // Az ingyenes tétel NEM hiba: saját, működő útja van. Az igénylő
+              // űrlap a kurzusoldalon áll — ugyanoda küld tovább az ingyenes
+              // termék /penztar-ja is. A súly a szótár szerinti `secondary`
+              // (§3.2 C-2), így a lap egyetlen elsődleges gombja a sávé marad.
+              <Button
+                href={courseCtaHref({ id: item.productId, slug: item.slug })}
+                size="sm"
+                variant="secondary"
+              >
+                {ctaLabel('free-course-claim')}
+                <span className="kc-visually-hidden">: {item.sku}</span>
+              </Button>
+            ) : null}
+            <Button onClick={onRemove} size="sm" variant="ghost">
+              {ctaLabel('cart-remove-item')}
+              <span className="kc-visually-hidden">: {item.sku}</span>
+            </Button>
+          </div>
         </div>
       </Card>
     </li>
@@ -136,9 +174,12 @@ export function CartView({ initialItem, isLoggedIn }: CartViewProps) {
   }
 
   // A pénztár szerver-oldala csak a ?termek= query-t látja (a kosár
-  // localStorage-os) — a link a CÉLTÉTEL id-jét viszi. A cél az első CSELEKVŐ
+  // localStorage-os) — a link a CÉLTÉTEL id-jét viszi. A cél az első MEGVEHETŐ
   // tétel, nem az első tétel: lásd a `cartSummary` indoklását.
   const target = summary.target
+  // Mire vonatkozik a fizetés? Csak akkor mondjuk ki, ha a kosárban a fizetett
+  // tételen kívül más is van — különben fölösleges zaj lenne.
+  const scopeNote = cartScopeNote(summary)
 
   return (
     <div className="kc-cart">
@@ -154,27 +195,21 @@ export function CartView({ initialItem, isLoggedIn }: CartViewProps) {
             Végösszeg: <strong>{summary.totalLabel}</strong>
           </p>
         )}
+        {/* A fizetés HATÓKÖRE közvetlenül a végösszeg alatt: a látogató itt
+            tudja meg, hogy a kosárban maradó többi tételért most nem fizet. */}
+        {scopeNote ? <p className="kc-cart__scope">{scopeNote}</p> : null}
         {summary.kind === 'amount' ? (
           <p className="kc-cart__total-note">
             A fizetendő végösszeget a rendszer a fizetéskor, a szerveren újraszámolja.
           </p>
         ) : null}
 
+        {/* Alternatíva CSAK akkor, ha a kosárban semmi nem vihető tovább:
+            Baymard szerint a puszta tiltás mellől 30% máshol keres tovább. Ha
+            van fizetés-út, ez a gomb kimarad, mert két elsődleges gomb egy
+            lapon gyengíti egymást (GOV.UK, Button). */}
         {summary.kind === 'blocked' ? (
           <Button href={COURSE_BASE_PATH}>{ctaLabel('course-list-open')}</Button>
-        ) : null}
-
-        {summary.kind === 'free' && target !== null ? (
-          // Az ingyenes kurzus útja az igénylő űrlap a kurzusoldalon — ugyanaz
-          // a cél, ahova az ingyenes termék /penztar-ja is továbbküld.
-          // A súly a szótár szerinti `secondary` (C-2: ugyanaz a cselekvés =
-          // ugyanaz a súly, akkor is, ha itt ez a sáv egyetlen cselekvése).
-          <Button
-            href={courseCtaHref({ id: target.productId, slug: target.slug })}
-            variant="secondary"
-          >
-            {ctaLabel('free-course-claim')}
-          </Button>
         ) : null}
 
         {summary.kind === 'amount' && target !== null ? (

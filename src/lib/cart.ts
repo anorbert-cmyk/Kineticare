@@ -213,7 +213,7 @@ export function cartItemNote(item: CartItem): string | null {
 }
 
 /**
- * A kosár végösszege — KIZÁRÓLAG az érvényes árú (`paid`) tételekből.
+ * A kosár ÖSSZÉRTÉKE — kizárólag az érvényes árú (`paid`) tételekből.
  *
  * A korábbi változat `item.priceHuf ?? 0`-t adott össze, tehát az ár nélküli
  * tétel 0-val szállt be, és a sávban „Végösszeg: 0 Ft" jelent meg egy
@@ -221,6 +221,12 @@ export function cartItemNote(item: CartItem): string | null {
  * elhagyók 12%-a azért lép ki, mert nem látja/nem tudja kiszámolni a
  * végösszeget (https://baymard.com/lists/cart-abandonment-rate) — a HAMIS
  * végösszeg ennél is rosszabb.
+ *
+ * FIGYELEM: ez NEM azonos a sávban megjelenő végösszeggel. A megjelenített
+ * összeg a `cartSummary().totalHuf`, ami azt mondja meg, mennyit von le a
+ * KÖVETKEZŐ LÉPÉS — a `/penztar` pedig egyszerre egy terméket kezel. Több
+ * megvehető tételnél a két szám szándékosan eltér; a különbséget a sáv
+ * `cartScopeNote` mondata mondja ki a látogatónak.
  */
 export function cartTotalHuf(state: CartState): number {
   return state.items.reduce((sum, item) => {
@@ -239,15 +245,21 @@ export const CART_FREE_LABEL = 'Ingyenes'
 /**
  * A kosár összegző sávjának állapota:
  *  - `empty`   — nincs tétel (a szerver-pillanatkép mindig ez, lásd EMPTY_CART);
- *  - `blocked` — van nem vásárolható tétel: NINCS végösszeg és NINCS cselekvés;
- *  - `free`    — minden tétel ingyenes: az igénylő űrlap az út;
- *  - `amount`  — van fizetendő végösszeg: a pénztár az út.
+ *  - `blocked` — EGYETLEN tétel sem vásárolható és nem is igényelhető: nincs
+ *                végösszeg és nincs sáv-cselekvés, csak alternatíva;
+ *  - `free`    — nincs megvehető tétel, de van ingyenes: az igénylés a tétel
+ *                SAJÁT sorában áll;
+ *  - `amount`  — van megvehető tétel: a pénztár útja nyitva.
  */
 export type CartSummaryKind = 'empty' | 'blocked' | 'free' | 'amount'
 
 export interface CartSummary {
   kind: CartSummaryKind
-  /** A FIZETENDŐ végösszeg (csak a `paid` tételekből). */
+  /**
+   * A MOST FIZETENDŐ összeg — kizárólag abból, amit a sáv gombja tényleg
+   * fedez. Lásd a `cartSummary` „MENNYIT MOND A VÉGÖSSZEG" szakaszát: ez NEM
+   * a kosár összértéke (`cartTotalHuf`), hanem a következő lépés ára.
+   */
   totalHuf: number
   /**
    * A végösszeg-sor szövege, VAGY `null`, ha a kosárnak nincs kimondható
@@ -256,61 +268,169 @@ export interface CartSummary {
    */
   totalLabel: string | null
   /**
-   * A sáv CTA-jának CÉLTÉTELE, vagy `null`, ha nincs cselekvés.
+   * A sáv CTA-jának CÉLTÉTELE, vagy `null`, ha a sávnak nincs cselekvése.
    *
-   * SZÁNDÉKOSAN az első CSELEKVŐ tétel, nem az `items[0]`: vegyes kosárban
-   * (ingyenes + fizetős) a régi, „első tétel" szabály a pénztárba küldte volna
-   * az ingyenes terméket, ahol a pénztár tájékoztató állapotot ad — vagyis egy
+   * SZÁNDÉKOSAN az első MEGVEHETŐ tétel, nem az `items[0]`: vegyes kosárban a
+   * régi, „első tétel" szabály a pénztárba küldte volna az ingyenes vagy az
+   * archivált terméket, ahol a pénztár tájékoztató állapotot ad — vagyis egy
    * újabb zsákutcát nyitott volna.
    */
   target: CartItem | null
-  /** A pénztárt blokkoló (archivált vagy hibás konfigurációjú) tételek. */
+  /** A megvehető (érvényes árú) tételek. */
+  payable: CartItem[]
+  /** A nem vásárolható (archivált vagy hiányos konfigurációjú) tételek. */
   blocked: CartItem[]
+  /** Az ingyenes tételek. NEM hibásak: saját, működő útjuk van. */
+  free: CartItem[]
+  /**
+   * Amit a sáv gombja NEM fedez. Nem hiba-lista: a saját sorában mindegyik
+   * megkapja a maga magyarázatát és cselekvését. A sáv ebből tudja, hogy ki
+   * kell-e mondani, MIRE vonatkozik a fizetés (`cartScopeNote`).
+   */
+  uncovered: CartItem[]
 }
 
 /**
  * A kosár összegzése.
  *
- * MIÉRT BLOKKOL EGYETLEN ROSSZ TÉTEL IS: a `startCheckout` a kosár tételére
- * indul; ha a látogató elé fizetés-gombot teszünk, miközben a szerver
- * garantáltan elutasítja, az hamis ígéret (NN/g, „A Link is a Promise"). A
- * kiút nem letiltott gomb — a GOV.UK Design System kimondja: „Disabled buttons
- * have poor contrast and can confuse some users, so avoid them if possible."
- * (https://design-system.service.gov.uk/components/button/) —, hanem a
- * cselekvés ELTŰNÉSE plusz magyarázat, ahogy a kurzusoldal Á-3 szabálya is
- * előírja. A továbblépést az alternatíva adja: Baymard mérése szerint ha a
- * látogatót csak annyival intézik el, hogy a termék nem kapható, 30% azonnal
- * máshol keresi tovább (https://baymard.com/blog/handling-out-of-stock-products).
+ * ═══ MIÉRT NEM BLOKKOL TÖBBÉ EGYETLEN ROSSZ TÉTEL AZ EGÉSZ KOSARAT ═══
+ * A 2026-08-17-i változat úgy zárta be a „Végösszeg: 0 Ft" hazugságot, hogy
+ * EGYETLEN nem vásárolható tétel elvette a KOSÁR EGÉSZÉNEK fizetés-gombját. Az
+ * elv jó volt (ne ígérj olyat, amit a szerver elutasít), a kivitel viszont a
+ * vevőt büntette: három megvehető kurzus mellett egy archivált tétel
+ * megállította az egészet. Baymard mérése szerint ha a látogatót csak annyival
+ * intézik el, hogy a termék nem kapható, 30% azonnal máshol keresi tovább, és a
+ * javaslat kifejezetten az, hogy a vásárlás maradjon nyitva
+ * (https://baymard.com/blog/handling-out-of-stock-products). NN/g,
+ * Error-Message Guidelines: „Display the error message close to the error's
+ * source." és „Merely stating the problem is also not enough; offer some
+ * potential remedies." (https://www.nngroup.com/articles/error-message-guidelines/)
+ * — ezért a magyarázat a TÉTEL SORÁBAN áll, nem a sávban, és a sáv gombja a
+ * megvehető tételre vonatkozik.
+ *
+ * A hamis ígéret elleni védelem NEM lazul: a nem vásárolható tétel továbbra sem
+ * kap árat, végösszeg-részt és fizetés-utat, tehát a `startCheckout` ár-kapuja
+ * elé olyan tétel nem kerül, amit garantáltan elutasítana (NN/g, „A Link is a
+ * Promise", https://www.nngroup.com/articles/link-promise/).
+ *
+ * ═══ MENNYIT MOND A VÉGÖSSZEG ═══
+ * A `/penztar` szerződése szerint EGY termék = egy vásárlás: a lap kizárólag a
+ * `?termek={id}` query-t látja (`src/app/(frontend)/penztar/page.tsx`), tehát a
+ * fizetés pontosan a `target` tételre megy. Ezért a végösszeg is pontosan ennyi,
+ * NEM a kosár összértéke. A korábbi, összegző változat két megvehető tételnél
+ * TÖBBET írt ki, mint amennyit a pénztár beszedett: ugyanaz a hibaosztály, mint
+ * a „0 Ft", csak ellenkező előjellel. Baymard mérése szerint a nem böngésző
+ * kosárelhagyók 12%-a azért lép ki, mert nem látja vagy nem tudja kiszámolni a
+ * végösszeget (https://baymard.com/lists/cart-abandonment-rate).
+ *
+ * Ha a kosárban a `target`-en kívül más is van, a sáv KIMONDJA, mire vonatkozik
+ * a fizetés (`cartScopeNote`) — NN/g 1. heurisztika, Visibility of System
+ * Status: „systems should always keep users informed about what is going on,
+ * through appropriate feedback within reasonable time."
+ * (https://www.nngroup.com/articles/visibility-system-status/).
+ *
+ * ═══ AZ ÁLLAPOTOK SORRENDJE ═══
+ * A POZITÍV oldal dönt először: van-e megvehető (→ `amount`), ha nincs, van-e
+ * ingyenes (→ `free`), és csak ha egyik sincs, akkor `blocked`. Így a jó tétel
+ * sosem esik áldozatul a rossznak.
  */
 export function cartSummary(state: CartState): CartSummary {
-  if (state.items.length === 0) {
-    return { kind: 'empty', totalHuf: 0, totalLabel: null, target: null, blocked: [] }
+  const items = state.items
+  if (items.length === 0) {
+    return {
+      kind: 'empty',
+      totalHuf: 0,
+      totalLabel: null,
+      target: null,
+      payable: [],
+      blocked: [],
+      free: [],
+      uncovered: [],
+    }
   }
-  const blocked = state.items.filter((item) => {
-    const availability = cartItemAvailability(item)
-    return availability === 'archived' || availability === 'unavailable'
-  })
-  if (blocked.length > 0) {
-    return { kind: 'blocked', totalHuf: 0, totalLabel: null, target: null, blocked }
+
+  const payable: CartItem[] = []
+  const blocked: CartItem[] = []
+  const free: CartItem[] = []
+  for (const item of items) {
+    switch (cartItemAvailability(item)) {
+      case 'paid':
+        payable.push(item)
+        break
+      case 'free':
+        free.push(item)
+        break
+      default:
+        blocked.push(item)
+    }
   }
-  const paid = state.items.filter((item) => cartItemAvailability(item) === 'paid')
-  if (paid.length === 0) {
+
+  if (payable.length > 0) {
+    const target = payable[0]
+    // A `paid` ág GARANCIA: a `cartItemAvailability` csak véges, pozitív árra
+    // adja — a `?? 0` így nem elnyel hibát, csak a típust szűkíti.
+    const totalHuf = target.priceHuf ?? 0
+    return {
+      kind: 'amount',
+      totalHuf,
+      totalLabel: formatPriceHuf(totalHuf),
+      target,
+      payable,
+      blocked,
+      free,
+      uncovered: items.filter((item) => item !== target),
+    }
+  }
+
+  if (free.length > 0) {
     return {
       kind: 'free',
       totalHuf: 0,
       totalLabel: CART_FREE_LABEL,
-      target: state.items[0],
-      blocked: [],
+      target: free[0],
+      payable,
+      blocked,
+      free,
+      // A sávnak ezen az ágon NINCS gombja: az igénylés a tétel saját sorában
+      // áll, tehát nincs mit „nem fedeznie".
+      uncovered: [],
     }
   }
-  const totalHuf = cartTotalHuf(state)
+
   return {
-    kind: 'amount',
-    totalHuf,
-    totalLabel: formatPriceHuf(totalHuf),
-    target: paid[0],
-    blocked: [],
+    kind: 'blocked',
+    totalHuf: 0,
+    totalLabel: null,
+    target: null,
+    payable,
+    blocked,
+    free,
+    uncovered: [],
   }
+}
+
+/**
+ * A sáv MONDATA arról, mire vonatkozik a fizetés; `null`, ha a fizetés a kosár
+ * egészét fedi, vagy ha nincs fizetés.
+ *
+ * Ez a mondat zárja be a vegyes kosár egyetlen valódi kockázatát: a látogató ne
+ * higgye, hogy a nem vásárolható vagy az ingyenes tételért is fizet. NÉGY réteg
+ * védi ugyanezt, és mind a négy mért:
+ *   1. a nem vásárolható sor nem kap árat;
+ *   2. a nem vásárolható sor magyarázó mondatot kap (`cartItemNote`);
+ *   3. a végösszeg csak a fizetett tételből számol (`cartSummary`);
+ *   4. és itt ki is mondjuk.
+ * GOV.UK Design System, Error summary: az összefoglaló és a tétel melletti
+ * üzenet EGYÜTT kell, nem egymás helyett
+ * (https://design-system.service.gov.uk/components/error-summary/).
+ *
+ * E/2, tegező magyarázó mondat (P-1b/P-1e), töltelék gondolatjel nélkül.
+ */
+export function cartScopeNote(summary: CartSummary): string | null {
+  if (summary.kind !== 'amount' || summary.target === null || summary.uncovered.length === 0) {
+    return null
+  }
+  return `Most csak ezért a kurzusért fizetsz: ${summary.target.sku}. A kosár többi tételéért nem.`
 }
 
 /** Hook a kosárállapothoz (kliens-komponensekhez). */

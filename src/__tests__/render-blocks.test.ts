@@ -6,6 +6,7 @@ import { pageBlockSlugs } from '../blocks'
 import { RenderBlocks } from '../components/blocks/RenderBlocks'
 import { HomeView } from '../components/content/HomeView'
 import { DEFAULT_HEADING } from '../components/content/home/CourseCards'
+import { FREE_SOS_COURSE_CTA_LABEL } from '../components/content/home/FreeSos'
 import { buildHomeLayout } from '../scripts/seed'
 import type { Page, Post, Product, Testimonial } from '../payload-types'
 
@@ -381,7 +382,7 @@ describe('RenderBlocks', () => {
     expect(html).not.toContain('Kérem az ingyenes anyagot')
   })
 
-  it('freeSos: ingyenes termékkel a szerkesztő felirata él, a cél a kurzusoldal', () => {
+  it('freeSos: ingyenes termékkel a SZÓTÁRI felirat áll, a cél a kurzusoldal', () => {
     const html = renderBlocks(
       layoutOf({
         blockType: 'freeSos',
@@ -402,7 +403,10 @@ describe('RenderBlocks', () => {
         ],
       },
     )
-    expect(html).toContain('Kérem az ingyenes anyagot')
+    // 2026-08-18, tulajdonosi döntés: a szótári cselekvéseknél a KÓD nyer —
+    // a szerkesztő felirata a `freeSos` gombján nem érvényesül.
+    expect(html).not.toContain('Kérem az ingyenes anyagot')
+    expect(html).toContain(FREE_SOS_COURSE_CTA_LABEL)
     expect(html).toContain('href="/kurzusok/sos-kezrelax-villamkurzus"')
   })
 })

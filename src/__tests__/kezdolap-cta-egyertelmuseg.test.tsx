@@ -238,8 +238,11 @@ describe('Ingyenes SOS-sáv: a gomb felirata és célja együtt mozog', () => {
       newTab: false,
     })
     expect(cta.href).toBe('/kurzusok/sos-kezrelax-villamkurzus')
-    // A szerkesztő felirata megmarad — most már IGAZ is.
-    expect(cta.label).toBe('Elindítom az ingyenes kurzust')
+    // 2026-08-18, tulajdonosi döntés: a SZÓTÁRI cselekvéseknél a KÓD nyer. Ez
+    // az az adatbázisban őrzött érték, ami élesben legyőzte a §3.2 #3/#4-et —
+    // innentől nem érvényesül.
+    expect(cta.label).toBe(FREE_SOS_COURSE_CTA_LABEL)
+    expect(cta.label).not.toBe('Elindítom az ingyenes kurzust')
   })
 
   it('a szűrt lista sem fogadható el célként (a `?kategoria=` sem)', () => {
@@ -298,7 +301,7 @@ describe('Ingyenes SOS-sáv: a gomb felirata és célja együtt mozog', () => {
 // ---------------------------------------------------------------------------
 
 describe('A szekciónkénti CTA-k és szövegek CMS-ből felülírhatók maradnak', () => {
-  it('a freeSos blokk feliratát a szerkesztő URL nélkül is átírhatja', () => {
+  it('a freeSos blokk SZÖVEGEI a szerkesztőé, a szótári CTA-felirat a kódé', () => {
     const layout = [
       {
         blockType: 'freeSos' as const,
@@ -319,7 +322,9 @@ describe('A szekciónkénti CTA-k és szövegek CMS-ből felülírhatók maradna
     )
     expect(html).toContain('Saját cím a szerkesztőtől')
     expect(html).toContain('Saját szöveg.')
-    expect(html).toContain('Kipróbálom ingyen')
+    // 2026-08-18: a szerkesztő a TARTALMAT írja, a szótári CTA-feliratot nem.
+    expect(html).not.toContain('Kipróbálom ingyen')
+    expect(html).toContain(FREE_SOS_COURSE_CTA_LABEL)
     expect(html).toContain('href="/kurzusok/sos-kezrelax-villamkurzus"')
   })
 

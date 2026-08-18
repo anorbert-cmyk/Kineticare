@@ -374,8 +374,11 @@ describe('AppointmentForm — kezdő állapot', () => {
     expect(forras).toMatch(/useEffect\(\(\) => \{\s*if \(hibasKiserlet > 0\)/)
   })
 
-  it('a gomb felirata a CMS-mezőből jön, és a mezők nincsenek letiltva', () => {
-    expect(html).toContain('Időpontot kérek')
+  it('a gomb felirata a §3.2 SZÓTÁRBÓL jön, és a mezők nincsenek letiltva', () => {
+    // 2026-08-18, tulajdonosi döntés: a szótári cselekvéseknél a KÓD nyer, a
+    // blokk „A gomb felirata" mezője a feliratra nem hat. A döntő bizonyíték:
+    // `src/__tests__/cms-nem-nyomja-el-a-szotart.test.tsx`.
+    expect(html).toContain(APPOINTMENT_UI_TEXT.submitLabel)
     expect(html).not.toContain('disabled=""')
   })
 
