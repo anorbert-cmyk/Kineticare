@@ -51,6 +51,19 @@
   font-size: var(--kc-font-m);
 }
 
+/* A nem vásárolható tétel (archivált vagy hiányos ár-konfigurációjú) magyarázó
+   mondata. TELJES tintával áll, nem tompítva, mint a leírás: ez a mondat az
+   EGYETLEN hely, ahol a látogató megtudja, miért nincs fizetés-gomb — a
+   blokkoló okot elrejteni pontosan az a néma hiba, amit ez a kör bezár.
+   FOLYÓSZÖVEG (semmilyen flex/grid): a `.kc-appointment__consent-label` mért
+   csapdája után szabály, hogy folyószövegre nem kerül flex (ott 320 px-en
+   107 px-es túlcsordulást okozott, WCAG 2.2 SC 1.4.10). */
+.kc-cart__note {
+  margin: var(--kc-space-2) 0 0;
+  color: var(--kc-color-text);
+  font-size: var(--kc-font-m);
+}
+
 .kc-cart__price {
   flex-shrink: 0;
 }

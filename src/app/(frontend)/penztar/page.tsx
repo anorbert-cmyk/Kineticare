@@ -17,10 +17,12 @@ import {
 import { logger } from '@/lib/logger'
 import {
   MY_COURSES_PATH,
+  UNAVAILABLE_COURSE_NOTE,
   coursePriceHuf,
   courseTitle,
   hasUserPurchased,
   isFreeCourse,
+  isPaidCourse,
 } from '@/lib/courses'
 import type { Product, User } from '@/payload-types'
 
@@ -74,6 +76,8 @@ async function getProductById(id: number): Promise<Product | null> {
  *   checkouton keresztül.
  * - ARCHIVÁLT terméknél az űrlap helyett tájékoztató állapot jelenik meg (a
  *   beküldés úgyis 400-zal hasalna el).
+ * - HIÁNYOS ÁR-KONFIGURÁCIÓNÁL (a HARMADIK ár-állapot) szintén: az indoklás és
+ *   a források az `isPaidCourse` kapunál.
  * - INGYENES terméknél UGYANEZ a minta (2026-08-17): a pénztár nem az ő útja,
  *   ezért tájékoztató állapot megy ki, egyetlen továbblépéssel a kurzusoldal
  *   igénylő űrlapjára. Az indoklás és a források az `isFree` kapunál.
@@ -103,7 +107,14 @@ export default async function PenztarPage({ searchParams }: PenztarPageProps) {
           <h1>Pénztár</h1>
           <div className="kc-cart-empty" role="status">
             <p>Nincs kiválasztott termék a fizetéshez.</p>
-            <Link className="kc-button kc-button--primary" href="/kurzusok">Válassz kurzust</Link>
+            {/* A felirat a §3.2 #10 szótári sora: ugyanaz a cselekvés (a
+                kurzuslistára lépés) a lap MINDEN végállapotában ugyanazt a
+                szót kapja (WCAG 2.2 SC 3.2.4). A korábbi „Válassz kurzust"
+                a `docs/gomb-inventar.md` A/6 megállapítása szerint a nyolc
+                párhuzamos felirat egyike volt. */}
+            <Link className="kc-button kc-button--primary" href="/kurzusok">
+              {ctaLabel('course-list-open')}
+            </Link>
           </div>
         </Container>
       </Section>
@@ -120,7 +131,9 @@ export default async function PenztarPage({ searchParams }: PenztarPageProps) {
           <h1>Pénztár</h1>
           <div className="kc-cart-empty" role="status">
             <p>Ez a kurzus jelenleg nem vásárolható meg.</p>
-            <Link className="kc-button kc-button--primary" href="/kurzusok">Nézd meg a kurzusokat</Link>
+            <Link className="kc-button kc-button--primary" href="/kurzusok">
+              {ctaLabel('course-list-open')}
+            </Link>
           </div>
         </Container>
       </Section>
@@ -189,6 +202,63 @@ export default async function PenztarPage({ searchParams }: PenztarPageProps) {
             >
               {ctaLabel(alreadyPurchased ? 'my-courses-open' : 'free-course-claim')}
             </Button>
+          </div>
+        </Container>
+      </Section>
+    )
+  }
+
+  /**
+   * ═══ A HARMADIK ÁR-ÁLLAPOT: HIÁNYOS KONFIGURÁCIÓ (2026-08-17) ═══
+   *
+   * A HIBA, AMIT BEZÁR. A fenti ingyenes-kapu feltétele az `isFreeCourse`,
+   * vagyis KIZÁRÓLAG a tudatosan kivett ár-pipa. Átcsúszott rajta minden olyan
+   * PUBLIKÁLT termék, ahol az ár-pipa BE van kapcsolva, de az ár üres, 0 vagy
+   * negatív, illetve ahol a pipa BEÁLLÍTATLAN (a szerkesztő hozzá sem nyúlt).
+   * Ezek a termékek teljes értékű pénztár-űrlapot kaptak, vendég- és
+   * számlázási mezőkkel, jogszabályi nyilatkozatokkal és fizetés-gombbal, DE
+   * ÁR NÉLKÜL — a beküldést pedig a checkout ár-kapuja garantáltan elutasítja:
+   * „A termékhez nem tartozik érvényes ár, így nem vásárolható meg."
+   * (`assertPurchasable`, src/lib/checkout/start-checkout.ts). Ugyanaz a
+   * díszlet-űrlap, amit az archivált ág kommentje már egyszer kimondott.
+   *
+   * A FELTÉTEL az `isPaidCourse` (ÉRVÉNYES ár), nem a `!isFreeCourse`. A
+   * `courses.ts` fejkommentje szerint a „fizetős" és az „ingyenes" NEM egymás
+   * tagadása: a harmadik halmaz a hiányos konfiguráció. A kurzusoldal
+   * CTA-állapotgépe (`resolveCourseCta`) 2026-08-16 óta pontosan így dönt —
+   * a pénztár most ugyanazt a HÁROM állapotot ismeri, tehát a két felület nem
+   * mondhat mást ugyanarról a termékről (WCAG 2.2 SC 3.2.4 Consistent
+   * Identification). A kapu ugyanazt a `coursePriceHuf`-ot hívja, mint a
+   * checkout, tehát a kettő nem tud egymástól elsodródni.
+   *
+   * A SZÖVEG az `UNAVAILABLE_COURSE_NOTE`, vagyis szó szerint ugyanaz a mondat,
+   * amit a látogató a kurzusoldalon is olvas ugyanerre az állapotra. NN/g,
+   * Error-Message Guidelines: „Concisely and precisely describe the issue." és
+   * „Merely stating the problem is also not enough; offer some potential
+   * remedies." https://www.nngroup.com/articles/error-message-guidelines/
+   *
+   * EGYETLEN TOVÁBBLÉPÉS, szótári felirattal (§3.2 #10). GOV.UK Design System,
+   * Button: „Avoid using multiple default buttons on a single page."
+   * https://design-system.service.gov.uk/components/button/
+   *
+   * MIÉRT NINCS külön „már megvetted" ág (szemben az ingyenes kapuval): a lap
+   * archivált ága sem különböztet, és ez az állapot SZERKESZTŐI HIBA, nem a
+   * termék életciklusa — a meglévő vevőt a Kurzusaim a főmenüből is várja. Az
+   * ingyenes ág azért tér el, mert ott a „már megkaptam" a NORMÁLIS eset.
+   *
+   * A staff külön RIASZTÁST kap ezekről a rekordokról
+   * (`reportUnpricedPublishedCourses`, src/lib/courses.ts).
+   */
+  if (!isPaidCourse(product)) {
+    return (
+      <Section>
+        <Container size="narrow">
+          <h1>Pénztár</h1>
+          <div className="kc-cart-empty" role="status">
+            <p>{UNAVAILABLE_COURSE_NOTE}</p>
+            <Link className="kc-button kc-button--primary" href="/kurzusok">
+              {ctaLabel('course-list-open')}
+            </Link>
           </div>
         </Container>
       </Section>
