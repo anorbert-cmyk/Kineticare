@@ -31,6 +31,13 @@ import { describe, expect, it } from 'vitest'
  * Mindegyik javítás a MEGENGEDETT eszközökkel készült (térköz, tábla-magasság,
  * mérték, sortáv) — betűméret egyet sem változott, azt a
  * `tipografia-harom-meret.test.ts` őrzi tovább.
+ *
+ * 2026-08-18: az 1. pont (1.4.10 Reflow) őrzése ÁTKERÜLT a
+ * `reflow-hasabmeres.test.ts`-be. Az itteni változat tulajdonságot nézett, nem
+ * mért, ezért zöld maradt, amikor a hiba `<p>`-ből `<h2>`-be költözött. Az itt
+ * maradt ellenőrzések a CSS-ben rögzíthető, MÁS jellegű szabályok (közös token
+ * használata, térköz-arány); ahol a helyes érték a kimeneten dől el, ott mérő
+ * őr való.
  */
 
 const REPO = fileURLToPath(new URL('..', import.meta.url))
@@ -49,17 +56,26 @@ function blokk(css: string, szelektor: string): string {
   return tiszta.slice(index, vege)
 }
 
-describe('1.4.10 Reflow — a jogi oldalak hosszú webcímei megtörnek', () => {
+/**
+ * A 1.4.10 Reflow ŐRE ÁTKÖLTÖZÖTT a `reflow-hasabmeres.test.ts`-be.
+ *
+ * Ami itt állt, tulajdonság-ellenőrzés volt: azt nézte, hogy a
+ * `.kc-richtext blockquote` szabályban SZEREPEL-E az `overflow-wrap` szó.
+ * Zöld maradt egy bizonyítottan túlcsorduló lapon — a szabály a bekezdéseken
+ * ott volt, a CÍMSOROKON nem (mérve, Chromium: /aszf 320 px-es nézetablakban
+ * 348 px széles dokumentum, a „Felelősségkorlátozás" h2 miatt). Mutáció sem
+ * kellett hozzá: a vak folt magától nyílt ki.
+ *
+ * Az új őr a KIMENETET méri — a valódi tartalomból, a valódi CSS-ből és a
+ * valódi betűmetrikából számolja a dokumentum-szélességet 320 és 390 px-en.
+ * Ide csak a mérték-szabály többi, szintén mért következménye maradt.
+ */
+describe('folyószöveg-mérték és szakaszcím-ritmus', () => {
   const content = olvas('app/(frontend)/styles/content.css')
 
-  it('a folyószöveg végszükség-tördelést kap (WCAG C33)', () => {
-    // A mérték-szabály blokkja viszi: ugyanaz a lista (p/ul/ol/blockquote).
-    const tiszta = kommentNelkul(content)
-    const index = tiszta.indexOf('.kc-richtext blockquote {')
-    expect(index).toBeGreaterThan(-1)
-    const szabaly = tiszta.slice(index, tiszta.indexOf('}', index))
+  it('a folyószöveg mértéke a közös tokenről jön (nem elemre írt érték)', () => {
+    const szabaly = blokk(content, '.kc-richtext blockquote')
     expect(szabaly).toContain('max-width: var(--kc-measure)')
-    expect(szabaly).toMatch(/overflow-wrap:\s*(break-word|anywhere)/)
   })
 
   it('a folyószöveg-szakaszcím fölött nagyobb a térköz, mint a bekezdések közt', () => {
