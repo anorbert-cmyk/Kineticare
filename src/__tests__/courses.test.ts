@@ -22,6 +22,8 @@ import {
   resolveCourseCta,
   unpricedPublishedCourseIds,
 } from '../lib/courses'
+import { COURSE_CTA_ANCHOR, courseCtaHref } from '../lib/course-url'
+import { ctaLabel } from '../lib/cta-vocabulary'
 import type { Category, Product } from '../payload-types'
 
 const NBSP = '\u00a0'
@@ -104,13 +106,20 @@ describe('archived kurzus CTA-ja', () => {
     expect(cta.disabled).toBe(true)
     expect(cta.href).toBeNull()
     expect(cta.note).toBe(ARCHIVED_COURSE_NOTE)
-    expect(cta.note).toBe('Ez a kurzus jelenleg nem vásárolható.')
+    // A mondat a §3.2 #16 jóváhagyott alakjával KEZDŐDIK, és — NN/g,
+    // Error-Message Guidelines („Merely stating the problem is also not enough;
+    // offer some potential remedies") — továbblépést is kínál. A korábbi
+    // egymondatos szöveg zsákutca volt: gomb sincs az oldalon (Á-3).
+    expect(cta.note).toBe(
+      'Ez a kurzus jelenleg nem vásárolható meg. Nézd meg a többi kurzusunkat, vagy írj nekünk, ha kérdésed van.',
+    )
+    expect(cta.note?.startsWith(ctaLabel('course-unavailable-notice'))).toBe(true)
     // Á-3 (docs/ui-sztenderdek.md): letiltott gomb helyett NINCS gomb — a
     // felirat hiánya teszi szerkezetileg lehetetlenné a hamis ígéretet.
     expect(cta.label).toBeNull()
   })
 
-  it('archived + vevő: a meglévő vevő tovább nézi — „Tovább a kurzusaimhoz" link', () => {
+  it('archived + vevő: a meglévő vevő tovább nézi — §3.2 #9 link', () => {
     const cta = resolveCourseCta(
       { id: 7, status: 'archived', priceInHUF: 19990, priceInHUFEnabled: true },
       true,
@@ -118,7 +127,7 @@ describe('archived kurzus CTA-ja', () => {
     expect(cta.kind).toBe('purchased')
     expect(cta.disabled).toBe(false)
     expect(cta.href).toBe(MY_COURSES_PATH)
-    expect(cta.label).toBe('Tovább a kurzusaimhoz')
+    expect(cta.label).toBe(ctaLabel('my-courses-open'))
   })
 
   it('draft + nem vevő: inaktív védekező ág (a nyilvános route amúgy 404)', () => {
@@ -135,16 +144,32 @@ describe('archived kurzus CTA-ja', () => {
 })
 
 describe('ingyenes kurzus (free kind)', () => {
-  it('published + ingyenes (priceInHUFEnabled: false) + nem vevő: „Ingyenes — azonnal eléred", nem checkout', () => {
+  it('published + ingyenes + nem vevő: §3.2 #3 felirat, a KURZUS igénylő űrlapjához', () => {
+    const cta = resolveCourseCta(
+      { id: 10, slug: 'sos-kezrelax', status: 'published', priceInHUF: null, priceInHUFEnabled: false },
+      false,
+    )
+    expect(cta.kind).toBe('free')
+    expect(cta.label).toBe(ctaLabel('free-course-claim'))
+    // ═══ A LAPPANGÓ ZSÁKUTCA BEZÁRVA (2026-08-18) ═══
+    // Az ág korábban a `/kurzusaim`-ra vitt. Be nem jelentkezett látogatónak ez
+    // zsákutca volt: fiókja nincs, a lista bejelentkezést kér, a kurzushoz sosem
+    // jut hozzá. A kurzusoldal `ctaSlot`-tal megkerülte, de BÁRMELY új hívó
+    // előhozta volna a régi viselkedést. A cél mostantól a kurzus saját oldalán
+    // álló igénylő űrlap horgonya.
+    expect(cta.href).toBe(courseCtaHref({ id: 10, slug: 'sos-kezrelax' }))
+    expect(cta.href).toBe(`/kurzusok/sos-kezrelax#${COURSE_CTA_ANCHOR}`)
+    expect(cta.href).not.toBe(MY_COURSES_PATH)
+    expect(cta.href).not.toContain(CHECKOUT_PATH)
+    expect(cta.disabled).toBe(false)
+  })
+
+  it('slug nélküli ingyenes kurzuson is a MŰKÖDŐ, id-alapú kurzus-URL-re mutat', () => {
     const cta = resolveCourseCta(
       { id: 10, status: 'published', priceInHUF: null, priceInHUFEnabled: false },
       false,
     )
-    expect(cta.kind).toBe('free')
-    expect(cta.label).toBe('Ingyenes — azonnal eléred')
-    expect(cta.href).toBe(MY_COURSES_PATH)
-    expect(cta.href).not.toContain(CHECKOUT_PATH)
-    expect(cta.disabled).toBe(false)
+    expect(cta.href).toBe(`/kurzusok/10#${COURSE_CTA_ANCHOR}`)
   })
 
   it('published + ingyenes + vevő: a purchased ág él (a meglévő vevő is a kurzusaimra megy)', () => {
@@ -187,13 +212,13 @@ describe('„már megvetted" ág', () => {
     }
   })
 
-  it('published + nem vevő: „Megveszem" a checkout-flowba visz (termek query-param)', () => {
+  it('published + nem vevő: §3.2 #1 felirat, a checkout-flowba visz (termek query-param)', () => {
     const cta = resolveCourseCta(
       { id: 42, status: 'published', priceInHUF: 19990, priceInHUFEnabled: true },
       false,
     )
     expect(cta.kind).toBe('buy')
-    expect(cta.label).toBe('Megveszem')
+    expect(cta.label).toBe(ctaLabel('course-buy'))
     expect(cta.href).toBe(`${CHECKOUT_PATH}?termek=42`)
     expect(cta.href).toBe(checkoutHref(42))
   })

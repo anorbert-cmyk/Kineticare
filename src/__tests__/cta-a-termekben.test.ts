@@ -4,6 +4,7 @@ import {
   CTA_PROGRESS_LABELS,
   CTA_VOCABULARY,
   ctaEntry,
+  ctaPatternEntry,
   type CtaAction,
 } from '@/lib/cta-vocabulary'
 
@@ -26,10 +27,20 @@ import { BARE_FORBIDDEN_LABELS, EM_DASH, EN_DASH, pusztaAlak } from './helpers/c
  *
  * MUTÁCIÓS BIZONYÍTÉK (2026-08-17, futtatva): a `CartView.tsx` és a
  * `ThankYouView.tsx` gombfeliratát elrontva a TELJES tesztkészlet zöld maradt.
- * Következmény: a felületen ma 67 olyan felirat él, amely nem a jóváhagyott
+ * Következmény: a felületen 67 olyan felirat élt, amely nem a jóváhagyott
  * §3.2 szótárból való — köztük a `Tovább a penztárhoz` elgépelés, amelyet a
  * `docs/gomb-inventar.md` 2026-08-16 óta névvel rögzít, mégsem tört meg tőle
  * semmi.
+ *
+ * ═══ AZ ELSŐ TELJES JAVÍTÓ KÖR (2026-08-18) ═══
+ * A kivétel-lista **96 → 42** sorra csökkent (a bontás a `FELIRAT_KIVETELEK`
+ * fejkommentjében és a `docs/gomb-inventar.md` 5.4 szakaszában). A „Tovább…"
+ * és a kvirtmínusz-kivételek KIÜRÜLTEK, a cél-ütközések 6-ról 4-re fogytak.
+ * Ugyanez a kör mutációval is igazolva lett: hét szándékos rontás (javított
+ * felirat visszaírása literálra, új „Tovább…" felirat, két felirat egy `href`-re,
+ * egy új szótári sor törlése, a `resolveCourseCta` free-ágának visszaállítása,
+ * a #15 mintázatának kiürítése, kvirtmínusz visszaírása) MIND megbuktatta az
+ * őröket.
  *
  * Ez az őr a hiányzó felet adja: a TERMÉK forrásából olvassa ki a vevőnek
  * megjelenő cselekvés-feliratokat (a bejáró:
@@ -74,14 +85,39 @@ const JOVAHAGYOTT_FELIRATOK: ReadonlySet<string> = new Set<string>([
 ])
 
 /**
+ * Jóváhagyott-e a felirat: BITRE szótári, vagy egy MINTÁZATOS (C-6) sor
+ * szabályos változata (`Vissza a <hova>`, `Letöltöm a <mit>`, `Hívd <Nevet>`).
+ *
+ * A mintázat-illesztés 2026-08-18-án került a szótárba (`CtaEntry.pattern`).
+ * Előtte kilenc élő `Vissza a …` felirat kivétel-soron ült „mintázat-jelölt"
+ * címkével, mert az őr nem tudta eldönteni, szabályos változat-e. A W3C
+ * Understanding SC 3.2.4 ezt kifejezetten megengedi: „Text alternatives that
+ * are 'consistent' are not always 'identical.'"
+ * https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html
+ */
+const jovahagyott = (felirat: string): boolean =>
+  JOVAHAGYOTT_FELIRATOK.has(felirat) || ctaPatternEntry(felirat) !== null
+
+/**
  * A kivétel-sor kategóriája. A kategória nem dísz: eldönti, milyen további
  * bizonyítást kér az őr a sortól.
+ *
+ * ═══ AMI 2026-08-18-ÁN MEGSZŰNT ═══
+ * A `mintazat-jelolt` kategória KIKERÜLT. Kilenc sor ült rajta („Vissza a
+ * kezdőlapra", „Vissza a belépéshez", „Vissza a kurzusaimhoz", „Vissza a
+ * Tudástárba"), és mind a kilenc azért, mert a §3.2 #15 MINTÁZATA csak
+ * emberi szöveggel volt kimondva. A szótár azóta gépi alakot is tárol
+ * (`CtaEntry.pattern`), tehát ezeket az őr MAGA ismeri fel — kivétel nem kell
+ * hozzájuk. Egy üresen hagyott kategória csak látszatot mérne.
+ *
+ * A `nincs-szotari-sor` kategória MEGMARAD (a típus része), de ma NULLA sora
+ * van: a 2026-08-18-i kör mind a húsz ilyen feliratot szótári sorra vezette
+ * (§3.2 #28–#38). A kategória azért marad, mert a következő új cselekvésnek
+ * lesz hova kerülnie, amíg a vezető el nem dönti a feliratát.
  */
 type KivetelKategoria =
   /** Van rá §3.2 sor, a felirat mégis más. KÖTELEZŐ megnevezni a célzott sort. */
   | 'szotartol-elter'
-  /** A §3.2 MINTÁZAT-sorának (C-6) alakját követi; a mintázat-illesztés még nincs kódban. */
-  | 'mintazat-jelolt'
   /** Valódi cselekvés, de a §3.2-ben nincs rá sor — a szótár bővítése tervezési kérdés. */
   | 'nincs-szotari-sor'
   /** Nem cselekvés-felirat: menücímke, morzsa, folyószövegbe ágyazott hivatkozás, logó, cím. */
@@ -93,23 +129,30 @@ interface FeliratKivetel {
   /** A `src/`-hez képest relatív fájl — ugyanaz a felirat máshol MÁS elbírálást kaphat. */
   readonly fajl: string
   readonly kategoria: KivetelKategoria
-  /** `szotartol-elter` és `mintazat-jelolt` esetén kötelező: melyik §3.2 sorra kell vezetni. */
+  /** `szotartol-elter` esetén kötelező: melyik §3.2 sorra kell vezetni. */
   readonly celzottAkcio?: CtaAction
   /** Egy mondat, amiért ma még így áll. Üresen hagyni nem lehet — az őr méri. */
   readonly indok: string
 }
 
-/** A 2026-08-16-i, párhuzamosan javítás alatt álló fájlokra közös megjegyzés. */
-const PARHUZAMOS =
-  'A 2026-08-17-i körben MÁSIK ügynök birtokolja ezt a fájlt: ha a sor elavulttá vált, a javítás megtörtént — töröld ezt a sort.'
-
 /**
- * A MAI ÁLLAPOT, soronként indokolva (2026-08-17-i audit).
+ * A MAI ÁLLAPOT, soronként indokolva (2026-08-18-i mérés).
+ *
+ * ═══ MI TÖRTÉNT A 2026-08-18-I KÖRBEN ═══
+ * A lista 96 sorról 42-re csökkent, kategóriánként:
+ *
+ *   szotartol-elter ... 27 → 1   (a 26 javított felirat a §3.2 szótárból olvas)
+ *   mintazat-jelolt ...  9 → 0   (a kategória megszűnt: `CtaEntry.pattern`)
+ *   nincs-szotari-sor . 20 → 0   (a §3.2 tizenegy új sorral bővült: #28–#38)
+ *   nem-cta .......... 40 → 41   (a „Kurzusaim" folyószöveges hivatkozása a
+ *                                 ThankYouView-ban ide sorolódott át; egyetlen
+ *                                 nem-CTA felirat sem szűnt meg, mert ezek nem
+ *                                 cselekvésgombok)
  *
  * A sorrend: előbb a szótártól eltérő valódi CTA-k (ez a munkalista), utána a
- * mintázat-jelöltek, a szótári sor nélküli cselekvések, végül a nem-CTA
- * feliratok. A `fajl` mező a `src/`-hez képest relatív, sorszám NÉLKÜL: egy
- * fölötte beszúrt sor ne buktassa a listát.
+ * szótári sor nélküli cselekvések, végül a nem-CTA feliratok. A `fajl` mező a
+ * `src/`-hez képest relatív, sorszám NÉLKÜL: egy fölötte beszúrt sor ne
+ * buktassa a listát.
  */
 const FELIRAT_KIVETELEK: readonly FeliratKivetel[] = [
   // ── 1. SZÓTÁRTÓL ELTÉRŐ CTA-k — a javítandók listája ───────────────────────
@@ -118,409 +161,19 @@ const FELIRAT_KIVETELEK: readonly FeliratKivetel[] = [
     fajl: 'components/checkout/CartView.tsx',
     kategoria: 'szotartol-elter',
     celzottAkcio: 'sign-in',
-    indok: `A §3.2 #5 szerint a belépés felirata „Belépés"; a cél megnevezése a környező szövegbe való. ${PARHUZAMOS}`,
-  },
-  {
-    felirat: 'Tovább a kurzusaimhoz',
-    fajl: 'components/checkout/ThankYouView.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'my-courses-open',
     indok:
-      'Puszta „Tovább"-bal kezd (M-7), és ugyanabban a komponensben a /kurzusaim cél MÁSIK feliratot is kap — a §3.2 #9 szerint „Nyisd meg a kurzusaidat".',
-  },
-  {
-    felirat: 'Nézd meg a kurzusaimat',
-    fajl: 'components/checkout/ThankYouView.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'my-courses-open',
-    indok:
-      'A „Tovább a kurzusaimhoz" párja UGYANEBBEN a komponensben, ugyanarra a /kurzusaim célra — WCAG 2.2 · 3.2.4 sértés; a §3.2 #9 az egyetlen jóváhagyott alak.',
-  },
-  {
-    felirat: 'Kurzusaim',
-    fajl: 'components/checkout/ThankYouView.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'my-courses-open',
-    indok:
-      'A köszönőoldal HÁROM gombja főnévi címkével visz a /kurzusaim-ra, miközben ugyanott két másik felirat is ugyanoda mutat; a §3.2 #9 az egyetlen jóváhagyott alak.',
-  },
-  {
-    felirat: 'Nézd meg a kurzusainkat',
-    fajl: 'components/account/AccountView.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'course-list-open',
-    indok:
-      'Birtokos alak a §3.2 #10 „Nézd meg a kurzusokat" helyett; a kettő ugyanarra a célra két felirat (WCAG 2.2 · 3.2.4).',
-  },
-  {
-    felirat: 'Számla letöltése',
-    fajl: 'components/account/AccountView.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'invoice-download',
-    indok:
-      'Főnévi alak a §3.2 #14 „Letöltöm a számlát" helyett; a letöltés a látogató gépén hoz létre fájlt, tehát P-1a → E/1.',
-  },
-  {
-    felirat: 'Megveszem',
-    fajl: 'lib/courses.ts',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'course-buy',
-    indok:
-      'A `resolveCourseCta` állapotgépe tárgy nélküli feliratot ad; a §3.2 #1 szerint „Megveszem a kurzust" (Carbon/Polaris {ige}+{főnév}).',
-  },
-  {
-    felirat: 'Ingyenes — azonnal eléred',
-    fajl: 'lib/courses.ts',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'free-course-claim',
-    indok:
-      'Háromszorosan hibás: nem ige, U+2014-et használ elválasztóként (§3.1.1), és ígéretet tesz (M-8); a §3.2 #3 szerint „Elindítom ingyen".',
-  },
-  {
-    felirat: 'Tovább a kurzusaimhoz',
-    fajl: 'lib/courses.ts',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'my-courses-open',
-    indok:
-      'A megvásárolt kurzus CTA-ja puszta „Tovább"-bal kezd (M-7); a §3.2 #9 szerint „Nyisd meg a kurzusaidat".',
-  },
-  {
-    felirat: 'Elfogadom',
-    fajl: 'components/analytics/ConsentBanner.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'consent-accept-all',
-    indok:
-      'A §3.2 #18 szerint „Elfogadom mindet" — a mai felirat nem mondja meg, mire vonatkozik az elfogadás (NN/g „Substantial").',
-  },
-  {
-    felirat: 'Elutasítom',
-    fajl: 'components/analytics/ConsentBanner.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'consent-essential-only',
-    indok:
-      'A §3.2 #18 szerint „Csak a szükségeseket" — a szükséges sütik nem utasíthatók el, tehát a mai felirat félrevezet.',
-  },
-  {
-    felirat: 'Megrendelés és fizetés',
-    fajl: 'components/checkout/CheckoutForm.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'checkout-submit',
-    indok:
-      'Főnévi alak a §3.2 #2 „Megrendelem és fizetek" helyett; a visszavonhatatlan lépés P-1a → E/1 (a régi oldal szava: MEGRENDELEM).',
-  },
-  {
-    felirat: 'Üzenet küldése',
-    fajl: 'app/(frontend)/kapcsolat/_components/ContactForm.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'contact-submit',
-    indok:
-      'Főnévi alak a §3.2 #12 „Elküldöm az üzenetet" helyett; a régi oldal kapcsolat-űrlapján szó szerint ELKÜLDÖM állt.',
-  },
-  {
-    felirat: 'Visszaállító link küldése',
-    fajl: 'components/auth/ForgotPasswordForm.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'password-reset-request',
-    indok: 'Főnévi alak a §3.2 #21 „Kérem a visszaállító linket" helyett (e-mail indul → E/1).',
-  },
-  {
-    felirat: 'Jelszó beállítása',
-    fajl: 'components/auth/ResetPasswordForm.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'password-reset-set',
-    indok: 'Főnévi alak a §3.2 #22 „Beállítom az új jelszót" helyett (a fiók megváltozik → E/1).',
-  },
-  {
-    felirat: 'Beállítás…',
-    fajl: 'components/auth/ResetPasswordForm.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'password-reset-set',
-    indok:
-      'A folyamatban-felirat nincs a ZÁRT L-1 listán; a §3.2 #22 `progress` mezője szerint `Mentés…` jár ide (a Polaris a szinonimák felszámolását írja elő).',
-  },
-  {
-    felirat: 'Lépj be',
-    fajl: 'app/(frontend)/regisztracio/page.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'sign-in',
-    indok: 'A §3.2 #5 szerint a belépés felirata mindenütt „Belépés" (P-1c, bevett egyszavas címke).',
-  },
-  {
-    felirat: 'Regisztrálj',
-    fajl: 'app/(frontend)/belepes/page.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'sign-up',
-    indok: 'A §3.2 #6 szerint a regisztráció felirata mindenütt „Regisztráció" (a nav-menü is így nevezi).',
-  },
-  {
-    felirat: 'Próbáld újra',
-    fajl: 'app/(frontend)/error.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'retry',
-    indok: 'A §3.2 #17 szerint „Újrapróbálom" — ma három alak él ugyanerre a cselekvésre.',
-  },
-  {
-    felirat: 'Újratöltés folyamatban…',
-    fajl: 'app/(frontend)/error.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'retry',
-    indok: 'A folyamatban-felirat nincs a ZÁRT L-1 listán; oda a `Betöltés…` való (P-1d).',
-  },
-  {
-    felirat: 'Próbáld újra',
-    fajl: 'app/global-error.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'retry',
-    indok: 'A §3.2 #17 szerint „Újrapróbálom"; a globális hibaoldal ugyanazt a cselekvést kínálja.',
-  },
-  {
-    felirat: 'Újrapróbálom a fizetést',
-    fajl: 'app/(frontend)/sikertelen/page.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'retry',
-    indok:
-      'A §3.2 #17 `patterned: false`, tehát a tárgy nem cserélhető; a cél megnevezése a hozzáférhető névbe való (WCAG 2.5.3).',
-  },
-  {
-    felirat: 'Kezdés',
-    fajl: 'components/account/course-list-order.ts',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'course-start',
-    indok: 'A kurzuskártya CTA-ja; a §3.2 #8 szerint „Kezdd el a kurzust" (P-1b, tárgy kötelező).',
-  },
-  {
-    felirat: 'Folytatás',
-    fajl: 'components/account/course-list-order.ts',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'course-continue',
-    indok: 'A §3.2 #7 szerint „Folytasd a kurzust"; a puszta főnév nem „Substantial" (NN/g).',
-  },
-  {
-    felirat: 'A kurzus megnyitása',
-    fajl: 'components/account/course-list-order.ts',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'course-start',
-    indok:
-      'Tananyag nélküli kurzus megnyitása — ugyanaz a cselekvés, mint a §3.2 #8, csak főnévi alakban és harmadik feliratként.',
-  },
-  {
-    felirat: 'Kurzusok megnézése',
-    fajl: 'components/account/course-list-order.ts',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'course-list-open',
-    indok: 'Az üres kurzuslista CTA-ja; a §3.2 #10 szerint „Nézd meg a kurzusokat".',
-  },
-  {
-    felirat: 'Kurzusok megnézése',
-    fajl: 'components/account/CourseList.tsx',
-    kategoria: 'szotartol-elter',
-    celzottAkcio: 'course-list-open',
-    indok: 'Az `EMPTY_CTA_LABEL` hívóhelye; a §3.2 #10 szerint „Nézd meg a kurzusokat".',
+      'A §3.2 #5 szerint a belépés felirata mindenütt „Belépés"; a cél megnevezése („a fizetéshez") a környező szövegbe vagy a hozzáférhető névbe való (WCAG 2.2 · 2.5.3). A fájlt a 2026-08-18-i körben MÁSIK ügynök zárta le, ezért ez az egyetlen meg nem javított szótár-eltérés — a vezetőnek jelentve.',
   },
 
-  // ── 2. MINTÁZAT-JELÖLTEK (§3.2 C-6) ───────────────────────────────────────
-  // A §3.2 #15 `patterned: true`: a `Vissza a <hova>` alak a TÁRGY cseréjével
-  // is jóváhagyott (WCAG 2.2 · 3.2.4 kifejezetten megengedi: „Go to page 4" /
-  // „Go to page 5"). A mintázat-illesztés viszont a szótárban NINCS
-  // megfogalmazva — a szabály alakját (mi a rögzített előtag, mi cserélhető)
-  // tervezői döntés kimondani. NYITOTT KÉRDÉS a vezetőnek; addig kivétel.
-  {
-    felirat: 'Vissza a kezdőlapra',
-    fajl: 'app/(frontend)/error.tsx',
-    kategoria: 'mintazat-jelolt',
-    celzottAkcio: 'back-to-courses',
-    indok: 'A §3.2 #15 `Vissza a <hova>` mintázatának alakja; a mintázat-illesztés kódban még nincs kimondva.',
-  },
-  {
-    felirat: 'Vissza a kezdőlapra',
-    fajl: 'app/(frontend)/kapcsolat/_components/ContactForm.tsx',
-    kategoria: 'mintazat-jelolt',
-    celzottAkcio: 'back-to-courses',
-    indok: 'A §3.2 #15 mintázatának alakja a kapcsolat-űrlap sikeres beküldése után.',
-  },
-  {
-    felirat: 'Vissza a kezdőlapra',
-    fajl: 'app/global-error.tsx',
-    kategoria: 'mintazat-jelolt',
-    celzottAkcio: 'back-to-courses',
-    indok: 'A §3.2 #15 mintázatának alakja a globális hibaoldalon.',
-  },
-  {
-    felirat: 'Vissza a kezdőlapra',
-    fajl: 'components/checkout/ThankYouView.tsx',
-    kategoria: 'mintazat-jelolt',
-    celzottAkcio: 'back-to-courses',
-    indok: 'A §3.2 #15 mintázatának alakja a köszönőoldal másodlagos gombján.',
-  },
-  {
-    felirat: 'Vissza a kezdőlapra',
-    fajl: 'components/error/NotFoundView.tsx',
-    kategoria: 'mintazat-jelolt',
-    celzottAkcio: 'back-to-courses',
-    indok: 'A §3.2 #15 mintázatának alakja a 404-oldal másodlagos gombján.',
-  },
-  {
-    felirat: 'Vissza a kezdőlapra',
-    fajl: 'components/error/not-found-content.ts',
-    kategoria: 'mintazat-jelolt',
-    celzottAkcio: 'back-to-courses',
-    indok: 'A 404-oldal szövegmodulja — a `NotFoundView` gombjának forrása, ugyanaz a mintázat.',
-  },
-  {
-    felirat: 'Vissza a belépéshez',
-    fajl: 'app/(frontend)/elfelejtett-jelszo/page.tsx',
-    kategoria: 'mintazat-jelolt',
-    celzottAkcio: 'back-to-courses',
-    indok: 'A §3.2 #15 `Vissza a <hova>` mintázatának alakja a jelszó-visszaállító lapon.',
-  },
-  {
-    felirat: 'Vissza a kurzusaimhoz',
-    fajl: 'components/account/CoursePlayer.tsx',
-    kategoria: 'mintazat-jelolt',
-    celzottAkcio: 'back-to-courses',
-    indok:
-      'A §3.2 #15 mintázatának alakja a lejátszó kapu-állapotaiban; a #9 („Nyisd meg a kurzusaidat") NAVIGÁCIÓS, ez VISSZA-lépés.',
-  },
-  {
-    felirat: 'Vissza a Tudástárba',
-    fajl: 'components/content/PostsEmptyState.tsx',
-    kategoria: 'mintazat-jelolt',
-    celzottAkcio: 'back-to-courses',
-    indok: 'A §3.2 #15 mintázatának alakja az üres tudástár-lista visszalépő gombján.',
-  },
+  // ── 2. NINCS §3.2 SOR — a szótár bővítése tervezési kérdés ────────────────
+  // ÜRES, és ez a szakasz ÉRTELME. A 2026-08-17-i mérés húsz ilyen feliratot
+  // talált (kijelentkezés, újranézés, kurzus befejezése, profil-mentés,
+  // kapcsolatfelvétel, süti-beállítások, jelszó-visszaállítás kezdeményezése,
+  // ingyenes pénztár-ág, „rólunk", tudástár, kártya-CTA…). Mind a húsz szótári
+  // sorra került: §3.2 #28–#38, plusz a L-1 lista `Kijelentkezés…` eleme, és a
+  // pénztár ingyenes ága a meglévő #26-ra (ugyanaz a funkció, ugyanaz a szó).
 
-  // ── 3. NINCS §3.2 SOR — a szótár bővítése tervezési kérdés ────────────────
-  {
-    felirat: 'A kurzus megtekintése',
-    fajl: 'components/account/CoursePlayer.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok:
-      'Lejárt/hiányzó hozzáférésnél a kurzus ÉRTÉKESÍTŐ oldalára visz; a §3.2-ben nincs sor a „vissza a kurzusoldalra" cselekvésre.',
-  },
-  {
-    felirat: 'A kurzus megtekintése',
-    fajl: 'components/account/course-list-order.ts',
-    kategoria: 'nincs-szotari-sor',
-    indok: 'A lejárt hozzáférésű kurzuskártya CTA-ja; ugyanaz a cselekvés, mint a lejátszó kapujában.',
-  },
-  {
-    felirat: 'Újranézés',
-    fajl: 'components/account/course-list-order.ts',
-    kategoria: 'nincs-szotari-sor',
-    indok:
-      'Befejezett kurzus újranézése; a §3.2 #7 (folytatás) és #8 (kezdés) egyike sem ez, külön sort kér.',
-  },
-  {
-    felirat: 'Kurzus befejezése',
-    fajl: 'components/account/player/navigation.ts',
-    kategoria: 'nincs-szotari-sor',
-    indok: 'A lejátszó záró lépése (az utolsó lecke után); a §3.2-ben nincs rá sor.',
-  },
-  {
-    felirat: 'Mentés',
-    fajl: 'components/account/AccountView.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok: 'A fiókadatok mentése; a §3.2-ben nincs sor a profil-mentésre (a L-1 `Mentés…` viszont már itt fut).',
-  },
-  {
-    felirat: 'Kijelentkezés',
-    fajl: 'components/layout/AccountNav.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok: 'A §3.2-ben nincs kijelentkezés-sor, pedig a #5 (belépés) párja volna.',
-  },
-  {
-    felirat: 'Kijelentkezés…',
-    fajl: 'components/layout/AccountNav.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok: 'A kijelentkezés folyamatban-felirata; a ZÁRT L-1 listán sincs rá kulcs.',
-  },
-  {
-    felirat: 'Hozzáférés megnyitása',
-    fajl: 'components/checkout/CheckoutForm.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok:
-      'A pénztár INGYENES ága; a §3.2 #2 a fizetésre szól, a #26 az ingyenes ŰRLAP beküldésére — erre az ágra nincs sor.',
-  },
-  {
-    felirat: 'Megnézem a programot',
-    fajl: 'components/content/ProductCard.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok:
-      'A kurzuskártya alapértelmezett CTA-felirata; a §3.2 #11 szerint a kártyán NINCS gomb (a kártya egésze link) — a felirat megszüntetése tervezési döntés.',
-  },
-  {
-    felirat: 'Ingyenes SOS gyakorlatok',
-    fajl: 'components/content/home/HeroCta.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok:
-      'Lapon belüli ugrás a kezdőlap ingyenes sávjára; a §3.2 #27 a KURZUSOLDAL űrlapjához vivő ugrásra szól, erre nincs sor.',
-  },
-  {
-    felirat: 'Bővebben a szakmai hátterünkről',
-    fajl: 'components/content/home/CredentialsStrip.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok:
-      'A „rólunk" oldalra vivő CTA; a §3.2-ben nincs rá sor. A „Bővebben" itt NEM puszta (M-7): a tárgyat megnevezi.',
-  },
-  {
-    felirat: 'Összes bejegyzés a tudástárban',
-    fajl: 'components/content/home/KnowledgeSection.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok: 'A tudástár-listára vivő CTA a kezdőlapról; a §3.2-ben nincs tudástár-sor.',
-  },
-  {
-    felirat: 'Kapcsolat',
-    fajl: 'components/content/PostsEmptyState.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok: 'Az üres tudástár-lista harmadik ajánlata gombként; a §3.2-ben nincs kapcsolatfelvétel-sor.',
-  },
-  {
-    felirat: 'Kapcsolat',
-    fajl: 'app/(frontend)/sikertelen/page.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok: 'A sikertelen fizetés utáni segítség-gomb; a §3.2-ben nincs kapcsolatfelvétel-sor.',
-  },
-  {
-    felirat: 'Kapcsolat',
-    fajl: 'components/checkout/ThankYouView.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok: 'A köszönőoldal hiba-ágának segítség-gombja; a §3.2-ben nincs kapcsolatfelvétel-sor.',
-  },
-  {
-    felirat: 'Segítséget kérek',
-    fajl: 'components/checkout/ThankYouView.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok:
-      'Ugyanarra a /kapcsolat célra MÁSIK felirat ugyanabban a komponensben, mint a „Kapcsolat" — a §3.2 bővítése rendezné.',
-  },
-  {
-    felirat: 'Írj nekünk a kapcsolati oldalon',
-    fajl: 'components/courses/FreeCourseRequestForm.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok: 'Az „nincs e-mailem" ág kisegítő hivatkozása; a §3.2-ben nincs kapcsolatfelvétel-sor.',
-  },
-  {
-    felirat: 'Süti-beállítások',
-    fajl: 'components/analytics/ConsentSettingsButton.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok: 'A süti-sáv újranyitása a láblécből; a §3.2 #18 csak a sáv két gombjáról rendelkezik.',
-  },
-  {
-    felirat: 'Elfelejtetted a jelszavad?',
-    fajl: 'app/(frontend)/belepes/page.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok:
-      'A jelszó-visszaállító lapra vivő LINK; a §3.2 #21 a beküldő gombra szól, a navigációs lépésre nincs sor.',
-  },
-  {
-    felirat: 'Új link kérése',
-    fajl: 'app/(frontend)/jelszo-visszaallitas/page.tsx',
-    kategoria: 'nincs-szotari-sor',
-    indok:
-      'Lejárt visszaállító linknél új igénylésre visz; ugyanarra a célra másik felirat, mint a belépőlapon — a §3.2 bővítése rendezné.',
-  },
-
-  // ── 4. NEM CTA — menücímke, morzsa, folyószöveg, logó, cím ────────────────
+  // ── 3. NEM CTA — menücímke, morzsa, folyószöveg, logó, cím ────────────────
   // A §3.2 N-3 kifejezetten kimondja: a főmenü menüpontjának neve NEM CTA.
   // Ugyanez áll a morzsára, a folyószövegbe ágyazott hivatkozásra, a logóra és
   // az e-mail-címre: ezek nem cselekvésgombok, tehát nem a §3.2 hatálya alá
@@ -554,19 +207,26 @@ const FELIRAT_KIVETELEK: readonly FeliratKivetel[] = [
     felirat: 'Kurzusaim',
     fajl: 'app/(frontend)/kosar/page.tsx',
     kategoria: 'nem-cta',
-    indok: `Folyószövegbe ágyazott hivatkozás („a Kurzusaim oldalon éred el"), nem gomb. ${PARHUZAMOS}`,
+    indok: 'Folyószövegbe ágyazott hivatkozás („a Kurzusaim oldalon éred el"), nem gomb.',
   },
   {
     felirat: 'Kurzusaim',
     fajl: 'app/(frontend)/penztar/page.tsx',
     kategoria: 'nem-cta',
-    indok: `Folyószövegbe ágyazott hivatkozás, nem gomb. ${PARHUZAMOS}`,
+    indok: 'Folyószövegbe ágyazott hivatkozás („a Kurzusaim oldalon éred el"), nem gomb.',
+  },
+  {
+    felirat: 'Kurzusaim',
+    fajl: 'components/checkout/ThankYouView.tsx',
+    kategoria: 'nem-cta',
+    indok:
+      'A `paid` ág magyarázó mondatába ágyazott hivatkozás („A kurzust a Kurzusaim oldalon éred el"), nem gomb — ugyanaz az elbírálás, mint a /kosar és a /penztar azonos mondatánál. A komponens HÁROM cselekvésgombja 2026-08-18 óta a §3.2 #9 szótári alakját viseli.',
   },
   {
     felirat: 'Kapcsolat',
     fajl: 'components/layout/Footer.tsx',
     kategoria: 'nem-cta',
-    indok: 'Lábléc-menüpont — N-3 szerint menücímke.',
+    indok: 'Lábléc-menüpont — N-3 szerint menücímke, nem cselekvés-felirat.',
   },
   {
     felirat: 'Kapcsolat',
@@ -614,11 +274,11 @@ const FELIRAT_KIVETELEK: readonly FeliratKivetel[] = [
     indok: 'A logó hozzáférhető neve (WCAG 2.2 · 4.1.2), nem látható gombfelirat.',
   },
   {
-    felirat: 'Kineticare — kezdőlap',
+    felirat: 'Kineticare kezdőlap',
     fajl: 'app/global-not-found.tsx',
     kategoria: 'nem-cta',
     indok:
-      'A logó hozzáférhető neve a 404-oldalon. FIGYELEM: U+2014-et tartalmaz (§3.1.1) — külön kivétel-soron is szerepel.',
+      'A logó hozzáférhető neve a 404-oldalon. 2026-08-18 óta BITRE egyezik a `Header.tsx`-ével: a korábbi „Kineticare — kezdőlap" U+2014-et tartalmazott (§3.1.1), és ugyanarra az elemre két nevet adott.',
   },
   {
     felirat: 'Ugrás a tartalomra',
@@ -774,11 +434,12 @@ const FELIRAT_KIVETELEK: readonly FeliratKivetel[] = [
   },
 ]
 /**
- * FELSŐ KORLÁT. A 2026-08-17-i mérés 98 sort talált; ezt a számot csak LEFELÉ
- * szabad átírni. Ha egy javítás elfogyaszt egy sort, a korlát is csökken —
- * így a lista visszahízása külön, látható mozdulatot kíván.
+ * FELSŐ KORLÁT. A 2026-08-17-i mérés 98 sort talált, a 2026-08-18-i kör után
+ * 42 maradt; ezt a számot csak LEFELÉ szabad átírni. Ha egy javítás elfogyaszt
+ * egy sort, a korlát is csökken — így a lista visszahízása külön, látható
+ * mozdulatot kíván.
  */
-const KIVETEL_LISTA_FELSO_KORLAT = 96
+const KIVETEL_LISTA_FELSO_KORLAT = 42
 
 /**
  * A „Tovább…"-tilalom (M-7) MAI sértései. SZŰK lista: az őr megköveteli, hogy
@@ -787,8 +448,10 @@ const KIVETEL_LISTA_FELSO_KORLAT = 96
  * legitimálható „nem CTA"-ként — legfeljebb elismerhető, hogy még nem javult.
  */
 const TOVABB_KIVETELEK: readonly { readonly felirat: string; readonly fajl: string }[] = [
-  { felirat: 'Tovább a kurzusaimhoz', fajl: 'components/checkout/ThankYouView.tsx' },
-  { felirat: 'Tovább a kurzusaimhoz', fajl: 'lib/courses.ts' },
+  // ÜRES (2026-08-18). A két mai sértés (`Tovább a kurzusaimhoz` a
+  // `ThankYouView`-ban és a `resolveCourseCta` `purchased` ágán) a §3.2 #9
+  // szótári alakjára javult. A lista üresen maradása ÁLLÍTÁS: a felületen
+  // egyetlen „Tovább…" kezdetű felirat sincs — az alatta álló őr ezt méri.
 ]
 
 /**
@@ -796,8 +459,10 @@ const TOVABB_KIVETELEK: readonly { readonly felirat: string; readonly fajl: stri
  * lista, és minden sorának szerepelnie kell a fő kivétel-listán is.
  */
 const GONDOLATJEL_KIVETELEK: readonly { readonly felirat: string; readonly fajl: string }[] = [
-  { felirat: 'Ingyenes — azonnal eléred', fajl: 'lib/courses.ts' },
-  { felirat: 'Kineticare — kezdőlap', fajl: 'app/global-not-found.tsx' },
+  // ÜRES (2026-08-18). A két mai sértés megszűnt: az `Ingyenes — azonnal
+  // eléred` a §3.2 #3 alakjára (`Elindítom ingyen`), a `Kineticare — kezdőlap`
+  // hozzáférhető név pedig a `Header.tsx`-ével bitre egyező `Kineticare
+  // kezdőlap`-ra javult. A vevői feliratokban innentől NULLA a kvirtmínusz.
 ]
 
 /**
@@ -816,48 +481,34 @@ const HREF_UTKOZES_KIVETELEK: readonly {
   readonly feliratok: readonly string[]
   readonly indok: string
 }[] = [
+  // A 2026-08-18-i kör után HAT helyett NÉGY cél ütközik, és MINDEGYIK a
+  // BÖNGÉSZÉS ↔ VISSZALÉPÉS szándékos kettőssége (§3.2 #10 ↔ #15 mintája),
+  // nem meg nem javított szinonima. A `/kapcsolat` (3 felirat) és az
+  // `/elfelejtett-jelszo` (2 felirat) ütközése MEGSZŰNT: mindkettőre egyetlen
+  // szótári sor lett (#33 és #37).
   {
     href: '/kurzusaim',
-    feliratok: [
-      'Ingyenes — azonnal eléred',
-      'Kurzusaim',
-      'Nézd meg a kurzusaimat',
-      'Tovább a kurzusaimhoz',
-      'Vissza a kurzusaimhoz',
-    ],
+    feliratok: ['Nyisd meg a kurzusaidat', 'Vissza a kurzusaimhoz'],
     indok:
-      'A mért „NÉGY felirat egy célra" hiba (docs/gomb-inventar.md §5) ma is él; a §3.2 #9 az egyetlen jóváhagyott alak, a „Vissza a…" pedig mintázat-jelölt.',
+      'A mért „NÉGY felirat egy célra" hiba (docs/gomb-inventar.md §5) KETTŐRE csökkent, és a maradék kettő SZÁNDÉKOS: a #9 („Nyisd meg a kurzusaidat") a navigáció, a #15 mintázata („Vissza a kurzusaimhoz") a lejátszóból való VISSZALÉPÉS. A W3C SC 3.2.4 magyarázata a mintázatos alakot kifejezetten megengedi.',
   },
   {
     href: '/kurzusok',
-    feliratok: [
-      'Kurzusok megnézése',
-      'Nézd meg a kurzusainkat',
-      'Nézd meg a kurzusokat',
-      'Vissza a kurzusokhoz',
-    ],
+    feliratok: ['Nézd meg a kurzusokat', 'Vissza a kurzusokhoz'],
     indok:
-      'A mért „NYOLC felirat egy célra" hiba maradéka. A `Nézd meg a kurzusokat` (#10) és a `Vissza a kurzusokhoz` (#15) SZÁNDÉKOSAN két sor: böngészés vs. visszalépés — a többi három javítandó.',
-  },
-  {
-    href: '/kapcsolat',
-    feliratok: ['Kapcsolat', 'Segítséget kérek', 'Írj nekünk a kapcsolati oldalon'],
-    indok: 'A §3.2-ben nincs kapcsolatfelvétel-sor, ezért három hívóhely három feliratot használ.',
+      'A mért „NYOLC felirat egy célra" hiba KETTŐRE csökkent. A `Nézd meg a kurzusokat` (#10) és a `Vissza a kurzusokhoz` (#15) SZÁNDÉKOSAN két sor: böngészés vs. visszalépés — a másik hat felirat megszűnt.',
   },
   {
     href: '/belepes',
     feliratok: ['Belépés', 'Vissza a belépéshez'],
-    indok: 'A #5 („Belépés") mellett a #15 mintázatának alakja áll a jelszó-visszaállító lapon.',
+    indok:
+      'A #5 („Belépés") mellett a #15 mintázatának alakja áll a jelszó-visszaállító lapon: ott a látogató VISSZALÉP oda, ahonnan jött. Ugyanaz a szándékos kettősség, mint a /kurzusok és a /kurzusaim célon.',
   },
   {
     href: '/blog',
-    feliratok: ['Vissza a Tudástárba', 'Összes bejegyzés a tudástárban'],
-    indok: 'A tudástárra nincs §3.2 sor; egy visszalépő és egy böngésző felirat él ugyanarra a célra.',
-  },
-  {
-    href: '/elfelejtett-jelszo',
-    feliratok: ['Elfelejtetted a jelszavad?', 'Új link kérése'],
-    indok: 'A jelszó-visszaállítás KEZDEMÉNYEZÉSÉRE nincs §3.2 sor, ezért két lap két feliratot használ.',
+    feliratok: ['Nézd meg a tudástárat', 'Vissza a Tudástárba'],
+    indok:
+      'A #35 („Nézd meg a tudástárat") a kezdőlapról BÖNGÉSZÉSRE visz, a #15 mintázata („Vissza a Tudástárba") pedig az üres kategória-oldalról VISSZALÉP a listára — két különböző eredmény, tehát nem „same functionality" (W3C Understanding SC 3.2.4).',
   },
 ]
 
@@ -983,10 +634,7 @@ describe('G-UI2 — hatókör: a bejáró tényleg végigméri a felületet', ()
 describe('G-UI2 — minden élő felirat a §3.2 szótárból való vagy indokolt kivétel', () => {
   it('nincs számon nem tartott felirat a felületen', () => {
     const ismeretlenek = talalatok
-      .filter(
-        (talalat) =>
-          !JOVAHAGYOTT_FELIRATOK.has(talalat.felirat) && kivetelhez(talalat) === undefined,
-      )
+      .filter((talalat) => !jovahagyott(talalat.felirat) && kivetelhez(talalat) === undefined)
       .map(hely)
     expect(
       [...new Set(ismeretlenek)],
@@ -1014,9 +662,12 @@ describe('G-UI2 — minden élő felirat a §3.2 szótárból való vagy indokol
 
   it('nincs kivétel olyan feliratra, amely már a szótárban van (halott sor)', () => {
     const feleslegesek = FELIRAT_KIVETELEK.filter((kivetel) =>
-      JOVAHAGYOTT_FELIRATOK.has(kivetel.felirat),
+      jovahagyott(kivetel.felirat),
     ).map((kivetel) => `${kivetel.fajl} — „${kivetel.felirat}"`)
-    expect(feleslegesek, 'a §3.2-ben szereplő feliratra nem kell kivétel').toEqual([])
+    expect(
+      feleslegesek,
+      'a §3.2-ben szereplő (vagy MINTÁZATÁNAK megfelelő) feliratra nem kell kivétel',
+    ).toEqual([])
   })
 
   it(`a kivétel-lista ma ${FELIRAT_KIVETELEK.length} soros, a felső korlát ${KIVETEL_LISTA_FELSO_KORLAT}`, () => {
@@ -1064,17 +715,38 @@ describe('G-UI2 — a kivétel-lista higiéniája', () => {
     ).toEqual([])
   })
 
-  it('a „mintazat-jelolt" sorok MINTÁZATOS (§3.2 C-6) szótári sorra hivatkoznak', () => {
-    const hibasak = FELIRAT_KIVETELEK.filter((kivetel) => kivetel.kategoria === 'mintazat-jelolt')
-      .filter(
-        (kivetel) =>
-          kivetel.celzottAkcio === undefined || !ctaEntry(kivetel.celzottAkcio).patterned,
-      )
-      .map((kivetel) => `${kivetel.fajl} — „${kivetel.felirat}"`)
+  it('a MINTÁZATOS (§3.2 C-6) sorok gépi alakja tényleg felismeri az élő változatokat', () => {
+    // Ez a korábbi „mintazat-jelolt" kategória HELYÉBE lép. Nem elég, hogy a
+    // szótár tárol egy `pattern` mezőt: bizonyítani kell, hogy a felületen élő
+    // változatokat FEL IS ismeri — különben a mintázat bevezetése némán
+    // visszahozná a kilenc kivétel-sort, csak épp „ismeretlen felirat" néven.
+    //
+    // NÉVSZERINT ellenőrzött élő alakok (2026-08-18-i mérés). Ha bármelyik
+    // eltűnik a felületről, ez az állítás HANGOSAN kidől, és a listát frissíteni
+    // kell — nem csendben tágul.
+    const MERT_MINTAZATOS_ALAKOK: readonly string[] = [
+      'Vissza a kezdőlapra',
+      'Vissza a kurzusaimhoz',
+      'Vissza a belépéshez',
+      'Vissza a Tudástárba',
+    ]
+    const eloFeliratok = new Set(talalatok.map((talalat) => talalat.felirat))
+
+    const hianyzok = MERT_MINTAZATOS_ALAKOK.filter((felirat) => !eloFeliratok.has(felirat))
+    expect(hianyzok, 'mért mintázatos alak eltűnt a felületről — frissítsd a listát').toEqual([])
+
+    const felnemismert = MERT_MINTAZATOS_ALAKOK.filter(
+      (felirat) => ctaPatternEntry(felirat)?.action !== 'back-to-courses',
+    )
     expect(
-      hibasak,
-      'mintázat-jelöltnek csak `patterned: true` szótári sorra szabad hivatkoznia',
+      felnemismert,
+      'a §3.2 #15 `pattern` mezője nem ismeri fel a saját mintázatának élő változatát',
     ).toEqual([])
+
+    // A puszta „Vissza" TILOS marad: a mintázat kötelező, nem üres tárgyat kér
+    // (NN/g, Better Link Labels — „Substantial").
+    expect(ctaPatternEntry('Vissza'), 'a puszta „Vissza" nem lehet mintázatos alak').toBeNull()
+    expect(ctaPatternEntry('Vissza a '), 'üres tárgy nem elég').toBeNull()
   })
 
   it('a „nem-cta" és a „nincs-szotari-sor" sorok NEM neveznek meg célsort', () => {
@@ -1260,7 +932,7 @@ describe('G-UI2 — CMS-ből felülírható CTA-feliratok (jelentés)', () => {
 
   it('a felülírható helyek feliratai ma a szótárból valók (a tartalék ág rendben van)', () => {
     const rosszTartalek = felulirhatoak
-      .filter((talalat) => !JOVAHAGYOTT_FELIRATOK.has(talalat.felirat))
+      .filter((talalat) => !jovahagyott(talalat.felirat))
       .map(hely)
     expect(
       [...new Set(rosszTartalek)],

@@ -613,10 +613,26 @@ akkor kerülhet be, ha **ez** a táblázat bővül – vele együtt frissül a
 a `gomb-inventar.md` leltár, nem szótár.)
 
 **Megvalósítás:** a szótár egyetlen modulban él konstansként
-(`src/lib/cta-vocabulary.ts`), és onnan olvas majd a `resolveCourseCta`, a
-`course-list-order.ts`, a `ThankYouView`, a `CartView` és a `penztar/page.tsx`.
-Így a G-UI1 őr egyetlen fájlt ellenőriz. **A hívóhelyek átírása külön kör** – a
-modul most a szótár igazságforrása, a bevezetés a következő lépés.
+(`src/lib/cta-vocabulary.ts`), és onnan olvas a `resolveCourseCta`, a
+`course-list-order.ts`, a `ThankYouView`, a `CartView`, a `penztar/page.tsx` és
+a többi hívóhely.
+
+**A hívóhelyek átírása 2026-08-18-án MEGTÖRTÉNT.** A 2026-08-17-i audit 136 élő
+gombfeliratot mért, ebből **67 tért el** ettől a táblázattól; a termék-oldali őr
+(**G-UI2**, `src/__tests__/cta-a-termekben.test.ts`) kivétel-listája 96 sorral
+indult. A javítás után **42 sor** maradt, és abból **egyetlen** szótár-eltérés
+(a `CartView` „Belépés a fizetéshez" felirata). A táblázat ugyanebben a körben
+**#28–#38** sorokkal bővült, a L-1 lista hatról hét elemre, a mintázatos sorok
+(#14, #15, #23) pedig gépi alakot is kaptak — lásd a **C-6** blokkot a táblázat
+alatt.
+
+**Két őr védi, és a kettő KÜLÖNBÖZŐ dolgot mér.** A **G-UI1**
+(`cta-vocabulary-guard.test.ts`) három fájlt olvas: ezt a táblázatot, a
+`gomb-inventar.md` §5-öt és a kódbeli szótárt — vagyis a *szótár* és a *doksik*
+egyezését. A **G-UI2** a TERMÉK forrásából olvassa ki a vevőnek megjelenő
+feliratokat (303 fájl, a TypeScript fordító elemzőjével), tehát azt méri, hogy a
+felületen tényleg a jóváhagyott alakok állnak-e. Egyik sem helyettesíti a
+másikat.
 
 **Ami a döntéstől FÜGGETLENÜL kötelező** (ezért több sor akkor is változik, ha
 a személy egyébként stimmel): egy cselekvésre egy felirat (WCAG 3.2.4); a
@@ -654,13 +670,54 @@ magyarázó mondat (#16).
 | 25 | **Az időpontkérő űrlap beküldése** | `Időpontot kérek` | E/1 (P-1a) | `primary` | **Új sor (1.2).** A beküldéssel időpontkérés KELETKEZIK, tehát a látogató dolgaiban változik valami → E/1. **Vezetői pontosítás:** ez a sor és a **#24** SZÁNDÉKOSAN különbözik, és nem sérti a WCAG 3.2.4-et: a #24 navigáció a szekcióhoz, a #25 a tényleges beküldés. Aki egységesítené a kettőt, az a navigációt és a vállalást mosná össze. Folyamatban: `Küldés…` |
 | 26 | **Az ingyenes kurzus igénylő űrlapjának beküldése** | `Kérem a kurzust` | E/1 (P-1a) | `primary` | **Új sor (1.3).** A beküldéssel HOZZÁFÉRÉS keletkezik és levél indul a látogatónak, tehát a nála lévő dolgokban változik valami → E/1. **Vezetői pontosítás:** ez a sor és a **#3** (`Elindítom ingyen`) SZÁNDÉKOSAN különbözik, és nem sérti a WCAG 3.2.4-et — ugyanaz a kettősség, mint a #24 ↔ #25 párnál: a #3 NAVIGÁCIÓ (a kezdőlapról a kurzus oldalára visz), a #26 a tényleges VÁLLALÁS. **A régi oldal ugyanezt a szerkezetet használta** a `/kezrelax` landingen: `KÉREM A VILLÁMKURZUST` (4×), `KÉREM A PROGRAMOT` (2×), `KÉREM A HOZZÁFÉRÉST` (2×) — mérés: `docs/regi-oldal-osszehasonlitas.md` 3.1; Jakob törvénye (NN/g). A tárgy SZÁNDÉKOSAN általános („a kurzust”), mert az űrlap minden ingyenes terméken megjelenhet; terméknevet a C-6 mintázat (`Kérem a <mit>`) hozhat később. Folyamatban: `Küldés…` |
 | 27 | **Ugrás az ingyenes kurzus igénylő űrlapjához** (a hosszú kurzusoldal aljáról) | `Kérd az ingyenes kurzust` | E/2 (P-1b) | `secondary` | **Új sor (1.4).** LAPON BELÜLI navigáció: a kattintás után semmi nem változik a látogató dolgaiban, csak máshol lesz a lapon, a vállalás továbbra is a #26 gombnál történik → P-1b. **Miért kell egyáltalán:** az igénylő űrlap a lap TETEJÉN, a vásárlódobozban áll; 1024 px alatt a doboz nem ragadós, tehát a végigolvasó látogatónak nincs visszaútja. NN/g, *The Same Link Twice on the Same Page*: „In cases when the page is extremely long, such as when the same long-form content is presented on mobile devices, having links at the bottom of pages can be a time-saver", ugyanott: „Duplicating links is usually not necessary if your pages are 2–3 screens long" és hosszú lapon a ragadós megoldás a jobb (https://www.nngroup.com/articles/duplicate-links/) — ezért jelenik meg a sor KIZÁRÓLAG 1024 px alatt, ahol ragadós doboz nincs. NN/g, *Scrolling and Attention*: „Keep major CTAs above the fold", a nézési idő 42%-a a felső 20%-ra esik (https://www.nngroup.com/articles/scrolling-and-attention/) — az elsődleges hely tehát marad a doboz, ez csak a lap alján álló másodlagos belépő. **A régi oldal mintája:** a `/kezrelax` landing ugyanezt a belépőt NÉGYSZER ismételte lefelé haladva (`KÉREM A VILLÁMKURZUST` 4×, mérve: `docs/regi-oldal-osszehasonlitas.md` 3.1); mi egyszer ismételjük. **Miért nem sérti a WCAG 2.2 3.2.4-et a #3 mellett:** a #3 a kezdőlapról a kurzus OLDALÁRA visz, ez a lapon belül az ŰRLAPHOZ — két különböző eredmény, a sikerkritérium pedig azonos *funkciót* kér azonos néven. GOV.UK: „If your link takes the user to a page where they can start a task, start your link with a verb" (https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/writing-guidelines/add-links/). **Miért nem „Ugorj az űrlaphoz":** az „Ugrás" szót a skip-link foglalja, C-4 szerint egy szó egy jelentés (ez írta át a #9-et is). |
+| 28 | **A kurzus SAJÁT (értékesítő) oldalának megnyitása** (kurzuskártya, lejátszó-kapu lejárt hozzáféréssel, lejárt kurzuskártya) | `Nyisd meg a kurzusoldalt` | E/2 (P-1b) | `secondary`, a kártyán dekoratív affordancia | **Új sor (1.5, 2026-08-18).** Három hívóhely, egy cselekvés, mégis három felirat élt rá: `Megnézem a programot` (kártya), `A kurzus megtekintése` (lejátszó-kapu ÉS lejárt kártya) — WCAG 2.2 **3.2.4** sérülés. Puszta navigáció → E/2. **Miért nem `Nézd meg a kurzust`:** a #10 (`Nézd meg a kurzusokat`) mellett az egyetlen különbség egy toldalék volna; pontosan ezt az érvet mondta ki a #9 sor is („a »kurzusokat ↔ kurzusaidat« különbség önmagában kevés"). **Miért nem `Nyisd meg a kurzust`:** az a #7/#8 párral ütközne, amelyek a LEJÁTSZÓT nyitják meg. A „Nyisd meg" ige SZÁNDÉKOSAN ismétlődik a #9-ből: egy fogalom (megnyitás) egy ige — Polaris, *Vocabulary*: *„identify and eliminate synonyms"*. **Forrás:** GOV.UK, *Add links* — *„If your link takes the user to a page where they can start a task, start your link with a verb"* (https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/writing-guidelines/add-links/); NN/g, *Better Link Labels* — „Specific": *„A link's primary purpose is to communicate to users what they'll find on the other side of a click"* (https://www.nngroup.com/articles/better-link-labels/). *(Ma: „Megnézem a programot", „A kurzus megtekintése" ×2.)* |
+| 29 | **Befejezett kurzus újranézése** (/kurzusaim kártya) | `Nézd újra a kurzust` | E/2 (P-1b) | `secondary` | **Új sor (1.5, 2026-08-18).** Mindhárom lejátszó-nyitó felirat (#7 folytatás, #8 kezdés, #29 újranézés) ugyanoda visz, de MÁS állapotból — és a felirat ezt mondja meg. Befejezett kurzuson a „Kezdd el" hazugság, a „Folytasd" félrevezető volna. **Forrás:** NN/g, *Better Link Labels* — „Sincere": *„A link is a promise. To function properly, it must set expectations that are not only specific, but also accurate."* (https://www.nngroup.com/articles/better-link-labels/); GOV.UK Design System, *Button* — *„Write button text in sentence case, describing the action it performs."* (https://design-system.service.gov.uk/components/button/). *(Ma: „Újranézés" — deverbális főnév, tárgy nélkül.)* |
+| 30 | **A kurzus befejezése a lejátszóban** (az utolsó lecke gombja) | `Befejezem a kurzust` | E/1 (P-1a) | `primary` | **Új sor (1.5, 2026-08-18).** A kattintás MEGVÁLTOZTATJA a látogató haladás-adatát (`marksWatched: true`): az utolsó lecke késznek jelölődik, a kurzus befejezetté válik — a P-1 határeset-kérdésének („változik-e bármi a látogató dolgaiban?") egyértelmű igen-ága. **Forrás:** GOV.UK Design System, *Button* (fent); NN/g, *Better Link Labels* — „Substantial": a felirat a környező szöveg nélkül is álljon meg. *(Ma: „Kurzus befejezése" — deverbális főnévi alak, M-1.)* |
+| 31 | **Fiókadatok mentése** (/fiok űrlap) | `Mentés` | főnévi (P-1c) | `primary` | **Új sor (1.5, 2026-08-18).** **Miért marad főnévi, szemben a #2/#12/#21/#22 E/1-es soraival:** a magyar E/1-es alak („Mentem az adataimat") KÉTÉRTELMŰ — a *mentem* a *menni* ige múlt idejű E/1 alakja is. Vevői gombon nem állhat két értelemben olvasható szó. A szinonima-csere („Rögzítem az adataimat") viszont a L-1 `Mentés…` folyamatban-felirattal ütközne, amit a Polaris kifejezetten tilt (*„identify and eliminate synonyms"*). Így a „Mentés" a #5/#6 P-1c kivételébe tartozik: bevett, egyszavas felületi címke. **Forrás:** GOV.UK Design System, *Button* — a példák között szó szerint szerepel a *„Save and continue"* (https://design-system.service.gov.uk/components/button/); NN/g, *Jakob's Law of Internet User Experience* — a látogatók az idejük nagy részét más oldalakon töltik, ezért azt várják, hogy a tiéd is úgy működjön, ahogy a többi (https://www.nngroup.com/videos/jakobs-law-internet-ux/). Folyamatban: `Mentés…` *(Ma is ez — kódot nem kell írni, csak a szótárból olvasni.)* |
+| 32 | **Kijelentkezés** (fiókmenü) | `Kijelentkezés` | főnévi (P-1c) | `ghost` | **Új sor (1.5, 2026-08-18).** A #5 (`Belépés`) szabályos párja, ugyanazzal a P-1c kivétellel. Ha a belépés főnévi, a kijelentkezés sem lehet más alakú: a menü két, egymásra felelő pontja nem beszélhet két nyelvtani személyben. **Forrás:** GOV.UK Design System, *Button* (fent); NN/g, *Jakob's Law* (fent) — a magyar felületeken ez a bevett név. Folyamatban: `Kijelentkezés…` (a L-1 lista **hetedik** eleme, lásd alább). *(Ma is ez.)* |
+| 33 | **Kapcsolatfelvételi oldalra lépés** (üres tudástár, sikertelen fizetés, köszönőoldal hiba-ágai, ingyenes kurzus levélhibája) | `Írj nekünk` | E/2 (P-1b) | `secondary` | **Új sor (1.5, 2026-08-18).** Négy hívóhely, egy cselekvés, HÁROM felirat élt rá: `Kapcsolat`, `Segítséget kérek`, `Írj nekünk a kapcsolati oldalon` — mért 3.2.4-ütközés a `/kapcsolat` célon. P-1b: a kattintás csak odavisz, a vállalás ott, a #12 gombbal történik (ugyanaz a kettősség, mint #24 ↔ #25 és #3 ↔ #26). **Miért nem `Kapcsolat`:** az menücímke (N-3), és a láblécben MARAD is annak; cselekvésgombként viszont nem mondja meg, mi történik (M-7). **Forrás:** GOV.UK, *Add links* — verb-first, és *„make it descriptive and avoid generic text like 'click here' or 'more'"* (https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/writing-guidelines/add-links/); W3C, *Understanding SC 3.2.4* — *„The intent of this success criterion is to ensure consistent identification of functional components that appear repeatedly within a set of web pages."* (https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html). |
+| 34 | **A „rólunk" oldalra lépés** (kezdőlapi szakmai hitel-csík) | `Ismerd meg a hátterünket` | E/2 (P-1b) | szöveglink | **Új sor (1.5, 2026-08-18).** A mai `Bővebben a szakmai hátterünkről` **öt szó** (M-3 korlátja négy), nem igével kezd, és a „Bővebben" a GOV.UK által kifejezetten kerülendő általános linkszöveg magyar párja. **Forrás:** GOV.UK, *Add links* — *„avoid generic text like 'click here' or 'more'"* (URL fent); NN/g, *Better Link Labels* — „Succinct": *„When composing links, don't waste words."* (https://www.nngroup.com/articles/better-link-labels/). |
+| 35 | **A tudástár listájára lépés** (kezdőlapi szekció-láb) | `Nézd meg a tudástárat` | E/2 (P-1b) | szöveglink | **Új sor (1.5, 2026-08-18).** A mai `Összes bejegyzés a tudástárban` főnévi, és a `Vissza a Tudástárba` (a #15 mintázata) mellett második feliratot ad ugyanarra a célra. A kettő SZÁNDÉKOSAN marad külön: az egyik BÖNGÉSZÉS, a másik VISSZALÉPÉS — pontosan az a kettősség, amit a #10 ↔ #15 páros már eldöntött a `/kurzusok` célon. **Forrás:** GOV.UK, *Add links* — verb-first, és *„Consider using the title of the page the link goes to as your link text."* (a cél oldal neve a felületen „Tudástár", URL fent); NN/g, *Better Link Labels* — „Specific" (URL fent). |
+| 36 | **Süti-beállítások újranyitása** (lábléc) | `Süti-beállítások` | főnévi (P-1c) | szöveglink | **Új sor (1.5, 2026-08-18).** A #18 a sáv KÉT DÖNTÉSGOMBJÁRÓL rendelkezik; a hozzájárulás visszavonásának belépője (GDPR) eddig szótáron kívül élt. P-1c: bevett, egyszavas (kötőjeles összetett) felületi címke. Az igei alak („Módosítom a süti-beállításokat") itt félre is vinne: a kattintás még nem módosít semmit, csak megnyitja a sávot. **Forrás:** NN/g, *Cookie Permissions 101* — a látogatónak később is meg kell tudnia változtatni a döntését, ehhez állandóan elérhető belépő kell (https://www.nngroup.com/articles/cookie-permissions/); NN/g, *Jakob's Law* (URL fent). *(Ma is ez.)* |
+| 37 | **Jelszó-visszaállítás kezdeményezése** (link a belépőlapról és a lejárt visszaállító linkről) | `Elfelejtetted a jelszavad?` | E/2 (P-1b) | szöveglink | **Új sor (1.5, 2026-08-18).** Két hívóhely, egy cselekvés, két felirat: `Elfelejtetted a jelszavad?` és `Új link kérése` — mért 3.2.4-ütközés az `/elfelejtett-jelszo` célon. **Miért ez a kettő közül:** a cél oldal **H1 címe szó szerint** „Elfelejtetted a jelszavad?", a GOV.UK pedig kimondja: *„Consider using the title of the page the link goes to as your link text."* (URL fent). Egyben a világ legbevettebb auth-mintája — NN/g, *Jakob's Law* (URL fent); a belépőlapról elvenni tudatos veszteség volna. P-1b: a kattintás után semmi nem változik, a levelet a #21 gomb indítja el. |
+| 38 | **Ugrás a kezdőlap ingyenes sávjára** (`#ingyenes`, hero másodlagos gombja és a filmHero második CMS-gombja) | `Nézd meg az SOS-kurzust` | E/2 (P-1b) | `ghost` | **Új sor (1.5, 2026-08-18).** **Miért nem a #27 (`Kérd az ingyenes kurzust`):** az a KURZUSOLDAL igénylő ŰRLAPJÁHOZ ugrik, tehát az ígéret ott egy kattintással beváltható; itt a cél egy AJÁNLÓ SÁV, ahonnan még két lépés az igénylés — a „Kérd" ígéret nem volna őszinte. NN/g, *Better Link Labels* — „Sincere": *„A link is a promise. To function properly, it must set expectations that are not only specific, but also accurate."* (https://www.nngroup.com/articles/better-link-labels/). **Miért nem a mai `Ingyenes SOS gyakorlatok`:** főnévi, és nem mondja meg, mi történik (M-7). A tárgyat a sáv SAJÁT NEVE adja („SOS Kézrelax: ingyenes villámkurzus") — GOV.UK, *Add links*: *„Consider using the title of the page the link goes to as your link text."* (URL fent). Az „ingyenes" jelző SZÁNDÉKOSAN marad ki a gombból: a sávon `Badge tone="success"` mondja ki, ahogy a #3 sor is előírja. |
+
+**C-6 — MINTÁZATOS feliratok, gépi alakkal (2026-08-18).** A `patterned: true`
+sorok (#14, #15, #23) eddig csak emberi szöveggel mondták ki a mintázatot, ezért
+a termék-oldali őr (G-UI2) kilenc élő `Vissza a …` feliratot kivétel-soron
+vezetett. A `src/lib/cta-vocabulary.ts` `CtaEntry.pattern` mezője ezt gépi
+alakra hozza:
+
+| §3.2 sor | Mintázat (reguláris kifejezés, `u`) | Élő változatok ma |
+| --- | --- | --- |
+| #14 | `^Letöltöm a[z]? \S.*$` | `Letöltöm a számlát` |
+| #15 | `^Vissza a[z]? \S.*$` | `Vissza a kurzusokhoz`, `Vissza a kezdőlapra`, `Vissza a kurzusaimhoz`, `Vissza a belépéshez`, `Vissza a Tudástárba` |
+| #23 | `^Hívd \S.*$` | `Hívd Kocsis Katát` |
+
+A szabály FORRÁSA maga a sikerkritérium magyarázata: W3C, *Understanding SC
+3.2.4 Consistent Identification* — *„Text alternatives that are 'consistent' are
+not always 'identical.'"*, és a példái pontosan ezt az alakot írják le (egy
+nyomtató-ikon az egyik helyen *„Print receipt"*, a másikon *„Print invoice"*; a
+letöltésé *„Download [document name]"*):
+https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html
+A mintázat SZÁNDÉKOSAN szűk: kötött, jelentést hordozó előtag + **kötelező, nem
+üres** tárgy. A puszta „Vissza" így sem engedett (NN/g, *Better Link Labels* —
+„Substantial": *„must be able to stand alone"*,
+https://www.nngroup.com/articles/better-link-labels/).
 
 **L-1 jóváhagyott feliratkészlet** (P-1d; három pont, gondolatjel nélkül).
 A §2.6 **L-1** mondja ki a *szabályt* („a beküldő gomb azonnal letiltódik, és
 a felirata folyamatot mond"); az alábbi lista a hozzá tartozó **jóváhagyott
-feliratkészlet** – ez a §3.2 szótár része, és **zárt**: pontosan hat elem.
+feliratkészlet** – ez a §3.2 szótár része, és **zárt**: pontosan hét elem.
 
-`Belépés…` · `Regisztráció…` · `Küldés…` · `Mentés…` · `Feldolgozás…` · `Betöltés…`
+`Belépés…` · `Regisztráció…` · `Kijelentkezés…` · `Küldés…` · `Mentés…` · `Feldolgozás…` · `Betöltés…`
+
+**A `Kijelentkezés…` 2026-08-18-án került fel** (a lista hat elemről hétre nőtt).
+Az indok BITRE ugyanaz, amivel korábban a `Regisztráció…` felkerült: ma is él a
+felületen (`AccountNav`), és a #32 főnévi címkéjének (P-1c) szabályos
+folyamatban-párja. Az `Újratöltés folyamatban…` viszont **NEM** került fel: az a
+`Betöltés…`-re egységesült — ugyanaz a művelet, két szó, és a Polaris előírja a
+szinonimák felszámolását (*„identify and eliminate synonyms"*).
 
 **A `Beállítás…` NEM kerül a listára.** A `/jelszo-visszaallitas` űrlap mai
 `Beállítás…` felirata a **`Mentés…`-re egységesül**. Indoklás: a „beállítás" és

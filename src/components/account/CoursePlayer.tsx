@@ -15,6 +15,7 @@ import { ProgressBar } from '@/components/ui/Progress'
 import { markVideoWatched } from '@/lib/course-progress/client'
 import { mergePlayingSession } from '@/lib/course-player-refresh'
 import { courseHref } from '@/lib/course-url'
+import { ctaLabel } from '@/lib/cta-vocabulary'
 import { findLessonByRef, type Curriculum } from '@/lib/curriculum/curriculum'
 import { summarizeCurriculum } from '@/lib/curriculum/progress'
 import { streamIframeSrc } from '@/lib/stream/contract'
@@ -785,7 +786,10 @@ export function CoursePlayer({
           {expiredMessage ??
             'A videók megtekintéséhez a kurzus megvásárlása szükséges. Ha már megvetted, jelentkezz be azzal a fiókkal, amellyel vásároltad.'}
         </p>
-        <Button href={courseHref(product)}>A kurzus megtekintése</Button>
+        {/* §3.2 #28: a kurzus SAJÁT oldalára vivő felirat mindenhol ugyanaz —
+            itt, a /kurzusaim lejárt kártyáján és a kurzuskártyán is
+            (WCAG 2.2 · 3.2.4). */}
+        <Button href={courseHref(product)}>{ctaLabel('course-sales-open')}</Button>
       </Card>
     )
   }

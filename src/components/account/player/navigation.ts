@@ -1,3 +1,4 @@
+import { ctaLabel } from '@/lib/cta-vocabulary'
 import type { Curriculum, CurriculumLesson } from '@/lib/curriculum/curriculum'
 
 /**
@@ -185,11 +186,16 @@ export function primaryAction(
         (lesson) => lesson.ref === current.ref || watched.has(lesson.ref),
       )
       if (mindenMasKesz) {
+        // A felirat a §3.2 #30 szótári sora. A hozzáférhető név a LÁTHATÓ
+        // felirattal kezdődik (WCAG 2.2 · 2.5.3 Label in Name), a lecke nevét
+        // pedig kettőspont vezeti be — kvirtmínusz a vevői szövegben tilos
+        // (§3.1.1).
+        const label = ctaLabel('course-finish')
         return {
           kind: 'complete-course',
-          label: 'Kurzus befejezése',
+          label,
           moduleHint: null,
-          ariaLabel: `Kurzus befejezése — ${current.title} megjelölése késznek`,
+          ariaLabel: `${label}: ${current.title} megjelölése késznek`,
           marksWatched: true,
           targetRef: null,
           disabled: false,

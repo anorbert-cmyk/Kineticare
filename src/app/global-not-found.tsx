@@ -71,7 +71,11 @@ export default function GlobalNotFound() {
         <header className="kc-site-header">
           <div className="kc-container">
             <div className="kc-site-header__bar">
-              <Link aria-label="Kineticare — kezdőlap" className="kc-site-header__brand" href="/">
+              {/* A hozzáférhető név BITRE a `Header.tsx`-é: ugyanaz az elem,
+                  ugyanaz a név (WCAG 2.2 · 3.2.4). A korábbi „Kineticare —
+                  kezdőlap" ráadásul U+2014-et tartalmazott, amit a magyar
+                  mikroszöveg-szabályzat tilt (docs/ui-sztenderdek.md §3.1.1). */}
+              <Link aria-label="Kineticare kezdőlap" className="kc-site-header__brand" href="/">
                 Kineti<span className="kc-site-header__brand-accent">care</span>
               </Link>
             </div>

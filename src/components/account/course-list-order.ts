@@ -2,6 +2,7 @@ import { toWatchedRefSet } from '../../lib/course-progress/progress'
 import type { Curriculum, CurriculumLesson } from '../../lib/curriculum/curriculum'
 import { NO_LESSONS_LABEL, summarizeCurriculum } from '../../lib/curriculum/progress'
 import type { CourseCover } from '../../lib/courses'
+import { ctaLabel } from '../../lib/cta-vocabulary'
 
 /**
  * A „Kurzusaim" lista TISZTA logikája — állapotgép, sorrend, feliratok.
@@ -63,21 +64,40 @@ export const CURRENT_GROUP_TITLE = 'Folyamatban lévő és új kurzusaid'
 export const EMPTY_TITLE = 'Itt jelennek meg a kurzusaid'
 export const EMPTY_BODY =
   'Még nincs elérhető kurzusod. Nézd meg a kínálatunkat: a megvásárolt kurzus azonnal itt nyílik meg.'
-export const EMPTY_CTA_LABEL = 'Kurzusok megnézése'
+export const EMPTY_CTA_LABEL = ctaLabel('course-list-open')
 export const EMPTY_CTA_HREF = '/kurzusok'
 
 /**
- * A gombfeliratok. Kiemelve, hogy a teszt és a felület UGYANARRA hivatkozzon —
- * egy elgépelt felirat így nem csúszhat át némán.
+ * A gombfeliratok — MIND a §3.2 szótárból (`src/lib/cta-vocabulary.ts`).
+ *
+ * ═══ MI VÁLTOZOTT 2026-08-18-ÁN ═══
+ * Az öt felirat korábban szabad szöveg volt („Kezdés", „Folytatás",
+ * „Újranézés", „A kurzus megtekintése", „A kurzus megnyitása"), és mind az öt
+ * eltért a jóváhagyott alaktól: deverbális főnév, tárgy nélkül (M-1, M-7). A
+ * `docs/gomb-inventar.md` §5 ezt „Kurzus megkezdése: Kezdés" néven mérte is.
+ *
+ * A `resumePrefix` LECKE-CÍMES összefűzése is megszűnt. A lecke neve mostantól
+ * a HOZZÁFÉRHETŐ NÉVBE kerül rejtett szöveggel (`ctaContext`), nem a látható
+ * feliratba — pontosan úgy, ahogy a §3.2 #17 sora előírja a több
+ * újrapróbálható elemet tartalmazó képernyőkre (WCAG 2.2 · 2.5.3 Label in Name
+ * továbbra is teljesül: a hozzáférhető név a látható felirattal KEZDŐDIK).
+ * Így a kártyák gombfelirata egységes hosszúságú, és a `Folytasd a kurzust`
+ * a lejátszó és a lista között sem tud elcsúszni.
+ *
+ * A `start` és az `open` SZÁNDÉKOSAN ugyanaz a szótári sor (#8): a tananyag
+ * nélküli kurzus megnyitása a látogató szemszögéből ugyanaz a cselekvés, mint
+ * az el nem kezdett kurzusé — külön feliratot adni nekik a 3.2.4-et sértené.
  */
 export const CTA_LABELS = {
-  start: 'Kezdés',
-  /** A folytatás felirata a lecke címével egészül ki: „Folytatás: <lecke>". */
-  resumePrefix: 'Folytatás',
-  rewatch: 'Újranézés',
-  expired: 'A kurzus megtekintése',
+  start: ctaLabel('course-start'),
+  /** Megkezdett kurzus folytatása (§3.2 #7). */
+  resume: ctaLabel('course-continue'),
+  /** Befejezett kurzus újranézése (§3.2 #29). */
+  rewatch: ctaLabel('course-rewatch'),
+  /** Lejárt hozzáférés: a kurzus SAJÁT (értékesítő) oldala (§3.2 #28). */
+  expired: ctaLabel('course-sales-open'),
   /** Tananyag nélküli kurzus: nincs mit „kezdeni", de a kurzus megnyitható. */
-  open: 'A kurzus megnyitása',
+  open: ctaLabel('course-start'),
 } as const
 
 /** A kártya kirajzolásához szükséges, MÁR KÉSZ (szerializálható) adatok. */
@@ -102,8 +122,9 @@ export interface CourseCardView {
   ctaLabel: string
   /**
    * A gomb akadálymentes nevének kiegészítése (vizuálisan rejtett): a kurzus
-   * neve. Több kártya áll egymás mellett, és a „Folytatás: …" önmagában nem
-   * mondja meg, MELYIK kurzusról van szó.
+   * neve, megkezdett kurzuson a következő lecke nevével. Több kártya áll
+   * egymás mellett, és a szótári felirat önmagában nem mondja meg, MELYIK
+   * kurzusról van szó (WCAG 2.2 · 2.4.4 Link Purpose).
    */
   ctaContext: string
   /** „Hozzáférés eddig: 2027. 03. 04." — null, ha nincs ismert lejárat. */
@@ -184,29 +205,48 @@ export function courseMetaLine(input: {
 }
 
 /**
- * A gomb felirata — az állapotgép LÁTHATÓ kimenete.
+ * A gomb LÁTHATÓ felirata — az állapotgép kimenete, kizárólag szótári alakból.
  *
- * A „Folytatás" a KONKRÉT leckét nevezi meg (a `resumeLesson`-ből), mert a
- * vevőt nem az érdekli, hogy „van hol folytatni", hanem hogy MI következik.
- * Lecke-cím hiányában a puszta „Folytatás" marad — kitalált címet nem írunk.
+ * A KONKRÉT lecke neve nem itt, hanem a hozzáférhető névben él
+ * (`courseCtaContext`): a vevőt tényleg az érdekli, MI következik, de a §3.2
+ * #17 szabálya szerint az ilyen megkülönböztetés rejtett szövegbe való
+ * (WCAG 2.2 · 2.5.3), nem a látható feliratba — különben ugyanaz a cselekvés
+ * kártyánként más szót viselne (WCAG 2.2 · 3.2.4).
  */
 export function courseCtaLabel(input: {
   status: CourseCardStatus
   totalLessons: number
-  resumeLessonTitle: string | null
 }): string {
   switch (input.status) {
     case 'expired':
       return CTA_LABELS.expired
     case 'completed':
       return CTA_LABELS.rewatch
-    case 'in-progress': {
-      const title = input.resumeLessonTitle?.trim()
-      return title ? `${CTA_LABELS.resumePrefix}: ${title}` : CTA_LABELS.resumePrefix
-    }
+    case 'in-progress':
+      return CTA_LABELS.resume
     default:
       return input.totalLessons === 0 ? CTA_LABELS.open : CTA_LABELS.start
   }
+}
+
+/**
+ * A gomb hozzáférhető nevének KIEGÉSZÍTÉSE (vizuálisan rejtett szöveg).
+ *
+ * Mindig a kurzus neve; megkezdett kurzuson a KÖVETKEZŐ LECKE neve is — ez az
+ * információ korábban a látható feliratban állt („Folytatás: <lecke>").
+ * A hozzáférhető név így is a látható felirattal KEZDŐDIK (a hívóhely a
+ * feliratot írja ki elsőként), tehát a WCAG 2.2 · 2.5.3 Label in Name teljesül,
+ * és a hangvezérléses látogató a látható szóval is aktiválni tudja a gombot.
+ */
+export function courseCtaContext(input: {
+  status: CourseCardStatus
+  title: string
+  resumeLessonTitle: string | null
+}): string {
+  const lesson = input.resumeLessonTitle?.trim()
+  return input.status === 'in-progress' && lesson
+    ? `${input.title}, következő lecke: ${lesson}`
+    : input.title
 }
 
 /**
@@ -279,9 +319,12 @@ export function buildCourseCardView(input: CourseCardInput): CourseCardView {
     ctaLabel: courseCtaLabel({
       status,
       totalLessons: progress.total,
+    }),
+    ctaContext: courseCtaContext({
+      status,
+      title: input.title,
       resumeLessonTitle: progress.resumeLesson?.title ?? null,
     }),
-    ctaContext: input.title,
     expiryLabel: input.expiryLabel,
     expiredMessage: input.expiredMessage,
   }

@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { Button } from '@/components/ui/Button'
+import { ctaLabel } from '@/lib/cta-vocabulary'
 
 export const metadata: Metadata = {
   title: 'A fizetés nem sikerült',
@@ -35,12 +36,18 @@ export default async function SikertelenPage({ searchParams }: SikertelenPagePro
             bankodat felhívni. Ha segítségre van szükséged, írj nekünk.
           </p>
           <div className="kc-thankyou__actions">
+            {/* §3.2 #17: a sor `patterned: false`, tehát a tárgy NEM cserélhető
+                — a cél megnevezése („a fizetést") a hozzáférhető névbe való
+                (WCAG 2.2 · 2.5.3), nem a látható feliratba. Itt egyetlen
+                újrapróbálható dolog van, ezért rejtett kiegészítés sem kell. */}
             {termek ? (
-              <Button href={`/penztar?termek=${encodeURIComponent(termek)}`}>Újrapróbálom a fizetést</Button>
+              <Button href={`/penztar?termek=${encodeURIComponent(termek)}`}>
+                {ctaLabel('retry')}
+              </Button>
             ) : (
               <Button href="/kurzusok">Vissza a kurzusokhoz</Button>
             )}
-            <Button href="/kapcsolat" variant="secondary">Kapcsolat</Button>
+            <Button href="/kapcsolat" variant="secondary">{ctaLabel('contact-open')}</Button>
           </div>
         </div>
       </Container>

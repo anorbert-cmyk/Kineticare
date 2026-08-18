@@ -14,6 +14,7 @@ import {
 } from '@/lib/analytics/barion-events'
 import { captureAnalyticsEvent } from '@/lib/analytics/posthog'
 import { checkoutHref } from '../../lib/courses'
+import { ctaLabel } from '../../lib/cta-vocabulary'
 import { pollOrderStatus } from '../../lib/order-status-poll'
 
 /**
@@ -227,7 +228,7 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
       <div className="kc-thankyou" role="status">
         <h1>Köszönjük!</h1>
         <p>Hiányzik a rendelésszám a hivatkozásból. A rendelésedet a Kurzusaim oldalon találod.</p>
-        <Button href="/kurzusaim">Kurzusaim</Button>
+        <Button href="/kurzusaim">{ctaLabel('my-courses-open')}</Button>
       </div>
     )
   }
@@ -243,8 +244,13 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
         <p className="kc-thankyou__order">
           Rendelésszám: <strong>{orderNumber}</strong>
         </p>
+        {/* §3.2 #9: a köszönőoldal HÁROM ága ugyanazzal a szóval visz a saját
+            kurzusokhoz. Korábban itt „Tovább a kurzusaimhoz" (M-7), a timeout
+            ágon „Nézd meg a kurzusaimat", a hiba-ágakon pedig „Kurzusaim" állt
+            — három felirat EGY cselekvésre, ugyanabban a komponensben
+            (WCAG 2.2 · 3.2.4 sértés). */}
         <div className="kc-thankyou__actions">
-          <Button href="/kurzusaim">Tovább a kurzusaimhoz</Button>
+          <Button href="/kurzusaim">{ctaLabel('my-courses-open')}</Button>
           <Button href="/" variant="secondary">Vissza a kezdőlapra</Button>
         </div>
       </div>
@@ -264,7 +270,7 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
           Rendelésszám: <strong>{orderNumber}</strong>
         </p>
         <div className="kc-thankyou__actions">
-          <Button href="/kurzusaim">Nézd meg a kurzusaimat</Button>
+          <Button href="/kurzusaim">{ctaLabel('my-courses-open')}</Button>
           <Button href="/" variant="secondary">Vissza a kezdőlapra</Button>
         </div>
       </div>
@@ -286,8 +292,8 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
           újrapróbálhatod bármikor.
         </p>
         <div className="kc-thankyou__actions">
-          <Button href={retryHref}>Újrapróbálom</Button>
-          <Button href="/kapcsolat" variant="secondary">Segítséget kérek</Button>
+          <Button href={retryHref}>{ctaLabel('retry')}</Button>
+          <Button href="/kapcsolat" variant="secondary">{ctaLabel('contact-open')}</Button>
         </div>
       </div>
     )
@@ -314,8 +320,8 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
           múlva a Kurzusaim oldalra, vagy írj nekünk.
         </p>
         <div className="kc-thankyou__actions">
-          <Button href="/kurzusaim">Kurzusaim</Button>
-          <Button href="/kapcsolat" variant="secondary">Kapcsolat</Button>
+          <Button href="/kurzusaim">{ctaLabel('my-courses-open')}</Button>
+          <Button href="/kapcsolat" variant="secondary">{ctaLabel('contact-open')}</Button>
         </div>
       </div>
     )

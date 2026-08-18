@@ -19,6 +19,7 @@ import { Field } from '@/components/ui/Field'
 import { PriceTag } from '@/components/ui/PriceTag'
 import type { BillingFieldName } from '../../lib/checkout/billing'
 import type { GuestFieldName } from '../../lib/checkout/guest'
+import { CTA_PROGRESS_LABELS, ctaLabel } from '../../lib/cta-vocabulary'
 import {
   BILLING_INPUT_NAME,
   CHECKOUT_TERMS_HEADING,
@@ -640,7 +641,23 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
           disabled={submitting}
           type="submit"
         >
-          {submitting ? 'Feldolgozás…' : product.isFree ? 'Hozzáférés megnyitása' : 'Megrendelés és fizetés'}
+          {/* A FELIRATOK A SZÓTÁRBÓL (2026-08-18). A fizetős ág a §3.2 #2
+              („Megrendelem és fizetek") — a korábbi „Megrendelés és fizetés"
+              deverbális főnévi alak volt (M-1), pedig ez a visszavonhatatlan
+              lépés (P-1a → E/1).
+
+              Az INGYENES ág a §3.2 #26 („Kérem a kurzust") sorát kapja, NEM
+              külön szótári sort: a látogató szemszögéből ugyanaz a cselekvés,
+              mint a kurzusoldal igénylő űrlapjának beküldése — űrlapot küld be,
+              és hozzáférést kap. Külön felirat („Hozzáférés megnyitása") ugyanarra
+              a funkcióra a WCAG 2.2 · 3.2.4-et sértené, ráadásul deverbális
+              főnévi alak volt. (Ez az ág egyébként VÉDEKEZŐ: a lap-szintű kapu
+              ingyenes terméken az űrlap helyett tájékoztató állapotot rendel.) */}
+          {submitting
+            ? CTA_PROGRESS_LABELS.processing
+            : product.isFree
+              ? ctaLabel('free-course-request')
+              : ctaLabel('checkout-submit')}
         </Button>
         {blockReason === null ? null : (
           <p className="kc-checkout-form__block-hint" id={CHECKOUT_BLOCK_HINT_ID}>

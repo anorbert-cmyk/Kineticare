@@ -75,7 +75,7 @@ import { fileURLToPath } from 'node:url'
 
 import ts from 'typescript'
 
-import { CTA_VOCABULARY } from '@/lib/cta-vocabulary'
+import { CTA_PROGRESS_LABELS, CTA_VOCABULARY } from '@/lib/cta-vocabulary'
 
 /** A `src/` könyvtár abszolút útja (záró perjel nélkül). */
 export const SRC_ROOT = fileURLToPath(new URL('../..', import.meta.url)).replace(/\/$/u, '')
@@ -138,6 +138,23 @@ const CTA_ALAKU_TARSMEZOK = new Set([
 /** A `ctaLabel('…')` hívások feloldásához: cselekvés-kulcs → jóváhagyott felirat. */
 const SZOTAR_FELIRAT_KULCS_SZERINT = new Map<string, string>(
   CTA_VOCABULARY.map((entry) => [entry.action, entry.label]),
+)
+
+/**
+ * A `ctaProgressLabel('…')` hívások feloldásához: cselekvés-kulcs → L-1 felirat.
+ *
+ * MIÉRT KELL (2026-08-18): a hívóhelyek a folyamatban-feliratot is a szótárból
+ * veszik (`{submitting ? ctaProgressLabel('sign-in') : ctaLabel('sign-in')}`).
+ * A `ctaLabel` nélkül ez a bejáró számára DINAMIKUS ág lenne, vagyis a
+ * rendezettebbé tett kódtól veszítené el a látását az őr — pontosan az a hiba,
+ * amit ez a modul a fejlécében kimond („a mérés éppen ott vakulna meg, ahol a
+ * kód a legrendezettebb"). A `null`-t adó cselekvéseket (nincs
+ * folyamatban-állapotuk) SZÁNDÉKOSAN kihagyjuk: ott a hívás sem ad feliratot.
+ */
+const L1_FELIRAT_KULCS_SZERINT = new Map<string, string>(
+  CTA_VOCABULARY.flatMap((entry) =>
+    entry.progress === null ? [] : [[entry.action, CTA_PROGRESS_LABELS[entry.progress]] as const],
+  ),
 )
 
 export interface CtaTalalat {
@@ -440,6 +457,17 @@ function feloldSzoveget(sf: ts.SourceFile, kifejezes: ts.Expression, melyseg = 0
       if (elso && ts.isStringLiteral(elso)) {
         const felirat = SZOTAR_FELIRAT_KULCS_SZERINT.get(elso.text)
         if (felirat !== undefined) return statikus(felirat)
+      }
+      return DINAMIKUS
+    }
+    // `ctaProgressLabel('…')` – a ZÁRT L-1 listából dolgozó folyamatban-felirat.
+    if (ts.isIdentifier(mag.expression) && mag.expression.text === 'ctaProgressLabel') {
+      const elso = mag.arguments[0]
+      if (elso && ts.isStringLiteral(elso)) {
+        const felirat = L1_FELIRAT_KULCS_SZERINT.get(elso.text)
+        if (felirat !== undefined) return statikus(felirat)
+        // Ismert cselekvés, de nincs folyamatban-állapota → a hívás `null`-t ad.
+        if (SZOTAR_FELIRAT_KULCS_SZERINT.has(elso.text)) return SEMMI
       }
       return DINAMIKUS
     }

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { ResetPasswordForm } from '@/components/auth/ResetPasswordForm'
+import { ctaLabel } from '@/lib/cta-vocabulary'
 
 export const metadata: Metadata = {
   title: 'Új jelszó beállítása',
@@ -22,12 +23,21 @@ export default async function ResetPasswordPage({ searchParams }: ResetPasswordP
     <Section>
       <Container size="narrow">
         <h1>Új jelszó beállítása</h1>
+        {/* NN/g, Error-Message Guidelines: „Merely stating the problem is
+            also not enough; offer some potential remedies." — ezért áll a
+            token-hiba mellett továbblépés. A felirat a §3.2 #37 szótári sora:
+            ugyanaz a cselekvés (a visszaállítás KEZDEMÉNYEZÉSE), ugyanaz a
+            szó, mint a belépőlapon (WCAG 2.2 · 3.2.4). A korábbi „Új link
+            kérése" második alak volt ugyanerre a célra. */}
         {token ? (
           <ResetPasswordForm token={token} />
         ) : (
           <div className="kc-auth-error" role="alert">
-            <p>Hiányzik a visszaállító token a hivatkozásból. Kérj új jelszó-visszaállító linket.</p>
-            <Link href="/elfelejtett-jelszo">Új link kérése</Link>
+            <p>
+              Hiányzik a visszaállító token a hivatkozásból, ezért nem tudjuk megnyitni az
+              űrlapot. Indítsd újra a visszaállítást, és a friss linkkel próbáld meg ismét.
+            </p>
+            <Link href="/elfelejtett-jelszo">{ctaLabel('password-reset-start')}</Link>
           </div>
         )}
       </Container>

@@ -6,6 +6,7 @@ import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
 import { resetPassword } from '../../lib/auth-client'
+import { ctaLabel, ctaProgressLabel } from '../../lib/cta-vocabulary'
 import {
   formatPasswordPolicyErrors,
   validatePasswordStrength,
@@ -58,7 +59,9 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
       <div aria-live="polite" className="kc-auth-success" role="status">
         <h2>Új jelszó beállítva</h2>
         <p>Sikeresen beállítottad az új jelszavadat. Most már be tudsz lépni vele.</p>
-        <Link className="kc-button kc-button--primary" href="/belepes">Belépés</Link>
+        <Link className="kc-button kc-button--primary" href="/belepes">
+          {ctaLabel('sign-in')}
+        </Link>
       </div>
     )
   }
@@ -89,8 +92,12 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
           {error}
         </div>
       ) : null}
+      {/* §3.2 #22: a fiók megváltozik (P-1a → E/1), a folyamatban-felirat pedig
+          a ZÁRT L-1 lista `Mentés…` eleme. A korábbi „Beállítás…" nem volt a
+          listán, és szinonimája a `/fiok` mentés-gombjának (Polaris: „identify
+          and eliminate synonyms"). */}
       <Button disabled={submitting} type="submit">
-        {submitting ? 'Beállítás…' : 'Jelszó beállítása'}
+        {submitting ? ctaProgressLabel('password-reset-set') : ctaLabel('password-reset-set')}
       </Button>
     </form>
   )

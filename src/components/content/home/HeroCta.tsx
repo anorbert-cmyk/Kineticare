@@ -1,3 +1,4 @@
+import { ctaLabel } from '../../../lib/cta-vocabulary'
 import { Button } from '../../ui/Button'
 
 /**
@@ -28,9 +29,13 @@ import { Button } from '../../ui/Button'
 export function HeroCta() {
   return (
     <div className="kc-hero__actions">
-      <Button href="/kurzusok">Nézd meg a kurzusokat</Button>
+      <Button href="/kurzusok">{ctaLabel('course-list-open')}</Button>
+      {/* §3.2 #38 — lapon belüli ugrás az ingyenes sávra. A korábbi „Ingyenes
+          SOS gyakorlatok" főnévi alak volt, és nem mondta meg, mi történik
+          (M-7). Az „ingyenes" jelző a sávon BADGE-ként jelenik meg, nem a
+          gombban (a #3 sor ugyanezt írja elő). */}
       <Button href="#ingyenes" variant="ghost">
-        Ingyenes SOS gyakorlatok
+        {ctaLabel('free-strip-jump')}
       </Button>
     </div>
   )

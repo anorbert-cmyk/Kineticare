@@ -11,6 +11,7 @@ import { GENERIC_UPDATE_ERROR, updateProfile, type ProfileUpdateInput } from '..
 import type { CourseAccessView } from '../../lib/course-access'
 import { courseHref } from '../../lib/course-url'
 import { courseTitle } from '../../lib/courses'
+import { ctaLabel, ctaProgressLabel } from '../../lib/cta-vocabulary'
 import { formatPriceHuf } from '../../lib/format-price'
 import { isTrustedInvoicePdfUrl } from '../../lib/szamlazz/invoice-url'
 import type { Order, User } from '../../payload-types'
@@ -152,8 +153,9 @@ export function AccountView({ accessByProductId, user, orders }: AccountViewProp
           />
         </div>
         <div className="kc-account__actions">
+          {/* A felirat és a folyamatban-alakja is a §3.2 szótárból (#31 és L-1). */}
           <Button disabled={saving} onClick={handleSave}>
-            {saving ? 'Mentés…' : 'Mentés'}
+            {saving ? ctaProgressLabel('profile-save') : ctaLabel('profile-save')}
           </Button>
           <ProfileSaveFeedback saved={saved} saveError={saveError} />
         </div>
@@ -161,10 +163,15 @@ export function AccountView({ accessByProductId, user, orders }: AccountViewProp
 
       <Card className="kc-account__section">
         <h2>Kurzusaim</h2>
+        {/* Az üres állapot felirata a §3.2 #10 szótári sora: a kurzuskínálatra
+            vivő hivatkozás mindenhol ugyanazt mondja (WCAG 2.2 · 3.2.4). A
+            korábbi „Nézd meg a kurzusainkat" birtokos alak a mért nyolc
+            párhuzamos felirat egyike volt. A tagmondatokat kettőspont
+            választja, nem kvirtmínusz (§3.1.1). */}
         {purchasedProducts.length === 0 ? (
           <p>
-            Még nincs kurzusod. <Link href="/kurzusok">Nézd meg a kurzusainkat</Link> — az első
-            ingyenes is lehet.
+            Még nincs kurzusod. <Link href="/kurzusok">{ctaLabel('course-list-open')}</Link>: az
+            első ingyenes is lehet.
           </p>
         ) : (
           <ul className="kc-account__courses" role="list">
@@ -244,7 +251,7 @@ export function AccountView({ accessByProductId, user, orders }: AccountViewProp
                     {total !== null ? <span>{formatPriceHuf(total)}</span> : null}
                     {invoiceHref ? (
                       <a href={invoiceHref} target="_blank" rel="noopener noreferrer">
-                        Számla letöltése
+                        {ctaLabel('invoice-download')}
                       </a>
                     ) : order.invoicePdfUrl ? (
                       // Van tárolt cím, de nem megbízható — a link NEM renderelődik
