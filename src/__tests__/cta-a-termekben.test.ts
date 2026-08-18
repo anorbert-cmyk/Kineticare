@@ -874,10 +874,17 @@ const HREF_UTKOZES_KIVETELEK: readonly {
  * A kérdés eldöntése tulajdonosi/vezetői hatáskör — ez az őr csak jelent.
  */
 const CMS_FELULIRHATO_HELYEK: readonly { readonly fajl: string; readonly felirat: string }[] = [
-  { fajl: 'components/blocks/AppointmentForm.tsx', felirat: 'Időpontot kérek' },
-  { fajl: 'components/blocks/AppointmentForm.tsx', felirat: 'Küldés…' },
-  { fajl: 'components/content/home/FreeSos.tsx', felirat: 'Elindítom ingyen' },
-  { fajl: 'components/content/home/FreeSos.tsx', felirat: 'Nézd meg a kurzusokat' },
+  // ÜRES — és ez a lista ÉRTELME. A 2026-08-18-i körben a tulajdonos döntése
+  // szerint a SZÓTÁRI cselekvéseknél a kód nyer: az `AppointmentForm` és a
+  // `FreeSos` CMS-felülírása megszűnt (`ctaLabel(...)` a `?? felülírás` helyett),
+  // ezért mind a négy korábbi sor kikerült. A lista üresen maradása állítás:
+  // egyetlen §3.2-beli cselekvés feliratát sem írhatja felül a szerkesztő.
+  //
+  // A `CtaBanner`, `FilmHero`, `RenderBlocks.linkFrom` és `TeamMembers`
+  // SZÁNDÉKOSAN nincs itt: ott a felirat kizárólag a szerkesztőé (nincs
+  // kódbeli tartalék, és a hívóhely nem ismer `CtaAction`-t — egy CTA-sáv
+  // bárhova mutathat). A szerkesztő elnémítása ott felirat NÉLKÜLI gombot
+  // adna. Azokat a helyeket külön őr méri (cms-nem-nyomja-el-a-szotart).
 ]
 
 // ---------------------------------------------------------------------------
