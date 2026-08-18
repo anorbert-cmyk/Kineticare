@@ -26,6 +26,7 @@ import {
   isTurnstileEnabled,
   submitAppointmentForm,
 } from '@/lib/appointment/submit'
+import { ctaLabel } from '@/lib/cta-vocabulary'
 
 /**
  * AppointmentForm — az időpontkérő szekció űrlapja.
@@ -57,6 +58,32 @@ import {
  *  4. A „folyamatban" gombállapot nem díszítés: küldés közben a gomb letiltott
  *     és a felirata változik, így a dupla beküldés kizárt.
  *
+ * A FELIRAT FORRÁSA — a KÓD nyer a szótári cselekvéseknél (2026-08-18)
+ * ---------------------------------------------------------------------
+ * A beküldő gomb felirata 2026-08-18-ig `gombFelirat?.trim() ||
+ * APPOINTMENT_UI_TEXT.submitLabel` volt: a CMS-mező LEGYŐZTE a kódot, ezért a
+ * §3.2 szótár betartatása a kódban élesben hatástalan maradt (mérés:
+ * `src/__tests__/cta-a-termekben.test.ts`, „CMS-ből felülírható CTA-k").
+ *
+ * A tulajdonosi döntés: a SZÓTÁRI cselekvéseknél a kód nyer. Az időpontkérés
+ * ilyen (§3.2 #25, `appointment-submit`), ezért a felirat innentől kizárólag a
+ * `ctaLabel('appointment-submit')` hívásból jön.
+ *
+ * MIÉRT: WCAG 2.2 SC 3.2.4 Consistent Identification — „Components that have
+ * the same functionality within a set of web pages are identified
+ * consistently."
+ * (https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html).
+ * Ugyanez a szerkesztő oldaláról nézve: NN/g 4. heurisztika, Consistency and
+ * Standards — „Users should not have to wonder whether different words,
+ * situations, or actions mean the same thing."
+ * (https://www.nngroup.com/articles/consistency-and-standards/). Egy szabadon
+ * átírható CTA-mező pontosan ezt a kettőt nem tudja garantálni: az
+ * időpontkérésre a felületen több felirat élhetne egyszerre.
+ *
+ * AMIT A SZERKESZTŐ TOVÁBBRA IS ÍR: a szekció címét, szövegét, az időpont-
+ * sávokat, a siker-üzenetet és a telefonszámokat. A tiltás CSAK a szótári
+ * CTA-feliratra vonatkozik, nem a tartalomra.
+ *
  * FÓKUSZ-KEZELÉS (a kapcsolat-űrlappal AZONOS, WCAG 2.2 3.2.4): beküldés után a
  * siker-címsor, hibánál a hiba-összefoglaló kapja a fókuszt. Enélkül a lap ott
  * marad, ahol a látogató éppen görgetett, és a visszajelzés a képernyőn kívülre
@@ -71,7 +98,17 @@ export interface AppointmentFormProps {
   turnstileSiteKey: string | null
   /** A választható időpont-sávok feliratai (CMS); üres tömb = a kérdés kimarad. */
   idopontSavok: readonly string[]
-  /** Az elküldő gomb felirata (CMS); üresen az alapértelmezett. */
+  /**
+   * A blokk „A gomb felirata" mezője (CMS).
+   *
+   * INAKTÍV, SZÁNDÉKOSAN. Az időpontkérés a §3.2 #25 SZÓTÁRI cselekvése, ezért
+   * a feliratot a kód adja (`ctaLabel('appointment-submit')`), és a CMS-mező
+   * nem írja felül. Lásd a komponens fejkommentjének „A FELIRAT FORRÁSA"
+   * szakaszát. A mező azért marad a propok között, mert az adatbázisban lévő
+   * értékeket NEM dobjuk el: a szerkesztő szövege megmarad, csak nem jelenik
+   * meg. A mező sorsáról (súgó-szöveg vagy megszüntetés) tulajdonosi döntés
+   * kell — addig a prop itt, egy helyen, kimondva inaktív.
+   */
   gombFelirat?: string
   /** A sikeres beküldés címe (CMS); üresen az alapértelmezett. */
   sikerCim?: string
@@ -85,7 +122,6 @@ export function AppointmentForm({
   formId,
   turnstileSiteKey,
   idopontSavok,
-  gombFelirat,
   sikerCim,
   sikerSzoveg,
   telefonok = [],
@@ -411,10 +447,11 @@ export function AppointmentForm({
         </p>
       ) : null}
 
+      {/* A felirat a §3.2 SZÓTÁRBÓL jön, nem a CMS-mezőből — lásd a fejkomment
+          „A FELIRAT FORRÁSA" szakaszát. A folyamatban-felirat a zárt L-1
+          listáé (`Küldés…`), az sem szerkesztői döntés. */}
       <Button disabled={disabled} type="submit">
-        {submitting
-          ? APPOINTMENT_UI_TEXT.submitPending
-          : gombFelirat?.trim() || APPOINTMENT_UI_TEXT.submitLabel}
+        {submitting ? APPOINTMENT_UI_TEXT.submitPending : ctaLabel('appointment-submit')}
       </Button>
     </form>
   )

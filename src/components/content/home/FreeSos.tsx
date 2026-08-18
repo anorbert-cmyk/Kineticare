@@ -1,4 +1,5 @@
 import { courseHref } from '../../../lib/course-url'
+import { ctaLabel } from '../../../lib/cta-vocabulary'
 import type { Product } from '../../../payload-types'
 import { Badge } from '../../ui/Badge'
 import { Button } from '../../ui/Button'
@@ -29,9 +30,33 @@ import '../../../app/(frontend)/styles/blocks/free-sos.css'
  *   2. nincs ingyenes termék → a gomb a kurzuslistára visz, felirata
  *      „Nézd meg a kurzusokat" (§3.2 #10) — ígéret nélkül, mert a listán
  *      nem indul el semmi.
- * A szerkesztő a FELIRATOT szabadon átírhatja, és a célt is átteheti EGY MÁSIK
- * KURZUS oldalára; a kurzuslistára mutató felülírást viszont a komponens
- * szándékosan figyelmen kívül hagyja, mert pontosan az volt a mért hiba.
+ * A szerkesztő a CÉLT átteheti EGY MÁSIK KURZUS oldalára; a kurzuslistára
+ * mutató felülírást viszont a komponens szándékosan figyelmen kívül hagyja,
+ * mert pontosan az volt a mért hiba.
+ *
+ * A FELIRAT FORRÁSA — a KÓD nyer a szótári cselekvéseknél (2026-08-18)
+ * ---------------------------------------------------------------------
+ * A felirat 2026-08-18-ig `override?.label?.trim() ||
+ * FREE_SOS_COURSE_CTA_LABEL` volt: a CMS-mező LEGYŐZTE a kódot, ezért élesben
+ * a régi, adatbázisban őrzött „Elindítom az ingyenes kurzust" látszott,
+ * miközben a §3.2 #3/#4 „Elindítom ingyen"-t ír elő. A kódbeli javítás így
+ * hatástalan maradt (mérés: `src/__tests__/cta-a-termekben.test.ts`).
+ *
+ * A tulajdonosi döntés: a SZÓTÁRI cselekvéseknél a kód nyer. Mindkét ág
+ * szótári cselekvés (`free-course-claim`, `course-list-open`), ezért a
+ * felirat innentől kizárólag a szótárból jön.
+ *
+ * MIÉRT: WCAG 2.2 SC 3.2.4 Consistent Identification — „Components that have
+ * the same functionality within a set of web pages are identified
+ * consistently."
+ * (https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html);
+ * NN/g 4. heurisztika, Consistency and Standards — „Users should not have to
+ * wonder whether different words, situations, or actions mean the same thing."
+ * (https://www.nngroup.com/articles/consistency-and-standards/).
+ *
+ * AMIT A SZERKESZTŐ TOVÁBBRA IS ÍR: a sáv címét, szövegét, a gomb CÉLJÁT (másik
+ * ingyenes kurzus oldalára) és az „új lapon nyíljon" kapcsolót. A tiltás CSAK a
+ * szótári CTA-feliratra vonatkozik.
  *
  * Miért így: „A link is a promise" — a felirat azt ígérje, ami a kattintás
  * UTÁN azonnal történik, nem azt, ami több lépéssel később
@@ -59,15 +84,18 @@ export const COURSE_LIST_PATH = '/kurzusok'
  * A gomb felirata, ha a cél VALÓBAN az ingyenes kurzus oldala.
  * Jóváhagyott felirat: `docs/ui-sztenderdek.md` §3.2 #4 („ingyenes kurzus
  * indítása"), kódbeli szótár: `src/lib/cta-vocabulary.ts` (`free-course-claim`).
+ *
+ * A SZÓTÁRBÓL OLVASVA, nem literálként: így a felirat és a §3.2 sor nem tud
+ * elcsúszni egymástól, és a G-UI1/G-UI2 őr a hívóhelyet is látja.
  */
-export const FREE_SOS_COURSE_CTA_LABEL = 'Elindítom ingyen'
+export const FREE_SOS_COURSE_CTA_LABEL = ctaLabel('free-course-claim')
 
 /**
  * A gomb felirata a hibatűrő ágon (nincs ingyenes termék). A listán semmi nem
  * indul el, ezért ígéretet sem tehet: `docs/ui-sztenderdek.md` §3.2 #10
  * („kurzuskínálatra"), kódbeli szótár: `course-list-open`.
  */
-export const FREE_SOS_LIST_CTA_LABEL = 'Nézd meg a kurzusokat'
+export const FREE_SOS_LIST_CTA_LABEL = ctaLabel('course-list-open')
 
 /**
  * Kurzus-ALOLDALra mutat-e az útvonal (`/kurzusok/<slug>` vagy `/kurzusok/<id>`)?
@@ -85,6 +113,15 @@ export function isCourseDetailHref(href: string): boolean {
 
 /** A blokkból érkező, RÉSZLEGES gomb-felülírás (bármelyik mező hiányozhat). */
 export interface FreeSosCtaOverride {
+  /**
+   * A blokk gomb-felirata (CMS).
+   *
+   * INAKTÍV, SZÁNDÉKOSAN: mindkét ág §3.2 SZÓTÁRI cselekvés, ezért a feliratot
+   * a kód adja. A mező azért marad a típusban, mert az adatbázisban lévő
+   * értékeket NEM dobjuk el (a `RenderBlocks.partialLinkFrom` továbbra is
+   * átadja), és mert a hívóhely így mondja ki, hogy a mezőt ISMERI és
+   * SZÁNDÉKOSAN hagyja figyelmen kívül. Lásd „A FELIRAT FORRÁSA" szakaszt.
+   */
   label?: string
   href?: string
   newTab?: boolean
@@ -116,10 +153,11 @@ export function resolveFreeSosCta(
       ? courseHref(freeProduct)
       : COURSE_LIST_PATH
 
+  // A FELIRAT a §3.2 SZÓTÁRBÓL jön, a CMS-mező nem írja felül: mindkét ág
+  // szótári cselekvés (`free-course-claim`, illetve `course-list-open`).
+  // Lásd a fájl „A FELIRAT FORRÁSA" szakaszát.
   const pointsToCourse = isCourseDetailHref(href)
-  const label = pointsToCourse
-    ? override?.label?.trim() || FREE_SOS_COURSE_CTA_LABEL
-    : FREE_SOS_LIST_CTA_LABEL
+  const label = pointsToCourse ? FREE_SOS_COURSE_CTA_LABEL : FREE_SOS_LIST_CTA_LABEL
 
   return {
     label,

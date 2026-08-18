@@ -767,12 +767,33 @@ describe('cartTotalHuf és cartSummary', () => {
     expect(osszegzes.totalHuf).toBe(5000)
   })
 
-  it('EGY nem vásárolható tétel az egész kosár pénztár-gombját elveszi', () => {
+  it('EGY nem vásárolható tétel NEM veszi el a megvehető tétel fizetés-útját', () => {
+    // 2026-08-18, tulajdonosi döntés: a jó tétel megvehető marad, a rossz a
+    // saját sorában kapja a magyarázatát. A régi, mindent blokkoló szabály
+    // Baymard mérése szerint 30%-ot küld máshova
+    // (https://baymard.com/blog/handling-out-of-stock-products).
+    // A teljes bizonyítás: `src/__tests__/vegyes-kosar-tetelenkent.test.tsx`.
+    const megvehetoTetel = tetel({ productId: 1, priceHuf: 5000 })
     const osszegzes = cartSummary({
-      items: [tetel({ productId: 1, priceHuf: 5000 }), tetel({ productId: 2, availability: 'archived' })],
+      items: [megvehetoTetel, tetel({ productId: 2, availability: 'archived' })],
+    })
+    expect(osszegzes.kind).toBe('amount')
+    expect(osszegzes.target).toBe(megvehetoTetel)
+    expect(osszegzes.blocked).toHaveLength(1)
+    expect(osszegzes.totalHuf, 'az archivált tétel ára nem szállhat be').toBe(5000)
+  })
+
+  it('MINDEN tétel nem vásárolható: marad a blokkolt állapot', () => {
+    const osszegzes = cartSummary({
+      items: [
+        tetel({ productId: 1, availability: 'archived' }),
+        tetel({ productId: 2, availability: 'unavailable', priceHuf: null }),
+      ],
     })
     expect(osszegzes.kind).toBe('blocked')
     expect(osszegzes.target).toBeNull()
+    expect(osszegzes.totalLabel).toBeNull()
+    expect(osszegzes.blocked).toHaveLength(2)
   })
 })
 
