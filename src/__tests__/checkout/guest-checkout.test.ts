@@ -371,7 +371,7 @@ describe('startCheckout — vendég-vásárlás', () => {
 
     const promise = startCheckout({
       payload,
-      input: { productId: 42, consentWithdrawalWaiver: true, billing: BILLING, guest: GUEST },
+      input: { productId: 42, consentWithdrawalWaiver: true, consentTerms: true, billing: BILLING, guest: GUEST },
     })
 
     await expect(promise).rejects.toBeInstanceOf(CheckoutError)
@@ -399,7 +399,7 @@ describe('startCheckout — vendég-vásárlás', () => {
 
     const promise = startCheckout({
       payload,
-      input: { productId: 42, consentWithdrawalWaiver: true, billing: BILLING, guest: GUEST },
+      input: { productId: 42, consentWithdrawalWaiver: true, consentTerms: true, billing: BILLING, guest: GUEST },
     })
 
     await expect(promise).rejects.toMatchObject({ status: 409 })
@@ -423,7 +423,7 @@ describe('startCheckout — vendég-vásárlás', () => {
 
     const result = await startCheckout({
       payload,
-      input: { productId: 42, consentWithdrawalWaiver: true, billing: BILLING, guest: GUEST },
+      input: { productId: 42, consentWithdrawalWaiver: true, consentTerms: true, billing: BILLING, guest: GUEST },
     })
 
     expect(result.orderNumber).toBe(ORDER_NUMBER)
@@ -448,7 +448,7 @@ describe('startCheckout — vendég-vásárlás', () => {
 
     await startCheckout({
       payload,
-      input: { productId: 42, consentWithdrawalWaiver: true, billing: BILLING, guest: GUEST },
+      input: { productId: 42, consentWithdrawalWaiver: true, consentTerms: true, billing: BILLING, guest: GUEST },
     })
 
     const pendingQuery = seenWhere.find((text) => text.includes('"payment_pending"'))
