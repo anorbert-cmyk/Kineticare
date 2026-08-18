@@ -20,6 +20,8 @@ const hasDb = await isDatabaseAvailable()
 describe.skipIf(!hasDb)('webhook + audit (DB)', () => {
   let payload: Payload
   let tablesReady = false
+  /** A bootstrap-user azonosítója, ha EZ a futás hozta létre (lásd lent). */
+  let bootstrapUserId: number | string | null = null
 
   beforeAll(async () => {
     try {
@@ -33,9 +35,51 @@ describe.skipIf(!hasDb)('webhook + audit (DB)', () => {
       tablesReady = false
       await payload?.db?.destroy?.().catch(() => undefined)
     }
+
+    /**
+     * ÜRES ADATBÁZIS ELŐKÉSZÍTÉSE — a `promoteFirstUserToOwner` miatt.
+     *
+     * A rendszer ELSŐ felhasználója mindig `owner` szerepkört kap
+     * (src/collections/Users.ts; enélkül a telepítés zárva maradna). A
+     * role-change teszt alanya `customer`-ként jön létre — de ha az adatbázis
+     * üres, ő maga az első user, tehát a hook `owner`-ré teszi, és a
+     * role-change audit-bejegyzés `before.role`-ja is `owner` lesz.
+     *
+     * A teszt eddig NÉMÁN egy „bejáratott" fejlesztői adatbázisra
+     * támaszkodott (ott már volt user), és sosem futott CI-ban — a CI
+     * service-konténer viszont MINDIG üres adatbázissal indul. Ezért itt
+     * gondoskodunk róla, hogy legyen már felhasználó, mielőtt az alany
+     * létrejön: így a mérés az első-user-bootstrapre nem érzékeny.
+     *
+     * SZÁNDÉKOSAN a fenti try/catch-en KÍVÜL: ha a bootstrap elhasal, az
+     * HANGOS hiba legyen, ne „nincsenek táblák" címén csendes kihagyás.
+     */
+    if (tablesReady) {
+      const { totalDocs } = await payload.count({ collection: 'users' })
+      if (totalDocs === 0) {
+        const bootstrap = await payload.create({
+          collection: 'users',
+          data: {
+            email: `audit-bootstrap-${Date.now()}@example.com`,
+            password: `Bootstrap-${Date.now()}!`,
+            name: 'Audit Bootstrap',
+            // A `promoteFirstUserToOwner` ezt üres adatbázison úgyis
+            // `owner`-re írja — pont ez a bootstrap célja.
+            role: 'customer',
+          },
+          overrideAccess: true,
+        })
+        bootstrapUserId = bootstrap.id
+      }
+    }
   }, 120_000)
 
   afterAll(async () => {
+    if (bootstrapUserId !== null) {
+      await payload
+        .delete({ collection: 'users', id: bootstrapUserId, overrideAccess: true })
+        .catch(() => undefined)
+    }
     await payload?.db?.destroy?.()
   })
 
