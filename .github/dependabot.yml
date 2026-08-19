@@ -37,6 +37,13 @@ updates:
       # (peer: >=4.8.4 <6.1.0) és a Payload típusgenerálás sem támogatja.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # ESLint 10 eltávolította a context.getFilename()-t. A tranzitív
+      # eslint-plugin-react@7.37.5 (peer: eslint ^3–^9.7) ettől összeomlik
+      # (#91 CI: react/display-name TypeError). A wrapper eslint-config-next
+      # peerje (>=9) félrevezető. Major csak akkor, ha a plugin peerje 10-et is
+      # enged: jsx-eslint/eslint-plugin-react#3977.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: "/"
