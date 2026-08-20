@@ -42,7 +42,7 @@ import {
    keskeny viewporton a wrap görget, nem a lap (WCAG 1.4.10 / G225). */
 const engagementTableStyle: CSSProperties = {
   ...tableStyle,
-  minWidth: '832px',
+  minWidth: 'calc(832 * var(--kc-as-px, 1px))',
 }
 
 const emphasizedCountStyle: CSSProperties = {

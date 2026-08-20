@@ -60,12 +60,14 @@ import {
  * 5. REFLOW. A LAP 320 px-en sem görget vízszintesen. A 12 hónapos
  *    oszlopdiagram kétirányú adatábrázolás: a WCAG 1.4.10 kivételként
  *    megengedi, hogy a diagram a saját konténerében görögjön, ahelyett,
- *    hogy a viewBox-szöveg 5 px-re zsugorodna. Az SVG ezért `min-width:
- *    720px` (a viewBox natív mérete — px-ben, mert a Payload admin
- *    13px-es gyökere miatt a 45rem 585px-re zsugorodott, és a tick a mért
- *    11,27px-re esett a tervezett 12 alá; lásd styles.ts fejkomment), a
- *    wrapper `overflow-x: auto`. A jelmagyarázat HTML-ben van a diagram
- *    alatt, így a szövege keskeny viewporton sem zsugorodik.
+ *    hogy a viewBox-szöveg 5 px-re zsugorodna. Az SVG ezért
+ *    `min-width: calc(720 * var(--kc-as-px, 1px))` — a viewBox natív
+ *    mérete a 13-as gyökérhez igazított rem-egységgel (custom.scss
+ *    --kc-as-px; alapállapotban pontosan 720px, a gyökérrel skálázódik,
+ *    így a tick sosem esik a tervezett 12px alá — a korábbi nyers 45rem
+ *    585px-re zsugorodott, a tick mért 11,27px-re), a wrapper
+ *    `overflow-x: auto`. A jelmagyarázat HTML-ben van a diagram alatt,
+ *    így a szövege keskeny viewporton sem zsugorodik.
  *    - WCAG 2.2 SC 1.4.10 Reflow (kivétel: 2D adatábra / G214):
  *      https://www.w3.org/WAI/WCAG22/Understanding/reflow.html
  * 6. A GÖRGETŐ BILLENTYŰZETRŐL IS MŰKÖDIK: a wrapper role="region" +
@@ -97,8 +99,8 @@ const chartScrollStyle: CSSProperties = {
 const svgStyle: CSSProperties = {
   display: 'block',
   width: '100%',
-  minWidth: '720px',
-  maxWidth: '832px',
+  minWidth: 'calc(720 * var(--kc-as-px, 1px))',
+  maxWidth: 'calc(832 * var(--kc-as-px, 1px))',
   height: 'auto',
 }
 
