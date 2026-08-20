@@ -105,6 +105,10 @@ gomb-gráf), `docs/gomb-inventar.md` (CTA-szótár), `docs/gomb-kontraszt-audit.
 - Új viselkedéshez fókuszált teszt vagy legalább reprodukálható ellenőrzési lépés.
 - Titok, `.env*` fájl, migrációs kézi szerkesztés, `confirmOrder`-hívás és
   `any`-típus esetén a PR automatikusan elutasítandó.
+- **Merge után a munka NEM kész.** Azonnal figyeld a `main` GitHub CI-jét és a
+  Railway deployt (tényleges `npm run build`, migráció a start-logban,
+  `GET /admin` healthcheck). Piros vagy gyanús állapotot azonnal javíts, ne
+  várj külön kérésre. Részletek: `AGENTS.md` „Merge után" szekció.
 
 ## Üzemeltetési tanulságok — élesben szerzett
 
@@ -255,6 +259,13 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
     lennie (`-k <dir>`), és a scratchpad SZÜLŐ könyvtáraira is kell `o+x`
     bejárási jog, különben a `pg_ctl` „Permission denied"-dal áll le.
 
+23. **Merge után azonnal a GitHub CI és a Railway.** A squash-merge nem zárja
+    a kört. A `main` CI (`ci.yml` + gitleaks) legyen zöld; a Railway-en
+    tényleges `npm run build` (ne skipped), start-logban `Migrating:` /
+    `Migrated:`, healthcheck `GET /admin`. A „SUCCESS" deploy nem elég
+    (1. pont). `WAITING` snapshot nélkül: előbb a lépés-események, ne indíts
+    vaktában új deployt (12. pont). Hiba esetén azonnal javíts.
+
 ## Munkamodell — vezető + Opus-ügynökök (tulajdonosi alapbeállítás, 2026-08-15)
 
 Minden kódolási munkánál ez az alapbeállítás, külön kérés nélkül:
@@ -290,3 +301,9 @@ Minden kódolási munkánál ez az alapbeállítás, külön kérés nélkül:
    elbukik ugyanazon, vagy a megoldás nem áll össze, a vezető nem indít újabb
    kört vaktában: maga oldja meg. A cél a működő eredmény, nem a delegálás
    fenntartása.
+9. **Merge után a vezető (vagy az ügynök) figyeli a CI-t és a Railwayt, és
+   hibánál azonnal javít.** A squash-merge, a zöld PR és a „SUCCESS" deploy
+   önmagában nem kész. GitHub: `ci.yml` + gitleaks a `main` squash-commitján.
+   Railway: tényleges `npm run build`, migráció a start-logban, `GET /admin`.
+   Piros, skipped-build vagy elmaradt healthcheck → azonnali fix, nem jelentés
+   és várakozás. (Tulajdonosi kérés, 2026-08-20.)

@@ -239,6 +239,26 @@ tartalmazza a mit/miértet, az érintett tilos zónát és az ellenőrzés módj
 Titok, `.env*`-módosítás, kézi migráció-szerkesztés, `confirmOrder`-hívás vagy
 `any`-típus esetén a PR automatikusan elutasítandó.
 
+## Merge után: GitHub CI + Railway (azonnal)
+
+A squash-merge NEM zárja a munkát. Merge (vagy `main`-push) után az ügynök
+**azonnal** figyeli a GitHub CI-t és a Railway deployt. Ha bármelyik piros,
+gyanús vagy elmarad, **azonnal javít** — nem vár külön kérésre.
+
+1. **GitHub CI** a squash-commiton: `ci.yml` (typecheck, teszt, lint, next
+   build, npm audit critical) és `gitleaks.yml`. Bukásnál a job-log a gyökérok,
+   majd fix PR a `main`re.
+2. **Railway** (staging + prod, `main` auto-deploy). A dashboard „SUCCESS”
+   önmagában nem elég (lásd a Deploy tanulságokat):
+   - a build-logban legyen tényleges `npm run build` (ne `Build · skipped`);
+   - a start-logban `Migrating:` / `Migrated:`;
+   - a healthcheck (`GET /admin`) menjen át.
+   Ha `WAITING` van snapshot és build-log nélkül, előbb a Railway MCP
+   lépés-eseményei — ne indíts vaktában új deployt. A kötet nélküli régi
+   `Postgres` szolgáltatást újraindítani tilos.
+3. Railway MCP / CLI nélkül a dashboard-log és a publikus healthcheck a
+   tartalék; a figyelést ettől még nem szabad kihagyni.
+
 ## Környezeti változók
 
 Az `.env.example` a teljes, kommentezett referencia (kulcsok, értékek nélkül).
