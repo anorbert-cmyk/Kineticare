@@ -27,12 +27,17 @@ import { PriceCell as PriceCell_e27bf7b8cc50640dcdd584767b8eac3c } from '@payloa
 import { PriceInput as PriceInput_b91672ccd6e8b071c11142ab941fedfb } from '@payloadcms/plugin-ecommerce/rsc'
 import { LessonRowLabel as LessonRowLabel_1ae3bdfcb2f2552e78505f80c9b85768 } from '../../../components/admin/CurriculumRowLabels'
 import { ModuleRowLabel as ModuleRowLabel_1ae3bdfcb2f2552e78505f80c9b85768 } from '../../../components/admin/CurriculumRowLabels'
+import { BunnyLibraryPanel as BunnyLibraryPanel_bb3944abc8f19c9587cee0d3a7012aec } from '../../../components/admin/BunnyLibraryPanel'
 import { CourseProgressPanel as CourseProgressPanel_845dc8fb8bc09ce445f441a2d473205a } from '../../../components/admin/CourseProgressPanel'
 import { OrderItemsCell as OrderItemsCell_2c6d79b4079205291accce4c0768f7ee } from '../../../components/admin/OrderItemsCell'
 import { RefundPanel as RefundPanel_3023d898ecda64dc966986d07a3332f3 } from '../../../components/admin/RefundPanel'
 import { PurchasesCell as PurchasesCell_7a2290ab482114115d46c087318ddccd } from '../../../components/admin/PurchasesCell'
 import { PurchasesOverviewPanel as PurchasesOverviewPanel_be42bab410342143f760b0e24f201ac8 } from '../../../components/admin/PurchasesOverviewPanel'
 import { GrantPurchasePanel as GrantPurchasePanel_20de7d9cfe7b60454d34835b4d120a81 } from '../../../components/admin/GrantPurchasePanel'
+import { StatisticsNavLink as StatisticsNavLink_63f67778ef57ca5216330299cb70718b } from '../../../components/admin/StatisticsNavLink'
+import { BunnyLibraryNavLink as BunnyLibraryNavLink_f6a3c3418c902de7e4c73776134d53c4 } from '../../../components/admin/BunnyLibraryNavLink'
+import { StatisticsView as StatisticsView_6bedff494c75b1f749e7d2a423ca9b94 } from '../../../components/admin/StatisticsView'
+import { BunnyLibraryView as BunnyLibraryView_07de92bea330a6c245d113b21f93e79c } from '../../../components/admin/BunnyLibraryView'
 import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc'
 
 /** @type import('payload').ImportMap */
@@ -66,11 +71,16 @@ export const importMap = {
   "@payloadcms/plugin-ecommerce/rsc#PriceInput": PriceInput_b91672ccd6e8b071c11142ab941fedfb,
   "/components/admin/CurriculumRowLabels#LessonRowLabel": LessonRowLabel_1ae3bdfcb2f2552e78505f80c9b85768,
   "/components/admin/CurriculumRowLabels#ModuleRowLabel": ModuleRowLabel_1ae3bdfcb2f2552e78505f80c9b85768,
+  "/components/admin/BunnyLibraryPanel#BunnyLibraryPanel": BunnyLibraryPanel_bb3944abc8f19c9587cee0d3a7012aec,
   "/components/admin/CourseProgressPanel#CourseProgressPanel": CourseProgressPanel_845dc8fb8bc09ce445f441a2d473205a,
   "/components/admin/OrderItemsCell#OrderItemsCell": OrderItemsCell_2c6d79b4079205291accce4c0768f7ee,
   "/components/admin/RefundPanel#RefundPanel": RefundPanel_3023d898ecda64dc966986d07a3332f3,
   "/components/admin/PurchasesCell#PurchasesCell": PurchasesCell_7a2290ab482114115d46c087318ddccd,
   "/components/admin/PurchasesOverviewPanel#PurchasesOverviewPanel": PurchasesOverviewPanel_be42bab410342143f760b0e24f201ac8,
   "/components/admin/GrantPurchasePanel#GrantPurchasePanel": GrantPurchasePanel_20de7d9cfe7b60454d34835b4d120a81,
+  "/components/admin/StatisticsNavLink#StatisticsNavLink": StatisticsNavLink_63f67778ef57ca5216330299cb70718b,
+  "/components/admin/BunnyLibraryNavLink#BunnyLibraryNavLink": BunnyLibraryNavLink_f6a3c3418c902de7e4c73776134d53c4,
+  "/components/admin/StatisticsView#StatisticsView": StatisticsView_6bedff494c75b1f749e7d2a423ca9b94,
+  "/components/admin/BunnyLibraryView#BunnyLibraryView": BunnyLibraryView_07de92bea330a6c245d113b21f93e79c,
   "@payloadcms/next/rsc#CollectionCards": CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1
 }

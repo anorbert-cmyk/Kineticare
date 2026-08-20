@@ -179,6 +179,10 @@ export function isSzamlazzVatMode(value: string): value is SzamlazzVatMode {
  *
  * - `BUNNY_STREAM_TOKEN_AUTH_KEY` — TITOK, a védett library token-kulcsa
  *   (src/lib/stream/issue-stream-token.ts).
+ * - `BUNNY_STREAM_LIBRARY_API_KEY` — TITOK, a védett library Stream API
+ *   kulcsa (videólista; NEM a lejátszási token-kulcs).
+ * - `BUNNY_STREAM_PUBLIC_LIBRARY_API_KEY` — TITOK, a publikus library
+ *   Stream API kulcsa (előzetesek listája).
  * - `NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID` — a védett library id-ja (embed-URL).
  * - `NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID` — a publikus library id-ja
  *   (hero-videó, kurzus-előzetes — token nélkül).
@@ -187,6 +191,8 @@ export function isSzamlazzVatMode(value: string): value is SzamlazzVatMode {
  */
 export const optionalBunnyStreamEnvVars = [
   'BUNNY_STREAM_TOKEN_AUTH_KEY',
+  'BUNNY_STREAM_LIBRARY_API_KEY',
+  'BUNNY_STREAM_PUBLIC_LIBRARY_API_KEY',
   'NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID',
   'NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID',
   'NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST',
@@ -309,7 +315,7 @@ export function assertRequiredEnv(
         `e-mail-cím ('${emailFrom ?? ''}'). Enélkül a levelek a 'noreply@localhost' ` +
         'tartalék címről indulnának, amit a szolgáltató elutasít — és mivel a ' +
         'küldés sosem dob hibát, a levelek CSENDBEN nem érkeznének meg. ' +
-        "Add meg a küldő címet, pl. EMAIL_FROM=\"Kineticare <noreply@kineticare.hu>\", " +
+        'Add meg a küldő címet, pl. EMAIL_FROM="Kineticare <noreply@kineticare.hu>", ' +
         'olyan tartománnyal, amit a levélküldőben igazoltál.',
     )
   }
