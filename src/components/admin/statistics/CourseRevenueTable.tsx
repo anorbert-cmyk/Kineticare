@@ -4,6 +4,7 @@ import {
   captionStyle,
   noticeStyle,
   numericStyle,
+  rowHeaderStyle,
   tableStyle,
   tableWrapStyle,
   tdStyle,
@@ -42,7 +43,7 @@ export function CourseRevenueTable({ rows }: { rows: readonly CourseRevenueRow[]
         <tbody>
           {rows.map((row) => (
             <tr key={row.sku}>
-              <th style={tdStyle} scope="row">
+              <th style={rowHeaderStyle} scope="row">
                 {row.sku}
               </th>
               <td style={tdStyle}>{AUDIENCE_LABELS[row.audience]}</td>

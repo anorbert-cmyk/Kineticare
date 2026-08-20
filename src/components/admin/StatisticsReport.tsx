@@ -4,23 +4,37 @@ import { CourseEngagementSection } from './statistics/CourseEngagementSection'
 import { CourseRevenueTable } from './statistics/CourseRevenueTable'
 import { FunnelSection } from './statistics/FunnelSection'
 import { MonthlyRevenueSection } from './statistics/MonthlyRevenueSection'
-import { headingStyle, leadStyle, noticeStyle, pageStyle, sectionStyle } from './statistics/styles'
+import {
+  eyebrowStyle,
+  headingStyle,
+  leadStyle,
+  noticeStyle,
+  pageStyle,
+  sectionStyle,
+} from './statistics/styles'
 import { TotalsCards } from './statistics/TotalsCards'
 
 /**
  * A Statisztika nézet KOMPOZÍCIÓS GYÖKERE — a lekérdezés és a jogosultság a
  * StatisticsView-ban marad, hogy a teszt DefaultTemplate nélkül futhasson.
  *
+ * A gyökér-div a `kc-adminstat` márka-scope-ot viseli (tulajdonosi döntés,
+ * 2026-08-20): a src/app/(payload)/custom.scss ezen a classon keresztül adja
+ * a vevői oldal designnyelvét (Tenor Sans címsor, paper-föld, hairline-
+ * felületek, sötét téma) — kizárólag erre a nézetre, az admin többi része
+ * változatlan. A h1 fölötti eyebrow-sor a landing felvezető-nyelve
+ * (tokens.css 195–196. sor).
+ *
  * A szekciók önálló komponensek a ./statistics mappában (styles.ts a közös
  * stílus-tokenekkel), így egy-egy szekció külön karbantartható és külön
  * tesztelhető; ez a fájl csak a sorrendet és az oldalszintű szövegeket adja.
  * A vizuális nyelv és a reszponzivitás indoklása (forrás-URL-ekkel):
- * ./statistics/styles.ts fejkommentje.
+ * ./statistics/styles.ts és a custom.scss fejkommentje.
  */
 
 export function StatisticsAccessDenied() {
   return (
-    <div style={pageStyle}>
+    <div className="kc-adminstat" style={pageStyle}>
       <h1 style={headingStyle}>Statisztika</h1>
       <p>{STATISTICS_ACCESS_DENIED_MESSAGE}</p>
     </div>
@@ -29,7 +43,7 @@ export function StatisticsAccessDenied() {
 
 export function StatisticsUnavailable() {
   return (
-    <div style={pageStyle}>
+    <div className="kc-adminstat" style={pageStyle}>
       <h1 style={headingStyle}>Statisztika</h1>
       <p>A kimutatás most nem tölthető be. Próbáld újra később.</p>
     </div>
@@ -49,7 +63,8 @@ export function StatisticsReport({
   engagement?: CourseEngagementReport | null
 }) {
   return (
-    <div style={pageStyle}>
+    <div className="kc-adminstat" style={pageStyle}>
+      <p style={eyebrowStyle}>Kimutatások</p>
       <h1 style={headingStyle}>Statisztika</h1>
       <p style={leadStyle}>
         Havi bevétel a számla teljesítési dátuma szerint (ha nincs számla, a rendelés leadásának
@@ -57,7 +72,7 @@ export function StatisticsReport({
         tételenként válik szét, mert egy kosárban mindkettő lehet.
       </p>
       {report.truncated ? (
-        <p style={{ ...noticeStyle, marginBottom: 'calc(var(--base) * 1)' }}>
+        <p style={{ ...noticeStyle, marginBottom: 'var(--kc-as-space-4, calc(var(--base) * 1))' }}>
           A lista a felső korlát miatt csonka. A kimutatás a beolvasott rendeléseket mutatja, nem a
           teljes archívumot.
         </p>

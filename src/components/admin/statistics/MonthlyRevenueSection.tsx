@@ -7,10 +7,10 @@ import { RevenueChart } from '../RevenueChart'
 import {
   captionStyle,
   numericStyle,
+  rowHeaderStyle,
   sectionStyle,
   tableStyle,
   tableWrapStyle,
-  tdStyle,
   thNumericStyle,
   thStyle,
 } from './styles'
@@ -52,7 +52,7 @@ export function MonthlyRevenueSection({ rows }: { rows: readonly MonthlyRevenueR
           <tbody>
             {rows.map((row) => (
               <tr key={row.month}>
-                <th style={tdStyle} scope="row">
+                <th style={rowHeaderStyle} scope="row">
                   {formatMonthLabel(row.month)}
                 </th>
                 <td style={numericStyle}>{formatHuf(row.laikusHuf)}</td>

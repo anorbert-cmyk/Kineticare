@@ -12,8 +12,10 @@ import {
  *
  * ═══ AKADÁLYMENTESSÉG ═══
  * A számokat a táblázat hordozza (képernyőolvasó); az SVG `role="img"` +
- * `aria-label`. Minden szín Payload admin CSS-változó, így a sötét téma is
- * működik hardcode nélkül.
+ * `aria-label`. Minden szín CSS-változó — a márka-tokenek
+ * (src/app/(payload)/custom.scss, `.kc-adminstat`) Payload-tartalékkal,
+ * így a sötét téma is működik hardcode nélkül, és a márka-CSS nélkül a
+ * diagram a Payload-kinézetre esik vissza.
  *
  * ═══ TERVEZÉSI DÖNTÉSEK ÉS FORRÁSAIK ═══
  * 1. JELMAGYARÁZAT SZÖVEGGEL ÉS MINTÁZATTAL. A két ágat nem csak szín
@@ -42,10 +44,17 @@ import {
  *    viewBox 53 px-es oszlopsávjában; az évszám félkövér „landmark" címke
  *    az első oszlopon és minden januárnál (Carbon, Axes and labels:
  *    „Whenever data crosses into a new time cycle … semibold the label").
- * 4. NEM-SZÖVEGES KONTRASZT. A két oszlopszín a háttérhez képest 3:1 felett
- *    van (világos témában számolva: success-500 = rgb(21,135,186), fehérhez
- *    4,03:1; elevation-800 = rgb(47,47,47), fehérhez 13,4:1); a csíkozás
- *    hézaga a `--theme-bg`, tehát a minta mindkét témában kontrasztos.
+ * 4. NEM-SZÖVEGES KONTRASZT (tulajdonosi márka-döntés, 2026-08-20: a
+ *    diagram-színek a márkapalettából jönnek). Otthoni = accent #3d78aa —
+ *    az accent dekorációként megengedett (tokens.css 107–111. sor), a
+ *    fehér diagram-háttéren számolva 4,70:1; Szakmai = ink #10243e +
+ *    mintázat, fehéren 15,63:1; a szomszédos oszlopok egymáshoz képest
+ *    3,32:1. Sötét témában: accent-quiet #9ec4df az emelt (#1a3757)
+ *    háttéren 6,61:1, a fehér mintázott oszlop 12,15:1 — a szomszédos
+ *    oszlopok 1,84:1-es színkontrasztját ott az átlós mintázat + körvonal
+ *    pótolja (nem a szín az egyedüli hordozó, WCAG 1.4.1). A csíkozás
+ *    hézaga a diagram-háttér tokenje, tehát a minta mindkét témában
+ *    kontrasztos. A teljes számolt jegyzőkönyv: custom.scss fejkomment.
  *    - WCAG 2.2 SC 1.4.11 Non-text Contrast:
  *      https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html
  * 5. REFLOW. A LAP 320 px-en sem görget vízszintesen. A 12 hónapos
@@ -58,6 +67,18 @@ import {
  *    - WCAG 2.2 SC 1.4.10 Reflow (kivétel: 2D adatábra / G214):
  *      https://www.w3.org/WAI/WCAG22/Understanding/reflow.html
  */
+
+/* A diagram + jelmagyarázat közös kártyája: emelt felület, a keret
+   hairline-strong, mert a görgethető adatterületet AZONOSÍTJA (tokens.css
+   118–121. sor; fehéren 4,13:1 ≥ 3:1, WCAG 1.4.11) — Payload-tartalékkal,
+   márka-CSS nélkül keret és háttér nélküli marad, mint eddig. */
+const chartCardStyle: CSSProperties = {
+  background: 'var(--kc-as-surface-raised, transparent)',
+  border: '1px solid var(--kc-as-hairline-strong, transparent)',
+  borderRadius: 'var(--kc-as-radius-md, 0)',
+  marginBottom: 'var(--kc-as-space-4, calc(var(--base) * 0.5))',
+  padding: 'var(--kc-as-space-4, 0)',
+}
 
 const chartScrollStyle: CSSProperties = {
   overflowX: 'auto',
@@ -80,9 +101,9 @@ const svgStyle: CSSProperties = {
 const legendStyle: CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
-  gap: 'calc(var(--base) * 0.75)',
-  marginTop: 'calc(var(--base) * 0.25)',
-  marginBottom: 'calc(var(--base) * 0.5)',
+  gap: 'var(--kc-as-space-3, calc(var(--base) * 0.75))',
+  marginTop: 'var(--kc-as-space-2, calc(var(--base) * 0.25))',
+  marginBottom: 0,
 }
 
 const legendItemStyle: CSSProperties = {
@@ -151,7 +172,7 @@ export function RevenueChart({ rows }: RevenueChartProps) {
   const barGap = Math.max(2, groupWidth * 0.04)
 
   return (
-    <div>
+    <div style={chartCardStyle}>
       <div style={chartScrollStyle}>
         <svg
           viewBox={`0 0 ${width} ${height}`}
@@ -171,8 +192,12 @@ export function RevenueChart({ rows }: RevenueChartProps) {
               patternUnits="userSpaceOnUse"
               patternTransform="rotate(45)"
             >
-              <rect width="4" height="4" fill="var(--theme-elevation-800)" />
-              <rect width="1.5" height="4" fill="var(--theme-bg)" />
+              <rect
+                width="4"
+                height="4"
+                fill="var(--kc-as-diagram-szakmai, var(--theme-elevation-800))"
+              />
+              <rect width="1.5" height="4" fill="var(--kc-as-surface-raised, var(--theme-bg))" />
             </pattern>
           </defs>
           {tickValues.map((value) => {
@@ -185,7 +210,7 @@ export function RevenueChart({ rows }: RevenueChartProps) {
                     y1={y}
                     x2={padLeft + plotWidth}
                     y2={y}
-                    stroke="var(--theme-elevation-150)"
+                    stroke="var(--kc-as-hairline, var(--theme-elevation-150))"
                     strokeWidth="1"
                   />
                 ) : null}
@@ -194,7 +219,7 @@ export function RevenueChart({ rows }: RevenueChartProps) {
                   y={y}
                   textAnchor="end"
                   dominantBaseline="middle"
-                  fill="var(--theme-elevation-650)"
+                  fill="var(--kc-as-text-muted, var(--theme-elevation-650))"
                   fontSize="12"
                 >
                   {tickLabelHuf(value)}
@@ -207,7 +232,7 @@ export function RevenueChart({ rows }: RevenueChartProps) {
             y1={padTop}
             x2={padLeft}
             y2={baselineY}
-            stroke="var(--theme-elevation-400)"
+            stroke="var(--kc-as-hairline-strong, var(--theme-elevation-400))"
             strokeWidth="1"
           />
           <line
@@ -215,7 +240,7 @@ export function RevenueChart({ rows }: RevenueChartProps) {
             y1={baselineY}
             x2={padLeft + plotWidth}
             y2={baselineY}
-            stroke="var(--theme-elevation-400)"
+            stroke="var(--kc-as-hairline-strong, var(--theme-elevation-400))"
             strokeWidth="1"
           />
           {rows.map((row, index) => {
@@ -237,7 +262,7 @@ export function RevenueChart({ rows }: RevenueChartProps) {
                     y={baselineY - laikusHeight}
                     width={barWidth}
                     height={laikusHeight}
-                    fill="var(--theme-success-500)"
+                    fill="var(--kc-as-diagram-otthoni, var(--theme-success-500))"
                   >
                     <title>{`${label}, otthoni: ${formatHuf(row.laikusHuf)}`}</title>
                   </rect>
@@ -249,7 +274,7 @@ export function RevenueChart({ rows }: RevenueChartProps) {
                     width={barWidth}
                     height={szakemberHeight}
                     fill="url(#ker-stat-szakmai-minta)"
-                    stroke="var(--theme-elevation-800)"
+                    stroke="var(--kc-as-diagram-szakmai, var(--theme-elevation-800))"
                     strokeWidth="1"
                   >
                     <title>{`${label}, szakmai: ${formatHuf(row.szakemberHuf)}`}</title>
@@ -259,7 +284,7 @@ export function RevenueChart({ rows }: RevenueChartProps) {
                   x={tickX}
                   y={baselineY + 18}
                   textAnchor="middle"
-                  fill="var(--theme-elevation-650)"
+                  fill="var(--kc-as-text-muted, var(--theme-elevation-650))"
                   fontSize="12"
                 >
                   {formatMonthShort(row.month)}
@@ -269,7 +294,7 @@ export function RevenueChart({ rows }: RevenueChartProps) {
                     x={tickX}
                     y={baselineY + 34}
                     textAnchor="middle"
-                    fill="var(--theme-elevation-800)"
+                    fill="var(--kc-as-text, var(--theme-elevation-800))"
                     fontSize="12"
                     fontWeight="600"
                   >
@@ -284,7 +309,12 @@ export function RevenueChart({ rows }: RevenueChartProps) {
       <div style={legendStyle}>
         <span style={legendItemStyle}>
           <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 14 14">
-            <rect width="14" height="14" rx="2" fill="var(--theme-success-500)" />
+            <rect
+              width="14"
+              height="14"
+              rx="2"
+              fill="var(--kc-as-diagram-otthoni, var(--theme-success-500))"
+            />
           </svg>
           Otthoni
         </span>
@@ -300,8 +330,12 @@ export function RevenueChart({ rows }: RevenueChartProps) {
                 patternUnits="userSpaceOnUse"
                 patternTransform="rotate(45)"
               >
-                <rect width="4" height="4" fill="var(--theme-elevation-800)" />
-                <rect width="1.5" height="4" fill="var(--theme-bg)" />
+                <rect
+                  width="4"
+                  height="4"
+                  fill="var(--kc-as-diagram-szakmai, var(--theme-elevation-800))"
+                />
+                <rect width="1.5" height="4" fill="var(--kc-as-surface-raised, var(--theme-bg))" />
               </pattern>
             </defs>
             <rect
@@ -311,7 +345,7 @@ export function RevenueChart({ rows }: RevenueChartProps) {
               y="0.5"
               rx="2"
               fill="url(#ker-stat-szakmai-jel)"
-              stroke="var(--theme-elevation-800)"
+              stroke="var(--kc-as-diagram-szakmai, var(--theme-elevation-800))"
               strokeWidth="1"
             />
           </svg>

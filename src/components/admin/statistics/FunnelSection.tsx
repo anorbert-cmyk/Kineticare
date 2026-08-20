@@ -18,14 +18,17 @@ export function FunnelSection({ funnel }: { funnel: OrderFunnelCounts }) {
           label="Folyamatban (leadva / várakozik)"
           value={(funnel.created + funnel.paymentPending).toLocaleString('hu-HU')}
         />
-        {/* A nullánál nagyobb sikertelen fizetés a Payload saját hibaszínét
-            kapja (--theme-error-500 — ugyanaz a token, amit a
-            CourseProgressPanel hibaüzenete használ), a jelentést a címke
+        {/* A nullánál nagyobb sikertelen fizetés a márka danger tokenjét
+            kapja (--kc-as-danger = #b3261e, a fehér kártyán számolt 6,54:1
+            kontraszttal — custom.scss jegyzőkönyv; a Payload --theme-error-500
+            a tartalék, ha a márka-CSS nem töltődik be). A jelentést a címke
             szövege hordozza, nem a szín (WCAG 1.4.1). */}
         <StatCard
           label="Sikertelen fizetés"
           value={funnel.paymentFailed.toLocaleString('hu-HU')}
-          valueColor={funnel.paymentFailed > 0 ? 'var(--theme-error-500)' : undefined}
+          valueColor={
+            funnel.paymentFailed > 0 ? 'var(--kc-as-danger, var(--theme-error-500))' : undefined
+          }
         />
         <StatCard label="Megszakítva" value={funnel.cancelled.toLocaleString('hu-HU')} />
       </div>

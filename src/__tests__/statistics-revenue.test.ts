@@ -275,6 +275,21 @@ describe('StatisticsReport + RevenueChart — a számok a táblázatban is ott v
     expect(html).toContain('ugyanabban a 12 hónapban')
   })
 
+  it('a gyökér a kc-adminstat márka-scope-ot viseli, eyebrow-sorral (tulajdonosi döntés, 2026-08-20)', () => {
+    const report = buildRevenueReport([], [], { months: 1, now: NOW })
+    const html = renderToStaticMarkup(createElement(StatisticsReport, { report }))
+    // A custom.scss márka-rétege ezen a classon keresztül hat — nélküle a
+    // nézet a Payload-kinézetre esne vissza, ezért a jelenléte szerkezeti
+    // követelmény.
+    expect(html).toContain('class="kc-adminstat"')
+    // A h1 fölötti eyebrow a landing felvezető-nyelve; a DOM-szöveg
+    // mondatkezdő, a verzált a CSS adja (ui-sztenderdek §3.1 M-4).
+    expect(html).toContain('Kimutatások')
+    // Az inline stílusok a márka-tokenre hivatkoznak, Payload-tartalékkal.
+    expect(html).toContain('--kc-as-')
+    expect(html).toContain('--theme-')
+  })
+
   it('az SVG oszlopdiagram role=img és aria-label mellett a táblázat is megjelenik', () => {
     const rows = aggregateMonthlyRevenue([], { months: 1, now: NOW })
     const svg = renderToStaticMarkup(createElement(RevenueChart, { rows }))

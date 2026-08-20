@@ -385,8 +385,17 @@ describe('G-K1 — minden var(--kc-*) hivatkozás LÉTEZŐ tokenre mutat', () =>
   const DEFINICIO_MINTA = /(--kc-[a-z0-9-]+)\s*:/g
   const HIVATKOZAS_MINTA = /var\(\s*(--kc-[a-z0-9-]+)/g
 
+  /* Az admin Statisztika nézet márka-rétege (tulajdonosi döntés, 2026-08-20)
+     a Payload route-groupban él, és scope-olt --kc-as-* tokeneket definiál
+     — a src/components/admin/statistics/** inline stílusai ezekre
+     hivatkoznak Payload-tartalékkal. A B9-védelem rá is vonatkozik: a
+     definíció- ÉS a hivatkozás-gyűjtésbe is belép, így az ottani elgépelt
+     token ugyanúgy megbukik itt. A storefront-kontrasztőrökbe (G-K2…K6)
+     viszont NEM kerül be: azok a storefront szelektorait mérik. */
+  const ADMIN_BRAND_CSS = join(SRC, 'app', '(payload)', 'custom.scss')
+
   const definialt = new Set<string>()
-  for (const fajl of CSS_FAJLOK) {
+  for (const fajl of [...CSS_FAJLOK, ADMIN_BRAND_CSS]) {
     for (const e of readFileSync(fajl, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').matchAll(DEFINICIO_MINTA)) {
       definialt.add(e[1])
     }
@@ -408,7 +417,7 @@ describe('G-K1 — minden var(--kc-*) hivatkozás LÉTEZŐ tokenre mutat', () =>
   }
 
   const hivatkozasok: Array<{ token: string; hol: string }> = []
-  for (const fajl of [...CSS_FAJLOK, ...TSX_FAJLOK]) {
+  for (const fajl of [...CSS_FAJLOK, ...TSX_FAJLOK, ADMIN_BRAND_CSS]) {
     const forras = readFileSync(fajl, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
     for (const e of forras.matchAll(HIVATKOZAS_MINTA)) {
       hivatkozasok.push({ token: e[1], hol: utvonal(fajl) })

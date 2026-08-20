@@ -4,14 +4,31 @@ import type { CSSProperties } from 'react'
  * A Statisztika nézet KÖZÖS stílus-tokenjei — minden szekció-komponens
  * innen importál, hogy a nézet egyetlen vizuális nyelvet beszéljen.
  *
- * ═══ VIZUÁLIS NYELV ═══
- * A kártya- és táblastílus az admin etalonját, a CourseProgressPanel-t
- * követi (elevation-50 háttér, elevation-100 keret, érték felül 1.5rem/600,
- * címke alatta elevation-650) — új vizuális nyelvet nem vezetünk be, mert az
- * azonos minta azonos jelentést hordoz (WCAG 2.2 SC 3.2.4 Consistent
- * Identification: https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html).
+ * ═══ VIZUÁLIS NYELV (tulajdonosi döntés, 2026-08-20) ═══
+ * A nézet a vevői oldal prémium márka-designnyelvét viseli — a tulajdonos
+ * 2026-08-20-i explicit kérése, ami erre az oldalra felülírja a
+ * docs/ui-sztenderdek.md §1.2 „az adminban a Payload design az elsődleges"
+ * szabályát. A korábbi CourseProgressPanel-mintás Payload-kinézetet ezért a
+ * márka-réteg váltja; a magyar mikroszöveg-szabályzat (ui-sztenderdek §3.1)
+ * változatlanul kötelező.
  *
- * ═══ RESZPONZIVITÁS ═══
+ * A márka-tokenek EGYETLEN igazságforrása a storefront tokens.css
+ * (src/app/(frontend)/styles/tokens.css); az admin-oldali, scope-olt másuk a
+ * src/app/(payload)/custom.scss `.kc-adminstat` blokkja, a kontraszt-
+ * jegyzőkönyvvel együtt. Minden érték itt `var(--kc-as-…, var(--theme-…))`
+ * alakú: ha a custom.scss nem töltődik be, a nézet a Payload-kinézetre esik
+ * vissza, nem törik el. A nyelv elemei:
+ *   - felületek: paper-föld + fehér, 1px hairline-keretes, 8px-radiusú
+ *     emelt felület, ÁRNYÉK NÉLKÜL (tokens.css 113–121. és 215–222. sor),
+ *   - vonalak: tábla-sorelválasztó = dekoratív hairline; ahol a keret
+ *     AZONOSÍT (görgetőkonténer határa), ott hairline-strong (tokens.css
+ *     118–121. sor; WCAG 2.2 SC 1.4.11 Non-text Contrast:
+ *     https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html),
+ *   - térköz: 4px-rács (tokens.css 198–207. sor),
+ *   - számok: Nunito Sans 700 + tabular-nums (az ár-kiemelés súllyal
+ *     történik, mérettel nem — tokens.css 168–169. sor).
+ *
+ * ═══ RESZPONZIVITÁS (változatlan) ═══
  * A kártyasor flex-wrap (flex: 1 1 8rem), így 320 px-en 1-2 oszlopba törik
  * media query nélkül; a táblák saját görgetőkonténerben (width: 100%,
  * overflowX: auto) csúsznak, tehát maga a LAP sosem görget vízszintesen.
@@ -24,62 +41,90 @@ import type { CSSProperties } from 'react'
  */
 
 export const pageStyle: CSSProperties = {
-  padding: 'calc(var(--base) * 1.5)',
+  background: 'var(--kc-as-bg, transparent)',
+  borderRadius: 'var(--kc-as-radius-md, 0)',
+  padding: 'var(--kc-as-space-6, calc(var(--base) * 1.5))',
   maxWidth: '64rem',
+}
+
+/* Eyebrow a h1 fölé — a landing prémium felvezető-sora: verzál CSS-ből
+   (a DOM-szöveg mondatkezdő marad, ui-sztenderdek §3.1 M-4), 0.24em
+   betűköz, ink-soft (tokens.css 195–196. sor; paperen 8,80:1). */
+export const eyebrowStyle: CSSProperties = {
+  color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
+  fontSize: '0.8125rem',
+  fontWeight: 600,
+  letterSpacing: 'var(--kc-as-tracking-eyebrow, 0.24em)',
+  marginTop: 0,
+  marginBottom: 'var(--kc-as-space-2, 0.5rem)',
+  textTransform: 'uppercase',
 }
 
 export const headingStyle: CSSProperties = {
   marginTop: 0,
-  marginBottom: 'calc(var(--base) * 0.5)',
+  marginBottom: 'var(--kc-as-space-2, calc(var(--base) * 0.5))',
 }
 
 /* 42rem ≈ 75 karakter magyar szöveggel — a 45–85 karakteres olvasható
    sorhossz-sávon belül (docs/ui-sztenderdek.md, tervezési skill 3. pont). */
 export const leadStyle: CSSProperties = {
-  color: 'var(--theme-elevation-650)',
+  color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
   marginTop: 0,
-  marginBottom: 'calc(var(--base) * 1.25)',
+  marginBottom: 'var(--kc-as-space-5, calc(var(--base) * 1.25))',
   maxWidth: '42rem',
 }
 
 export const cardRowStyle: CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
-  gap: 'calc(var(--base) * 0.5)',
-  marginBottom: 'calc(var(--base) * 1.5)',
+  gap: 'var(--kc-as-space-3, calc(var(--base) * 0.5))',
+  marginBottom: 'var(--kc-as-space-6, calc(var(--base) * 1.5))',
 }
 
+/* Kártya = emelt felület: fehér + 1px hairline + 8px radius, árnyék nélkül
+   (a landing kártya-nyelve, tokens.css 113–124. sor). A kártya kerete csak
+   dekorál, nem azonosít — az információt a szöveg hordozza, ezért elég a
+   halk hairline (tokens.css 118–121. sor). */
 export const cardStyle: CSSProperties = {
-  background: 'var(--theme-elevation-50)',
-  border: '1px solid var(--theme-elevation-100)',
-  borderRadius: '4px',
+  background: 'var(--kc-as-surface-raised, var(--theme-elevation-50))',
+  border: '1px solid var(--kc-as-hairline, var(--theme-elevation-100))',
+  borderRadius: 'var(--kc-as-radius-md, 4px)',
   flex: '1 1 8rem',
   minWidth: '8rem',
-  padding: 'calc(var(--base) * 0.5)',
+  padding: 'var(--kc-as-space-4, calc(var(--base) * 0.5))',
 }
 
 /* Érték FELÜL, nagyban — a szám a lényeg, a címke a kontextus (a dashboard
    kártyáin az adat vezet, a leírás követ; NN/g, Clutter-Free charts:
-   https://www.nngroup.com/articles/clutter-charts/). */
+   https://www.nngroup.com/articles/clutter-charts/). A súly 700: a márka a
+   kiemelt számot súllyal jelöli, nem mérettel (tokens.css 168–169. sor). */
 export const cardValueStyle: CSSProperties = {
   display: 'block',
   fontSize: '1.5rem',
   fontVariantNumeric: 'tabular-nums',
-  fontWeight: 600,
+  fontWeight: 700,
   lineHeight: 1.2,
 }
 
 export const cardLabelStyle: CSSProperties = {
-  color: 'var(--theme-elevation-650)',
+  color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
   display: 'block',
 }
 
 export const sectionStyle: CSSProperties = {
-  marginBottom: 'calc(var(--base) * 1.75)',
+  marginBottom: 'var(--kc-as-space-7, calc(var(--base) * 1.75))',
 }
 
+/* Tábla-konténer = emelt felület ÉS görgetőkonténer egyben: a kerete
+   azonosítja a (keskeny viewporton) görgethető adatterületet, ezért
+   hairline-strong jár neki (tokens.css 118–121. sor: „ahol a keret
+   azonosít… border-strong"; fehéren 4,13:1 ≥ 3:1, WCAG 1.4.11). */
 export const tableWrapStyle: CSSProperties = {
+  background: 'var(--kc-as-surface-raised, transparent)',
+  border: '1px solid var(--kc-as-hairline-strong, transparent)',
+  borderRadius: 'var(--kc-as-radius-md, 0)',
   overflowX: 'auto',
+  padding: 'var(--kc-as-space-4, 0)',
   width: '100%',
 }
 
@@ -94,22 +139,38 @@ export const tableStyle: CSSProperties = {
 }
 
 export const captionStyle: CSSProperties = {
+  color: 'var(--kc-as-text-muted, inherit)',
   textAlign: 'left',
   captionSide: 'top',
-  paddingBottom: '0.5rem',
+  paddingBottom: 'var(--kc-as-space-2, 0.5rem)',
 }
 
+/* A fejléc-sor alatti vonal a táblatest határát azonosítja → hairline-strong;
+   a sorelválasztó csak dekorál → hairline (tokens.css 118–121. sor). */
 export const thStyle: CSSProperties = {
   textAlign: 'left',
-  borderBottom: '1px solid var(--theme-elevation-250)',
-  padding: '0.5rem 0.75rem 0.5rem 0',
-  color: 'var(--theme-elevation-650)',
+  borderBottom: '1px solid var(--kc-as-hairline-strong, var(--theme-elevation-250))',
+  padding:
+    'var(--kc-as-space-2, 0.5rem) var(--kc-as-space-3, 0.75rem) var(--kc-as-space-2, 0.5rem) 0',
+  color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
   fontWeight: 600,
 }
 
 export const tdStyle: CSSProperties = {
-  borderBottom: '1px solid var(--theme-elevation-100)',
-  padding: '0.5rem 0.75rem 0.5rem 0',
+  borderBottom: '1px solid var(--kc-as-hairline, var(--theme-elevation-100))',
+  padding:
+    'var(--kc-as-space-2, 0.5rem) var(--kc-as-space-3, 0.75rem) var(--kc-as-space-2, 0.5rem) 0',
+}
+
+/* Sor-fejléc (<th scope="row">): a böngésző alapértelmezése középre igazítana
+   és félkövérezne — explicit balra igazítás kell, hogy a cella a bal-igazított
+   oszlopfejléce alá essen (WCAG 2.2 SC 1.3.1 Info and Relationships mellett a
+   vizuális oszloprend is maradjon konzisztens; a kiemelés súllyal történik,
+   mérettel nem — tokens.css 168–169. sor). */
+export const rowHeaderStyle: CSSProperties = {
+  ...tdStyle,
+  fontWeight: 600,
+  textAlign: 'left',
 }
 
 export const numericStyle: CSSProperties = {
@@ -124,6 +185,6 @@ export const thNumericStyle: CSSProperties = {
 }
 
 export const noticeStyle: CSSProperties = {
-  color: 'var(--theme-elevation-650)',
+  color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
   margin: 0,
 }

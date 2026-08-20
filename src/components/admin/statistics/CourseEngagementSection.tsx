@@ -6,6 +6,7 @@ import {
   captionStyle,
   noticeStyle,
   numericStyle,
+  rowHeaderStyle,
   sectionStyle,
   tableStyle,
   tableWrapStyle,
@@ -29,10 +30,11 @@ import {
  * https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html
  *
  * ═══ HANGSÚLY ═══
- * Az „El sem kezdte" érték nullánál nagyobb esetben vastag és a Payload
- * hibaszínét kapja: ők azok, akiket a munkatársak utolérnek. A jelentést az
- * oszlopfejléc szövege hordozza, a szín csak kiegészítő jelzés (WCAG 2.2
- * SC 1.4.1 Use of Color:
+ * Az „El sem kezdte" érték nullánál nagyobb esetben vastag és a márka
+ * danger tokenjét kapja (--kc-as-danger = #b3261e, fehér felületen számolt
+ * 6,54:1 kontraszt — custom.scss jegyzőkönyv; Payload-tartalékkal): ők azok,
+ * akiket a munkatársak utolérnek. A jelentést az oszlopfejléc szövege
+ * hordozza, a szín csak kiegészítő jelzés (WCAG 2.2 SC 1.4.1 Use of Color:
  * https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html).
  */
 
@@ -44,12 +46,8 @@ const engagementTableStyle: CSSProperties = {
 }
 
 const emphasizedCountStyle: CSSProperties = {
-  color: 'var(--theme-error-500)',
-  fontWeight: 600,
-}
-
-const linkStyle: CSSProperties = {
-  color: 'var(--theme-text)',
+  color: 'var(--kc-as-danger, var(--theme-error-500))',
+  fontWeight: 700,
 }
 
 export function CourseEngagementSection({
@@ -70,7 +68,12 @@ export function CourseEngagementSection({
       ) : (
         <>
           {engagement.truncated ? (
-            <p style={{ ...noticeStyle, marginBottom: 'calc(var(--base) * 1)' }}>
+            <p
+              style={{
+                ...noticeStyle,
+                marginBottom: 'var(--kc-as-space-4, calc(var(--base) * 1))',
+              }}
+            >
               A kurzusoknak a megjeleníthetőnél több adata van, ezért a számok alsó becslések. A
               pontos, hallgatónkénti adat a kurzus lapján érhető el.
             </p>
@@ -111,7 +114,7 @@ export function CourseEngagementSection({
               <tbody>
                 {engagement.courses.map((course) => (
                   <tr key={course.productId}>
-                    <th style={tdStyle} scope="row">
+                    <th style={rowHeaderStyle} scope="row">
                       {course.title}
                     </th>
                     <td style={tdStyle}>{AUDIENCE_LABELS[course.audience]}</td>
@@ -125,10 +128,11 @@ export function CourseEngagementSection({
                     </td>
                     <td style={numericStyle}>{`${String(course.averagePercent)}%`}</td>
                     <td style={tdStyle}>
-                      <a
-                        style={linkStyle}
-                        href={`/admin/collections/products/${String(course.productId)}`}
-                      >
+                      {/* A link színét a custom.scss `.kc-adminstat a` szabálya
+                          adja (ink + aláhúzás, hover accent-deep — a landing
+                          link-nyelve); a márka-CSS nélkül a Payload saját
+                          link-stílusa érvényesül. */}
+                      <a href={`/admin/collections/products/${String(course.productId)}`}>
                         Névsor és szűrés a kurzus lapján
                       </a>
                     </td>
@@ -137,7 +141,13 @@ export function CourseEngagementSection({
               </tbody>
             </table>
           </div>
-          <p style={{ ...noticeStyle, marginTop: 'calc(var(--base) * 0.75)', maxWidth: '42rem' }}>
+          <p
+            style={{
+              ...noticeStyle,
+              marginTop: 'var(--kc-as-space-3, calc(var(--base) * 0.75))',
+              maxWidth: '42rem',
+            }}
+          >
             A név szerinti lista a kurzus szerkesztőlapján, a Tananyag alatti Kurzus-haladás
             panelben van: ott állapot szerint szűrhetsz (mind, nem kezdte el, folyamatban,
             befejezte), név vagy e-mail alapján kereshetsz, és látod a leckénkénti lemorzsolódást
