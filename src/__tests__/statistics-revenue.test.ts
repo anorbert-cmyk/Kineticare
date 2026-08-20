@@ -367,11 +367,14 @@ describe('RevenueChart — jelmagyarázat, rövid tickek, Y-tengely', () => {
     const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
     expect(html).toContain('overflow-x:auto')
     // A 720 a viewBox natív szélessége, a --kc-as-px a 13-as Payload-
-    // gyökérhez igazított rem-egység (custom.scss): alapállapotban pontosan
-    // 720px, a gyökérrel skálázódik. Az 1px fallback a scss nélkül is
-    // pontos px-értéket ad (a nyers 45rem 585px-re zsugorodott volna —
-    // 2026-08-20-i élő audit).
-    expect(html).toContain('min-width:calc(720 * var(--kc-as-px, 1px))')
+    // gyökérhez igazított rem-egység (custom.scss). A `max()` alsó korlát
+    // AZÉRT kell, mert a Payload 1024 px alatt 12 px-re viszi a gyökeret —
+    // enélkül a rajzolat 0,9231-szeresére kicsinyedne, a tick 11,08 px-re.
+    // FIGYELEM: ez csak a kifejezés ALAKJÁT rögzíti. A tényleges tick-méretet
+    // SZÁMOLÓ őr méri: src/__tests__/statisztika-diagram-tick.test.ts — egy
+    // string-egyezés nem tud különbséget tenni 12,00 és 11,08 px között, és
+    // pontosan ezért engedte át ez az állítás a #126 regresszióját.
+    expect(html).toContain('min-width:max(720px, calc(720 * var(--kc-as-px, 1px)))')
   })
 
   it('a diagram görgetője billentyűzetről fókuszálható és nevesített (WCAG 2.1.1, 4.1.2)', () => {
