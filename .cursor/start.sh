@@ -23,6 +23,12 @@
 # (lásd .cursor/environment.json), nem itt.
 set -euo pipefail
 
+# Node 24-et garantálunk (a repó engines/.nvmrc kikötése). A Cloud Agent
+# /exec-daemon/node shime (Node 22) egyébként PATH-előnyt élvez és elárnyékolná
+# a rendszerbeli Node 24-et — az explicit prepend ezt a parancs futásakor
+# felülírja. A NodeSource Node 24 a /usr/bin/node alatt él.
+export PATH="/usr/bin:$PATH"
+
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$HOME/.kineticare-dev.env"
 

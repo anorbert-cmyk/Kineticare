@@ -1,11 +1,11 @@
 {
   "name": "Kineticare",
-  "install": "npm ci",
+  "install": "export PATH=\"/usr/bin:$PATH\"\nnpm ci",
   "start": "bash .cursor/start.sh",
   "terminals": [
     {
       "name": "dev",
-      "command": "set -a; . \"$HOME/.kineticare-dev.env\"; set +a; npm run dev"
+      "command": "export PATH=\"/usr/bin:$PATH\"; set -a; . \"$HOME/.kineticare-dev.env\"; set +a; npm run dev"
     }
   ]
 }
