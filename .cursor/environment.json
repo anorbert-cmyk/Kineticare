@@ -1,6 +1,6 @@
 {
   "name": "Kineticare",
-  "install": "export PATH=\"/usr/bin:$PATH\"\nnpm ci",
+  "install": "bash .cursor/install.sh",
   "start": "bash .cursor/start.sh",
   "terminals": [
     {
