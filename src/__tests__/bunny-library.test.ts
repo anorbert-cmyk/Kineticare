@@ -4,6 +4,7 @@ import { optionalBunnyStreamEnvVars, requiredEnvVars } from '../env'
 import {
   BUNNY_LIBRARY_API_KEY_ENV,
   BUNNY_PUBLIC_LIBRARY_API_KEY_ENV,
+  BUNNY_SEARCH_MAX_LENGTH,
   listBunnyLibraryVideos,
   parseBunnyLibraryVideo,
   parseBunnyLibraryListPayload,
@@ -124,5 +125,36 @@ describe('listBunnyLibraryVideos', () => {
       expect(result.list.videos[0]?.title).toBe('Lecke 1')
       expect(JSON.stringify(result)).not.toContain(DUMMY_KEY)
     }
+  })
+
+  it('nem numerikus libraryId → invalid-library-id, nincs fetch', async () => {
+    process.env.BUNNY_STREAM_LIBRARY_API_KEY = DUMMY_KEY
+    process.env.NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID = '../evil'
+    const fetchImpl = vi.fn()
+    const result = await listBunnyLibraryVideos({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      kind: 'protected',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.code).toBe('invalid-library-id')
+    }
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('túl hosszú keresés → invalid-search, nincs fetch', async () => {
+    process.env.BUNNY_STREAM_LIBRARY_API_KEY = DUMMY_KEY
+    process.env.NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID = '4242'
+    const fetchImpl = vi.fn()
+    const result = await listBunnyLibraryVideos({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      kind: 'protected',
+      search: 'x'.repeat(BUNNY_SEARCH_MAX_LENGTH + 1),
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.code).toBe('invalid-search')
+    }
+    expect(fetchImpl).not.toHaveBeenCalled()
   })
 })

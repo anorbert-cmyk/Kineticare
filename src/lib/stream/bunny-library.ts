@@ -48,7 +48,21 @@ export type BunnyLibraryListResult =
   { ok: true; list: BunnyLibraryList } | { ok: false; code: BunnyLibraryErrorCode; message: string }
 
 export type BunnyLibraryErrorCode =
-  'not-configured' | 'unauthorized' | 'upstream' | 'invalid-response'
+  | 'not-configured'
+  | 'unauthorized'
+  | 'upstream'
+  | 'invalid-response'
+  | 'invalid-library-id'
+  | 'invalid-search'
+
+/** Bunny Stream library-azonosító: pozitív egész, path-injekció nélkül. */
+export const BUNNY_LIBRARY_ID_PATTERN = /^\d{1,12}$/
+/** A keresőmező felső hossza: a query-string ne legyen tetszőlegesen hosszú. */
+export const BUNNY_SEARCH_MAX_LENGTH = 200
+
+export function isBunnyLibraryId(value: string): boolean {
+  return BUNNY_LIBRARY_ID_PATTERN.test(value)
+}
 
 /** A Bunny Stream videó-státusz kódjai (VideoModel.status). */
 const STATUS_LABELS: Record<number, string> = {
@@ -195,6 +209,23 @@ export async function listBunnyLibraryVideos(
     }
   }
 
+  if (!isBunnyLibraryId(config.libraryId)) {
+    return {
+      ok: false,
+      code: 'invalid-library-id',
+      message: 'A videótár azonosítója érvénytelen. A Bunny library azonosító csak szám lehet.',
+    }
+  }
+
+  const search = deps.search?.trim() ?? ''
+  if (search.length > BUNNY_SEARCH_MAX_LENGTH) {
+    return {
+      ok: false,
+      code: 'invalid-search',
+      message: 'A keresés túl hosszú. Rövidítsd a kifejezést.',
+    }
+  }
+
   const itemsPerPage = deps.itemsPerPage ?? DEFAULT_PAGE_SIZE
   const collected: BunnyLibraryVideo[] = []
   let totalItems: number | null = null
@@ -211,8 +242,7 @@ export async function listBunnyLibraryVideos(
     url.searchParams.set('page', String(page))
     url.searchParams.set('itemsPerPage', String(itemsPerPage))
     url.searchParams.set('orderBy', 'date')
-    const search = deps.search?.trim()
-    if (search) {
+    if (search.length > 0) {
       url.searchParams.set('search', search)
     }
 

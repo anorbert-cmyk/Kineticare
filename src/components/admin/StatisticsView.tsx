@@ -3,7 +3,7 @@ import type { AdminViewServerProps } from 'payload'
 import { logger } from '../../lib/logger'
 import { queryRevenueReport } from '../../lib/statistics/query'
 import { canAccessStatistics, type RevenueReport } from '../../lib/statistics/revenue'
-import { AdminChrome } from './AdminChrome'
+import { AdminChrome, AdminViewFrame } from './AdminChrome'
 import { StatisticsAccessDenied, StatisticsReport, StatisticsUnavailable } from './StatisticsReport'
 
 /**
@@ -25,9 +25,9 @@ export async function StatisticsView(props: AdminViewServerProps) {
   const { req } = props.initPageResult
   if (!canAccessStatistics(req.user)) {
     return (
-      <AdminChrome props={props}>
+      <AdminViewFrame props={props}>
         <StatisticsAccessDenied />
-      </AdminChrome>
+      </AdminViewFrame>
     )
   }
 

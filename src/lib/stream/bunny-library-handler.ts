@@ -3,7 +3,11 @@ import type { Payload } from 'payload'
 import { hasStaffOrOwnerRole } from '../../access/roles'
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
-import { listBunnyLibraryVideos, type BunnyLibraryKind } from './bunny-library'
+import {
+  listBunnyLibraryVideos,
+  type BunnyLibraryErrorCode,
+  type BunnyLibraryKind,
+} from './bunny-library'
 
 /**
  * GET /api/admin/bunny-videos?library=protected|public — Bunny Stream
@@ -23,6 +27,18 @@ export interface BunnyVideosHandlerDeps {
 
 function parseLibraryKind(value: string | null): BunnyLibraryKind {
   return value === 'public' ? 'public' : 'protected'
+}
+
+function httpStatusForBunnyError(code: BunnyLibraryErrorCode): number {
+  switch (code) {
+    case 'not-configured':
+    case 'invalid-library-id':
+      return 503
+    case 'invalid-search':
+      return 400
+    default:
+      return 502
+  }
 }
 
 export function createBunnyVideosHandler(
@@ -62,8 +78,10 @@ export function createBunnyVideosHandler(
       })
 
       if (!result.ok) {
-        const status = result.code === 'not-configured' ? 503 : 502
-        return Response.json({ error: result.message, code: result.code }, { status })
+        return Response.json(
+          { error: result.message, code: result.code },
+          { status: httpStatusForBunnyError(result.code) },
+        )
       }
 
       return Response.json({

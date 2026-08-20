@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   mapOrderDocToRevenueInput,
   queryRevenueReport,
+  readStatisticsPages,
   type StatisticsOrderDoc,
 } from '../lib/statistics/query'
 
@@ -96,5 +97,80 @@ describe('queryRevenueReport', () => {
     expect(report.totals.totalHuf).toBe(1000)
     expect(report.funnel.paid).toBe(1)
     expect(report.funnel.paymentFailed).toBe(1)
+  })
+
+  it('szám-product és { id } stub audience-ét products.find pótolja, id is a selectben van', async () => {
+    const paidDocs: StatisticsOrderDoc[] = [
+      {
+        status: 'paid',
+        createdAt: '2026-08-10T10:00:00.000Z',
+        items: [
+          { product: 41, quantity: 1, priceHufSnapshot: 1000, titleSnapshot: 'Szám' },
+          { product: { id: 42 }, quantity: 1, priceHufSnapshot: 2000, titleSnapshot: 'Stub' },
+          {
+            product: { id: 43, audience: null },
+            quantity: 1,
+            priceHufSnapshot: 3000,
+            titleSnapshot: 'Explicit null',
+          },
+        ],
+      },
+    ]
+    const find = vi.fn(async (args: { collection: string; where?: unknown }) => {
+      if (args.collection === 'products') {
+        return {
+          docs: [
+            { id: 41, audience: 'szakember' },
+            { id: 42, audience: 'szakember' },
+          ],
+        }
+      }
+      if (args.where) {
+        return { docs: paidDocs, hasNextPage: false, totalDocs: 1 }
+      }
+      return { docs: [{ status: 'paid' }], hasNextPage: false, totalDocs: 1 }
+    })
+
+    const report = await queryRevenueReport({
+      payload: { find } as never,
+      now: new Date('2026-08-20T12:00:00Z'),
+      months: 1,
+    })
+
+    const productCall = find.mock.calls.find((call) => {
+      const args = call[0] as { collection?: string }
+      return args.collection === 'products'
+    })
+    expect(productCall).toBeDefined()
+    const productArgs = productCall?.[0] as {
+      select?: Record<string, unknown>
+      where?: { id?: { in?: number[] } }
+    }
+    expect(productArgs.select).toEqual({ id: true, audience: true })
+    expect(productArgs.where?.id?.in?.sort()).toEqual([41, 42])
+    expect(report.totals.szakemberHuf).toBe(3000)
+    expect(report.totals.laikusHuf).toBe(3000)
+  })
+})
+
+describe('readStatisticsPages — csonkolás csak ha maradt sor', () => {
+  it('pontosan a korlátnyi, teljes halmaz nem truncated', async () => {
+    const result = await readStatisticsPages(
+      async () => ({ docs: [{ id: 1 }, { id: 2 }], hasNextPage: false }),
+      2,
+      2,
+    )
+    expect(result.docs).toHaveLength(2)
+    expect(result.truncated).toBe(false)
+  })
+
+  it('a korlátnál van következő lap → truncated', async () => {
+    const result = await readStatisticsPages(
+      async () => ({ docs: [{ id: 1 }, { id: 2 }], hasNextPage: true }),
+      2,
+      2,
+    )
+    expect(result.docs).toHaveLength(2)
+    expect(result.truncated).toBe(true)
   })
 })

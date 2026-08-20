@@ -186,7 +186,7 @@ function CourseTable({ rows }: { rows: readonly CourseRevenueRow[] }) {
     <div style={tableWrapStyle}>
       <table style={tableStyle}>
         <caption style={{ textAlign: 'left', captionSide: 'top', paddingBottom: '0.5rem' }}>
-          Bevétel kurzusonként
+          Bevétel kurzusonként, ugyanabban a 12 hónapban
         </caption>
         <thead>
           <tr>

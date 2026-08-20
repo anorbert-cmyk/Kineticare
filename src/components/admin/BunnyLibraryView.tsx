@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 import type { AdminViewServerProps } from 'payload'
 
 import { hasStaffOrOwnerRole } from '../../access/roles'
-import { AdminChrome } from './AdminChrome'
+import { AdminChrome, AdminViewFrame } from './AdminChrome'
 import { BunnyLibraryPanel } from './BunnyLibraryPanel'
 
 /**
@@ -24,12 +24,12 @@ export function BunnyLibraryView(props: AdminViewServerProps) {
   const { req } = props.initPageResult
   if (!hasStaffOrOwnerRole(req.user)) {
     return (
-      <AdminChrome props={props}>
+      <AdminViewFrame props={props}>
         <div style={pageStyle}>
           <h1 style={{ marginTop: 0 }}>Videótár</h1>
           <p>{DENIED_MESSAGE}</p>
         </div>
-      </AdminChrome>
+      </AdminViewFrame>
     )
   }
 

@@ -226,6 +226,19 @@ export function sumRevenueTotals(rows: readonly MonthlyRevenueRow[]): RevenueTot
   return totals
 }
 
+function ordersInMonthWindow(
+  orders: readonly RevenueOrderInput[],
+  options?: { months?: number; now?: Date },
+): readonly RevenueOrderInput[] {
+  const months = options?.months ?? DEFAULT_MONTHS
+  const now = options?.now ?? new Date()
+  const windowKeys = new Set(listMonthKeys(now, months))
+  return orders.filter((order) => {
+    const month = orderMonthKey(order)
+    return month !== null && windowKeys.has(month)
+  })
+}
+
 export function aggregateCourseRevenue(orders: readonly RevenueOrderInput[]): CourseRevenueRow[] {
   const bySku = new Map<string, CourseRevenueRow & { orderIds: Set<number> }>()
   let orderIndex = 0
@@ -343,11 +356,15 @@ export function buildRevenueReport(
   statuses: readonly string[],
   options?: { months?: number; now?: Date; truncated?: boolean },
 ): RevenueReport {
-  const months = aggregateMonthlyRevenue(orders, options)
+  const monthOptions = { months: options?.months ?? DEFAULT_MONTHS, now: options?.now }
+  const months = aggregateMonthlyRevenue(orders, monthOptions)
   return {
     months,
     totals: sumRevenueTotals(months),
-    courses: aggregateCourseRevenue(orders),
+    // A kurzus-tábla ugyanarra az ablakra vonatkozik, mint a havi összeg.
+    // A tölcsér szándékosan teljes állomány: a nyitott/sikertelen fizetés
+    // operatív jelzés, nem 12 havi bevétel.
+    courses: aggregateCourseRevenue(ordersInMonthWindow(orders, monthOptions)),
     funnel: aggregateOrderFunnel(statuses),
     truncated: options?.truncated === true,
   }

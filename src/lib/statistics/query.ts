@@ -5,8 +5,10 @@
  * - Csak a szerepkör-kapu UTÁN hívható (`overrideAccess: true` különben
  *   adatszivárgás). A nézet a `canAccessStatistics` után hívja.
  * - A `refunds` mezőt NEM kérjük le és NEM olvassuk (owner-only, CLAUDE.md 4.).
- * - `depth: 1` kell az `items[].product.audience`-hez. Ha a product mégis
- *   csak azonosítóként jön, a tétel a laikus ágba esik (normalizeAudience).
+ * - `depth: 1` kell az `items[].product.audience`-hez. Ha a product csak
+ *   azonosító (szám vagy `{ id }` audience nélkül), a
+ *   `hydrateProductAudience` külön `products.find`-del pótolja. Explicit
+ *   `audience: null` marad null → laikus.
  * - Lapozás felső korláttal: a `limit: 0` korlátlan memóriát jelentene. A
  *   kurzus-haladás panel mintájára explicit lapméret + max, és a csonkolást
  *   a nézet kimondja.
@@ -75,7 +77,11 @@ const STATUS_SELECT = {
   status: true,
 } as const
 
-async function readAllPages<T>(
+/**
+ * Lapozott beolvasás felső korláttal. A pontosan a korláttal egyező, teljes
+ * halmaz NEM csonkolt — ugyanaz a szabály, mint a kurzus-haladás panelen.
+ */
+export async function readStatisticsPages<T>(
   fetchPage: (page: number, limit: number) => Promise<FindResultLike<T>>,
   pageSize: number,
   maxDocs: number,
@@ -88,7 +94,12 @@ async function readAllPages<T>(
     const pageDocs = Array.isArray(result.docs) ? result.docs : []
     docs.push(...pageDocs)
     if (docs.length >= maxDocs) {
-      return { docs: docs.slice(0, maxDocs), truncated: true }
+      const hasMorePages =
+        typeof result.hasNextPage === 'boolean' ? result.hasNextPage : pageDocs.length === pageSize
+      return {
+        docs: docs.slice(0, maxDocs),
+        truncated: hasMorePages || docs.length > maxDocs,
+      }
     }
     if (pageDocs.length < pageSize || result.hasNextPage === false) {
       return { docs, truncated: false }
@@ -139,6 +150,38 @@ export function mapStatusDocs(docs: readonly StatisticsStatusDoc[]): string[] {
   return docs.map((doc) => (typeof doc.status === 'string' ? doc.status : ''))
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function productIdOf(product: unknown): number | null {
+  if (typeof product === 'number' && Number.isFinite(product)) {
+    return product
+  }
+  if (isRecord(product) && typeof product.id === 'number' && Number.isFinite(product.id)) {
+    return product.id
+  }
+  return null
+}
+
+/**
+ * Audience-t kell pótolni, ha a product csak azonosító, vagy `{ id }` van
+ * audience kulcs nélkül. Explicit `audience: null` NEM hiányzó: az a laikus
+ * fallback a `normalizeAudience`-ben.
+ */
+function productNeedsAudienceHydration(product: unknown): boolean {
+  if (typeof product === 'number' && Number.isFinite(product)) {
+    return true
+  }
+  if (!isRecord(product)) {
+    return false
+  }
+  if (typeof product.id !== 'number' || !Number.isFinite(product.id)) {
+    return false
+  }
+  return !('audience' in product)
+}
+
 async function hydrateProductAudience(
   payload: Pick<Payload, 'find'>,
   docs: StatisticsOrderDoc[],
@@ -146,8 +189,11 @@ async function hydrateProductAudience(
   const missingIds = new Set<number>()
   for (const doc of docs) {
     for (const item of doc.items ?? []) {
-      if (typeof item.product === 'number') {
-        missingIds.add(item.product)
+      if (productNeedsAudienceHydration(item.product)) {
+        const id = productIdOf(item.product)
+        if (id !== null) {
+          missingIds.add(id)
+        }
       }
     }
   }
@@ -161,7 +207,7 @@ async function hydrateProductAudience(
     depth: 0,
     pagination: false,
     limit: missingIds.size,
-    select: { audience: true },
+    select: { id: true, audience: true },
     overrideAccess: true,
   })) as FindResultLike<{ id?: unknown; audience?: unknown }>
 
@@ -176,12 +222,16 @@ async function hydrateProductAudience(
     ...doc,
     items: Array.isArray(doc.items)
       ? doc.items.map((item) => {
-          if (typeof item.product !== 'number') {
+          if (!productNeedsAudienceHydration(item.product)) {
+            return item
+          }
+          const id = productIdOf(item.product)
+          if (id === null) {
             return item
           }
           return {
             ...item,
-            product: { id: item.product, audience: audienceById.get(item.product) },
+            product: { id, audience: audienceById.get(id) },
           }
         })
       : doc.items,
@@ -202,7 +252,7 @@ export interface QueryRevenueReportDeps {
  * Payload-mockkal, auth nélkül futhasson.
  */
 export async function queryRevenueReport(deps: QueryRevenueReportDeps): Promise<RevenueReport> {
-  const paidPage = await readAllPages<StatisticsOrderDoc>(
+  const paidPage = await readStatisticsPages<StatisticsOrderDoc>(
     (page, limit) =>
       deps.payload.find({
         collection: 'orders',
@@ -217,7 +267,7 @@ export async function queryRevenueReport(deps: QueryRevenueReportDeps): Promise<
     STATISTICS_ORDER_MAX,
   )
 
-  const funnelPage = await readAllPages<StatisticsStatusDoc>(
+  const funnelPage = await readStatisticsPages<StatisticsStatusDoc>(
     (page, limit) =>
       deps.payload.find({
         collection: 'orders',

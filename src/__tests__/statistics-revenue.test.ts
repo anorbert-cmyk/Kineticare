@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { RevenueChart } from '../components/admin/RevenueChart'
 import { StatisticsReport } from '../components/admin/StatisticsReport'
+import { shouldWrapAdminChrome } from '../lib/admin/custom-view-auth'
 import {
   STATISTICS_ACCESS_DENIED_MESSAGE,
   aggregateCourseRevenue,
@@ -54,6 +55,13 @@ describe('canAccessStatistics — a nézet egyetlen védelme', () => {
 
   it('a magyar elutasító szöveg a nézetben él', () => {
     expect(STATISTICS_ACCESS_DENIED_MESSAGE).toBe('Ehhez a nézethez nincs jogosultságod.')
+  })
+
+  it('anoním látogatónál a DefaultTemplate kimarad, bejelentkezett usernél nem', () => {
+    expect(shouldWrapAdminChrome(null)).toBe(false)
+    expect(shouldWrapAdminChrome(undefined)).toBe(false)
+    expect(shouldWrapAdminChrome({ role: 'customer' })).toBe(true)
+    expect(shouldWrapAdminChrome({ role: 'staff' })).toBe(true)
   })
 })
 
@@ -219,6 +227,31 @@ describe('kurzus-bontás és tölcsér', () => {
     expect(funnel.created).toBe(1)
     expect(funnel.total).toBe(5)
   })
+
+  it('a kurzus-tábla ugyanarra a 12 hónapra vonatkozik, a tölcsér a teljes állományt számolja', () => {
+    const report = buildRevenueReport(
+      [
+        paid({
+          createdAt: '2024-01-10T10:00:00.000Z',
+          items: [
+            { audience: 'laikus', priceHuf: 10000, quantity: 1, titleSnapshot: 'Régi kurzus' },
+          ],
+        }),
+        paid({
+          createdAt: '2026-08-01T10:00:00.000Z',
+          items: [
+            { audience: 'laikus', priceHuf: 5000, quantity: 1, titleSnapshot: 'Friss kurzus' },
+          ],
+        }),
+      ],
+      ['paid', 'paid', 'payment_failed'],
+      { months: 12, now: NOW },
+    )
+    expect(report.courses.map((row) => row.sku)).toEqual(['Friss kurzus'])
+    expect(report.totals.totalHuf).toBe(5000)
+    expect(report.funnel.paid).toBe(2)
+    expect(report.funnel.paymentFailed).toBe(1)
+  })
 })
 
 describe('StatisticsReport + RevenueChart — a számok a táblázatban is ott vannak', () => {
@@ -238,6 +271,7 @@ describe('StatisticsReport + RevenueChart — a számok a táblázatban is ott v
     expect(html).toContain(formatHuf(79500))
     expect(html).toContain('Otthoni')
     expect(html).toContain('Sikertelen fizetés')
+    expect(html).toContain('ugyanabban a 12 hónapban')
   })
 
   it('az SVG oszlopdiagram role=img és aria-label mellett a táblázat is megjelenik', () => {

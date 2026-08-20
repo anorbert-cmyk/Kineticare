@@ -70,4 +70,34 @@ describe('createBunnyVideosHandler', () => {
     expect(text).not.toContain(DUMMY_KEY)
     expect(fetchImpl).toHaveBeenCalledOnce()
   })
+
+  it('nem numerikus libraryId → 503, nincs Bunny-hívás', async () => {
+    process.env.BUNNY_STREAM_LIBRARY_API_KEY = DUMMY_KEY
+    process.env.NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID = 'abc'
+    const fetchImpl = vi.fn()
+    const GET = createBunnyVideosHandler({
+      getPayload: async () => createPayload('staff') as never,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    const response = await GET(new Request(URL))
+    expect(response.status).toBe(503)
+    const body = (await response.json()) as { code: string }
+    expect(body.code).toBe('invalid-library-id')
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('túl hosszú search → 400, nincs Bunny-hívás', async () => {
+    process.env.BUNNY_STREAM_LIBRARY_API_KEY = DUMMY_KEY
+    process.env.NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID = '99'
+    const fetchImpl = vi.fn()
+    const GET = createBunnyVideosHandler({
+      getPayload: async () => createPayload('staff') as never,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    const response = await GET(new Request(`${URL}?search=${'x'.repeat(201)}`))
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as { code: string }
+    expect(body.code).toBe('invalid-search')
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
 })

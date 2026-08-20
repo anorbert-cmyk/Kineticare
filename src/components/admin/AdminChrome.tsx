@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import type { AdminViewServerProps } from 'payload'
 import { DefaultTemplate } from '@payloadcms/next/templates'
 
+import { shouldWrapAdminChrome } from '../../lib/admin/custom-view-auth'
+
 /**
  * A Payload admin keret (oldalsáv, fejléc) a saját nézetek körül.
  * A custom view magától nem kapja meg a sablont.
@@ -28,4 +30,22 @@ export function AdminChrome({
       {children}
     </DefaultTemplate>
   )
+}
+
+/**
+ * Custom nézet köré csak akkor teszi a DefaultTemplate-et, ha van user.
+ * Anoním elutasításnál a sablon kihagyása a 500 elleni védelem.
+ */
+export function AdminViewFrame({
+  props,
+  children,
+}: {
+  props: AdminViewServerProps
+  children: ReactNode
+}) {
+  const user = props.user ?? props.initPageResult.req.user
+  if (!shouldWrapAdminChrome(user)) {
+    return children
+  }
+  return <AdminChrome props={props}>{children}</AdminChrome>
 }
