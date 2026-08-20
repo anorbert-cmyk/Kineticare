@@ -1,0 +1,11 @@
+{
+  "name": "Kineticare",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "export PATH=\"/usr/bin:$PATH\"; set -a; . \"$HOME/.kineticare-dev.env\"; set +a; npm run dev"
+    }
+  ]
+}
