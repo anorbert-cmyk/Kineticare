@@ -351,6 +351,24 @@ export function formatMonthLabel(monthKey: string): string {
   })
 }
 
+/**
+ * Rövid hónap-tick a diagram X-tengelyéhez („szept.", „jan."). A táblázat
+ * marad a teljes `formatMonthLabel`-en; a diagramon a 12 hosszú címke
+ * („2025. szeptember") 320 px-es viewporton átfedett — a rövid alak elfér
+ * elforgatás nélkül. Az évszámot a diagram csak évváltásnál és az első
+ * oszlopnál írja ki (Carbon „landmark label" minta:
+ * https://carbondesignsystem.com/data-visualization/axes-and-labels/).
+ */
+export function formatMonthShort(monthKey: string): string {
+  const [yearPart, monthPart] = monthKey.split('-')
+  const year = Number(yearPart)
+  const month = Number(monthPart)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return monthKey
+  }
+  return new Date(year, month - 1, 1).toLocaleDateString('hu-HU', { month: 'short' })
+}
+
 export function buildRevenueReport(
   orders: readonly RevenueOrderInput[],
   statuses: readonly string[],

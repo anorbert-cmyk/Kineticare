@@ -1,6 +1,8 @@
 import type { AdminViewServerProps } from 'payload'
 
 import { logger } from '../../lib/logger'
+import { queryCourseEngagement } from '../../lib/statistics/engagement-query'
+import type { CourseEngagementReport } from '../../lib/statistics/engagement'
 import { queryRevenueReport } from '../../lib/statistics/query'
 import { canAccessStatistics, type RevenueReport } from '../../lib/statistics/revenue'
 import { AdminChrome, AdminViewFrame } from './AdminChrome'
@@ -19,7 +21,9 @@ import { StatisticsAccessDenied, StatisticsReport, StatisticsUnavailable } from 
  * A havi bevétel a fizetett rendelések tétel-szintű ág-bontása. A demó-seed
  * szándékosan szétosztott `paid` rendeléseket hoz létre, hogy ez a nézet
  * kitöltve jelenjen meg a demó-környezetben; élesben a valódi fizetések
- * ugyaninnen jönnek.
+ * ugyaninnen jönnek. A kurzus-hatás (eladás × haladás) a kurzus-haladás
+ * KÖZÖS összesítőjéből számolódik (src/lib/statistics/engagement-query.ts),
+ * hogy a statisztika és a kurzuslap ugyanazt a számot mutassa.
  */
 export async function StatisticsView(props: AdminViewServerProps) {
   const { req } = props.initPageResult
@@ -45,9 +49,21 @@ export async function StatisticsView(props: AdminViewServerProps) {
     )
   }
 
+  // A kurzus-hatás lekérdezés hibája NEM dönti el az oldalt: a bevételi rész
+  // ilyenkor is megjelenik, a szekció helyén magyar magyarázat áll (a
+  // StatisticsReport `engagement: null` ágán). A hiba naplózva marad.
+  let engagement: CourseEngagementReport | null = null
+  try {
+    engagement = await queryCourseEngagement({ payload: req.payload })
+  } catch (error) {
+    logger.error('statisztika-nézet: a kurzus-hatás lekérdezés nem sikerült', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
   return (
     <AdminChrome props={props}>
-      <StatisticsReport report={report} />
+      <StatisticsReport report={report} engagement={engagement} />
     </AdminChrome>
   )
 }

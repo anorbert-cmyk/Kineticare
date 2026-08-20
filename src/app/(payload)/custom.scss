@@ -1,0 +1,291 @@
+/**
+ * Admin márka-réteg a Statisztika nézethez (/admin/statisztika).
+ *
+ * ═══ MIÉRT LÉTEZIK (tulajdonosi döntés, 2026-08-20) ═══
+ * A docs/ui-sztenderdek.md §1.2 szerint az admin paneleken a Payload saját
+ * design-rendszere az elsődleges. A tulajdonos 2026-08-20-i explicit kérése
+ * ezt a Statisztika oldalra FELÜLÍRJA: ott a vevői oldalon élő prémium
+ * márka-designnyelv jár (Tenor Sans címsor, Nunito Sans törzs, paper-föld,
+ * hairline-alapú, árnyék nélküli felületek). A magyar mikroszöveg-szabályzat
+ * (docs/ui-sztenderdek.md §3.1) változatlanul kötelező marad.
+ *
+ * ═══ HATÓKÖR ═══
+ * MINDEN szabály a .kc-adminstat scope alatt él — az admin többi része
+ * (lista-nézetek, szerkesztők, CourseProgressPanel) VÁLTOZATLAN marad.
+ * A fájl a Payload 3 dokumentált custom-CSS mintáját követi: a (payload)
+ * layout importálja az `@payloadcms/next/css` UTÁN, így döntetlennél a
+ * márka-szabály nyer (https://payloadcms.com/docs/admin/customizing-css).
+ * A komponensek inline stílusai `var(--kc-as-…, var(--theme-…))` alakban
+ * hivatkoznak ide: ha ez a fájl nem töltődik be, a nézet a Payload-kinézetre
+ * esik vissza, nem törik el (src/components/admin/statistics/styles.ts).
+ *
+ * ═══ FORRÁSOK ═══
+ * - Token-igazságforrás: src/app/(frontend)/styles/tokens.css (paletta:
+ *   28–40. sor · kontraszt-jegyzőkönyv: 81–121. sor · tipográfia: 141–196.
+ *   sor · térköz-rács: 198–207. sor · árnyék-tilalom: 215–222. sor).
+ * - Betűk: src/app/(frontend)/styles/fonts.css — UGYANAZOK a self-hostolt
+ *   public/fonts/ woff2 metszetek, hotlink tilos (repo-szabály).
+ * - WCAG 2.2: 1.4.3 Contrast (Minimum), 1.4.11 Non-text Contrast,
+ *   1.4.1 Use of Color, 2.4.7 Focus Visible —
+ *   https://www.w3.org/WAI/WCAG22/Understanding/
+ * - Sötét téma (a paletta sötét párjainak levezetése): Material Design,
+ *   Dark theme — a magasabb réteg világosabb felületet kap, a hibaszín
+ *   sötét felületen a világosított error-árnyalat (baseline error80
+ *   = #ffb4ab): https://m2.material.io/design/color/dark-theme.html és
+ *   https://m3.material.io/styles/color/system/overview
+ * - Apple HIG, Dark Mode (a színek témánként adaptálódnak, nem invertálódnak):
+ *   https://developer.apple.com/design/human-interface-guidelines/dark-mode
+ *
+ * ═══ KONTRASZT-JEGYZŐKÖNYV (WCAG 2.2 relatív luminanciával SZÁMOLT értékek;
+ *     normál szöveg ≥ 4,5:1 · nagy szöveg ≥ 3:1 · UI-határ/nem-szöveg ≥ 3:1) ═══
+ *
+ * VILÁGOS téma — a tokens.css jegyzőkönyvéből újrahasznált párok:
+ *   ink #10243e        / paper #f6f9fc ......... 14,79:1  AA/AAA ✓
+ *   ink                / fehér #ffffff ......... 15,63:1  AA/AAA ✓
+ *   ink-soft #33495f   / paper ..................  8,80:1  AA/AAA ✓
+ *   ink-soft           / fehér ..................  9,30:1  AA/AAA ✓
+ *   hairline-strong #6b7f94 / fehér ............  4,13:1  UI-határ ✓
+ *   hairline-strong    / paper ..................  3,91:1  UI-határ ✓
+ *   accent-deep #2f6e9f (fókuszgyűrű) / paper ..  5,16:1  UI-határ ✓
+ * VILÁGOS téma — ÚJ, ehhez a nézethez számolt párok:
+ *   danger #b3261e     / fehér (kártya) ........  6,54:1  AA ✓
+ *   danger             / paper ..................  6,19:1  AA ✓
+ *   accent #3d78aa oszlop / fehér diagram-háttér  4,70:1  nem-szöveg ✓ (1.4.11)
+ *   ink oszlop         / fehér diagram-háttér ... 15,63:1  nem-szöveg ✓
+ *   accent / ink (szomszédos oszlopok) .........  3,32:1  nem-szöveg ✓ (1.4.11)
+ *
+ * SÖTÉT téma — a tokens.css on-dark mérései + ÚJ, itt számolt párok:
+ *   fehér              / ink-föld #10243e ...... 15,63:1  AA/AAA ✓ (tokens.css)
+ *   accent-quiet #9ec4df / ink-föld ............  8,49:1  AA/AAA ✓ (tokens.css)
+ *   fehér              / emelt felület #1a3757 . 12,15:1  AA/AAA ✓ (ÚJ)
+ *   accent-quiet       / emelt felület .........  6,61:1  AA ✓ (ÚJ)
+ *   danger-dark #ffb4ab / emelt felület ........  7,16:1  AA/AAA ✓ (ÚJ)
+ *   danger-dark        / ink-föld ...............  9,20:1  AA/AAA ✓ (ÚJ)
+ *   hairline-strong-dark #8aa3ba / emelt felület  4,65:1  UI-határ ✓ (ÚJ)
+ *   hairline-strong-dark / ink-föld ............  5,97:1  UI-határ ✓ (ÚJ)
+ *   hairline-dark #2c4a6e / emelt felület ......  1,34:1  TUDATOSAN dekoratív
+ *     (a világos hairline fehéren 1,31:1 — ugyanaz a szereposztás, mint a
+ *     tokens.css 118–121. sorában: sosem azonosító határ)
+ *   accent-quiet oszlop / emelt diagram-háttér ..  6,61:1  nem-szöveg ✓
+ *   fehér oszlop       / emelt diagram-háttér ... 12,15:1  nem-szöveg ✓
+ *   accent-quiet / fehér (szomszédos oszlopok) ..  1,84:1  — a megkülönböztetést
+ *     NEM a szín, hanem az átlós MINTÁZAT + körvonal hordozza (WCAG 1.4.1;
+ *     IBM Carbon, Legends: „Texture can be used instead of, or in addition
+ *     to, color" — https://carbondesignsystem.com/data-visualization/legends/);
+ *     a háttérrel szemben mindkét oszlop ≥ 3:1 (1.4.11).
+ *   fókuszgyűrű sötéten: fehér / ink-föld ...... 15,63:1  UI-határ ✓
+ *     (a tokens.css 139. sorának mintája: accent-deep az inken csak 2,87:1)
+ */
+
+/* ---- Betűk: ugyanazok a self-hostolt metszetek, mint a storefronton ------
+   (src/app/(frontend)/styles/fonts.css minta; a (frontend) stíluslap az
+   admin-fába nem jut el, ezért itt is deklarálni kell. Új fontfájl NINCS:
+   a public/fonts/ meglévő woff2-i töltődnek. font-display: swap — a szöveg
+   azonnal olvasható rendszerbetűvel, a metszet megérkezésekor cserélődik.) */
+
+@font-face {
+  font-family: 'Tenor Sans';
+  src: url('/fonts/tenor-sans-400-latin.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Tenor Sans';
+  src: url('/fonts/tenor-sans-400-latin-ext.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Nunito Sans';
+  src: url('/fonts/nunito-sans-var-latin.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Nunito Sans';
+  src: url('/fonts/nunito-sans-var-latin-ext.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* ---- Márka-tokenek és alapok — CSAK a Statisztika nézet scope-jában ------
+   MÉRET-EGYSÉG: PX, NEM REM (2026-08-20-i élő audit lelete). A Payload admin
+   gyökér-betűmérete 13px (--base-body-size: 13 —
+   node_modules/@payloadcms/ui/dist/scss/app.scss 10. sor; élőben mérve:
+   getComputedStyle(document.documentElement).fontSize = 13px), ezért minden
+   rem-alapú érték a storefront 16px-es alapjának 13/16-ára zsugorodott:
+   a törzs 13px-en, az eyebrow 10,6px-en, a tábla 12,4px-en, a diagram-tick
+   11,3px-en renderelt, a radius 6,5px lett a 8 helyett. A rem itt a
+   felhasználói betűméret-beállítást sem követné (a Payload fixen 13-ra
+   állítja), tehát a px semmit nem vesz el, a márka-skálát viszont pontosan
+   adja vissza. Külső mérce a helyreállított értékekhez: a törzs 16px a
+   16px-es minimum-ajánlás miatt (UXPin, Optimal Line Length — desktop min
+   font size 16px: https://www.uxpin.com/studio/blog/optimal-line-length-for-readability/),
+   a sorhossz 45–75 karakter (Baymard, Readability: The Optimal Line Length:
+   https://baymard.com/blog/line-length-readability). */
+
+.kc-adminstat {
+  /* Színek (tokens.css 28–49. sor nyers palettája). */
+  --kc-as-bg: #f6f9fc; /* paper: a lap földje */
+  --kc-as-surface-raised: #ffffff; /* a föld FÖLÉ emelt felület: kártya, tábla */
+  --kc-as-text: #10243e; /* ink */
+  --kc-as-text-muted: #33495f; /* ink-soft */
+  --kc-as-hairline: #d8e2eb; /* dekoratív 1px elválasztó */
+  --kc-as-hairline-strong: #6b7f94; /* azonosító UI-határ (≥ 3:1) */
+  --kc-as-danger: #b3261e; /* kiemelt hibaszám (fehéren 6,54:1) */
+  --kc-as-link-hover: #2f6e9f; /* accent-deep: link-hover (tokens.css 137. sor) */
+  --kc-as-focus: #2f6e9f; /* fókuszgyűrű világos felületen (tokens.css 138. sor) */
+  /* Diagram: Otthoni = accent (dekorációként megengedett, tokens.css
+     107–111. sor), Szakmai = ink + átlós mintázat (WCAG 1.4.1). */
+  --kc-as-diagram-otthoni: #3d78aa;
+  --kc-as-diagram-szakmai: #10243e;
+
+  /* Tipográfia (tokens.css 141–196. sor), px-ben a 13px-es admin-gyökér
+     miatt (lásd a szakasz fejkommentjét). A cím-1 a storefront L lépcsője
+     (tokens.css 178. sor: clamp(2rem, 1.62rem + 1.7vw, 2.9rem) 16px-es
+     alapon = 32 → 46,4px); a cím-2 admin-adaptáció: a landing H1/H2-közös L
+     mérete egy táblázatos adatlapon négy óriás szekciócímet adna, ezért a
+     szekciócím kisebb, a szintet a betűcsalád + szín + elhelyezés jelöli
+     (NN/g, Visual Hierarchy: a méret CSAK EGY a hierarchia hordozói közül —
+     https://www.nngroup.com/articles/visual-hierarchy-ux-definition/; a
+     három-méretes őr az admint kifejezetten kiveszi a hatóköréből:
+     src/__tests__/tipografia-harom-meret.test.ts 29–30. sor). */
+  --kc-as-font-heading: 'Tenor Sans', 'Georgia', 'Times New Roman', serif;
+  --kc-as-font-body: 'Nunito Sans', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --kc-as-font-cim-1: clamp(32px, 25.92px + 1.7vw, 46.4px);
+  --kc-as-font-cim-2: 24px;
+  --kc-as-tracking-eyebrow: 0.24em; /* landing eyebrow-nyelv (tokens.css 196. sor) */
+
+  /* Térköz: 4px-rács (tokens.css 198–207. sor), px-ben (13px-es gyökér). */
+  --kc-as-space-1: 4px;
+  --kc-as-space-2: 8px;
+  --kc-as-space-3: 12px;
+  --kc-as-space-4: 16px;
+  --kc-as-space-5: 24px;
+  --kc-as-space-6: 32px;
+  --kc-as-space-7: 48px;
+
+  --kc-as-radius-md: 8px; /* tokens.css 211. sor (0.5rem 16px-es alapon) */
+
+  /* A landing hairline-alapú, ÁRNYÉK NÉLKÜLI nyelve (tokens.css 215–222.
+     sor): a felületeket 1px-es vonal határolja, nem lebegtetés — ezért itt
+     sehol nincs box-shadow. */
+  background: var(--kc-as-bg);
+  border-radius: var(--kc-as-radius-md);
+  color: var(--kc-as-text);
+  font-family: var(--kc-as-font-body);
+  font-size: 16px; /* az M lépcső alsó határa (tokens.css 179. sor: 1rem a 16px-es storefront-alapon) */
+  line-height: 1.67; /* --kc-leading-body (tokens.css 184. sor) */
+}
+
+.kc-adminstat h1,
+.kc-adminstat h2 {
+  color: var(--kc-as-text);
+  font-family: var(--kc-as-font-heading);
+  font-weight: 400; /* a Tenor Sansnak csak 400-as metszete van (fonts.css) */
+  line-height: 1.2; /* --kc-leading-heading (tokens.css 183. sor) */
+}
+
+.kc-adminstat h1 {
+  font-size: var(--kc-as-font-cim-1);
+}
+
+.kc-adminstat h2 {
+  font-size: var(--kc-as-font-cim-2);
+  margin-bottom: var(--kc-as-space-3);
+  margin-top: 0;
+}
+
+/* Link: ink + aláhúzás, hover accent-deep — a landing footer-meta mintája
+   (tokens.css 136–137. sor). A hét állapot végiggondolva (termektervezes
+   skill 4. pont), 2026-08-20-i élő audit:
+   - ALAP: ink + EXPLICIT aláhúzás. A link színe azonos a törzsszöveggel,
+     tehát az aláhúzás az EGYETLEN nem-szín jelzés (WCAG 2.2 SC 1.4.1 Use of
+     Color); eddig csak a böngésző-alapértelmezés adta, deklarálva nem volt —
+     mostantól őr-teszt is védi. GOV.UK: „Links are blue and underlined by
+     default" — https://design-system.service.gov.uk/styles/links/
+   - HOVER: accent-deep szín + vastagabb aláhúzás. A GOV.UK mért indoklása:
+     a vastagodó aláhúzás a gyengén látóknak is észrevehető jelzés, a puszta
+     színváltásnál erősebb — https://designnotes.blog.gov.uk/2021/07/07/making-links-easier-to-see-and-read-on-gov-uk/
+   - FOCUS-VISIBLE: 2px gyűrű, ≥ 3:1 mindkét témában (WCAG 2.4.7; mérve:
+     világoson 5,45:1 fehéren, sötéten 12,15:1 — fenti jegyzőkönyv).
+   - ACTIVE: a szöveg-szín (a GOV.UK palettában a link-active = text:
+     https://design-system.service.gov.uk/styles/colour/) — kattintás közben
+     a hover-színről visszavált, ez a látható „lenyomva" visszajelzés.
+   - VISITED: SZÁNDÉKOSAN nincs külön szín. A GOV.UK kifejezett szabálya:
+     admin-felület gyakran változó tartalmú lapjaira mutató linknél a
+     visited-megkülönböztetés nem segít („…for example when linking to pages
+     with frequently-changing content such as the dashboard for an admin
+     interface" — https://design-system.service.gov.uk/styles/links/);
+     az NN/g visited-ajánlása (https://www.nngroup.com/articles/change-the-color-of-visited-links/)
+     a tartalom-felfedező navigációra szól, itt viszont minden sor-link
+     ugyanarra az élő adatlapra visz, amit szándékosan látogat újra a
+     munkatárs.
+   - DISABLED és FOLYAMATBAN: nem értelmezett (tiszta navigációs link,
+     nem űrlap-cselekvés). */
+.kc-adminstat a {
+  color: var(--kc-as-text);
+  text-decoration: underline;
+  text-underline-offset: 0.17em;
+}
+
+.kc-adminstat a:hover {
+  color: var(--kc-as-link-hover);
+  text-decoration-thickness: 2px;
+}
+
+.kc-adminstat a:active {
+  color: var(--kc-as-text);
+}
+
+/* A görgetőkonténerek (tabla-wrap, diagram) tabindex="0"-t viselnek, hogy
+   billentyűzetről is görgethetők legyenek (WCAG 2.1.1 Keyboard; axe-szabály:
+   scrollable-region-focusable —
+   https://dequeuniversity.com/rules/axe/4.12/scrollable-region-focusable;
+   a minta: Adrian Roselli, Under-Engineered Responsive Tables —
+   https://adrianroselli.com/2020/11/under-engineered-responsive-tables.html).
+   Fókuszban ugyanaz a gyűrű jár nekik, mint a linkeknek (WCAG 2.4.7). */
+.kc-adminstat a:focus-visible,
+.kc-adminstat [role='region'][tabindex]:focus-visible {
+  outline: 2px solid var(--kc-as-focus);
+  outline-offset: 2px;
+}
+
+/* ---- Sötét téma — a Payload a <html data-theme="dark">-ot állítja --------
+   A föld a márka sötét felülete (ink, tokens.css 126. sor), az emelt réteg
+   egy lépcsővel világosabb (Material dark-theme elv). Minden pár SZÁMOLT
+   értékkel a fenti jegyzőkönyvben. */
+[data-theme='dark'] .kc-adminstat {
+  --kc-as-bg: #10243e; /* ink: a sötét föld (fehér rajta 15,63:1) */
+  --kc-as-surface-raised: #1a3757; /* emelt réteg (fehér rajta 12,15:1) */
+  --kc-as-text: #ffffff;
+  --kc-as-text-muted: #9ec4df; /* accent-quiet (inken 8,49:1, emelten 6,61:1) */
+  --kc-as-hairline: #2c4a6e; /* dekoratív (1,34:1 — szándékosan halk) */
+  --kc-as-hairline-strong: #8aa3ba; /* azonosító határ (4,65:1 / 5,97:1) */
+  --kc-as-danger: #ffb4ab; /* világosított error-árnyalat (7,16:1 / 9,20:1) */
+  --kc-as-link-hover: #9ec4df; /* accent-quiet (8,49:1 az inken) */
+  --kc-as-focus: #ffffff; /* tokens.css 139. sor: accent-deep az inken csak 2,87:1 */
+  --kc-as-diagram-otthoni: #9ec4df; /* emelt háttéren 6,61:1 (≥ 3:1) */
+  --kc-as-diagram-szakmai: #ffffff; /* emelt háttéren 12,15:1 + mintázat */
+}

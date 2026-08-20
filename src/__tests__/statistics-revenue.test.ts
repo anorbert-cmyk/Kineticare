@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -13,6 +16,7 @@ import {
   buildRevenueReport,
   canAccessStatistics,
   formatHuf,
+  formatMonthShort,
   orderMonthKey,
   type RevenueOrderInput,
 } from '../lib/statistics/revenue'
@@ -274,11 +278,152 @@ describe('StatisticsReport + RevenueChart — a számok a táblázatban is ott v
     expect(html).toContain('ugyanabban a 12 hónapban')
   })
 
+  it('a gyökér a kc-adminstat márka-scope-ot viseli, eyebrow-sorral (tulajdonosi döntés, 2026-08-20)', () => {
+    const report = buildRevenueReport([], [], { months: 1, now: NOW })
+    const html = renderToStaticMarkup(createElement(StatisticsReport, { report }))
+    // A custom.scss márka-rétege ezen a classon keresztül hat — nélküle a
+    // nézet a Payload-kinézetre esne vissza, ezért a jelenléte szerkezeti
+    // követelmény.
+    expect(html).toContain('class="kc-adminstat"')
+    // A h1 fölötti eyebrow a landing felvezető-nyelve; a DOM-szöveg
+    // mondatkezdő, a verzált a CSS adja (ui-sztenderdek §3.1 M-4).
+    expect(html).toContain('Kimutatások')
+    // Az inline stílusok a márka-tokenre hivatkoznak, Payload-tartalékkal.
+    expect(html).toContain('--kc-as-')
+    expect(html).toContain('--theme-')
+  })
+
   it('az SVG oszlopdiagram role=img és aria-label mellett a táblázat is megjelenik', () => {
     const rows = aggregateMonthlyRevenue([], { months: 1, now: NOW })
     const svg = renderToStaticMarkup(createElement(RevenueChart, { rows }))
     expect(svg).toContain('role="img"')
     expect(svg).toContain('aria-label=')
     expect(svg).toContain('<rect')
+  })
+})
+
+describe('formatMonthShort — rövid magyar hónap-tick a diagramhoz', () => {
+  it('rövid magyar hónapnevet ad', () => {
+    expect(formatMonthShort('2025-09')).toBe('szept.')
+    expect(formatMonthShort('2026-01')).toBe('jan.')
+    expect(formatMonthShort('2026-08')).toBe('aug.')
+  })
+
+  it('értelmezhetetlen kulcsnál magát a kulcsot adja vissza', () => {
+    expect(formatMonthShort('nem-honap')).toBe('nem-honap')
+    expect(formatMonthShort('2026-13')).toBe('2026-13')
+  })
+})
+
+describe('RevenueChart — jelmagyarázat, rövid tickek, Y-tengely', () => {
+  it('a jelmagyarázat szöveggel nevezi meg a két ágat (WCAG 1.4.1)', () => {
+    const rows = aggregateMonthlyRevenue([], { months: 12, now: NOW })
+    const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
+    expect(html).toContain('Otthoni')
+    expect(html).toContain('Szakmai')
+  })
+
+  it('az X-tengely tickje rövid hónap, évszám az első oszlopon és januárnál', () => {
+    const rows = aggregateMonthlyRevenue([], { months: 12, now: NOW })
+    const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
+    expect(html).toContain('>szept.<')
+    expect(html).toContain('>jan.<')
+    // Évszám „landmark" felirat: az ablak eleje (2025) és az évváltás (2026).
+    expect(html).toContain('>2025<')
+    expect(html).toContain('>2026<')
+    // A hosszú hónapcímke csak az aria-labelben él, tickként nem jelenik meg.
+    expect(html).not.toContain('>2025. szeptember<')
+  })
+
+  it('az Y-tengelyen legalább 3 tick van magyar Ft-formátummal', () => {
+    const rows = aggregateMonthlyRevenue(
+      [
+        paid({
+          createdAt: '2026-08-01T10:00:00.000Z',
+          items: [
+            { audience: 'laikus', priceHuf: 79500, quantity: 1 },
+            { audience: 'szakember', priceHuf: 120000, quantity: 1 },
+          ],
+        }),
+      ],
+      { months: 12, now: NOW },
+    )
+    const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
+    expect(html).toContain('>0 Ft<')
+    expect(html).toContain('>60 e Ft<')
+    expect(html).toContain('>120 e Ft<')
+  })
+
+  it('a role=img és az aria-label a jelmagyarázattal együtt is megmarad', () => {
+    const rows = aggregateMonthlyRevenue([], { months: 12, now: NOW })
+    const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
+    expect(html).toContain('role="img"')
+    expect(html).toContain('aria-label=')
+    expect(html).toContain('<rect')
+  })
+
+  it('a diagram saját konténerében görög, a viewBox-szöveg nem zsugorodik 320 px-re', () => {
+    const rows = aggregateMonthlyRevenue([], { months: 12, now: NOW })
+    const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
+    expect(html).toContain('overflow-x:auto')
+    // px, nem rem: a Payload admin 13px-es gyökere a 45rem-et 585px-re
+    // zsugorította, és a tick a mért 11,27px-re esett a tervezett 12 alá
+    // (2026-08-20-i élő audit; a 720 a viewBox natív szélessége).
+    expect(html).toContain('min-width:720px')
+  })
+
+  it('a diagram görgetője billentyűzetről fókuszálható és nevesített (WCAG 2.1.1, 4.1.2)', () => {
+    // axe: scrollable-region-focusable —
+    // https://dequeuniversity.com/rules/axe/4.12/scrollable-region-focusable
+    const rows = aggregateMonthlyRevenue([], { months: 12, now: NOW })
+    const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
+    expect(html).toContain('role="region"')
+    expect(html).toContain('tabindex="0"')
+    expect(html).toContain('aria-label="Havi bevétel oszlopdiagram"')
+  })
+})
+
+describe('kc-adminstat márka-CSS őrök — fókusz, link-állapotok, méret-egység', () => {
+  const brandCss = readFileSync(
+    join(process.cwd(), 'src', 'app', '(payload)', 'custom.scss'),
+    'utf8',
+  )
+
+  it('a linknek explicit aláhúzása van (WCAG 1.4.1: a link színe a törzsével azonos)', () => {
+    // A link ink-színű, tehát az aláhúzás az egyetlen nem-szín jelzés —
+    // GOV.UK: https://design-system.service.gov.uk/styles/links/
+    const linkRule = brandCss.match(/\.kc-adminstat a \{[^}]*\}/)?.[0]
+    expect(linkRule).toBeDefined()
+    expect(linkRule).toContain('text-decoration: underline')
+  })
+
+  it('a fókuszgyűrű a linkre ÉS a görgethető régiókra is definiált (WCAG 2.4.7)', () => {
+    // Az inline stílus nem tud :focus-visible-t, ezért ennek a custom.scss-ben
+    // KELL élnie; a régió-szelektor az axe scrollable-region-focusable
+    // szabályhoz felvett tabindexes wrappereket fedi (2026-08-20-i audit).
+    expect(brandCss).toContain('.kc-adminstat a:focus-visible')
+    expect(brandCss).toContain(".kc-adminstat [role='region'][tabindex]:focus-visible")
+    const focusRule = brandCss.match(/:focus-visible \{[^}]*\}/)?.[0]
+    expect(focusRule).toContain('outline: 2px solid var(--kc-as-focus)')
+  })
+
+  it('a link active állapota definiált (termektervezes skill 4. pont: hét állapot)', () => {
+    expect(brandCss).toContain('.kc-adminstat a:active')
+  })
+
+  it('a scope-olt méret-tokenek px-alapúak (a Payload 13px-es gyökere miatt)', () => {
+    // 2026-08-20-i élő audit: a rem-értékek a 16px-es storefront-alap
+    // 13/16-ára zsugorodtak (törzs 13px, radius 6,5px). A tokenek px-ben
+    // rögzítettek; rem-alapú méret-token nem térhet vissza.
+    // A kommentek magyarázó rem-hivatkozásai nem számítanak, csak az érték.
+    const tokenLines = brandCss
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .filter((line) => /^\s*--kc-as-(space|radius|font-cim)/.test(line))
+    expect(tokenLines.length).toBeGreaterThanOrEqual(9)
+    for (const line of tokenLines) {
+      expect(line, `rem-alapú méret-token: ${line.trim()}`).not.toMatch(/[\d.]rem/)
+    }
+    expect(brandCss).toContain('font-size: 16px')
   })
 })
