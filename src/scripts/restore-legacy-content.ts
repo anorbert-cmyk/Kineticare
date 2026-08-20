@@ -1673,9 +1673,13 @@ const KAPCSOLAT_IDOPONTKERES = {
  *     A felirat változatlanul a §3.2 szótár #24 sora, mert a cselekvés
  *     ugyanaz, csak a cél kifejezése lapon belüli (WCAG 2.2 · 3.2.4).
  *
- * A rendelési idő és a helyszín szakemberenként továbbra sincs a repóban, ezért
- * az `availability` mező itt is ÜRES marad (kitalált nyitvatartás hazugság
- * lenne); az adminban egy sorral pótolható.
+ * A rendelési idő és a helyszín szakemberenként továbbra sincs a repóban. Az
+ * `availability` mező ezért NEM nyitvatartást ír (az kitalált adat lenne),
+ * hanem a valódi folyamatot: „A hívás során megbeszélitek, melyik rendelőbe
+ * érdemes jönnöd." A szöveget a közös `szakemberSzekcio` építő adja (lásd
+ * ugyanebben a fájlban, az `availability` beállításánál), a tulajdonos
+ * 2026-08-17-i válasza alapján — ez a komment 2026-08-20-ig még az azelőtti,
+ * ÜRES állapotot írta le, ami a kód olvasóját félrevezette.
  */
 const kapcsolatSzakemberSzekcio = (
   media: OldalLayoutMedia = {},

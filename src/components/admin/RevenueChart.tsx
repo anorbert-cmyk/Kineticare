@@ -61,13 +61,27 @@ import {
  *    oszlopdiagram kétirányú adatábrázolás: a WCAG 1.4.10 kivételként
  *    megengedi, hogy a diagram a saját konténerében görögjön, ahelyett,
  *    hogy a viewBox-szöveg 5 px-re zsugorodna. Az SVG ezért
- *    `min-width: calc(720 * var(--kc-as-px, 1px))` — a viewBox natív
- *    mérete a 13-as gyökérhez igazított rem-egységgel (custom.scss
- *    --kc-as-px; alapállapotban pontosan 720px, a gyökérrel skálázódik,
- *    így a tick sosem esik a tervezett 12px alá — a korábbi nyers 45rem
- *    585px-re zsugorodott, a tick mért 11,27px-re), a wrapper
+ *    `min-width: max(720px, calc(720 * var(--kc-as-px, 1px)))`, a wrapper
  *    `overflow-x: auto`. A jelmagyarázat HTML-ben van a diagram alatt,
  *    így a szövege keskeny viewporton sem zsugorodik.
+ *
+ *    ═══ MIÉRT `max()` ÉS NEM CSAK A REM-EGYSÉG (2026-08-20, MÉRVE) ═══
+ *    A `--kc-as-px` = `calc(1rem / 13)`, mert a Payload-admin gyökere 13 px
+ *    (node_modules/@payloadcms/ui/dist/scss/type.scss: `%body { font-size:
+ *    $baseline-body-size }`, vars.scss: `$baseline-body-size: 13px`).
+ *    CSAKHOGY a Payload 1024 px alatt LEVISZI a gyökeret 12 px-re
+ *    (app.scss: `html { @include mid-break { font-size: 12px } }`,
+ *    vars.scss: `$breakpoint-m-width: 1024px`). Ott tehát
+ *    `--kc-as-px` = 12/13 = 0,9231 px, a puszta rem-alak szerint a min-width
+ *    664,6 px lenne — és mivel a viewBox 720 EGYSÉG széles, az SVG teljes
+ *    rajzolata 0,9231-szeresére kicsinyedne, a 12-es tick MÉRT 11,08 px-re.
+ *    Az a 11,27 px-nél is rosszabb, amit ez a bekezdés hibaként ír le.
+ *    A `max()` a rem-skálát FÖLFELÉ meghagyja (nagyobb gyökéren nő, WCAG
+ *    1.4.4 / C14), de a viewBox natív 720 px-e alá nem enged — a tick így
+ *    minden gyökérméreten ≥ 12 px. Végrehajtható, SZÁMOLÓ őr védi:
+ *    src/__tests__/statisztika-diagram-tick.test.ts.
+ *    A `maxWidth`-nél ez a kérdés nem áll fenn: a felső korlát csökkenése
+ *    nem kicsinyíti a rajzolatot, csak korábban engedi a görgetést.
  *    - WCAG 2.2 SC 1.4.10 Reflow (kivétel: 2D adatábra / G214):
  *      https://www.w3.org/WAI/WCAG22/Understanding/reflow.html
  * 6. A GÖRGETŐ BILLENTYŰZETRŐL IS MŰKÖDIK: a wrapper role="region" +
@@ -99,7 +113,7 @@ const chartScrollStyle: CSSProperties = {
 const svgStyle: CSSProperties = {
   display: 'block',
   width: '100%',
-  minWidth: 'calc(720 * var(--kc-as-px, 1px))',
+  minWidth: 'max(720px, calc(720 * var(--kc-as-px, 1px)))',
   maxWidth: 'calc(832 * var(--kc-as-px, 1px))',
   height: 'auto',
 }

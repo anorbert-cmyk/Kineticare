@@ -261,6 +261,14 @@ gyanús vagy elmarad, **azonnal javít** — nem vár külön kérésre.
 
 ## Cursor-modellek (tulajdonosi kérés, 2026-08-20)
 
+> **A csapat alapbeállítása ettől függetlenül az Opus.** Ez a szekció azt írja
+> le, mi legyen bent a Cursor pickerében / Cloud Agentjén, ha onnan dolgozol —
+> a Kineticare ügynök-csapatának modelljét viszont a tulajdonos globális
+> utasítása és a `CLAUDE.md` „Munkamodell" szekciója köti ki (Opus-ügynökök).
+> A kettő nem ütközik: ez KÉSZLET, az Opus KIOSZTÁS. (Tisztázva 2026-08-20-án,
+> tulajdonosi döntésre, mert a #124 után a két hely ellentmondott egymásnak.)
+
+
 Az **Auto nem modell**: a Cursor Router kérésenként választ a készletből.
 Auto ≠ Grok 4.6, és Auto ≠ Composer. A Kineticare-munkánál a pickerben /
 Cloud Agenten **névre szólóan** ez a két modell legyen bent, ne csak Auto:
