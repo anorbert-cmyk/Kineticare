@@ -259,6 +259,22 @@ gyanús vagy elmarad, **azonnal javít** — nem vár külön kérésre.
 3. Railway MCP / CLI nélkül a dashboard-log és a publikus healthcheck a
    tartalék; a figyelést ettől még nem szabad kihagyni.
 
+## Cursor-modellek (tulajdonosi kérés, 2026-08-20)
+
+Az **Auto nem modell**: a Cursor Router kérésenként választ a készletből.
+Auto ≠ Grok 4.6, és Auto ≠ Composer. A Kineticare-munkánál a pickerben /
+Cloud Agenten **névre szólóan** ez a két modell legyen bent, ne csak Auto:
+
+1. **Composer** (`composer-2.5`, szükség szerint `composer-2.5-fast`) —
+   mindennapi kódolás, gyors kör, felderítés, rövidebb alügynök. A Cursor
+   nem vonja ki; a gyors munkához ezt kell indítani.
+2. **Cursor Grok 4.6** (`cursor-grok-4.6-high`) — hosszú Cloud Agent, nehéz
+   több lépéses munka, nagy kódbázis.
+
+Alügynök (Task): ha a vezető nem köt ki mást, a gyors felderítés Composer,
+a hosszú megvalósítás Grok 4.6. Az Auto-t ne tedd a csapat egyetlen
+modelljének.
+
 ## Környezeti változók
 
 Az `.env.example` a teljes, kommentezett referencia (kulcsok, értékek nélkül).
