@@ -28,13 +28,19 @@ import type { CSSProperties } from 'react'
  *   - számok: Nunito Sans 700 + tabular-nums (az ár-kiemelés súllyal
  *     történik, mérettel nem — tokens.css 168–169. sor).
  *
- * ═══ MÉRET-EGYSÉG: PX, NEM REM (2026-08-20-i élő audit) ═══
+ * ═══ MÉRET-EGYSÉG: REM a --kc-as-px egységgel (tulajdonosi döntés, 2026-08-20) ═══
  * A Payload admin gyökér-betűmérete 13px (--base-body-size: 13 —
- * node_modules/@payloadcms/ui/dist/scss/app.scss), ezért az itteni rem-értékek
- * a tervezett 16px-es storefront-alap 13/16-ára zsugorodtak (mérve: törzs
- * 13px, tábla 12,4px, kártya-érték 19,5px). A px a márka-skála pontos
- * visszaadása; a rem az adminban a felhasználói beállítást sem követné,
- * mert a Payload fixen 13-ra állítja. Részletes indoklás forrásokkal:
+ * node_modules/@payloadcms/ui/dist/scss/app.scss; mid-break alatt 12px),
+ * ezért minden méret a custom.scss `--kc-as-px: calc(1rem / 13)` egységével
+ * megy: `calc(N * var(--kc-as-px, 1px))`. Alapállapotban ez pixelre pontosan
+ * N px (16 * 1rem/13 = 16px a 13px-es gyökéren), a gyökérrel együtt viszont
+ * skálázódik — ahogy a Payload saját, rem-alapú `--base` tokenje is. A
+ * fallback szándékosan `1px`: ha a custom.scss nem töltődik be, az érték
+ * fix N px marad, a nézet nem törik. Az 1px hairline-keretek px-ben
+ * maradnak (vonal-identitás, nem szövegméret). Források: NN/g, Let Users
+ * Control Font Size (https://www.nngroup.com/articles/let-users-control-font-size/);
+ * WCAG 2.2 SC 1.4.4 + C14 technika
+ * (https://www.w3.org/WAI/WCAG22/Techniques/css/C14). Részletes indoklás:
  * custom.scss „Márka-tokenek" fejkomment.
  *
  * ═══ RESZPONZIVITÁS (változatlan) ═══
@@ -53,7 +59,7 @@ export const pageStyle: CSSProperties = {
   background: 'var(--kc-as-bg, transparent)',
   borderRadius: 'var(--kc-as-radius-md, 0)',
   padding: 'var(--kc-as-space-6, calc(var(--base) * 1.5))',
-  maxWidth: '1024px',
+  maxWidth: 'calc(1024 * var(--kc-as-px, 1px))',
 }
 
 /* Eyebrow a h1 fölé — a landing prémium felvezető-sora: verzál CSS-ből
@@ -62,7 +68,7 @@ export const pageStyle: CSSProperties = {
    S lépcső alsó határa (tokens.css 180. sor: 0.8125rem 16px-es alapon). */
 export const eyebrowStyle: CSSProperties = {
   color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
-  fontSize: '13px',
+  fontSize: 'calc(13 * var(--kc-as-px, 1px))',
   fontWeight: 600,
   letterSpacing: 'var(--kc-as-tracking-eyebrow, 0.24em)',
   marginTop: 0,
@@ -85,7 +91,7 @@ export const leadStyle: CSSProperties = {
   color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
   marginTop: 0,
   marginBottom: 'var(--kc-as-space-5, calc(var(--base) * 1.25))',
-  maxWidth: '528px',
+  maxWidth: 'calc(528 * var(--kc-as-px, 1px))',
 }
 
 export const cardRowStyle: CSSProperties = {
@@ -103,8 +109,8 @@ export const cardStyle: CSSProperties = {
   background: 'var(--kc-as-surface-raised, var(--theme-elevation-50))',
   border: '1px solid var(--kc-as-hairline, var(--theme-elevation-100))',
   borderRadius: 'var(--kc-as-radius-md, 4px)',
-  flex: '1 1 128px',
-  minWidth: '128px',
+  flex: '1 1 calc(128 * var(--kc-as-px, 1px))',
+  minWidth: 'calc(128 * var(--kc-as-px, 1px))',
   padding: 'var(--kc-as-space-4, calc(var(--base) * 0.5))',
 }
 
@@ -114,7 +120,7 @@ export const cardStyle: CSSProperties = {
    kiemelt számot súllyal jelöli, nem mérettel (tokens.css 168–169. sor). */
 export const cardValueStyle: CSSProperties = {
   display: 'block',
-  fontSize: '24px',
+  fontSize: 'calc(24 * var(--kc-as-px, 1px))',
   fontVariantNumeric: 'tabular-nums',
   fontWeight: 700,
   lineHeight: 1.2,
@@ -150,9 +156,9 @@ export const tableWrapStyle: CSSProperties = {
    9,3:1 / 6,61:1 (jegyzőkönyv a custom.scss-ben). */
 export const tableStyle: CSSProperties = {
   width: '100%',
-  minWidth: '576px',
+  minWidth: 'calc(576 * var(--kc-as-px, 1px))',
   borderCollapse: 'collapse',
-  fontSize: '15px',
+  fontSize: 'calc(15 * var(--kc-as-px, 1px))',
 }
 
 export const captionStyle: CSSProperties = {
@@ -209,5 +215,5 @@ export const thNumericStyle: CSSProperties = {
 export const noticeStyle: CSSProperties = {
   color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
   margin: 0,
-  maxWidth: '528px',
+  maxWidth: 'calc(528 * var(--kc-as-px, 1px))',
 }

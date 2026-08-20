@@ -366,10 +366,12 @@ describe('RevenueChart — jelmagyarázat, rövid tickek, Y-tengely', () => {
     const rows = aggregateMonthlyRevenue([], { months: 12, now: NOW })
     const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
     expect(html).toContain('overflow-x:auto')
-    // px, nem rem: a Payload admin 13px-es gyökere a 45rem-et 585px-re
-    // zsugorította, és a tick a mért 11,27px-re esett a tervezett 12 alá
-    // (2026-08-20-i élő audit; a 720 a viewBox natív szélessége).
-    expect(html).toContain('min-width:720px')
+    // A 720 a viewBox natív szélessége, a --kc-as-px a 13-as Payload-
+    // gyökérhez igazított rem-egység (custom.scss): alapállapotban pontosan
+    // 720px, a gyökérrel skálázódik. Az 1px fallback a scss nélkül is
+    // pontos px-értéket ad (a nyers 45rem 585px-re zsugorodott volna —
+    // 2026-08-20-i élő audit).
+    expect(html).toContain('min-width:calc(720 * var(--kc-as-px, 1px))')
   })
 
   it('a diagram görgetője billentyűzetről fókuszálható és nevesített (WCAG 2.1.1, 4.1.2)', () => {
@@ -411,19 +413,23 @@ describe('kc-adminstat márka-CSS őrök — fókusz, link-állapotok, méret-eg
     expect(brandCss).toContain('.kc-adminstat a:active')
   })
 
-  it('a scope-olt méret-tokenek px-alapúak (a Payload 13px-es gyökere miatt)', () => {
-    // 2026-08-20-i élő audit: a rem-értékek a 16px-es storefront-alap
-    // 13/16-ára zsugorodtak (törzs 13px, radius 6,5px). A tokenek px-ben
-    // rögzítettek; rem-alapú méret-token nem térhet vissza.
-    // A kommentek magyarázó rem-hivatkozásai nem számítanak, csak az érték.
-    const tokenLines = brandCss
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .split('\n')
-      .filter((line) => /^\s*--kc-as-(space|radius|font-cim)/.test(line))
-    expect(tokenLines.length).toBeGreaterThanOrEqual(9)
-    for (const line of tokenLines) {
-      expect(line, `rem-alapú méret-token: ${line.trim()}`).not.toMatch(/[\d.]rem/)
+  it('a méret-tokenek a --kc-as-px rem-egységgel mennek (NN/g + WCAG C14)', () => {
+    // Tulajdonosi döntés (2026-08-20): a méretek REM-alapúak, a 13-as
+    // Payload-gyökérhez igazított közös egységgel — a szövegméret kövesse a
+    // gyökér skálázását (NN/g, Let Users Control Font Size:
+    // https://www.nngroup.com/articles/let-users-control-font-size/;
+    // WCAG C14: https://www.w3.org/WAI/WCAG22/Techniques/css/C14).
+    // Az egység definíciója kötelező, és a méret-tokenek NYERS px-értéket
+    // nem hordozhatnak (a kommentek magyarázó hivatkozásai nem számítanak).
+    const uncommented = brandCss.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(uncommented).toContain('--kc-as-px: calc(1rem / 13)')
+    const tokenChunks = uncommented.match(/--kc-as-(space|radius|font-cim)[\w-]*:[^;]+;/g) ?? []
+    expect(tokenChunks.length).toBeGreaterThanOrEqual(9)
+    for (const chunk of tokenChunks) {
+      expect(chunk, `nyers px-es méret-token: ${chunk.trim()}`).not.toMatch(/[\d.]px/)
+      expect(chunk, `nem a közös egységgel megy: ${chunk.trim()}`).toContain('var(--kc-as-px)')
     }
-    expect(brandCss).toContain('font-size: 16px')
+    // A törzs betűmérete is az egységgel megy (16 tervezési px).
+    expect(uncommented).toContain('font-size: calc(16 * var(--kc-as-px))')
   })
 })

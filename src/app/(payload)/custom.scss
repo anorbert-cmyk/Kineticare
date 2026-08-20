@@ -130,22 +130,49 @@
 }
 
 /* ---- Márka-tokenek és alapok — CSAK a Statisztika nézet scope-jában ------
-   MÉRET-EGYSÉG: PX, NEM REM (2026-08-20-i élő audit lelete). A Payload admin
-   gyökér-betűmérete 13px (--base-body-size: 13 —
-   node_modules/@payloadcms/ui/dist/scss/app.scss 10. sor; élőben mérve:
-   getComputedStyle(document.documentElement).fontSize = 13px), ezért minden
-   rem-alapú érték a storefront 16px-es alapjának 13/16-ára zsugorodott:
-   a törzs 13px-en, az eyebrow 10,6px-en, a tábla 12,4px-en, a diagram-tick
-   11,3px-en renderelt, a radius 6,5px lett a 8 helyett. A rem itt a
-   felhasználói betűméret-beállítást sem követné (a Payload fixen 13-ra
-   állítja), tehát a px semmit nem vesz el, a márka-skálát viszont pontosan
-   adja vissza. Külső mérce a helyreállított értékekhez: a törzs 16px a
-   16px-es minimum-ajánlás miatt (UXPin, Optimal Line Length — desktop min
-   font size 16px: https://www.uxpin.com/studio/blog/optimal-line-length-for-readability/),
-   a sorhossz 45–75 karakter (Baymard, Readability: The Optimal Line Length:
+   MÉRET-EGYSÉG: REM, a 13-as Payload-gyökérhez igazított közös egységgel
+   (tulajdonosi döntés, 2026-08-20). A történet két lépésben:
+
+   1. A Payload admin gyökér-betűmérete 13px (--base-body-size: 13 —
+      node_modules/@payloadcms/ui/dist/scss/app.scss 10. sor; a %body
+      a html-re $baseline-body-size = 13px-et ír, mid-break alatt 12px-et:
+      app.scss 93. sor). A nyers rem-értékek ezért a storefront 16px-es
+      alapjának 13/16-ára zsugorodtak (mérve: törzs 13px, tick 11,3px).
+   2. Az első javítás fix px-re váltott — ez a méreteket helyreállította, de
+      kiszakadt a Payload saját, rem-alapú rendszeréből (a --base tokenje is
+      calc((20 / 13) * 1rem) — app.scss 11. sor), és nem követte a gyökér
+      mid-break váltását (13px → 12px) sem.
+
+   A VÉGSŐ megoldás ezért a REM, egyetlen közös egységgel:
+     --kc-as-px: calc(1rem / 13) — „egy tervezési pixel" a 13-as gyökéren.
+   Minden méret calc(N * var(--kc-as-px)) alakú: alapállapotban pixelre
+   pontosan N px-et ad (16 * 1rem/13 = 1.2308rem = 16px), és a gyökérrel
+   együtt skálázódik — mid-breaken a Payload saját szövegeivel arányosan
+   kicsinyedik, és ha a gyökér valaha követi a felhasználói beállítást,
+   ez a skála is követi. Források:
+   - NN/g, Let Users Control Font Size (a szövegméret kövesse a felhasználó
+     beállítását, ne fix px legyen):
+     https://www.nngroup.com/articles/let-users-control-font-size/
+   - WCAG 2.2 SC 1.4.4 Resize Text + C14 technika (relatív egység a
+     betűmérethez): https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html
+     és https://www.w3.org/WAI/WCAG22/Techniques/css/C14
+   - Belső minta: a Payload --base tokenje ugyanígy rem-ben él (app.scss).
+   Ismert korlát (kimondva): amíg a Payload a gyökeret fix 13px-re állítja,
+   a BÖNGÉSZŐ betűméret-beállítása nem jut el idáig — ez a Payload-héj
+   tulajdonsága, nem ezé a rétegé; a zoom mindkét esetben működik.
+   KIVÉTEL a rem alól: az 1px hairline és a 2px fókuszgyűrű/aláhúzás — ezek
+   nem szöveg-méretek, hanem vonal-identitás (tokens.css 215–222. sor
+   hairline-nyelve; a Payload --accessibility-outline-ja is fix 2px).
+   Külső mérce a célértékekhez (változatlan): a törzs 16px a desktop
+   minimum-ajánlás miatt (UXPin, Optimal Line Length:
+   https://www.uxpin.com/studio/blog/optimal-line-length-for-readability/),
+   a sorhossz 45–75 karakter (Baymard:
    https://baymard.com/blog/line-length-readability). */
 
 .kc-adminstat {
+  /* Egy „tervezési pixel" rem-ben, a 13-as Payload-gyökéren (lásd fent). */
+  --kc-as-px: calc(1rem / 13);
+
   /* Színek (tokens.css 28–49. sor nyers palettája). */
   --kc-as-bg: #f6f9fc; /* paper: a lap földje */
   --kc-as-surface-raised: #ffffff; /* a föld FÖLÉ emelt felület: kártya, tábla */
@@ -161,32 +188,37 @@
   --kc-as-diagram-otthoni: #3d78aa;
   --kc-as-diagram-szakmai: #10243e;
 
-  /* Tipográfia (tokens.css 141–196. sor), px-ben a 13px-es admin-gyökér
-     miatt (lásd a szakasz fejkommentjét). A cím-1 a storefront L lépcsője
-     (tokens.css 178. sor: clamp(2rem, 1.62rem + 1.7vw, 2.9rem) 16px-es
-     alapon = 32 → 46,4px); a cím-2 admin-adaptáció: a landing H1/H2-közös L
-     mérete egy táblázatos adatlapon négy óriás szekciócímet adna, ezért a
-     szekciócím kisebb, a szintet a betűcsalád + szín + elhelyezés jelöli
-     (NN/g, Visual Hierarchy: a méret CSAK EGY a hierarchia hordozói közül —
+  /* Tipográfia (tokens.css 141–196. sor), rem-ben a --kc-as-px egységgel
+     (lásd a szakasz fejkommentjét — a szám a tervezett px-érték). A cím-1 a
+     storefront L lépcsője (tokens.css 178. sor: clamp(2rem, 1.62rem + 1.7vw,
+     2.9rem) 16px-es alapon = 32 → 46,4px); a cím-2 admin-adaptáció: a
+     landing H1/H2-közös L mérete egy táblázatos adatlapon négy óriás
+     szekciócímet adna, ezért a szekciócím kisebb, a szintet a betűcsalád +
+     szín + elhelyezés jelöli (NN/g, Visual Hierarchy: a méret CSAK EGY a
+     hierarchia hordozói közül —
      https://www.nngroup.com/articles/visual-hierarchy-ux-definition/; a
      három-méretes őr az admint kifejezetten kiveszi a hatóköréből:
      src/__tests__/tipografia-harom-meret.test.ts 29–30. sor). */
   --kc-as-font-heading: 'Tenor Sans', 'Georgia', 'Times New Roman', serif;
   --kc-as-font-body: 'Nunito Sans', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --kc-as-font-cim-1: clamp(32px, 25.92px + 1.7vw, 46.4px);
-  --kc-as-font-cim-2: 24px;
+  --kc-as-font-cim-1: clamp(
+    calc(32 * var(--kc-as-px)),
+    calc(25.92 * var(--kc-as-px) + 1.7vw),
+    calc(46.4 * var(--kc-as-px))
+  );
+  --kc-as-font-cim-2: calc(24 * var(--kc-as-px));
   --kc-as-tracking-eyebrow: 0.24em; /* landing eyebrow-nyelv (tokens.css 196. sor) */
 
-  /* Térköz: 4px-rács (tokens.css 198–207. sor), px-ben (13px-es gyökér). */
-  --kc-as-space-1: 4px;
-  --kc-as-space-2: 8px;
-  --kc-as-space-3: 12px;
-  --kc-as-space-4: 16px;
-  --kc-as-space-5: 24px;
-  --kc-as-space-6: 32px;
-  --kc-as-space-7: 48px;
+  /* Térköz: 4px-rács (tokens.css 198–207. sor), rem-ben (--kc-as-px). */
+  --kc-as-space-1: calc(4 * var(--kc-as-px));
+  --kc-as-space-2: calc(8 * var(--kc-as-px));
+  --kc-as-space-3: calc(12 * var(--kc-as-px));
+  --kc-as-space-4: calc(16 * var(--kc-as-px));
+  --kc-as-space-5: calc(24 * var(--kc-as-px));
+  --kc-as-space-6: calc(32 * var(--kc-as-px));
+  --kc-as-space-7: calc(48 * var(--kc-as-px));
 
-  --kc-as-radius-md: 8px; /* tokens.css 211. sor (0.5rem 16px-es alapon) */
+  --kc-as-radius-md: calc(8 * var(--kc-as-px)); /* tokens.css 211. sor (0.5rem 16px-es alapon) */
 
   /* A landing hairline-alapú, ÁRNYÉK NÉLKÜLI nyelve (tokens.css 215–222.
      sor): a felületeket 1px-es vonal határolja, nem lebegtetés — ezért itt
@@ -195,7 +227,9 @@
   border-radius: var(--kc-as-radius-md);
   color: var(--kc-as-text);
   font-family: var(--kc-as-font-body);
-  font-size: 16px; /* az M lépcső alsó határa (tokens.css 179. sor: 1rem a 16px-es storefront-alapon) */
+  /* Az M lépcső alsó határa (tokens.css 179. sor: 1rem a 16px-es
+     storefront-alapon) — rem-ben: 16/13 rem = 16px az alap-gyökéren. */
+  font-size: calc(16 * var(--kc-as-px));
   line-height: 1.67; /* --kc-leading-body (tokens.css 184. sor) */
 }
 
