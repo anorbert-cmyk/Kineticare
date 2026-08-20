@@ -15,6 +15,24 @@ import { RevenueChart } from './RevenueChart'
 /**
  * A Statisztika nézet tiszta megjelenítője — a lekérdezés és a jogosultság
  * a StatisticsView-ban marad, hogy a teszt DefaultTemplate nélkül futhasson.
+ *
+ * ═══ VIZUÁLIS NYELV ═══
+ * A kártya- és táblastílus az admin etalonját, a CourseProgressPanel-t
+ * követi (elevation-50 háttér, elevation-100 keret, érték felül 1.5rem/600,
+ * címke alatta elevation-650) — új vizuális nyelvet nem vezetünk be, mert az
+ * azonos minta azonos jelentést hordoz (WCAG 2.2 SC 3.2.4 Consistent
+ * Identification: https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html).
+ *
+ * ═══ RESZPONZIVITÁS ═══
+ * A kártyasor flex-wrap (flex: 1 1 8rem), így 320 px-en 1-2 oszlopba törik
+ * media query nélkül; a táblák saját görgetőkonténerben (width: 100%,
+ * overflowX: auto) csúsznak, tehát maga a LAP sosem görget vízszintesen.
+ * - WCAG 2.2 SC 1.4.10 Reflow (320 px, nincs kétirányú görgetés a lapon):
+ *   https://www.w3.org/WAI/WCAG22/Understanding/reflow.html — a G225
+ *   technika kifejezetten megengedi, hogy egy szekció (itt: adattábla)
+ *   a saját konténerében görögjön vízszintesen.
+ * - C31 technika (flexbox reflow):
+ *   https://www.w3.org/WAI/WCAG22/Techniques/css/C31
  */
 
 const pageStyle: CSSProperties = {
@@ -27,6 +45,8 @@ const headingStyle: CSSProperties = {
   marginBottom: 'calc(var(--base) * 0.5)',
 }
 
+/* 42rem ≈ 75 karakter magyar szöveggel — a 45–85 karakteres olvasható
+   sorhossz-sávon belül (docs/ui-sztenderdek.md, tervezési skill 3. pont). */
 const leadStyle: CSSProperties = {
   color: 'var(--theme-elevation-650)',
   marginTop: 0,
@@ -35,28 +55,35 @@ const leadStyle: CSSProperties = {
 }
 
 const cardRowStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(10rem, 1fr))',
-  gap: 'calc(var(--base) * 0.75)',
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 'calc(var(--base) * 0.5)',
   marginBottom: 'calc(var(--base) * 1.5)',
 }
 
 const cardStyle: CSSProperties = {
-  border: '1px solid var(--theme-elevation-150)',
+  background: 'var(--theme-elevation-50)',
+  border: '1px solid var(--theme-elevation-100)',
   borderRadius: '4px',
-  padding: 'calc(var(--base) * 0.75)',
+  flex: '1 1 8rem',
+  minWidth: '8rem',
+  padding: 'calc(var(--base) * 0.5)',
+}
+
+/* Érték FELÜL, nagyban — a szám a lényeg, a címke a kontextus (a dashboard
+   kártyáin az adat vezet, a leírás követ; NN/g, Clutter-Free charts:
+   https://www.nngroup.com/articles/clutter-charts/). */
+const cardValueStyle: CSSProperties = {
+  display: 'block',
+  fontSize: '1.5rem',
+  fontVariantNumeric: 'tabular-nums',
+  fontWeight: 600,
+  lineHeight: 1.2,
 }
 
 const cardLabelStyle: CSSProperties = {
-  margin: 0,
   color: 'var(--theme-elevation-650)',
-  fontSize: '0.85rem',
-}
-
-const cardValueStyle: CSSProperties = {
-  margin: '0.25rem 0 0',
-  fontSize: '1.25rem',
-  fontWeight: 600,
+  display: 'block',
 }
 
 const sectionStyle: CSSProperties = {
@@ -65,10 +92,15 @@ const sectionStyle: CSSProperties = {
 
 const tableWrapStyle: CSSProperties = {
   overflowX: 'auto',
+  width: '100%',
 }
 
+/* A minWidth garantálja, hogy az 5 oszlop sose préselődjön olvashatatlanra:
+   keskeny viewporton a tableWrap görget, nem a lap (WCAG 1.4.10 / G225,
+   ugyanaz a minta, mint a CourseProgressPanel 46rem-es táblája). */
 const tableStyle: CSSProperties = {
   width: '100%',
+  minWidth: '36rem',
   borderCollapse: 'collapse',
   fontSize: '0.95rem',
 }
@@ -111,25 +143,41 @@ export function StatisticsAccessDenied() {
   )
 }
 
+/**
+ * Összesítő kártya — a CourseProgressPanel StatCard mintája (érték felül,
+ * címke alul). A `valueColor` a figyelmet kérő értéknek szól (pl. sikertelen
+ * fizetés): a szín KIEGÉSZÍTŐ jelzés, az információt maga a címke szövege
+ * hordozza (WCAG 2.2 SC 1.4.1 Use of Color:
+ * https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html).
+ */
+function StatCard({
+  label,
+  value,
+  valueColor,
+}: {
+  label: string
+  value: string
+  valueColor?: string
+}) {
+  return (
+    <div style={cardStyle}>
+      <span
+        style={valueColor === undefined ? cardValueStyle : { ...cardValueStyle, color: valueColor }}
+      >
+        {value}
+      </span>
+      <span style={cardLabelStyle}>{label}</span>
+    </div>
+  )
+}
+
 function TotalsCards({ totals }: { totals: RevenueTotals }) {
   return (
     <div style={cardRowStyle}>
-      <div style={cardStyle}>
-        <p style={cardLabelStyle}>Összes bevétel (12 hónap)</p>
-        <p style={cardValueStyle}>{formatHuf(totals.totalHuf)}</p>
-      </div>
-      <div style={cardStyle}>
-        <p style={cardLabelStyle}>{AUDIENCE_LABELS.laikus}</p>
-        <p style={cardValueStyle}>{formatHuf(totals.laikusHuf)}</p>
-      </div>
-      <div style={cardStyle}>
-        <p style={cardLabelStyle}>{AUDIENCE_LABELS.szakember}</p>
-        <p style={cardValueStyle}>{formatHuf(totals.szakemberHuf)}</p>
-      </div>
-      <div style={cardStyle}>
-        <p style={cardLabelStyle}>Fizetett rendelések</p>
-        <p style={cardValueStyle}>{totals.orderCount.toLocaleString('hu-HU')}</p>
-      </div>
+      <StatCard label="Összes bevétel (12 hónap)" value={formatHuf(totals.totalHuf)} />
+      <StatCard label={AUDIENCE_LABELS.laikus} value={formatHuf(totals.laikusHuf)} />
+      <StatCard label={AUDIENCE_LABELS.szakember} value={formatHuf(totals.szakemberHuf)} />
+      <StatCard label="Fizetett rendelések" value={totals.orderCount.toLocaleString('hu-HU')} />
     </div>
   )
 }
@@ -230,24 +278,21 @@ function FunnelSection({ funnel }: { funnel: OrderFunnelCounts }) {
   return (
     <div>
       <div style={cardRowStyle}>
-        <div style={cardStyle}>
-          <p style={cardLabelStyle}>Fizetve</p>
-          <p style={cardValueStyle}>{funnel.paid.toLocaleString('hu-HU')}</p>
-        </div>
-        <div style={cardStyle}>
-          <p style={cardLabelStyle}>Folyamatban (leadva / várakozik)</p>
-          <p style={cardValueStyle}>
-            {(funnel.created + funnel.paymentPending).toLocaleString('hu-HU')}
-          </p>
-        </div>
-        <div style={cardStyle}>
-          <p style={cardLabelStyle}>Sikertelen fizetés</p>
-          <p style={cardValueStyle}>{funnel.paymentFailed.toLocaleString('hu-HU')}</p>
-        </div>
-        <div style={cardStyle}>
-          <p style={cardLabelStyle}>Megszakítva</p>
-          <p style={cardValueStyle}>{funnel.cancelled.toLocaleString('hu-HU')}</p>
-        </div>
+        <StatCard label="Fizetve" value={funnel.paid.toLocaleString('hu-HU')} />
+        <StatCard
+          label="Folyamatban (leadva / várakozik)"
+          value={(funnel.created + funnel.paymentPending).toLocaleString('hu-HU')}
+        />
+        {/* A nullánál nagyobb sikertelen fizetés a Payload saját hibaszínét
+            kapja (--theme-error-500 — ugyanaz a token, amit a
+            CourseProgressPanel hibaüzenete használ), a jelentést a címke
+            szövege hordozza, nem a szín (WCAG 1.4.1). */}
+        <StatCard
+          label="Sikertelen fizetés"
+          value={funnel.paymentFailed.toLocaleString('hu-HU')}
+          valueColor={funnel.paymentFailed > 0 ? 'var(--theme-error-500)' : undefined}
+        />
+        <StatCard label="Megszakítva" value={funnel.cancelled.toLocaleString('hu-HU')} />
       </div>
       <p style={noticeStyle}>
         {needsAttention === 0

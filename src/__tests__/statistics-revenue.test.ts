@@ -13,6 +13,7 @@ import {
   buildRevenueReport,
   canAccessStatistics,
   formatHuf,
+  formatMonthShort,
   orderMonthKey,
   type RevenueOrderInput,
 } from '../lib/statistics/revenue'
@@ -280,5 +281,73 @@ describe('StatisticsReport + RevenueChart — a számok a táblázatban is ott v
     expect(svg).toContain('role="img"')
     expect(svg).toContain('aria-label=')
     expect(svg).toContain('<rect')
+  })
+})
+
+describe('formatMonthShort — rövid magyar hónap-tick a diagramhoz', () => {
+  it('rövid magyar hónapnevet ad', () => {
+    expect(formatMonthShort('2025-09')).toBe('szept.')
+    expect(formatMonthShort('2026-01')).toBe('jan.')
+    expect(formatMonthShort('2026-08')).toBe('aug.')
+  })
+
+  it('értelmezhetetlen kulcsnál magát a kulcsot adja vissza', () => {
+    expect(formatMonthShort('nem-honap')).toBe('nem-honap')
+    expect(formatMonthShort('2026-13')).toBe('2026-13')
+  })
+})
+
+describe('RevenueChart — jelmagyarázat, rövid tickek, Y-tengely', () => {
+  it('a jelmagyarázat szöveggel nevezi meg a két ágat (WCAG 1.4.1)', () => {
+    const rows = aggregateMonthlyRevenue([], { months: 12, now: NOW })
+    const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
+    expect(html).toContain('Otthoni')
+    expect(html).toContain('Szakmai')
+  })
+
+  it('az X-tengely tickje rövid hónap, évszám az első oszlopon és januárnál', () => {
+    const rows = aggregateMonthlyRevenue([], { months: 12, now: NOW })
+    const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
+    expect(html).toContain('>szept.<')
+    expect(html).toContain('>jan.<')
+    // Évszám „landmark" felirat: az ablak eleje (2025) és az évváltás (2026).
+    expect(html).toContain('>2025<')
+    expect(html).toContain('>2026<')
+    // A hosszú hónapcímke csak az aria-labelben él, tickként nem jelenik meg.
+    expect(html).not.toContain('>2025. szeptember<')
+  })
+
+  it('az Y-tengelyen legalább 3 tick van magyar Ft-formátummal', () => {
+    const rows = aggregateMonthlyRevenue(
+      [
+        paid({
+          createdAt: '2026-08-01T10:00:00.000Z',
+          items: [
+            { audience: 'laikus', priceHuf: 79500, quantity: 1 },
+            { audience: 'szakember', priceHuf: 120000, quantity: 1 },
+          ],
+        }),
+      ],
+      { months: 12, now: NOW },
+    )
+    const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
+    expect(html).toContain('>0 Ft<')
+    expect(html).toContain('>60 e Ft<')
+    expect(html).toContain('>120 e Ft<')
+  })
+
+  it('a role=img és az aria-label a jelmagyarázattal együtt is megmarad', () => {
+    const rows = aggregateMonthlyRevenue([], { months: 12, now: NOW })
+    const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
+    expect(html).toContain('role="img"')
+    expect(html).toContain('aria-label=')
+    expect(html).toContain('<rect')
+  })
+
+  it('a diagram saját konténerében görög, a viewBox-szöveg nem zsugorodik 320 px-re', () => {
+    const rows = aggregateMonthlyRevenue([], { months: 12, now: NOW })
+    const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
+    expect(html).toContain('overflow-x:auto')
+    expect(html).toContain('min-width:45rem')
   })
 })
