@@ -105,6 +105,13 @@ gomb-gráf), `docs/gomb-inventar.md` (CTA-szótár), `docs/gomb-kontraszt-audit.
 - Új viselkedéshez fókuszált teszt vagy legalább reprodukálható ellenőrzési lépés.
 - Titok, `.env*` fájl, migrációs kézi szerkesztés, `confirmOrder`-hívás és
   `any`-típus esetén a PR automatikusan elutasítandó.
+- **Merge után a munka NEM kész.** Azonnal figyeld a `main` GitHub CI-jét és a
+  Railway deployt (tényleges `npm run build`, migráció a start-logban,
+  `GET /admin` healthcheck). Piros vagy gyanús állapotot azonnal javíts, ne
+  várj külön kérésre. Részletek: `AGENTS.md` „Merge után" szekció.
+- **Composer is a készletben van.** Auto nem modell (router). Névre szólóan:
+  Composer a gyors/mindennapi körre, Grok 4.6 a hosszú Cloud Agentre.
+  Részletek: `AGENTS.md` „Cursor-modellek".
 
 ## Üzemeltetési tanulságok — élesben szerzett
 
@@ -255,7 +262,14 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
     lennie (`-k <dir>`), és a scratchpad SZÜLŐ könyvtáraira is kell `o+x`
     bejárási jog, különben a `pg_ctl` „Permission denied"-dal áll le.
 
-## Munkamodell — vezető + Opus-ügynökök (tulajdonosi alapbeállítás, 2026-08-15)
+23. **Merge után azonnal a GitHub CI és a Railway.** A squash-merge nem zárja
+    a kört. A `main` CI (`ci.yml` + gitleaks) legyen zöld; a Railway-en
+    tényleges `npm run build` (ne skipped), start-logban `Migrating:` /
+    `Migrated:`, healthcheck `GET /admin`. A „SUCCESS" deploy nem elég
+    (1. pont). `WAITING` snapshot nélkül: előbb a lépés-események, ne indíts
+    vaktában új deployt (12. pont). Hiba esetén azonnal javíts.
+
+## Munkamodell — vezető + ügynök-csapat (tulajdonosi alapbeállítás, 2026-08-15; modellek: 2026-08-20)
 
 Minden kódolási munkánál ez az alapbeállítás, külön kérés nélkül:
 
@@ -263,8 +277,9 @@ Minden kódolási munkánál ez az alapbeállítás, külön kérés nélkül:
    megoldások aprólékos kitalálása és a feladatkiírás a vezető dolga. A kiírás
    részletes: cél, érintett fájlok, elfogadási feltételek, tilalmak,
    ellenőrzési mód.
-2. **A munkát Opus-ügynökök végzik**, mindegyik a saját szakterületének
-   profija. Addig dolgoznak, amíg a kiírás minden pontja kész.
+2. **A munkát szakterület szerinti ügynökök végzik.** Gyors, mindennapi kör:
+   **Composer**. Hosszú, nehéz Cloud Agent: **Grok 4.6**. Opus csak akkor,
+   ha a vezető külön kiosztja. Addig dolgoznak, amíg a kiírás minden pontja kész.
 3. **Az ügynök, ha valamiben nem biztos:** előbb kutat (internet, hivatalos
    dokumentáció, a repó kódja); ha a kérdés ezek után is valódi döntést
    igényel, NEM találgat — megáll, és a kérdést visszaküldi a vezetőnek.
@@ -280,13 +295,19 @@ Minden kódolási munkánál ez az alapbeállítás, külön kérés nélkül:
    részfeladatokra bomlik, melyik ügynök melyiket kapja, mi a tiszta
    fájl-tulajdonlás (hogy ne írjanak egymásra, lásd a 16. üzemeltetési
    tanulságot), és mi az elfogadási feltétel.
-7. **MINDIG teljes körű ügynök-csapat indul, Opus-ügynökökből.** Nem egyetlen
-   ügynök, hanem a feladathoz szabott csapat: felderítés, kutatás,
-   megvalósítás, ellenőrzés — mindegyik a saját szakterületén. A csapat
-   összetételét a vezető állítja össze a feladat természete szerint. (A
-   párhuzamossági korlát ~2 egyidejű ügynök, a többi sorban áll — lásd a 17.
-   üzemeltetési tanulságot; ez tervezési adat, nem elakadás.)
+7. **MINDIG teljes körű ügynök-csapat indul.** Nem egyetlen ügynök, hanem a
+   feladathoz szabott csapat: felderítés, kutatás, megvalósítás, ellenőrzés.
+   A gyors ág Composer, a hosszú megvalósítás Grok 4.6; a vezető a
+   szakterület szerint oszt. (A párhuzamossági korlát ~2 egyidejű ügynök, a
+   többi sorban áll — lásd a 17. üzemeltetési tanulságot; ez tervezési adat,
+   nem elakadás.) Az **Auto-t ne tedd** a csapat egyetlen modelljének.
 8. **Ismétlődő hibánál a vezető ÁTVESZI a feladatot.** Ha egy ügynök többször
    elbukik ugyanazon, vagy a megoldás nem áll össze, a vezető nem indít újabb
    kört vaktában: maga oldja meg. A cél a működő eredmény, nem a delegálás
    fenntartása.
+9. **Merge után a vezető (vagy az ügynök) figyeli a CI-t és a Railwayt, és
+   hibánál azonnal javít.** A squash-merge, a zöld PR és a „SUCCESS" deploy
+   önmagában nem kész. GitHub: `ci.yml` + gitleaks a `main` squash-commitján.
+   Railway: tényleges `npm run build`, migráció a start-logban, `GET /admin`.
+   Piros, skipped-build vagy elmaradt healthcheck → azonnali fix, nem jelentés
+   és várakozás. (Tulajdonosi kérés, 2026-08-20.)
