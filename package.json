@@ -26,18 +26,19 @@
     "kurzus:videok-modulba": "tsx src/scripts/videok-modulba.ts"
   },
   "dependencies": {
-    "@payloadcms/db-postgres": "3.86.0",
-    "@payloadcms/next": "3.86.0",
-    "@payloadcms/plugin-ecommerce": "3.86.0",
-    "@payloadcms/plugin-form-builder": "3.86.0",
-    "@payloadcms/richtext-lexical": "3.86.0",
-    "@payloadcms/translations": "3.86.0",
+    "@payloadcms/db-postgres": "3.88.0",
+    "@payloadcms/next": "3.88.0",
+    "@payloadcms/plugin-ecommerce": "3.88.0",
+    "@payloadcms/plugin-form-builder": "3.88.0",
+    "@payloadcms/richtext-lexical": "3.88.0",
+    "@payloadcms/translations": "3.88.0",
     "graphql": "16.14.2",
     "next": "16.3.0",
-    "payload": "3.86.0",
+    "payload": "3.88.0",
     "posthog-js": "1.413.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "sass": "1.77.4",
     "sharp": "0.35.3"
   },
   "devDependencies": {
@@ -53,5 +54,8 @@
     "typescript": "5.9.3",
     "vite": "8.2.1",
     "vitest": "4.1.10"
+  },
+  "overrides": {
+    "nanoid": "^3.3.18"
   }
 }
