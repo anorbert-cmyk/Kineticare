@@ -312,10 +312,11 @@ repóba titok soha, még placeholderként sem.)
 | Kulcs | Mire | Titok? | `NEXT_PUBLIC_`? |
 |---|---|---|---|
 | `BUNNY_STREAM_TOKEN_AUTH_KEY` | a védett library token-kulcsa (hash-elés) | **IGEN** | nem — sosem mehet a böngészőbe |
+| `BUNNY_STREAM_LIBRARY_API_KEY` | a védett library Stream API kulcsa (videólista az adminban) | **IGEN** | nem |
+| `BUNNY_STREAM_PUBLIC_LIBRARY_API_KEY` | a publikus library Stream API kulcsa (előzetesek listája) | **IGEN** | nem |
 | `NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID` | a védett library numerikus id-ja | nem | igen — a kliens építi az embed-URL-t |
 | `NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID` | a publikus library (hero, előzetes) | nem | igen |
 | `NEXT_PUBLIC_BUNNY_STREAM_PULL_ZONE_HOST` | `vz-….b-cdn.net` — CSP + poszterképek | nem | igen |
-| `BUNNY_STREAM_API_KEY` | **csak** ha később automata feltöltést építünk | **IGEN** | nem |
 
 A library id és a pull-zone hoszt amúgy is látszik minden embed-URL-ben —
 nem titok, csak konfiguráció.
@@ -347,6 +348,11 @@ Amit frissíteni kell (`src/plugins/ecommerce.ts`), csak szövegek:
 
 A `durationSec` (hossz másodpercben) továbbra is **kötelező**: ebből
 számoljuk a jegy lejáratát.
+
+Az admin **Videótár** (`/admin/videok`) és a kurzuslap „Videók a Bunny tárból”
+panelje a libraryből **listázza** a felvételeket; a GUID onnan másolható a
+lecke mezőjébe. Feltöltés továbbra is a Bunny felületén történik, tus az
+adminból nincs.
 
 ### 4.8 Tesztelési terv
 

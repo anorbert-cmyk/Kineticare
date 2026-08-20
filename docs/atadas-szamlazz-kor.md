@@ -199,7 +199,7 @@ Ezeket egy 17 ügynökös audit-kör tárta fel, és mindegyiket egy független
 | 3 | **A checkout a PISZKOZAT verzióból dönt** | A `startCheckout` `draft: true`-val olvas, az ár-snapshot és a storefront a publikált sorból. Egy félkész szerkesztés azonnal átbillenti a vásárolhatóságot, miközben az oldalon semmi nem változik: a kurzusoldal árat és „Megveszem" gombot mutat, de minden vásárlás 400-zal hasal el. Fordítva: piszkozatban `published`-re állított kurzus az API-n megvásárolható, miközben meg sem jelenik. Napló nincs. |
 | 4 | **A Rendelések listán nem látszik, MIT vettek** | A megrendelő első admin-igénye („ki mit vett és mikor"). A tételek egy névtelen tab alatt, összecsukott tömbben ülnek; oszlopként sem segít, mert a Payload `ArrayCell`-je csak darabszámot ír ki. Külön megjelenítés kell. |
 | 5 | **A carts keresője némán 0 találatot ad** | A #61-ben a `carts.useAsTitle` `id` lett, ami megszünteti a Postgres-hibát — de a Payload a `like`-ot `equals`-re fordítja az id-n, tehát nem-számra némán üres, számra pedig pontos egyezés. Nem hiba, de dokumentálandó/jobbítandó. |
-| 6 | T-013 statisztika-nézet | Megrendelői igény, nincs megírva. Teljes spec a 9. szakaszban. **Tulajdonosi döntésre vár.** |
+| 6 | T-013 statisztika-nézet | **KÉSZ** — `/admin/statisztika`, staff/owner, tétel-szintű otthoni/szakmai bontás. A 9. szakasz a szerződést írja; a korábbi „tulajdonosi döntésre vár” sor idejétmúlt. |
 | 7 | Admin videó-feltöltés (tus) | Megrendelői igény; a megvalósult állapot tudatos eltérés (Bunny + kézi GUID). **Megrendelői döntés kell.** |
 
 ### 3.1 A négy javasolt CI-őr (G1–G4)
@@ -502,7 +502,11 @@ kiadható feladat**, és a mostani tapasztalat alapján magas prioritású:
 két teljes fejlesztési kör (fizetés-állapotgép, job-alapú számlázás) landolt
 úgy, hogy élesben egyáltalán nem működhetett.
 
-## 9. T-013 — Statisztika/kimutatás admin-nézet (MEGRENDELŐI IGÉNY, NINCS MEG)
+## 9. T-013 — Statisztika/kimutatás admin-nézet (KÉSZ)
+
+A nézet él: `/admin/statisztika`, a bal oldali navigáció **Statisztika**
+linkjéről. Az alábbi szakasz a szerződést rögzíti, amit a megvalósítás
+követ — ne vedd el a kaput, a Budapest-hónapot, vagy a `refunds` kizárását.
 
 ### 9.1 Miért ez a feladat
 
@@ -512,15 +516,11 @@ szerint kéri:
 > „Statisztika/grafikon/kimutatás: havi bevétel, bontásban szakmai
 > (professzionális) vs. otthoni-rehabilitációs értékesítés szerint."
 
-**Ez nincs megvalósítva**: nincs admin-nézet, nincs aggregáció, nincs
-diagram-könyvtár a `package.json`-ben.
-
-⚠️ **Figyelem, félrevezető nyom:** a `docs/igeny-valtozas-pontok.md` 10. sora
-azt állítja, hogy „T-013 statisztika/grafikon ✅ orders-aggregáció +
-kategória-bontás". **Ez téves.** A kódban a T-013 a **menük láthatósági
-access-szabálya** (`src/access/menus-visibility.ts`, `src/access/policies.ts:20`) —
-a jegyszámozás elcsúszott, a pipa nem erre a funkcióra vonatkozik. A feladat
-része, hogy **ezt a sort is javítsd** a mapping-doksiban.
+**Ez megvalósult:** `/admin/statisztika`, tiszta aggregátor
+(`src/lib/statistics/revenue.ts`), SVG oszlopdiagram új npm-függőség nélkül.
+A kódban a T-013 ticket-szám korábban a menük láthatósági szabályára is
+rákerült (`src/access/menus-visibility.ts`) — a jegyszámozás elcsúszott, de
+a bevétel-nézet ettől függetlenül a 9. szakasz szerződése szerint készült.
 
 ### 9.2 Elfogadási kritériumok
 
@@ -848,20 +848,16 @@ dolgozzon; ha DB-t érintő tesztet írnál, a meglévő TCP-próbás skip-mint�
 7. **Branch-konvenció**: `feat/<ticket>-<rovid-nev>`, ékezet nélkül,
    pl. `feat/T-013-statisztika-nezet`.
 
-## 10. Másodlagos hiány: admin videó-feltöltés (tus) — tudatos eltérés
+## 10. Admin videó: nincs tus feltöltés, van Bunny-lista
 
 A megrendelői specifikáció „Kurzuskezelés" pontja **adminból induló tus
-feltöltést** kért (eredetileg Cloudflare Streamre). A megvalósult állapot: a
-videó-platform **Bunny Stream** lett (`docs/video-platform-dontes.md`), és az
-adminban a `products.videos[]` tömbbe **kézzel kell beilleszteni a Bunny GUID-ot**
-— a feltöltés a Bunny felületén történik.
-
-Ez **dokumentált döntés, nem elfelejtett funkció**, de a megrendelő felé
-tisztázandó, hogy így marad-e. Ha bekötendő, a feladat: Bunny Stream
-`POST /library/{id}/videos` → tus-feltöltés az adminból, a visszakapott GUID
-automatikus beírásával. Ehhez a Bunny API-kulcs **szerver-oldali** kezelése kell
-(kliensbe kulcs nem kerülhet — CLAUDE.md 1. zóna), tehát egy saját route-handler
-a `src/app/(frontend)/api/admin/…` alatt, a refund-route mintájára.
+feltöltést** kért (eredetileg Cloudflare Streamre). A tulajdonosi döntés:
+a feltöltés **a Bunny felületén marad**. Az admin **Videótár** nézete
+(`/admin/videok`) és a kurzus szerkesztőlapjának „Videók a Bunny tárból”
+panelje a library videóit listázza, a GUID másolható a leckébe. Új env
+(érték nélkül az `.env.example`-ben): `BUNNY_STREAM_LIBRARY_API_KEY` és
+`BUNNY_STREAM_PUBLIC_LIBRARY_API_KEY` — ezek a Stream API library-kulcsok,
+nem a lejátszási token-kulcs.
 
 ## 11. Ami a fentieken túl NINCS lezárva (az igény-ellenőrzés eredménye)
 

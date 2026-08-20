@@ -84,6 +84,7 @@ describe('logger — az e-mail-cím redakciója', () => {
       token: 'DUMMY-42',
       poskey: 'DUMMY-42',
       authorization: 'DUMMY-42',
+      accesskey: 'DUMMY-42',
     })
 
     expect(lastContext()).toEqual({
@@ -91,6 +92,7 @@ describe('logger — az e-mail-cím redakciója', () => {
       token: '[REDACTED]',
       poskey: '[REDACTED]',
       authorization: '[REDACTED]',
+      accesskey: '[REDACTED]',
     })
   })
 })

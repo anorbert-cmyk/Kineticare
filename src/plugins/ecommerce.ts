@@ -647,7 +647,8 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
       required: true,
       label: 'Kategória',
       admin: {
-        description: 'Kötelező. Ha nincs megfelelő, előbb hozd létre a Tartalom → Kategóriák alatt.',
+        description:
+          'Kötelező. Ha nincs megfelelő, előbb hozd létre a Tartalom → Kategóriák alatt.',
       },
     },
     {
@@ -682,6 +683,19 @@ const productsCollectionOverride: CollectionOverride = ({ defaultCollection }) =
     // kell összeállítani, a `videos` már csak a korábbi tartalom hordozója.
     // A két szerkezet egyesítése a src/lib/curriculum/curriculum.ts-ben él.
     courseModulesField,
+    {
+      // Bunny Stream library-lista: a feltöltés a Bunny felületén marad, itt
+      // a GUID kimásolható a leckébe. UI-mező, nem tárol adatot, nincs séma-
+      // változás. A streamAssetId access-szabálya VÁLTOZATLAN.
+      name: 'bunnyLibraryPanel',
+      type: 'ui',
+      label: 'Videók a Bunny tárból',
+      admin: {
+        components: {
+          Field: '/components/admin/BunnyLibraryPanel#BunnyLibraryPanel',
+        },
+      },
+    },
     {
       name: 'videos',
       type: 'array',

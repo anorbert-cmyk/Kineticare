@@ -555,6 +555,29 @@ export default buildConfig({
     meta: {
       titleSuffix: ' – Kineticare admin',
     },
+    components: {
+      views: {
+        // T-013: havi bevétel otthoni/szakmai bontásban. A Payload 3.86 a
+        // custom view-t NYILVÁNOS admin-route-ként kezeli — a szerepkör-kapu
+        // a nézetben van (`canAccessStatistics`), nem itt.
+        statisztika: {
+          Component: '/components/admin/StatisticsView#StatisticsView',
+          path: '/statisztika',
+          exact: true,
+          meta: { title: 'Statisztika' },
+        },
+        videok: {
+          Component: '/components/admin/BunnyLibraryView#BunnyLibraryView',
+          path: '/videok',
+          exact: true,
+          meta: { title: 'Videótár' },
+        },
+      },
+      afterNavLinks: [
+        '/components/admin/StatisticsNavLink#StatisticsNavLink',
+        '/components/admin/BunnyLibraryNavLink#BunnyLibraryNavLink',
+      ],
+    },
   },
   // Magyar admin felület: a @payloadcms/translations `hu` nyelvfájlja a
   // fallback, így a nem szerkesztett kulcsok is magyarul jelennek meg; az `en`

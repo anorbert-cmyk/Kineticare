@@ -87,6 +87,10 @@ const REDACTED_KEYS: ReadonlySet<string> = new Set(
     'session_id',
     'privatekey',
     'private_key',
+    'accesskey',
+    'access_key',
+    'libraryapikey',
+    'library_api_key',
   ].map((key) => key.toLowerCase()),
 )
 

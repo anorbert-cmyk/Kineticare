@@ -16,11 +16,13 @@
 | --- | --- |
 | Regisztráció, belépés, jelszó-beállítás | **Videó-lejátszás** — ahhoz valódi Bunny Stream fiók és feltöltött felvételek kellenek. A demó-tananyag ezért **szöveges leckékből** áll, azok minden környezetben megnyithatók, és beleszámítanak a haladásba. |
 | Kurzusaim, tananyag-lista, lecke megnyitása, „megnéztem" jelölés | **Számlázás** — a `SZAMLAZZ_AGENT_KEY` nincs beállítva, így a számlázás kikapcsolt állapotban van (nem próbál számlát kiállítani). |
-| Admin: vásárlók, rendelések (dátum, összeg, állapot), kurzus-haladás panel | **E-mail-küldés** — provider-kulcs nélkül a noop-provider fut: a levél nem megy ki, csak naplósor keletkezik. Kitalált címekre amúgy sem szabad levelet küldeni. |
+| Admin: vásárlók, rendelések, **Statisztika** (`/admin/statisztika`: havi bevétel otthoni/szakmai bontásban), kurzus-haladás panel | **E-mail-küldés** — provider-kulcs nélkül a noop-provider fut: a levél nem megy ki, csak naplósor keletkezik. Kitalált címekre amúgy sem szabad levelet küldeni. |
 | Rendelés-állapotok: **fizetve** és **sikertelen fizetés** is szerepel | **Valódi Barion-tranzakció** — a demó-rendelések fizetésazonosítója `DEMO-` előtagú, hálózati hívás nem történik. |
 
 A demó-vásárlások a **79 500 Ft-os kurzusra** szólnak, több hónapra elosztva —
-így az adminban látszik a bevétel alakulása.
+így az admin **Statisztika** nézetén (`/admin/statisztika`) látszik a bevétel
+alakulása. Ez ugyanaz a nézet, ami élesben a valódi `paid` rendeléseket
+összesíti; a demó csak az adatot tölti, külön „hamis grafikon” nincs.
 
 ---
 
