@@ -290,17 +290,22 @@ describe('CourseEngagementSection', () => {
       createElement(CourseEngagementSection, { engagement: mintaReport }),
     )
     expect(html).toContain('Kurzus-hatás')
+    // Az oszlopnevek SZÓRÓL SZÓRA a Kurzus-haladás panel címkéi
+    // („Beiratkozott", „Nem kezdte el") — egy fogalom egy szó (WCAG 3.2.4;
+    // 2026-08-20-i audit: korábban „Hozzáfér" és „El sem kezdte" állt itt).
     for (const fejlec of [
       'Kurzus',
       'Ág',
-      'Hozzáfér',
+      'Beiratkozott',
       'Elkezdte',
       'Befejezte',
-      'El sem kezdte',
+      'Nem kezdte el',
       'Átlagos haladás',
     ]) {
       expect(html).toContain(fejlec)
     }
+    expect(html).not.toContain('Hozzáfér')
+    expect(html).not.toContain('El sem kezdte')
     expect(html).toContain('Otthoni kéztorna')
     expect(html).toContain('47%')
     expect(html).toContain('href="/admin/collections/products/42"')
@@ -309,7 +314,19 @@ describe('CourseEngagementSection', () => {
     expect(html).toContain('állapot szerint szűrhetsz')
   })
 
-  it('a nullánál nagyobb „El sem kezdte" érték kiemelést kap, a 0 nem', () => {
+  it('a görgethető tábla-régió billentyűzetről fókuszálható és nevesített (WCAG 2.1.1, 4.1.2)', () => {
+    // axe: scrollable-region-focusable; minta: Adrian Roselli,
+    // https://adrianroselli.com/2020/11/under-engineered-responsive-tables.html
+    const html = renderToStaticMarkup(
+      createElement(CourseEngagementSection, { engagement: mintaReport }),
+    )
+    expect(html).toContain('role="region"')
+    expect(html).toContain('tabindex="0"')
+    expect(html).toContain('aria-labelledby="kc-stat-kurzushatas-cim"')
+    expect(html).toContain('id="kc-stat-kurzushatas-cim"')
+  })
+
+  it('a nullánál nagyobb „Nem kezdte el" érték kiemelést kap, a 0 nem', () => {
     const html = renderToStaticMarkup(
       createElement(CourseEngagementSection, { engagement: mintaReport }),
     )
@@ -385,7 +402,7 @@ describe('StatisticsReport + kurzus-hatás integráció', () => {
         },
       }),
     )
-    expect(html).toContain('El sem kezdte')
+    expect(html).toContain('Nem kezdte el')
     expect(html).toContain('href="/admin/collections/products/1"')
   })
 })

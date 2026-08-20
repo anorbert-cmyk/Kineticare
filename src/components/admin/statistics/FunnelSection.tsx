@@ -14,8 +14,13 @@ export function FunnelSection({ funnel }: { funnel: OrderFunnelCounts }) {
       <h2>Ami beavatkozást kérhet</h2>
       <div style={cardRowStyle}>
         <StatCard label="Fizetve" value={funnel.paid.toLocaleString('hu-HU')} />
+        {/* „vagy", nem per-jel: a GOV.UK stílus-szabály szerint a / nem
+            helyettesíti az „or"-t (képernyőolvasónak és keresőnek is rossz) —
+            https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/style-guides/a-to-z-style-guide/
+            (Slashes szócikk); összhangban a ui-sztenderdek §3.1 natív magyar
+            mikroszöveg-szabályával. */}
         <StatCard
-          label="Folyamatban (leadva / várakozik)"
+          label="Folyamatban (leadva vagy várakozik)"
           value={(funnel.created + funnel.paymentPending).toLocaleString('hu-HU')}
         />
         {/* A nullánál nagyobb sikertelen fizetés a márka danger tokenjét

@@ -18,9 +18,21 @@ export function CourseRevenueTable({ rows }: { rows: readonly CourseRevenueRow[]
     return <p style={noticeStyle}>Ebben az időszakban még nincs fizetett kurzus-tétel.</p>
   }
   return (
-    <div style={tableWrapStyle}>
+    /* role="region" + aria-labelledby + tabIndex: a keskeny viewporton
+       görgethető tábla billentyűzetről is görgethető legyen (WCAG 2.1.1;
+       axe: scrollable-region-focusable; minta: Adrian Roselli,
+       Under-Engineered Responsive Tables —
+       https://adrianroselli.com/2020/11/under-engineered-responsive-tables.html). */
+    <div
+      style={tableWrapStyle}
+      role="region"
+      aria-labelledby="kc-stat-kurzus-bevetel-cim"
+      tabIndex={0}
+    >
       <table style={tableStyle}>
-        <caption style={captionStyle}>Bevétel kurzusonként, ugyanabban a 12 hónapban</caption>
+        <caption style={captionStyle} id="kc-stat-kurzus-bevetel-cim">
+          Bevétel kurzusonként, ugyanabban a 12 hónapban
+        </caption>
         <thead>
           <tr>
             <th style={thStyle} scope="col">

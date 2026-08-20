@@ -61,11 +61,20 @@ import {
  *    oszlopdiagram kétirányú adatábrázolás: a WCAG 1.4.10 kivételként
  *    megengedi, hogy a diagram a saját konténerében görögjön, ahelyett,
  *    hogy a viewBox-szöveg 5 px-re zsugorodna. Az SVG ezért `min-width:
- *    45rem` (a 720-as viewBox natív mérete), a wrapper `overflow-x: auto`.
- *    A jelmagyarázat HTML-ben van a diagram alatt, így a szövege keskeny
- *    viewporton sem zsugorodik.
+ *    720px` (a viewBox natív mérete — px-ben, mert a Payload admin
+ *    13px-es gyökere miatt a 45rem 585px-re zsugorodott, és a tick a mért
+ *    11,27px-re esett a tervezett 12 alá; lásd styles.ts fejkomment), a
+ *    wrapper `overflow-x: auto`. A jelmagyarázat HTML-ben van a diagram
+ *    alatt, így a szövege keskeny viewporton sem zsugorodik.
  *    - WCAG 2.2 SC 1.4.10 Reflow (kivétel: 2D adatábra / G214):
  *      https://www.w3.org/WAI/WCAG22/Understanding/reflow.html
+ * 6. A GÖRGETŐ BILLENTYŰZETRŐL IS MŰKÖDIK: a wrapper role="region" +
+ *    aria-label + tabindex="0" hármast visel (WCAG 2.1.1 Keyboard; axe:
+ *    scrollable-region-focusable —
+ *    https://dequeuniversity.com/rules/axe/4.12/scrollable-region-focusable;
+ *    minta: Adrian Roselli, Under-Engineered Responsive Tables —
+ *    https://adrianroselli.com/2020/11/under-engineered-responsive-tables.html).
+ *    A fókuszgyűrűjét a custom.scss adja (WCAG 2.4.7).
  */
 
 /* A diagram + jelmagyarázat közös kártyája: emelt felület, a keret
@@ -88,8 +97,8 @@ const chartScrollStyle: CSSProperties = {
 const svgStyle: CSSProperties = {
   display: 'block',
   width: '100%',
-  minWidth: '45rem',
-  maxWidth: '52rem',
+  minWidth: '720px',
+  maxWidth: '832px',
   height: 'auto',
 }
 
@@ -109,7 +118,7 @@ const legendStyle: CSSProperties = {
 const legendItemStyle: CSSProperties = {
   alignItems: 'center',
   display: 'inline-flex',
-  gap: '0.4rem',
+  gap: 'var(--kc-as-space-2, 0.4rem)',
 }
 
 interface RevenueChartProps {
@@ -173,7 +182,12 @@ export function RevenueChart({ rows }: RevenueChartProps) {
 
   return (
     <div style={chartCardStyle}>
-      <div style={chartScrollStyle}>
+      <div
+        style={chartScrollStyle}
+        role="region"
+        aria-label="Havi bevétel oszlopdiagram"
+        tabIndex={0}
+      >
         <svg
           viewBox={`0 0 ${width} ${height}`}
           role="img"

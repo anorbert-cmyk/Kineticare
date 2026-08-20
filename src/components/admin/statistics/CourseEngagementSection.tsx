@@ -30,7 +30,7 @@ import {
  * https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html
  *
  * ═══ HANGSÚLY ═══
- * Az „El sem kezdte" érték nullánál nagyobb esetben vastag és a márka
+ * A „Nem kezdte el" érték nullánál nagyobb esetben vastag és a márka
  * danger tokenjét kapja (--kc-as-danger = #b3261e, fehér felületen számolt
  * 6,54:1 kontraszt — custom.scss jegyzőkönyv; Payload-tartalékkal): ők azok,
  * akiket a munkatársak utolérnek. A jelentést az oszlopfejléc szövege
@@ -42,7 +42,7 @@ import {
    keskeny viewporton a wrap görget, nem a lap (WCAG 1.4.10 / G225). */
 const engagementTableStyle: CSSProperties = {
   ...tableStyle,
-  minWidth: '52rem',
+  minWidth: '832px',
 }
 
 const emphasizedCountStyle: CSSProperties = {
@@ -78,10 +78,31 @@ export function CourseEngagementSection({
               pontos, hallgatónkénti adat a kurzus lapján érhető el.
             </p>
           ) : null}
-          <div style={tableWrapStyle}>
+          {/* role="region" + aria-labelledby + tabIndex: a keskeny viewporton
+              görgethető táblát billentyűzetről is lehessen görgetni (WCAG
+              2.1.1; axe: scrollable-region-focusable; a minta Adrian Roselli
+              Under-Engineered Responsive Tables cikkéből —
+              https://adrianroselli.com/2020/11/under-engineered-responsive-tables.html;
+              a fókuszgyűrűt a custom.scss adja). */}
+          <div
+            style={tableWrapStyle}
+            role="region"
+            aria-labelledby="kc-stat-kurzushatas-cim"
+            tabIndex={0}
+          >
             <table style={engagementTableStyle}>
-              <caption style={captionStyle}>
-                Eladás és haladás kurzusonként: hozzáférők, elkezdők, befejezők
+              {/* Oszlopnevek: SZÓRÓL SZÓRA a kurzuslap Kurzus-haladás
+                  paneljének címkéi („Beiratkozott", „Nem kezdte el" —
+                  CourseProgressPanel StatCard-sor és statusLabel), mert a
+                  kettő ugyanazt a közös összesítőt mutatja: egy fogalom egy
+                  szó (WCAG 2.2 SC 3.2.4 Consistent Identification:
+                  https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html;
+                  NN/g 4. heurisztika, Consistency and Standards:
+                  https://www.nngroup.com/articles/consistency-and-standards/).
+                  A 2026-08-20-i audit előtt itt „Hozzáfér" és „El sem
+                  kezdte" állt. */}
+              <caption style={captionStyle} id="kc-stat-kurzushatas-cim">
+                Eladás és haladás kurzusonként: beiratkozottak, elkezdők, befejezők
               </caption>
               <thead>
                 <tr>
@@ -92,7 +113,7 @@ export function CourseEngagementSection({
                     Ág
                   </th>
                   <th style={thNumericStyle} scope="col">
-                    Hozzáfér
+                    Beiratkozott
                   </th>
                   <th style={thNumericStyle} scope="col">
                     Elkezdte
@@ -101,7 +122,7 @@ export function CourseEngagementSection({
                     Befejezte
                   </th>
                   <th style={thNumericStyle} scope="col">
-                    El sem kezdte
+                    Nem kezdte el
                   </th>
                   <th style={thNumericStyle} scope="col">
                     Átlagos haladás
@@ -145,7 +166,6 @@ export function CourseEngagementSection({
             style={{
               ...noticeStyle,
               marginTop: 'var(--kc-as-space-3, calc(var(--base) * 0.75))',
-              maxWidth: '42rem',
             }}
           >
             A név szerinti lista a kurzus szerkesztőlapján, a Tananyag alatti Kurzus-haladás

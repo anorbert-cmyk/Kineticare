@@ -25,9 +25,19 @@ export function MonthlyRevenueSection({ rows }: { rows: readonly MonthlyRevenueR
     <section style={sectionStyle}>
       <h2>Havi bevétel</h2>
       <RevenueChart rows={rows} />
-      <div style={tableWrapStyle}>
+      {/* role="region" + aria-labelledby + tabIndex: a keskeny viewporton
+          görgethető tábla billentyűzetről is görgethető legyen (WCAG 2.1.1;
+          axe: scrollable-region-focusable; minta: Adrian Roselli,
+          Under-Engineered Responsive Tables —
+          https://adrianroselli.com/2020/11/under-engineered-responsive-tables.html). */}
+      <div
+        style={tableWrapStyle}
+        role="region"
+        aria-labelledby="kc-stat-havi-bevetel-cim"
+        tabIndex={0}
+      >
         <table style={tableStyle}>
-          <caption style={captionStyle}>
+          <caption style={captionStyle} id="kc-stat-havi-bevetel-cim">
             Havi bevétel otthoni és szakmai bontásban, forintban
           </caption>
           <thead>

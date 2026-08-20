@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -363,6 +366,64 @@ describe('RevenueChart — jelmagyarázat, rövid tickek, Y-tengely', () => {
     const rows = aggregateMonthlyRevenue([], { months: 12, now: NOW })
     const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
     expect(html).toContain('overflow-x:auto')
-    expect(html).toContain('min-width:45rem')
+    // px, nem rem: a Payload admin 13px-es gyökere a 45rem-et 585px-re
+    // zsugorította, és a tick a mért 11,27px-re esett a tervezett 12 alá
+    // (2026-08-20-i élő audit; a 720 a viewBox natív szélessége).
+    expect(html).toContain('min-width:720px')
+  })
+
+  it('a diagram görgetője billentyűzetről fókuszálható és nevesített (WCAG 2.1.1, 4.1.2)', () => {
+    // axe: scrollable-region-focusable —
+    // https://dequeuniversity.com/rules/axe/4.12/scrollable-region-focusable
+    const rows = aggregateMonthlyRevenue([], { months: 12, now: NOW })
+    const html = renderToStaticMarkup(createElement(RevenueChart, { rows }))
+    expect(html).toContain('role="region"')
+    expect(html).toContain('tabindex="0"')
+    expect(html).toContain('aria-label="Havi bevétel oszlopdiagram"')
+  })
+})
+
+describe('kc-adminstat márka-CSS őrök — fókusz, link-állapotok, méret-egység', () => {
+  const brandCss = readFileSync(
+    join(process.cwd(), 'src', 'app', '(payload)', 'custom.scss'),
+    'utf8',
+  )
+
+  it('a linknek explicit aláhúzása van (WCAG 1.4.1: a link színe a törzsével azonos)', () => {
+    // A link ink-színű, tehát az aláhúzás az egyetlen nem-szín jelzés —
+    // GOV.UK: https://design-system.service.gov.uk/styles/links/
+    const linkRule = brandCss.match(/\.kc-adminstat a \{[^}]*\}/)?.[0]
+    expect(linkRule).toBeDefined()
+    expect(linkRule).toContain('text-decoration: underline')
+  })
+
+  it('a fókuszgyűrű a linkre ÉS a görgethető régiókra is definiált (WCAG 2.4.7)', () => {
+    // Az inline stílus nem tud :focus-visible-t, ezért ennek a custom.scss-ben
+    // KELL élnie; a régió-szelektor az axe scrollable-region-focusable
+    // szabályhoz felvett tabindexes wrappereket fedi (2026-08-20-i audit).
+    expect(brandCss).toContain('.kc-adminstat a:focus-visible')
+    expect(brandCss).toContain(".kc-adminstat [role='region'][tabindex]:focus-visible")
+    const focusRule = brandCss.match(/:focus-visible \{[^}]*\}/)?.[0]
+    expect(focusRule).toContain('outline: 2px solid var(--kc-as-focus)')
+  })
+
+  it('a link active állapota definiált (termektervezes skill 4. pont: hét állapot)', () => {
+    expect(brandCss).toContain('.kc-adminstat a:active')
+  })
+
+  it('a scope-olt méret-tokenek px-alapúak (a Payload 13px-es gyökere miatt)', () => {
+    // 2026-08-20-i élő audit: a rem-értékek a 16px-es storefront-alap
+    // 13/16-ára zsugorodtak (törzs 13px, radius 6,5px). A tokenek px-ben
+    // rögzítettek; rem-alapú méret-token nem térhet vissza.
+    // A kommentek magyarázó rem-hivatkozásai nem számítanak, csak az érték.
+    const tokenLines = brandCss
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .filter((line) => /^\s*--kc-as-(space|radius|font-cim)/.test(line))
+    expect(tokenLines.length).toBeGreaterThanOrEqual(9)
+    for (const line of tokenLines) {
+      expect(line, `rem-alapú méret-token: ${line.trim()}`).not.toMatch(/[\d.]rem/)
+    }
+    expect(brandCss).toContain('font-size: 16px')
   })
 })

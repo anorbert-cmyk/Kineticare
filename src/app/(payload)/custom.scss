@@ -129,7 +129,21 @@
     U+A720-A7FF;
 }
 
-/* ---- Márka-tokenek és alapok — CSAK a Statisztika nézet scope-jában ------ */
+/* ---- Márka-tokenek és alapok — CSAK a Statisztika nézet scope-jában ------
+   MÉRET-EGYSÉG: PX, NEM REM (2026-08-20-i élő audit lelete). A Payload admin
+   gyökér-betűmérete 13px (--base-body-size: 13 —
+   node_modules/@payloadcms/ui/dist/scss/app.scss 10. sor; élőben mérve:
+   getComputedStyle(document.documentElement).fontSize = 13px), ezért minden
+   rem-alapú érték a storefront 16px-es alapjának 13/16-ára zsugorodott:
+   a törzs 13px-en, az eyebrow 10,6px-en, a tábla 12,4px-en, a diagram-tick
+   11,3px-en renderelt, a radius 6,5px lett a 8 helyett. A rem itt a
+   felhasználói betűméret-beállítást sem követné (a Payload fixen 13-ra
+   állítja), tehát a px semmit nem vesz el, a márka-skálát viszont pontosan
+   adja vissza. Külső mérce a helyreállított értékekhez: a törzs 16px a
+   16px-es minimum-ajánlás miatt (UXPin, Optimal Line Length — desktop min
+   font size 16px: https://www.uxpin.com/studio/blog/optimal-line-length-for-readability/),
+   a sorhossz 45–75 karakter (Baymard, Readability: The Optimal Line Length:
+   https://baymard.com/blog/line-length-readability). */
 
 .kc-adminstat {
   /* Színek (tokens.css 28–49. sor nyers palettája). */
@@ -147,8 +161,10 @@
   --kc-as-diagram-otthoni: #3d78aa;
   --kc-as-diagram-szakmai: #10243e;
 
-  /* Tipográfia (tokens.css 141–196. sor). A cím-1 a storefront L lépcsője
-     (tokens.css 178. sor); a cím-2 admin-adaptáció: a landing H1/H2-közös L
+  /* Tipográfia (tokens.css 141–196. sor), px-ben a 13px-es admin-gyökér
+     miatt (lásd a szakasz fejkommentjét). A cím-1 a storefront L lépcsője
+     (tokens.css 178. sor: clamp(2rem, 1.62rem + 1.7vw, 2.9rem) 16px-es
+     alapon = 32 → 46,4px); a cím-2 admin-adaptáció: a landing H1/H2-közös L
      mérete egy táblázatos adatlapon négy óriás szekciócímet adna, ezért a
      szekciócím kisebb, a szintet a betűcsalád + szín + elhelyezés jelöli
      (NN/g, Visual Hierarchy: a méret CSAK EGY a hierarchia hordozói közül —
@@ -157,20 +173,20 @@
      src/__tests__/tipografia-harom-meret.test.ts 29–30. sor). */
   --kc-as-font-heading: 'Tenor Sans', 'Georgia', 'Times New Roman', serif;
   --kc-as-font-body: 'Nunito Sans', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --kc-as-font-cim-1: clamp(2rem, 1.62rem + 1.7vw, 2.9rem);
-  --kc-as-font-cim-2: 1.5rem;
+  --kc-as-font-cim-1: clamp(32px, 25.92px + 1.7vw, 46.4px);
+  --kc-as-font-cim-2: 24px;
   --kc-as-tracking-eyebrow: 0.24em; /* landing eyebrow-nyelv (tokens.css 196. sor) */
 
-  /* Térköz: 4px-rács (tokens.css 198–207. sor). */
-  --kc-as-space-1: 0.25rem;
-  --kc-as-space-2: 0.5rem;
-  --kc-as-space-3: 0.75rem;
-  --kc-as-space-4: 1rem;
-  --kc-as-space-5: 1.5rem;
-  --kc-as-space-6: 2rem;
-  --kc-as-space-7: 3rem;
+  /* Térköz: 4px-rács (tokens.css 198–207. sor), px-ben (13px-es gyökér). */
+  --kc-as-space-1: 4px;
+  --kc-as-space-2: 8px;
+  --kc-as-space-3: 12px;
+  --kc-as-space-4: 16px;
+  --kc-as-space-5: 24px;
+  --kc-as-space-6: 32px;
+  --kc-as-space-7: 48px;
 
-  --kc-as-radius-md: 0.5rem; /* 8px (tokens.css 211. sor) */
+  --kc-as-radius-md: 8px; /* tokens.css 211. sor (0.5rem 16px-es alapon) */
 
   /* A landing hairline-alapú, ÁRNYÉK NÉLKÜLI nyelve (tokens.css 215–222.
      sor): a felületeket 1px-es vonal határolja, nem lebegtetés — ezért itt
@@ -179,7 +195,7 @@
   border-radius: var(--kc-as-radius-md);
   color: var(--kc-as-text);
   font-family: var(--kc-as-font-body);
-  font-size: 1rem; /* az M lépcső alsó határa (tokens.css 179. sor) */
+  font-size: 16px; /* az M lépcső alsó határa (tokens.css 179. sor: 1rem a 16px-es storefront-alapon) */
   line-height: 1.67; /* --kc-leading-body (tokens.css 184. sor) */
 }
 
@@ -202,18 +218,56 @@
 }
 
 /* Link: ink + aláhúzás, hover accent-deep — a landing footer-meta mintája
-   (tokens.css 136–137. sor). Fókuszgyűrű: ≥ 3:1 mindkét témában (WCAG 2.4.7,
-   a mért értékek a fenti jegyzőkönyvben). */
+   (tokens.css 136–137. sor). A hét állapot végiggondolva (termektervezes
+   skill 4. pont), 2026-08-20-i élő audit:
+   - ALAP: ink + EXPLICIT aláhúzás. A link színe azonos a törzsszöveggel,
+     tehát az aláhúzás az EGYETLEN nem-szín jelzés (WCAG 2.2 SC 1.4.1 Use of
+     Color); eddig csak a böngésző-alapértelmezés adta, deklarálva nem volt —
+     mostantól őr-teszt is védi. GOV.UK: „Links are blue and underlined by
+     default" — https://design-system.service.gov.uk/styles/links/
+   - HOVER: accent-deep szín + vastagabb aláhúzás. A GOV.UK mért indoklása:
+     a vastagodó aláhúzás a gyengén látóknak is észrevehető jelzés, a puszta
+     színváltásnál erősebb — https://designnotes.blog.gov.uk/2021/07/07/making-links-easier-to-see-and-read-on-gov-uk/
+   - FOCUS-VISIBLE: 2px gyűrű, ≥ 3:1 mindkét témában (WCAG 2.4.7; mérve:
+     világoson 5,45:1 fehéren, sötéten 12,15:1 — fenti jegyzőkönyv).
+   - ACTIVE: a szöveg-szín (a GOV.UK palettában a link-active = text:
+     https://design-system.service.gov.uk/styles/colour/) — kattintás közben
+     a hover-színről visszavált, ez a látható „lenyomva" visszajelzés.
+   - VISITED: SZÁNDÉKOSAN nincs külön szín. A GOV.UK kifejezett szabálya:
+     admin-felület gyakran változó tartalmú lapjaira mutató linknél a
+     visited-megkülönböztetés nem segít („…for example when linking to pages
+     with frequently-changing content such as the dashboard for an admin
+     interface" — https://design-system.service.gov.uk/styles/links/);
+     az NN/g visited-ajánlása (https://www.nngroup.com/articles/change-the-color-of-visited-links/)
+     a tartalom-felfedező navigációra szól, itt viszont minden sor-link
+     ugyanarra az élő adatlapra visz, amit szándékosan látogat újra a
+     munkatárs.
+   - DISABLED és FOLYAMATBAN: nem értelmezett (tiszta navigációs link,
+     nem űrlap-cselekvés). */
 .kc-adminstat a {
   color: var(--kc-as-text);
+  text-decoration: underline;
   text-underline-offset: 0.17em;
 }
 
 .kc-adminstat a:hover {
   color: var(--kc-as-link-hover);
+  text-decoration-thickness: 2px;
 }
 
-.kc-adminstat a:focus-visible {
+.kc-adminstat a:active {
+  color: var(--kc-as-text);
+}
+
+/* A görgetőkonténerek (tabla-wrap, diagram) tabindex="0"-t viselnek, hogy
+   billentyűzetről is görgethetők legyenek (WCAG 2.1.1 Keyboard; axe-szabály:
+   scrollable-region-focusable —
+   https://dequeuniversity.com/rules/axe/4.12/scrollable-region-focusable;
+   a minta: Adrian Roselli, Under-Engineered Responsive Tables —
+   https://adrianroselli.com/2020/11/under-engineered-responsive-tables.html).
+   Fókuszban ugyanaz a gyűrű jár nekik, mint a linkeknek (WCAG 2.4.7). */
+.kc-adminstat a:focus-visible,
+.kc-adminstat [role='region'][tabindex]:focus-visible {
   outline: 2px solid var(--kc-as-focus);
   outline-offset: 2px;
 }

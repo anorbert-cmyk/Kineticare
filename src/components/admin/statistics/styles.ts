@@ -28,8 +28,17 @@ import type { CSSProperties } from 'react'
  *   - számok: Nunito Sans 700 + tabular-nums (az ár-kiemelés súllyal
  *     történik, mérettel nem — tokens.css 168–169. sor).
  *
+ * ═══ MÉRET-EGYSÉG: PX, NEM REM (2026-08-20-i élő audit) ═══
+ * A Payload admin gyökér-betűmérete 13px (--base-body-size: 13 —
+ * node_modules/@payloadcms/ui/dist/scss/app.scss), ezért az itteni rem-értékek
+ * a tervezett 16px-es storefront-alap 13/16-ára zsugorodtak (mérve: törzs
+ * 13px, tábla 12,4px, kártya-érték 19,5px). A px a márka-skála pontos
+ * visszaadása; a rem az adminban a felhasználói beállítást sem követné,
+ * mert a Payload fixen 13-ra állítja. Részletes indoklás forrásokkal:
+ * custom.scss „Márka-tokenek" fejkomment.
+ *
  * ═══ RESZPONZIVITÁS (változatlan) ═══
- * A kártyasor flex-wrap (flex: 1 1 8rem), így 320 px-en 1-2 oszlopba törik
+ * A kártyasor flex-wrap (flex: 1 1 128px), így 320 px-en 1-2 oszlopba törik
  * media query nélkül; a táblák saját görgetőkonténerben (width: 100%,
  * overflowX: auto) csúsznak, tehát maga a LAP sosem görget vízszintesen.
  * - WCAG 2.2 SC 1.4.10 Reflow (320 px, nincs kétirányú görgetés a lapon):
@@ -44,15 +53,16 @@ export const pageStyle: CSSProperties = {
   background: 'var(--kc-as-bg, transparent)',
   borderRadius: 'var(--kc-as-radius-md, 0)',
   padding: 'var(--kc-as-space-6, calc(var(--base) * 1.5))',
-  maxWidth: '64rem',
+  maxWidth: '1024px',
 }
 
 /* Eyebrow a h1 fölé — a landing prémium felvezető-sora: verzál CSS-ből
    (a DOM-szöveg mondatkezdő marad, ui-sztenderdek §3.1 M-4), 0.24em
-   betűköz, ink-soft (tokens.css 195–196. sor; paperen 8,80:1). */
+   betűköz, ink-soft (tokens.css 195–196. sor; paperen 8,80:1). A 13px az
+   S lépcső alsó határa (tokens.css 180. sor: 0.8125rem 16px-es alapon). */
 export const eyebrowStyle: CSSProperties = {
   color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
-  fontSize: '0.8125rem',
+  fontSize: '13px',
   fontWeight: 600,
   letterSpacing: 'var(--kc-as-tracking-eyebrow, 0.24em)',
   marginTop: 0,
@@ -65,13 +75,17 @@ export const headingStyle: CSSProperties = {
   marginBottom: 'var(--kc-as-space-2, calc(var(--base) * 0.5))',
 }
 
-/* 42rem ≈ 75 karakter magyar szöveggel — a 45–85 karakteres olvasható
-   sorhossz-sávon belül (docs/ui-sztenderdek.md, tervezési skill 3. pont). */
+/* 528px (55 × a 16px-es törzs ch-egysége) ≈ 72–74 karakter magyar szöveggel
+   (élőben mérve, Range API-s soronkénti karakterszámlálással: 672px-en még
+   89–95 karakter jött ki, mert a magyar szöveg keskeny betűi a ch-nál többet
+   engednek egy sorba) — a 45–85 karakteres sávon belül (tervezési skill
+   3. pont), és a Baymard 50–75-ös optimumában
+   (https://baymard.com/blog/line-length-readability). */
 export const leadStyle: CSSProperties = {
   color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
   marginTop: 0,
   marginBottom: 'var(--kc-as-space-5, calc(var(--base) * 1.25))',
-  maxWidth: '42rem',
+  maxWidth: '528px',
 }
 
 export const cardRowStyle: CSSProperties = {
@@ -89,8 +103,8 @@ export const cardStyle: CSSProperties = {
   background: 'var(--kc-as-surface-raised, var(--theme-elevation-50))',
   border: '1px solid var(--kc-as-hairline, var(--theme-elevation-100))',
   borderRadius: 'var(--kc-as-radius-md, 4px)',
-  flex: '1 1 8rem',
-  minWidth: '8rem',
+  flex: '1 1 128px',
+  minWidth: '128px',
   padding: 'var(--kc-as-space-4, calc(var(--base) * 0.5))',
 }
 
@@ -100,7 +114,7 @@ export const cardStyle: CSSProperties = {
    kiemelt számot súllyal jelöli, nem mérettel (tokens.css 168–169. sor). */
 export const cardValueStyle: CSSProperties = {
   display: 'block',
-  fontSize: '1.5rem',
+  fontSize: '24px',
   fontVariantNumeric: 'tabular-nums',
   fontWeight: 700,
   lineHeight: 1.2,
@@ -130,12 +144,15 @@ export const tableWrapStyle: CSSProperties = {
 
 /* A minWidth garantálja, hogy az oszlopok sose préselődjenek olvashatatlanra:
    keskeny viewporton a tableWrap görget, nem a lap (WCAG 1.4.10 / G225,
-   ugyanaz a minta, mint a CourseProgressPanel 46rem-es táblája). */
+   ugyanaz a minta, mint a CourseProgressPanel táblája). A 15px admin-
+   adaptáció a 16px-es törzs alá: az adatsűrű tábla egy fokkal kisebb, de a
+   12,4px-es (mért) korábbi rendernél jóval olvashatóbb; kontrasztja mérve
+   9,3:1 / 6,61:1 (jegyzőkönyv a custom.scss-ben). */
 export const tableStyle: CSSProperties = {
   width: '100%',
-  minWidth: '36rem',
+  minWidth: '576px',
   borderCollapse: 'collapse',
-  fontSize: '0.95rem',
+  fontSize: '15px',
 }
 
 export const captionStyle: CSSProperties = {
@@ -184,7 +201,13 @@ export const thNumericStyle: CSSProperties = {
   textAlign: 'right',
 }
 
+/* A notice ugyanolyan folyószöveg, mint a lead, ezért ugyanaz a sorhossz-
+   plafon jár neki (2026-08-20-i élő audit: maxWidth nélkül a tölcsér-notice
+   sora 133, 672px-en még 91–95 karakterre nyúlt a 85-ös küszöb és a Baymard
+   50–75-ös optimuma fölé — https://baymard.com/blog/line-length-readability;
+   tervezési skill 3. pont: 45–85; az 528px mért indoklása a leadStyle-nál). */
 export const noticeStyle: CSSProperties = {
   color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
   margin: 0,
+  maxWidth: '528px',
 }
