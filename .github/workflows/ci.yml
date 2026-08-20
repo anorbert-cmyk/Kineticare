@@ -168,7 +168,7 @@ jobs:
         run: npm run build
 
   audit:
-    name: npm audit (critical = bukás)
+    name: npm audit (high = bukás)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -178,5 +178,18 @@ jobs:
           cache: npm
       - name: Függőségek telepítése
         run: npm ci --legacy-peer-deps
-      - name: Sebezhetőség-audit
-        run: npm audit --audit-level=critical
+      # A teljes kép MINDIG látszik, akkor is, ha a kapu átenged: enélkül a
+      # `moderate` tételek némán gyűlnek. Nem blokkol (`|| true`), csak riportál.
+      - name: Sebezhetőség-riport (nem blokkol)
+        run: npm audit || true
+      # ═══ MIÉRT `high` ÉS NEM `critical` (2026-08-20, MÉRVE) ═══
+      # A kapu 2026-08-20-ig `critical`-on állt, és ezért ZÖLDEN átengedett NÉGY
+      # HIGH sebezhetőséget a PRODUKCIÓS fában: undici (GHSA-4cwx-7wf7-3272,
+      # cross-user information disclosure, CVSS 7.4), image-size (GHSA-w3rx-r6r6-pgpr
+      # és GHSA-5p2g-fcmc-qvqq, DoS, CVSS 7.5), payload (tranzitívan) és nanoid
+      # (GHSA-2v37-7h3g-55p8). A kapu tehát VAK volt: `--audit-level=critical`
+      # exit 0, `--audit-level=high` exit 1 — ugyanazon a lockfile-on mérve.
+      # A tételek ebben a PR-ben rendeződtek (payload 3.88.0 + nanoid override),
+      # így a kapu SZIGORÍTHATÓ arra a szintre, ahol tényleg fog.
+      - name: Sebezhetőség-audit (high és fölötte bukás)
+        run: npm audit --audit-level=high

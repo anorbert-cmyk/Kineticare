@@ -417,7 +417,7 @@ export interface BlockCredsStrip {
       }[]
     | null;
   /**
-   * Nem kötelező. Ide szokott kerülni a „Bővebben a szakmai hátterünkről" hivatkozás a Rólunk oldalra.
+   * Nem kötelező. Ide a Rólunk oldalra vivő hivatkozás kerül; a jóváhagyott felirat: „Ismerd meg a hátterünket".
    */
   link?: {
     /**
@@ -472,7 +472,7 @@ export interface BlockCourseCards {
    */
   lead?: string | null;
   /**
-   * A kurzuskártyák alján megjelenő gomb felirata. Nem kötelező — üresen a beépített felirat marad („Megnézem a programot”). A gomb dekoratív: maga a KÁRTYA a link.
+   * A kurzuskártyák alján megjelenő gomb felirata. Nem kötelező — üresen a beépített, jóváhagyott felirat marad („Nyisd meg a kurzusoldalt”). A gomb dekoratív: maga a KÁRTYA a link.
    */
   ctaLabel?: string | null;
   /**
@@ -804,7 +804,7 @@ export interface BlockServices {
          */
         body: string;
         /**
-         * A sor végi hivatkozás szövege (pl. „Tovább a kezelésekre").
+         * A sor végi hivatkozás szövege. Igével kezdd, és nevezd meg a célt (pl. „Nézd meg a kezeléseket"). A puszta „Tovább…" nem mondja meg, mi történik, ezért nem használható.
          */
         felirat?: string | null;
         /**
