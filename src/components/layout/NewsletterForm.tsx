@@ -7,6 +7,7 @@ import { TurnstileWidget } from '@/app/(frontend)/kapcsolat/_components/Turnstil
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
 import { BARION_SIGNUP, trackSignUp, type BarionSignUpEvent } from '@/lib/analytics/barion-events'
+import { withLeadTracking, type LeadTrackers } from '@/lib/analytics/lead-events'
 import { NEWSLETTER_CONSENT_TEXT, PRIVACY_POLICY_PATH } from '@/lib/newsletter/consent-text'
 import {
   buildNewsletterPayload,
@@ -60,10 +61,12 @@ export interface NewsletterFormProps {
 export interface TrackedNewsletterDeps {
   submit: (payload: NewsletterSubmissionPayload) => Promise<NewsletterSubmitResult>
   track: (event: BarionSignUpEvent) => boolean
+  /** A PostHog lead-küldői; elhagyva az éles küldők futnak (LEAD_TRACKERS). */
+  lead?: LeadTrackers
 }
 
 /**
- * Hírlevél-beküldés + Barion `signUp`.
+ * Hírlevél-beküldés + Barion `signUp` + PostHog lead-funnel.
  *
  * ═══ MIÉRT SIGNUP A FELIRATKOZÁS ═══
  * A hivatalos leírás a hírlevél-feliratkozást is `signUp`-eseménynek tekinti
@@ -82,6 +85,15 @@ export interface TrackedNewsletterDeps {
  *
  * A `track` hívás saját `try/catch`-ben fut: a mérés hibája nem ronthatja el a
  * feliratkozást.
+ *
+ * ═══ A LEAD-FUNNEL (PostHog) ═══
+ * A `withLeadTracking` a hívás ELŐTT `lead_submitted`-et, sikeres válasz után
+ * `lead_succeeded`-et küld `hirlevel` forrás-címkével. A két esemény
+ * KÜLÖNBSÉGE a néma beküldési hibák egyetlen külső jelzője (a részletes
+ * indoklás: src/lib/analytics/lead-events.ts fejléce). A Barion `signUp` és a
+ * PostHog lead-események EGYMÁSTÓL FÜGGETLENEK: két külön mérőrendszer,
+ * két külön riport — az egyik hibája nem némíthatja el a másikat, ezért
+ * mindkettő saját `try/catch`-ben fut.
  */
 export async function trackedSubmitNewsletter(
   payload: NewsletterSubmissionPayload,
@@ -90,15 +102,21 @@ export async function trackedSubmitNewsletter(
     track: (event) => trackSignUp(event),
   },
 ): Promise<NewsletterSubmitResult> {
-  const result = await deps.submit(payload)
-  if (result.ok) {
-    try {
-      deps.track(BARION_SIGNUP.newsletter)
-    } catch {
-      // A mérés hibája nem érheti el a felhasználót.
-    }
-  }
-  return result
+  return withLeadTracking(
+    'hirlevel',
+    async () => {
+      const result = await deps.submit(payload)
+      if (result.ok) {
+        try {
+          deps.track(BARION_SIGNUP.newsletter)
+        } catch {
+          // A mérés hibája nem érheti el a felhasználót.
+        }
+      }
+      return result
+    },
+    { trackers: deps.lead },
+  )
 }
 
 export function NewsletterForm({ formId, turnstileSiteKey }: NewsletterFormProps) {

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
+import { withLeadTracking, type LeadTrackers } from '@/lib/analytics/lead-events'
 import { ctaLabel, ctaProgressLabel } from '@/lib/cta-vocabulary'
 
 import {
@@ -12,6 +13,8 @@ import {
   GENERIC_SUBMIT_ERROR,
   isTurnstileEnabled,
   submitContactForm,
+  type FormSubmissionPayload,
+  type SubmitResult,
 } from '../_lib/submit'
 import {
   EMPTY_CONTACT_VALUES,
@@ -48,6 +51,35 @@ export interface ContactFormProps {
   formId: string | null
   /** TURNSTILE_SITE_KEY (szerver-oldalon olvasva); null/üres = widget rejtve. */
   turnstileSiteKey: string | null
+}
+
+/** A `trackedSubmitContact` injektálható függőségei (a teszt kémeket ad be). */
+export interface TrackedContactDeps {
+  submit: (payload: FormSubmissionPayload) => Promise<SubmitResult>
+  /** A PostHog lead-küldői; elhagyva az éles küldők futnak (LEAD_TRACKERS). */
+  lead?: LeadTrackers
+}
+
+/**
+ * Kapcsolat-beküldés + PostHog lead-funnel (`kapcsolat` forrás-címke).
+ *
+ * A hívás ELŐTT `lead_submitted`, sikeres szerverválasz után `lead_succeeded`
+ * megy ki. A kettő KÜLÖNBSÉGE a néma beküldési hibák egyetlen külső jelzője —
+ * a részletes indoklás és az adatvédelmi szerződés a
+ * `src/lib/analytics/lead-events.ts` fejlécében áll.
+ *
+ * A mérés hibája nem ronthatja el a beküldést: a `withLeadTracking` mindkét
+ * küldőt saját `try/catch`-ben futtatja.
+ *
+ * A honeypotba lépő bot, a hiányzó Turnstile-token és a kliensoldali
+ * mezőhibák ide EL SEM JUTNAK (az űrlap előbb visszatér, hálózati hívás
+ * nélkül) — tehát sem bot, sem elgépelés nem torzítja a tölcsért.
+ */
+export async function trackedSubmitContact(
+  payload: FormSubmissionPayload,
+  deps: TrackedContactDeps = { submit: submitContactForm },
+): Promise<SubmitResult> {
+  return withLeadTracking('kapcsolat', () => deps.submit(payload), { trackers: deps.lead })
 }
 
 export function ContactForm({ formId, turnstileSiteKey }: ContactFormProps) {
@@ -116,7 +148,7 @@ export function ContactForm({ formId, turnstileSiteKey }: ContactFormProps) {
     }
 
     setSubmitting(true)
-    const result = await submitContactForm(
+    const result = await trackedSubmitContact(
       buildSubmissionPayload(values, formId, turnstileToken),
     )
     setSubmitting(false)
