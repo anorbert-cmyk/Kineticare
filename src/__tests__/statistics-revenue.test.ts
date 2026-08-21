@@ -61,7 +61,9 @@ describe('canAccessStatistics — a nézet egyetlen védelme', () => {
   })
 
   it('a magyar elutasító szöveg a nézetben él', () => {
-    expect(STATISTICS_ACCESS_DENIED_MESSAGE).toBe('Ehhez a nézethez nincs jogosultságod.')
+    // „Oldal", nem „nézet": a „nézet" a Payload fejlesztői szava, a munkatárs
+    // oldalt lát (ui-sztenderdek §3.1 — a felhasználó szavát használjuk).
+    expect(STATISTICS_ACCESS_DENIED_MESSAGE).toBe('Ehhez az oldalhoz nincs jogosultságod.')
   })
 
   it('anoním látogatónál a DefaultTemplate kimarad, bejelentkezett usernél nem', () => {
@@ -438,6 +440,58 @@ describe('kurzus-bontás és tölcsér', () => {
     expect(rows[0]?.sku).toBe('Otthoni')
     expect(rows[0]?.revenueHuf).toBe(79500)
     expect(rows.find((row) => row.sku === 'SOS ingyenes')?.freeItemCount).toBe(1)
+  })
+
+  /**
+   * ŐR — A SORFEJLÉC A KURZUS CÍME (H7, 2026-08-21-i audit).
+   *
+   * A bevétel-tábla sorfejléce korábban a sku volt, miközben ugyanaz a kurzus
+   * a haladás-táblában a címével szerepelt: egy lapon két néven futott ugyanaz
+   * a termék (WCAG 2.2 SC 3.2.4 Consistent Identification). A csoportosítás
+   * viszont MARAD a sku-snapshoton, mert a cím változhat, a snapshot nem.
+   */
+  it('a kurzus-sor CÍMET kap, de sku szerint csoportosít', () => {
+    const rows = aggregateCourseRevenue([
+      paid({
+        createdAt: '2026-08-01T10:00:00.000Z',
+        items: [
+          {
+            audience: 'laikus',
+            priceHuf: 79500,
+            quantity: 1,
+            titleSnapshot: 'kez-rehab-otthon-alap',
+            displayTitle: 'Kézrehabilitáció otthon: az alapok',
+          },
+        ],
+      }),
+      paid({
+        createdAt: '2026-07-01T10:00:00.000Z',
+        items: [
+          {
+            audience: 'laikus',
+            priceHuf: 79500,
+            quantity: 1,
+            titleSnapshot: 'kez-rehab-otthon-alap',
+            displayTitle: 'Kézrehabilitáció otthon: az alapok',
+          },
+        ],
+      }),
+    ])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.title).toBe('Kézrehabilitáció otthon: az alapok')
+    expect(rows[0]?.sku).toBe('kez-rehab-otthon-alap')
+    expect(rows[0]?.revenueHuf).toBe(159000)
+  })
+
+  it('törölt terméknél (nincs populált cím) a sku marad a sor neve', () => {
+    const rows = aggregateCourseRevenue([
+      paid({
+        createdAt: '2026-08-01T10:00:00.000Z',
+        items: [{ audience: 'laikus', priceHuf: 1000, quantity: 1, titleSnapshot: 'regi-kurzus' }],
+      }),
+    ])
+    expect(rows[0]?.title).toBe('regi-kurzus')
+    expect(rows[0]?.sku).toBe('regi-kurzus')
   })
 
   it('a tölcsér a státuszokat számolja, a refunded-et is, de az nem bevétel', () => {

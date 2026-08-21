@@ -35,6 +35,30 @@ import { ctaLabel, ctaProgressLabel } from '../../lib/cta-vocabulary'
  * feltételes mondat („Ha a … címhez tartozik fiók") és a hibaág. Ezek a
  * biztonsági szerződés részei, nem a hívó dolga.
  */
+/**
+ * Üres mezővel való beküldés MAGYAR üzenete.
+ *
+ * ═══ MIÉRT NEM LETILTOTT GOMB (mérve, 2026-08-21) ═══
+ * A gomb korábban `disabled` volt, amíg a mező üres. Chromium-mal, VALÓDI
+ * Tab-billentyűvel bejárva a `/belepes-atallas` lap fókusz-lánca ez volt:
+ * mező → „Írj nekünk" → „Vissza a belépéshez" — a BEKÜLDŐ GOMB KIMARADT.
+ * A natív `disabled` kiesik a Tab-sorrendből, tehát a billentyűzetes és a
+ * képernyőolvasós látogató a lap elsődleges cselekvését meg sem találta,
+ * és arról sem kapott hírt, miért nem használható.
+ *
+ * A repó saját szabálya ugyanezt írja elő (`src/components/ui/Button.tsx`
+ * fejléce): „Ahol a letiltás a felhasználó által ORVOSOLHATÓ hiányból fakad …
+ * ott a gombot NEM tiltjuk le … a beküldést pedig validáció fogja meg, világos
+ * magyar hibaüzenettel."
+ * GOV.UK Design System, Button: „Disabled buttons have poor contrast and can
+ * confuse some users, so avoid them if possible."
+ * https://design-system.service.gov.uk/components/button/
+ *
+ * A `submitting` alatti letiltás MARAD: az nem orvosolható hiány, hanem
+ * rendszerállapot (dupla küldés elleni védelem), és néhány másodpercig tart.
+ */
+export const URES_EMAIL_HIBA = 'Add meg az e-mail-címed.'
+
 export interface ForgotPasswordFormProps {
   /**
    * Segédszöveg az e-mail-mező alatt (`Field.hint` → `aria-describedby`,
@@ -48,7 +72,13 @@ export interface ForgotPasswordFormProps {
   successNote?: string
 }
 
-export function ForgotPasswordForm({ emailHint, successNote }: ForgotPasswordFormProps = {}) {
+/**
+ * Minden prop opcionális, ezért a `<ForgotPasswordForm />` alak változatlanul
+ * érvényes. Alapértelmezett paraméter-objektum (`= {}`) SZÁNDÉKOSAN nincs: attól
+ * a komponens típusa `(props?: …) => …` lenne, amit a `React.createElement`
+ * túlterhelései nem fogadnak el propokkal (mérve: TS2769 a felületi őr-tesztben).
+ */
+export function ForgotPasswordForm({ emailHint, successNote }: ForgotPasswordFormProps) {
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
@@ -57,6 +87,7 @@ export function ForgotPasswordForm({ emailHint, successNote }: ForgotPasswordFor
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!email.trim()) {
+      setError(URES_EMAIL_HIBA)
       return
     }
     setError(null)
@@ -102,7 +133,7 @@ export function ForgotPasswordForm({ emailHint, successNote }: ForgotPasswordFor
       ) : null}
       {/* §3.2 #21: e-mail indul a látogatónak, tehát elkötelezés (P-1a → E/1).
           A korábbi „Visszaállító link küldése" deverbális főnévi alak volt. */}
-      <Button disabled={submitting || !email.trim()} type="submit">
+      <Button disabled={submitting} type="submit">
         {submitting ? ctaProgressLabel('password-reset-request') : ctaLabel('password-reset-request')}
       </Button>
     </form>

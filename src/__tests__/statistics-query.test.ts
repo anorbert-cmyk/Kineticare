@@ -152,7 +152,9 @@ describe('queryRevenueReport', () => {
       select?: Record<string, unknown>
       where?: { id?: { in?: number[] } }
     }
-    expect(productArgs.select).toEqual({ id: true, audience: true })
+    // A cím ugyanabban a batchelt hívásban jön, mint az ág: a bevétel-tábla
+    // sorfejléce a kurzus CÍME, nem a sku (H7, 2026-08-21-i audit).
+    expect(productArgs.select).toEqual({ id: true, audience: true, displayTitle: true })
     expect(productArgs.where?.id?.in?.sort()).toEqual([41, 42])
     expect(report.totals.szakemberHuf).toBe(3000)
     expect(report.totals.laikusHuf).toBe(3000)

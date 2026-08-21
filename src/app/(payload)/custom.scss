@@ -417,8 +417,17 @@
    https://dequeuniversity.com/rules/axe/4.12/scrollable-region-focusable;
    a minta: Adrian Roselli, Under-Engineered Responsive Tables —
    https://adrianroselli.com/2020/11/under-engineered-responsive-tables.html).
-   Fókuszban ugyanaz a gyűrű jár nekik, mint a linkeknek (WCAG 2.4.7). */
+   Fókuszban ugyanaz a gyűrű jár nekik, mint a linkeknek (WCAG 2.4.7).
+
+   A `summary` 2026-08-21-én került a listába: a Statisztika oldal
+   „nem kezdte el" névsora nyitható blokkban (<details>/<summary>) ül, és a
+   summary billentyűzettel fókuszálható. MÉRVE (Chromium, CDP, valódi Tab):
+   a rendszer-alapértelmezett gyűrűt kapta (outline-style: auto, 1px,
+   #101010), vagyis a lap saját, 2px-es #2f6e9f gyűrűjétől eltérőt. Egy lapon
+   kétféle fókuszjelölés a következetes azonosítás ellen való (WCAG 2.2
+   SC 3.2.4), ezért a summary ugyanazt a gyűrűt kapja, mint a linkek. */
 .kc-adminstat a:focus-visible,
+.kc-adminstat summary:focus-visible,
 .kc-adminstat [role='region'][tabindex]:focus-visible {
   outline: 2px solid var(--kc-as-focus);
   outline-offset: 2px;

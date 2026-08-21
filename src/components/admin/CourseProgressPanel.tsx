@@ -1,7 +1,8 @@
 'use client'
 
 import { Button, useAuth, useDocumentInfo } from '@payloadcms/ui'
-import { useState, type CSSProperties, type JSX } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 
 import { hasStaffOrOwnerRole } from '../../access/roles'
 import type {
@@ -10,20 +11,31 @@ import type {
   CourseStudentProgress,
   CourseStudentStatus,
 } from '../../lib/admin/course-progress-stats'
+import './course-progress-panel.css'
 import {
-  ariaSortValue,
+  cardLabelStyle,
+  cardStyle,
+  cardValueStyle,
+  cardsStyle,
+  errorStyle,
+  filterFieldStyle,
+  filterRowStyle,
+  noteStyle,
+  panelStyle,
+  rowStyle,
+  srOnlyStyle,
+  warningStyle,
+} from './course-progress-styles'
+import { LessonDropOffTable, StudentsTable } from './course-progress-tables'
+import {
   csvFileName,
-  dropOffLabel,
   filterStudents,
-  formatRelativeHungarian,
-  moduleColumnLabel,
-  nextLessonLabel,
-  ringGeometry,
+  readProgressDeepLink,
   sortStudents,
-  statusChipColors,
-  statusLabel,
   studentsCsv,
   visibleCountLabel,
+  NO_DATA,
+  PROGRESS_PANEL_ANCHOR,
   STATUS_FILTER_OPTIONS,
   STUDENT_PAGE_SIZE,
   STUDENT_PAGE_STEP,
@@ -40,28 +52,40 @@ import {
  * A megrendelői igény szó szerint: „fontos, hogy a lányok láthassák, ki
  * indította el a kurzust, ki még nem, és milyen százalékban van elkészült.
  * Ehhez egy apró indikátor, például egy kis kördiagram, vagy hasonló megoldás
- * elegendő." A panel ezt adja: négy összesítő kártya, majd hallgatónkénti
+ * elegendő." A panel ezt adja: összesítő kártyák, majd hallgatónkénti
  * táblázat kis kördiagrammal, szűrővel és keresővel.
  *
  * ═══ KIZÁRÓLAG FELÜLET ═══
  * Semmit nem számol: az összes szám a GET /api/admin/course-progress
- * végponttól jön, amely a KÖZÖS `summarizeCurriculum` modullal dolgozik —
+ * végponttól jön, amely a KÖZÖS `summarizeCurriculum` modullal dolgozik,
  * ugyanazzal, amit a vevő lejátszója is használ. Így az admin és a vevő
  * garantáltan ugyanazt a százalékot látja. A tiszta nézet-logika (szűrés,
- * rendezés, relatív idő, ring-geometria) a `course-progress-view.ts`-ben él és
- * tesztelt; itt csak a DOM-ra kötés marad.
+ * rendezés, relatív idő, ring-geometria, mély link) a `course-progress-view.ts`-ben
+ * él és tesztelt; a két táblázat a `course-progress-tables.tsx`-ben, szintén
+ * tesztelhető alakban; itt csak az állapotkezelés és a DOM-ra kötés marad.
  *
  * ═══ MIÉRT GOMBRA TÖLT, NEM MOUNTKOR ═══
  * Két ok: (1) a kurzus szerkesztőoldala ne lassuljon egy összesítő
  * lekérdezéssel, amit nem mindig néznek meg; (2) a repó `react-hooks`
  * beállítása a mountkori effektben történő állapotírást hibaként kezeli
- * (lásd eslint.config.mjs) — az interakcióra induló betöltés ettől is mentes.
+ * (lásd eslint.config.mjs).
+ *
+ * ═══ EGYETLEN KIVÉTEL: A MÉLY LINK ═══
+ * A Statisztika oldal
+ * `/admin/collections/products/<id>?haladas=nem-kezdte#kurzus-haladas`
+ * alakban linkel ide (a szerződés KÖTÖTT, `docs/statisztika-audit-2026-08-21.md`
+ * 1. pont). Ha a link KIFEJEZETTEN kérte, a panel magától betölt, beállítja a
+ * szűrőt és odagörget: a válaszig vezető út így háromról egy kattintásra
+ * csökken. Paraméter nélkül minden marad a régi, gombra induló viselkedésnél,
+ * tehát a fenti teljesítmény-indok sértetlen. Ismeretlen vagy hibás értéknél a
+ * panel úgy viselkedik, mintha nem lenne paraméter (nem dob hibát).
  *
  * ═══ AKADÁLYMENTESSÉG ═══
  * A kördiagram DEKORATÍV (`aria-hidden`): az információt a mellette álló
- * „12/18 · 67%" szöveg hordozza. A rendezhető oszlopfejlécek `aria-sort`-tal
- * jelzik az aktuális rendezést, a hiba és a siker `role="alert"` /
- * `role="status"` élő régió.
+ * „12/18 · 67%" szöveg hordozza. A táblák akadálymentességi részletei (görgethető
+ * régió, sorfejléc, látható rendezés-jelölés, érintőcél) a
+ * `course-progress-tables.tsx` fejkommentjében; a két állapotszín kontraszt-
+ * jegyzőkönyve a `course-progress-panel.css`-ben.
  */
 
 const REQUEST_TIMEOUT_MS = 30_000
@@ -69,10 +93,21 @@ const REQUEST_TIMEOUT_MS = 30_000
 /** Ennyi idő után engedjük el a CSV blob-URL-jét (lásd a `downloadCsv` mérését). */
 const CSV_URL_RELEASE_MS = 1_000
 
-const GENERIC_ERROR = 'A kurzus-haladás most nem tölthető be. Kérjük, próbáld újra később.'
+/**
+ * A magyar mikroszöveg-szabályzat (`docs/ui-sztenderdek.md` §3.1, §2.7) szerint
+ * a hibaüzenet végig TEGEZ: a korábbi „Kérjük, próbáld újra később" egyetlen
+ * mondaton belül keverte a magázást a tegezéssel.
+ */
+const GENERIC_ERROR = 'A kurzus-haladás most nem tölthető be. Próbáld újra később.'
 const NETWORK_ERROR = 'Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot, és próbáld újra.'
 const EMPTY_STATE = 'Ehhez a kurzushoz még senki nem kapott hozzáférést.'
 const NO_MATCH = 'A szűrésnek egyetlen hallgató sem felel meg.'
+
+/** A hallgató-táblázat képernyőolvasónak szóló neve (a `role="region"`-é is). */
+const STUDENTS_CAPTION = 'A kurzushoz hozzáférő hallgatók haladása'
+const STUDENTS_CAPTION_ID = 'kc-course-progress-hallgatok'
+const LESSONS_CAPTION = 'Leckénkénti elvégzettség és lemorzsolódás'
+const LESSONS_CAPTION_ID = 'kc-course-progress-leckek'
 
 /** A végpont válasza — a panel által használt mezőkre szűkítve. */
 interface CourseProgressData {
@@ -83,6 +118,11 @@ interface CourseProgressData {
   product: { title: string }
   meta: { generatedAt: string; totalLessons: number }
 }
+
+/** A lekérdezés eredménye. A hívó ebből ír állapotot, a kérés maga nem ír. */
+type ProgressResult =
+  | { ok: true; data: CourseProgressData }
+  | { ok: false; message: string }
 
 /** A szerver magyar hibaüzenete a válasz-törzsből ({ error: string }). */
 function readServerError(body: unknown): string | null {
@@ -108,7 +148,7 @@ function readStatus(value: unknown): CourseStudentStatus {
 /**
  * A válasz szűkítése a panel modelljére.
  *
- * A `fetch` `unknown`-t ad, a `any` pedig tilos — ezért minden mező
+ * A `fetch` `unknown`-t ad, a `any` pedig tilos, ezért minden mező
  * típusszűkítve olvasódik. Hiányzó mező sosem dob: a panel inkább 0-t mutat,
  * mint hogy fehér képernyőre fusson egy váratlan válasz-alaktól.
  */
@@ -133,7 +173,7 @@ function readCourseProgress(body: unknown): CourseProgressData | null {
     students.push({
       userId: readNumber(student.userId),
       name: readText(student.name),
-      email: readText(student.email) ?? '—',
+      email: readText(student.email) ?? NO_DATA,
       completed: readNumber(student.completed),
       total: readNumber(student.total),
       percent: readNumber(student.percent),
@@ -198,131 +238,41 @@ function readCourseProgress(body: unknown): CourseProgressData | null {
   }
 }
 
-const panelStyle: CSSProperties = {
-  border: '1px solid var(--theme-elevation-150)',
-  borderRadius: '4px',
-  marginBottom: 'var(--base)',
-  padding: 'calc(var(--base) * 0.75)',
-}
-
 /**
- * Csak képernyőolvasónak szóló tartalom (a Payload adminban nincs sr-only
- * segédosztály, ezért a szokásos clip-minta inline).
+ * A haladás lekérdezése. SZÁNDÉKOSAN nem ír állapotot, és sosem dob: az
+ * eredményt a hívó vezeti be. Így ugyanaz a hívás használható a gombról és a
+ * mély link mountkori effektjéből is, és az effekt törzsében nincs szinkron
+ * `setState` (`react-hooks/set-state-in-effect`, lásd eslint.config.mjs).
+ *
+ * NAPLÓZÁS NINCS, és nem is lehet: hibaágon sem kerülhet hallgatói objektum a
+ * naplóba (`docs/statisztika-audit-2026-08-21.md` 6.5 — a logger redact-listáján
+ * rajta van az `email`, a `name` NINCS).
  */
-const srOnlyStyle: CSSProperties = {
-  position: 'absolute',
-  width: 1,
-  height: 1,
-  padding: 0,
-  margin: -1,
-  overflow: 'hidden',
-  clip: 'rect(0 0 0 0)',
-  whiteSpace: 'nowrap',
-  border: 0,
-}
-
-const noteStyle: CSSProperties = {
-  color: 'var(--theme-elevation-650)',
-  margin: 0,
-}
-
-const rowStyle: CSSProperties = {
-  marginTop: 'calc(var(--base) * 0.5)',
-}
-
-const cardsStyle: CSSProperties = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: 'calc(var(--base) * 0.5)',
-  marginTop: 'calc(var(--base) * 0.5)',
-}
-
-const cardStyle: CSSProperties = {
-  background: 'var(--theme-elevation-50)',
-  border: '1px solid var(--theme-elevation-100)',
-  borderRadius: '4px',
-  flex: '1 1 8rem',
-  minWidth: '8rem',
-  padding: 'calc(var(--base) * 0.5)',
-}
-
-const cardValueStyle: CSSProperties = {
-  display: 'block',
-  fontSize: '1.5rem',
-  fontWeight: 600,
-  lineHeight: 1.2,
-}
-
-const cardLabelStyle: CSSProperties = {
-  color: 'var(--theme-elevation-650)',
-  display: 'block',
-}
-
-const tableWrapStyle: CSSProperties = {
-  marginTop: 'calc(var(--base) * 0.5)',
-  overflowX: 'auto',
-}
-
-const tableStyle: CSSProperties = {
-  borderCollapse: 'collapse',
-  minWidth: '46rem',
-  width: '100%',
-}
-
-const cellStyle: CSSProperties = {
-  borderBottom: '1px solid var(--theme-elevation-100)',
-  padding: 'calc(var(--base) * 0.35) calc(var(--base) * 0.4)',
-  textAlign: 'left',
-  verticalAlign: 'middle',
-}
-
-const headCellStyle: CSSProperties = {
-  ...cellStyle,
-  borderBottom: '1px solid var(--theme-elevation-150)',
-  color: 'var(--theme-elevation-650)',
-  fontWeight: 600,
-  whiteSpace: 'nowrap',
-}
-
-const sortButtonStyle: CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: 'inherit',
-  cursor: 'pointer',
-  font: 'inherit',
-  padding: 0,
-}
-
-/** Kis, DEKORATÍV kördiagram — az információt a mellette álló szám hordozza. */
-function ProgressRing({ percent }: { percent: number }): JSX.Element {
-  const { radius, circumference, dash, gap } = ringGeometry(percent)
-  const size = 30
-  const center = size / 2
-  return (
-    <svg aria-hidden="true" focusable="false" height={size} viewBox={`0 0 ${size} ${size}`} width={size}>
-      <circle
-        cx={center}
-        cy={center}
-        fill="none"
-        r={radius}
-        stroke="var(--theme-elevation-150)"
-        strokeWidth={3}
-      />
-      <circle
-        cx={center}
-        cy={center}
-        fill="none"
-        r={radius}
-        stroke={percent >= 100 ? 'var(--theme-success-500)' : 'var(--theme-elevation-800)'}
-        strokeDasharray={`${String(dash)} ${String(gap)}`}
-        strokeDashoffset={circumference / 4}
-        strokeLinecap="round"
-        strokeWidth={3}
-        // A 0%-os ív ne látszódjon pontnak a lekerekített végződés miatt.
-        style={{ opacity: dash === 0 ? 0 : 1 }}
-      />
-    </svg>
-  )
+async function fetchCourseProgress(productId: string): Promise<ProgressResult> {
+  try {
+    const response = await fetch(
+      `/api/admin/course-progress?productId=${encodeURIComponent(productId)}`,
+      {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      },
+    )
+    let body: unknown = null
+    try {
+      body = await response.json()
+    } catch {
+      body = null
+    }
+    if (!response.ok) {
+      return { ok: false, message: readServerError(body) ?? GENERIC_ERROR }
+    }
+    const parsed = readCourseProgress(body)
+    return parsed === null ? { ok: false, message: GENERIC_ERROR } : { ok: true, data: parsed }
+  } catch {
+    // Hálózati hiba vagy időtúllépés: a művelet újrapróbálható marad.
+    return { ok: false, message: NETWORK_ERROR }
+  }
 }
 
 /** Egy összesítő kártya a felső sorban. */
@@ -335,67 +285,108 @@ function StatCard({ label, value }: { label: string; value: string }): JSX.Eleme
   )
 }
 
+/**
+ * A panel címsora.
+ *
+ * ═══ MIÉRT h3 ═══
+ * A címsor eddig `h4` volt. MÉRVE (a Payload 3.88 forrásából): a szerkesztő-
+ * oldal dokumentumcíme `h1` (@payloadcms/ui RenderTitle alapértelmezett
+ * eleme), a `type: 'array'` és `type: 'group'` mezők címkéje pedig `h3`
+ * (@payloadcms/ui fields/Array és fields/Group). A termékoldalon a panel
+ * ELŐTT hét tömb-mező áll, tehát a DOM-ban a h1 → h4 ugrás valójában nem
+ * következik be. A `h4` mégis hibás: azt állítja, hogy a panel az ELŐTTE álló
+ * tömb-mező ALSZAKASZA, holott a dokumentum önálló, azonos rangú szekciója
+ * (WCAG 2.2 SC 1.3.1 Info and Relationships —
+ * https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html;
+ * W3C H42 technika: a címsor szintje a valós szerkezetet tükrözze).
+ * A `h3` a testvér-mezőkkel AZONOS szint, és nem hoz be új ugrást.
+ * (A meglévő h1 → h3 ugrás a Payload sajátja, nem ezé a panelé.)
+ */
+function PanelHeading(): JSX.Element {
+  return <h3 style={{ marginTop: 0 }}>Kurzus-haladás</h3>
+}
+
 export function CourseProgressPanel() {
   const { id, isInitializing } = useDocumentInfo()
   const { user } = useAuth<{ id: number | string; role?: string | null }>()
+  const searchParams = useSearchParams()
+
+  /**
+   * A mély link kérése. `useSearchParams` azért kell a `window.location`
+   * helyett, mert a szerveren és a böngészőben UGYANAZT adja, tehát az ebből
+   * származtatott kezdőállapot nem okoz hidratálás-eltérést.
+   */
+  const deepLinkStatus = readProgressDeepLink(searchParams.toString())
 
   const [data, setData] = useState<CourseProgressData | null>(null)
-  const [loading, setLoading] = useState(false)
+  // Mély linknél a betöltés azonnal indul, tehát a gomb már az első rendernél
+  // „folyamatban" állapotú (NN/g 1. heurisztika: a rendszer mondja meg, mi
+  // történik éppen).
+  const [loading, setLoading] = useState(deepLinkStatus !== null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<StudentStatusFilter>('mind')
+  const [statusFilter, setStatusFilter] = useState<StudentStatusFilter>(deepLinkStatus ?? 'mind')
   const [query, setQuery] = useState('')
   const [sortKey, setSortKey] = useState<StudentSortKey>('haladas')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   /**
    * Hány sor látszik. A korlát azért kell, mert az admin UX-audit 305
-   * beiratkozottnál 17 126 px magas panelt mért — a szűrő és a kereső viszont
+   * hozzáférőnél 17 126 px magas panelt mért. A szűrő és a kereső viszont
    * VÉGIG a teljes halmazon dolgozik, tehát semmi nem vész el.
    */
   const [visibleLimit, setVisibleLimit] = useState(STUDENT_PAGE_SIZE)
+  /** Az automata betöltés legfeljebb EGYSZER indulhat el. */
+  const autoLoadStarted = useRef(false)
 
   const productId = typeof id === 'number' || typeof id === 'string' ? String(id) : null
 
-  // Sima függvény (nem useCallback): a React Compiler maga memoizál — a kézi
-  // memoizáció itt csak a `preserve-manual-memoization` szabályba ütközne
-  // (ugyanaz az indoklás, mint a RefundPanel-ben).
+  /**
+   * A lekérdezés eredményének bevezetése az állapotba.
+   *
+   * `useCallback`, mert a mély link effektje FÜGG tőle: memoizálás nélkül a
+   * függőség minden renderben más volna, és az effekt fölöslegesen újraindulna
+   * (a `react-hooks/exhaustive-deps` ezt jelzi is). A panel többi függvénye
+   * marad sima függvény, azoktól nem függ effekt.
+   */
+  const applyResult = useCallback((result: ProgressResult): void => {
+    if (result.ok) {
+      setData(result.data)
+      setErrorMessage(null)
+    } else {
+      setErrorMessage(result.message)
+    }
+    setLoading(false)
+  }, [])
+
+  // Sima függvény (nem useCallback): a kézi memoizáció itt csak zaj volna,
+  // mert semmilyen effekt vagy memoizált gyerek nem függ tőle.
   const loadProgress = async (): Promise<void> => {
     if (productId === null) {
       return
     }
     setLoading(true)
     setErrorMessage(null)
-    try {
-      const response = await fetch(
-        `/api/admin/course-progress?productId=${encodeURIComponent(productId)}`,
-        {
-          credentials: 'include',
-          headers: { Accept: 'application/json' },
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        },
-      )
-      let body: unknown = null
-      try {
-        body = await response.json()
-      } catch {
-        body = null
-      }
-      if (!response.ok) {
-        setErrorMessage(readServerError(body) ?? GENERIC_ERROR)
-        return
-      }
-      const parsed = readCourseProgress(body)
-      if (parsed === null) {
-        setErrorMessage(GENERIC_ERROR)
-        return
-      }
-      setData(parsed)
-    } catch {
-      // Hálózati hiba vagy időtúllépés — a művelet újrapróbálható marad.
-      setErrorMessage(NETWORK_ERROR)
-    } finally {
-      setLoading(false)
-    }
+    applyResult(await fetchCourseProgress(productId))
   }
+
+  /**
+   * A mély link kiszolgálása: automata betöltés, majd görgetés a panelre.
+   *
+   * Az effekt törzsében NINCS szinkron `setState` (a kérés egy külön, állapotot
+   * nem író függvény, az írás a `then` folytatásában történik), ezért a
+   * `react-hooks/set-state-in-effect` szabály nem sérül.
+   *
+   * A görgetés `behavior` nélkül, tehát AZONNAL ugrik: mozgás nincs, így a
+   * `prefers-reduced-motion` sem sérülhet (WCAG 2.2 SC 2.3.3 Animation from
+   * Interactions — https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html).
+   */
+  useEffect(() => {
+    if (deepLinkStatus === null || productId === null || autoLoadStarted.current) {
+      return
+    }
+    autoLoadStarted.current = true
+    document.getElementById(PROGRESS_PANEL_ANCHOR)?.scrollIntoView({ block: 'start' })
+    void fetchCourseProgress(productId).then(applyResult)
+  }, [applyResult, deepLinkStatus, productId])
 
   /** Ugyanarra az oszlopra kattintva megfordul az irány. */
   const toggleSort = (key: StudentSortKey): void => {
@@ -409,8 +400,8 @@ export function CourseProgressPanel() {
 
   if (isInitializing) {
     return (
-      <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Kurzus-haladás</h4>
+      <div className="field-type kc-course-progress" id={PROGRESS_PANEL_ANCHOR} style={panelStyle}>
+        <PanelHeading />
         <p style={noteStyle}>Betöltés…</p>
       </div>
     )
@@ -418,8 +409,8 @@ export function CourseProgressPanel() {
 
   if (!hasStaffOrOwnerRole(user)) {
     return (
-      <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Kurzus-haladás</h4>
+      <div className="field-type kc-course-progress" id={PROGRESS_PANEL_ANCHOR} style={panelStyle}>
+        <PanelHeading />
         <p style={noteStyle}>A kurzus-haladást csak munkatárs vagy tulajdonos nézheti meg.</p>
       </div>
     )
@@ -427,10 +418,10 @@ export function CourseProgressPanel() {
 
   if (productId === null) {
     return (
-      <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Kurzus-haladás</h4>
+      <div className="field-type kc-course-progress" id={PROGRESS_PANEL_ANCHOR} style={panelStyle}>
+        <PanelHeading />
         <p style={noteStyle}>
-          Előbb mentsd a kurzust — haladást csak meglévő kurzushoz tudunk mutatni.
+          Előbb mentsd a kurzust: haladást csak meglévő kurzushoz tudunk mutatni.
         </p>
       </div>
     )
@@ -447,7 +438,7 @@ export function CourseProgressPanel() {
   const visibleStudents = matchingStudents.slice(0, visibleLimit)
 
   /**
-   * A LÁTHATÓ (szűrt és rendezett) sorok letöltése táblázatba.
+   * A LÁTHATÓ (szűrt és rendezett) sorok letöltése CSV-fájlba.
    *
    * Az export a SZŰRT teljes halmazt viszi, nem csak a kirajzolt szeletet: a
    * „ki nem kezdte még el" lista így egyetlen kattintással megvan, akkor is, ha
@@ -465,11 +456,11 @@ export function CourseProgressPanel() {
     link.download = csvFileName(data.product.title, data.meta.generatedAt)
     document.body.appendChild(link)
     link.click()
-    // A takarítás KÉSLELTETVE — mind a link eltávolítása, mind a blob-URL
+    // A takarítás KÉSLELTETVE: mind a link eltávolítása, mind a blob-URL
     // elengedése. Böngészőben mérve: ha a horgony azonnal kikerül a DOM-ból (és
     // az objektum-URL azonnal visszavonódik), a letöltés ugyan elindul és a
-    // tartalom is jó, de a böngésző ELVESZÍTI a fájlnevet — „download" lesz a
-    // javasolt név a „Kéztorna-otthon-haladas-2026-08-15.csv" helyett.
+    // tartalom is jó, de a böngésző ELVESZÍTI a fájlnevet („download" lesz a
+    // javasolt név a „Kéztorna-otthon-haladas-2026-08-15.csv" helyett).
     window.setTimeout(() => {
       link.remove()
       URL.revokeObjectURL(url)
@@ -477,8 +468,8 @@ export function CourseProgressPanel() {
   }
 
   return (
-    <div className="field-type" style={panelStyle}>
-      <h4 style={{ marginTop: 0 }}>Kurzus-haladás</h4>
+    <div className="field-type kc-course-progress" id={PROGRESS_PANEL_ANCHOR} style={panelStyle}>
+      <PanelHeading />
       {/* MINDIG a DOM-ban lévő élő régió: a képernyőolvasó csak így figyeli. */}
       <p aria-live="polite" role="status" style={srOnlyStyle}>
         {data === null
@@ -499,16 +490,12 @@ export function CourseProgressPanel() {
           }}
           size="medium"
         >
-          {loading
-            ? 'Haladás betöltése…'
-            : data === null
-              ? 'Haladás betöltése'
-              : 'Frissítés'}
+          {loading ? 'Betöltés…' : data === null ? 'Megnézem a haladást' : 'Frissítés'}
         </Button>
       </div>
 
       {errorMessage ? (
-        <p role="alert" style={{ color: 'var(--theme-error-500)', marginBottom: 0 }}>
+        <p role="alert" style={errorStyle}>
           {errorMessage}
         </p>
       ) : null}
@@ -516,18 +503,28 @@ export function CourseProgressPanel() {
       {data === null ? null : (
         <>
           {data.notice ? (
-            <p role="status" style={{ color: 'var(--theme-warning-500)', marginBottom: 0 }}>
+            <p role="status" style={warningStyle}>
               {data.notice}
             </p>
           ) : null}
 
           <div style={cardsStyle}>
-            <StatCard label="Beiratkozott" value={String(data.totals.enrolled)} />
+            {/*
+              „Hozzáfér", nem „Beiratkozott" (vezetői döntés,
+              docs/statisztika-audit-2026-08-21.md 8.2): a hozzáférést ADÓ panel
+              már ma is így beszél („Hozzáférés adása", „Hozzáférés megadva"), a
+              users mező pedig „Megvásárolt kurzusok". Webshopban senki nem
+              iratkozik be. A Statisztika oldal UGYANEBBEN a PR-ben vált át, hogy
+              a két felület egyetlen pillanatra se mondjon mást ugyanarra
+              (WCAG 2.2 SC 3.2.4 Consistent Identification —
+              https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html).
+            */}
+            <StatCard label="Hozzáfér" value={String(data.totals.enrolled)} />
             <StatCard label="Elkezdte" value={String(data.totals.started)} />
             {/*
               A megrendelő SZÓ SZERINTI kérdése: „ki indította el a kurzust, KI
               MÉG NEM". A szám eddig is megvolt a szerveren (totals.notStarted),
-              a panel be is olvasta — csak sosem jelenítette meg, tehát a
+              a panel be is olvasta, csak sosem jelenítette meg, tehát a
               munkatársnak 300 sort kellett volna kézzel megszámolnia.
             */}
             <StatCard label="Nem kezdte el" value={String(data.totals.notStarted)} />
@@ -539,16 +536,8 @@ export function CourseProgressPanel() {
             <p style={{ ...noteStyle, marginTop: 'calc(var(--base) * 0.5)' }}>{EMPTY_STATE}</p>
           ) : (
             <>
-              <div
-                style={{
-                  ...rowStyle,
-                  alignItems: 'flex-end',
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 'calc(var(--base) * 0.5)',
-                }}
-              >
-                <div>
+              <div style={filterRowStyle}>
+                <div style={filterFieldStyle}>
                   <label htmlFor="kineticare-progress-status" style={{ display: 'block' }}>
                     Állapot
                   </label>
@@ -558,6 +547,7 @@ export function CourseProgressPanel() {
                       setStatusFilter(event.target.value as StudentStatusFilter)
                       setVisibleLimit(STUDENT_PAGE_SIZE)
                     }}
+                    style={filterFieldStyle}
                     value={statusFilter}
                   >
                     {STATUS_FILTER_OPTIONS.map((option) => (
@@ -567,7 +557,7 @@ export function CourseProgressPanel() {
                     ))}
                   </select>
                 </div>
-                <div>
+                <div style={filterFieldStyle}>
                   <label htmlFor="kineticare-progress-search" style={{ display: 'block' }}>
                     Keresés (név vagy e-mail)
                   </label>
@@ -578,23 +568,30 @@ export function CourseProgressPanel() {
                       setVisibleLimit(STUDENT_PAGE_SIZE)
                     }}
                     placeholder="Pl. Kovács vagy kovacs@"
+                    style={filterFieldStyle}
                     type="search"
                     value={query}
                   />
                 </div>
+                {/*
+                  A régi „Letöltés táblázatba (CSV)" felirat NEM volt igaz: a gomb
+                  fájlt tölt le, nem táblázatba tölt. A felirat E/1, mert a
+                  látogató saját, következménnyel járó cselekvése (letöltött fájl)
+                  — docs/ui-sztenderdek.md §3.1.5, P-1a.
+                */}
                 <Button
                   buttonStyle="secondary"
                   disabled={matchingStudents.length === 0}
                   onClick={downloadCsv}
                   size="small"
                 >
-                  Letöltés táblázatba (CSV)
+                  Letöltöm a listát (CSV)
                 </Button>
               </div>
 
               {/*
                 Látható visszajelzés a szűrés eredményéről. Az ÉLŐ (felolvasott)
-                párja a panel tetején, mindig jelen lévő rejtett régió — a
+                párja a panel tetején, mindig jelen lévő rejtett régió: a
                 feltételesen beillesztett élő régiót a képernyőolvasó jellemzően
                 nem veszi észre, mert a beillesztés pillanatában még nincs mit
                 figyelnie (code review-találat).
@@ -607,121 +604,29 @@ export function CourseProgressPanel() {
                 )}
               </p>
 
-              <div style={tableWrapStyle}>
-                <table aria-label="A kurzushoz hozzáférő hallgatók haladása" style={tableStyle}>
-                  <thead>
-                    <tr>
-                      <th
-                        aria-sort={ariaSortValue('nev', sortKey, sortDirection)}
-                        scope="col"
-                        style={headCellStyle}
-                      >
-                        <button
-                          onClick={() => toggleSort('nev')}
-                          style={sortButtonStyle}
-                          type="button"
-                        >
-                          Név
-                        </button>
-                      </th>
-                      <th scope="col" style={headCellStyle}>
-                        E-mail
-                      </th>
-                      <th scope="col" style={headCellStyle}>
-                        Állapot
-                      </th>
-                      <th
-                        aria-sort={ariaSortValue('haladas', sortKey, sortDirection)}
-                        scope="col"
-                        style={headCellStyle}
-                      >
-                        <button
-                          onClick={() => toggleSort('haladas')}
-                          style={sortButtonStyle}
-                          type="button"
-                        >
-                          Haladás
-                        </button>
-                      </th>
-                      <th
-                        aria-sort={ariaSortValue('aktivitas', sortKey, sortDirection)}
-                        scope="col"
-                        style={headCellStyle}
-                      >
-                        <button
-                          onClick={() => toggleSort('aktivitas')}
-                          style={sortButtonStyle}
-                          type="button"
-                        >
-                          Utolsó aktivitás
-                        </button>
-                      </th>
-                      <th scope="col" style={headCellStyle}>
-                        Következő lecke
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleStudents.map((student) => {
-                      const chip = statusChipColors(student.status)
-                      const relative = formatRelativeHungarian(student.lastActivityAt)
-                      return (
-                        <tr key={student.userId}>
-                          <td style={cellStyle}>{student.name ?? '—'}</td>
-                          <td style={cellStyle}>{student.email}</td>
-                          <td style={cellStyle}>
-                            <span
-                              style={{
-                                background: chip.background,
-                                borderRadius: '999px',
-                                color: chip.color,
-                                display: 'inline-block',
-                                padding: '0.1rem 0.5rem',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {statusLabel(student.status)}
-                            </span>
-                          </td>
-                          <td style={cellStyle}>
-                            <span
-                              style={{
-                                alignItems: 'center',
-                                display: 'inline-flex',
-                                gap: '0.4rem',
-                              }}
-                            >
-                              <ProgressRing percent={student.percent} />
-                              <span style={{ whiteSpace: 'nowrap' }}>
-                                {`${String(student.completed)}/${String(student.total)} · ${String(student.percent)}%`}
-                              </span>
-                            </span>
-                          </td>
-                          <td style={cellStyle}>
-                            {relative === null ? (
-                              '—'
-                            ) : (
-                              <time dateTime={student.lastActivityAt ?? undefined}>{relative}</time>
-                            )}
-                          </td>
-                          <td style={cellStyle}>{nextLessonLabel(student)}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <StudentsTable
+                caption={STUDENTS_CAPTION}
+                captionId={STUDENTS_CAPTION_ID}
+                onSort={toggleSort}
+                sortDirection={sortDirection}
+                sortKey={sortKey}
+                students={visibleStudents}
+              />
 
               {visibleStudents.length === 0 ? <p style={noteStyle}>{NO_MATCH}</p> : null}
 
               {matchingStudents.length > visibleStudents.length ? (
                 <div style={rowStyle}>
+                  {/*
+                    Puszta lapozás, nem elkötelező cselekvés, ezért E/2 tegező
+                    alak (docs/ui-sztenderdek.md §3.1.5, P-1b).
+                  */}
                   <Button
                     buttonStyle="secondary"
                     onClick={() => setVisibleLimit(visibleLimit + STUDENT_PAGE_STEP)}
                     size="medium"
                   >
-                    {`További ${String(Math.min(STUDENT_PAGE_STEP, matchingStudents.length - visibleStudents.length))} hallgató megjelenítése`}
+                    {`Mutass még ${String(Math.min(STUDENT_PAGE_STEP, matchingStudents.length - visibleStudents.length))} hallgatót`}
                   </Button>
                 </div>
               ) : null}
@@ -729,52 +634,12 @@ export function CourseProgressPanel() {
               {data.lessons.length > 0 ? (
                 <details style={rowStyle}>
                   <summary>Leckénkénti lemorzsolódás</summary>
-                  <div style={tableWrapStyle}>
-                    <table
-                      aria-label="Leckénkénti elvégzettség és lemorzsolódás"
-                      style={tableStyle}
-                    >
-                      <thead>
-                        <tr>
-                          <th scope="col" style={headCellStyle}>
-                            Fejezet
-                          </th>
-                          <th scope="col" style={headCellStyle}>
-                            Lecke
-                          </th>
-                          <th scope="col" style={headCellStyle}>
-                            Elvégezte
-                          </th>
-                          <th scope="col" style={headCellStyle}>
-                            Lemorzsolódás
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.lessons.map((lesson, index) => {
-                          const elozo = index === 0 ? null : data.lessons[index - 1]
-                          return (
-                            <tr key={lesson.lessonRef}>
-                              <td style={cellStyle}>
-                                {moduleColumnLabel(lesson.moduleTitle, elozo?.moduleTitle ?? null)}
-                              </td>
-                              <td style={cellStyle}>{lesson.title}</td>
-                              <td style={cellStyle}>
-                                {`${String(lesson.completedCount)}/${String(data.totals.enrolled)}`}
-                              </td>
-                              <td style={cellStyle}>
-                                {dropOffLabel(
-                                  index,
-                                  lesson.completedCount,
-                                  elozo?.completedCount ?? null,
-                                )}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <LessonDropOffTable
+                    caption={LESSONS_CAPTION}
+                    captionId={LESSONS_CAPTION_ID}
+                    enrolled={data.totals.enrolled}
+                    lessons={data.lessons}
+                  />
                 </details>
               ) : null}
             </>

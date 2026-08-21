@@ -7,7 +7,8 @@
  * - A `refunds` mezőt NEM kérjük le és NEM olvassuk (owner-only, CLAUDE.md 4.).
  * - `depth: 1` kell az `items[].product.audience`-hez. Ha a product csak
  *   azonosító (szám vagy `{ id }` audience nélkül), a
- *   `hydrateProductAudience` külön `products.find`-del pótolja. Explicit
+ *   `hydrateProductFields` külön `products.find`-del pótolja (az ágat és a
+ *   bevétel-tábla sorfejlécéhez kellő marketingcímet is). Explicit
  *   `audience: null` marad null → laikus.
  * - Lapozás felső korláttal: a `limit: 0` korlátlan memóriát jelentene. A
  *   kurzus-haladás panel mintájára explicit lapméret + max, és a csonkolást
@@ -137,6 +138,22 @@ function audienceFromProduct(product: unknown): unknown {
   return (product as { audience?: unknown }).audience
 }
 
+/**
+ * A termék MAI marketingcíme a populált relationshipből.
+ *
+ * A bevétel-tábla sorfejléce ez, nem a sku-snapshot (H7, 2026-08-21-i audit):
+ * ugyanaz a kurzus nem futhat két néven egy lapon (WCAG 2.2 SC 3.2.4). Ha a
+ * termék nincs populálva vagy időközben törölték, `null` jön vissza, és az
+ * aggregátor a sku-ra esik vissza.
+ */
+function displayTitleFromProduct(product: unknown): string | null {
+  if (typeof product !== 'object' || product === null) {
+    return null
+  }
+  const value = (product as { displayTitle?: unknown }).displayTitle
+  return typeof value === 'string' ? value : null
+}
+
 function finiteOrZero(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
@@ -174,6 +191,7 @@ export function mapOrderDocToRevenueInput(doc: StatisticsOrderDoc): RevenueOrder
         priceHuf: finiteOrZero(item.priceHufSnapshot),
         quantity: quantityOf(item.quantity),
         titleSnapshot: typeof item.titleSnapshot === 'string' ? item.titleSnapshot : null,
+        displayTitle: displayTitleFromProduct(item.product),
       })
     }
   }
@@ -202,7 +220,7 @@ function productIdOf(product: unknown): number | null {
 }
 
 /**
- * Audience-t kell pótolni, ha a product csak azonosító, vagy `{ id }` van
+ * Pótolni kell a termék mezőit, ha a product csak azonosító, vagy `{ id }` van
  * audience kulcs nélkül. Explicit `audience: null` NEM hiányzó: az a laikus
  * fallback a `normalizeAudience`-ben.
  */
@@ -219,7 +237,12 @@ function productNeedsAudienceHydration(product: unknown): boolean {
   return !('audience' in product)
 }
 
-async function hydrateProductAudience(
+/**
+ * A hiányzó termék-mezők (ág és marketingcím) pótlása EGYETLEN, batchelt
+ * lekérdezéssel. A cím ugyanabban a körben jön, mint az ág: külön hívás
+ * ugyanazokra a sorokra fölösleges kör lenne.
+ */
+async function hydrateProductFields(
   payload: Pick<Payload, 'find'>,
   docs: StatisticsOrderDoc[],
 ): Promise<StatisticsOrderDoc[]> {
@@ -244,14 +267,16 @@ async function hydrateProductAudience(
     depth: 0,
     pagination: false,
     limit: missingIds.size,
-    select: { id: true, audience: true },
+    select: { id: true, audience: true, displayTitle: true },
     overrideAccess: true,
-  })) as FindResultLike<{ id?: unknown; audience?: unknown }>
+  })) as FindResultLike<{ id?: unknown; audience?: unknown; displayTitle?: unknown }>
 
   const audienceById = new Map<number, unknown>()
+  const titleById = new Map<number, unknown>()
   for (const product of products.docs ?? []) {
     if (typeof product.id === 'number') {
       audienceById.set(product.id, product.audience)
+      titleById.set(product.id, product.displayTitle)
     }
   }
 
@@ -268,7 +293,7 @@ async function hydrateProductAudience(
           }
           return {
             ...item,
-            product: { id, audience: audienceById.get(id) },
+            product: { id, audience: audienceById.get(id), displayTitle: titleById.get(id) },
           }
         })
       : doc.items,
@@ -358,7 +383,7 @@ export async function queryRevenueReport(deps: QueryRevenueReportDeps): Promise<
 
   const funnel = await countOrderFunnel(deps.payload)
 
-  const hydrated = await hydrateProductAudience(deps.payload, paidPage.docs)
+  const hydrated = await hydrateProductFields(deps.payload, paidPage.docs)
   const orders = hydrated.map(mapOrderDocToRevenueInput)
   return buildRevenueReport(orders, funnel, {
     now: deps.now,
