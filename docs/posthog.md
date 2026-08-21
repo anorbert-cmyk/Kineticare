@@ -73,17 +73,38 @@ Az egyetlen igazságforrás: `ANALYTICS_EVENTS` a `src/lib/analytics/posthog.ts`
 | `$pageview` | minden útvonalváltás | `$current_url` (tisztított) |
 | `course_viewed` | kurzus-oldal megnyitása | `courseId`, `courseSku` |
 | `checkout_started` | a pénztár megnyitása | `courseId`, `courseSku` |
-| `purchase_confirmed` | a köszönőoldalon a `paid` státusz | `orderNumber`, `value`, `currency` |
+| `purchase_confirmed` | a köszönőoldalon, **csak** `kind: 'status'` + `paid` | `orderNumber`, `value`, `currency` |
 | `checkout_failed` | a pénztári beküldés elutasítása | gépi hibakategória |
+
+**Ismert mérési lyuk — vendég / nincs munkamenet.** A `ThankYouView` a
+`purchase_confirmed` eseményt kizárólag akkor küldi, ha a `pollOrderStatus`
+`kind: 'status'` **és** `status === 'paid'`. A státusz-végpont a saját
+rendelésre szűkít (`customer: { equals: user.id }`), tehát bejelentkezés
+nélkül 401-et ad. Vendég Barion-visszatérésnél a poll
+`kind: 'unauthorized'` — ezen az ágon, valamint `not-found` és időtúllépés
+esetén **nincs** `purchase_confirmed`.
+
+Ez szándékos. Hamis paid-eseményt küldeni (a Barion-visszatérés puszta
+tényéből, vagy a 401-ből) rosszabb, mint a lyukat dokumentálni: a
+bevétel-riport akkor fizetetlen vagy félbehagyott kísérleteket is
+sikernek számolna. Nyilvános, hitelesítés nélküli státusz-végpont,
+aláírt fizetési token vagy a fizetési állapotgép nyitása **nem** ennek
+a mérésnek a feladata.
+
+A bejelentkezett vevő `paid` ága továbbra is mér. A vendég-lyuk ismert
+termékdöntés, nem kódhiba ezen a PR-en.
 
 ### 4b. Lead-funnel (nem-vásárlói konverziók)
 
 | Esemény | Mikor | Tulajdonságok |
 |---|---|---|
-| `lead_submitted` | a beküldés SZÁNDÉKA | `forras` |
-| `lead_succeeded` | a szerver visszaigazolása | `forras` |
+| `lead_submitted` | a beküldés SZÁNDÉKA | `leadSource` |
+| `lead_succeeded` | a szerver visszaigazolása | `leadSource` |
 
-Források: `kapcsolat`, `idopontkeres`, `hirlevel`, `ingyenes-kurzus`.
+A tulajdonságkulcs `leadSource` (angol, mint a `courseId` / `value` /
+`currency`). Az értékek a magyar forrás-címkék: `kapcsolat`,
+`idopontkeres`, `hirlevel`, `ingyenes-kurzus`. Egyetlen élő küldő van
+(`src/lib/analytics/lead-events.ts`); `forras` kulcsot a kód nem küld.
 
 **A kettő különbsége maga a mérőszám.** Ha sok a `lead_submitted` és kevés a
 `lead_succeeded`, akkor az űrlap vagy a szerver hibázik — és ez a néma
@@ -155,7 +176,7 @@ HUF-ban, heti bontásban. Mellé: átlagos kosárérték.
 > megy ki) — a `null` hamis nulla-bevételnek látszana az összegzésben.
 
 ### D3 — Lead-tölcsér és néma hibák
-Két idősor egy grafikonon: `lead_submitted` vs `lead_succeeded`, `forras`
+Két idősor egy grafikonon: `lead_submitted` vs `lead_succeeded`, `leadSource`
 szerint bontva. **Ha a két vonal szétnyílik, az beküldési hiba** — ezt érdemes
 riasztásra is kötni.
 
@@ -201,6 +222,9 @@ tehát a 3a. pont nélkül üres lenne.
   üzenetszöveg, cím SOHA. Kurzus- és lecke-azonosító igen. (A
   `src/lib/logger.ts` redact-listája a NAPLÓRA véd, a PostHog-hívásra nem —
   itt kézzel kell a fegyelem.)
+- **Vendég-vásárlás `purchase_confirmed` nélkül.** Nincs munkamenet → a
+  státusz-poll 401 → nincs paid-esemény. Hamis paid-et nem küldünk; lásd
+  a 4a. pont lyuk-leírását.
 
 ## 8. Nyitott jogi tétel
 
