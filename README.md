@@ -62,6 +62,7 @@ kizárólag a kezdőlap szekciósorát és a landing tartalmi képeit tölti be
 | E2E-futtatás | `docs/e2e-staging-runbook.md` |
 | UX-hierarchia-audit | `docs/ux-hierarchia-audit.md` |
 | OWASP biztonsági audit | `docs/owasp-security-review.md` |
+| Statisztika/Bunny review (2026-08-21) | `docs/review-2026-08-21-statisztika-bunny.md` |
 | PostHog | `docs/posthog.md` |
 | SEO / GEO / LLM-optimalizálás | `docs/seo-geo-llm.md` |
 | Hero-videó feltöltés | `docs/hero-video-feltoltes.md` |
