@@ -19,7 +19,13 @@ hitték**.
 
 A cáfolatok közül kettő a SAJÁT első olvasatomat is érinti: a CSS-szabályból
 és a doboz-méretekből levont következtetést a tényleges rendered állapot
-megdöntötte. Ezért van külön mérve minden állítás.
+megdöntötte.
+
+**És egy hibát a saját MÉRÉSEMBEN is javítani kellett:** a színfelbontóm a
+`color(srgb …)` jelölést 0–255-ösként kezelte a helyes 0–1 helyett, ezért a
+fejléc-gombra 20,98:1-et adott a valódi 15,63:1 helyett. A verdiktet nem
+forgatta meg, de a teljes kontraszt-mérés újra lefutott (5.1). Ezért van
+külön mérve — és ahol kellett, kétszer mérve — minden állítás.
 
 | Korábbi állítás | A mérés ítélete |
 | --- | --- |
@@ -60,14 +66,21 @@ számszerűsíthető. Ezek nélkül nem kész.
 
 | Mit | Hogyan | Küszöb |
 | --- | --- | --- |
-| Kontraszt | számolt relatív luminancia, a tényleges (átlátszatlan ősig felkeresett) háttérrel | 4,5:1 / 3:1 |
+| Kontraszt | számolt relatív luminancia, a tényleges (átlátszatlan ősig felkeresett) háttérrel; a `rgb()` és a `color(srgb …)` jelölés KÜLÖN kezelve | 4,5:1 (nagy szöveg 3:1) |
 | Sorhossz | **Range API**, karakterenként keresve az első sortörést | 45–85 kar/sor |
 | Érintőcél | mért befoglaló doboz | 24×24 px (cél 44×44) |
 | Reflow | `documentElement.scrollWidth > innerWidth` | nincs túlcsordulás 320 px-en |
 | Réteg-átfedés | fix/sticky elemek befoglaló dobozainak metszete | nincs átfedés |
 | Tördelés | computed `overflow-wrap` / `word-break` / `hyphens` | márkanév nem törik |
 
-**Egy mérési műterméket külön ki kell mondani.** Az első futás minden oldalon,
+**KÉT mérési műterméket külön ki kell mondani**, mert mindkettő hamis
+következtetéshez vezetett volna.
+
+**Az első: a színfelbontó.** Az `rgb(16, 36, 62)` komponensei 0–255-ösek, a
+`color(srgb 0.06 0.14 0.24)` komponensei 0–1-esek. Az első szondám mindkettőt
+0–255-nek vette. Részletek és a következmény az 5.1-ben.
+
+**A második: a láthatóság.** Az első futás minden oldalon,
 minden ≤768 px-es nézetben átfedést jelzett a `kc-nav-mobile__overlay` és a
 süti-sáv között. Ellenőrizve: az overlay zárt állapotban
 `visibility: hidden; opacity: 0`, tehát **nem takar semmit**. Az összes ilyen
@@ -165,7 +178,7 @@ Mérve, minden oldalon jelen van mindkettő:
 | Sarok-kerekítés | **999 px** (tabletta) | **8 px** (`--kc-radius-md`) |
 | Háttér | **#10243e** (`--kc-color-ink`) | **#2f6e9f** (`--kc-color-accent-deep`) |
 | Magasság | **45 px** | **53 px** |
-| Kontraszt | 20,98:1 | 5,45:1 |
+| Kontraszt | 15,63:1 | 5,45:1 |
 
 Két különböző forma, két különböző kitöltés, két különböző magasság,
 ugyanabban a szerepkörben (elsődleges cselekvés). A WCAG 2.2 **3.2.4**
@@ -190,7 +203,7 @@ Mérve, a teljes storefronton négy vizuális gomb-alak fordul elő:
 
 | Alak | radius | háttér | kontraszt | hol |
 | --- | ---: | --- | ---: | --- |
-| fejléc-pill | 999 px | #10243e | 20,98:1 | minden oldal fejléce |
+| fejléc-pill | 999 px | #10243e | 15,63:1 | minden oldal fejléce |
 | primary | 8 px | #2f6e9f | 5,45:1 | törzs, lábléc |
 | fehér tömör | 8 px | #ffffff | 15,63:1 | kezdőlap hero (SOS) |
 | átlátszó | 8 px | átlátszó | 5,45 / 14,79:1 | kezdőlap, 404 |
@@ -223,13 +236,130 @@ Az összevetés ott almát hasonlított körtével. A lapos skála egységes.
 | blog-cikk | „Ezen az oldalon" (tartalomjegyzék) | 18 px |
 | kosár, belépés, 404 | „Hírlevél" (lábléc) | 18 px |
 
+### 4.3 CTA-szótár: mit ír elő a §3.2, és mi van élesben
+
+A normatív forrás a `docs/ui-sztenderdek.md` **§3.2** (38 számozott tétel), gépi
+párja a `src/lib/cta-vocabulary.ts` (37 bejegyzés). Tizenhat élő gombfeliratot
+vetettünk össze vele.
+
+**Tizenhárom egyezik.** Három nem, és mindhárom eltérés **CMS-eredetű**, azaz
+a kód már a helyes alakot tartalmazza, csak az élő adatbázis elavult:
+
+| Hol | Éles felirat | §3.2 | Előírt felirat |
+| --- | --- | ---: | --- |
+| Kezdőlap hero, 2. gomb | „Ingyenes SOS gyakorlatok" | **#38** | `Nézd meg az SOS-kurzust` |
+| `/rolunk` | „Megnézem a kurzusokat" | **#10** | `Nézd meg a kurzusokat` |
+| `/szolgaltatasok` | „Megnézem a kurzusokat" | **#10** | `Nézd meg a kurzusokat` |
+
+A #38 tétel indoklása szó szerint kimondja, miért: a mai alak *„főnévi, és nem
+mondja meg, mi történik"*. Az „ingyenes" jelző szándékosan marad ki a gombból,
+mert a sávon egy `success` jelvény mondja ki.
+
+A #10-nél a nyelvtani kategória dönt: a kurzuslistára lépéskor a látogató
+dolgaiban semmi nem változik (nincs rendelés, kosár, fiók), tehát **P-1b,
+tegező E/2** alak jár — a „Megnézem" E/1-es alakja elkötelezést sugall, ami itt
+nincs. Ugyanaz a cselekvés két néven sérti a WCAG 2.2 **3.2.4**-et.
+
+**Ami NEM eltérés, bár annak látszik:**
+
+- **„Kérem a kurzust" vs „Kérd az ingyenes kurzust"** — a §3.2 **szándékosan**
+  ad rá két sort (#26 és #27): az egyik az űrlap **beküldése** (E/1, primary),
+  a másik **lapon belüli ugrás** ugyanahhoz az űrlaphoz (E/2, secondary). Két
+  különböző eredmény, tehát a 3.2.4 nem sérül. A „rejtettség" is szándékos és
+  mért: `display: none` 1024 px felett, ezért a Tab-sorrendből is kiesik.
+- **Az „Elindítom ingyen →" nyila** — a nyíl **sehol nem része a
+  felirat-stringnek**, külön `aria-hidden="true"` spanben áll, és a §2.5 I-2/I-3
+  pontja pont ezt írja elő. Nincs itt találat.
+
+**Ami viszont rendszer-szintű hiba, és a 3.4-hez tartozik:** a §2.2 **K-1**
+szabálya *„oldalanként pontosan 1 primary gomb-példány"*. Élesben a fejléc-pill
+(primary súlyú) és a lábléc „Feliratkozom" (`primary`, pedig a #13 `secondary`-t
+ír elő) **minden oldalon együtt** jelen van, a lap saját elsődlegese mellett.
+A 404-en ez három primary-súlyú gomb egyszerre.
+
+**Két hiány a szótárban** (nem eltérés, hanem hiányzó sor): a
+`/szolgaltatasok`-ra vivő navigáció (élő alak „Nézd meg a kezeléseket") és a
+külső kézworkshopra vivő navigáció (élő alak „Nézd meg a kézworkshopot").
+
+### 4.4 Miért nem fogta meg egyetlen őr sem
+
+Ez a legfontosabb rendszer-tanulság, mert enélkül a javítás vissza fog csúszni.
+
+1. **Az élő CMS-adatot egyik őr sem látja.** A meglévő őrök a doksi és a
+   TypeScript-forrás egyezését mérik. A hero gombfelirata viszont futásidőben
+   az adatbázisból jön, és a `FilmHero` a kapott feliratot **szűrés nélkül**
+   rendereli. A `FreeSos` és az `AppointmentForm` ezzel szemben 2026-08-18 óta
+   figyelmen kívül hagyja a CMS-feliratot a szótári cselekvéseknél, tehát ott a
+   kód nyer. A `FilmHero`-n nincs ilyen kényszerítés — **ez a #38-as eltérés élő
+   oka**, és amíg így marad, minden kódbeli javítás hatástalan a hero gombjain.
+2. **A `src/scripts/**` kívül esik az őr bejárási körén.** A `/rolunk` és a
+   `/szolgaltatasok` CMS-tartalmát seedelő script négy „Megnézem a kurzusokat"
+   előfordulása így láthatatlan.
+3. **A magyar `{ felirat, url }` alakú seed-objektumokat** az őr nem ismeri fel
+   CTA-ként (csak az `label` kulcsot olvassa), ezért a kezdőlap-seed öt
+   gombfelirata ellenőrizetlen.
+4. **A meglévő CMS-javító script csak a kezdőlapra fut**, a `/rolunk` és a
+   `/szolgaltatasok` nem szerepel benne — vagyis a két #10-es eltérésre ma
+   **nincs futtatható javítási út**.
+
+### 4.5 Gomb-variánsok: három deklarált, négy megjelenő
+
+A `Button` primitív **három** variánst ismer (`primary`, `secondary`, `ghost`),
+a `docs/ui-sztenderdek.md` §2.2 viszont **négyet** ír elő — a **`danger`**
+hiányzik a kódból, és a doksi ezt A/8 megállapításként vezeti is. Ma a
+visszatérítés-gomb `primary`-t használ.
+
+A négy élesben MÉRT vizuális alak úgy áll elő, hogy három egymástól független
+**lokális CSS-felülírás** ír át rendszer-tulajdonságokat:
+
+| Mért alak | Rendszer-variáns | Mi írja felül |
+| --- | --- | --- |
+| fejléc-pill | `primary` | lap-szintű felülírás: kerekítés, kitöltés és betűsúly **egyszerre** |
+| fehér tömör | `secondary` | blokk-szintű felülírás a hero-ban |
+| átlátszó | `secondary` | változatlan |
+| törzs primary | `primary` | változatlan |
+
+**A rendszer-eltérés gyökere kimondva:** négy vizuális alak három deklarált
+variánsból, három lokális felülírással. A fejléc-pill tehát nem „másik gomb",
+hanem a `primary` háromszorosan átírt példánya — és épp ezért nem is látszik
+a rendszerben, hogy létezik.
+
 ## 5. Akadálymentesség és reszponzivitás
 
-### 5.1 Kontraszt: hibátlan
+### 5.1 Kontraszt: hibátlan, kétszer megmérve
 
-**Nulla** olyan mért címsor vagy törzsbekezdés, ami 4,5:1 alá esne, egyik
-oldalon és egyik nézetben sem. Ez a storefront legerősebb mérhető
-tulajdonsága, és a `docs/gomb-kontraszt-audit.md` munkáját igazolja.
+**Nulla** olyan szövegelem, ami elbukna az 1.4.3 küszöbön. Ezt az állítást
+**kétszer** kellett megmérni, és a második mérés a lényeg.
+
+**Az első szonda hibás volt.** A színfelbontóm minden színt 0–255-ös
+komponensekként értelmezett, holott a CSS `color(srgb 0.06 0.14 0.24)`
+jelölésében a komponensek **0–1** tartományúak. Ezért az ilyen jelölésű
+kitöltések majdnem feketének számítottak, és HAMISAN MAGAS arányt adtak: a
+fejléc-gombra **20,98:1**-et a valódi **15,63:1** helyett. (Ellenőrizve
+kézzel: fehér a `#10243e` alapon = 15,63:1.)
+
+A verdiktet ez nem forgatta meg, mert az érintett elem így is, úgy is bőven a
+küszöb fölött volt. **De ez szerencse, nem érdem**, ezért a teljes mérés újra
+lefutott javított felbontóval, levélszintű szövegcsomópontokra, a nagy szöveg
+(≥24 px, vagy ≥18,66 px félkövér) 3:1-es küszöbét külön kezelve.
+
+**A javított mérés 24 találatot adott. Mind a 24 `aria-hidden="true"`:**
+
+| Elem | Mi ez | Arány |
+| --- | --- | ---: |
+| `kc-usps__num` | dekoratív sorszám (1, 2, 3) az USP-listán | 1,74:1 |
+| `kc-how__num` | dekoratív sorszám a „hogyan működik" sorokon | 1,74:1 |
+| `kc-testimonials__mark` | dekoratív nyitó idézőjel a véleményeknél | 1,59:1 |
+
+Mindhárom **tisztán dekoratív**: a sorrendet a DOM-sorrend és a szöveg
+hordozza, az idézetet maga az idézet szövege. A WCAG 2.2 **1.4.3**
+kifejezetten kiveszi a tisztán dekoratív szöveget („Incidental"), és
+mindegyik elem explicit `aria-hidden="true"`-t visel, tehát a
+képernyőolvasóhoz sem jut el.
+
+**Következtetés: valódi kontraszt-bukás nincs, egyetlen oldalon és egyetlen
+nézetben sem.** Ez a storefront legerősebb mérhető tulajdonsága, és a
+`docs/gomb-kontraszt-audit.md` munkáját igazolja.
 
 ### 5.2 Reflow 320 px-en: hibátlan
 
@@ -338,15 +468,31 @@ legtöbb látogatót éri a legkorábban.
    karakter/sor, és mivel chrome, minden oldalt érint.
 5. **A `/belepes` jelölőnégyzete legyen legalább 24×24 px** (5.3). Egyetlen
    valódi WCAG 2.2 AA-bukás a mérésben.
+6. **A lábléc „Feliratkozom" gombja legyen `secondary`** (4.3). A §3.2 #13 ezt
+   írja elő, ma `primary`, és a fejléc-pillel együtt minden oldalon két
+   idegen elsődleges súlyt ad a lap sajátja mellé.
+7. **A három CMS-eredetű felirat-eltérés javítása** (4.3): a hero SOS-gombja
+   (#38) és a `/rolunk` + `/szolgaltatasok` „Megnézem a kurzusokat" (#10). A
+   kód már a helyes alakot tartalmazza, az élő adatbázis elavult — **de a két
+   utóbbira ma nincs futtatható javítási út** (4.4).
+8. **A `FilmHero` kényszerítse a szótárt** a CMS-felirat fölé (4.4), ahogy a
+   `FreeSos` és az `AppointmentForm` már teszi. Enélkül a 7. pont javítása
+   bármikor visszacsúszhat egy szerkesztéssel.
+9. **Az őr-kör terjedjen ki a `src/scripts/**`-ra és a magyar
+   `{ felirat, url }` alakra** (4.4). Ma mindkettő vak folt.
 
 ### P2 — lappangó kockázat és tartalom-döntés
 
-6. **A márkanév legyen törésvédett** a buyboxban (3.3). Ma NEM törik, de a
-   szabály aktív; ez megelőzés, nem hibajavítás.
-7. **A buybox H1-hasábja 350 px** 1024 és 1440 px-en, ezért négy szó három
-   sorba fut (3.3). Vagy a hasáb szélesebb, vagy a cím rövidebb.
-8. `/szakmai-kez-kurzus`: vagy héj készül rá, vagy a menü ne ígérje belső
-   oldalnak. Ma 404-re visz.
+10. **A márkanév legyen törésvédett** a buyboxban (3.3). Ma NEM törik, de a
+    szabály aktív; ez megelőzés, nem hibajavítás.
+11. **A buybox H1-hasábja 350 px** 1024 és 1440 px-en, ezért négy szó három
+    sorba fut (3.3). Vagy a hasáb szélesebb, vagy a cím rövidebb.
+12. **Két hiányzó szótári sor** felvétele (4.3): a `/szolgaltatasok`-ra és a
+    külső kézworkshopra vivő navigáció.
+13. **A `danger` gombvariáns pótlása** (4.5). A doksi előírja, a kód nem
+    ismeri, a visszatérítés ma `primary`-t használ.
+14. `/szakmai-kez-kurzus`: vagy héj készül rá, vagy a menü ne ígérje belső
+    oldalnak. Ma 404-re visz.
 
 ### Amit a mérés alapján NEM kell javítani
 
