@@ -34,12 +34,13 @@ import '../../app/(frontend)/styles/blocks/post-view.css'
  *
  * ═══ A SZAKASZ-SORREND, ÉS MIÉRT PONT EZ ═══
  *
- *   HERO (tint sáv, szűk konténer): kategória-címke · H1 · lead · byline-sor
+ *   HERO (tint sáv, szűk konténer): morzsamenü · kategória-címke · H1 ·
+ *          lead · byline-sor
  *   BORÍTÓ (csak ha van, széles konténer)
  *   TÖRZS (szűk konténer): tartalomjegyzék · szöveg (a záró „Források" H2-vel)
  *          · Gyakori kérdések · szerző- és lektor-blokk
  *   KURZUS-CTA (tint sáv, kompakt panel)
- *   KAPCSOLÓDÓ CIKKEK
+ *   KAPCSOLÓDÓ CIKKEK (a Tudástár rácsán, `compact` kártyákkal)
  *
  * A sorrend két, látszólag ütköző NN/g-ajánlást old fel. A *Related Content
  * Boosts Pageviews, When Done Right*
@@ -133,6 +134,38 @@ export function PostArticle({ post, related: relatedProp }: PostArticleProps) {
 
       <Section className="kc-page-hero" variant="tint">
         <Container size="narrow">
+          {/* MORZSAMENÜ (2026-08-21). A keresőből érkező látogató kihagyja a
+              köztes szinteket, és a morzsa az, ami eligazítja: NN/g,
+              *Breadcrumbs: 11 Design Guidelines* — „when they skip some of
+              these levels (for example, because they arrived to the site by
+              clicking on an external link such as a search-engine result),
+              breadcrumbs orient them"
+              (https://www.nngroup.com/articles/breadcrumbs/).
+
+              A SZERKEZET a kurzusoldaléval AZONOS
+              (`kurzusok/[slug]/page.tsx`): ugyanaz a `nav[aria-label]`,
+              ugyanaz az `ol`, a gyűjtőoldal linkként, az aktuális lap
+              `aria-current="page"`-dzsel és NEM linkként. A WCAG 2.2 **3.2.3**
+              (Consistent Navigation) ezt kéri: az ismétlődő navigációs
+              mechanizmus ugyanabban a relatív sorrendben álljon minden lapon —
+              mérve a cikkoldalon eddig 0 link mutatott a `/blog`-ra, miközben
+              a kurzusoldalnak volt morzsája. Az `aria-current="page"` a W3C
+              ARIA APG morzsa-mintája („The link to the current page has
+              aria-current set to page"; nem-link elemnél elhagyható, de a
+              kurzusoldal is kiírja, ezért itt is).
+
+              KÉT SZINT, a JSON-LD-vel AZONOS tartalommal (lásd a fenti
+              `breadcrumbJsonLd`-t): a strukturált adat és a látható morzsa
+              nem tud szétcsúszni. A kategória-oldalra a hero címkéje visz,
+              ezért az nem ismétlődik meg itt harmadik szintként. */}
+          <nav aria-label="Morzsamenü" className="kc-post-breadcrumb">
+            <ol role="list">
+              <li>
+                <Link href="/blog">Tudástár</Link>
+              </li>
+              <li aria-current="page">{post.title}</li>
+            </ol>
+          </nav>
           {/* PONTOSAN egy kategória-címke (docs/tudastar-ux-terv.md 5.3): a
               következetesség ugyanaz a Baymard-elv, mint a kártyákon, és a
               címke a kategória-oldalra vezető visszaút is. */}
@@ -203,9 +236,33 @@ export function PostArticle({ post, related: relatedProp }: PostArticleProps) {
         <Section className="kc-post-related">
           <Container>
             <h2 className="kc-section-title">{relatedHeading(post, related)}</h2>
-            <div className="kc-card-grid">
+            {/* A KAPCSOLÓDÓ BLOKK RÁCSA ÉS KÁRTYA-VÁLTOZATA (2026-08-21).
+
+                Eddig a közös hármas `kc-card-grid` + az alapértelmezett
+                `list` változat állt itt, kivonattal. Mérve (Chromium 141, a
+                repó valódi betűivel) a kivonat sorhossza 1440 px-en
+                27/33/38, 1024 px-en 23/30/34, 320 px-en 23/28/30
+                karakter/sor volt — mindenhol a repó Ü6 szabályának 45-ös
+                alsó tűrése ALATT (docs/ui-sztenderdek.md; a találat
+                docs/tudastar-a11y-meres.md 3.1 és a séta 6.3 pontja).
+
+                A javítás kettős, és a `PostCard` már kész eszközeit
+                használja: a `compact` változat NEM ODATESZI a kivonatot (nem
+                elrejti — úgy a képernyőolvasó és a keresőrobot még mindig
+                végigolvasná), a `kc-card-grid--posts` módosító pedig a
+                Tudástár mért rácsát hozza ide is, tehát a lista-oldal és a
+                kapcsolódó blokk ugyanazt a kártya-nyelvet beszéli
+                (WCAG 2.2 **3.2.4**, Consistent Identification).
+
+                Miért elég a cím kivonat nélkül: NN/g, *Cards: UI-Component
+                Definition* (https://www.nngroup.com/articles/cards-component/)
+                szerint a kártya „a linked, short representation of a
+                conceptual unit" — a teaser-sávban a cím önmagában elég
+                információ-szag. A címsor-szint marad h3, mert fölötte a
+                szekció h2-je áll. */}
+            <div className="kc-card-grid kc-card-grid--posts">
               {related.map((relatedPost) => (
-                <PostCard key={relatedPost.id} post={relatedPost} />
+                <PostCard key={relatedPost.id} post={relatedPost} variant="compact" />
               ))}
             </div>
           </Container>

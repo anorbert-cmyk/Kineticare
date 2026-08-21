@@ -12,6 +12,7 @@ import { authorPersonOf, relatedHeading, shouldShowToc } from '../components/con
 import { ctaLabel } from '../lib/cta-vocabulary'
 import { betuMetrika, szoSzelessegPx } from './helpers/font-metrics'
 import {
+  elsoHossz,
   hosszPx,
   sajatErtek,
   stilusLapNezetablakra,
@@ -43,12 +44,44 @@ import type { Post } from '../payload-types'
  *  G7  Kvirtmínusz (U+2014) sehol — sem a kódban, sem a kimeneten (§3.1.2).
  *  G8  A mért CSS-küszöbök: a kéthasábos rács track-korlátai és a CTA-sáv
  *      56 px-es zárótávja (a hamis lapvég ellen).
+ *  G9  A cikkoldal MORZSAMENÜJE a kurzusoldaléval azonos szerkezetű és
+ *      azonos stílusú (WCAG 2.2 3.2.3 Consistent Navigation), és a `<main>`
+ *      valóban visszavisz a `/blog` gyűjtőoldalra.
+ *  G10 A KAPCSOLÓDÓ blokk a Tudástár rácsán, `compact` kártyákkal áll: a
+ *      kivonat sorhossz-problémája (24–38 karakter/sor) nem térhet vissza.
+ *  G11 A TARTALOMJEGYZÉK előnézete: legfeljebb hat tétel látszik nyitás
+ *      nélkül, a folytatás natív `details` mögött, folytatólagos számozással.
+ *  G12 A cikk törzsének BEKEZDÉSKÖZE teljesíti a WCAG 2.2 1.4.8 (AAA)
+ *      küszöbét, és a KÖZÖS `.kc-richtext` ritmusa nem mozdul el.
  *
  * A tesztkörnyezet `node` (nincs jsdom), ezért a SZERVER-RENDELT kimenetet
  * mérjük — pontosan azt, amit a JS nélküli látogató és a keresőrobot lát.
  */
 
 const REPO = fileURLToPath(new URL('..', import.meta.url))
+
+/** A cikkoldal stíluslapjának nyers forrása (a G8–G12 őrök ebből mérnek). */
+const cikkCssForras = readFileSync(`${REPO}app/(frontend)/styles/blocks/post-view.css`, 'utf8')
+
+/**
+ * A tartalomjegyzék TELJES horgony-sorrendje, az előnézet és a kinyitható
+ * folytatás listáját összefűzve.
+ *
+ * MIÉRT NEM ELÉG AZ ELSŐ `</ol>`-IG VÁGNI (2026-08-21): a jegyzék azóta KÉT
+ * `<ol>`-ből áll (az első hat tétel + a `details` mögötti folytatás,
+ * PostToc.tsx), a lapon pedig már a MORZSAMENÜ `<ol>`-je is megelőzi őket.
+ * A régi, `indexOf('</ol>')`-alapú vágás emiatt a morzsánál zárt, és üres
+ * listát mért. A `nav.kc-post-toc` blokkjából olvasunk, tehát a jegyzék
+ * belső szerkezete szabadon változhat: a MÉRT MENNYISÉG a horgonyok
+ * sorrendje marad.
+ */
+function tocHorgonyok(html: string): string[] {
+  const eleje = html.indexOf('class="kc-post-toc"')
+  if (eleje < 0) return []
+  const vege = html.indexOf('</nav>', eleje)
+  const blokk = html.slice(eleje, vege < 0 ? undefined : vege)
+  return [...blokk.matchAll(/href="#([^"]+)"/g)].map((match) => match[1]!)
+}
 
 const render = (element: Parameters<typeof renderToStaticMarkup>[0]): string =>
   renderToStaticMarkup(element)
@@ -186,8 +219,7 @@ describe('G1 — a tartalomjegyzék és a törzs horgonyai nem csúszhatnak szé
   })
 
   it('a jegyzék tételei a szakaszcímek szövegét és SORRENDJÉT hozzák', () => {
-    const lista = html.slice(html.indexOf('kc-post-toc__list'), html.indexOf('</ol>'))
-    const sorrend = [...lista.matchAll(/href="#([^"]+)"/g)].map((match) => match[1]!)
+    const sorrend = tocHorgonyok(html)
     expect(sorrend).toEqual([
       'miert-zsibbad-a-kez',
       'melyik-ujjad-zsibbad',
@@ -274,8 +306,7 @@ describe('G2 — tartalomjegyzék csak ott, ahol segít', () => {
         }),
       }),
     )
-    const lista = html.slice(html.indexOf('kc-post-toc__list'), html.indexOf('</ol>'))
-    const sorrend = [...lista.matchAll(/href="#([^"]+)"/g)].map((match) => match[1]!)
+    const sorrend = tocHorgonyok(html)
     expect(sorrend[sorrend.length - 1]).toBe('gyakori-kerdesek')
     expect(html).toContain('id="gyakori-kerdesek"')
   })
@@ -590,10 +621,31 @@ describe('G8 — a mért CSS-küszöbök nem csúszhatnak vissza', () => {
   const listaCss = readFileSync(`${REPO}app/(frontend)/styles/blocks/tudastar-lista.css`, 'utf8')
   const kodCsak = (forras: string): string => forras.replace(/\/\*[\s\S]*?\*\//g, '')
 
-  it('a poszt-rács auto-fit alapú, 26rem alsó és 34rem felső track-korláttal', () => {
+  /**
+   * JAVÍTVA 2026-08-21. A korábbi állítás betűhíven a HIBÁS szabályt várta
+   * (`repeat(auto-fit, minmax(min(100%, 26rem), 34rem))`), ami böngészőben
+   * MINDEN szélességen egy hasábot adott. A mai szabály három dolgot mond
+   * egyszerre, és mindhármat külön kell védeni:
+   *   - `auto-fill` (NEM `auto-fit`): üres sáv nem csukódik össze, tehát
+   *     egyetlen cikknél sem lesz 1072 px-es óriáskártya;
+   *   - `1fr` felső korlát: NEM határozott, ezért az ismétlésszám az alsó
+   *     trackkel számol (CSS Grid 1, §7.2.3.1);
+   *   - a MÉRTÉK a kártyán ül (`max-width: 34rem`), nem a tracken.
+   */
+  it('a poszt-rács auto-fill alapú, 28rem alsó track-korláttal és 1fr felsővel', () => {
     const szabaly = kodCsak(listaCss)
     expect(szabaly).toContain('.kc-card-grid.kc-card-grid--posts')
-    expect(szabaly).toContain('repeat(auto-fit, minmax(min(100%, 26rem), 34rem))')
+    expect(szabaly).toContain('repeat(auto-fill, minmax(min(100%, 28rem), 1fr))')
+    // `auto-fit` visszacsúszás: az üres sáv összecsukása + `1fr` óriáskártyát ad.
+    expect(szabaly).not.toContain('auto-fit')
+  })
+
+  it('a poszt-kártya mértéke a KÁRTYÁN ül, nem a rács felső trackjén', () => {
+    const szabaly = kodCsak(listaCss)
+    expect(szabaly).toMatch(
+      /\.kc-card-grid\.kc-card-grid--posts > \*\s*\{[^}]*max-width:\s*34rem;/,
+    )
+    expect(szabaly).toMatch(/\.kc-card-grid\.kc-card-grid--posts > \*\s*\{[^}]*width:\s*100%;/)
   })
 
   it('a CTA-sáv és a kapcsolódó blokk közti táv 56 px (a küszöb 72 px)', () => {
@@ -716,25 +768,152 @@ describe('MÉRÉS — érintőcél, térköz, rács és sorhossz', () => {
     })
   }
 
-  it('1440 px: a poszt-rács geometriája KIZÁRJA a harmadik hasábot', () => {
-    const lap = lapNezetablakra(1440)
+  /**
+   * JAVÍTVA 2026-08-21 — EZ AZ ŐR KORÁBBAN ROSSZ FIZIKÁT VÉDETT.
+   *
+   * A régi állítás az ALSÓ trackkel számolt (`2 × 416 + 24 = 856 ≤ 1072`), és
+   * ezért zöld volt, miközben a lap böngészőben MINDEN szélességen egyhasábos
+   * maradt. A CSS Grid Level 1 §7.2.3.1 (auto-repeat) szabálya ez:
+   *
+   *   „each track is treated as its max track sizing function if that is
+   *    definite or else its min track sizing function if that is definite"
+   *   (https://www.w3.org/TR/css-grid-1/#auto-repeat)
+   *
+   * tehát a HATÁROZOTT felső korlát (a régi 34rem = 544 px) dönt, és
+   * `floor((1072 + 24) / (544 + 24)) = 1`. Az `1fr` NEM határozott, ezért a
+   * mai szabálynál az alsó track (28rem = 448 px) számol.
+   *
+   * Ez a teszt most a SPEC szabályát modellezi, nem egy önkényesen választott
+   * trackét, és a HASÁBSZÁMOT állítja — azt a mennyiséget, amit a böngésző is
+   * kiszámol. Böngészős hitelesítés (Chromium 141, a repó valódi CSS-ével és
+   * betűivel, hat valódi cikk-kivonattal), a mai szabállyal:
+   *   592 px → 1 hasáb · 768 → 1 · 904 → 1 · 968 → 2 · 1024 → 2 · 1440 → 2 ·
+   *   2560 → 2.
+   */
+  const hasabSzam = (
+    lap: readonly ReturnType<typeof szabalyok>[number][],
+    nezetablak: number,
+    konteneri: number,
+  ): number => {
     const sav = sajatErtek(lap, osztalyElem('.kc-card-grid.kc-card-grid--posts'), 'grid-template-columns')
     expect(sav).not.toBeNull()
     const hatarok = /minmax\(\s*min\(100%,\s*([^)]+)\)\s*,\s*([^)]+)\)/.exec(sav!)
     expect(hatarok).not.toBeNull()
-    const alsoTrack = px(lap, hatarok![1]!, 1440)
-    const felsoTrack = px(lap, hatarok![2]!, 1440)
-    const rescek = px(lap, sajatErtek(lap, osztalyElem('.kc-card-grid'), 'gap')!, 1440)
-    const konteneri =
-      px(lap, sajatErtek(lap, osztalyElem('.kc-container'), 'max-width')!, 1440) -
-      2 * px(lap, sajatErtek(lap, osztalyElem('.kc-container'), 'padding-inline')!, 1440)
+    const alsoNyers = hatarok![1]!.trim()
+    const felsoNyers = hatarok![2]!.trim()
+    // A `fr` és a `%` NEM határozott hossz; minden más (rem/px/em) az.
+    const hatarozott = (ertek: string): boolean => !/(^|\d)(fr|%)\s*$/.test(ertek)
+    const trackPx = hatarozott(felsoNyers) ? px(lap, felsoNyers, nezetablak) : px(lap, alsoNyers, nezetablak)
+    const res = px(lap, sajatErtek(lap, osztalyElem('.kc-card-grid'), 'gap')!, nezetablak)
+    return Math.max(1, Math.floor((konteneri + res) / (trackPx + res)))
+  }
 
-    // MÉRT: alsó track 416 px, felső 544 px, rés 24 px, tartalom-hasáb 1072 px.
-    expect(alsoTrack).toBe(416)
-    expect(felsoTrack).toBe(544)
-    // Két hasáb befér, három matematikailag nem — külön médialekérdezés nélkül.
-    expect(2 * alsoTrack + rescek).toBeLessThanOrEqual(konteneri)
-    expect(3 * alsoTrack + 2 * rescek).toBeGreaterThan(konteneri)
+  const tartalomHasab = (
+    lap: readonly ReturnType<typeof szabalyok>[number][],
+    nezetablak: number,
+  ): number => {
+    const gutter = px(lap, sajatErtek(lap, osztalyElem('.kc-container'), 'padding-inline')!, nezetablak)
+    const max = px(lap, sajatErtek(lap, osztalyElem('.kc-container'), 'max-width')!, nezetablak)
+    return Math.min(max, nezetablak) - 2 * gutter
+  }
+
+  for (const nezetablak of [320, 1440]) {
+    const lap = lapNezetablakra(nezetablak)
+
+    it(`${nezetablak} px: a kategória-címke LINKJE 44 px-es érintőcélt kap`, () => {
+      // A `.kc-badge` érintetlen marad (máshol nem interaktív); a célfelület a
+      // linké. Mérve a javítás előtt 28,8 px (320) és 32,4 px (1440) — a WCAG
+      // 2.2 2.5.8 (AA, 24 px) fölött, a repó 44 px-es szabálya alatt.
+      const link: Elem = {
+        elemnev: 'a',
+        szulo: osztalyElem('.kc-post-hero__categories'),
+        osztaly: null,
+        ostagOsztaly: '.kc-post-hero__categories',
+      }
+      const magassag = sajatErtek(lap, link, 'min-height')
+      expect(magassag).not.toBeNull()
+      expect(px(lap, magassag!, nezetablak)).toBeGreaterThanOrEqual(44)
+    })
+
+    it(`${nezetablak} px: a jegyzék doboza NEM szélesebb a szövegoszlopnál`, () => {
+      // Mérve a korlát nélkül 1440 px-en 672 px a jegyzék és 544 px a
+      // folyószöveg oszlopa: 23,5%-os túlnyúlás (a11y-mérés 3.6).
+      const tocMax = sajatErtek(lap, osztalyElem('.kc-post-toc'), 'max-width')
+      expect(tocMax).not.toBeNull()
+      const szovegMax = sajatErtek(
+        lap,
+        { elemnev: 'p', szulo: osztalyElem('.kc-richtext'), osztaly: null, ostagOsztaly: '.kc-richtext' },
+        'max-width',
+      )
+      expect(szovegMax).not.toBeNull()
+      expect(px(lap, tocMax!, nezetablak)).toBeLessThanOrEqual(px(lap, szovegMax!, nezetablak))
+    })
+
+    it(`${nezetablak} px: a cikk törzsének bekezdésköze teljesíti a WCAG 1.4.8-at`, () => {
+      const t = tokenek(lap)
+      const betumeret = px(lap, 'var(--kc-font-m)', nezetablak)
+      const sortav = Number(varFeloldas('var(--kc-leading-body)', t)) * betumeret
+      // A cikk törzsének margója a post-view.css-ben él (`p + p`), amit a
+      // kaszkád-modell kombinátor híján nem old fel: a VÁRT tokent a
+      // szabályból olvassuk ki, a hosszát viszont a valódi lapról számoljuk.
+      const cikkSzabaly = /\.kc-post-body \.kc-richtext p \+ p\s*\{[^}]*margin-top:\s*var\((--kc-space-\d)\)/.exec(
+        cikkCssForras.replace(/\/\*[\s\S]*?\*\//g, ''),
+      )
+      expect(cikkSzabaly, 'a cikk törzsének bekezdés-margója eltűnt').not.toBeNull()
+      const cikkMargo = px(lap, `var(${cikkSzabaly![1]!})`, nezetablak)
+
+      const kuszob = 1.5 * sortav
+      const koz = cikkMargo + sortav
+      expect(koz).toBeGreaterThanOrEqual(kuszob)
+      // A TARTALÉK a lényeg: a mérés előtt 1440 px-en 0,97 px volt, tehát a
+      // következő sortáv-hangolás észrevétlenül átbillentette volna.
+      expect(koz - kuszob).toBeGreaterThan(5)
+
+      // ELLENPRÓBA a mérés értelmességére: a KÖZÖS margóval a tartalék
+      // visszaesne a hajszálnyi értékre (1440 px-en 0,97 px).
+      const kozosMargo = sajatErtek(
+        lap,
+        { elemnev: 'p', szulo: osztalyElem('.kc-richtext'), osztaly: null, ostagOsztaly: '.kc-richtext' },
+        'margin',
+      )
+      expect(kozosMargo).not.toBeNull()
+      const kozosPx = px(lap, elsoHossz(varFeloldas(kozosMargo!, t))!, nezetablak)
+      expect(kozosPx + sortav - kuszob).toBeLessThan(3)
+    })
+  }
+
+  it('a KÖZÖS .kc-richtext bekezdés-ritmusa NEM mozdult el', () => {
+    // A `.kc-richtext` a kurzus-leírásokat és a jogi oldalakat is rendereli:
+    // a cikk-törzsi javítás nem szivároghat át rájuk.
+    const lap = lapNezetablakra(1440)
+    const kozos = sajatErtek(
+      lap,
+      { elemnev: 'p', szulo: osztalyElem('.kc-richtext'), osztaly: null, ostagOsztaly: '.kc-richtext' },
+      'margin',
+    )
+    expect(kozos).toBe('var(--kc-space-4) 0')
+    // És a cikk-törzsi felülírás valóban a `.kc-post-body`-ra szűkít.
+    const kodCsak = cikkCssForras.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(kodCsak).toContain('.kc-post-body .kc-richtext p + p')
+    expect(kodCsak).not.toMatch(/(^|\})\s*\.kc-richtext p\s*\{/)
+  })
+
+  it('a poszt-rács a CSS Grid auto-repeat szabálya szerint KÉT hasábot ad 1440 px-en', () => {
+    const lap = lapNezetablakra(1440)
+    const konteneri = tartalomHasab(lap, 1440)
+    expect(konteneri).toBe(1072)
+    // A böngésző ugyanezt méri: `grid-template-columns: 524px 524px`.
+    expect(hasabSzam(lap, 1440, konteneri)).toBe(2)
+  })
+
+  it('a poszt-rács 768 px-en EGY hasáb (a mérték nem esik szét)', () => {
+    const lap = lapNezetablakra(768)
+    expect(hasabSzam(lap, 768, tartalomHasab(lap, 768))).toBe(1)
+  })
+
+  it('a poszt-rács 2560 px-en sem ad harmadik hasábot', () => {
+    const lap = lapNezetablakra(2560)
+    expect(hasabSzam(lap, 2560, tartalomHasab(lap, 2560))).toBe(2)
   })
 
   it('a cikkoldal panel-szövegeinek sorhossza a WCAG 1.4.8 (AAA) 80 karakteres plafonja alatt marad', () => {
@@ -882,5 +1061,163 @@ describe('MÉRÉS — 320 px reflow: a saját feliratok elférnek (WCAG 2.2 1.4.
         expect(szelesseg, `„${szo}" ${szelesseg.toFixed(1)} px / ${panel} px`).toBeLessThanOrEqual(panel)
       }
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// G9 — morzsamenü: konzisztens navigáció (WCAG 2.2 3.2.3)
+// ---------------------------------------------------------------------------
+
+describe('G9 — a cikkoldal morzsamenüje', () => {
+  const html = render(
+    createElement(PostArticle, {
+      post: post({ author: SZERZO, content: HOSSZU_CIKK }),
+    }),
+  )
+
+  it('a <main>-ből VAN visszaút a Tudástár gyűjtőoldalára', () => {
+    // A séta mérése szerint korábban 24 linkből 0 mutatott a /blog-ra.
+    expect(html).toMatch(/<a[^>]+href="\/blog"/)
+  })
+
+  it('a szerkezete a kurzusoldaléval AZONOS: nav + aria-label + ol + aria-current', () => {
+    const morzsa = html.slice(html.indexOf('kc-post-breadcrumb'), html.indexOf('</nav>'))
+    expect(html).toContain('aria-label="Morzsamenü"')
+    expect(morzsa).toContain('<ol role="list">')
+    // A gyűjtőoldal LINK, az aktuális lap NEM link, de aria-current="page".
+    expect(morzsa).toMatch(/<a[^>]+href="\/blog"[^>]*>Tudástár<\/a>/)
+    expect(morzsa).toContain('aria-current="page"')
+    const aktualis = /aria-current="page"[^>]*>([^<]*)</.exec(morzsa)
+    expect(aktualis?.[1]).toBe('Miért zsibbad a kezem?')
+  })
+
+  it('a látható morzsa és a BreadcrumbList strukturált adat ugyanazt mondja', () => {
+    // A repó szabálya: a séma minden mezője a LÁTHATÓ tartalomból jön.
+    expect(html).toContain('"@type":"BreadcrumbList"')
+    expect(html).toContain('"name":"Tudástár"')
+    expect(html).toContain('"name":"Miért zsibbad a kezem?"')
+  })
+
+  it('a stílusa a kurzusoldal morzsájával MEGEGYEZIK (3.2.3)', () => {
+    // A két blokk ugyanazokat a deklarációkat viszi; ha az egyik elmozdul, ez
+    // az őr jelez. (A cikkoldalé ezen felül 44 px-es érintőcélt ad a linknek —
+    // lásd a post-view.css indoklását.)
+    const kurzusCss = readFileSync(`${REPO}app/(frontend)/kurzusok/kurzusok.css`, 'utf8')
+    const kodCsak = (forras: string): string => forras.replace(/\/\*[\s\S]*?\*\//g, '')
+    const blokk = (forras: string, szelektor: string): string => {
+      const minta = new RegExp(`${szelektor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`)
+      const talalat = minta.exec(kodCsak(forras))
+      expect(talalat, `${szelektor} nincs meg`).not.toBeNull()
+      return talalat![1]!
+        .split(';')
+        .map((sor) => sor.trim())
+        .filter(Boolean)
+        .sort()
+        .join(';')
+    }
+    expect(blokk(cikkCssForras, '.kc-post-breadcrumb ol')).toBe(
+      blokk(kurzusCss, '.kc-course-breadcrumb ol'),
+    )
+    expect(blokk(cikkCssForras, '.kc-post-breadcrumb li + li::before')).toBe(
+      blokk(kurzusCss, '.kc-course-breadcrumb li + li::before'),
+    )
+  })
+
+  it('a morzsa linkje 44 px-es érintőcélt kap', () => {
+    const kodCsak = cikkCssForras.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(kodCsak).toMatch(/\.kc-post-breadcrumb a\s*\{[^}]*min-height:\s*2\.75rem;/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// G10 — a kapcsolódó blokk: Tudástár-rács + compact kártya
+// ---------------------------------------------------------------------------
+
+describe('G10 — a kapcsolódó cikkek blokkja', () => {
+  const kapcsolodo = (id: number, cim: string) => ({
+    id,
+    title: cim,
+    slug: `cikk-${id}`,
+    status: 'published',
+    publishedAt: '2026-07-14T09:00:00.000Z',
+    excerpt: 'Ez a kivonat SOSEM jelenhet meg a kapcsolódó blokkban: a hármas rácsban a mért sorhossza 24–38 karakter/sor lenne.',
+    categories: [{ id: 5, title: 'Kézrehabilitáció', slug: 'kezrehabilitacio' }],
+    content: null,
+  })
+  const html = render(
+    createElement(PostArticle, {
+      post: post({ author: SZERZO, content: HOSSZU_CIKK }),
+      related: [
+        kapcsolodo(21, 'Kéztőalagút-szindróma: mit tehetsz otthon?'),
+        kapcsolodo(22, 'Pattanó ujj: mi történik az ínhüvelyben?'),
+        kapcsolodo(23, 'Teniszkönyök: miért fáj?'),
+      ] as never,
+    }),
+  )
+  const blokk = html.slice(html.indexOf('kc-post-related'))
+
+  it('a Tudástár rács-módosítóján áll, nem a közös hármas rácson', () => {
+    expect(blokk).toContain('kc-card-grid kc-card-grid--posts')
+  })
+
+  it('a kártyák `compact` változatúak: KIVONAT nincs a DOM-ban', () => {
+    // Elrejteni kevés lenne: a képernyőolvasó és a keresőrobot a rejtett
+    // kivonatot is végigolvasná (PostCard fejléce).
+    expect(blokk).not.toContain('kc-post-card__excerpt')
+    expect(blokk).not.toContain('SOSEM jelenhet meg')
+  })
+
+  it('a kártyák címe címsor marad (h3 a szekció h2-je alatt)', () => {
+    expect(blokk).toContain('<h3 class="kc-post-card__title">')
+    expect([...blokk.matchAll(/<h3 class="kc-post-card__title">/g)]).toHaveLength(3)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// G11 — a tartalomjegyzék előnézete
+// ---------------------------------------------------------------------------
+
+describe('G11 — a jegyzék előnézete és kinyitható folytatása', () => {
+  const sokSzakasz = lexical([
+    ...Array.from({ length: 12 }, (_, i) => [
+      heading('h2', `Szakasz ${i + 1}`),
+      paragraph(words(80)),
+    ]).flat(),
+  ])
+  const html = render(createElement(PostArticle, { post: post({ content: sokSzakasz }) }))
+  const toc = html.slice(html.indexOf('class="kc-post-toc"'), html.indexOf('</nav>', html.indexOf('class="kc-post-toc"')))
+
+  it('nyitás nélkül LEGFELJEBB hat tétel látszik', () => {
+    const elonezet = toc.slice(0, toc.indexOf('kc-post-toc__tobbi'))
+    expect([...elonezet.matchAll(/href="#/g)]).toHaveLength(6)
+  })
+
+  it('a többi tétel natív `details` mögött áll, megnevezett darabszámmal', () => {
+    expect(toc).toContain('<details class="kc-post-toc__tobbi">')
+    expect(toc).toContain('<summary class="kc-post-toc__nyito">')
+    expect(text(toc)).toContain('További 6 szakasz')
+    // Alapból ZÁRVA: `open` attribútum nincs.
+    expect(toc).not.toContain('<details class="kc-post-toc__tobbi" open')
+  })
+
+  it('a számozás folytatólagos (a sorrend információ)', () => {
+    expect(toc).toContain('start="7"')
+  })
+
+  it('egyetlen elmaradó tételért NEM nyit harmonikát', () => {
+    const hetSzakasz = lexical([
+      ...Array.from({ length: 7 }, (_, i) => [
+        heading('h2', `Szakasz ${i + 1}`),
+        paragraph(words(80)),
+      ]).flat(),
+    ])
+    const rovid = render(createElement(PostArticle, { post: post({ content: hetSzakasz }) }))
+    expect(rovid).not.toContain('kc-post-toc__tobbi')
+    expect(tocHorgonyok(rovid)).toHaveLength(7)
+  })
+
+  it('a nyitó 44 px-es érintőcélt kap, és nem tartalmaz mozgást', () => {
+    const kodCsak = cikkCssForras.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(kodCsak).toMatch(/\.kc-post-toc__nyito\s*\{[^}]*min-height:\s*2\.75rem;/)
   })
 })

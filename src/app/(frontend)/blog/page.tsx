@@ -40,10 +40,23 @@ import '../styles/blocks/tudastar-lista.css'
  * ═══ ELRENDEZÉS: KÉTHASÁBOS RÁCS ═══
  * A lista `.kc-card-grid--posts` módosítót kap. A közös hármas rácsban a
  * kártya kivonatának mért sorhossza 28,8–37,4 karakter/sor minden asztali
- * szélességen, a kéthasábosban 48,1–60,6 — a 45-ös alsó tűréshatár (WCAG 2.2
- * 1.4.8 és a repó B1.1 szabálya) csak az utóbbiban teljesül. A mérés és a
- * track-korlátok levezetése: docs/tudastar-ux-terv.md 2.2, a szabály maga
- * styles/blocks/tudastar-lista.css.
+ * szélességen — a 45-ös alsó tűréshatár (WCAG 2.2 1.4.8 és a repó Ü6
+ * szabálya) ott nem teljesül. A levezetés: docs/tudastar-ux-terv.md 2.2, a
+ * szabály maga styles/blocks/tudastar-lista.css.
+ *
+ * 2026-08-21, JAVÍTÁS. A módosító 2026-08-21-ig NEM azt csinálta, amit ez a
+ * komment állított: a `repeat(auto-fit, minmax(min(100%, 26rem), 34rem))`
+ * szabály böngészőben MINDEN szélességen EGY hasábot adott (mérve Chromium
+ * 141-ben 320-tól 2560 px-ig), mert az auto-repeat ismétlésszáma a
+ * HATÁROZOTT felső trackkel számol (CSS Grid 1, §7.2.3.1). A javított
+ * szabállyal a böngészőben mért állapot:
+ *
+ *   320 · 390 · 592 · 640 · 768 · 904 px → 1 hasáb
+ *   968 · 1024 · 1120 · 1280 · 1440 · 1920 · 2560 px → 2 hasáb
+ *
+ * és a kivonat sorhosszának mediánja 592 px-től felfelé 64 · 63 · 62 · 48 ·
+ * 51 · 59 · 57 · 58 karakter/sor — végig a 45–85-ös tűrésen belül. Hat
+ * cikknél a lap 1440 px-en 4 024 → 2 210 px.
  *
  * ═══ A SZŰRŐ MEGJELENÉSI KÜSZÖBE ═══
  * A chip-sor csak akkor jelenik meg, ha legalább három kategóriának van
@@ -161,8 +174,8 @@ export default async function BlogPage({ searchParams }: Props) {
             {posts.map((post) => (
               /* A lap egyetlen fölérendelt címsora a H1, tehát a kártyacím H2
                  — fix H3 mellett H1 → H3 ugrás keletkezne (WCAG 2.2 1.3.1).
-                 A `list` változat (alapértelmezés) hozza a kivonatot: itt a
-                 kéthasábos rácsban a sorhossz mérve 48,1–60,6 karakter/sor. */
+                 A `list` változat (alapértelmezés) hozza a kivonatot: a
+                 sorhossz mediánja mérve 48–64 karakter/sor 592 px felett. */
               <PostCard key={post.id} post={post} headingLevel={2} />
             ))}
           </div>
