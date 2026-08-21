@@ -114,6 +114,18 @@ describe('trackLeadSubmitted és trackLeadSucceeded', () => {
     expect(utolsoHivas()).toEqual(['lead_succeeded', { leadSource: 'hirlevel' }])
   })
 
+  it('a tulajdonságkulcs leadSource — nem forras (a többi eseményprop is angol)', () => {
+    trackLeadSubmitted('kapcsolat')
+    const [, submitted] = utolsoHivas()
+    expect(Object.keys(submitted)).toEqual(['leadSource'])
+    expect(submitted).not.toHaveProperty('forras')
+
+    trackLeadSucceeded('ingyenes-kurzus', { courseId: 3 })
+    const [, succeeded] = utolsoHivas()
+    expect(Object.keys(succeeded).sort()).toEqual(['courseId', 'leadSource'])
+    expect(succeeded).not.toHaveProperty('forras')
+  })
+
   it('a kurzus-azonosító akkor és csak akkor kerül ki, ha van', () => {
     trackLeadSubmitted('ingyenes-kurzus', { courseId: 2 })
     expect(utolsoHivas()).toEqual(['lead_submitted', { leadSource: 'ingyenes-kurzus', courseId: 2 }])
