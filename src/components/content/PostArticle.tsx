@@ -3,6 +3,7 @@ import Link from 'next/link'
 import type { Post } from '../../payload-types'
 import { estimateReadingMinutes } from '../../lib/reading-time'
 import { articleJsonLd, breadcrumbJsonLd, resolveOgImageUrl } from '../../lib/seo'
+import { kulcsszoFor } from '../../lib/tudastar/seo-kulcsszavak'
 import { Badge } from '../ui/Badge'
 import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
@@ -98,6 +99,8 @@ export function PostArticle({ post, related: relatedProp }: PostArticleProps) {
   // számolná, csomópontonként 2–3 fantomszóval (technikai terv D5).
   const readingMinutes = estimateReadingMinutes(plainTextOf(post.content))
   const faqItems = postFaqItems(post)
+  // A cikk mért kulcsszó-célzása (ha van hozzá mérés).
+  const kulcsszoOf = typeof post.slug === 'string' ? kulcsszoFor(post.slug) : undefined
   const related = displayableRelated(relatedProp ?? post.relatedPosts)
   const heroMedia = post.heroImage && typeof post.heroImage === 'object' ? post.heroImage : null
 
@@ -123,6 +126,15 @@ export function PostArticle({ post, related: relatedProp }: PostArticleProps) {
           path: `/blog/${post.slug}`,
           ...(author !== null ? { authorName: author.name } : {}),
           imageUrl: resolveOgImageUrl(post),
+          // A MÉRT célkifejezések és a cikk tárgya entitásként. Csak azoknál a
+          // cikkeknél áll rendelkezésre, amikhez van mérés — a többinél a
+          // mezők egyszerűen kimaradnak a sémából, nem üresen jelennek meg.
+          ...(kulcsszoOf === undefined
+            ? {}
+            : {
+                keywords: [kulcsszoOf.elsodleges, ...kulcsszoOf.masodlagos],
+                about: kulcsszoOf.targy,
+              }),
         })}
       />
       <JsonLd

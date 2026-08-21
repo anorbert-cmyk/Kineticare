@@ -8,7 +8,7 @@ import { PostsEmptyState } from '@/components/content/PostsEmptyState'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { getCategoryBySlug, getPosts, getPublishedProducts } from '@/lib/cms'
-import { blogJsonLd, breadcrumbJsonLd } from '@/lib/seo'
+import { blogJsonLd, breadcrumbJsonLd, buildStaticPageMetadata } from '@/lib/seo'
 import { freeCourseHref } from '@/lib/tudastar'
 
 import '../../../styles/blocks/tudastar-lista.css'
@@ -62,9 +62,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // korábbi „<téma> — Tudástár" alak kvirtmínuszt (U+2014) használt
     // elválasztónak, amit a magyar mikroszöveg-szabályzat kizár
     // (docs/ui-sztenderdek.md §3.1.1).
-    title: `${category.title} a Tudástárban`,
-    description: `${category.title}: kézrehabilitációs cikkek és gyakorlatok a Kineticare Tudástárában.`,
-    alternates: { canonical: `/blog/kategoria/${category.slug}` },
+    ...buildStaticPageMetadata({
+      title: `${category.title} a Tudástárban`,
+      description: `${category.title}: kézrehabilitációs cikkek és gyakorlatok a Kineticare Tudástárában.`,
+      path: `/blog/kategoria/${category.slug}`,
+    }),
     // Üres témánál nem kérünk indexelést (soft 404 elkerülése), de a linkek
     // bejárását igen.
     ...(posts.length === 0 ? { robots: { index: false, follow: true } } : {}),

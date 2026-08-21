@@ -7,6 +7,7 @@ import {
   excerptFrom,
   extractArticleBody,
   inlineNodes,
+  LEKTORI_JELOLESEK,
   markdownToLexical,
 } from '../lib/tudastar/markdown-to-lexical'
 
@@ -104,6 +105,25 @@ describe('T1 — a törzs kivágása', () => {
         'A vezetőnek szóló jelzések',
       )
     }
+  })
+
+  it.each(CIKKEK)('%s törzsében NINCS lektornak szóló szöveg', (nev) => {
+    // A 2026-08-21-i éles hiba őre: a figyelmeztetés a H1 ALATT állt, ezért a
+    // törzsbe került, és a cikkoldalon LÁTHATÓAN, az og:description mezőben
+    // pedig a megosztásokon is megjelent. A szószám-őr ezt nem fogta meg, mert
+    // a mondat szöveg — csak épp nem a látogatónak szól.
+    const { lines } = extractArticleBody(readFileSync(cikkPath(nev), 'utf8'))
+    const torzs = lines.join('\n')
+    for (const jel of LEKTORI_JELOLESEK) {
+      expect(torzs, `${nev}: lektori jelölés a törzsben: ${jel}`).not.toContain(jel)
+    }
+  })
+
+  it.each(CIKKEK)('%s bevezetője a VALÓDI első mondattal kezdődik', (nev) => {
+    const { lines } = extractArticleBody(readFileSync(cikkPath(nev), 'utf8'))
+    const excerpt = excerptFrom(lines)
+    expect(excerpt).not.toContain('lektorálandó')
+    expect(excerpt).not.toContain('gyógytornász szakmai jóváhagyása')
   })
 
   it('a cikk RÉSZÉT képező záró szakaszokat viszont bent tartja', () => {

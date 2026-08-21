@@ -10,7 +10,7 @@ import { Section } from '@/components/ui/Section'
 import { shouldShowCategoryFilter } from '@/components/content/post-list'
 import { BARION_PAGE_VIEW } from '@/lib/analytics/barion-events'
 import { getCategoryBySlug, getContentCategories, getPosts, getPublishedProducts } from '@/lib/cms'
-import { blogJsonLd } from '@/lib/seo'
+import { blogJsonLd, buildStaticPageMetadata } from '@/lib/seo'
 import { categoriesWithPosts, freeCourseHref } from '@/lib/tudastar'
 
 import '../styles/blocks/tudastar-lista.css'
@@ -94,11 +94,11 @@ async function canonicalPathFor(kategoria: string | undefined): Promise<string> 
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const { kategoria } = await searchParams
-  return {
+  return buildStaticPageMetadata({
     title: 'Tudástár',
     description: LEAD,
-    alternates: { canonical: await canonicalPathFor(kategoria) },
-  }
+    path: await canonicalPathFor(kategoria),
+  })
 }
 
 export default async function BlogPage({ searchParams }: Props) {
