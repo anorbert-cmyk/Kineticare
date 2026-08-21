@@ -105,6 +105,29 @@ azt látja, ami odaért.
 ismétlődnek — retesz védi. Enélkül egy ember többszörösen számítana, és a
 tölcsér hamis képet adna.
 
+#### Mit mér pontosan a mérföldkő — és mit NEM
+
+A `video_milestone` a **lejátszófej mélységét** méri (pozíció ÷ hossz), nem a
+ténylegesen végignézett szakaszok lefedettségét. A kettő szándékosan
+különbözik:
+
+| | `video_milestone` | `lesson_completed` |
+|---|---|---|
+| Mit néz | hol tart a lejátszófej | mennyit néztek végig ténylegesen |
+| Előretekerés | beleszámít | nem számít bele |
+| Mire jó | lemorzsolódás, tölcsér | teljesítés, haladás |
+
+**Miért így.** Ha a mérföldkő lefedettség-alapú lenne, a **100%-os lépés
+gyakorlatilag sosem teljesülne** (a készre jelölés is ezért húz 90%-nál), és a
+tölcsér utolsó fokán tartósan nulla állna. A GA4 `video_progress` és a GOV.UK
+videó-követője ugyanezt a százalék-alapú sémát használja, szintén
+„videónként egyszer" reteszelve.
+
+**Amit ez jelent:** aki előretekerve átugorja a 25/50%-ot, azt a
+mérföldköveket is megkapja. Ez nem hiba — az „ordered funnel" épp ilyen,
+előtag-zárt lefutást igényel. A tényleges nézettséget a `lesson_completed` és
+az admin haladás-nézet mondja meg, nem ez.
+
 ## 5. Dashboard-terv (a PostHog projektben felépítendő)
 
 Ez a rész **nem kód** — a PostHog felületén kell összeállítani. Sorrendben:
