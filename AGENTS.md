@@ -349,6 +349,11 @@ Kritikus, élesben szerzett tanulságok (a teljes lista a `CLAUDE.md`
 | E2E-futtatás stagingen | `docs/e2e-staging-runbook.md` |
 | OWASP biztonsági audit | `docs/owasp-security-review.md` |
 | Statisztika/Bunny review (2026-08-21) | `docs/review-2026-08-21-statisztika-bunny.md` |
+| **Piaci stratégia és végrehajtási terv** | `docs/piaci-strategia.md` |
+| Kulcsszó-célzás (mért) | `docs/kulcsszavak.md` |
+| Kampányterv mért adatokból | `docs/kampanyterv-mert-adatokbol.md` |
+| Vevőhang és hirdetésszöveg | `docs/vevohang-es-hirdetesszoveg.md` |
+| Monid-kutatás (terv + 2. kör) | `docs/monid-kampany-kutatas.md`, `docs/monid-masodik-kor.md` |
 | Számlázz.hu (követelmények, megfelelés, stornó) | `docs/szamlazz-*.md`, `docs/atadas-szamlazz-kor.md` |
 | Analitika | `docs/posthog.md`, `docs/ga4.md` |
 | SEO / GEO / LLM-optimalizálás | `docs/seo-geo-llm.md` |

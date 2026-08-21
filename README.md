@@ -63,6 +63,11 @@ kizárólag a kezdőlap szekciósorát és a landing tartalmi képeit tölti be
 | UX-hierarchia-audit | `docs/ux-hierarchia-audit.md` |
 | OWASP biztonsági audit | `docs/owasp-security-review.md` |
 | Statisztika/Bunny review (2026-08-21) | `docs/review-2026-08-21-statisztika-bunny.md` |
+| **Piaci stratégia és végrehajtási terv** | `docs/piaci-strategia.md` |
+| Kulcsszó-célzás (mért) | `docs/kulcsszavak.md` |
+| Kampányterv mért adatokból | `docs/kampanyterv-mert-adatokbol.md` |
+| Vevőhang és hirdetésszöveg | `docs/vevohang-es-hirdetesszoveg.md` |
+| Monid-kutatás (terv + 2. kör) | `docs/monid-kampany-kutatas.md`, `docs/monid-masodik-kor.md` |
 | PostHog | `docs/posthog.md` |
 | SEO / GEO / LLM-optimalizálás | `docs/seo-geo-llm.md` |
 | Hero-videó feltöltés | `docs/hero-video-feltoltes.md` |
