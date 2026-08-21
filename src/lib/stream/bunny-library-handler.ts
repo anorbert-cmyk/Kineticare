@@ -45,8 +45,19 @@ export interface BunnyVideosHandlerDeps {
  */
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store' } as const
 
+/**
+ * A `?library=` paraméter feloldása.
+ *
+ * Kis- és nagybetűre NEM érzékeny, és a körülvevő szóközöket levágja: a
+ * `?library=PUBLIC` korábban CSENDBEN a védett tárat adta vissza (a szigorú
+ * `=== 'public'` miatt), vagyis a munkatárs a nyilvános tárat kérte, és a
+ * fizetős leckék listáját kapta. Ismeretlen érték továbbra is a védett tárra
+ * esik vissza: az a szűkebb, nem az a tár, ahonnan előzetes megy ki.
+ */
 function parseLibraryKind(value: string | null): BunnyLibraryKind {
-  return value === 'public' ? 'public' : 'protected'
+  return typeof value === 'string' && value.trim().toLowerCase() === 'public'
+    ? 'public'
+    : 'protected'
 }
 
 function httpStatusForBunnyError(code: BunnyLibraryErrorCode): number {
@@ -119,6 +130,15 @@ export function createBunnyVideosHandler(
       })
 
       if (!result.ok) {
+        // A Bunny-oldali hiba (502/503) eddig NYOM NÉLKÜL ment vissza: csak a
+        // váratlan kivétel ága naplózott. Egy tartós upstream-kiesés így
+        // láthatatlan maradt volna a naplóban, holott a munkatárs oldalán ez a
+        // panel teljes használhatatlansága. A felhasználónak szóló magyar
+        // üzenet helyett a gépi kódot naplózzuk.
+        log.warn('bunny-videos: a Bunny videótár nem szolgálta ki a kérést', {
+          kind,
+          code: result.code,
+        })
         return Response.json(
           { error: result.message, code: result.code },
           { status: httpStatusForBunnyError(result.code), headers: NO_STORE_HEADERS },

@@ -173,3 +173,65 @@ describe('createBunnyVideosHandler — kérés-korlát és gyorsítótár', () =
     }
   })
 })
+
+/**
+ * L5 és L9 (2026-08-21-i kódvizsgálat): a Bunny-oldali hiba naplózás nélkül
+ * ment vissza, a `?library=` pedig kis-nagybetűre érzékeny volt.
+ */
+describe('createBunnyVideosHandler — library-paraméter és upstream-hiba', () => {
+  it('a ?library=PUBLIC a NYILVÁNOS tárat kéri, nem csendben a védettet', async () => {
+    process.env.BUNNY_STREAM_PUBLIC_LIBRARY_API_KEY = DUMMY_KEY
+    process.env.NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID = '77'
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ items: [], totalItems: 0 }),
+    }))
+    const GET = createBunnyVideosHandler({
+      getPayload: async () => createPayload('staff') as never,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    const response = await GET(new Request(`${URL}?library=PUBLIC`))
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { library: string; libraryId: string }
+    expect(body.library).toBe('public')
+    expect(body.libraryId).toBe('77')
+    delete process.env.BUNNY_STREAM_PUBLIC_LIBRARY_API_KEY
+    delete process.env.NEXT_PUBLIC_BUNNY_STREAM_PUBLIC_LIBRARY_ID
+  })
+
+  it('ismeretlen library-érték a VÉDETT tárra esik vissza (a szűkebb alapértelmezés)', async () => {
+    process.env.BUNNY_STREAM_LIBRARY_API_KEY = DUMMY_KEY
+    process.env.NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID = '99'
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ items: [], totalItems: 0 }),
+    }))
+    const GET = createBunnyVideosHandler({
+      getPayload: async () => createPayload('staff') as never,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    const response = await GET(new Request(`${URL}?library=publik`))
+    const body = (await response.json()) as { library: string }
+    expect(body.library).toBe('protected')
+  })
+
+  it('upstream Bunny-hiba: 502 a kliensnek, és nem néma — a válasz kódot visz', async () => {
+    process.env.BUNNY_STREAM_LIBRARY_API_KEY = DUMMY_KEY
+    process.env.NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID = '99'
+    const fetchImpl = vi.fn(async () => {
+      throw new Error('kapcsolat megszakadt')
+    })
+    const GET = createBunnyVideosHandler({
+      getPayload: async () => createPayload('staff') as never,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    const response = await GET(new Request(URL))
+    expect(response.status).toBe(502)
+    const body = (await response.json()) as { error: string; code: string }
+    expect(body.code).toBe('upstream')
+    expect(body.error).toContain('nem érhető el')
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
