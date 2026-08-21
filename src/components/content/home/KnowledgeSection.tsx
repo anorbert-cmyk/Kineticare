@@ -64,7 +64,12 @@ export function KnowledgeSection({
         <h2 className="kc-section-title">{title}</h2>
         <div className="kc-card-grid">
           {shownPosts.map((post) => (
-            <PostCard key={post.id} post={post} />
+            /* `compact`: HÁRMAS rácsban állunk, ott a kivonat mért sorhossza
+               24–38 karakter/sor (docs/tudastar-a11y-meres.md 3.1), a repó Ü6
+               szabályának 45-ös alsó tűréshatára alatt. A kivonat ezért nem
+               kerül a kártyára — a `headingLevel` alapértelmezett 3-as értéke
+               pedig a fenti h2 szekciócím alá illeszkedik, hézag nélkül. */
+            <PostCard key={post.id} post={post} variant="compact" />
           ))}
         </div>
         <p className="kc-section-more">

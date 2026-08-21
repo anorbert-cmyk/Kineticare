@@ -35,7 +35,96 @@
   margin-bottom: var(--kc-space-6);
 }
 
-/* ---- Posztkártya (a /blog listán és a kapcsolódó posztoknál is) ----------- */
+/* ---- Posztkártya (a /blog listán és a kapcsolódó posztoknál is) -----------
+   ═══ AZ EGÉSZ KÁRTYA KATTINTHATÓ, DE A LINK NEVE CSAK A CÍM ═══
+   2026-08-21 előtt a teljes kártya egyetlen `<a>` volt, és emiatt a link
+   hozzáférhető neve három valódi kapcsolódó kártyán 206 / 227 / 212 karakterre
+   nőtt (docs/tudastar-a11y-meres.md 3.2). A `<a>` innentől CSAK a címet fogja
+   körbe, a kártya többi felületét ez az overlay teszi kattinthatóvá.
+
+   A minta és a lépései szó szerint: Heydon Pickering, *Inclusive Components —
+   Cards* (https://inclusive-components.design/cards/, hozzáférés: 2026-08-21):
+   „Give the card container element `position: relative`", „Give the link's
+   `::after` pseudo-content `position: absolute`", és a `left/top/right/bottom`
+   nullázása. A nagy célfelület haszna: NN/g, *Cards: UI-Component Definition*
+   (2016-11-06, https://www.nngroup.com/articles/cards-component/, hozzáférés:
+   2026-08-21) — a kártyánál „clicking or tapping *anywhere* on the card link
+   to a details page", és ez Fitts törvénye szerint gyorsítja a célzást.
+
+   ═══ AZ OVERLAY KÉT ISMERT MELLÉKHATÁSA, ÉS MIÉRT VÁLLALJUK ═══
+   (1) MÁSODIK LINK VAGY GOMB nem fér el a kártyán: az overlay elnyelné. A
+       kártyán ma sincs második interaktív elem — a kategória-címke `<span>`
+       (a szűrés a `/blog` chip-sorának dolga), a nyíl pedig `aria-hidden`
+       dekoráció. Az őr-teszt (K1) MÉRI, hogy a kártyán pontosan egy `<a>` és
+       nulla `<button>` van, tehát a szabály nem csúszhat vissza némán.
+   (2) A KÁRTYA SZÖVEGE NEM JELÖLHETŐ KI egérrel: az Inclusive Components
+       ugyanezt mondja ki („it's now difficult to select the text within the
+       card (the link acts as a mask over the top of it)"). Az ott felkínált
+       kerülőút — a szöveget `position: relative`-tel az overlay FÖLÉ emelni —
+       lyukakat üt a kattintható felületbe, tehát pontosan azt a nagy
+       célfelületet rontaná el, amiért az overlay egyáltalán van.
+       DÖNTÉS: az overlay marad, mert a kijelölhetőség itt nem vész el, csak
+       átkerül a cikkoldalra. A kártya mindhárom szövege ott is ott áll,
+       kijelölhetően: a cím a `h1`, a kivonat a lead-bekezdés
+       (`.kc-page-hero__lead`), a dátum a meta-sor `<time>` eleme — mind egy
+       kattintásnyira, ugyanazzal a szöveggel. Billentyűzetes kijelölés
+       (caret browsing) és a képernyőolvasó-hozzáférés érintetlen marad. */
+
+.kc-post-card {
+  /* Az overlay pozicionálási kerete. Egyben oszlop-elrendezés, hogy a
+     hajszálvonalas láb a kártya ALJÁRA kerüljön: a `compact` változatban
+     nincs kivonat, e nélkül a lábak sorról sorra elcsúsznának egymáshoz
+     képest. (Baymard-elv: egy listán belül a tételek ugyanúgy épülnek fel.) */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.kc-post-card .kc-post-card__body {
+  flex: 1 1 auto;
+}
+
+/* A cím-link INLINE elem a címsorban. A content.css `display: flex;
+   height: 100%` szabálya a régi, TELJES kártyát átfogó linké volt; ott most
+   nem lenne értelme. A `text-decoration`-t és a `color`-t szándékosan NEM
+   írjuk felül: így a base.css `a:hover` szabálya érvényben marad, és a kártya
+   bármely pontjára mutatva a CÍM aláhúzódik — ez mutatja meg, hol a link
+   (a hover-szín accent-deep a fehér kártyán 5,45:1, AA felett). */
+.kc-post-card .kc-post-card__link {
+  display: inline;
+  height: auto;
+}
+
+.kc-post-card .kc-post-card__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--kc-radius-lg);
+}
+
+/* ═══ FÓKUSZ: A GYŰRŰ A TELJES KÁRTYÁT RAJZOLJA KÖRBE ═══
+   A `:focus-visible` alapból a link SAJÁT dobozát (a cím sorát) keretezné, a
+   billentyűzetes látogató viszont a kártyát célozza. A gyűrűt ezért az
+   overlay viseli: az pontosan a kártya doboza. Sara Soueidan, *A Guide To
+   Designing Accessible, WCAG-Conformant Focus Indicators*
+   (https://www.sarasoueidan.com/blog/focus-indicators/, hozzáférés:
+   2026-08-21) szerint a jelölésnek „solidly _bound_ or _surround_ the
+   component" kell, és „a solid outline around an element is an example of a
+   focus indicator that solidly bounds an element".
+   Küszöbök: WCAG 2.2 **1.4.11** (Non-text Contrast, AA) 3:1, és **2.4.13**
+   (Focus Appearance, AAA) 2 CSS px vastagság. Mérve: a gyűrű 3 px tömör,
+   2 px eltartással; az `accent-deep` (#2f6e9f) kontrasztja a szomszédos
+   felületekhez 5,45:1 (fehér kártya), 5,16:1 (paper), 4,72:1 (tint sáv).
+   A vastagság és az eltartás a base.css globális `:focus-visible` értéke,
+   tehát a lapon minden fókuszjel egyforma (WCAG 2.2 3.2.4). */
+.kc-post-card .kc-post-card__link:focus-visible {
+  outline: none;
+}
+
+.kc-post-card .kc-post-card__link:focus-visible::after {
+  outline: 3px solid var(--kc-color-focus);
+  outline-offset: 2px;
+}
 
 /* A borító íve kövesse a kártyáét (a közös alap a kisebb `md` ívet adja). */
 .kc-post-card .kc-post-card__cover {

@@ -159,7 +159,11 @@ export default async function BlogPage({ searchParams }: Props) {
         ) : (
           <div className="kc-card-grid kc-card-grid--posts">
             {posts.map((post) => (
-              <PostCard key={post.id} post={post} />
+              /* A lap egyetlen fölérendelt címsora a H1, tehát a kártyacím H2
+                 — fix H3 mellett H1 → H3 ugrás keletkezne (WCAG 2.2 1.3.1).
+                 A `list` változat (alapértelmezés) hozza a kivonatot: itt a
+                 kéthasábos rácsban a sorhossz mérve 48,1–60,6 karakter/sor. */
+              <PostCard key={post.id} post={post} headingLevel={2} />
             ))}
           </div>
         )}
