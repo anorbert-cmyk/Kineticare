@@ -4,6 +4,11 @@ import { hasStaffOrOwnerRole } from '../../access/roles'
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
 import {
+  checkUserRateLimit,
+  rateLimitHeaders,
+  type CheckRequestRateLimitOptions,
+} from '../security/rate-limit'
+import {
   listBunnyLibraryVideos,
   type BunnyLibraryErrorCode,
   type BunnyLibraryKind,
@@ -18,12 +23,27 @@ import {
  *
  * A library API-kulcs SOSEM megy ki a válaszban. Tesztből a fetch
  * injektált, valódi hálózat nincs.
+ *
+ * ═══ KÉRÉS-KORLÁT ÉS GYORSÍTÓTÁR ═══
+ * A végpont a Payload REST catch-allon KÍVÜL él, tehát az útvonal-alapú
+ * IP-limiter nem fedi. Egy hívás akár öt kimenő Bunny-kérést indít, ezért a
+ * szerepkör-kapu UTÁN per-user keret fut (a stream-token és a
+ * kurzus-haladás mintája). A válasz `no-store`: a lista védett tár GUID-jait
+ * is tartalmazhatja, amit sem böngésző, sem köztes gyorsítótár nem őrizhet.
  */
 
 export interface BunnyVideosHandlerDeps {
   getPayload: () => Promise<Payload>
   fetchImpl?: typeof fetch
+  /** Kizárólag tesztből: saját limiter vagy szabálykészlet injektálása. */
+  rateLimit?: CheckRequestRateLimitOptions
 }
+
+/**
+ * Minden válasz `no-store`: a védett tár azonosítói nem kerülhetnek
+ * gyorsítótárba (sem böngészőbe, sem köztes proxyba).
+ */
+const NO_STORE_HEADERS = { 'Cache-Control': 'no-store' } as const
 
 function parseLibraryKind(value: string | null): BunnyLibraryKind {
   return value === 'public' ? 'public' : 'protected'
@@ -54,7 +74,7 @@ export function createBunnyVideosHandler(
       if (!user) {
         return Response.json(
           { error: 'A videótár megtekintéséhez bejelentkezés szükséges.' },
-          { status: 401 },
+          { status: 401, headers: NO_STORE_HEADERS },
         )
       }
       if (!hasStaffOrOwnerRole(user)) {
@@ -64,7 +84,24 @@ export function createBunnyVideosHandler(
         })
         return Response.json(
           { error: 'A videótár megtekintéséhez munkatársi vagy tulajdonosi jogosultság kell.' },
-          { status: 403 },
+          { status: 403, headers: NO_STORE_HEADERS },
+        )
+      }
+
+      // Per-user keret az AUTH és a szerepkör-kapu UTÁN, a kimenő Bunny-hívás
+      // ELŐTT: csak jogosult hívó fogyasztja a vödröt, és a keret a Bunny felé
+      // menő kérésszámot fogja meg.
+      const rejection = checkUserRateLimit({
+        request,
+        routeClass: 'bunny-videos',
+        userId: user.id,
+        ...(deps.rateLimit ? { options: deps.rateLimit } : {}),
+      })
+      if (rejection) {
+        log.warn('bunny-videos: kérés-korlát elérve', { userId: user.id })
+        return Response.json(
+          { error: rejection.message },
+          { status: 429, headers: { ...NO_STORE_HEADERS, ...rateLimitHeaders(rejection) } },
         )
       }
 
@@ -84,24 +121,27 @@ export function createBunnyVideosHandler(
       if (!result.ok) {
         return Response.json(
           { error: result.message, code: result.code },
-          { status: httpStatusForBunnyError(result.code) },
+          { status: httpStatusForBunnyError(result.code), headers: NO_STORE_HEADERS },
         )
       }
 
-      return Response.json({
-        library: result.list.kind,
-        libraryId: result.list.libraryId,
-        totalItems: result.list.totalItems,
-        truncated: result.list.truncated,
-        videos: result.list.videos,
-      })
+      return Response.json(
+        {
+          library: result.list.kind,
+          libraryId: result.list.libraryId,
+          totalItems: result.list.totalItems,
+          truncated: result.list.truncated,
+          videos: result.list.videos,
+        },
+        { headers: NO_STORE_HEADERS },
+      )
     } catch (error) {
       log.error('bunny-videos: váratlan hiba', {
         error: error instanceof Error ? error.message : String(error),
       })
       return Response.json(
         { error: 'A videótár most nem tölthető be. Próbáld újra később.' },
-        { status: 500 },
+        { status: 500, headers: NO_STORE_HEADERS },
       )
     }
   }
