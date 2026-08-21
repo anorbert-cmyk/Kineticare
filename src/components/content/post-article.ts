@@ -1,3 +1,8 @@
+import {
+  postFaqItems as faqItemsFrom,
+  type PostFaqItem,
+  type PostFaqSource,
+} from '../../lib/seo-cikk'
 import type { Category, Post } from '../../payload-types'
 import type { MediaLike, MediaSizeInfo } from './media-url'
 
@@ -52,6 +57,17 @@ function readText(value: unknown): string | null {
 
 function readNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+/**
+ * Nyers szöveg-mező szűkítése, TRIMMELÉS NÉLKÜL.
+ *
+ * A `readText` a megjelenítési döntést is meghozza (üres szöveg = nincs érték);
+ * ez a változat CSAK a típust szűkíti, mert a hozzá tartozó tartalmi döntés
+ * máshol, egyetlen helyen él (lásd `postFaqItems`).
+ */
+function readRawText(value: unknown): string | null {
+  return typeof value === 'string' ? value : null
 }
 
 // ---------------------------------------------------------------------------
@@ -230,31 +246,40 @@ export function reviewDatesOf(post: Post): ReviewDates {
 // „Mások ezt is kérdezik" (GYIK)
 // ---------------------------------------------------------------------------
 
-export interface PostFaqItem {
-  question: string
-  answer: string
-}
+/**
+ * A GYIK-tétel alakja — a séma-réteg típusa, ÚJRAEXPORTÁLVA.
+ *
+ * Egy alak, egy definíció: a látható lista (`PostFaq`) és a `FAQPage` séma
+ * ugyanazt a típust használja, tehát a kettő szerkezetileg nem tud
+ * szétcsúszni. Korábban a típus két, karakterre azonos példányban élt.
+ */
+export type { PostFaqItem } from '../../lib/seo-cikk'
 
 /**
- * A cikk GYIK-tételei, hiányos tétel nélkül, legfeljebb hatan.
+ * A cikk GYIK-tételei a dokumentumból, hiányos tétel nélkül, legfeljebb hatan.
  *
- * A hatos plafon az NHS felsorolás-szabálya („Limit your list to no more than
- * 6 items", https://service-manual.nhs.uk/content/formatting), és ugyanez a
- * szám áll a séma `maxRows` értékében is (technikai terv 2.2), tehát a
- * felület és a szerkesztő ugyanazt a korlátot látja.
+ * ═══ EZ A FÜGGVÉNY CSAK OLVAS ═══
+ * A szűrés (hiányos tétel kihagyása), a trimmelés és a hatos plafon EGYETLEN
+ * helyen él, a `src/lib/seo-cikk.ts` `postFaqItems` függvényében. Korábban
+ * ugyanaz a szabály két példányban futott — itt és ott —, márpedig két külön
+ * szűrő idővel szétcsúszik, és pont az a látható lista és a séma közti eltérés
+ * keletkezik belőle, ami miatt a keresők elvetik a strukturált adatot (Google,
+ * *Structured data general policies*). Itt tehát CSAK a mező kiolvasása és a
+ * típus szűkítése történik; a tartalmi döntés a séma-rétegé.
+ *
+ * A plafon forrása változatlan: az NHS felsorolás-szabálya („Limit your list
+ * to no more than 6 items", https://service-manual.nhs.uk/content/formatting),
+ * és ugyanez a szám áll a `posts.faq` `maxRows` értékében is (technikai terv
+ * 2.2), tehát a felület és a szerkesztő ugyanazt a korlátot látja.
  */
 export function postFaqItems(post: Post): PostFaqItem[] {
   const raw = readField(post, 'faq')
   if (!Array.isArray(raw)) return []
-  const items: PostFaqItem[] = []
-  for (const entry of raw) {
-    const question = readText(readField(entry, 'question'))
-    const answer = readText(readField(entry, 'answer'))
-    if (question === null || answer === null) continue
-    items.push({ question, answer })
-    if (items.length === 6) break
-  }
-  return items
+  const sources: PostFaqSource[] = raw.map((entry) => ({
+    question: readRawText(readField(entry, 'question')),
+    answer: readRawText(readField(entry, 'answer')),
+  }))
+  return faqItemsFrom(sources)
 }
 
 // ---------------------------------------------------------------------------

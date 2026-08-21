@@ -1568,6 +1568,18 @@ export interface Post {
    */
   author?: (number | null) | User;
   /**
+   * A gyógytornász, aki a cikk klinikai állításait a forrásokkal együtt ellenőrizte.
+   */
+  reviewedBy?: (number | null) | User;
+  /**
+   * Az utolsó szakmai ellenőrzés napja. Csak akkor töltsd ki, ha az ellenőrzés tényleg megtörtént.
+   */
+  reviewedAt?: string | null;
+  /**
+   * A következő tervezett ellenőrzés napja (az NHS-minta szerint jellemzően 2 év).
+   */
+  nextReviewAt?: string | null;
+  /**
    * Melyik témakörökbe tartozik a cikk. Több is választható.
    */
   categories?: (number | Category)[] | null;
@@ -1575,6 +1587,20 @@ export interface Post {
    * Legfeljebb 3 cikk, amit a bejegyzés alján ajánlunk az olvasónak.
    */
   relatedPosts?: (number | Post)[] | null;
+  /**
+   * Mások ezt is kérdezik: 2–6 rövid kérdés-válasz a cikk végére. A válasz önmagában is megálljon (2–4 mondat), mert a keresők és az AI-válaszok pontosan ezt idézik.
+   */
+  faq?:
+    | {
+        question: string;
+        answer: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * A cikk végi ajánló erre a kurzusra mutat. Üresen hagyva az ajánló a kurzuslistára visz.
+   */
+  ctaCourse?: (number | null) | Product;
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
@@ -1588,6 +1614,18 @@ export interface Post {
 export interface User {
   id: number;
   name: string;
+  /**
+   * Rövid szakmai titulus, például: gyógytornász, kézterapeuta. A cikkek szerzősorában és a szerző-blokkban jelenik meg. Csak olyan végzettséget írj ide, ami igazolható.
+   */
+  credentials?: string | null;
+  /**
+   * 1–2 mondat a szakterületről, a cikkek végi szerző-blokkba. Csak igazolható állítás kerülhet bele, gyógyulást ígérő megfogalmazás nem.
+   */
+  bioShort?: string | null;
+  /**
+   * Arckép a cikkek végi szerző-blokkba. Valódi portré legyen, ne logó vagy illusztráció: az olvasók a mérések szerint egyedül az igazi arcképet nézik meg.
+   */
+  portrait?: (number | null) | Media;
   /**
    * Tulajdonos: mindent lát és állít. Munkatárs: tartalmat kezel. Vásárló: csak a saját fiókját. Átállítani csak tulajdonos tud.
    */
@@ -3394,8 +3432,19 @@ export interface PostsSelect<T extends boolean = true> {
   publishedAt?: T;
   order?: T;
   author?: T;
+  reviewedBy?: T;
+  reviewedAt?: T;
+  nextReviewAt?: T;
   categories?: T;
   relatedPosts?: T;
+  faq?:
+    | T
+    | {
+        question?: T;
+        answer?: T;
+        id?: T;
+      };
+  ctaCourse?: T;
   updatedAt?: T;
   createdAt?: T;
   _status?: T;
@@ -3844,6 +3893,9 @@ export interface FormSubmissionsSelect<T extends boolean = true> {
  */
 export interface UsersSelect<T extends boolean = true> {
   name?: T;
+  credentials?: T;
+  bioShort?: T;
+  portrait?: T;
   role?: T;
   purchases?: T;
   billingName?: T;

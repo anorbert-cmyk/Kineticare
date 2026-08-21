@@ -2,7 +2,8 @@ import Link from 'next/link'
 
 import type { Post } from '../../payload-types'
 import { estimateReadingMinutes } from '../../lib/reading-time'
-import { articleJsonLd, breadcrumbJsonLd, resolveOgImageUrl } from '../../lib/seo'
+import { breadcrumbJsonLd, resolveOgImageUrl } from '../../lib/seo'
+import { postArticleJsonLd } from '../../lib/seo-cikk'
 import { kulcsszoFor } from '../../lib/tudastar/seo-kulcsszavak'
 import { Badge } from '../ui/Badge'
 import { Container } from '../ui/Container'
@@ -120,11 +121,30 @@ export function PostArticle({ post, related: relatedProp }: PostArticleProps) {
 
   return (
     <article>
+      {/* A CIKK SÉMÁJA: EGY node, `['Article', 'MedicalWebPage']` kettős
+          típussal (`src/lib/seo-cikk.ts`). A `MedicalWebPage`-tag nem
+          dísz: a `WebPage` altípusa, és CSAK ettől lesz érvényes a
+          `reviewedBy` és a `lastReviewed` tulajdonság — `Article` típuson
+          mindkettő érvénytelen lenne (https://schema.org/reviewedBy,
+          https://schema.org/lastReviewed).
+
+          A séma-réteg SOSEM látja a nyers user-dokumentumot (technikai terv
+          2.4): a populált szerző a jelszó-hasht és a session-listát is viszi,
+          ezért csak a byline-ban IS LÁTHATÓ nevet és titulust adjuk át. */}
       <JsonLd
-        data={articleJsonLd({
+        data={postArticleJsonLd({
           post,
           path: `/blog/${post.slug}`,
-          ...(author !== null ? { authorName: author.name } : {}),
+          ...(author !== null
+            ? { author: { name: author.name, credentials: author.credentials } }
+            : {}),
+          ...(reviewer !== null
+            ? { reviewer: { name: reviewer.name, credentials: reviewer.credentials } }
+            : {}),
+          // Ellenőrzés-dátum ellenőrzés nélkül hazugság (docs/tudastar-ux-terv.md
+          // 5.6): a séma-réteg üres mezőnél kihagyja a kulcsot, ahogy a látható
+          // szerző-blokk is elhagyja a sort.
+          lastReviewed: reviewedAt,
           imageUrl: resolveOgImageUrl(post),
           // A MÉRT célkifejezések és a cikk tárgya entitásként. Csak azoknál a
           // cikkeknél áll rendelkezésre, amikhez van mérés — a többinél a

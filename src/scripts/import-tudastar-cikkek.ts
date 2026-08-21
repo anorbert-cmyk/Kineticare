@@ -20,6 +20,13 @@
  * szövegekből. Ami nyitva maradt: a két gyógytornász szakmai átolvasása.
  * Ezért alapból piszkozat.
  *
+ * ═══ MI KERÜL BE A MARKDOWNON KÍVÜL ═══
+ * A `seoTitle` és a `seoDescription` a MÉRT kulcsszó-célzásból jön
+ * (`src/lib/tudastar/seo-kulcsszavak.ts`), a `faq` mező pedig a MÉRT keresési
+ * kérdésekből (`src/lib/tudastar/faq.ts`). Egyik sem a cikkből számolódik, és
+ * egyik sem találgatás: a GYIK-válaszok kizárólag azt mondják, amit a cikk
+ * törzse már kimond.
+ *
  * ═══ ÚJRAFUTTATHATÓ ═══
  * A párosítás slug szerint történik: meglévő bejegyzést FRISSÍT, nem duplikál.
  * A `publishedAt` az első publikáláskor áll be (a Posts collection
@@ -37,6 +44,7 @@ import { pathToFileURL } from 'node:url'
 import { getPayload, type Payload } from 'payload'
 
 import { logger } from '../lib/logger'
+import { faqMezore, GYIK_MAX, GYIK_MIN } from '../lib/tudastar/faq'
 import {
   excerptFrom,
   extractArticleBody,
@@ -71,6 +79,14 @@ export interface ForditottCikk {
   seoTitle: string
   /** A mért kulcsszó-célzásból jövő SEO-leírás. */
   seoDescription: string
+  /**
+   * A cikk GYIK-tételei, vagy `undefined`, ha ehhez a slughoz nincs.
+   *
+   * Az `undefined` és az üres tömb NEM ugyanaz: az előbbi azt jelenti, hogy a
+   * betöltőnek nincs mondanivalója a mezőről, ezért hozzá sem nyúl (lásd az
+   * `adat` összeállítását lentebb).
+   */
+  faq: { question: string; answer: string }[] | undefined
 }
 
 /** Egy cikkfájl beolvasása és fordítása. Hibára DOB, nem ugrik át. */
@@ -92,6 +108,30 @@ export function cikketFordit(cikkekDir: string, fajl: string, slug: string): For
     )
   }
 
+  // A GYIK-nél SZÁNDÉKOSAN nincs ugyanilyen kemény kényszer, és ez nem
+  // következetlenség:
+  //
+  //  1. A hiányzó SEO-célzásnál a `buildDocMetadata` NÉMÁN visszaesik a cikk
+  //     címére és bevezetőjére, tehát a hiba nem látszik. A GYIK-nek nincs
+  //     fallbackje: ha nincs tétel, nincs blokk. Ez látható és ártalmatlan.
+  //  2. A `posts.faq` nem kötelező mező, a kulcsszó-célzás viszont mind a hat
+  //     cikknél megvan, tehát ott a hiány valóban programhiba lenne.
+  //  3. A legfontosabb: egészségügyi tartalomnál egy kötelező GYIK arra
+  //     nyomna, hogy találjunk ki választ olyan mért kérdésre is, amit a cikk
+  //     nem fed le. Pontosan ezt kell elkerülni.
+  //
+  // Ami viszont VALÓBAN programhiba: a `maxRows` átlépése, mert azt a Payload
+  // csak íráskor utasítaná vissza, félig betöltött állapotot hagyva. Ezért a
+  // darabszámot itt, a fordításkor ellenőrizzük, a DB-hez érés előtt.
+  const faq = faqMezore(slug)
+  if (faq !== undefined && (faq.length < GYIK_MIN || faq.length > GYIK_MAX)) {
+    throw new Error(
+      `A(z) „${slug}” cikk GYIK-je ${faq.length} tételt tartalmaz, a megengedett ` +
+        `${GYIK_MIN}–${GYIK_MAX} helyett. A korlátot a Posts kollekció maxRows értéke adja; ` +
+        'javítsd a src/lib/tudastar/faq.ts CIKK_GYIK listáját.',
+    )
+  }
+
   return {
     slug,
     title,
@@ -100,6 +140,7 @@ export function cikketFordit(cikkekDir: string, fajl: string, slug: string): For
     szoszam: lines.join(' ').split(/\s+/).filter(Boolean).length,
     seoTitle: kulcsszo.seoTitle,
     seoDescription: kulcsszo.seoDescription,
+    faq,
   }
 }
 
@@ -123,7 +164,16 @@ async function main(): Promise<void> {
       cim: cikk.title,
       szoszam: cikk.szoszam,
       seoTitle: cikk.seoTitle,
+      gyikTetelek: cikk.faq?.length ?? 0,
     })
+    if (cikk.faq === undefined) {
+      logger.warn(
+        'Tudástár-import: ehhez a cikkhez nincs GYIK, a faq mezőhöz nem nyúlunk. ' +
+          'Ha kell, a src/lib/tudastar/faq.ts CIKK_GYIK listájába vedd fel, MÉRT kérdésekből, ' +
+          'a cikk törzsében benne lévő válasszal.',
+        { slug: cikk.slug },
+      )
+    }
   }
 
   if (dryRun) {
@@ -163,6 +213,12 @@ async function main(): Promise<void> {
       // és így nem kell literál `draft: true` paramétert adni.
       status: publikal ? ('published' as const) : ('draft' as const),
       _status: publikal ? ('published' as const) : ('draft' as const),
+      // A GYIK csak akkor kerül a payloadba, ha van mit írni. Ha a slughoz
+      // nincs tétel, a kulcs KIMARAD, így egy adminban kézzel felvett GYIK-et
+      // nem töröl le egy olyan modul, amelynek épp nincs mondanivalója. Ahol
+      // viszont van tétel, ott a faq.ts az igazság forrása, ugyanúgy, ahogy a
+      // törzsnél a markdown: a script felülírja a kézi szerkesztést.
+      ...(cikk.faq === undefined ? {} : { faq: cikk.faq }),
     }
 
     const letezo = meglevo.docs[0]
@@ -190,6 +246,7 @@ async function main(): Promise<void> {
     letrehozva,
     frissitve,
     allapot: publikal ? 'published' : 'draft',
+    gyikTetelek: forditott.reduce((osszeg, cikk) => osszeg + (cikk.faq?.length ?? 0), 0),
   })
 }
 

@@ -372,6 +372,34 @@ export const Users: CollectionConfig = {
       label: 'Név',
     },
     {
+      name: 'credentials',
+      type: 'text',
+      label: 'Végzettség, titulus',
+      admin: {
+        description:
+          'Rövid szakmai titulus, például: gyógytornász, kézterapeuta. A cikkek szerzősorában és a szerző-blokkban jelenik meg. Csak olyan végzettséget írj ide, ami igazolható.',
+      },
+    },
+    {
+      name: 'bioShort',
+      type: 'textarea',
+      label: 'Rövid szakmai bemutatkozás',
+      admin: {
+        description:
+          '1–2 mondat a szakterületről, a cikkek végi szerző-blokkba. Csak igazolható állítás kerülhet bele, gyógyulást ígérő megfogalmazás nem.',
+      },
+    },
+    {
+      name: 'portrait',
+      type: 'upload',
+      relationTo: 'media',
+      label: 'Arckép',
+      admin: {
+        description:
+          'Arckép a cikkek végi szerző-blokkba. Valódi portré legyen, ne logó vagy illusztráció: az olvasók a mérések szerint egyedül az igazi arcképet nézik meg.',
+      },
+    },
+    {
       name: 'role',
       type: 'select',
       required: true,
