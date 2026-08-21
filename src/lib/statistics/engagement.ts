@@ -37,22 +37,20 @@ export interface CourseEngagementRow {
   completionRateOfEnrolled: number
   /** Befejezők aránya az elkezdőkhöz mérve (0–100). */
   completionRateOfStarted: number
+  /* ═══ MIÉRT KÖTELEZŐ MIND A NÉGY ALÁBBI MEZŐ ═══
+     A `notStartedNames`, a `notStartedWithoutName`, az `omitted` és a
+     `truncated` KÖTELEZŐ, nem opcionális-alapértékes. Ez tudatos döntés:
+     a névsor kiírása csak akkor becsületes, ha a hiányát is kimondjuk, és
+     pontosan az „elfelejtettem átvezetni" hiba miatt tűnt el eddig az
+     `omitted`. Kötelező mezőnél a FORDÍTÓ áll a néma adatvesztés elé; ha
+     valaki egy későbbi körben „kényelmesebbre" venné őket, ugyanaz a hiba
+     jönne vissza, csak észrevétlenül. */
   /**
    * A „nem kezdte el" hallgatók NEVE, magyar betűrendben, legfeljebb
    * `NOT_STARTED_NAME_LIMIT` darab. E-MAIL SOSEM KERÜL IDE (a statisztika
    * oldalára csak név megy: docs/statisztika-audit-2026-08-21.md 6.7).
    */
   notStartedNames: string[]
-  /**
-   * ═══ MIÉRT KÖTELEZŐ MIND A NÉGY ÚJ MEZŐ ═══
-   * A `notStartedNames`, a `notStartedWithoutName`, az `omitted` és a
-   * `truncated` KÖTELEZŐ, nem opcionális-alapértékes. Ez tudatos döntés:
-   * a névsor kiírása csak akkor becsületes, ha a hiányát is kimondjuk, és
-   * pontosan az „elfelejtettem átvezetni" hiba miatt tűnt el eddig az
-   * `omitted`. Kötelező mezőnél a fordító áll a néma adatvesztés elé; ha
-   * valaki egy későbbi körben „kényelmesebbre" venné őket, ugyanaz a hiba
-   * jönne vissza, csak észrevétlenül.
-   */
   /**
    * Hány „nem kezdte el" hallgatónak NINCS megadott neve.
    *

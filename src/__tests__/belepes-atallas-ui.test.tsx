@@ -407,6 +407,8 @@ describe('4.5. levél — a levél és a céllap ugyanazt mondja', () => {
     TERV.indexOf('### 4.5.'),
     TERV.indexOf('**A behelyettesítendő mezők**'),
   )
+  /** A levél SORTÖRÉS NÉLKÜL: a markdown idézet-jelölők a mondatokat elvágják. */
+  const folyo = level.replace(/\n>\s*/gu, ' ').replace(/\s+/gu, ' ')
 
   it('a levél létezik, és van tárgymezője', () => {
     expect(level.length).toBeGreaterThan(500)
@@ -416,12 +418,11 @@ describe('4.5. levél — a levél és a céllap ugyanazt mondja', () => {
   it('kimondja, hogy a régi jelszó nem működik, és megmondja az okot', () => {
     expect(level).toContain('nem működik')
     expect(level).toContain('külön rendszer')
-    expect(level).toContain('nem is
-> te hibáztál')
+    expect(folyo).toContain('nem is te hibáztál')
   })
 
   it('SZÓ SZERINT tartalmazza a hozzáférés-mondatot', () => {
-    expect(level).toContain(ATALLAS_HOZZAFERES_MONDAT)
+    expect(folyo).toContain(ATALLAS_HOZZAFERES_MONDAT)
   })
 
   it('PONTOSAN EGY linket kér a vevőtől', () => {
@@ -432,7 +433,9 @@ describe('4.5. levél — a levél és a céllap ugyanazt mondja', () => {
 
   it('a kérés-korlát számai egyeznek a lapéval és a valódi kerettel', () => {
     const keret = RATE_LIMIT_RULES['password-forgot-email']
-    expect(level).toContain(`${keret.windowMs / 60_000} percen belül legfeljebb ${keret.limit} levelet`)
+    expect(folyo).toContain(
+      `${keret.windowMs / 60_000} percen belül legfeljebb ${keret.limit} levelet`,
+    )
   })
 
   it('a levél NEM tartalmaz kitalált dátumot', () => {
