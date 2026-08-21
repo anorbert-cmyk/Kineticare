@@ -247,6 +247,20 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
     `git merge-base --is-ancestor` ezért hamisan „nincs benne"-t mond. A helyes
     ellenőrzés: `git diff <branch-tip> <squash-commit>` — ha üres, a tartalom
     hiánytalanul átment, és a branch force-with-lease-szel újraalapozható.
+20b. **Futó ügynökök mellett a `git add -A` SZAKADT fájlt commitolhat.** Mérve
+    2026-08-21: a `npm run typecheck` zöld volt, utána `git add -A`, majd a
+    CI mégis `TS1002: Unterminated string literal`-lel bukott. A gyökérok
+    verseny-helyzet: a mérés és a stage-elés KÖZÖTT az ügynök újraírta a
+    fájlt, és a stage a félbeírt állapotot rögzítette (`'nem is` / új sor /
+    `te hibáztál')`). A mérés tehát a KORÁBBI, teljes tartalmat igazolta, a
+    commit meg a KÉSŐBBI, csonkát vitte fel.
+    **Szabály: azt kell ellenőrizni, ami STAGE-ELVE van, nem azt, ami a
+    mérés pillanatában a lemezen volt.** Sorrend: `git add -A` → futtasd a
+    typecheck-et → `git status --short` és `git diff --stat` (üresnek kell
+    lennie a stage-elt fájlokra) → csak ezután commit. Ha a fájlok a mérés
+    alatt mozogtak, kezdd elölről. Alternatíva: `git show :<fajl>` a
+    stage-elt tartalomra, és azt ellenőrizd.
+
 21. **Idézőjelet tartalmazó commit-üzenet töri a `git commit -m "…"`-t** (a
     string korán lezárul, a maradék pathspec-ként hibázik, de a `git add` már
     lefutott — így a következő commit magával viszi a bestage-elt fájlokat!).
