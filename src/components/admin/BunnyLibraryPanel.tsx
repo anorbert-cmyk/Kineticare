@@ -1,7 +1,7 @@
 'use client'
 
 import { useAuth } from '@payloadcms/ui'
-import { useCallback, useState, type CSSProperties } from 'react'
+import { useCallback, useReducer, type CSSProperties } from 'react'
 
 import { hasStaffOrOwnerRole } from '../../access/roles'
 import type { BunnyLibraryKind, BunnyLibraryVideo } from '../../lib/stream/bunny-library'
@@ -13,9 +13,34 @@ import type { BunnyLibraryKind, BunnyLibraryVideo } from '../../lib/stream/bunny
  * látszik: cím, hossz, állapot, GUID — a GUID a vágólapra másolható, és a
  * lecke „Videó azonosítója” mezőjébe illesztendő. A lejátszás a meglévő
  * tokenes embeden megy, vásárlónak és ingyenes kurzus nézőjének egyaránt.
+ *
+ * ═══ MIÉRT REDUCER, ÉS MIÉRT VAN BENNE A TÁR AZONOSÍTÓJA (2026-08-21) ═══
+ * A panel egyetlen célja, hogy a HELYES azonosító kerüljön a leckébe, ezért a
+ * félrecímkézés itt a legsúlyosabb hiba. Két úton keletkezhetett:
+ *  1. a videótár-váltás csak a legördülő értékét írta át, a táblázat viszont
+ *     az ELŐZŐ tár videóit mutatta tovább, amíg a listát újra be nem töltötték;
+ *  2. verseny a válaszok között: aki betöltötte a védett tárat, majd váltott a
+ *     nyilvánosra, annak a beérkező régi válasz az új tár neve alatt jelent
+ *     volna meg.
+ * Ezért az állapotot egyetlen, tiszta reducer kezeli, és minden betöltési
+ * művelet magával viszi, MELYIK tárnak indult: az oda nem illő választ a
+ * reducer eldobja, a váltás pedig kiüríti a listát és a figyelmeztetéseket.
+ * A reducer külön exportált és tesztelhető, mert a repó teszt-környezete
+ * node (renderToStaticMarkup), nem böngésző.
  */
 
 const REQUEST_TIMEOUT_MS = 20_000
+
+export const LIBRARY_SWITCH_HINT =
+  'Videótárat váltottál. Töltsd be a listát, hogy ennek a tárnak a videói jelenjenek meg.'
+
+export const LOAD_FAILED_MESSAGE = 'A videótár most nem tölthető be. Próbáld újra később.'
+
+export const NETWORK_FAILED_MESSAGE =
+  'Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot, és próbáld újra.'
+
+export const COPY_FAILED_MESSAGE =
+  'A másolás nem sikerült. Jelöld ki az azonosítót, és másold ki kézzel.'
 
 const panelStyle: CSSProperties = {
   border: '1px solid var(--theme-elevation-150)',
@@ -73,59 +98,116 @@ function formatLength(lengthSec: number | null): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
-export function BunnyLibraryPanel() {
-  const { user } = useAuth<{ id: number | string; role?: string | null }>()
-  const [kind, setKind] = useState<BunnyLibraryKind>('protected')
-  const [videos, setVideos] = useState<BunnyLibraryVideo[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [truncated, setTruncated] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [copiedGuid, setCopiedGuid] = useState<string | null>(null)
-  const [loaded, setLoaded] = useState(false)
+export interface BunnyLibraryPanelState {
+  /** A legördülőben ÉPP kiválasztott tár. */
+  kind: BunnyLibraryKind
+  /** A táblázat tartalma: mindig a `kind` szerinti tárból való. */
+  videos: BunnyLibraryVideo[]
+  error: string | null
+  hint: string | null
+  truncated: boolean
+  loading: boolean
+  loaded: boolean
+  copiedGuid: string | null
+}
 
-  const load = useCallback(async (library: BunnyLibraryKind) => {
-    setLoading(true)
-    setError(null)
-    const controller = new AbortController()
-    const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-    try {
-      const response = await fetch(`/api/admin/bunny-videos?library=${library}`, {
-        credentials: 'include',
-        signal: controller.signal,
-      })
-      const body: unknown = await response.json().catch(() => null)
-      const parsed = readVideos(body)
-      if (!response.ok) {
-        setVideos([])
-        setError(parsed.error ?? 'A videótár most nem tölthető be. Próbáld újra később.')
-        return
+export type BunnyLibraryPanelAction =
+  | { type: 'library-changed'; kind: BunnyLibraryKind }
+  | { type: 'load-started'; kind: BunnyLibraryKind }
+  | {
+      type: 'load-succeeded'
+      kind: BunnyLibraryKind
+      videos: BunnyLibraryVideo[]
+      truncated: boolean
+    }
+  | { type: 'load-failed'; kind: BunnyLibraryKind; message: string }
+  | { type: 'copy-succeeded'; guid: string }
+  | { type: 'copy-failed' }
+
+export const initialBunnyLibraryPanelState: BunnyLibraryPanelState = {
+  kind: 'protected',
+  videos: [],
+  error: null,
+  hint: null,
+  truncated: false,
+  loading: false,
+  loaded: false,
+  copiedGuid: null,
+}
+
+export function bunnyLibraryPanelReducer(
+  state: BunnyLibraryPanelState,
+  action: BunnyLibraryPanelAction,
+): BunnyLibraryPanelState {
+  switch (action.type) {
+    case 'library-changed': {
+      if (action.kind === state.kind) {
+        return state
       }
-      setVideos(parsed.videos)
-      setTruncated(parsed.truncated)
-      setLoaded(true)
-    } catch {
-      setVideos([])
-      setError('Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot, és próbáld újra.')
-    } finally {
-      window.clearTimeout(timer)
-      setLoading(false)
+      // Tiszta lap: a másik tár videói, a csonka-figyelmeztetés és a hibaüzenet
+      // sem tartozik az új tárhoz.
+      return {
+        ...initialBunnyLibraryPanelState,
+        kind: action.kind,
+        hint: state.loaded ? LIBRARY_SWITCH_HINT : null,
+      }
     }
-  }, [])
-
-  const copyGuid = useCallback(async (guid: string) => {
-    try {
-      await navigator.clipboard.writeText(guid)
-      setCopiedGuid(guid)
-    } catch {
-      setCopiedGuid(null)
-      setError('A másolás nem sikerült. Jelöld ki az azonosítót, és másold ki kézzel.')
+    case 'load-started': {
+      if (action.kind !== state.kind) {
+        return state
+      }
+      return { ...state, loading: true, error: null, hint: null, copiedGuid: null }
     }
-  }, [])
-
-  if (!hasStaffOrOwnerRole(user)) {
-    return null
+    case 'load-succeeded': {
+      if (action.kind !== state.kind) {
+        return state
+      }
+      return {
+        ...state,
+        loading: false,
+        loaded: true,
+        error: null,
+        hint: null,
+        videos: action.videos,
+        truncated: action.truncated,
+      }
+    }
+    case 'load-failed': {
+      if (action.kind !== state.kind) {
+        return state
+      }
+      return {
+        ...state,
+        loading: false,
+        loaded: false,
+        error: action.message,
+        hint: null,
+        videos: [],
+        truncated: false,
+        copiedGuid: null,
+      }
+    }
+    case 'copy-succeeded':
+      return { ...state, copiedGuid: action.guid, error: null }
+    case 'copy-failed':
+      return { ...state, copiedGuid: null, error: COPY_FAILED_MESSAGE }
   }
+}
 
+export interface BunnyLibraryPanelViewProps {
+  state: BunnyLibraryPanelState
+  onLibraryChange: (kind: BunnyLibraryKind) => void
+  onLoad: () => void
+  onCopy: (guid: string) => void
+}
+
+/** A panel megjelenítő fele: állapotot kap, nem tart. */
+export function BunnyLibraryPanelView({
+  state,
+  onLibraryChange,
+  onLoad,
+  onCopy,
+}: BunnyLibraryPanelViewProps) {
   return (
     <div className="field-type" style={panelStyle}>
       <h4 style={{ marginTop: 0 }}>Videók a Bunny tárból</h4>
@@ -139,35 +221,39 @@ export function BunnyLibraryPanel() {
         <label>
           Videótár{' '}
           <select
-            value={kind}
+            value={state.kind}
             onChange={(event) => {
-              const next = event.target.value === 'public' ? 'public' : 'protected'
-              setKind(next)
+              onLibraryChange(event.target.value === 'public' ? 'public' : 'protected')
             }}
           >
             <option value="protected">Védett (fizetős leckék)</option>
             <option value="public">Nyilvános (előzetes)</option>
           </select>
         </label>
-        <button type="button" onClick={() => void load(kind)} disabled={loading}>
-          {loading ? 'Betöltés…' : loaded ? 'Lista frissítése' : 'Lista betöltése'}
+        <button type="button" onClick={onLoad} disabled={state.loading}>
+          {state.loading ? 'Betöltés…' : state.loaded ? 'Lista frissítése' : 'Lista betöltése'}
         </button>
       </div>
-      {error ? (
+      {state.error !== null ? (
         <p style={{ ...noteStyle, marginTop: '0.75rem' }} role="alert">
-          {error}
+          {state.error}
         </p>
       ) : null}
-      {truncated ? (
+      {state.hint !== null ? (
+        <p style={{ ...noteStyle, marginTop: '0.75rem' }} role="status">
+          {state.hint}
+        </p>
+      ) : null}
+      {state.truncated ? (
         <p style={{ ...noteStyle, marginTop: '0.75rem' }}>
           A lista csonka: a tárban több videó van, mint amennyit egyben megjelenítünk. Keresd a
           Bunny felületén a hiányzó címet, és másold ki onnan az azonosítót.
         </p>
       ) : null}
-      {loaded && videos.length === 0 && error === null ? (
+      {state.loaded && state.videos.length === 0 && state.error === null ? (
         <p style={{ ...noteStyle, marginTop: '0.75rem' }}>Ebben a tárban most nincs videó.</p>
       ) : null}
-      {videos.length > 0 ? (
+      {state.videos.length > 0 ? (
         <table style={tableStyle}>
           <thead>
             <tr>
@@ -186,7 +272,7 @@ export function BunnyLibraryPanel() {
             </tr>
           </thead>
           <tbody>
-            {videos.map((video) => (
+            {state.videos.map((video) => (
               <tr key={video.guid}>
                 <th style={cellStyle} scope="row">
                   {video.title}
@@ -195,8 +281,8 @@ export function BunnyLibraryPanel() {
                 <td style={cellStyle}>{formatLength(video.lengthSec)}</td>
                 <td style={cellStyle}>
                   <code>{video.guid}</code>{' '}
-                  <button type="button" onClick={() => void copyGuid(video.guid)}>
-                    {copiedGuid === video.guid ? 'Kimásolva' : 'Másolás'}
+                  <button type="button" onClick={() => onCopy(video.guid)}>
+                    {state.copiedGuid === video.guid ? 'Kimásolva' : 'Másolás'}
                   </button>
                 </td>
               </tr>
@@ -205,6 +291,65 @@ export function BunnyLibraryPanel() {
         </table>
       ) : null}
     </div>
+  )
+}
+
+export function BunnyLibraryPanel() {
+  const { user } = useAuth<{ id: number | string; role?: string | null }>()
+  const [state, dispatch] = useReducer(bunnyLibraryPanelReducer, initialBunnyLibraryPanelState)
+
+  const load = useCallback(async (library: BunnyLibraryKind) => {
+    dispatch({ type: 'load-started', kind: library })
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    try {
+      const response = await fetch(`/api/admin/bunny-videos?library=${library}`, {
+        credentials: 'include',
+        signal: controller.signal,
+      })
+      const body: unknown = await response.json().catch(() => null)
+      const parsed = readVideos(body)
+      if (!response.ok) {
+        dispatch({
+          type: 'load-failed',
+          kind: library,
+          message: parsed.error ?? LOAD_FAILED_MESSAGE,
+        })
+        return
+      }
+      dispatch({
+        type: 'load-succeeded',
+        kind: library,
+        videos: parsed.videos,
+        truncated: parsed.truncated,
+      })
+    } catch {
+      dispatch({ type: 'load-failed', kind: library, message: NETWORK_FAILED_MESSAGE })
+    } finally {
+      window.clearTimeout(timer)
+    }
+  }, [])
+
+  const copyGuid = useCallback(async (guid: string) => {
+    try {
+      await navigator.clipboard.writeText(guid)
+      dispatch({ type: 'copy-succeeded', guid })
+    } catch {
+      dispatch({ type: 'copy-failed' })
+    }
+  }, [])
+
+  if (!hasStaffOrOwnerRole(user)) {
+    return null
+  }
+
+  return (
+    <BunnyLibraryPanelView
+      state={state}
+      onLibraryChange={(kind) => dispatch({ type: 'library-changed', kind })}
+      onLoad={() => void load(state.kind)}
+      onCopy={(guid) => void copyGuid(guid)}
+    />
   )
 }
 

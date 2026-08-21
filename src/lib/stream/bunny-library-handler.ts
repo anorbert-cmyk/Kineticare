@@ -75,6 +75,10 @@ export function createBunnyVideosHandler(
         fetchImpl: deps.fetchImpl ?? fetch,
         kind,
         search: search ?? undefined,
+        // A kérés-azonosítóhoz kötött naplózó: a GUID nélküli, kihagyott
+        // tételek figyelmeztetése így ugyanahhoz a kéréshez rendelhető, mint
+        // a route többi sora.
+        log,
       })
 
       if (!result.ok) {
