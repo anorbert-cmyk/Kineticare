@@ -82,6 +82,49 @@ export function emitBarionPurchase(
   return sent
 }
 
+/**
+ * ═══ POSTHOG — `purchase_confirmed` BEVÉTELLEL ═══
+ *
+ * A MÉRT HIBA: az esemény korábban CSAK a rendelésszámot vitte. A PostHogban
+ * így meg lehetett számolni, HÁNY vásárlás történt, de azt nem, hogy MENNYI
+ * bevétel keletkezett — az értékesítési tölcsér utolsó lépése értékszám nélkül
+ * maradt, tehát bevétel-riport (és bármilyen ROI-számítás) nem volt készíthető.
+ *
+ * A TULAJDONSÁGNEVEK. A PostHog Revenue analytics leírása szerint „the actual
+ * event and property names don't matter since you configure them later in
+ * PostHog" — vagyis a bevétel-mező NEVE a projekt-beállításban szabadon
+ * megadható. Ezért a repóban máshol is használt, iparági `value` + `currency`
+ * párost küldjük (GA4 és a Barion-pixel `revenue`/`currency` mezőjével is
+ * egy tőről): https://posthog.com/docs/revenue-analytics/capture-revenue-events
+ *
+ * ÖSSZEG-EGYSÉG: a `value` EGÉSZ FORINT (a rendelés `totalHufSnapshot` mezője),
+ * nem váltópénz. A forintnak ma nincs használatban lévő váltópénze, tehát a
+ * „decimal amount" alak az egyetlen értelmes — a PostHog projekt-beállításában
+ * is ezt kell választani, különben a riport 100-szoros hibát mutatna.
+ *
+ * SZEMÉLYES ADAT NINCS BENNE: rendelésszám, összeg, pénznem — se e-mail, se
+ * név, se cím (a posthog.ts fejlécének tilalma).
+ *
+ * KÜLÖN, EXPORTÁLT TISZTA FÜGGVÉNY — ugyanaz az indok, mint az
+ * `emitBarionPurchase`-nél: a poll-effekt belseje DOM nélkül nem futtatható,
+ * így viszont a bevétel-mérés mindkét ága valódi állítással ellenőrizhető.
+ */
+export function purchaseEventProperties(
+  orderNumber: string,
+  order: { value: number | null; currency: string | null },
+): Record<string, unknown> {
+  const properties: Record<string, unknown> = { orderNumber }
+  // Hiányzó/érvénytelen összeg esetén a kulcs KIMARAD — a `value: null` a
+  // riportban nullás bevételnek látszana, ami hamis állítás lenne.
+  if (order.value !== null) {
+    properties.value = order.value
+  }
+  if (order.currency !== null) {
+    properties.currency = order.currency
+  }
+  return properties
+}
+
 const POLL_INTERVAL_MS = 2000
 const POLL_TIMEOUT_MS = 120000 // 2 perc
 
@@ -173,7 +216,8 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
     // A Barion `purchase` a kimenetel ELDŐLTEKOR megy ki (a szerződést és az
     // indoklást a modul-szintű `emitBarionPurchase` fejkommentje írja le). Az
     // alias azért kell, mert a `tick` zárványában a `string | null` prop
-    // szűkítése már nem él.
+    // szűkítése már nem él. Ugyanezt az aliast használja a PostHog
+    // `purchase_confirmed` eseménye is — az is `string`-et vár.
     const pixelOrderNumber: string = orderNumber
 
     const tick = async (): Promise<void> => {
@@ -190,8 +234,13 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
         const status = result.status
         if (status === 'paid') {
           setState({ kind: 'paid' })
-          // PostHog funnel-záró esemény (no-op consent nélkül).
-          captureAnalyticsEvent('purchase_confirmed', { orderNumber })
+          // PostHog funnel-záró esemény, a rendelés végösszegével (no-op
+          // consent nélkül) — a tulajdonságokat lásd a purchaseEventProperties
+          // fejlécében.
+          captureAnalyticsEvent(
+            'purchase_confirmed',
+            purchaseEventProperties(pixelOrderNumber, result),
+          )
           emitBarionPurchase(pixelOrderNumber, true)
           return
         }

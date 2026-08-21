@@ -24,7 +24,16 @@ describe('pollOrderStatus', () => {
   it('200 + érvényes törzs → status (a productId-val együtt, #70-es szerződés)', async () => {
     const fetchImpl = fetchReturning(200, { status: 'paid', productId: 42 })
     const result = await pollOrderStatus('KH-2026-000123', fetchImpl)
-    expect(result).toEqual({ kind: 'status', status: 'paid', productId: 42 })
+    // A `value`/`currency` a bevétel-méréshez került a szerződésbe (2026-08-21);
+    // e törzsben nincs benne, tehát null — a pozitív ágat a
+    // src/__tests__/analytics/azonositas-es-bevetel.test.tsx méri.
+    expect(result).toEqual({
+      kind: 'status',
+      status: 'paid',
+      productId: 42,
+      value: null,
+      currency: null,
+    })
     // A hívás ugyanazon az originen, sütivel megy (a csrf-szűrő átengedi):
     const [url, init] = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit]
     expect(url).toBe('/api/orders/KH-2026-000123/status')
@@ -36,12 +45,14 @@ describe('pollOrderStatus', () => {
       kind: 'status',
       status: 'paid',
       productId: null,
+      value: null,
+      currency: null,
     })
     expect(
       await pollOrderStatus('X', fetchReturning(200, { status: 'paid', productId: 'abc' })),
-    ).toEqual({ kind: 'status', status: 'paid', productId: null })
+    ).toEqual({ kind: 'status', status: 'paid', productId: null, value: null, currency: null })
     expect(await pollOrderStatus('X', fetchReturning(200, { status: 'paid', productId: -3 }))).toEqual(
-      { kind: 'status', status: 'paid', productId: null },
+      { kind: 'status', status: 'paid', productId: null, value: null, currency: null },
     )
   })
 

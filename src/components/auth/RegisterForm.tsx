@@ -9,6 +9,7 @@ import {
   trackAccountSignUp,
   type BarionSignUpEvent,
 } from '@/lib/analytics/barion-events'
+import { identifyUser } from '@/lib/analytics/posthog'
 import { DEFAULT_AUTH_RETURN_URL, sanitizeReturnUrl } from '@/lib/return-url'
 import { registerUser, type AuthResult, type RegisterInput } from '../../lib/auth-client'
 import { ctaLabel, ctaProgressLabel } from '../../lib/cta-vocabulary'
@@ -56,10 +57,59 @@ export interface RegisterFormProps {
   returnUrl: string
 }
 
+/**
+ * ═══ A FRISSEN REGISZTRÁLT FELHASZNÁLÓ AZONOSÍTÓJA ═══
+ *
+ * MÉRT TÉNY: a Payload REST create-végpontja `{ doc, message }` alakú törzset
+ * ad (201), ahol a `doc.id` az új rekord azonosítója — a telepített csomagban
+ * ellenőrizve: node_modules/payload/dist/collections/endpoints/create.js
+ * (`Response.json({ doc, message }, { status: httpStatus.CREATED })`).
+ *
+ * A kiolvasás indoklása (miért a válasz klónjából, és miért nem az
+ * `AuthResult`-ból) azonos a belépésével — lásd
+ * `src/components/auth/LoginForm.tsx` `readLoginUserId` fejlécét.
+ * A segédfüggvény SZÁNDÉKOSAN nem onnan importálódik: a `LoginForm` modulja
+ * kliens-komponenst exportál, azt a regisztrációs oldal csomagjába behúzni
+ * fölösleges. (Ugyanaz a minta, mint a repóban hét helyen élő, modul-lokális
+ * `isRecord` — a közös helyre emelés a vezető harvest-döntése.)
+ */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+/** Az új felhasználó azonosítója a create-válasz klónjából; sosem dob. */
+export async function readRegisteredUserId(
+  response: Response,
+): Promise<number | string | null> {
+  try {
+    const body: unknown = await response.clone().json()
+    if (!isRecord(body)) {
+      return null
+    }
+    const doc = body.doc
+    if (!isRecord(doc)) {
+      return null
+    }
+    const id = doc.id
+    return typeof id === 'number' || typeof id === 'string' ? id : null
+  } catch {
+    return null
+  }
+}
+
 /** A `trackedRegister` injektálható függőségei (a teszt kémeket ad be). */
 export interface TrackedRegisterDeps {
-  register: (input: RegisterInput) => Promise<AuthResult>
+  /**
+   * A második paraméter a MEGFIGYELŐ `fetch` (lásd a `TrackedLoginDeps`
+   * azonos mezőjét). Opcionális, hogy a csak `(input)`-ot váró teszt-kémek is
+   * beadhatók maradjanak.
+   */
+  register: (input: RegisterInput, fetchImpl?: typeof fetch) => Promise<AuthResult>
   track: (event: BarionSignUpEvent) => boolean
+  /** Alapértelmezés: a PostHog `identifyUser` (consent/kulcs nélkül no-op). */
+  identify?: (userId: number | string) => boolean
+  /** Alapértelmezés: a böngésző `fetch`-e (a tesztben injektált hamis fetch). */
+  fetchImpl?: typeof fetch
 }
 
 /**
@@ -73,8 +123,11 @@ export interface TrackedRegisterDeps {
  * regisztráció utáni átirányításkor a fejléc implicit, munkamenet-nyitó
  * signUp-ja már ugyanazt az eseményt jelentené másodszor.
  *
- * A `track` hívás saját `try/catch`-ben fut — a mérés hibája nem ronthatja el
- * a regisztrációt (lásd a LoginForm azonos indoklását).
+ * A `track` és az `identify` hívás saját `try/catch`-ben fut — a mérés hibája
+ * nem ronthatja el a regisztrációt (lásd a LoginForm azonos indoklását).
+ *
+ * SZEMÉLYES ADAT NEM MEGY KI: kizárólag a Payload `id`. Az épp beírt név és
+ * e-mail-cím SOHA (a posthog.ts fejlécének tilalma).
  */
 export async function trackedRegister(
   input: RegisterInput,
@@ -83,12 +136,31 @@ export async function trackedRegister(
     track: (event) => trackAccountSignUp(event),
   },
 ): Promise<AuthResult> {
-  const result = await deps.register(input)
+  const identify = deps.identify ?? identifyUser
+  const baseFetch: typeof fetch = deps.fetchImpl ?? ((request, init) => fetch(request, init))
+
+  let userId: number | string | null = null
+  const observingFetch: typeof fetch = async (request, init) => {
+    const response = await baseFetch(request, init)
+    if (response.ok) {
+      userId = await readRegisteredUserId(response)
+    }
+    return response
+  }
+
+  const result = await deps.register(input, observingFetch)
   if (result.ok) {
     try {
       deps.track(BARION_SIGNUP.registration)
     } catch {
       // A mérés hibája nem érheti el a felhasználót.
+    }
+    if (userId !== null) {
+      try {
+        identify(userId)
+      } catch {
+        // Ugyanaz a garancia: az azonosítás hibája nem érinti a regisztrációt.
+      }
     }
   }
   return result
