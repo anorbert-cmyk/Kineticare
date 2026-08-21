@@ -15,8 +15,10 @@
  *    `createdAt` Europe/Budapest szerint. Nincs `paidAt` mező.
  * 3. Az ág-bontás TÉTEL-szintű: `priceHuf × quantity`, audience a
  *    `normalizeAudience()` szerint. NULL / ismeretlen → laikus.
- * 4. Tétel nélküli (régi/hibás) rendelés `totalHuf`-ja a laikus ágba megy,
- *    különben a havi összesen és az ágak összege elcsúszna.
+ * 4. Ha a tételekből 0 Ft jön ki, de a rendelés-szintű `totalHuf` pozitív, a
+ *    rendelés-szintű összeg a bevétel (F3 — tétel nélküli ÉS hiányos
+ *    item-snapshotú rendelésre egyaránt), különben a havi összesen és az ágak
+ *    összege elcsúszna.
  * 5. A hiányzó hónapok nullás sorként jelennek meg (az oszlopdiagram ne
  *    ugorja át őket).
  */
@@ -164,6 +166,33 @@ function itemRevenue(item: RevenueOrderItemInput): number {
   return price * count
 }
 
+function itemsRevenue(items: readonly RevenueOrderItemInput[]): number {
+  let total = 0
+  for (const item of items) {
+    total += itemRevenue(item)
+  }
+  return total
+}
+
+/**
+ * A rendelés-szintű tartalék összeg ága. Ha a tételek EGYÖNTETŰEN egy ághoz
+ * tartoznak, oda kerül (egy szakmai kurzus hiányos snapshotja ne az otthoni
+ * ágat növelje); vegyes vagy tétel nélküli rendelésnél a laikus ág a tartalék
+ * — ugyanaz a szabály, mint a `normalizeAudience()` ismeretlen-ágánál.
+ */
+function fallbackAudience(items: readonly RevenueOrderItemInput[]): CourseAudience {
+  let single: CourseAudience | null = null
+  for (const item of items) {
+    const audience = normalizeAudience(item.audience)
+    if (single === null) {
+      single = audience
+    } else if (single !== audience) {
+      return 'laikus'
+    }
+  }
+  return single ?? 'laikus'
+}
+
 export function aggregateMonthlyRevenue(
   orders: readonly RevenueOrderInput[],
   options?: { months?: number; now?: Date },
@@ -191,16 +220,31 @@ export function aggregateMonthlyRevenue(
 
     row.orderCount += 1
 
-    if (!Array.isArray(order.items) || order.items.length === 0) {
-      // Tétel nélküli régi/hibás sor: a rendelés-összeg a laikus ágba megy,
-      // különben a havi totalHuf és az ágak összege nem stimmelne.
-      const fallback = finiteNumber(order.totalHuf) ?? 0
-      row.laikusHuf += fallback
-      row.totalHuf += fallback
+    const items = Array.isArray(order.items) ? order.items : []
+    const itemsTotal = itemsRevenue(items)
+    const orderTotal = finiteNumber(order.totalHuf) ?? 0
+
+    // ═══ REND.-SZINTŰ TARTALÉK (F3, 2026-08-21-i vizsgálat) ═══
+    // Két, mérve azonos kimenetű eset kapott korábban ELTÉRŐ számot:
+    //  a) `items: []` (régi rendelés) → a totalHufSnapshot számított,
+    //  b) `items` megvan, de a `priceHufSnapshot` NULL (a mezőt a T-017 hook
+    //     csak create-kor tölti, a régi sorok backfill nélkül maradtak)
+    //     → a riport 0 Ft-ot írt, miközben a rendelés 79 500 Ft-ról szólt.
+    // A fallback így fordítva működött: KEVESEBB adatból jött ki a HELYESEBB
+    // szám. A feltétel ezért nem az items ürességére, hanem a tételekből
+    // számolt összegre néz. Csak POZITÍV rendelés-összeg pótol (a 0 és a
+    // negatív snapshot nem növelheti — illetve nem csökkentheti — a bevételt).
+    if (itemsTotal === 0 && orderTotal > 0) {
+      if (fallbackAudience(items) === 'szakember') {
+        row.szakemberHuf += orderTotal
+      } else {
+        row.laikusHuf += orderTotal
+      }
+      row.totalHuf += orderTotal
       continue
     }
 
-    for (const item of order.items) {
+    for (const item of items) {
       const amount = itemRevenue(item)
       const audience = normalizeAudience(item.audience)
       if (audience === 'szakember') {
@@ -239,6 +283,17 @@ function ordersInMonthWindow(
   })
 }
 
+/**
+ * Kurzusonkénti bontás — KIZÁRÓLAG tétel-szintű adatból.
+ *
+ * A havi sorok rendelés-szintű tartaléka (F3) itt SZÁNDÉKOSAN nem jelenik meg:
+ * a `totalHufSnapshot` nem tudja, melyik kurzusra jutott az összeg, tehát egy
+ * ide gyártott sor kitalált adat lenne. Következmény, amit tudni kell a
+ * kimutatás olvasásakor: hiányos item-snapshotú (backfilleletlen) rendeléseknél
+ * a kurzus-tábla bevétel-összege KEVESEBB lehet, mint a havi összesen — a
+ * különbség pontosan a tartalékkal pótolt rendelések összege. A tétel ilyenkor
+ * 0 Ft-os sorként (`freeItemCount`) látszik, ami jelzi is a hiányt.
+ */
 export function aggregateCourseRevenue(orders: readonly RevenueOrderInput[]): CourseRevenueRow[] {
   const bySku = new Map<string, CourseRevenueRow & { orderIds: Set<number> }>()
   let orderIndex = 0

@@ -78,6 +78,30 @@ const STATUS_SELECT = {
 } as const
 
 /**
+ * Determinisztikus rendezés a LAPOZOTT rendelés-lekérdezésekhez (F2).
+ *
+ * ═══ MIÉRT KELL (2026-08-21-i vizsgálat) ═══
+ * `sort` nélkül a Drizzle-adapter alapértelmezése `-createdAt`, TIEBREAKER
+ * NÉLKÜL. Azonos időbélyegű rendeléseknél (tömeges import, egy másodpercen
+ * belüli vásárlások) a lapok határán az adatbázis szabadon cserélheti a sorok
+ * sorrendjét: ugyanaz a rendelés KÉTSZER jöhet be, vagy KIESHET — a riport
+ * bevétele így a valóság fölé vagy alá csúszik, némán.
+ *
+ * ═══ MIÉRT `['-createdAt', 'id']` ÉS NEM `'id'` ═══
+ * Az `id` önmagában is egyedi (elsődleges kulcs), tehát a lapozást stabilizálná
+ * — DE növekvő sorrendben a felső korlát (STATISTICS_ORDER_MAX) a LEGRÉGEBBI
+ * rendeléseket tartaná meg, és éppen a friss hónapokat vágná le a 12 havi
+ * riportból. A `-createdAt` a friss sorokat hozza előre, az `id` pedig egyedi
+ * tiebreakerként zárja a rendezést — csonkolás esetén a jelentés ablaka
+ * marad ép, és a lapozás determinisztikus.
+ *
+ * A `createdAt` és az `id` nem korlátozott olvasású mező; a hívások amúgy is
+ * `overrideAccess: true`-val mennek (Local API), ahol a Payload 3.88
+ * `validateSortQuery` mezőszintű access-ellenőrzése nem fut.
+ */
+const PAGED_ORDER_SORT: string[] = ['-createdAt', 'id']
+
+/**
  * Lapozott beolvasás felső korláttal. A pontosan a korláttal egyező, teljes
  * halmaz NEM csonkolt — ugyanaz a szabály, mint a kurzus-haladás panelen.
  */
@@ -119,8 +143,27 @@ function finiteOrZero(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
+/**
+ * Tétel-mennyiség a bevétel-számításhoz. Hiányzó / értelmezhetetlen /
+ * nem pozitív érték = **1 db** (F3).
+ *
+ * ═══ MIÉRT 1 ÉS NEM 0 ═══
+ * A 0-s alapértelmezés miatt egy `quantity` nélküli tétel 0 Ft bevételt adott,
+ * miközben a vevő fizetett. Az 1-es default nem választás kérdése: pontosan
+ * ezzel a szabállyal készült maga a beszedett összeg is.
+ *  - `src/lib/order-integrity.ts` (a `totalHufSnapshot` forrása):
+ *    `typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1`
+ *  - `src/lib/checkout/start-checkout.ts` (a Barionnak küldött tételsor):
+ *    `(item.quantity ?? 1)`
+ * Az explicit 0 és a negatív érték ezért szintén 1: a rendelés végösszege
+ * ezekben az esetekben is 1 db-bal képződött (a hook nem számol újra
+ * update-kor), tehát a 0 kevesebbet, a negatív pedig levonást mutatna a
+ * ténylegesen beszedett bevételből. A pénztár input-validációja amúgy is
+ * 1..99 egészre szűkít, tehát a nem pozitív érték csak kézi adatszerkesztésből
+ * vagy importból kerülhet a sorba.
+ */
 function quantityOf(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 1
 }
 
 /** A Payload-dokumentum leképezése az aggregátor bemenetére — tiszta, tesztelhető. */
@@ -260,6 +303,7 @@ export async function queryRevenueReport(deps: QueryRevenueReportDeps): Promise<
         depth: 1,
         page,
         limit,
+        sort: PAGED_ORDER_SORT,
         select: ORDER_SELECT,
         overrideAccess: true,
       }) as Promise<FindResultLike<StatisticsOrderDoc>>,
@@ -274,6 +318,7 @@ export async function queryRevenueReport(deps: QueryRevenueReportDeps): Promise<
         depth: 0,
         page,
         limit,
+        sort: PAGED_ORDER_SORT,
         select: STATUS_SELECT,
         overrideAccess: true,
       }) as Promise<FindResultLike<StatisticsStatusDoc>>,
