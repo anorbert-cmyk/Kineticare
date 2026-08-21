@@ -105,6 +105,38 @@ export function resolveOgImageUrl(doc: SeoDoc): string | undefined {
 }
 
 /**
+ * Metadata egy STATIKUS (nem CMS-ből jövő) oldalhoz, megosztási mezőkkel.
+ *
+ * ═══ MIÉRT KELL (2026-08-21-i mérés) ═══
+ * A `/blog`, a `/kurzusok`, a kezdőlap és a kategória-oldal `generateMetadata`-ja
+ * eddig CSAK `title`-t és `description`-t adott, `openGraph` blokkot nem. A Next
+ * ilyenkor a keret-layout OG-jére esik vissza, ezért a Tudástár megosztva
+ * „Kineticare — Kézrehabilitációs online kurzusplatform” néven jelent meg, és
+ * `og:url` sem tartozott hozzá. Élesben mérve: a `/blog` `og:title`-je szó
+ * szerint azonos volt a kezdőlapéval.
+ *
+ * A CMS-dokumentumok (`buildDocMetadata`) ezt már helyesen csinálták; ez a
+ * segédlet ugyanazt a szerkezetet adja a kézzel írt oldalaknak, hogy ne
+ * keletkezzen két párhuzamos meta-logika.
+ */
+export function buildStaticPageMetadata(input: {
+  title: string
+  description: string
+  path: string
+}): Metadata {
+  return {
+    title: input.title,
+    description: input.description,
+    alternates: { canonical: input.path },
+    openGraph: {
+      title: input.title,
+      description: input.description,
+      url: absoluteUrl(input.path),
+    },
+  }
+}
+
+/**
  * Next Metadata-objektum egy CMS-dokumentumhoz (page/post/product közös).
  * A title a keret-layout template-je (%s | Kineticare) alá kerül.
  */

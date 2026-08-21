@@ -1,0 +1,51 @@
+import { describe, expect, it } from 'vitest'
+
+import { buildStaticPageMetadata } from '../lib/seo'
+
+/**
+ * Őr a nyilvános oldalak megosztási metaadatára.
+ *
+ * ═══ MI VOLT A HIBA (2026-08-21, élesben mérve) ═══
+ * A `/blog` `generateMetadata`-ja csak `title`-t és `description`-t adott,
+ * `openGraph` blokkot nem. A Next ilyenkor a keret-layout OG-jére esik vissza,
+ * ezért a Tudástár megosztva SZÓ SZERINT a kezdőlap címét mutatta
+ * („Kineticare — Kézrehabilitációs online kurzusplatform”), és `og:url` sem
+ * tartozott hozzá. Ugyanez állt a `/kurzusok`, a kategória-oldal és a kezdőlap
+ * esetén.
+ *
+ * A hiba néma: a lap tökéletesen renderel, a hiányzó OG csak megosztáskor
+ * derül ki. Ezért kell rá őr.
+ */
+describe('buildStaticPageMetadata', () => {
+  it('a megosztási cím és leírás megegyezik a lap sajátjával', () => {
+    const meta = buildStaticPageMetadata({
+      title: 'Tudástár',
+      description: 'Kézrehabilitációs cikkek.',
+      path: '/blog',
+    })
+    expect(meta.title).toBe('Tudástár')
+    expect(meta.openGraph?.title).toBe('Tudástár')
+    expect(meta.openGraph?.description).toBe('Kézrehabilitációs cikkek.')
+  })
+
+  it('az og:url ABSZOLÚT cím, a canonical viszont relatív marad', () => {
+    const meta = buildStaticPageMetadata({
+      title: 'Kurzusok',
+      description: 'Leírás.',
+      path: '/kurzusok',
+    })
+    const url = meta.openGraph?.url
+    expect(String(url)).toMatch(/^https?:\/\/.+\/kurzusok$/)
+    expect(meta.alternates?.canonical).toBe('/kurzusok')
+  })
+
+  it('a lap címe SOSEM eshet vissza a kezdőlapéra', () => {
+    // Ez a konkrét regresszió: a Tudástár megosztva a kezdőlap címét mutatta.
+    const meta = buildStaticPageMetadata({
+      title: 'Tudástár',
+      description: 'Kézrehabilitációs cikkek.',
+      path: '/blog',
+    })
+    expect(meta.openGraph?.title).not.toContain('Kézrehabilitációs online kurzusplatform')
+  })
+})

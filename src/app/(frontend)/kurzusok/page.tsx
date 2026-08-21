@@ -7,6 +7,7 @@ import { CourseAudienceBand } from '@/components/courses/CourseAudienceBand'
 import { Container } from '@/components/ui/Container'
 import { Section } from '@/components/ui/Section'
 import { BARION_PAGE_VIEW } from '@/lib/analytics/barion-events'
+import { buildStaticPageMetadata } from '@/lib/seo'
 import { AUDIENCE_BANDS, groupProductsByAudience } from '@/lib/course-audience'
 import {
   CATEGORY_QUERY_PARAM,
@@ -40,11 +41,12 @@ import config from '../../../payload.config'
  * üres állapottal renderel — a getNavTree-mintát követve.
  */
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildStaticPageMetadata({
   title: 'Kurzusok',
   description:
     'Kineticare online kézrehabilitációs kurzusok: otthoni gyakorlóprogramok és szakmai továbbképzések videós anyagokkal. Válaszd ki a hozzád illő kurzust, és kezdj el gyógyulni.',
-}
+  path: '/kurzusok',
+})
 
 interface KurzusokPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>

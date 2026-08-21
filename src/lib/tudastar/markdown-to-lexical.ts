@@ -44,6 +44,30 @@ const BELSO_SZAKASZOK: readonly string[] = [
   'A cikkíró javaslata a vezetőnek',
 ]
 
+/**
+ * Kifejezések, amelyek KIZÁRÓLAG a lektornak/vezetőnek szólnak, és sosem
+ * kerülhetnek a nyilvános oldalra.
+ *
+ * ═══ MIÉRT VAN ERRE KÜLÖN ŐR (2026-08-21-i éles hiba) ═══
+ * Az első változat a törzset az utolsó H1-től vágta, abból a feltevésből, hogy
+ * a lektornak szóló rész a H1 FÖLÖTT áll. Mind a hat cikkben viszont a H1 ALATT,
+ * a törzs első bekezdéseként is ott a figyelmeztetés: „Ez a szöveg lektorálandó
+ * vázlat…”. Így az élesbe kikerült cikkek törzsében LÁTHATÓAN, az `og:description`
+ * mezőjükben pedig a megosztásokon is ez a mondat állt. A hiba néma volt: a
+ * szószám-őr rendben találta, mert a mondat SZÖVEG, csak épp nem a látogatónak
+ * szól.
+ *
+ * Ezért ez a lista nem „szűrés”, hanem ŐR: a fordítás hangosan bukik, ha a
+ * törzsben bárhol felbukkan valamelyik.
+ */
+export const LEKTORI_JELOLESEK: readonly string[] = [
+  'lektorálandó vázlat',
+  'nem publikálható',
+  'a cikkíró öntesztje',
+  'A vezetőnek szóló',
+  'a cikkíró javaslata',
+]
+
 /** Lexical szövegformátum-bitek (a Lexical TextNode formatját követve). */
 const FORMAT_BOLD = 1
 const FORMAT_ITALIC = 2
@@ -83,7 +107,31 @@ export function extractArticleBody(markdown: string): ArticleBody {
       break
     }
   }
-  return { title, lines: lines.slice(h1 + 1, veg) }
+  const torzs = lines.slice(h1 + 1, veg)
+
+  // A H1 UTÁNI, bevezető lektori figyelmeztetés levágása. Egy bekezdésnyi:
+  // az első üres sorig tart (a hat cikk közül kettőben két sorra tördelve áll).
+  let kezd = 0
+  while (kezd < torzs.length && torzs[kezd].trim().length === 0) kezd += 1
+  let bekezdesVeg = kezd
+  while (bekezdesVeg < torzs.length && torzs[bekezdesVeg].trim().length > 0) bekezdesVeg += 1
+  const elsoBekezdes = torzs.slice(kezd, bekezdesVeg).join(' ')
+  const torzsSorok = LEKTORI_JELOLESEK.some((jel) => elsoBekezdes.includes(jel))
+    ? torzs.slice(bekezdesVeg)
+    : torzs
+
+  // ŐR: a levágás után a törzs SEHOL nem tartalmazhat lektori jelölést.
+  const maradek = torzsSorok.join('\n')
+  for (const jel of LEKTORI_JELOLESEK) {
+    if (maradek.includes(jel)) {
+      throw new Error(
+        `A cikk törzsében lektornak szóló szöveg maradt: „${jel}”. Ez a nyilvános ` +
+          'oldalra és az og:description mezőbe is kikerülne. Nézd át a cikkfájl szerkezetét.',
+      )
+    }
+  }
+
+  return { title, lines: torzsSorok }
 }
 
 interface InlineDarab {
