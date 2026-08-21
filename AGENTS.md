@@ -348,6 +348,7 @@ Kritikus, élesben szerzett tanulságok (a teljes lista a `CLAUDE.md`
 | Barion sandbox | `docs/barion-sandbox-setup.md` |
 | E2E-futtatás stagingen | `docs/e2e-staging-runbook.md` |
 | OWASP biztonsági audit | `docs/owasp-security-review.md` |
+| Statisztika/Bunny review (2026-08-21) | `docs/review-2026-08-21-statisztika-bunny.md` |
 | Számlázz.hu (követelmények, megfelelés, stornó) | `docs/szamlazz-*.md`, `docs/atadas-szamlazz-kor.md` |
 | Analitika | `docs/posthog.md`, `docs/ga4.md` |
 | SEO / GEO / LLM-optimalizálás | `docs/seo-geo-llm.md` |
