@@ -92,7 +92,14 @@ function kartyaLinkNevek(html: string): string[] {
   const minta = /<a\b[^>]*class="[^"]*kc-post-card__link[^"]*"[^>]*>([\s\S]*?)<\/a>/g
   let talalat: RegExpExecArray | null
   while ((talalat = minta.exec(html)) !== null) {
-    nevek.push(szoveg(ariaRejtettNelkul(talalat[1]!)))
+    // A beágyazott kép ALT-ja is a névhez tartozik (a szabvány 2F/„Name From
+    // Content" ága a `img` helyettesítő szövegét is beszámítja), ezért a
+    // jelölés-kiszedés ELŐTT beemeljük szövegként.
+    const altfeloldva = talalat[1]!.replace(
+      /<img\b[^>]*\balt="([^"]*)"[^>]*>/g,
+      (_egesz, alt: string) => alt,
+    )
+    nevek.push(szoveg(ariaRejtettNelkul(altfeloldva)))
   }
   return nevek
 }
@@ -206,11 +213,39 @@ describe('K1 — a kártya-link neve a cikk címe, legfeljebb 80 karakter', () =
     expect(szoveg(html)).toContain(minta.kivonat)
   })
 
-  it('a hármas rács három kártyáján a nevek KÜLÖNBÖZNEK az első szótól', () => {
+  it('a hármas rács három neve az ELSŐ KARAKTERTŐL különbözik', () => {
+    // NN/g, *Writing Hyperlinks*: az emberek „mostly look at the first 2 words
+    // of a link". A régi szerkezetben mindhárom név a KATEGÓRIA nevével
+    // kezdődött („Kézzsibbadás…"), tehát a rotor link-listája
+    // megkülönböztethetetlen volt.
     const html = render(createElement(KnowledgeSection, { posts: [...POSZTOK] }))
-    const elsoSzavak = kartyaLinkNevek(html).map((nev) => nev.split(/\s+/)[0])
-    expect(elsoSzavak).toHaveLength(3)
-    expect(new Set(elsoSzavak).size).toBe(3)
+    const nevek = kartyaLinkNevek(html)
+    expect(nevek).toHaveLength(3)
+    for (const nev of nevek) {
+      expect(nev.startsWith(KATEGORIA.title)).toBe(false)
+    }
+    const eleje = nevek.map((nev) => nev.slice(0, 12))
+    expect(new Set(eleje).size).toBe(3)
+  })
+
+  it('a BORÍTÓ alt-szövege sem kerül a link nevébe', () => {
+    // A régi szerkezetben a `<a>` a borítót is átfogta, tehát a kép alt-ja is
+    // a névbe került. A borító innentől a linken kívül áll.
+    const boritos = {
+      ...POSZTOK[0]!,
+      heroImage: {
+        id: 9,
+        url: '/borito.webp',
+        width: 1280,
+        height: 720,
+        alt: 'Kézfej vizsgálata a rendelőben, a terapeuta a csuklót mozgatja',
+        sizes: { sm: { url: '/borito-640.webp', width: 640, height: 360 } },
+      },
+    } as unknown as Post
+    const html = render(createElement(PostCard, { post: boritos }))
+    expect(html).toContain('kc-post-card__cover')
+    expect(kartyaLinkNevek(html)).toEqual([POSZTOK[0]!.title])
+    expect(kartyaLinkNevek(html)[0]).not.toContain('Kézfej')
   })
 
   it('a kártyán nincs beágyazott második link vagy gomb (az overlay elnyelné)', () => {
@@ -260,6 +295,24 @@ describe('K3 — a compact változat NEM rendereli a kivonatot', () => {
     expect(html).not.toMatch(/visibility:\s*hidden/)
     expect(html).not.toContain('line-clamp')
     expect(html).not.toMatch(/<[^>]*\bhidden\b(?!=)/)
+  })
+
+  it('a HÁRMAS rácsú felületek ténylegesen `compact`-ot kérnek', () => {
+    // Enélkül a 24–38 karakter/soros kivonat NÉMÁN visszatérne a kezdőlapra
+    // és a cikkoldal kapcsolódó blokkjába: a lap 200-zal válaszolna, semmi nem
+    // hibázna, csak olvashatatlan lenne (docs/tudastar-a11y-meres.md 3.1).
+    const kezdolap = render(createElement(KnowledgeSection, { posts: [...POSZTOK] }))
+    expect(kezdolap).not.toContain('kc-post-card__excerpt')
+
+    const cikkoldal = render(
+      createElement(PostView, {
+        post: { ...POSZTOK[0]!, relatedPosts: [...POSZTOK] } as unknown as Post,
+      }),
+    )
+    expect(cikkoldal).not.toContain('kc-post-card__excerpt')
+    // A cikk SAJÁT kivonata viszont ott marad a lead-bekezdésben — a kártya
+    // szövege tehát nem tűnik el a lapról, csak a kártyáról.
+    expect(cikkoldal).toContain('kc-page-hero__lead')
   })
 
   it('a compact kártya minden MÁS mezőt hoz (cím, kategória, dátum)', () => {

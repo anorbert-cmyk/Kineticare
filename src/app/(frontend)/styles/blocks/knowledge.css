@@ -57,18 +57,23 @@
        (a szűrés a `/blog` chip-sorának dolga), a nyíl pedig `aria-hidden`
        dekoráció. Az őr-teszt (K1) MÉRI, hogy a kártyán pontosan egy `<a>` és
        nulla `<button>` van, tehát a szabály nem csúszhat vissza némán.
-   (2) A KÁRTYA SZÖVEGE NEM JELÖLHETŐ KI egérrel: az Inclusive Components
-       ugyanezt mondja ki („it's now difficult to select the text within the
-       card (the link acts as a mask over the top of it)"). Az ott felkínált
-       kerülőút — a szöveget `position: relative`-tel az overlay FÖLÉ emelni —
-       lyukakat üt a kattintható felületbe, tehát pontosan azt a nagy
-       célfelületet rontaná el, amiért az overlay egyáltalán van.
-       DÖNTÉS: az overlay marad, mert a kijelölhetőség itt nem vész el, csak
-       átkerül a cikkoldalra. A kártya mindhárom szövege ott is ott áll,
-       kijelölhetően: a cím a `h1`, a kivonat a lead-bekezdés
-       (`.kc-page-hero__lead`), a dátum a meta-sor `<time>` eleme — mind egy
-       kattintásnyira, ugyanazzal a szöveggel. Billentyűzetes kijelölés
-       (caret browsing) és a képernyőolvasó-hozzáférés érintetlen marad. */
+   (2) A KÁRTYA SZÖVEGE NEM JELÖLHETŐ KI EGÉR-HÚZÁSSAL: az Inclusive
+       Components ugyanezt mondja ki („it's now difficult to select the text
+       within the card (the link acts as a mask over the top of it)"). Az ott
+       felkínált kerülőút — a szöveget `position: relative`-tel az overlay FÖLÉ
+       emelni — „creates gaps in the clickable region".
+       MÉRVE (Chromium 141, 1440×900, a kártya felületén 8 px-es rácsban 2 244
+       mintapont): overlay-vel a kártya **99,9%-a** viszi a linkre, a
+       kerülőúttal **6,4%-a** — a nagy célfelület tehát gyakorlatilag
+       megszűnne, miközben a kártya EGÉSZE látszik kattinthatónak. Ez az
+       elrendezés a felhasználót becsapná, ezért a kerülőút elvetve.
+       Amit a kijelölésből TÉNYLEG elvesztünk, szintén mérve: az egér-húzásos
+       kijelölés a kivonaton üres stringet ad. Ami MEGMARAD: a Ctrl+A a teljes
+       lapot kijelöli a kivonattal együtt (mért kijelölés-hossz 747 karakter),
+       a Selection API / caret browsing változatlanul működik, és a kártya
+       mindhárom szövege a cikkoldalon is ott áll, szabadon kijelölhetően — a
+       cím a `h1`, a kivonat a lead-bekezdés (`.kc-page-hero__lead`), a dátum a
+       meta-sor `<time>` eleme. A képernyőolvasó-hozzáférés érintetlen. */
 
 .kc-post-card {
   /* Az overlay pozicionálási kerete. Egyben oszlop-elrendezés, hogy a
