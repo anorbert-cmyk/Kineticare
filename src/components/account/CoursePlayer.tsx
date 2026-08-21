@@ -477,8 +477,16 @@ export function CoursePlayer({
    * ./player/useWatchTracking.ts-ben él; a DÖNTÉST és a szerverhívást
    * változatlanul a fenti `reportLessonProgress` hozza meg, tehát az
    * automatikus és a kézi jelölés ugyanazt az utat járja.
+   *
+   * UGYANEZ a hook küldi a videó-MÉLYSÉG eseményeit (video_started,
+   * video_milestone 25/50/75/100%-nál) — leckénként és mérföldkövenként
+   * egyszer, retesszel (./player/analytics.ts). A `lesson_completed` a lecke
+   * VÉGÉT jelzi, a mélység-események a KÖZTES lemorzsolódást mutatják meg.
    */
   useWatchTracking({
+    // A videó-mélység eseményekhez (video_started / video_milestone) a kurzus
+    // azonosítója kell — a lecke refjét a hook a lejátszott leckéből tudja.
+    courseId: product.id,
     durationSec: activeLesson?.durationSec ?? null,
     iframeRef,
     iframeSrc: state.kind === 'playing' ? state.loadedSrc : null,

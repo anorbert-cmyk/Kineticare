@@ -167,6 +167,13 @@ export const RATE_LIMIT_RULES = {
   // Ugyanaz a per-user keret, mint a jegykiadásé: egy belépett fiók így sem
   // tud korlátlanul haladás-sort létrehozni.
   'course-progress': { limit: 60, windowMs: ONE_MINUTE_MS },
+  // A Bunny videótár-listázás EGY hívása akár öt kimenő kérést indít a Bunny
+  // felé (MAX_PAGES). A végpont staff-only, tehát nem autentikálatlan
+  // erősítő vektor, de a keret nélkül egy elszabadult kliens vagy egy nyitva
+  // felejtett fül a saját Bunny-kvótánkat fogyasztaná. Húsz hívás percenként
+  // bőven elég a kézi használatra (a panel egy kattintás = egy hívás), és a
+  // kimenő kérést felhasználónként százra korlátozza.
+  'bunny-videos': { limit: 20, windowMs: ONE_MINUTE_MS },
 } as const satisfies Record<string, RateLimitRule>
 
 /**
@@ -459,10 +466,7 @@ function consumeRateLimit(input: {
 }): RateLimitRejection | null {
   const rule = (input.options.rules ?? RATE_LIMIT_RULES)[input.routeClass]
   const limiter = input.options.limiter ?? defaultRateLimiter
-  const decision = limiter.check(
-    `${input.routeClass}:${input.subject}:${input.identifier}`,
-    rule,
-  )
+  const decision = limiter.check(`${input.routeClass}:${input.subject}:${input.identifier}`, rule)
 
   if (decision.allowed) {
     return null
@@ -686,10 +690,7 @@ export function withPayloadRestRateLimit<Args extends unknown[]>(
   handler: (request: Request, ...args: Args) => Promise<Response>,
   options: CheckRequestRateLimitOptions = {},
 ): (request: Request, ...args: Args) => Promise<Response> {
-  return async function rateLimitedHandler(
-    request: Request,
-    ...args: Args
-  ): Promise<Response> {
+  return async function rateLimitedHandler(request: Request, ...args: Args): Promise<Response> {
     const ipRejection = checkRequestRateLimit(request, options)
     if (ipRejection) {
       return payloadRestRateLimitResponse(ipRejection)

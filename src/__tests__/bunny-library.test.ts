@@ -7,6 +7,7 @@ import {
   BUNNY_SEARCH_MAX_LENGTH,
   listBunnyLibraryVideos,
   parseBunnyLibraryVideo,
+  parseBunnyLibraryListPage,
   parseBunnyLibraryListPayload,
 } from '../lib/stream/bunny-library'
 
@@ -156,5 +157,256 @@ describe('listBunnyLibraryVideos', () => {
       expect(result.code).toBe('invalid-search')
     }
     expect(fetchImpl).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * ŐR — A LAPOZÁS A NYERS OLDALMÉRETEN DŐL EL, NEM A PARSE-OLT HOSSZON.
+ *
+ * ═══ A HIBA, AMIT BEZÁR (2026-08-21-i vizsgálat, F5) ═══
+ * A ciklus korábban a `parsed.videos.length < itemsPerPage` feltételre állt
+ * meg. A parser a GUID nélküli sort ELDOBJA, ezért egy tele, 100-as oldal
+ * egyetlen ilyen tétellel 99 videót adott: a lapozás „ez már nem tele oldal”
+ * alapon megállt, a 2–5. oldal SOSEM jött be, és csonka-figyelmeztetés sem
+ * volt. GUID nélküli sort a gyakorlatban feltöltés alatti vagy hibás videónál
+ * láttunk — pontosan akkor, amikor a munkatárs friss felvételt köt leckéhez.
+ *
+ * A hivatalos Bunny-séma (PaginationListOfVideoModel + VideoModel) szerint a
+ * `guid` KÖTELEZŐ mező, tehát a hiánya szerződésszegés: a lapozás nem
+ * támaszkodhat rá. Az oldal „tele van-e” kérdést a NYERS `items.length` és a
+ * válasz `itemsPerPage` mezője dönti el.
+ *
+ * HÁLÓZAT: minden hívás injektált `fetchImpl`-en megy, valódi kérés nincs.
+ */
+
+/** Egy szabályos videósor a Bunny válaszában. */
+function videoRow(id: string) {
+  return { guid: id, title: `Videó ${id}`, status: 4, length: 60 }
+}
+
+/** GUID nélküli sor: feltöltés alatti / hibás felvétel (status 0 vagy 6). */
+const GUID_NELKULI_SOR = { title: 'Feltöltés alatt', status: 0, length: 0 }
+
+function jsonPage(body: unknown) {
+  return { ok: true, status: 200, json: async () => body }
+}
+
+function rows(prefix: string, count: number) {
+  return Array.from({ length: count }, (_, index) => videoRow(`${prefix}-${index + 1}`))
+}
+
+describe('listBunnyLibraryVideos — lapozás GUID nélküli tétel mellett (F5 őr)', () => {
+  afterEach(() => {
+    delete process.env.BUNNY_STREAM_LIBRARY_API_KEY
+    delete process.env.NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID
+  })
+
+  function setupEnv() {
+    process.env.BUNNY_STREAM_LIBRARY_API_KEY = DUMMY_KEY
+    process.env.NEXT_PUBLIC_BUNNY_STREAM_LIBRARY_ID = '4242'
+  }
+
+  it('tele oldal EGY GUID nélküli tétellel: a 2. oldal is bejön, és nincs néma veszteség', async () => {
+    setupEnv()
+    // 1. oldal: 100 NYERS tétel, ebből 99 szabályos + 1 GUID nélküli.
+    const elsoOldal = {
+      totalItems: 150,
+      currentPage: 1,
+      itemsPerPage: 100,
+      items: [...rows('p1', 99), GUID_NELKULI_SOR],
+    }
+    // 2. oldal: 50 tétel — itt már tényleg vége a listának.
+    const masodikOldal = {
+      totalItems: 150,
+      currentPage: 2,
+      itemsPerPage: 100,
+      items: rows('p2', 50),
+    }
+    const oldalak = [elsoOldal, masodikOldal]
+    const fetchImpl = vi.fn(async () => jsonPage(oldalak.shift() ?? { items: [] }))
+    const warn = vi.fn()
+
+    const result = await listBunnyLibraryVideos({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      kind: 'protected',
+      log: { warn },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(fetchImpl, 'a 2. oldal le sem kérdeződött').toHaveBeenCalledTimes(2)
+    expect(result.list.videos).toHaveLength(149)
+    expect(result.list.videos.map((video) => video.guid)).toContain('p2-50')
+    // Az eldobott tétel nem tűnik el némán: számláló + napló.
+    expect(result.list.droppedItems).toBe(1)
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]?.[1]).toMatchObject({ droppedItemCount: 1, page: 1 })
+    // A lista hiányos (egy tétel kimaradt), ezért a felület figyelmeztet.
+    expect(result.list.truncated).toBe(true)
+  })
+
+  it('hiánytalan, nem tele oldal: egyetlen kérés, nincs csonka jelzés', async () => {
+    setupEnv()
+    const fetchImpl = vi.fn(async () =>
+      jsonPage({ totalItems: 3, currentPage: 1, itemsPerPage: 100, items: rows('p1', 3) }),
+    )
+    const result = await listBunnyLibraryVideos({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      kind: 'protected',
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(result.list.videos).toHaveLength(3)
+    expect(result.list.truncated).toBe(false)
+    expect(result.list.droppedItems).toBe(0)
+  })
+
+  it('a MAX_PAGES (5) kimerülése csonka listát jelez', async () => {
+    setupEnv()
+    let page = 0
+    const fetchImpl = vi.fn(async () => {
+      page += 1
+      return jsonPage({
+        totalItems: 1000,
+        currentPage: page,
+        itemsPerPage: 100,
+        items: rows(`p${page}`, 100),
+      })
+    })
+    const result = await listBunnyLibraryVideos({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      kind: 'protected',
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(fetchImpl).toHaveBeenCalledTimes(5)
+    expect(result.list.videos).toHaveLength(500)
+    expect(result.list.truncated).toBe(true)
+  })
+
+  it('a lapozás megáll, ha a totalItems szerint minden nyers tétel megvan', async () => {
+    setupEnv()
+    let page = 0
+    const fetchImpl = vi.fn(async () => {
+      page += 1
+      return jsonPage({
+        totalItems: 200,
+        currentPage: page,
+        itemsPerPage: 100,
+        items: rows(`p${page}`, 100),
+      })
+    })
+    const result = await listBunnyLibraryVideos({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      kind: 'protected',
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(fetchImpl, 'fölösleges 3. kérés ment ki').toHaveBeenCalledTimes(2)
+    expect(result.list.videos).toHaveLength(200)
+    expect(result.list.truncated).toBe(false)
+  })
+
+  it('a válasz által jelentett kisebb oldalméret is tele oldalnak számít', async () => {
+    setupEnv()
+    // A kért 100 helyett a Bunny 50-es lapokat ad: az 50 tétel TELE oldal,
+    // tehát tovább kell lapozni. A régi (kért méretre néző) logika itt is
+    // idő előtt megállt volna.
+    let page = 0
+    const fetchImpl = vi.fn(async () => {
+      page += 1
+      return jsonPage({
+        totalItems: 120,
+        currentPage: page,
+        itemsPerPage: 50,
+        items: rows(`p${page}`, page < 3 ? 50 : 20),
+      })
+    })
+    const result = await listBunnyLibraryVideos({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      kind: 'protected',
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(result.list.videos).toHaveLength(120)
+    expect(result.list.truncated).toBe(false)
+  })
+
+  it('deps.page megadva: egyetlen kérés, a megadott oldalra, változatlan jelzésekkel', async () => {
+    setupEnv()
+    const kertUrlk: string[] = []
+    const fetchImpl = vi.fn(async (url: string) => {
+      kertUrlk.push(url)
+      return jsonPage({ totalItems: 130, currentPage: 2, itemsPerPage: 100, items: rows('p2', 30) })
+    })
+    const result = await listBunnyLibraryVideos({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      kind: 'protected',
+      page: 2,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(kertUrlk[0]).toContain('page=2')
+    expect(result.list.videos).toHaveLength(30)
+    expect(result.list.truncated).toBe(false)
+  })
+
+  it('deps.page megadva tele oldallal: marad a korábbi csonka-jelzés', async () => {
+    setupEnv()
+    const fetchImpl = vi.fn(async () =>
+      jsonPage({ totalItems: 500, currentPage: 2, itemsPerPage: 100, items: rows('p2', 100) }),
+    )
+    const result = await listBunnyLibraryVideos({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      kind: 'protected',
+      page: 2,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(result.list.truncated).toBe(true)
+  })
+})
+
+describe('parseBunnyLibraryListPage — nyers számok a lapozáshoz', () => {
+  it('a nyers tételszám és az eldobott tételek száma külön látszik', () => {
+    const page = parseBunnyLibraryListPage(
+      {
+        totalItems: 7,
+        itemsPerPage: 100,
+        items: [videoRow('a'), GUID_NELKULI_SOR, videoRow('b')],
+      },
+      { kind: 'protected', libraryId: '123' },
+    )
+    expect(page?.rawItemCount).toBe(3)
+    expect(page?.droppedItemCount).toBe(1)
+    expect(page?.pageSize).toBe(100)
+    expect(page?.list.videos).toHaveLength(2)
+    expect(page?.list.droppedItems).toBe(1)
+  })
+
+  it('érvénytelen itemsPerPage esetén nincs oldalméret (a kért méret marad a küszöb)', () => {
+    const page = parseBunnyLibraryListPage(
+      { itemsPerPage: 0, items: [videoRow('a')] },
+      { kind: 'public', libraryId: '9' },
+    )
+    expect(page?.pageSize).toBeNull()
   })
 })

@@ -2,9 +2,16 @@
 
 import { useEffect, useRef } from 'react'
 
+import { trackVideoMilestone, trackVideoStarted } from '../../../lib/analytics/course-events'
 import { createBunnyPlayerBridge } from '../../../lib/stream/playerjs-client'
 import { loadBunnyPlayerJs, type PlayerJsLibraryPlayer } from '../../../lib/stream/playerjs-loader'
 import { createWatchTracker } from '../../../lib/stream/watched-coverage'
+
+import {
+  createVideoDepthTracker,
+  type VideoDepthEvents,
+  type VideoDepthTracker,
+} from './analytics'
 
 /**
  * AUTOMATIKUS „megnézett" jelölés a Bunny-lejátszó tényleges nézettsége alapján.
@@ -53,8 +60,29 @@ import { createWatchTracker } from '../../../lib/stream/watched-coverage'
  * A DÖNTÉST és a szerverhívást nem ez a modul hozza: a `report` visszahíváson
  * jelentünk a lejátszónak, ott dől el a küszöb (`shouldAutoMarkWatched`) és ott
  * fut a jelölés — UGYANAZ az út, amit a kézi gomb hív.
+ *
+ * ═══ VIDEÓ-MÉLYSÉG (video_started / video_milestone) ═══
+ * UGYANEZEKRE a lejátszó-eseményekre épül a tölcsér mélység-mérése is —
+ * szándékosan nem külön, párhuzamos követővel: egy második figyelő külön
+ * feliratkozást, külön életciklust és eltérő igazságot jelentene ugyanarról a
+ * videóról. A DÖNTÉS (mi az új esemény, mi ment már ki) tiszta modulban él
+ * (./analytics.ts — `createVideoDepthTracker`), itt csak a huzalozás van.
+ *
+ * A RETESZ LECKÉNKÉNT él és a KOMPONENS ÉLETTARTAMÁIG kitart (lentebb:
+ * `melysegRef`), nem az effekt lefutásáig. Így a leckére VISSZATÉRÉS
+ * (A → B → A) sem küldi újra sem az indulást, sem a már elért mérföldköveket.
+ *
+ * A mérés SOSEM ronthatja el a lejátszást: minden küldés `try/catch`-ben fut.
+ * Naplózni innen nem tudunk (a `src/lib/logger.ts` a szerver stdoutjára ír) —
+ * ugyanaz a csendes elv, mint a player.js-híd `onError`-jánál.
  */
 export interface WatchTrackingInput {
+  /**
+   * A kurzus adatbázis-azonosítója a videó-mélység eseményekhez. `null`, ha
+   * ismeretlen — ilyenkor mérföldkő NEM megy ki (azonosító nélkül a riport
+   * nem köthető kurzushoz). Személyes adat nem kerül az eseményekbe.
+   */
+  courseId: number | null
   /** Az iframe elem — erre iratkozik fel a hivatalos könyvtár és a tartalék híd is. */
   iframeRef: React.RefObject<HTMLIFrameElement | null>
   /** Az iframe által BETÖLTÖTT embed-URL; változása = új lecke indult. */
@@ -68,6 +96,7 @@ export interface WatchTrackingInput {
 }
 
 export function useWatchTracking({
+  courseId,
   durationSec,
   iframeRef,
   iframeSrc,
@@ -81,6 +110,14 @@ export function useWatchTracking({
     reportRef.current = report
   }, [report])
 
+  /**
+   * Lecke → mélység-követő (a RETESZ tárolója). Azért ref és azért LECKÉNKÉNT,
+   * mert a reteszt nem az effekt lefutásához, hanem a leckéhez kell kötni: az
+   * effekt lecke-váltáskor és `iframeSrc`-változáskor újraindul, a már
+   * elküldött mérföldköveket viszont ilyenkor sem szabad újraküldeni.
+   */
+  const melysegRef = useRef(new Map<string, VideoDepthTracker>())
+
   useEffect(() => {
     const iframe = iframeRef.current
     if (iframe === null || iframeSrc === null || lessonRef === null) {
@@ -88,16 +125,43 @@ export function useWatchTracking({
     }
 
     const tracker = createWatchTracker(durationSec)
+    // Leckénként EGY követő: a meglévő retesz megmarad, új leckéhez új követő.
+    const melyseg = melysegRef.current.get(lessonRef) ?? createVideoDepthTracker()
+    melysegRef.current.set(lessonRef, melyseg)
     let eldobva = false
     let utoljaraJelentett = -1
     let tartalekHid: { dispose(): void } | null = null
     let hivatalosPlayer: PlayerJsLibraryPlayer | null = null
+
+    /**
+     * A mélység-események KIKÜLDÉSE. A követő már csak az ÚJ (még nem küldött)
+     * eseményeket adja vissza, itt tehát nincs több szűrés — csak a védőháló,
+     * hogy a mérés hibája ne érje el a nézőt.
+     */
+    const melysegetKuld = (events: VideoDepthEvents): void => {
+      if (courseId === null) {
+        return
+      }
+      try {
+        if (events.started) {
+          trackVideoStarted({ courseId, lessonRef })
+        }
+        for (const percent of events.milestones) {
+          trackVideoMilestone({ courseId, lessonRef, percent })
+        }
+      } catch {
+        // A mérés hibája nem akaszthatja meg a lejátszást.
+      }
+    }
 
     /** Egy időpont rögzítése és — érdemi változásnál — jelentés a lejátszónak. */
     const rogzit = (seconds: number, duration: number | null): void => {
       if (eldobva) {
         return
       }
+      // A MÉLYSÉG a lejátszófej pozíciójából számol, a lefedettségtől
+      // függetlenül (a kettő szándékosan más mérőszám — ./analytics.ts).
+      melysegetKuld(melyseg.position({ seconds, duration: duration ?? durationSec }))
       tracker.setDuration(duration ?? durationSec)
       // A falióra-időbélyeg a tekerés-védelem második rétege: a valós időnél
       // gyorsabb média-előrehaladás tekerésnek számít, a megtanult küszöbtől
@@ -118,6 +182,7 @@ export function useWatchTracking({
     /** A videó vége: a MÉRT arányt jelentjük (a szkippelt rész nem számít bele). */
     const vegetErt = (): void => {
       if (!eldobva) {
+        melysegetKuld(melyseg.ended())
         reportRef.current(lessonRef, tracker.coverage())
       }
     }
@@ -181,5 +246,5 @@ export function useWatchTracking({
     }
     // Az `iframeSrc` a lecke-váltás kulcsa: a token-frissítés NEM változtatja,
     // az explicit betöltés igen — pontosan ekkor kell új követő.
-  }, [durationSec, iframeRef, iframeSrc, lessonRef])
+  }, [courseId, durationSec, iframeRef, iframeSrc, lessonRef])
 }

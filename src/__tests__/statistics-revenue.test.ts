@@ -13,11 +13,14 @@ import {
   aggregateCourseRevenue,
   aggregateMonthlyRevenue,
   aggregateOrderFunnel,
+  buildOrderFunnelFromCounts,
   buildRevenueReport,
   canAccessStatistics,
   formatHuf,
   formatMonthShort,
+  FUNNEL_STATUSES,
   orderMonthKey,
+  type OrderFunnelCounts,
   type RevenueOrderInput,
 } from '../lib/statistics/revenue'
 
@@ -207,6 +210,220 @@ describe('aggregateMonthlyRevenue', () => {
   })
 })
 
+describe('F3 — rendelés-szintű tartalék: a hiányos snapshot nem nyeli el a bevételt', () => {
+  it('tétel van, de a tételekből 0 Ft jön ki → a pozitív totalHuf a bevétel (79 500 Ft, nem 0)', () => {
+    const rows = aggregateMonthlyRevenue(
+      [
+        paid({
+          createdAt: '2026-08-05T10:00:00.000Z',
+          totalHuf: 79500,
+          // A pre-T-017 rendelés item-sora: a priceHufSnapshot NULL volt,
+          // a leképezés 0-t ad — a mennyiség viszont 1 (order-integrity szabály).
+          items: [{ audience: 'laikus', priceHuf: 0, quantity: 1, titleSnapshot: 'Otthoni' }],
+        }),
+      ],
+      { months: 1, now: NOW },
+    )
+    expect(rows[0]?.totalHuf).toBe(79500)
+    expect(rows[0]?.laikusHuf).toBe(79500)
+    expect(rows[0]?.orderCount).toBe(1)
+    expect((rows[0]?.laikusHuf ?? 0) + (rows[0]?.szakemberHuf ?? 0)).toBe(rows[0]?.totalHuf)
+  })
+
+  it('a tartalék NEM inverz: az items: [] és a nullás tételsor UGYANAZT adja', () => {
+    const itemNelkul = aggregateMonthlyRevenue(
+      [paid({ createdAt: '2026-08-05T10:00:00.000Z', totalHuf: 79500, items: [] })],
+      { months: 1, now: NOW },
+    )
+    const nullasTetellel = aggregateMonthlyRevenue(
+      [
+        paid({
+          createdAt: '2026-08-05T10:00:00.000Z',
+          totalHuf: 79500,
+          items: [{ audience: 'laikus', priceHuf: 0, quantity: 1, titleSnapshot: 'Otthoni' }],
+        }),
+      ],
+      { months: 1, now: NOW },
+    )
+    expect(itemNelkul[0]?.totalHuf).toBe(79500)
+    expect(nullasTetellel[0]?.totalHuf).toBe(79500)
+    expect(nullasTetellel[0]?.totalHuf).toBe(itemNelkul[0]?.totalHuf)
+  })
+
+  it('egyöntetűen szakmai tételeknél a tartalék a szakember ágba kerül', () => {
+    const rows = aggregateMonthlyRevenue(
+      [
+        paid({
+          createdAt: '2026-08-06T10:00:00.000Z',
+          totalHuf: 120000,
+          items: [{ audience: 'szakember', priceHuf: 0, quantity: 1, titleSnapshot: 'Szakmai' }],
+        }),
+      ],
+      { months: 1, now: NOW },
+    )
+    expect(rows[0]?.szakemberHuf).toBe(120000)
+    expect(rows[0]?.laikusHuf).toBe(0)
+    expect(rows[0]?.totalHuf).toBe(120000)
+  })
+
+  it('vegyes ágú rendelésnél és tétel nélkül a laikus ág a tartalék (változatlan szabály)', () => {
+    const vegyes = aggregateMonthlyRevenue(
+      [
+        paid({
+          createdAt: '2026-08-07T10:00:00.000Z',
+          totalHuf: 199500,
+          items: [
+            { audience: 'laikus', priceHuf: 0, quantity: 1 },
+            { audience: 'szakember', priceHuf: 0, quantity: 1 },
+          ],
+        }),
+      ],
+      { months: 1, now: NOW },
+    )
+    expect(vegyes[0]?.laikusHuf).toBe(199500)
+    expect(vegyes[0]?.szakemberHuf).toBe(0)
+
+    const ures = aggregateMonthlyRevenue(
+      [paid({ createdAt: '2026-08-07T10:00:00.000Z', totalHuf: 50, items: [] })],
+      { months: 1, now: NOW },
+    )
+    expect(ures[0]?.laikusHuf).toBe(50)
+  })
+
+  it('a tartalék csak POZITÍV rendelés-összegre lép be (0 és negatív snapshot nem mozdít)', () => {
+    const rows = aggregateMonthlyRevenue(
+      [
+        paid({
+          createdAt: '2026-08-08T10:00:00.000Z',
+          totalHuf: 0,
+          items: [{ audience: 'laikus', priceHuf: 0, quantity: 1, titleSnapshot: 'Ingyenes' }],
+        }),
+        paid({ createdAt: '2026-08-08T11:00:00.000Z', totalHuf: -5000, items: [] }),
+      ],
+      { months: 1, now: NOW },
+    )
+    expect(rows[0]?.totalHuf).toBe(0)
+    expect(rows[0]?.orderCount).toBe(2)
+  })
+
+  it('ha a tételekből JÖN szám, az marad a forrás (a tartalék nem írja felül)', () => {
+    const rows = aggregateMonthlyRevenue(
+      [
+        paid({
+          createdAt: '2026-08-09T10:00:00.000Z',
+          totalHuf: 999999,
+          items: [{ audience: 'laikus', priceHuf: 79500, quantity: 1, titleSnapshot: 'Otthoni' }],
+        }),
+      ],
+      { months: 1, now: NOW },
+    )
+    expect(rows[0]?.totalHuf).toBe(79500)
+  })
+
+  it('ŐR: pozitív totalHuf mellett nincs olyan sor, ahol orderCount > 0 és totalHuf === 0', () => {
+    const esetek: RevenueOrderInput[] = [
+      paid({
+        createdAt: '2026-08-10T10:00:00.000Z',
+        totalHuf: 79500,
+        items: [{ audience: 'laikus', priceHuf: 0, quantity: 1, titleSnapshot: 'NULL ár' }],
+      }),
+      paid({ createdAt: '2026-08-11T10:00:00.000Z', totalHuf: 120000, items: [] }),
+      paid({
+        createdAt: '2026-08-12T10:00:00.000Z',
+        totalHuf: 45000,
+        items: [{ audience: 'szakember', priceHuf: 0, quantity: 0, titleSnapshot: 'nincs qty' }],
+      }),
+    ]
+    for (const order of esetek) {
+      const rows = aggregateMonthlyRevenue([order], { months: 1, now: NOW })
+      const row = rows[0]
+      expect(row?.orderCount).toBe(1)
+      expect(
+        row?.totalHuf === 0 && (row?.orderCount ?? 0) > 0,
+        `pozitív snapshot (${String(order.totalHuf)} Ft) mellett 0 Ft-os hónap-sor`,
+      ).toBe(false)
+      expect(row?.totalHuf).toBe(order.totalHuf)
+    }
+  })
+})
+
+describe('F4 — naptárilag érvénytelen számla-dátum nem nyelheti el a rendelést', () => {
+  it('orderMonthKey: a naptárilag lehetetlen dátum createdAt-tartalékra fut', () => {
+    for (const rossz of ['2026-13-45', '2026-02-30', '2026-13-01', '2026-04-31', '2026-00-05']) {
+      expect(
+        orderMonthKey({ createdAt: '2026-03-10T10:00:00.000Z', invoiceCompletionDate: rossz }),
+        rossz,
+      ).toBe('2026-03')
+    }
+  })
+
+  it('orderMonthKey: a VALÓDI szökőnap érvényes marad, a nem létező nem', () => {
+    // 2024 szökőév, 2026 NEM (2026 % 4 = 2).
+    expect(
+      orderMonthKey({
+        createdAt: '2024-03-10T10:00:00.000Z',
+        invoiceCompletionDate: '2024-02-29',
+      }),
+    ).toBe('2024-02')
+    expect(
+      orderMonthKey({
+        createdAt: '2026-03-10T10:00:00.000Z',
+        invoiceCompletionDate: '2026-02-29',
+      }),
+    ).toBe('2026-03')
+  })
+
+  it('a rendelés a createdAt hónapjába kerül — nem esik ki a bevételből és az orderCount-ból', () => {
+    const rows = aggregateMonthlyRevenue(
+      [
+        paid({
+          createdAt: '2026-08-13T10:00:00.000Z',
+          invoiceCompletionDate: '2026-13-45',
+          totalHuf: 30000,
+          items: [{ audience: 'laikus', priceHuf: 30000, quantity: 1, titleSnapshot: 'Otthoni' }],
+        }),
+      ],
+      { months: 1, now: NOW },
+    )
+    expect(rows[0]?.month).toBe('2026-08')
+    expect(rows[0]?.totalHuf).toBe(30000)
+    expect(rows[0]?.orderCount).toBe(1)
+  })
+
+  it('a kurzus-tábla is látja az ilyen rendelést (a hónap-ablak nem ejti ki)', () => {
+    const report = buildRevenueReport(
+      [
+        paid({
+          createdAt: '2026-08-13T10:00:00.000Z',
+          invoiceCompletionDate: '2026-13-45',
+          totalHuf: 30000,
+          items: [{ audience: 'laikus', priceHuf: 30000, quantity: 1, titleSnapshot: 'Otthoni' }],
+        }),
+      ],
+      aggregateOrderFunnel(['paid']),
+      { months: 12, now: NOW },
+    )
+    expect(report.totals.totalHuf).toBe(30000)
+    expect(report.totals.orderCount).toBe(1)
+    expect(report.courses.map((row) => row.sku)).toEqual(['Otthoni'])
+  })
+
+  it('érvénytelen `now` nem borítja fel a jelentést (listMonthKeys nem dob)', () => {
+    const invalidNow = new Date('nem-datum')
+    expect(() =>
+      buildRevenueReport([], aggregateOrderFunnel(['paid']), { months: 12, now: invalidNow }),
+    ).not.toThrow()
+    const report = buildRevenueReport([], aggregateOrderFunnel(['paid']), {
+      months: 12,
+      now: invalidNow,
+    })
+    expect(report.months).toEqual([])
+    expect(report.totals.totalHuf).toBe(0)
+    // A tölcsér a hónap-ablaktól függetlenül számol, tehát megmarad.
+    expect(report.funnel.paid).toBe(1)
+  })
+})
+
 describe('kurzus-bontás és tölcsér', () => {
   it('kurzusonként összegzi a bevételt, az ingyenes tételt külön számolja', () => {
     const rows = aggregateCourseRevenue([
@@ -248,13 +465,150 @@ describe('kurzus-bontás és tölcsér', () => {
           ],
         }),
       ],
-      ['paid', 'paid', 'payment_failed'],
+      aggregateOrderFunnel(['paid', 'paid', 'payment_failed']),
       { months: 12, now: NOW },
     )
     expect(report.courses.map((row) => row.sku)).toEqual(['Friss kurzus'])
     expect(report.totals.totalHuf).toBe(5000)
     expect(report.funnel.paid).toBe(2)
     expect(report.funnel.paymentFailed).toBe(1)
+  })
+})
+
+/**
+ * F8 (2026-08-21-i vizsgálat) — a tölcsér KÉSZ darabszámokból is felépíthető,
+ * nem csak státusz-listából. A két útnak PONTOSAN ugyanazt kell adnia, mert
+ * ugyanaz a státusz→mező tábla hajtja őket.
+ */
+describe('F8 — tölcsér darabszámokból', () => {
+  function counts(entries: Record<string, number>): ReadonlyMap<string, number> {
+    return new Map(Object.entries(entries))
+  }
+
+  it('a nevesített hat státuszt a saját mezőjébe teszi', () => {
+    const funnel = buildOrderFunnelFromCounts(
+      counts({
+        created: 3,
+        payment_pending: 5,
+        paid: 100,
+        payment_failed: 7,
+        cancelled: 2,
+        refunded: 1,
+      }),
+      118,
+    )
+    expect(funnel).toEqual({
+      created: 3,
+      paymentPending: 5,
+      paid: 100,
+      paymentFailed: 7,
+      cancelled: 2,
+      refunded: 1,
+      other: 0,
+      total: 118,
+    })
+  })
+
+  it('az `other` a teljes darabszám és a nevesített státuszok különbsége', () => {
+    // 118 nevesített + 12 ismeretlen (régi enum-érték, importból maradt sor).
+    const funnel = buildOrderFunnelFromCounts(
+      counts({
+        created: 3,
+        payment_pending: 5,
+        paid: 100,
+        payment_failed: 7,
+        cancelled: 2,
+        refunded: 1,
+      }),
+      130,
+    )
+    expect(funnel.other).toBe(12)
+    expect(funnel.total).toBe(130)
+    expect(
+      funnel.created +
+        funnel.paymentPending +
+        funnel.paid +
+        funnel.paymentFailed +
+        funnel.cancelled +
+        funnel.refunded +
+        funnel.other,
+    ).toBe(funnel.total)
+  })
+
+  it('az `other` NEM megy negatívba, ha a hét lekérdezés között beérkezik egy rendelés', () => {
+    // A `total` korábban futott le, mint a `paid` számlálója → a nevesített
+    // összeg (101) meghaladja a total-t (100).
+    const funnel = buildOrderFunnelFromCounts(counts({ paid: 101 }), 100)
+    expect(funnel.other).toBe(0)
+    // A `total` az marad, amit az adatbázis mondott — nem gyártunk rá becslést.
+    expect(funnel.total).toBe(100)
+  })
+
+  it('a hiányzó, negatív, tört és nem véges darabszám 0-ra esik', () => {
+    const funnel = buildOrderFunnelFromCounts(
+      counts({ created: -5, paid: 2.7, payment_failed: Number.NaN }),
+      10,
+    )
+    expect(funnel.created).toBe(0)
+    expect(funnel.paid).toBe(2)
+    expect(funnel.paymentFailed).toBe(0)
+    expect(funnel.cancelled).toBe(0)
+    expect(funnel.other).toBe(8)
+  })
+
+  it('a listás és a darabszámos út UGYANAZT adja (nincs két külön leképezés)', () => {
+    const lista = [
+      'created',
+      'payment_pending',
+      'paid',
+      'paid',
+      'payment_failed',
+      'cancelled',
+      'refunded',
+      'ismeretlen_statusz',
+    ]
+    const listabol = aggregateOrderFunnel(lista)
+    const szamokbol = buildOrderFunnelFromCounts(
+      counts({
+        created: 1,
+        payment_pending: 1,
+        paid: 2,
+        payment_failed: 1,
+        cancelled: 1,
+        refunded: 1,
+      }),
+      lista.length,
+    )
+    expect(szamokbol).toEqual(listabol)
+    expect(listabol.other).toBe(1)
+  })
+
+  it('a FUNNEL_STATUSES pontosan a hat nevesített státusz, életút-sorrendben', () => {
+    expect(FUNNEL_STATUSES).toEqual([
+      'created',
+      'payment_pending',
+      'paid',
+      'payment_failed',
+      'cancelled',
+      'refunded',
+    ])
+  })
+
+  it('a buildRevenueReport kész darabszámokat is elfogad, és nem aliasolja a bemenetet', () => {
+    const forras: OrderFunnelCounts = {
+      created: 1,
+      paymentPending: 2,
+      paid: 3,
+      paymentFailed: 4,
+      cancelled: 5,
+      refunded: 6,
+      other: 7,
+      total: 28,
+    }
+    const report = buildRevenueReport([], forras, { months: 1, now: NOW })
+    expect(report.funnel).toEqual(forras)
+    report.funnel.paid = 999
+    expect(forras.paid).toBe(3)
   })
 })
 
@@ -267,7 +621,7 @@ describe('StatisticsReport + RevenueChart — a számok a táblázatban is ott v
           items: [{ audience: 'laikus', priceHuf: 79500, quantity: 1, titleSnapshot: 'Otthoni' }],
         }),
       ],
-      ['paid', 'payment_failed'],
+      aggregateOrderFunnel(['paid', 'payment_failed']),
       { months: 1, now: NOW },
     )
     const html = renderToStaticMarkup(createElement(StatisticsReport, { report }))
@@ -279,7 +633,7 @@ describe('StatisticsReport + RevenueChart — a számok a táblázatban is ott v
   })
 
   it('a gyökér a kc-adminstat márka-scope-ot viseli, eyebrow-sorral (tulajdonosi döntés, 2026-08-20)', () => {
-    const report = buildRevenueReport([], [], { months: 1, now: NOW })
+    const report = buildRevenueReport([], aggregateOrderFunnel([]), { months: 1, now: NOW })
     const html = renderToStaticMarkup(createElement(StatisticsReport, { report }))
     // A custom.scss márka-rétege ezen a classon keresztül hat — nélküle a
     // nézet a Payload-kinézetre esne vissza, ezért a jelenléte szerkezeti

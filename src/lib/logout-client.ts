@@ -20,6 +20,8 @@
  * szerződést (a repó 15. üzemeltetési tanulsága: tesztből sosem megy ki hívás).
  */
 
+import { resetAnalyticsIdentity } from './analytics/posthog'
+
 /** Magyar, cselekvésre irányító hibaszöveg (WCAG 3.3.1 szellemében: mit tegyen). */
 export const LOGOUT_ERROR_MESSAGE =
   'A kijelentkezés most nem sikerült. Próbáld újra, vagy zárd be a böngészőt.'
@@ -29,7 +31,35 @@ export interface LogoutResult {
   message?: string
 }
 
-export async function logoutUser(fetchImpl: typeof fetch = fetch): Promise<LogoutResult> {
+/**
+ * Kijelentkezés + az analitikai AZONOSSÁG elengedése.
+ *
+ * ═══ MIÉRT KÖTELEZŐ A `reset()` (nem szépészeti kérdés) ═══
+ * A belépéskor lefutó `identify()` a PostHog `distinct_id`-jét a felhasználó
+ * Payload-azonosítójára állítja, és ezt a böngésző TÁROLÓJÁBAN tartja
+ * (localStorage + süti — buildPostHogOptions). A `reset()` nélkül ez a
+ * kijelentkezés után is ott marad, tehát MINDEN további esemény — a következő
+ * látogatóé is — az ELŐZŐ felhasználó profiljára menne.
+ *
+ * KÖZÖS GÉPEN ez azonnali kár, és nálunk közös gép a tipikus eset: rendelői
+ * tablet, családi laptop, egy háztartáson belül két beteg. Két különböző ember
+ * viselkedése olvadna egy profilba — egyszerre MÉRÉSI hiba (hamis megtartás- és
+ * kohorsz-számok) és ADATVÉDELMI hiba (A viselkedése B azonosítója alatt
+ * tárolódna). A `resetAnalyticsIdentity` ezért itt fut, a sikeres kilépés után.
+ *
+ * MIÉRT CSAK SIKER UTÁN: ha a végpont hibázik, a munkamenet ÉL — az azonosság
+ * eldobása ilyenkor a még bejelentkezett felhasználó eseményeit szakítaná le a
+ * profiljáról.
+ *
+ * A `resetIdentity` injektálható (teszt), és a gyártásban használt
+ * `resetAnalyticsIdentity` maga is no-op, ha nincs consent vagy nincs kulcs.
+ * A hívás `try/catch`-ben fut: a mérés hibája nem ronthatja el a kijelentkezést
+ * (ugyanaz a garancia, mint a LoginForm/RegisterForm követésénél).
+ */
+export async function logoutUser(
+  fetchImpl: typeof fetch = fetch,
+  resetIdentity: () => void = resetAnalyticsIdentity,
+): Promise<LogoutResult> {
   try {
     const response = await fetchImpl('/api/users/logout', {
       method: 'POST',
@@ -38,6 +68,11 @@ export async function logoutUser(fetchImpl: typeof fetch = fetch): Promise<Logou
     })
     if (!response.ok) {
       return { ok: false, message: LOGOUT_ERROR_MESSAGE }
+    }
+    try {
+      resetIdentity()
+    } catch {
+      // A mérés hibája nem érheti el a felhasználót — a kilépés sikeres.
     }
     return { ok: true }
   } catch {
