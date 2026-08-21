@@ -14,8 +14,41 @@ import { ctaLabel, ctaProgressLabel } from '../../lib/cta-vocabulary'
  * létezik-e a cím) — a kliens ugyanazt a megerősítő üzenetet mutatja.
  * KIVÉTEL: az IP-alapú kérés-korlát (A2) 429-e, amikor e-mail sem ment ki —
  * ilyenkor hibaüzenet jár a megerősítő képernyő helyett.
+ *
+ * ═══ MIÉRT KAPOTT KÉT SZÖVEG-PROPOT (2026-08-21) ═══
+ * Ugyanez az űrlap szolgálja ki a `/elfelejtett-jelszo` lapot ÉS a
+ * `/belepes-atallas` lapot (a systeme.io-ról átköltöztetett vevők egyetlen
+ * belépő útja). A két lapon a KÉRT CSELEKVÉS azonos — ezért ugyanaz a végpont,
+ * ugyanaz a kérés-korlát és ugyanaz a §3.2 #21 gombfelirat (WCAG 2.2 · 3.2.4
+ * Consistent Identification) —, a KÖRÜLÖTTE ÁLLÓ MAGYARÁZAT viszont nem: aki
+ * levelet kapott arról, hogy a régi jelszava nem működik, nem „elfelejtette" a
+ * jelszavát.
+ *
+ * A két prop SZÁNDÉKOSAN puszta szöveg, nem `variant` felsorolás:
+ *  - az átállás KAMPÁNY-szöveg, aminek egy helyen (a lap fájljában) kell
+ *    állnia, hogy a tulajdonos egy fájlban átnézhesse és később egy fájlból
+ *    törölhesse;
+ *  - az űrlap így tartalom-mentes marad: nem tud az átállásról, tehát egy
+ *    későbbi harmadik hívóhely sem kényszerít újabb `variant`-ágat.
+ *
+ * Amit a propok NEM érintenek: a végpont, a kérés-korlát, az enumeráció-védő
+ * feltételes mondat („Ha a … címhez tartozik fiók") és a hibaág. Ezek a
+ * biztonsági szerződés részei, nem a hívó dolga.
  */
-export function ForgotPasswordForm() {
+export interface ForgotPasswordFormProps {
+  /**
+   * Segédszöveg az e-mail-mező alatt (`Field.hint` → `aria-describedby`,
+   * WCAG 2.2 · 3.3.2 Labels or Instructions). Alapból nincs.
+   */
+  emailHint?: string
+  /**
+   * Egy MÁSODIK mondat a beküldés utáni megerősítő panelen, az enumeráció-védő
+   * mondat UTÁN. Az elsőt sosem írja felül.
+   */
+  successNote?: string
+}
+
+export function ForgotPasswordForm({ emailHint, successNote }: ForgotPasswordFormProps = {}) {
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
@@ -45,6 +78,7 @@ export function ForgotPasswordForm() {
           Ha a <strong>{email}</strong> címhez tartozik fiók, néhány percen belül megérkezik a
           jelszó-visszaállító link. A link 1 óráig érvényes.
         </p>
+        {successNote ? <p className="kc-auth-success__note">{successNote}</p> : null}
       </div>
     )
   }
@@ -53,6 +87,7 @@ export function ForgotPasswordForm() {
     <form className="kc-auth-form" noValidate onSubmit={handleSubmit}>
       <Field
         autoComplete="email"
+        hint={emailHint}
         label="E-mail-cím"
         name="email"
         onChange={(event) => setEmail(event.target.value)}
