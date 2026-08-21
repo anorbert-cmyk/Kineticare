@@ -6,8 +6,11 @@ import { createOrderStatusHandler } from '../../lib/checkout/order-status-handle
  * A GET /api/orders/[orderNumber]/status handler tesztjei:
  * - 401 anon,
  * - 404 más rendelésére (ne szivárogjon a létezés),
- * - 200 csak {status, productId} a saját rendelésre (a productId az első tétel
- *   terméke — a köszönőoldal „Újrapróbálom" linkjéhez, M8),
+ * - 200 csak {status, productId, totalHufSnapshot, currency} a saját rendelésre
+ *   (a productId az első tétel terméke — a köszönőoldal „Újrapróbálom"
+ *   linkjéhez, M8; a végösszeg + pénznem a bevétel-méréshez, 2026-08-21 —
+ *   a mezők feltöltött ágát a src/__tests__/analytics/azonositas-es-bevetel.test.tsx
+ *   méri),
  * - 400 hiányzó rendelésszámra.
  */
 
@@ -78,7 +81,7 @@ describe('GET /api/orders/[orderNumber]/status', () => {
     expect([200, 404]).toContain(response2.status)
   })
 
-  it('200 és CSAK a {status, productId} mező a saját rendelésre (a productId az Újrapróbálom-linkhez)', async () => {
+  it('200 és CSAK a {status, productId, totalHufSnapshot, currency} mező a saját rendelésre', async () => {
     const handler = createOrderStatusHandler({
       getPayload: async () => payloadWithUser({ id: 7 }, [OWN_ORDER]) as never,
     })
@@ -86,9 +89,15 @@ describe('GET /api/orders/[orderNumber]/status', () => {
     const response = await handler(req as never, ctx)
     expect(response.status).toBe(200)
     const body = await response.json()
-    expect(body).toEqual({ status: 'paid', productId: 42 })
-    // Ne tartalmazzon más rendelésadatot (customer, orderNumber, items stb.).
-    expect(Object.keys(body)).toEqual(['status', 'productId'])
+    expect(body).toEqual({
+      status: 'paid',
+      productId: 42,
+      totalHufSnapshot: null,
+      currency: null,
+    })
+    // Ne tartalmazzon más rendelésadatot (customer, customerEmail, orderNumber,
+    // items, számla- és Barion-mezők stb.).
+    expect(Object.keys(body)).toEqual(['status', 'productId', 'totalHufSnapshot', 'currency'])
   })
 
   it('a productId populate-olt tételből is feloldódik; tétel nélkül null', async () => {
@@ -98,7 +107,12 @@ describe('GET /api/orders/[orderNumber]/status', () => {
     })
     const [req, ctx] = request('KH-2026-000123')
     const body = await (await handler(req as never, ctx)).json()
-    expect(body).toEqual({ status: 'paid', productId: 43 })
+    expect(body).toEqual({
+      status: 'paid',
+      productId: 43,
+      totalHufSnapshot: null,
+      currency: null,
+    })
 
     const itemless: MockOrder = { ...OWN_ORDER, items: [] }
     const handler2 = createOrderStatusHandler({
@@ -106,7 +120,12 @@ describe('GET /api/orders/[orderNumber]/status', () => {
     })
     const [req2, ctx2] = request('KH-2026-000123')
     const body2 = await (await handler2(req2 as never, ctx2)).json()
-    expect(body2).toEqual({ status: 'paid', productId: null })
+    expect(body2).toEqual({
+      status: 'paid',
+      productId: null,
+      totalHufSnapshot: null,
+      currency: null,
+    })
   })
 
   it('400 hiányzó rendelésszámra', async () => {

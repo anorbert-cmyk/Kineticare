@@ -50,6 +50,15 @@
  * VILÁGOS téma — ÚJ, ehhez a nézethez számolt párok:
  *   danger #b3261e     / fehér (kártya) ........  6,54:1  AA ✓
  *   danger             / paper ..................  6,19:1  AA ✓
+ *   ink                / hover-sor #e6f0f8 ..... 13,53:1  AA/AAA ✓ (2026-08-21)
+ *   ink-soft           / hover-sor ..............  8,05:1  AA/AAA ✓ (2026-08-21)
+ *   danger             / hover-sor ..............  5,66:1  AA ✓ (2026-08-21)
+ *   hairline-strong    / hover-sor ..............  3,57:1  UI-határ ✓ (2026-08-21)
+ *   eyebrow accent-deep / paper (felvezető sor, 13px) 5,16:1  AA ✓ (2026-08-21)
+ *   accent #3d78aa (felvezető-vonal) / paper ...  4,45:1  nem-szöveg ✓ (2026-08-21)
+ *   hairline #d8e2eb   / paper (fej- és szekció-vonal) 1,24:1  TUDATOSAN dekoratív
+ *     (ugyanaz a szereposztás, mint fehéren 1,31:1-nél: a vonal csoportosít,
+ *     nem azonosít UI-komponenst — tokens.css 118–121. sor) (2026-08-21)
  *   accent #3d78aa oszlop / fehér diagram-háttér  4,70:1  nem-szöveg ✓ (1.4.11)
  *   ink oszlop         / fehér diagram-háttér ... 15,63:1  nem-szöveg ✓
  *   accent / ink (szomszédos oszlopok) .........  3,32:1  nem-szöveg ✓ (1.4.11)
@@ -63,6 +72,14 @@
  *   danger-dark        / ink-föld ...............  9,20:1  AA/AAA ✓ (ÚJ)
  *   hairline-strong-dark #8aa3ba / emelt felület  4,65:1  UI-határ ✓ (ÚJ)
  *   hairline-strong-dark / ink-föld ............  5,97:1  UI-határ ✓ (ÚJ)
+ *   fehér              / hover-sor #22456b ......  9,85:1  AA/AAA ✓ (2026-08-21)
+ *   accent-quiet       / hover-sor ..............  5,36:1  AA ✓ (2026-08-21)
+ *   danger-dark        / hover-sor ..............  5,80:1  AA ✓ (2026-08-21)
+ *   hairline-strong-dark / hover-sor ............  3,77:1  UI-határ ✓ (2026-08-21)
+ *   eyebrow accent-quiet / ink-föld (felvezető sor) 8,49:1  AA/AAA ✓ (2026-08-21)
+ *     (az accent-deep ott MÉRVE csak 2,87:1 volna — 1.4.3 bukás, ezért vált)
+ *   accent-quiet (felvezető-vonal) / ink-föld ...  8,49:1  nem-szöveg ✓ (2026-08-21)
+ *   hairline-dark      / ink-föld (fej- és szekció-vonal) 1,72:1 TUDATOSAN dekoratív (2026-08-21)
  *   hairline-dark #2c4a6e / emelt felület ......  1,34:1  TUDATOSAN dekoratív
  *     (a világos hairline fehéren 1,31:1 — ugyanaz a szereposztás, mint a
  *     tokens.css 118–121. sorában: sosem azonosító határ)
@@ -187,6 +204,28 @@
      107–111. sor), Szakmai = ink + átlós mintázat (WCAG 1.4.1). */
   --kc-as-diagram-otthoni: #3d78aa;
   --kc-as-diagram-szakmai: #10243e;
+  /* Egérrel kiemelt táblasor: a hűvös tint-sáv (tokens.css --kc-color-tint-cool,
+     29. sor) — NEM új szín, a paletta meglévő tagja. Miért kell: a nézet
+     mostantól a teljes Payload-tartalomsávot kitölti, tehát a sorok
+     lényegesen hosszabbak, és a sorkövetés nehezebb. NN/g, Data Tables:
+     „Borders, zebra striping, and hover-triggered highlighting" segítik a
+     felhasználót, hogy ne csússzon el a sorban
+     (https://www.nngroup.com/articles/data-tables/, hozzáférés: 2026-08-21).
+     A háromból a KERET + HOVER párost visszük: a zebracsíkozás a landing
+     hairline-alapú, csendes felület-nyelvét (tokens.css 215–222. sor)
+     törné meg, a hover viszont csak akkor jelenik meg, amikor kell. */
+  --kc-as-surface-hover: #e6f0f8;
+  /* A felvezető sor (eyebrow) színe. 2026-08-21-i ÖSSZEVETÉS a storefronttal
+     (mindkét lap Chromiumban renderelve, számított értékek 1920 px-en): a
+     `.kc-eyebrow` a vevői oldalon `--kc-color-primary` = accent-deep, itt
+     viszont ink-soft volt — ugyanaz az elem, két különböző szín. A landing
+     nyelve nyer (content.css .kc-eyebrow). Kontraszt: accent-deep a paperen
+     5,16:1 (tokens.css jegyzőkönyv), tehát 13 px-es szövegként is AA. */
+  --kc-as-eyebrow: #2f6e9f;
+  /* A felvezető sor alatti rövid akcent-vonal (content.css .kc-eyebrow::after).
+     DEKORÁCIÓ, nem hordoz információt; az `accent` erre kifejezetten
+     megengedett (tokens.css 107–111. sor), a paperen 4,45:1 (≥ 3:1). */
+  --kc-as-accent: #3d78aa;
 
   /* Tipográfia (tokens.css 141–196. sor), rem-ben a --kc-as-px egységgel
      (lásd a szakasz fejkommentjét — a szám a tervezett px-érték). A cím-1 a
@@ -219,12 +258,64 @@
   --kc-as-space-7: calc(48 * var(--kc-as-px));
 
   --kc-as-radius-md: calc(8 * var(--kc-as-px)); /* tokens.css 211. sor (0.5rem 16px-es alapon) */
+  /* A KÁRTYA lekerekítése a storefront `.kc-card`-jáé: `--kc-radius-lg`
+     (0.75rem = 12 px). A 2026-08-21-i, böngészőben MÉRT összevetés szerint a
+     vevői kártya 12 px-es, az admin-kártya 8 px-es volt — ez az eltérés
+     látszik is, ezért zárul. (ui.css .kc-card) */
+  --kc-as-radius-lg: calc(12 * var(--kc-as-px));
+
+  /* ---- SZÉLESSÉGI RENDSZER (tulajdonosi panasz, 2026-08-21: „nem oldalszéles")
+     A nézet korábban `max-width: 1024px`-et vitt, és a Payload tartalmi sávja
+     ennél jóval szélesebb. MÉRVE (Chromium, DefaultTemplate-geometriával, nyitott
+     275 px-es navigációval): 1920 px-es nézetablakon a sáv 1645 px, a nézet 1024 px
+     — a KITÖLTÖTTSÉG 62,2%. 1440 px-en 87,9%. Ez a három token váltja fel az
+     egyetlen plafont; a mérték elemenként dől el, nem az egész lapon.
+
+     1. --kc-as-gutter — a lap oldal-margója. NEM saját szám: a Payload SAJÁT
+        nézet-margója (`--gutter-h`: 60 px, 1024 px alatt 40 px, 768 px alatt
+        16 px — @payloadcms/ui app.scss). Így a Statisztika bal éle PONTOSAN
+        ott van, ahol a Vezérlőpulté és a listáké, tehát az admin-lapok között
+        nem ugrik a tartalom (NN/g, 4. heurisztika, Consistency and Standards:
+        https://www.nngroup.com/articles/consistency-and-standards/, hozzáférés:
+        2026-08-21; WCAG 2.2 SC 3.2.3 Consistent Navigation).
+     2. --kc-as-page-max — felső korlát ULTRASZÉLES kijelzőre. Az érték az IBM
+        Carbon 2x rácsának max-töréspontja: 1584 px (99rem), a rács margója ott
+        24 px (packages/grid/scss/_config.scss; a v10-es dokumentáció szó
+        szerint: a rács-osztály „applies the proper margin and a default
+        max-width of 1584px" —
+        https://v10.carbondesignsystem.com/guidelines/2x-grid/implementation/,
+        hozzáférés: 2026-08-21). Egybevág a Material 3 ablakméret-osztályaival
+        is: az „extra-large" 1600 dp fölött kezdődik, tehát 1584 px alatt még a
+        „large" egyhasábos elrendezése az otthonos
+        (https://developer.android.com/develop/ui/compose/layouts/adaptive/window-size-classes,
+        hozzáférés: 2026-08-21). A korlát a lap TARTALMÁRA vonatkozik, a
+        paper-földre nem: a föld teljes szélességű marad, a tartalom középre zár
+        (a padding `max()`-os alakja a styles.ts pageStyle-jában).
+     3. --kc-as-measure — a FOLYÓSZÖVEG sorhossz-korlátja. A szélesség csak a
+        táblákra és a kártyasorra jár; a magyarázó bekezdés nem nyúlhat vele.
+        Az érték a storefront `--kc-measure-comfort`-ja (tokens.css: 30rem =
+        480 px 16 px-es alapon), tehát ugyanaz a szám, mint a vevői oldalon.
+        MÉRVE (magyar szöveg, Range API-s soronkénti karakterszámlálás, 16 px
+        Nunito Sans): 768 px-től 58–69 karakter/sor — a Baymard 50–75-ös optimumában
+        (https://baymard.com/blog/line-length-readability, hozzáférés:
+        2026-08-21) és a WCAG 2.2 SC 1.4.8 (AAA) 80-as plafonja alatt.
+        A korábbi 528 px MÉRVE 68–76 karaktert adott, tehát a cél-sáv tetején
+        ült; a styles.ts-ben álló „72–74 karakter" becslés nem állta ki a mérést.
+     A hasábra bontás elve (folyószöveg szűk, adat széles) a Shopify
+     kereskedő-felületének kimondott szabálya is: a sok oszlopos adatlistának
+     teljes szélesség jár, minden másnak az alapértelmezett
+     (https://shopify.dev/docs/apps/design/layout, hozzáférés: 2026-08-21). */
+  --kc-as-gutter: var(--gutter-h, calc(32 * var(--kc-as-px)));
+  --kc-as-page-max: calc(1584 * var(--kc-as-px));
+  --kc-as-measure: calc(480 * var(--kc-as-px));
 
   /* A landing hairline-alapú, ÁRNYÉK NÉLKÜLI nyelve (tokens.css 215–222.
      sor): a felületeket 1px-es vonal határolja, nem lebegtetés — ezért itt
-     sehol nincs box-shadow. */
+     sehol nincs box-shadow. A lap-földnek NINCS lekerekítése: a nézet a
+     tartalmi sáv teljes szélességét kitölti (lásd a szélességi rendszert),
+     egy széltől szélig érő sávon a lekerekített sarok pedig levágott
+     kártyának látszana. */
   background: var(--kc-as-bg);
-  border-radius: var(--kc-as-radius-md);
   color: var(--kc-as-text);
   font-family: var(--kc-as-font-body);
   /* Az M lépcső alsó határa (tokens.css 179. sor: 1rem a 16px-es
@@ -238,6 +329,10 @@
   color: var(--kc-as-text);
   font-family: var(--kc-as-font-heading);
   font-weight: 400; /* a Tenor Sansnak csak 400-as metszete van (fonts.css) */
+  /* A landing serif címsorának finom nyitottsága — SZÓ SZERINT a storefront
+     szabálya (base.css h1…h6: `letter-spacing: 0.01em`). A 2026-08-21-i mért
+     összevetésben a vevői h1 0,464 px betűközt vitt, az admin-h1 `normal`-t. */
+  letter-spacing: 0.01em;
   line-height: 1.2; /* --kc-leading-heading (tokens.css 183. sor) */
 }
 
@@ -249,6 +344,27 @@
   font-size: var(--kc-as-font-cim-2);
   margin-bottom: var(--kc-as-space-3);
   margin-top: 0;
+}
+
+/* Felvezető sor (eyebrow) — a landing `.kc-eyebrow` nyelve (content.css):
+   akcent-mély szín, 600-as súly, verzál + 0,24em betűköz, 1,3-as sortáv, és
+   alatta a rövid akcent-vonal. A DOM-szöveg mondatkezdő marad, a verzált a
+   CSS adja (ui-sztenderdek §3.1 M-4). A vonal `aria-hidden` természetű
+   (::after tartalom nélküli dekoráció), a jelentést a szöveg hordozza —
+   WCAG 2.2 SC 1.4.1. A szélessége és vastagsága a storefronté (3.75rem ×
+   1.5px a 16 px-es alapon = 60 × 1,5 tervezési px). */
+.kc-adminstat__eyebrow {
+  color: var(--kc-as-eyebrow, var(--theme-elevation-650));
+  line-height: 1.3;
+}
+
+.kc-adminstat__eyebrow::after {
+  display: block;
+  width: calc(60 * var(--kc-as-px));
+  height: 1.5px;
+  margin-top: var(--kc-as-space-3);
+  background-color: var(--kc-as-accent, var(--theme-elevation-400));
+  content: '';
 }
 
 /* Link: ink + aláhúzás, hover accent-deep — a landing footer-meta mintája
@@ -281,7 +397,9 @@
 .kc-adminstat a {
   color: var(--kc-as-text);
   text-decoration: underline;
-  text-underline-offset: 0.17em;
+  /* base.css `a { text-underline-offset: 0.25em }` — a mért összevetésben a
+     vevői link 0,25em-et, az admin-link 0,17em-et vitt. */
+  text-underline-offset: 0.25em;
 }
 
 .kc-adminstat a:hover {
@@ -306,6 +424,26 @@
   outline-offset: 2px;
 }
 
+/* Táblasor egér alatt — SORKÖVETÉS a szélesebb táblákon.
+   Miért most: a nézet a teljes tartalmi sávot kitölti, tehát egy sor 1920 px-en
+   960 helyett 1525 px hosszú; a szem könnyebben csúszik át a szomszéd sorba.
+   NN/g, Data Tables: „Borders, zebra striping, and hover-triggered
+   highlighting" — https://www.nngroup.com/articles/data-tables/ (hozzáférés:
+   2026-08-21); ugyanezt a hover-visszajelzést írja elő a Material adattábla-
+   útmutatója is (https://m2.material.io/components/data-tables, hozzáférés:
+   2026-08-21).
+   A jelzés NEM hordoz információt (csak azt mutatja, hol áll az egér), ezért a
+   WCAG 2.2 SC 1.4.1 nem érinti; a hovered soron a szöveg-kontrasztok külön
+   mérve a fenti jegyzőkönyvben. Átmenet szándékosan nincs: mozgás nélkül a
+   `prefers-reduced-motion` sem sérülhet.
+   `@media (hover: hover)`: érintőképernyőn a hover „beragadna" az utoljára
+   megérintett sorra. */
+@media (hover: hover) {
+  .kc-adminstat tbody tr:hover {
+    background: var(--kc-as-surface-hover);
+  }
+}
+
 /* ---- Sötét téma — a Payload a <html data-theme="dark">-ot állítja --------
    A föld a márka sötét felülete (ink, tokens.css 126. sor), az emelt réteg
    egy lépcsővel világosabb (Material dark-theme elv). Minden pár SZÁMOLT
@@ -322,4 +460,24 @@
   --kc-as-focus: #ffffff; /* tokens.css 139. sor: accent-deep az inken csak 2,87:1 */
   --kc-as-diagram-otthoni: #9ec4df; /* emelt háttéren 6,61:1 (≥ 3:1) */
   --kc-as-diagram-szakmai: #ffffff; /* emelt háttéren 12,15:1 + mintázat */
+  /* Kiemelt táblasor sötéten. A világos téma tintjének nincs sötét párja a
+     tokens.css-ben, ezért — ugyanazzal a levezetéssel, mint az emelt felület
+     (#1a3757), a sötét hairline-ok és a világosított error-árnyalat — egy
+     lépcsővel VILÁGOSABB felület jár neki: sötét témában a kiemelt réteg
+     világosodik, nem sötétedik (Material, Dark theme:
+     https://m3.material.io/styles/color/system/overview és
+     https://m2.material.io/design/color/dark-theme.html; Apple HIG, Dark Mode:
+     https://developer.apple.com/design/human-interface-guidelines/dark-mode —
+     hozzáférés: 2026-08-21). Minden rajta futó szöveg SZÁMOLVA a fenti
+     jegyzőkönyvben (legkisebb: accent-quiet 5,36:1). */
+  --kc-as-surface-hover: #22456b;
+  /* A felvezető sor sötéten NEM viheti az accent-deepet: MÉRVE 2,87:1 az
+     ink-földön, tehát megbukna a WCAG 2.2 SC 1.4.3-on. A storefront ugyanezt
+     a váltást teszi (content.css: `.kc-section--dark .kc-eyebrow { color:
+     var(--kc-color-on-dark-muted) }` = accent-quiet, az inken 8,49:1). */
+  --kc-as-eyebrow: #9ec4df;
+  /* A felvezető-vonal (dekoráció) is a halvány akcentre vált: az accent
+     #3d78aa az ink-földön SZÁMOLVA 3,32:1 — épp csak a nem-szöveges küszöb
+     fölött, és nem az a szín, amit a storefront visz sötét sávon. */
+  --kc-as-accent: #9ec4df;
 }

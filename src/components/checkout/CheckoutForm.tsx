@@ -12,6 +12,11 @@ import {
   type BarionCourseInput,
   type BarionSnapshotStorage,
 } from '@/lib/analytics/barion-events'
+import {
+  ANALYTICS_EVENTS,
+  captureAnalyticsEvent,
+  captureAnalyticsException,
+} from '@/lib/analytics/posthog'
 import { BarionFizetesJelzes } from '@/components/checkout/BarionFizetesJelzes'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -34,6 +39,7 @@ import {
   WAIVER_LOSS_INPUT_ID,
   WAIVER_START_INPUT_ID,
   createCheckoutSubmitHandler,
+  planCheckoutSubmission,
   CHECKOUT_ERROR_REGION_ID,
   emptyGuestForm,
   prefillBillingForm,
@@ -42,6 +48,8 @@ import {
   withoutBillingError,
   withoutGuestError,
   type BillingFieldErrors,
+  type CheckoutSubmissionContext,
+  type CheckoutSubmissionPlan,
   type GuestFieldErrors,
 } from '../../lib/checkout/form-submission'
 import {
@@ -130,6 +138,103 @@ export function checkoutBarionCourse(product: CheckoutProduct): BarionCourseInpu
   }
 }
 
+/**
+ * ═══ ÜZLETI HIBAKÖVETÉS A PÉNZTÁRBAN (checkout_failed) ═══════════════════
+ *
+ * MIÉRT KELL. A `checkout_started` → `purchase_confirmed` tölcsér csak azt
+ * mutatja meg, HÁNYAN esnek ki — azt nem, hogy MIÉRT. A kiesés okai
+ * gyökeresen különböző teendőt jelentenek: a hiányzó ÁSZF-pipa felület-hiba,
+ * a mezőhiba szöveg- vagy validáció-hiba, a szerver-elutasítás pedig
+ * üzemzavar. Ezek nélkül a pénztár néma: a szerveroldali napló CSAK azt látja,
+ * ami odaért, a kliensoldali elakadás (pipa, mezőhiba, hálózat) ott nyomtalan.
+ *
+ * MI MEHET KI: a hiba GÉPI kategóriája és — ahol van — a fókuszált elem
+ * AZONOSÍTÓJA. Mindkettő zárt, kódban rögzített készletből származik.
+ *
+ * MI NEM MEHET KI SOHA: a felhasználónak szóló MAGYAR hibaüzenet szövege. Két
+ * okból. (1) A szöveg VÁLTOZIK — a riport ilyenkor némán kettéhasadna,
+ * miközben ugyanarról a hibáról szól. (2) A szöveg BEVITT ADATOT is
+ * tartalmazhat (a validáció összefoglalója a mezőkről beszél), márpedig az
+ * esemény harmadik félhez (PostHog) megy ki. Ugyanaz a tilalom, amit a
+ * ./../../lib/analytics/lead-events.ts és a course-events.ts is kimond.
+ */
+
+/** A pénztári hibák ZÁRT kategória-készlete — a riportok ezekre bontanak. */
+export const CHECKOUT_FAILURE_REASONS = [
+  /** A beküldés el sem indulhatott (már megvette / hiányzó nyilatkozat). */
+  'blocked',
+  /** A megadott adatok nem mentek át a kliensoldali validáción. */
+  'invalid',
+  /** A kérés kiment, a szerver (vagy a hálózat) elutasította. */
+  'rejected',
+  /** VALÓDI JS-kivétel a beküldés útján (a részletek a PostHog $exception-be). */
+  'exception',
+] as const
+
+/** Egy pénztári hiba kategóriája. Szűk unió: szabad sztringet nem enged át. */
+export type CheckoutFailureReason = (typeof CHECKOUT_FAILURE_REASONS)[number]
+
+export interface CheckoutFailureInput {
+  /** A kurzus adatbázis-azonosítója (szám — a rendszerünkön kívül semmit nem jelent). */
+  productId: number
+  reason: CheckoutFailureReason
+  /**
+   * A fókuszált elem azonosítója, ha van. ZÁRT készlet: a hibarégió, a két
+   * nyilatkozat-négyzet, az ÁSZF-négyzet vagy egy mező input-azonosítója —
+   * mind a kódban rögzített konstans, SOHA nem a felhasználó bevitele.
+   */
+  field?: string | null
+  /** A valódi JS-kivétel, ha volt — a PostHog `$exception`-be megy. */
+  error?: unknown
+}
+
+/**
+ * A pénztári hiba rögzítése.
+ *
+ * TELJES `try/catch`: a mérés hibája NEM ronthatja el a pénztárat. Ha a
+ * PostHog-kliens bármely okból dob (blokkoló kiegészítő, hibás konfiguráció),
+ * a vásárló ebből semmit nem érzékelhet — ugyanaz az elv, amit a
+ * `withLeadTracking` és a Barion-pixel burkolók követnek. Naplózni innen nem
+ * tudunk: a `src/lib/logger.ts` a szerver stdoutjára ír.
+ */
+export function reportCheckoutFailure({ error, field, productId, reason }: CheckoutFailureInput): void {
+  try {
+    captureAnalyticsEvent(ANALYTICS_EVENTS.checkoutFailed, {
+      productId,
+      reason,
+      // A hiányzó fókuszcél ki sem kerül (nem null-ként).
+      ...(typeof field === 'string' && field.length > 0 ? { field } : {}),
+    })
+    if (error !== undefined) {
+      captureAnalyticsException(error, 'checkout-submit')
+    }
+  } catch {
+    // A mérés hibája nem érheti el a vásárlót.
+  }
+}
+
+/**
+ * A beküldési TERVBŐL a hiba gépi kategóriája — tiszta függvény, ezért DOM
+ * nélkül tesztelhető. `null`, ha a terv szerint a beküldés mehet.
+ *
+ * MIÉRT A TERVBŐL: a `createCheckoutSubmitHandler` láncába nyúlni kockázatos
+ * lenne (a fizetési út látható viselkedése nem változhat), a
+ * `planCheckoutSubmission` viszont TISZTA — ugyanazzal az állapottal
+ * másodszor hívva ugyanazt adja, mellékhatás nélkül. A mérés így a beküldés
+ * mellett fut, nem benne.
+ */
+export function checkoutFailureFromPlan(
+  plan: CheckoutSubmissionPlan,
+): { reason: CheckoutFailureReason; field: string | null } | null {
+  if (plan.kind === 'blocked') {
+    return { reason: 'blocked', field: plan.focusElementId }
+  }
+  if (plan.kind === 'invalid') {
+    return { reason: 'invalid', field: plan.focusElementId }
+  }
+  return null
+}
+
 /** A követéssel BURKOLT beküldés injektálható függőségei (teszthez). */
 export interface TrackedSubmitDeps {
   submit: (body: CheckoutSubmitInput) => Promise<CheckoutSubmitResult>
@@ -141,6 +246,12 @@ export interface TrackedSubmitDeps {
     orderNumber: string,
     course: BarionCourseInput,
   ) => boolean
+  /**
+   * A pénztári hiba rögzítése. OPCIONÁLIS: hiányában a valódi küldő fut
+   * (`reportCheckoutFailure`), így a meglévő hívási helyek és tesztek
+   * változtatás nélkül működnek tovább, a mérés viszont élesben végig megy.
+   */
+  failed?: (reason: CheckoutFailureReason, error?: unknown) => void
 }
 
 /**
@@ -182,13 +293,33 @@ export function trackedSubmitCheckout(
     remember: rememberCheckoutSnapshot,
   },
 ): (body: CheckoutSubmitInput) => Promise<CheckoutSubmitResult> {
+  const failed =
+    deps.failed ??
+    ((reason: CheckoutFailureReason, error?: unknown) =>
+      reportCheckoutFailure({ productId: product.id, reason, error }))
+
   return async (body) => {
     const course = checkoutBarionCourse(product)
     deps.addPaymentInfo(course)
-    const result = await deps.submit(body)
+    let result: CheckoutSubmitResult
+    try {
+      result = await deps.submit(body)
+    } catch (error) {
+      // VALÓDI JS-kivétel a beküldés útján. A `submitCheckout` maga mindent
+      // elnyel, tehát ide csak váratlan hiba juthat — épp ezért érdemes látni.
+      // A hiba UTÁNA VÁLTOZATLANUL TOVÁBBMEGY: a látható viselkedés (a
+      // beküldés-kezelő `finally` ága, a gomb állapota) nem változhat attól,
+      // hogy mérünk.
+      failed('exception', error)
+      throw error
+    }
     if (result.ok) {
       deps.remember(deps.storage(), result.orderNumber, course)
       deps.initiatePurchase(course, result.orderNumber)
+    } else {
+      // A szerver (vagy a hálózat) elutasította. A magyar üzenet SZÖVEGE
+      // szándékosan nem megy ki — csak a gépi kategória.
+      failed('rejected')
     }
     return result
   }
@@ -319,17 +450,24 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
    * hogy az eredeti hiba visszatérjen, miközben a teljes suite zöld marad.
    * Itt már csak az aktuális állapot olvasása és a React-hookok bekötése van.
    */
+  /**
+   * A beküldés pillanatában érvényes űrlapállapot — EGYETLEN forrásból. A
+   * beküldés és a hiba-MÉRÉS ugyanabból dolgozik, tehát a kettő nem tud
+   * eltérő állapotról dönteni.
+   */
+  const readCheckoutContext = (): CheckoutSubmissionContext => ({
+    productId: product.id,
+    alreadyPurchased,
+    waiverRequired: requiresWaiver,
+    waiverStartAccepted: waiverStart,
+    waiverLossAccepted: waiverLoss,
+    termsAccepted,
+    billing,
+    ...(isGuest ? { guest } : {}),
+  })
+
   const runSubmit = createCheckoutSubmitHandler({
-    readContext: () => ({
-      productId: product.id,
-      alreadyPurchased,
-      waiverRequired: requiresWaiver,
-      waiverStartAccepted: waiverStart,
-      waiverLossAccepted: waiverLoss,
-      termsAccepted,
-      billing,
-      ...(isGuest ? { guest } : {}),
-    }),
+    readContext: readCheckoutContext,
     setError,
     setBillingErrors,
     setGuestErrors,
@@ -341,6 +479,22 @@ export function CheckoutForm({ product, user, alreadyPurchased }: CheckoutFormPr
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    /**
+     * MÉRÉS a beküldés MELLETT, nem BENNE: a `planCheckoutSubmission` tiszta
+     * függvény, ugyanazzal az állapottal másodszor hívva ugyanazt adja,
+     * mellékhatás nélkül. Így a fizetési út látható viselkedése (hibaüzenetek,
+     * fókusz, gombállapot) érintetlen marad — a mérés nem nyúl a láncba.
+     * A SZERVER által elutasított beküldés a `trackedSubmitCheckout`-ban megy
+     * ki, tehát itt nem duplázódik: ez az ág csak a KLIENSOLDALI elakadást méri.
+     */
+    try {
+      const hiba = checkoutFailureFromPlan(planCheckoutSubmission(readCheckoutContext()))
+      if (hiba !== null) {
+        reportCheckoutFailure({ productId: product.id, ...hiba })
+      }
+    } catch {
+      // A mérés hibája nem érheti el a vásárlót.
+    }
     await runSubmit()
   }
 

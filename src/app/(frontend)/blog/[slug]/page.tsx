@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { draftMode } from 'next/headers'
 import { notFound } from 'next/navigation'
 
-import { PostView } from '@/components/content/PostView'
+import { PostArticle } from '@/components/content/PostArticle'
 import { PreviewBar } from '@/components/preview/PreviewBar'
 import { getPostBySlug, getRelatedPosts } from '@/lib/cms'
 import { withDraftRobots } from '@/lib/preview/draft-metadata'
@@ -31,11 +31,13 @@ export default async function BlogPostPage({ params }: Props) {
   if (!post) notFound()
   const related = await getRelatedPosts(post)
 
-  // Az Article JSON-LD-t a PostView rendereli (szerző + og:image feloldással).
+  // Az Article JSON-LD-t és a morzsa-sémát a PostArticle rendereli (szerző +
+  // og:image feloldással), mert a séma mezőinek a LÁTHATÓ tartalomból kell
+  // jönniük — ott van egy helyen a kettő (docs/seo-geo-llm.md 1. fejezet).
   return (
     <>
       {isDraft ? <PreviewBar path={`/blog/${slug}`} /> : null}
-      <PostView post={post} related={related} showMeta />
+      <PostArticle post={post} related={related} />
     </>
   )
 }

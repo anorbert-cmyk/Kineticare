@@ -53,21 +53,80 @@ import type { CSSProperties } from 'react'
  *   a saját konténerében görögjön vízszintesen.
  * - C31 technika (flexbox reflow):
  *   https://www.w3.org/WAI/WCAG22/Techniques/css/C31
+ *
+ * ═══ SZÉLESSÉGI RENDSZER (tulajdonosi panasz, 2026-08-21: „nem oldalszéles") ═══
+ * A nézet korábban EGYETLEN plafont vitt (`maxWidth: 1024px`), és így a
+ * Payload tartalmi sávjának csak egy részét foglalta el. MÉRVE (Chromium,
+ * a DefaultTemplate geometriájával, nyitott 275 px-es navigációval):
+ *
+ *   nézetablak   sáv      nézet    kitöltöttség
+ *   1280 px      1005 px  1005 px  100,0%
+ *   1440 px      1165 px  1024 px   87,9%
+ *   1920 px      1645 px  1024 px   62,2%
+ *   2560 px      2285 px  1024 px   44,8%
+ *
+ * A plafon törlése önmagában rossz válasz lenne: a magyarázó bekezdések
+ * sorhossza elszaladna. Ezért a mérték ELEMENKÉNT dől el:
+ *   - LAP: kitölti a sávot, a Payload saját nézet-margójával (`--gutter-h`,
+ *     tehát a bal él egy vonalban a Vezérlőpultéval), ultraszéles kijelzőn a
+ *     tartalom 1584 px-en (Carbon 2x rács max-töréspontja) középre zár;
+ *   - TÁBLA és KÁRTYASOR: teljes szélesség — a sok oszlopos adatlistának ez
+ *     jár (Shopify, Layout: https://shopify.dev/docs/apps/design/layout,
+ *     hozzáférés: 2026-08-21);
+ *   - FOLYÓSZÖVEG: `--kc-as-measure` (a storefront `--kc-measure-comfort`-ja,
+ *     480 px), mérve 58–69 karakter/sor 768 px-től — a Baymard 50–75-ös optimumában
+ *     (https://baymard.com/blog/line-length-readability, hozzáférés:
+ *     2026-08-21);
+ *   - DIAGRAM: a saját természetes szélességén marad (lásd chartFrameStyle).
+ * A tokenek és a teljes forrásjegyzék: custom.scss, „SZÉLESSÉGI RENDSZER".
  */
 
+/**
+ * A lap-héj. Két dolgot csinál egyszerre, egyetlen `padding-inline`-nal:
+ *   max(oldal-margó, (100% - tartalom-plafon) / 2)
+ * A paper-föld így SZÉLTŐL SZÉLIG ér (ez a storefront lap-földje, tokens.css
+ * `--kc-color-bg`), a TARTALOM viszont a plafonnál nem nő tovább, hanem
+ * középre zár. Extra `div` nélkül, mert a `box-sizing: border-box` az egész
+ * adminra érvényes (@payloadcms/ui app.scss `* { box-sizing: border-box }`).
+ * A `100%` a szülő (a Payload `template-default__wrap`) szélessége.
+ */
 export const pageStyle: CSSProperties = {
   background: 'var(--kc-as-bg, transparent)',
-  borderRadius: 'var(--kc-as-radius-md, 0)',
-  padding: 'var(--kc-as-space-6, calc(var(--base) * 1.5))',
-  maxWidth: 'calc(1024 * var(--kc-as-px, 1px))',
+  paddingBottom: 'var(--kc-as-space-7, calc(var(--base) * 2))',
+  paddingInline:
+    'max(var(--kc-as-gutter, var(--gutter-h, calc(32 * var(--kc-as-px, 1px)))), calc((100% - var(--kc-as-page-max, calc(1584 * var(--kc-as-px, 1px)))) / 2))',
+  paddingTop: 'var(--kc-as-space-6, calc(var(--base) * 1.5))',
+  width: '100%',
 }
+
+/**
+ * A lap fejrésze (eyebrow + h1 + lead) alatt hairline zár — a landing
+ * elválasztó-nyelve (tokens.css 215–222. sor: a felületeket 1px-es vonal
+ * határolja, nem árnyék). A vonal itt CSOPORTOSÍT: elválasztja a lap
+ * azonosítóját az adattól, ami a szélesebb lapon fontosabb, mint eddig
+ * (NN/g, Visual Hierarchy — a szint jelölése nem csak méret dolga:
+ * https://www.nngroup.com/articles/visual-hierarchy-ux-definition/,
+ * hozzáférés: 2026-08-21).
+ */
+export const pageHeaderStyle: CSSProperties = {
+  borderBottom: '1px solid var(--kc-as-hairline, var(--theme-elevation-100))',
+  marginBottom: 'var(--kc-as-space-6, calc(var(--base) * 1.5))',
+  paddingBottom: 'var(--kc-as-space-5, calc(var(--base) * 1.25))',
+}
+
+/**
+ * A folyószöveg-mérték KÖZÖS értéke — ugyanaz a logika, mint a storefronton
+ * (tokens.css „Mérték" szakasz): nem elemre írt egyedi szám, hanem token.
+ * A fallback az érték px-ben, hogy a márka-CSS nélkül se szaladjon el a sor.
+ */
+const MEASURE = 'var(--kc-as-measure, calc(480 * var(--kc-as-px, 1px)))'
 
 /* Eyebrow a h1 fölé — a landing prémium felvezető-sora: verzál CSS-ből
    (a DOM-szöveg mondatkezdő marad, ui-sztenderdek §3.1 M-4), 0.24em
    betűköz, ink-soft (tokens.css 195–196. sor; paperen 8,80:1). A 13px az
    S lépcső alsó határa (tokens.css 180. sor: 0.8125rem 16px-es alapon). */
 export const eyebrowStyle: CSSProperties = {
-  color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
+  color: 'var(--kc-as-eyebrow, var(--theme-elevation-650))',
   fontSize: 'calc(13 * var(--kc-as-px, 1px))',
   fontWeight: 600,
   letterSpacing: 'var(--kc-as-tracking-eyebrow, 0.24em)',
@@ -81,17 +140,19 @@ export const headingStyle: CSSProperties = {
   marginBottom: 'var(--kc-as-space-2, calc(var(--base) * 0.5))',
 }
 
-/* 528px (55 × a 16px-es törzs ch-egysége) ≈ 72–74 karakter magyar szöveggel
-   (élőben mérve, Range API-s soronkénti karakterszámlálással: 672px-en még
-   89–95 karakter jött ki, mert a magyar szöveg keskeny betűi a ch-nál többet
-   engednek egy sorba) — a 45–85 karakteres sávon belül (tervezési skill
-   3. pont), és a Baymard 50–75-ös optimumában
-   (https://baymard.com/blog/line-length-readability). */
+/* A lead a mérték-tokenre hivatkozik. A korábbi, elemre írt 528px MÉRVE
+   68–76 karaktert adott (magyar szöveg, 16px Nunito Sans, Range API-s
+   soronkénti karakterszámlálás) — a 45–85-ös tűrésen belül, de a Baymard
+   50–75-ös optimumának a tetején. A közös 480px-es mérték MÉRVE: 768 px-től
+   58–69 karakter/sor, 390 px-en 44–56, 320 px-en 30–45. A 320 px-es alsó
+   érték a kis kijelző adottsága, nem a mérték hibája: 45 karakterhez 16 px-es
+   törzsméretnél ~320 px-es szövegdoboz kellene, a Payload 16 px-es
+   oldal-margói mellett viszont 288 px áll rendelkezésre. */
 export const leadStyle: CSSProperties = {
   color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
   marginTop: 0,
-  marginBottom: 'var(--kc-as-space-5, calc(var(--base) * 1.25))',
-  maxWidth: 'calc(528 * var(--kc-as-px, 1px))',
+  marginBottom: 0,
+  maxWidth: MEASURE,
 }
 
 export const cardRowStyle: CSSProperties = {
@@ -101,17 +162,22 @@ export const cardRowStyle: CSSProperties = {
   marginBottom: 'var(--kc-as-space-6, calc(var(--base) * 1.5))',
 }
 
-/* Kártya = emelt felület: fehér + 1px hairline + 8px radius, árnyék nélkül
+/* Kártya = emelt felület: fehér + 1px hairline + 12px radius, árnyék nélkül
    (a landing kártya-nyelve, tokens.css 113–124. sor). A kártya kerete csak
    dekorál, nem azonosít — az információt a szöveg hordozza, ezért elég a
-   halk hairline (tokens.css 118–121. sor). */
+   halk hairline (tokens.css 118–121. sor).
+   A LEKEREKÍTÉS és a BELSŐ TÉRKÖZ 2026-08-21-én igazodott a storefronthoz: a
+   böngészőben mért összevetés szerint a vevői `.kc-card` 12 px-es sarkot
+   (`--kc-radius-lg`) és 24 px-es belső térközt (`--kc-card--padded`,
+   `--kc-space-5`) visz, az admin-kártya viszont 8-at és 16-ot vitt — ugyanaz
+   a komponens, két különböző arány. (ui.css .kc-card / .kc-card--padded) */
 export const cardStyle: CSSProperties = {
   background: 'var(--kc-as-surface-raised, var(--theme-elevation-50))',
   border: '1px solid var(--kc-as-hairline, var(--theme-elevation-100))',
-  borderRadius: 'var(--kc-as-radius-md, 4px)',
+  borderRadius: 'var(--kc-as-radius-lg, 4px)',
   flex: '1 1 calc(128 * var(--kc-as-px, 1px))',
   minWidth: 'calc(128 * var(--kc-as-px, 1px))',
-  padding: 'var(--kc-as-space-4, calc(var(--base) * 0.5))',
+  padding: 'var(--kc-as-space-5, calc(var(--base) * 0.75))',
 }
 
 /* Érték FELÜL, nagyban — a szám a lényeg, a címke a kontextus (a dashboard
@@ -131,8 +197,31 @@ export const cardLabelStyle: CSSProperties = {
   display: 'block',
 }
 
+/* Szekció-ritmus: hairline vonal FÖLÖTTE + 32px belső térköz. A széles lapon
+   a puszta függőleges térköz kevés a csoportosításhoz — a landing ugyanezt
+   1px-es vonallal oldja meg (tokens.css 215–222. sor), és a szekció-határ
+   jelölése a hierarchia egyik hordozója a méret mellett (NN/g, Visual
+   Hierarchy: https://www.nngroup.com/articles/visual-hierarchy-ux-definition/,
+   hozzáférés: 2026-08-21). A vonal DEKORATÍV (hairline, nem hairline-strong):
+   a szekciót a `h2` nevezi meg, nem a vonal. */
 export const sectionStyle: CSSProperties = {
+  borderTop: '1px solid var(--kc-as-hairline, var(--theme-elevation-100))',
   marginBottom: 'var(--kc-as-space-7, calc(var(--base) * 1.75))',
+  paddingTop: 'var(--kc-as-space-6, calc(var(--base) * 1.5))',
+}
+
+/* A diagram KERETE. A RevenueChart SVG-je a saját, természetes felső
+   szélességén (832 tervezési px) áll meg — ez tudatos: egy 12 oszlopos
+   idősort nem a nyújtás tesz olvashatóbbá, a túl lapos arány éppen rontja az
+   oszlopok összevetését (IBM Carbon, Chart anatomy:
+   https://carbondesignsystem.com/data-visualization/chart-anatomy/; NN/g,
+   Clutter-Free charts: https://www.nngroup.com/articles/clutter-charts/ —
+   hozzáférés: 2026-08-21). A lap kiszélesedésével viszont a diagram KÁRTYÁJA
+   is nőne, és félig üres dobozként állna a széles sávban; ezért a kártya a
+   diagram természetes szélességéhez igazodik.
+   A szám: 832 (SVG) + 2 × 16 (kártya-belsőtérköz) + 2 × 1 (keret) = 866. */
+export const chartFrameStyle: CSSProperties = {
+  maxWidth: 'calc(866 * var(--kc-as-px, 1px))',
 }
 
 /* Tábla-konténer = emelt felület ÉS görgetőkonténer egyben: a kerete
@@ -142,7 +231,7 @@ export const sectionStyle: CSSProperties = {
 export const tableWrapStyle: CSSProperties = {
   background: 'var(--kc-as-surface-raised, transparent)',
   border: '1px solid var(--kc-as-hairline-strong, transparent)',
-  borderRadius: 'var(--kc-as-radius-md, 0)',
+  borderRadius: 'var(--kc-as-radius-lg, 0)',
   overflowX: 'auto',
   padding: 'var(--kc-as-space-4, 0)',
   width: '100%',
@@ -196,24 +285,58 @@ export const rowHeaderStyle: CSSProperties = {
   textAlign: 'left',
 }
 
+/* A számoszlop JOBBRA igazít és tabuláris számjegyet használ (GOV.UK, Table:
+   „When comparing columns of numbers, align the numbers to the right in table
+   cells" — https://design-system.service.gov.uk/components/table/; ugyanez
+   Materialnál: https://m2.material.io/components/data-tables — hozzáférés:
+   2026-08-21).
+   A `white-space: nowrap` a széles lap miatt került ide: az összeg egyetlen
+   érték, nem tördelhető szöveg — enélkül a „3 600 000 Ft" a magyar ezres
+   szóközöknél két sorba törhet, és két külön számnak látszik.
+   Oszlopszélességet SZÁNDÉKOSAN nem írunk elő: a böngésző automatikus
+   tábla-algoritmusa a szabad helyet a tartalom arányában osztja szét. MÉRVE
+   1920 px-en a havi táblán: Hónap 403 px, a négy számoszlop 259–298 px. A
+   kipróbált alternatíva (`width: 1%` a számoszlopokon, hogy a maradék a
+   címkeoszlopba menjen) MÉRVE 1125 px-es Hónap-oszlopot adott, a számokat
+   pedig a lap jobb szélére szorította — pont az ellen, amit az NN/g kér:
+   „related columns should be adjacent so users don't have to move their eyes
+   between distant columns" (https://www.nngroup.com/articles/data-tables/,
+   hozzáférés: 2026-08-21). */
 export const numericStyle: CSSProperties = {
   ...tdStyle,
   textAlign: 'right',
   fontVariantNumeric: 'tabular-nums',
+  whiteSpace: 'nowrap',
 }
 
 export const thNumericStyle: CSSProperties = {
   ...thStyle,
   textAlign: 'right',
+  whiteSpace: 'nowrap',
 }
 
-/* A notice ugyanolyan folyószöveg, mint a lead, ezért ugyanaz a sorhossz-
-   plafon jár neki (2026-08-20-i élő audit: maxWidth nélkül a tölcsér-notice
-   sora 133, 672px-en még 91–95 karakterre nyúlt a 85-ös küszöb és a Baymard
-   50–75-ös optimuma fölé — https://baymard.com/blog/line-length-readability;
-   tervezési skill 3. pont: 45–85; az 528px mért indoklása a leadStyle-nál). */
+/* Sorbeli navigációs link. A cél-méret azért kap külön szabályt, mert a széles
+   lapon a linkszöveg EGY sorba fér, és a beágyazott `<a>` doboza a sormagasságra
+   (mérve 22,5 px) esne vissza — keskeny lapon két sorosan még 45 px volt. A
+   repó célértéke 44 × 44 CSS px (a WCAG 2.2 SC 2.5.8 minimuma 24 × 24:
+   https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html,
+   hozzáférés: 2026-08-21; a nagyobb célt a docs/ui-sztenderdek.md írja elő).
+   A `max()` alsó korlátja azért kell, mert a Payload 1024 px alatt 12 px-re
+   viszi a gyökeret, és a puszta rem-alak ott 40,6 px-et adna — a cél-méret
+   viszont CSS px-ben van kimondva, nem a betűmérethez kötve. (Ugyanaz a minta,
+   mint a RevenueChart min-widthjénél.) */
+export const rowLinkStyle: CSSProperties = {
+  alignItems: 'center',
+  display: 'inline-flex',
+  minHeight: 'max(44px, calc(44 * var(--kc-as-px, 1px)))',
+}
+
+/* A notice ugyanolyan folyószöveg, mint a lead, ezért UGYANAZ a mérték-token
+   jár neki. Mérték nélkül a tölcsér-megjegyzés sora a lap teljes szélességét
+   vinné: 1920 px-en 1525 px, ami magyar szöveggel 200 karakter fölötti sor —
+   a 85-ös tűréshatár két és félszerese. */
 export const noticeStyle: CSSProperties = {
   color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
   margin: 0,
-  maxWidth: 'calc(528 * var(--kc-as-px, 1px))',
+  maxWidth: MEASURE,
 }

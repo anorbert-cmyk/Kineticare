@@ -6,10 +6,13 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { TurnstileWidget } from '@/app/(frontend)/kapcsolat/_components/TurnstileWidget'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
+import { withLeadTracking, type LeadTrackers } from '@/lib/analytics/lead-events'
 import { CTA_PROGRESS_LABELS } from '@/lib/cta-vocabulary'
 import {
   buildFreeCourseRequestPayload,
   submitFreeCourseRequest,
+  type FreeCourseRequestPayload,
+  type FreeCourseSubmitResult,
 } from '@/lib/free-course/submit'
 import {
   CONTACT_PATH,
@@ -133,6 +136,46 @@ function isTurnstileEnabled(siteKey: string | null | undefined): boolean {
   return typeof siteKey === 'string' && siteKey.trim().length > 0
 }
 
+/** A `trackedSubmitFreeCourseRequest` injektálható függőségei (a teszt kémeket ad be). */
+export interface TrackedFreeCourseDeps {
+  submit: (payload: FreeCourseRequestPayload) => Promise<FreeCourseSubmitResult>
+  /** A PostHog lead-küldői; elhagyva az éles küldők futnak (LEAD_TRACKERS). */
+  lead?: LeadTrackers
+}
+
+/**
+ * Ingyenes kurzus igénylése + PostHog lead-funnel (`ingyenes-kurzus` címke).
+ *
+ * A hívás ELŐTT `lead_submitted`, sikeres szerverválasz után `lead_succeeded`
+ * megy ki. A kettő KÜLÖNBSÉGE a néma beküldési hibák egyetlen külső jelzője —
+ * a részletes indoklás és az adatvédelmi szerződés a
+ * `src/lib/analytics/lead-events.ts` fejlécében áll.
+ *
+ * EZ AZ EGYETLEN LEAD-FORRÁS, AMI KURZUS-AZONOSÍTÓT IS KÜLD: az igénylés egy
+ * KONKRÉT kurzusra szól (`productId`), és a tölcsér csak így bontható
+ * kurzusonként. A szám a saját rendszerünkön kívül semmit nem jelent, tehát
+ * nem személyes adat. A név és az e-mail-cím SOHA nem kerül az eseménybe.
+ *
+ * A `lead_succeeded` a `result.ok`-hoz kötött, NEM az `emailSent`-hez: a
+ * hozzáférés ilyenkor létrejött (a szerver visszaigazolta a leadet), csak a
+ * belépő levél nem tudott kimenni. Az e-mail-küldés meghibásodása külön
+ * kérdés, és nem a lead-tölcsérben mérendő — a felhasználó ehhez igazodó, IGAZ
+ * üzenetet kap a siker-nézet figyelmeztető ágán.
+ *
+ * A mérés hibája nem ronthatja el az igénylést: a `withLeadTracking` mindkét
+ * küldőt saját `try/catch`-ben futtatja. A honeypotba lépő bot, a hiányzó
+ * Turnstile-token és a kliensoldali mezőhibák ide EL SEM JUTNAK.
+ */
+export async function trackedSubmitFreeCourseRequest(
+  payload: FreeCourseRequestPayload,
+  deps: TrackedFreeCourseDeps = { submit: submitFreeCourseRequest },
+): Promise<FreeCourseSubmitResult> {
+  return withLeadTracking('ingyenes-kurzus', () => deps.submit(payload), {
+    extra: { courseId: payload.productId },
+    trackers: deps.lead,
+  })
+}
+
 export function FreeCourseRequestForm({
   productId,
   courseTitle,
@@ -211,7 +254,7 @@ export function FreeCourseRequestForm({
     }
 
     setSubmitting(true)
-    const result = await submitFreeCourseRequest(
+    const result = await trackedSubmitFreeCourseRequest(
       buildFreeCourseRequestPayload(values, productId, turnstileToken),
     )
     setSubmitting(false)

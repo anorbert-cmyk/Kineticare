@@ -74,6 +74,7 @@ Egyéb scriptek:
 | --- | --- |
 | `npm run seed` | Demó-/tesztadatok (`src/scripts/seed.ts`); `SEED_SCOPE=kezdolap` = élesben is futtatható szűk hatókör |
 | `npm run grant:purchase` | Kézi hozzáférés-adás vásárlás nélkül (`src/scripts/grant-purchase.ts`) |
+| `npm run backfill:ar-snapshot` | Egyszeri ár-snapshot backfill (`src/scripts/backfill-price-snapshot.ts`); alapból próbafutás, íráshoz `OWNER_BACKFILL_CONFIRM=igen`; útmutató: `docs/ar-snapshot-backfill.md` |
 | `npm run seed:legacy` | Örökölt tartalom visszatöltése (`src/scripts/restore-legacy-content.ts`) |
 | `npm run generate:types` | Payload típusok újragenerálása (`src/payload-types.ts`) |
 | `npm run generate:importmap` | Admin importmap újragenerálása |

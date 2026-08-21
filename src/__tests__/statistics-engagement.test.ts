@@ -17,7 +17,7 @@ import {
   queryCourseEngagement,
   type QueryCourseEngagementDeps,
 } from '../lib/statistics/engagement-query'
-import { buildRevenueReport } from '../lib/statistics/revenue'
+import { aggregateOrderFunnel, buildRevenueReport } from '../lib/statistics/revenue'
 import type { Product } from '../payload-types'
 
 /**
@@ -106,7 +106,7 @@ describe('buildCourseEngagementRow', () => {
 
 describe('buildCourseEngagementReport', () => {
   it('0 kurzusnál üres, nem csonkolt jelentést ad', () => {
-    expect(buildCourseEngagementReport([])).toEqual({ courses: [], truncated: false })
+    expect(buildCourseEngagementReport([])).toEqual({ courses: [], truncated: false, skipped: 0 })
   })
 
   it('a truncated jelzést továbbadja', () => {
@@ -240,7 +240,7 @@ describe('queryCourseEngagement', () => {
       progressByProduct: {},
     })
     const report = await queryCourseEngagement(deps)
-    expect(report).toEqual({ courses: [], truncated: false })
+    expect(report).toEqual({ courses: [], truncated: false, skipped: 0 })
     expect(calls.filter((call) => call.collection === 'users')).toHaveLength(0)
   })
 
@@ -258,6 +258,92 @@ describe('queryCourseEngagement', () => {
     const report = await queryCourseEngagement(deps)
     expect(report.truncated).toBe(true)
     expect(report.courses[0]?.enrolled).toBe(ENGAGEMENT_ENROLLMENT_MAX)
+  })
+
+  it('csonkolt haladásnál a kimaradó diákok NEM „nem kezdte el"-ként jelennek meg', async () => {
+    // A 2026-08-21-i kódvizsgálat HIGH (F1) találata, mért reprodukcióval:
+    // 800 beiratkozott, MINDENKI mind a 20 leckével készen → 16 000 haladás-sor
+    // a 10 000-es plafon ellen. A levágás nélkül a riport 300 KÉSZ diákot
+    // „nem kezdte el"-nek mutatott, az átlagot pedig 63%-nak (a valóság 100%).
+    // A torzítás iránya ellentétes a `truncated` jelzés ígéretével — ezért nem
+    // elég a figyelmeztetés, a sornak magának kell igazat mondania.
+    const huszLecke = Array.from({ length: 20 }, (_, i) => ({
+      id: `v${String(i + 1)}`,
+      title: `${String(i + 1)}. lecke`,
+      streamAssetId: `g${String(i + 1)}`,
+      status: 'ready',
+    }))
+    const diakok = Array.from({ length: 800 }, (_, i) => ({ id: i + 1 }))
+    const sorok = diakok.flatMap((diak) =>
+      huszLecke.map((lecke) => ({ user: diak.id, videoRef: lecke.id })),
+    )
+    expect(sorok.length).toBe(16_000)
+    expect(sorok.length).toBeGreaterThan(ENGAGEMENT_PROGRESS_MAX)
+
+    const { deps } = createPayloadMock({
+      products: [{ id: 1, sku: 'nagy', audience: 'laikus', videos: huszLecke }],
+      usersByProduct: { 1: diakok },
+      progressByProduct: { 1: sorok },
+    })
+    const report = await queryCourseEngagement(deps)
+    const sor = report.courses[0]
+
+    expect(report.truncated).toBe(true)
+    // A 10 000. sor pont az 500. diák utolsó leckéje. Őt is eldobjuk: a
+    // plafonon nem tudhatjuk, hogy a sorai nem vágódtak-e félbe.
+    expect(sor?.enrolled).toBe(499)
+    expect(sor?.started).toBe(499)
+    expect(sor?.completed).toBe(499)
+    // EZ a tétel: kész diák sosem eshet a „nem kezdte el" oszlopba.
+    expect(sor?.notStarted).toBe(0)
+    expect(sor?.averagePercent).toBe(100)
+    // A hibás (levágás nélküli) értékek, hogy a mutáció itt hangosan bukjon.
+    expect(sor?.notStarted).not.toBe(300)
+    expect(sor?.averagePercent).not.toBe(63)
+  })
+
+  it('egy kurzus hibája nem viszi el a többi kurzus sorát, és a kimaradás látszik', async () => {
+    // F7 (2026-08-21): a ciklusban nem volt kurzusonkénti hibakezelés, tehát
+    // egyetlen rossz termék az EGÉSZ Kurzus-hatás szekciót elvitte.
+    const videos = [{ id: 'v1', title: '1. lecke', streamAssetId: 'g1', status: 'ready' }]
+    const calls: FindArgs[] = []
+    const find = (rawArgs: unknown) => {
+      const args = rawArgs as FindArgs
+      calls.push(args)
+      const page = args.page ?? 1
+      const limit = args.limit ?? 10
+      if (args.collection === 'products') {
+        return Promise.resolve(
+          pagedResult(
+            [
+              { id: 1, sku: 'ep', audience: 'laikus', videos },
+              { id: 2, sku: 'romlott', audience: 'laikus', videos },
+            ],
+            page,
+            limit,
+          ),
+        )
+      }
+      const feltetel = args.where?.[args.collection === 'users' ? 'purchases' : 'product'] as
+        { equals?: unknown } | undefined
+      if (feltetel?.equals === 2) {
+        return Promise.reject(new Error('adatbázis-hiba a 2. kurzusnál'))
+      }
+      if (args.collection === 'users') {
+        return Promise.resolve(pagedResult([{ id: 10 }], page, limit))
+      }
+      return Promise.resolve(pagedResult([{ user: 10, videoRef: 'v1' }], page, limit))
+    }
+
+    const report = await queryCourseEngagement({
+      payload: { find } as unknown as QueryCourseEngagementDeps['payload'],
+    })
+
+    // Az ép kurzus sora megvan…
+    expect(report.courses).toHaveLength(1)
+    expect(report.courses[0]).toMatchObject({ productId: 1, enrolled: 1, completed: 1 })
+    // …a hibás kurzus pedig nem tűnik el némán.
+    expect(report.skipped).toBe(1)
   })
 
   it('a plafonok a kurzus-haladás handler plafonjainak a fele', () => {
@@ -283,6 +369,7 @@ describe('CourseEngagementSection', () => {
       },
     ],
     truncated: false,
+    skipped: 0,
   }
 
   it('kirajzolja a fejléceket, a számokat és a kurzuslap-linket', () => {
@@ -312,6 +399,24 @@ describe('CourseEngagementSection', () => {
     expect(html).toContain('Névsor és szűrés a kurzus lapján')
     // A „ki az konkrétan" útbaigazítás magyarul, a kurzuslapra mutatva.
     expect(html).toContain('állapot szerint szűrhetsz')
+  })
+
+  it('a hibára kimaradt kurzusokat kimondja, egyes és többes számban is', () => {
+    const egy = renderToStaticMarkup(
+      createElement(CourseEngagementSection, { engagement: { ...mintaReport, skipped: 1 } }),
+    )
+    expect(egy).toContain('Egy kurzus adata technikai hiba miatt kimaradt')
+
+    const tobb = renderToStaticMarkup(
+      createElement(CourseEngagementSection, { engagement: { ...mintaReport, skipped: 3 } }),
+    )
+    expect(tobb).toContain('3 kurzus adata technikai hiba miatt kimaradt')
+
+    // Ha nincs kimaradás, a mondat sem jelenik meg.
+    const nulla = renderToStaticMarkup(
+      createElement(CourseEngagementSection, { engagement: mintaReport }),
+    )
+    expect(nulla).not.toContain('technikai hiba miatt kimaradt')
   })
 
   it('a görgethető tábla-régió billentyűzetről fókuszálható és nevesített (WCAG 2.1.1, 4.1.2)', () => {
@@ -351,7 +456,9 @@ describe('CourseEngagementSection', () => {
 
   it('üres kurzuslistánál ezt magyarul mondja ki', () => {
     const html = renderToStaticMarkup(
-      createElement(CourseEngagementSection, { engagement: { courses: [], truncated: false } }),
+      createElement(CourseEngagementSection, {
+        engagement: { courses: [], truncated: false, skipped: 0 },
+      }),
     )
     expect(html).toContain('Még nincs kurzus')
   })
@@ -367,7 +474,9 @@ describe('CourseEngagementSection', () => {
 })
 
 describe('StatisticsReport + kurzus-hatás integráció', () => {
-  const revenueReport = buildRevenueReport([], [], { now: new Date('2026-08-15T12:00:00Z') })
+  const revenueReport = buildRevenueReport([], aggregateOrderFunnel([]), {
+    now: new Date('2026-08-15T12:00:00Z'),
+  })
 
   it('engagement nélkül is renderel: bevétel + magyar magyarázat a szekcióban', () => {
     const html = renderToStaticMarkup(
@@ -399,6 +508,7 @@ describe('StatisticsReport + kurzus-hatás integráció', () => {
             },
           ],
           truncated: false,
+          skipped: 0,
         },
       }),
     )

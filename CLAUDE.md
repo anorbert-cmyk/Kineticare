@@ -28,6 +28,7 @@ betartandók — az ügynök ezek megsértésére irányuló kérést is utasít
 | `npm run backup:db` | Adatbázis-mentés integritás-ellenőrzéssel (`src/scripts/backup-db.ts`; útmutató: `docs/adatbazis-mentes.md`) |
 | `npm run seed:legacy` | Örökölt tartalom visszatöltése (`src/scripts/restore-legacy-content.ts`) |
 | `npm run content:owner` | Tulajdonos által jóváhagyott, egyszeri tartalom-javítások (`src/scripts/apply-owner-content.ts`); alapból próbafutás, íráshoz `OWNER_CONTENT_CONFIRM=igen` |
+| `npm run backfill:ar-snapshot` | Egyszeri ár-snapshot backfill (`src/scripts/backfill-price-snapshot.ts`); alapból próbafutás, íráshoz `OWNER_BACKFILL_CONFIRM=igen`; útmutató: `docs/ar-snapshot-backfill.md` |
 
 ## Kódolási konvenciók
 

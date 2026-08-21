@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { TurnstileWidget } from '@/app/(frontend)/kapcsolat/_components/TurnstileWidget'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
+import { withLeadTracking, type LeadTrackers } from '@/lib/analytics/lead-events'
 import {
   APPOINTMENT_CONSENT_TEXT,
   APPOINTMENT_PRIVACY_POLICY_PATH,
@@ -25,6 +26,8 @@ import {
   buildAppointmentPayload,
   isTurnstileEnabled,
   submitAppointmentForm,
+  type AppointmentSubmissionPayload,
+  type AppointmentSubmitResult,
 } from '@/lib/appointment/submit'
 import { ctaLabel } from '@/lib/cta-vocabulary'
 
@@ -116,6 +119,38 @@ export interface AppointmentFormProps {
   sikerSzoveg?: string
   /** A siker-nézetben megismételt telefonszámok (CMS), hívás-linkkel. */
   telefonok?: ReadonlyArray<{ nev: string; szam: string; href: string | null }>
+}
+
+/** A `trackedSubmitAppointment` injektálható függőségei (a teszt kémeket ad be). */
+export interface TrackedAppointmentDeps {
+  submit: (payload: AppointmentSubmissionPayload) => Promise<AppointmentSubmitResult>
+  /** A PostHog lead-küldői; elhagyva az éles küldők futnak (LEAD_TRACKERS). */
+  lead?: LeadTrackers
+}
+
+/**
+ * Időpontkérés beküldése + PostHog lead-funnel (`idopontkeres` forrás-címke).
+ *
+ * A hívás ELŐTT `lead_submitted`, sikeres szerverválasz után `lead_succeeded`
+ * megy ki. A kettő KÜLÖNBSÉGE a néma beküldési hibák egyetlen külső jelzője —
+ * a részletes indoklás és az adatvédelmi szerződés a
+ * `src/lib/analytics/lead-events.ts` fejlécében áll.
+ *
+ * ADATVÉDELMI HANGSÚLY: ez az űrlap GDPR 9. cikk (1) szerinti egészségügyi
+ * adatot is fogadhat (a „panasz" mező). A mérésbe ebből SEMMI nem kerül —
+ * kizárólag a forrás-címke megy ki, sem a panasz szövege, sem a név, sem a
+ * telefonszám, sem az e-mail-cím.
+ *
+ * A mérés hibája nem ronthatja el a beküldést: a `withLeadTracking` mindkét
+ * küldőt saját `try/catch`-ben futtatja. A honeypotba lépő bot, a hiányzó
+ * Turnstile-token, a hiányzó űrlap-azonosító és a kliensoldali mezőhibák ide
+ * EL SEM JUTNAK (az űrlap előbb visszatér, hálózati hívás nélkül).
+ */
+export async function trackedSubmitAppointment(
+  payload: AppointmentSubmissionPayload,
+  deps: TrackedAppointmentDeps = { submit: submitAppointmentForm },
+): Promise<AppointmentSubmitResult> {
+  return withLeadTracking('idopontkeres', () => deps.submit(payload), { trackers: deps.lead })
 }
 
 export function AppointmentForm({
@@ -226,7 +261,7 @@ export function AppointmentForm({
     }
 
     setSubmitting(true)
-    const result = await submitAppointmentForm(
+    const result = await trackedSubmitAppointment(
       buildAppointmentPayload(values, formId, turnstileToken),
     )
     setSubmitting(false)

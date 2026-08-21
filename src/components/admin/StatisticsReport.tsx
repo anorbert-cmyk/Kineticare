@@ -9,6 +9,7 @@ import {
   headingStyle,
   leadStyle,
   noticeStyle,
+  pageHeaderStyle,
   pageStyle,
   sectionStyle,
 } from './statistics/styles'
@@ -64,19 +65,31 @@ export function StatisticsReport({
 }) {
   return (
     <div className="kc-adminstat" style={pageStyle}>
-      <p style={eyebrowStyle}>Kimutatások</p>
-      <h1 style={headingStyle}>Statisztika</h1>
-      <p style={leadStyle}>
-        Havi bevétel a számla teljesítési dátuma szerint (ha nincs számla, a rendelés leadásának
-        budapesti hónapja). Csak a kifizetett rendelések számítanak. Az otthoni és a szakmai ág
-        tételenként válik szét, mert egy kosárban mindkettő lehet.
-      </p>
-      {report.truncated ? (
-        <p style={{ ...noticeStyle, marginBottom: 'var(--kc-as-space-4, calc(var(--base) * 1))' }}>
-          A lista a felső korlát miatt csonka. A kimutatás a beolvasott rendeléseket mutatja, nem a
-          teljes archívumot.
+      {/* A fejrész saját blokk, hairline zárással: a lap azonosítója (eyebrow +
+          cím + magyarázat) elválik az adattól. A magyarázó bekezdés mérték-
+          korláttal fut, míg a kártyák és a táblák teljes szélességűek — a
+          szélességi rendszer indoklása a styles.ts fejkommentjében. */}
+      <header style={pageHeaderStyle}>
+        {/* A `kc-adminstat__eyebrow` osztály adja a landing felvezető-sorának
+            akcent-színét és az alatta futó rövid akcent-vonalat (custom.scss);
+            a márka-CSS nélkül csak az inline stílus marad, a sor akkor is
+            olvasható. */}
+        <p className="kc-adminstat__eyebrow" style={eyebrowStyle}>
+          Kimutatások
         </p>
-      ) : null}
+        <h1 style={headingStyle}>Statisztika</h1>
+        <p style={leadStyle}>
+          Havi bevétel a számla teljesítési dátuma szerint (ha nincs számla, a rendelés leadásának
+          budapesti hónapja). Csak a kifizetett rendelések számítanak. Az otthoni és a szakmai ág
+          tételenként válik szét, mert egy kosárban mindkettő lehet.
+        </p>
+        {report.truncated ? (
+          <p style={{ ...noticeStyle, marginTop: 'var(--kc-as-space-3, calc(var(--base) * 0.75))' }}>
+            A lista a felső korlát miatt csonka. A kimutatás a beolvasott rendeléseket mutatja, nem
+            a teljes archívumot.
+          </p>
+        ) : null}
+      </header>
       <TotalsCards totals={report.totals} />
       <MonthlyRevenueSection rows={report.months} />
       <section style={sectionStyle}>

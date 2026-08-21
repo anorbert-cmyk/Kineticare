@@ -3,7 +3,7 @@
 # Kineticare — Cloud Agent per-boot indító.
 #
 # Feladata (minden induláskor, idempotensen):
-#   1. elindítja a helyi PostgreSQL 16 clustert;
+#   1. elindítja a helyi PostgreSQL clustert (a verziót a pg_lsclusters adja);
 #   2. legenerálja EGYSZER a NEM titkos fejlesztői környezeti változókat egy
 #      repón KÍVÜLI fájlba ($HOME/.kineticare-dev.env), és utána stabilan onnan
 #      olvassa;
@@ -35,8 +35,29 @@ ENV_FILE="$HOME/.kineticare-dev.env"
 log() { printf '[start.sh] %s\n' "$*"; }
 
 # --- 1) PostgreSQL cluster indítása (idempotens) ---------------------------
-log 'PostgreSQL 16 cluster indítása…'
-sudo pg_ctlcluster 16 main start >/dev/null 2>&1 || true
+# A cluster verzióját NEM égetjük be. Az install.sh a disztribúció `postgresql`
+# META-csomagját telepíti, ami egy disztró-frissítéssel 17-re vagy 18-ra
+# válthat; a korábbi, beégetett `pg_ctlcluster 16 main` ilyenkor a nem létező
+# 16-os clustert indította volna, a hibát pedig egy `|| true` elnyelte, így a
+# baj csak 30 másodperc múlva, félrevezető „nem lett elérhető" üzenetként
+# jelent meg. A `pg_lsclusters` a TÉNYLEGESEN telepített clustert mondja meg,
+# tehát a start a valósághoz igazodik, nem egy feltételezéshez.
+cluster_line="$(pg_lsclusters --no-header 2>/dev/null | head -n 1 || true)"
+pg_version="$(printf '%s\n' "$cluster_line" | awk '{print $1}')"
+pg_cluster="$(printf '%s\n' "$cluster_line" | awk '{print $2}')"
+if [ -z "$pg_version" ] || [ -z "$pg_cluster" ]; then
+  log 'HIBA: nincs telepített PostgreSQL cluster (a pg_lsclusters üres). Futtasd előbb az install.sh-t.'
+  exit 1
+fi
+
+log "PostgreSQL cluster indítása: ${pg_version}/${pg_cluster}…"
+# A „már fut" eset normális és nem hiba, ezért a nem nulla kilépés önmagában
+# nem állítja meg a scriptet — de KIMONDJUK, hogy ne néma legyen. A tényleges
+# döntést a lenti readiness-ciklus hozza meg.
+if ! sudo pg_ctlcluster "$pg_version" "$pg_cluster" start >/dev/null 2>&1; then
+  log "A cluster indító parancsa nem nullával tért vissza (ha már fut, ez rendben van)."
+fi
+
 ready=0
 for _ in $(seq 1 30); do
   if pg_isready -h localhost -q; then
@@ -46,7 +67,7 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 if [ "$ready" -ne 1 ]; then
-  log 'HIBA: a PostgreSQL nem lett elérhető 30 mp alatt.'
+  log "HIBA: a PostgreSQL (${pg_version}/${pg_cluster}) nem lett elérhető 30 mp alatt."
   exit 1
 fi
 log 'PostgreSQL elérhető (localhost:5432).'
@@ -78,7 +99,13 @@ if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='kineticar
   sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE kineticare LOGIN"
 fi
 # A jelszót minden induláskor a generált, stabil értékre állítjuk (idempotens).
-sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER ROLE kineticare WITH LOGIN PASSWORD '${DB_PASSWORD}'" >/dev/null
+# A jelszó STDIN-en megy, nem a `-c` argumentumában: a parancssor a
+# /proc/<pid>/cmdline-on keresztül a gép minden felhasználója számára olvasható,
+# amíg a parancs fut. (A dev-jelszó eldobható és a $HOME alatt, umask 077-tel
+# születik, de a rossz szokást nem visszük tovább élesebb scriptekbe.)
+sudo -u postgres psql -v ON_ERROR_STOP=1 >/dev/null <<SQL
+ALTER ROLE kineticare WITH LOGIN PASSWORD '${DB_PASSWORD}';
+SQL
 if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='kineticare'" | grep -q 1; then
   log 'kineticare adatbázis létrehozása.'
   sudo -u postgres createdb -O kineticare kineticare

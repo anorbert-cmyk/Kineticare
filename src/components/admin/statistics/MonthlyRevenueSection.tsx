@@ -6,6 +6,7 @@ import {
 import { RevenueChart } from '../RevenueChart'
 import {
   captionStyle,
+  chartFrameStyle,
   numericStyle,
   rowHeaderStyle,
   sectionStyle,
@@ -24,7 +25,13 @@ export function MonthlyRevenueSection({ rows }: { rows: readonly MonthlyRevenueR
   return (
     <section style={sectionStyle}>
       <h2>Havi bevétel</h2>
-      <RevenueChart rows={rows} />
+      {/* A diagram a saját természetes szélességén áll meg, a TÁBLÁZAT viszont
+          teljes szélességű: az idősoros oszlopdiagramot a nyújtás nem teszi
+          olvashatóbbá, a sok oszlopos adattáblát viszont igen (indoklás és
+          források: styles.ts chartFrameStyle). */}
+      <div style={chartFrameStyle}>
+        <RevenueChart rows={rows} />
+      </div>
       {/* role="region" + aria-labelledby + tabIndex: a keskeny viewporton
           görgethető tábla billentyűzetről is görgethető legyen (WCAG 2.1.1;
           axe: scrollable-region-focusable; minta: Adrian Roselli,

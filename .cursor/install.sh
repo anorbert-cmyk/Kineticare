@@ -3,8 +3,13 @@
 # Kineticare — Cloud Agent install (repó-bootstrap a checkout után).
 #
 # Idempotens: biztosítja a két hiányzó RENDSZERfüggőséget (Node 24 +
-# PostgreSQL 16) az alap image tetején, majd telepíti az npm-függőségeket a
+# PostgreSQL) az alap image tetején, majd telepíti az npm-függőségeket a
 # lockfile szerint.
+#
+# A PostgreSQL szándékosan a disztribúció META-csomagja, nem `postgresql-16`:
+# így egy alap image-frissítés után is a disztróhoz illő verzió települ,
+# pinelési karbantartás nélkül. A start.sh EZÉRT nem éget be verziószámot,
+# hanem a `pg_lsclusters` kimenetéből olvassa ki a clustert.
 #
 # Miért itt és nem külön Dockerfile-ban: (1) a repó minden infrastruktúra-
 # konfigot VERZIÓZVA tart (vö. railway.*.json), így a fejlesztői környezet is
@@ -29,7 +34,7 @@ apt_update_once() {
   fi
 }
 
-# --- PostgreSQL 16 (a Payload adatbázisa) — idempotens ---------------------
+# --- PostgreSQL (a Payload adatbázisa) — idempotens ------------------------
 if ! command -v pg_ctlcluster >/dev/null 2>&1; then
   echo '[install.sh] PostgreSQL telepítése…'
   apt_update_once

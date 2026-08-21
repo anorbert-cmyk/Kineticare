@@ -7,6 +7,7 @@ import {
   noticeStyle,
   numericStyle,
   rowHeaderStyle,
+  rowLinkStyle,
   sectionStyle,
   tableStyle,
   tableWrapStyle,
@@ -76,6 +77,22 @@ export function CourseEngagementSection({
             >
               A kurzusoknak a megjeleníthetőnél több adata van, ezért a számok alsó becslések. A
               pontos, hallgatónkénti adat a kurzus lapján érhető el.
+            </p>
+          ) : null}
+          {/* A hibára kimaradt kurzusokat KIMONDJUK. Egy csendben eltűnt sor
+              rosszabb, mint egy hiányt jelző mondat: a munkatárs azt hinné,
+              hogy az a kurzus nem is létezik. A részleteket (melyik kurzus,
+              milyen hiba) a szerveroldali napló őrzi. */}
+          {engagement.skipped > 0 ? (
+            <p
+              style={{
+                ...noticeStyle,
+                marginBottom: 'var(--kc-as-space-4, calc(var(--base) * 1))',
+              }}
+            >
+              {engagement.skipped === 1
+                ? 'Egy kurzus adata technikai hiba miatt kimaradt ebből a táblából. A többi sor teljes.'
+                : `${engagement.skipped.toLocaleString('hu-HU')} kurzus adata technikai hiba miatt kimaradt ebből a táblából. A többi sor teljes.`}
             </p>
           ) : null}
           {/* role="region" + aria-labelledby + tabIndex: a keskeny viewporton
@@ -152,8 +169,13 @@ export function CourseEngagementSection({
                       {/* A link színét a custom.scss `.kc-adminstat a` szabálya
                           adja (ink + aláhúzás, hover accent-deep — a landing
                           link-nyelve); a márka-CSS nélkül a Payload saját
-                          link-stílusa érvényesül. */}
-                      <a href={`/admin/collections/products/${String(course.productId)}`}>
+                          link-stílusa érvényesül. A `rowLinkStyle` a 44 px-es
+                          cél-magasságot tartja akkor is, amikor a széles lapon
+                          a felirat egyetlen sorba fér (indoklás: styles.ts). */}
+                      <a
+                        href={`/admin/collections/products/${String(course.productId)}`}
+                        style={rowLinkStyle}
+                      >
                         Névsor és szűrés a kurzus lapján
                       </a>
                     </td>
