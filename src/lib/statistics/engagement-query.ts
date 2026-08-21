@@ -14,6 +14,7 @@ import {
   type CourseEngagementInput,
   type CourseEngagementReport,
 } from './engagement'
+import { trimTruncatedProgress } from './progress-truncation'
 import { readStatisticsPages } from './query'
 
 /**
@@ -34,10 +35,13 @@ import { readStatisticsPages } from './query'
  *   egy kérésben aggregál, a handler egyet — a memória-költségvetés így
  *   marad összemérhető. Az importált konstansokból számolódnak, tehát a
  *   két hely nem tud szétcsúszni.
- * - Csonkolásnál a számok ALSÓ becslések (a be nem olvasott sorok
- *   hiányoznak); a `truncated` jelzést a nézet magyarul kimondja. A
- *   hallgatónkénti PONTOS adat a kurzus szerkesztőlapján él, ahol a
- *   handler user-határon vág — ott a megjelenített sor sosem hamis.
+ * - Csonkolásnál a számok ALSÓ becslések, de SOSEM hamisak: a haladás-lista
+ *   plafonján túli diákok kimaradnak a sorból (`trimTruncatedProgress`),
+ *   nem pedig „nem kezdte el"-ként jelennek meg. Enélkül egy kész diák a
+ *   „nem kezdte el" oszlopba esne, vagyis a torzítás iránya ELLENTÉTES
+ *   lenne a `truncated` figyelmeztetés ígéretével. A `truncated` jelzést a
+ *   nézet magyarul kimondja; a hallgatónkénti pontos adat a kurzus
+ *   szerkesztőlapján él, ahol a handler UGYANEZT a közös szabályt hívja.
  * - A tananyaghoz `depth: 0` elég (a course-progress-handler mintája): az
  *   összesítés a mellékleteket nem használja, a lekérdezés így olcsóbb.
  */
@@ -220,6 +224,15 @@ export async function queryCourseEngagement(
       progressRows.push({ userId, videoRef })
     }
 
+    // A haladás-lista plafonjánál az utolsó felhasználó sorai félbevághatók.
+    // A közös szabály eldobja őt és a nála nagyobb azonosítójú diákokat —
+    // így a sor kevesebb diákot összesít, de amit mutat, az igaz.
+    const teljes = trimTruncatedProgress({
+      progressRows,
+      enrollments,
+      truncated: progressPage.truncated,
+    })
+
     inputs.push({
       productId,
       title: productLabel(doc, productId),
@@ -230,8 +243,8 @@ export async function queryCourseEngagement(
         { modules: doc.modules ?? null, videos: doc.videos ?? null },
         true,
       ),
-      enrollments,
-      progressRows,
+      enrollments: teljes.enrollments,
+      progressRows: teljes.progressRows,
     })
   }
 

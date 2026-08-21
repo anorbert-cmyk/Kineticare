@@ -260,6 +260,48 @@ describe('queryCourseEngagement', () => {
     expect(report.courses[0]?.enrolled).toBe(ENGAGEMENT_ENROLLMENT_MAX)
   })
 
+  it('csonkolt haladásnál a kimaradó diákok NEM „nem kezdte el"-ként jelennek meg', async () => {
+    // A 2026-08-21-i kódvizsgálat HIGH (F1) találata, mért reprodukcióval:
+    // 800 beiratkozott, MINDENKI mind a 20 leckével készen → 16 000 haladás-sor
+    // a 10 000-es plafon ellen. A levágás nélkül a riport 300 KÉSZ diákot
+    // „nem kezdte el"-nek mutatott, az átlagot pedig 63%-nak (a valóság 100%).
+    // A torzítás iránya ellentétes a `truncated` jelzés ígéretével — ezért nem
+    // elég a figyelmeztetés, a sornak magának kell igazat mondania.
+    const huszLecke = Array.from({ length: 20 }, (_, i) => ({
+      id: `v${String(i + 1)}`,
+      title: `${String(i + 1)}. lecke`,
+      streamAssetId: `g${String(i + 1)}`,
+      status: 'ready',
+    }))
+    const diakok = Array.from({ length: 800 }, (_, i) => ({ id: i + 1 }))
+    const sorok = diakok.flatMap((diak) =>
+      huszLecke.map((lecke) => ({ user: diak.id, videoRef: lecke.id })),
+    )
+    expect(sorok.length).toBe(16_000)
+    expect(sorok.length).toBeGreaterThan(ENGAGEMENT_PROGRESS_MAX)
+
+    const { deps } = createPayloadMock({
+      products: [{ id: 1, sku: 'nagy', audience: 'laikus', videos: huszLecke }],
+      usersByProduct: { 1: diakok },
+      progressByProduct: { 1: sorok },
+    })
+    const report = await queryCourseEngagement(deps)
+    const sor = report.courses[0]
+
+    expect(report.truncated).toBe(true)
+    // A 10 000. sor pont az 500. diák utolsó leckéje. Őt is eldobjuk: a
+    // plafonon nem tudhatjuk, hogy a sorai nem vágódtak-e félbe.
+    expect(sor?.enrolled).toBe(499)
+    expect(sor?.started).toBe(499)
+    expect(sor?.completed).toBe(499)
+    // EZ a tétel: kész diák sosem eshet a „nem kezdte el" oszlopba.
+    expect(sor?.notStarted).toBe(0)
+    expect(sor?.averagePercent).toBe(100)
+    // A hibás (levágás nélküli) értékek, hogy a mutáció itt hangosan bukjon.
+    expect(sor?.notStarted).not.toBe(300)
+    expect(sor?.averagePercent).not.toBe(63)
+  })
+
   it('a plafonok a kurzus-haladás handler plafonjainak a fele', () => {
     expect(ENGAGEMENT_ENROLLMENT_MAX).toBe(1000)
     expect(ENGAGEMENT_PROGRESS_MAX).toBe(10_000)

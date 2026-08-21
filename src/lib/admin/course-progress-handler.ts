@@ -4,6 +4,7 @@ import { hasStaffOrOwnerRole } from '../../access/roles'
 import { buildCurriculum } from '../curriculum/curriculum'
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
+import { trimTruncatedProgress } from '../statistics/progress-truncation'
 import {
   buildCourseProgressStats,
   type CourseEnrollment,
@@ -331,14 +332,14 @@ export function createCourseProgressHandler(
         PROGRESS_MAX,
       )
 
-      const progressRows: CourseProgressStatRow[] = []
+      const nyersProgressRows: CourseProgressStatRow[] = []
       for (const row of progressPage.docs) {
         const userId = relationshipId(row.user)
         const videoRef = trimmedOrNull(row.videoRef)
         if (userId === null || videoRef === null) {
           continue
         }
-        progressRows.push({
+        nyersProgressRows.push({
           userId,
           videoRef,
           watchedAt: typeof row.watchedAt === 'string' ? row.watchedAt : null,
@@ -347,26 +348,20 @@ export function createCourseProgressHandler(
 
       /**
        * Csonkolásnál az UTOLSÓ felhasználó sorai félbevághatók, tehát róla csak
-       * alulmért — vagyis HAMIS — százalékot tudnánk mutatni. Az ő sorait
-       * eldobjuk, és innentől minden nagyobb azonosítójú diák kimarad a
-       * listából. Inkább hiányozzon egy sor, mint hogy rossz szám kerüljön elé.
+       * alulmért — vagyis HAMIS — százalékot tudnánk mutatni. A levágás szabálya
+       * a src/lib/statistics/progress-truncation.ts közös moduljában él, hogy a
+       * Statisztika nézet Kurzus-hatás táblája ne tudjon tőle elcsúszni
+       * (korábban csak itt volt meg, és a másik felület emiatt hamis
+       * „nem kezdte el" számot mutatott).
        */
-      let hianyosTolUserId: number | null = null
-      if (progressPage.truncated && progressRows.length > 0) {
-        hianyosTolUserId = progressRows[progressRows.length - 1].userId
-        while (
-          progressRows.length > 0 &&
-          progressRows[progressRows.length - 1].userId === hianyosTolUserId
-        ) {
-          progressRows.pop()
-        }
-      }
-
-      const teljesEnrollments =
-        hianyosTolUserId === null
-          ? enrollments
-          : enrollments.filter((entry) => entry.userId < hianyosTolUserId)
-      const kihagyottDiakok = enrollments.length - teljesEnrollments.length
+      const teljes = trimTruncatedProgress({
+        progressRows: nyersProgressRows,
+        enrollments,
+        truncated: progressPage.truncated,
+      })
+      const progressRows = teljes.progressRows
+      const teljesEnrollments = teljes.enrollments
+      const kihagyottDiakok = teljes.omitted
 
       const stats = buildCourseProgressStats({
         curriculum,
