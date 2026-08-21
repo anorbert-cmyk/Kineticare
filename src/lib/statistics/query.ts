@@ -11,13 +11,22 @@
  *   `audience: null` marad null → laikus.
  * - Lapozás felső korláttal: a `limit: 0` korlátlan memóriát jelentene. A
  *   kurzus-haladás panel mintájára explicit lapméret + max, és a csonkolást
- *   a nézet kimondja.
+ *   a nézet kimondja. EZ CSAK A FIZETETT rendelésekre vonatkozik: ott a
+ *   tényleges sorokra (tételek, összegek, dátumok) szükség van.
+ * - A TÖLCSÉR nem olvas sort: hét `payload.count` adja (hat státusz + a
+ *   szűrés nélküli összes). Következmény a `RevenueReport` szerződésére: a
+ *   `truncated` jelző ezután KIZÁRÓLAG a fizetett rendelések lapozásától
+ *   függ — a tölcsér számai sosem csonkák, plafon sincs rajtuk (F8,
+ *   2026-08-21-i vizsgálat).
  */
 
 import type { Payload } from 'payload'
 
 import {
+  buildOrderFunnelFromCounts,
   buildRevenueReport,
+  FUNNEL_STATUSES,
+  type OrderFunnelCounts,
   type RevenueOrderInput,
   type RevenueOrderItemInput,
   type RevenueReport,
@@ -27,9 +36,6 @@ import {
 export const STATISTICS_ORDER_PAGE_SIZE = 200
 /** Legfeljebb ennyi fizetett rendelést aggregálunk egy nézet-betöltéskor. */
 export const STATISTICS_ORDER_MAX = 10_000
-/** A tölcsér (minden státusz) lapmérete. */
-export const STATISTICS_FUNNEL_PAGE_SIZE = 500
-export const STATISTICS_FUNNEL_MAX = 20_000
 
 interface FindResultLike<T> {
   docs?: T[] | null
@@ -61,20 +67,12 @@ export interface StatisticsOrderItemDoc {
   priceHufSnapshot?: number | null
 }
 
-export interface StatisticsStatusDoc {
-  status?: string | null
-}
-
 const ORDER_SELECT = {
   status: true,
   createdAt: true,
   invoiceCompletionDate: true,
   totalHufSnapshot: true,
   items: true,
-} as const
-
-const STATUS_SELECT = {
-  status: true,
 } as const
 
 /**
@@ -189,10 +187,6 @@ export function mapOrderDocToRevenueInput(doc: StatisticsOrderDoc): RevenueOrder
   }
 }
 
-export function mapStatusDocs(docs: readonly StatisticsStatusDoc[]): string[] {
-  return docs.map((doc) => (typeof doc.status === 'string' ? doc.status : ''))
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -282,9 +276,60 @@ async function hydrateProductAudience(
 }
 
 export interface QueryRevenueReportDeps {
-  payload: Pick<Payload, 'find'>
+  /**
+   * `find` a fizetett rendelések lapozott beolvasásához és a product-audience
+   * pótlásához; `count` a tölcsérhez (F8 — a hat szám nem 20 000 sorból jön).
+   */
+  payload: Pick<Payload, 'count' | 'find'>
   now?: Date
   months?: number
+}
+
+/**
+ * A rendelés-tölcsér hat száma + a teljes darabszám — SOR-BEOLVASÁS NÉLKÜL
+ * (F8, 2026-08-21-i vizsgálat).
+ *
+ * ═══ MI VOLT ═══
+ * A tölcsér 500-asával olvasta be az ÖSSZES rendelést a 20 000-es plafonig:
+ * 40 lekérdezés és 20 000 dokumentum a memóriában — hat szám kedvéért. A
+ * plafon fölött ráadásul csonkolt is: 25 000 rendelésnél a tölcsér a valóság
+ * 80%-át mutatta, és a jelentés „csonka" feliratot kapott, holott a
+ * bevétel-rész hiánytalan volt.
+ *
+ * ═══ MI VAN ═══
+ * Hét `payload.count`: hat nevesített státuszra egy-egy, plusz a szűrés
+ * nélküli összes (ebből lesz az `other`, lásd `buildOrderFunnelFromCounts`).
+ * A Postgres COUNT-ot futtat, sor nem jön át a dróton, és nincs felső korlát —
+ * a szám egymillió rendelésnél is pontos.
+ *
+ * ═══ MIÉRT PÁRHUZAMOSAN ═══
+ * Hét rövid, csak-olvasó lekérdezés; egyszerre legfeljebb ennyi kapcsolatot
+ * kér, tehát a `pg` pool alapértelmezett 10-es kerete alatt marad (a nézet a
+ * bevétel- és a kurzus-hatás lekérdezést egymás UTÁN futtatja, lásd
+ * `StatisticsView`). Sorosan is működne, csak lassabban.
+ *
+ * `overrideAccess: true` — ugyanaz a szerződés, mint a `find`-eknél: a
+ * szerepkör-kaput a hívó adja (lásd a modul fejkommentjét).
+ */
+async function countOrderFunnel(payload: Pick<Payload, 'count'>): Promise<OrderFunnelCounts> {
+  const [totalResult, statusResults] = await Promise.all([
+    payload.count({ collection: 'orders', overrideAccess: true }),
+    Promise.all(
+      FUNNEL_STATUSES.map((status) =>
+        payload.count({
+          collection: 'orders',
+          where: { status: { equals: status } },
+          overrideAccess: true,
+        }),
+      ),
+    ),
+  ])
+
+  const countByStatus = new Map<string, number>()
+  FUNNEL_STATUSES.forEach((status, index) => {
+    countByStatus.set(status, statusResults[index]?.totalDocs ?? 0)
+  })
+  return buildOrderFunnelFromCounts(countByStatus, totalResult.totalDocs)
 }
 
 /**
@@ -311,27 +356,15 @@ export async function queryRevenueReport(deps: QueryRevenueReportDeps): Promise<
     STATISTICS_ORDER_MAX,
   )
 
-  const funnelPage = await readStatisticsPages<StatisticsStatusDoc>(
-    (page, limit) =>
-      deps.payload.find({
-        collection: 'orders',
-        depth: 0,
-        page,
-        limit,
-        sort: PAGED_ORDER_SORT,
-        select: STATUS_SELECT,
-        overrideAccess: true,
-      }) as Promise<FindResultLike<StatisticsStatusDoc>>,
-    STATISTICS_FUNNEL_PAGE_SIZE,
-    STATISTICS_FUNNEL_MAX,
-  )
+  const funnel = await countOrderFunnel(deps.payload)
 
   const hydrated = await hydrateProductAudience(deps.payload, paidPage.docs)
   const orders = hydrated.map(mapOrderDocToRevenueInput)
-  const statuses = mapStatusDocs(funnelPage.docs)
-  return buildRevenueReport(orders, statuses, {
+  return buildRevenueReport(orders, funnel, {
     now: deps.now,
     months: deps.months,
-    truncated: paidPage.truncated || funnelPage.truncated,
+    // Csak a fizetett rendelések lapozása csonkolhat: a tölcsér `count`-ból
+    // jön, azon nincs plafon.
+    truncated: paidPage.truncated,
   })
 }

@@ -13,11 +13,14 @@ import {
   aggregateCourseRevenue,
   aggregateMonthlyRevenue,
   aggregateOrderFunnel,
+  buildOrderFunnelFromCounts,
   buildRevenueReport,
   canAccessStatistics,
   formatHuf,
   formatMonthShort,
+  FUNNEL_STATUSES,
   orderMonthKey,
+  type OrderFunnelCounts,
   type RevenueOrderInput,
 } from '../lib/statistics/revenue'
 
@@ -397,7 +400,7 @@ describe('F4 — naptárilag érvénytelen számla-dátum nem nyelheti el a rend
           items: [{ audience: 'laikus', priceHuf: 30000, quantity: 1, titleSnapshot: 'Otthoni' }],
         }),
       ],
-      ['paid'],
+      aggregateOrderFunnel(['paid']),
       { months: 12, now: NOW },
     )
     expect(report.totals.totalHuf).toBe(30000)
@@ -407,8 +410,13 @@ describe('F4 — naptárilag érvénytelen számla-dátum nem nyelheti el a rend
 
   it('érvénytelen `now` nem borítja fel a jelentést (listMonthKeys nem dob)', () => {
     const invalidNow = new Date('nem-datum')
-    expect(() => buildRevenueReport([], ['paid'], { months: 12, now: invalidNow })).not.toThrow()
-    const report = buildRevenueReport([], ['paid'], { months: 12, now: invalidNow })
+    expect(() =>
+      buildRevenueReport([], aggregateOrderFunnel(['paid']), { months: 12, now: invalidNow }),
+    ).not.toThrow()
+    const report = buildRevenueReport([], aggregateOrderFunnel(['paid']), {
+      months: 12,
+      now: invalidNow,
+    })
     expect(report.months).toEqual([])
     expect(report.totals.totalHuf).toBe(0)
     // A tölcsér a hónap-ablaktól függetlenül számol, tehát megmarad.
@@ -457,13 +465,150 @@ describe('kurzus-bontás és tölcsér', () => {
           ],
         }),
       ],
-      ['paid', 'paid', 'payment_failed'],
+      aggregateOrderFunnel(['paid', 'paid', 'payment_failed']),
       { months: 12, now: NOW },
     )
     expect(report.courses.map((row) => row.sku)).toEqual(['Friss kurzus'])
     expect(report.totals.totalHuf).toBe(5000)
     expect(report.funnel.paid).toBe(2)
     expect(report.funnel.paymentFailed).toBe(1)
+  })
+})
+
+/**
+ * F8 (2026-08-21-i vizsgálat) — a tölcsér KÉSZ darabszámokból is felépíthető,
+ * nem csak státusz-listából. A két útnak PONTOSAN ugyanazt kell adnia, mert
+ * ugyanaz a státusz→mező tábla hajtja őket.
+ */
+describe('F8 — tölcsér darabszámokból', () => {
+  function counts(entries: Record<string, number>): ReadonlyMap<string, number> {
+    return new Map(Object.entries(entries))
+  }
+
+  it('a nevesített hat státuszt a saját mezőjébe teszi', () => {
+    const funnel = buildOrderFunnelFromCounts(
+      counts({
+        created: 3,
+        payment_pending: 5,
+        paid: 100,
+        payment_failed: 7,
+        cancelled: 2,
+        refunded: 1,
+      }),
+      118,
+    )
+    expect(funnel).toEqual({
+      created: 3,
+      paymentPending: 5,
+      paid: 100,
+      paymentFailed: 7,
+      cancelled: 2,
+      refunded: 1,
+      other: 0,
+      total: 118,
+    })
+  })
+
+  it('az `other` a teljes darabszám és a nevesített státuszok különbsége', () => {
+    // 118 nevesített + 12 ismeretlen (régi enum-érték, importból maradt sor).
+    const funnel = buildOrderFunnelFromCounts(
+      counts({
+        created: 3,
+        payment_pending: 5,
+        paid: 100,
+        payment_failed: 7,
+        cancelled: 2,
+        refunded: 1,
+      }),
+      130,
+    )
+    expect(funnel.other).toBe(12)
+    expect(funnel.total).toBe(130)
+    expect(
+      funnel.created +
+        funnel.paymentPending +
+        funnel.paid +
+        funnel.paymentFailed +
+        funnel.cancelled +
+        funnel.refunded +
+        funnel.other,
+    ).toBe(funnel.total)
+  })
+
+  it('az `other` NEM megy negatívba, ha a hét lekérdezés között beérkezik egy rendelés', () => {
+    // A `total` korábban futott le, mint a `paid` számlálója → a nevesített
+    // összeg (101) meghaladja a total-t (100).
+    const funnel = buildOrderFunnelFromCounts(counts({ paid: 101 }), 100)
+    expect(funnel.other).toBe(0)
+    // A `total` az marad, amit az adatbázis mondott — nem gyártunk rá becslést.
+    expect(funnel.total).toBe(100)
+  })
+
+  it('a hiányzó, negatív, tört és nem véges darabszám 0-ra esik', () => {
+    const funnel = buildOrderFunnelFromCounts(
+      counts({ created: -5, paid: 2.7, payment_failed: Number.NaN }),
+      10,
+    )
+    expect(funnel.created).toBe(0)
+    expect(funnel.paid).toBe(2)
+    expect(funnel.paymentFailed).toBe(0)
+    expect(funnel.cancelled).toBe(0)
+    expect(funnel.other).toBe(8)
+  })
+
+  it('a listás és a darabszámos út UGYANAZT adja (nincs két külön leképezés)', () => {
+    const lista = [
+      'created',
+      'payment_pending',
+      'paid',
+      'paid',
+      'payment_failed',
+      'cancelled',
+      'refunded',
+      'ismeretlen_statusz',
+    ]
+    const listabol = aggregateOrderFunnel(lista)
+    const szamokbol = buildOrderFunnelFromCounts(
+      counts({
+        created: 1,
+        payment_pending: 1,
+        paid: 2,
+        payment_failed: 1,
+        cancelled: 1,
+        refunded: 1,
+      }),
+      lista.length,
+    )
+    expect(szamokbol).toEqual(listabol)
+    expect(listabol.other).toBe(1)
+  })
+
+  it('a FUNNEL_STATUSES pontosan a hat nevesített státusz, életút-sorrendben', () => {
+    expect(FUNNEL_STATUSES).toEqual([
+      'created',
+      'payment_pending',
+      'paid',
+      'payment_failed',
+      'cancelled',
+      'refunded',
+    ])
+  })
+
+  it('a buildRevenueReport kész darabszámokat is elfogad, és nem aliasolja a bemenetet', () => {
+    const forras: OrderFunnelCounts = {
+      created: 1,
+      paymentPending: 2,
+      paid: 3,
+      paymentFailed: 4,
+      cancelled: 5,
+      refunded: 6,
+      other: 7,
+      total: 28,
+    }
+    const report = buildRevenueReport([], forras, { months: 1, now: NOW })
+    expect(report.funnel).toEqual(forras)
+    report.funnel.paid = 999
+    expect(forras.paid).toBe(3)
   })
 })
 
@@ -476,7 +621,7 @@ describe('StatisticsReport + RevenueChart — a számok a táblázatban is ott v
           items: [{ audience: 'laikus', priceHuf: 79500, quantity: 1, titleSnapshot: 'Otthoni' }],
         }),
       ],
-      ['paid', 'payment_failed'],
+      aggregateOrderFunnel(['paid', 'payment_failed']),
       { months: 1, now: NOW },
     )
     const html = renderToStaticMarkup(createElement(StatisticsReport, { report }))
@@ -488,7 +633,7 @@ describe('StatisticsReport + RevenueChart — a számok a táblázatban is ott v
   })
 
   it('a gyökér a kc-adminstat márka-scope-ot viseli, eyebrow-sorral (tulajdonosi döntés, 2026-08-20)', () => {
-    const report = buildRevenueReport([], [], { months: 1, now: NOW })
+    const report = buildRevenueReport([], aggregateOrderFunnel([]), { months: 1, now: NOW })
     const html = renderToStaticMarkup(createElement(StatisticsReport, { report }))
     // A custom.scss márka-rétege ezen a classon keresztül hat — nélküle a
     // nézet a Payload-kinézetre esne vissza, ezért a jelenléte szerkezeti

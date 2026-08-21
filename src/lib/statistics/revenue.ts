@@ -21,6 +21,11 @@
  *    összege elcsúszna.
  * 5. A hiányzó hónapok nullás sorként jelennek meg (az oszlopdiagram ne
  *    ugorja át őket).
+ * 6. A TÖLCSÉR bemenete kétféle alakban jöhet: státusz-LISTA (tiszta
+ *    aggregátor-tesztek, kis halmaz) vagy KÉSZ DARABSZÁMOK
+ *    (`OrderFunnelCounts` — a `payload.count`-os lekérdezésből, F8). A
+ *    státusz→mező leképezést mindkét ág UGYANABBÓL a táblából veszi
+ *    (`FUNNEL_FIELD_BY_STATUS`), tehát a két út nem tud elcsúszni egymástól.
  */
 
 import { hasStaffOrOwnerRole, type RoleUser } from '../../access/roles'
@@ -85,7 +90,18 @@ export interface RevenueReport {
   totals: RevenueTotals
   courses: CourseRevenueRow[]
   funnel: OrderFunnelCounts
-  /** Igaz, ha a lekérdezés a felső korlát miatt csonkolt. */
+  /**
+   * Igaz, ha a FIZETETT rendelések lapozott beolvasása ütközött a felső
+   * korlátba.
+   *
+   * ═══ SZERZŐDÉS-VÁLTOZÁS (F8, 2026-08-21) ═══
+   * Korábban a tölcsér lapozása is beleszámított: 20 000 rendelés fölött a
+   * jelentés akkor is „csonka" volt, ha a bevétel-rész hiánytalan. A tölcsért
+   * azóta `payload.count` adja (nincs lapozás, nincs plafon), ezért a
+   * `funnel` MINDIG teljes állományt tükröz, és ez a jelző KIZÁRÓLAG a
+   * havi/kurzus-bevételre vonatkozik. A `StatisticsReport` figyelmeztető
+   * mondatát is így kell olvasni.
+   */
   truncated: boolean
 }
 
@@ -358,34 +374,84 @@ export function emptyFunnel(): OrderFunnelCounts {
   }
 }
 
+/**
+ * Státusz → tölcsér-mező: a leképezés EGYETLEN forrása.
+ *
+ * Két út olvassa (F8, 2026-08-21-i vizsgálat): a státusz-listás
+ * `aggregateOrderFunnel` és a darabszámos `buildOrderFunnelFromCounts`. Új
+ * rendelés-státusz felvételekor ezt az EGY táblát kell bővíteni — a régi,
+ * `switch`-es alak mellett a két ág külön-külön csúszhatott volna el.
+ *
+ * A kulcsok a `src/plugins/ecommerce.ts` állapotgépének értékei, a rendelés
+ * életútjának sorrendjében (created → … → refunded). `Map`, nem objektum: a
+ * `Map.get` nem ad vissza örökölt `Object.prototype`-tagot, tehát egy
+ * `'constructor'` státuszú (elvben lehetetlen, gyakorlatban importból bejövő)
+ * sor sem tud mezőnévnek álcázott függvényt visszaadni.
+ */
+const FUNNEL_FIELD_BY_STATUS = new Map<string, keyof OrderFunnelCounts>([
+  ['created', 'created'],
+  ['payment_pending', 'paymentPending'],
+  ['paid', 'paid'],
+  ['payment_failed', 'paymentFailed'],
+  ['cancelled', 'cancelled'],
+  ['refunded', 'refunded'],
+])
+
+/** A tölcsérben nevesített rendelés-státuszok, életút-sorrendben. */
+export const FUNNEL_STATUSES: readonly string[] = [...FUNNEL_FIELD_BY_STATUS.keys()]
+
+/**
+ * Tölcsér státusz-LISTÁBÓL — olvasható referencia-alak.
+ *
+ * Az ÉLES lekérdezés nem ezt hívja (az F8 óta a tölcsér `payload.count`-ból
+ * jön, sorok beolvasása nélkül), hanem a `buildOrderFunnelFromCounts`-ot. Ez a
+ * függvény azért marad, mert néhány elemű listán sokkal olvashatóbban fejezi
+ * ki a várt eredményt, és mert az egyenértékűség-teszt EHHEZ MÉRI a darabszámos
+ * ágat: ha a közös leképezés-tábla elcsúszna, a két út eredménye eltérne.
+ */
 export function aggregateOrderFunnel(statuses: readonly string[]): OrderFunnelCounts {
   const funnel = emptyFunnel()
   for (const status of statuses) {
     funnel.total += 1
-    switch (status) {
-      case 'created':
-        funnel.created += 1
-        break
-      case 'payment_pending':
-        funnel.paymentPending += 1
-        break
-      case 'paid':
-        funnel.paid += 1
-        break
-      case 'payment_failed':
-        funnel.paymentFailed += 1
-        break
-      case 'cancelled':
-        funnel.cancelled += 1
-        break
-      case 'refunded':
-        funnel.refunded += 1
-        break
-      default:
-        funnel.other += 1
-        break
-    }
+    funnel[FUNNEL_FIELD_BY_STATUS.get(status) ?? 'other'] += 1
   }
+  return funnel
+}
+
+/** Darabszám-higiénia: a nem véges, negatív vagy tört érték 0-ra esik. */
+function nonNegativeCount(value: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0
+}
+
+/**
+ * Tölcsér KÉSZ darabszámokból — a `payload.count`-os lekérdezés bemenete (F8).
+ *
+ * A `total` a SZŰRÉS NÉLKÜLI darabszám, az `other` pedig a `total` és a
+ * nevesített státuszok különbsége: így a nem nevesített státusz (régi enum-érték,
+ * importból maradt sor) sem tűnik el a képből, holott egyetlen rendelés-sort sem
+ * olvastunk be.
+ *
+ * ═══ MIÉRT NEM MEHET NEGATÍVBA ═══
+ * A hét szám hét külön lekérdezésből jön, tehát nem egyetlen pillanatkép: ha a
+ * `total` lekérdezése ELŐBB fut le, mint egy közben beérkező rendelés státusz-
+ * számlálója, a nevesített összeg egy-két sorral meghaladhatja a `total`-t.
+ * Ilyenkor az `other` matematikailag negatív lenne — a felületen viszont
+ * „mínusz két egyéb rendelés" nem értelmezhető szám, ezért 0-ra vágjuk. A
+ * `total` marad az, amit az adatbázis mondott: nem gyártunk rá becslést.
+ */
+export function buildOrderFunnelFromCounts(
+  countByStatus: ReadonlyMap<string, number>,
+  total: number,
+): OrderFunnelCounts {
+  const funnel = emptyFunnel()
+  let named = 0
+  for (const [status, field] of FUNNEL_FIELD_BY_STATUS) {
+    const count = nonNegativeCount(countByStatus.get(status) ?? 0)
+    funnel[field] = count
+    named += count
+  }
+  funnel.total = nonNegativeCount(total)
+  funnel.other = Math.max(0, funnel.total - named)
   return funnel
 }
 
@@ -426,7 +492,7 @@ export function formatMonthShort(monthKey: string): string {
 
 export function buildRevenueReport(
   orders: readonly RevenueOrderInput[],
-  statuses: readonly string[],
+  funnel: OrderFunnelCounts,
   options?: { months?: number; now?: Date; truncated?: boolean },
 ): RevenueReport {
   const monthOptions = { months: options?.months ?? DEFAULT_MONTHS, now: options?.now }
@@ -438,7 +504,8 @@ export function buildRevenueReport(
     // A tölcsér szándékosan teljes állomány: a nyitott/sikertelen fizetés
     // operatív jelzés, nem 12 havi bevétel.
     courses: aggregateCourseRevenue(ordersInMonthWindow(orders, monthOptions)),
-    funnel: aggregateOrderFunnel(statuses),
+    // Másolat, nem hivatkozás: a jelentés ne aliasolja a hívó objektumát.
+    funnel: { ...funnel },
     truncated: options?.truncated === true,
   }
 }

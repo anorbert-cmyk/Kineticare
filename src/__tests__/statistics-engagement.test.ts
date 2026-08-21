@@ -17,7 +17,7 @@ import {
   queryCourseEngagement,
   type QueryCourseEngagementDeps,
 } from '../lib/statistics/engagement-query'
-import { buildRevenueReport } from '../lib/statistics/revenue'
+import { aggregateOrderFunnel, buildRevenueReport } from '../lib/statistics/revenue'
 import type { Product } from '../payload-types'
 
 /**
@@ -325,8 +325,7 @@ describe('queryCourseEngagement', () => {
         )
       }
       const feltetel = args.where?.[args.collection === 'users' ? 'purchases' : 'product'] as
-        | { equals?: unknown }
-        | undefined
+        { equals?: unknown } | undefined
       if (feltetel?.equals === 2) {
         return Promise.reject(new Error('adatbázis-hiba a 2. kurzusnál'))
       }
@@ -475,7 +474,9 @@ describe('CourseEngagementSection', () => {
 })
 
 describe('StatisticsReport + kurzus-hatás integráció', () => {
-  const revenueReport = buildRevenueReport([], [], { now: new Date('2026-08-15T12:00:00Z') })
+  const revenueReport = buildRevenueReport([], aggregateOrderFunnel([]), {
+    now: new Date('2026-08-15T12:00:00Z'),
+  })
 
   it('engagement nélkül is renderel: bevétel + magyar magyarázat a szekcióban', () => {
     const html = renderToStaticMarkup(
