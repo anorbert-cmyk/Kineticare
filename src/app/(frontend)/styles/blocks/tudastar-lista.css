@@ -1,0 +1,52 @@
+/**
+ * Tudástár — LISTA-OLDAL (/blog) elrendezése.
+ *
+ * Betöltés: az útvonal (`src/app/(frontend)/blog/page.tsx`) importálja.
+ *
+ * ═══ SZÜRET UTÁNI TEENDŐ A VEZETŐNEK ═══
+ * A `docs/tudastar-technikai-terv.md` 5.1/a pontja a `.kc-card-grid--posts`
+ * rácsot a `styles/blocks/knowledge.css`-be tervezi (B-csomag). Az a lap
+ * ebben a körben MÁS csapat fájlja, ezért a mért rács itt, saját lapon él. Ha
+ * a B-csomag ugyanezt a szabályt beteszi a knowledge.css-be, a kettő közül az
+ * EGYIKET törölni kell (a szabály bitre azonos, a hatás ugyanaz — a
+ * duplikátum csak zaj).
+ *
+ * ═══ MIÉRT KÉT HASÁB, ÉS MIÉRT NEM HÁROM ═══
+ * A közös `.kc-card-grid` 900 px felett HÁROM hasábot ad. Ebben a rácsban a
+ * kártya kivonatának mért sorhossza 28,8–37,4 karakter/sor minden asztali
+ * szélességen, a cím 33,8 karakter/sor 1440 px-en — mind a saját 45-ös alsó
+ * tűréshatárunk ALATT (docs/tudastar-ux-terv.md 2.2, mérve Chromiumban).
+ *
+ * A kéthasábos rácsban ugyanez 48,1–60,6 karakter/sor, vagyis 904 px-től
+ * felfelé végig a tűrésen belül, 900 px felett a cél-sávban (50–75) is.
+ * Forrás a tűréshatárra: WCAG 2.2 **1.4.8** (Visual Presentation, AAA) 80
+ * karakteres plafonja és a repó saját B1.1 szabálya.
+ *
+ * ═══ MIÉRT AUTO-FIT ÉS NEM FIX HASÁBSZÁM ═══
+ * A track alsó korlátja (26rem = 416 px) a 1072 px-es tartalom-szélességben
+ * MATEMATIKAILAG kizárja a harmadik hasábot (3 × 416 + 2 × 24 = 1296 > 1072),
+ * tehát a kettes rács külön médialekérdezés és oszlopszám-korlát nélkül
+ * adódik, 2560 px-en is. A felső korlát (34rem = 544 px) azt zárja ki, hogy
+ * egyetlen cikknél a kártya 1072 px széles óriássá nőjön: az egyhasábos
+ * tartományban (592–903 px) a kártya szövege így 65,3–67,2 karakter/sor.
+ * A `min(100%, …)` ág a 320 px-es reflow-védelem (WCAG 2.2 **1.4.10**) —
+ * ugyanaz a minta, mint a `course-cards.css` kurzus-rácsánál.
+ *
+ * A `justify-content: center` amiatt kell, hogy a fix felső track-korláttal a
+ * rács ne tapadjon balra, amikor a tartalom szélesebb a track-eknél.
+ *
+ * A kétosztályos szelektor SPECIFICITÁSBÓL veri a közös `.kc-card-grid`
+ * 640/900 px-es töréspontjait, tehát a betöltési sorrendtől független.
+ * Nulla új token, nulla új szín, nulla új betűméret.
+ */
+
+.kc-card-grid.kc-card-grid--posts {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 34rem));
+  justify-content: center;
+}
+
+/* A lap felvezetője (H1 + lead) és a szűrő/rács közti ritmus. A szűrő saját
+   alsó köze a content.css-ben él (32 px), itt csak a felvezető záró köze áll. */
+.kc-tudastar-intro {
+  margin-bottom: var(--kc-space-6);
+}

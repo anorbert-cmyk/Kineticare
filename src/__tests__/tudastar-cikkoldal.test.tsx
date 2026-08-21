@@ -1,0 +1,886 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it } from 'vitest'
+
+import { PostArticle } from '../components/content/PostArticle'
+import { shouldShowCategoryFilter } from '../components/content/post-list'
+import { headingsOf, plainTextOf, RESERVED_ANCHOR_IDS, wordCountOf } from '../components/content/post-outline'
+import { authorPersonOf, relatedHeading, shouldShowToc } from '../components/content/post-article'
+import { ctaLabel } from '../lib/cta-vocabulary'
+import { betuMetrika, szoSzelessegPx } from './helpers/font-metrics'
+import {
+  hosszPx,
+  sajatErtek,
+  stilusLapNezetablakra,
+  szabalyok,
+  tokenek,
+  varFeloldas,
+  type Elem,
+} from './helpers/css-geometria'
+import type { Post } from '../payload-types'
+
+/**
+ * ŐR — A TUDÁSTÁR CIKKOLDALA ÉS LISTÁJA.
+ *
+ * Mit véd, és miért csak végrehajtható szabály védheti meg:
+ *
+ *  G1  A tartalomjegyzék és a törzs HORGONYAI ugyanabból a bejárásból jönnek.
+ *      Ha szétcsúsznak, a lap 200-zal válaszol, semmi nem hibázik, a linkek
+ *      mégis a semmibe visznek — NÉMA hiba (docs/tudastar-ux-terv.md 5.4).
+ *  G2  A jegyzék KÜSZÖBE (800 szó vagy 5 szakaszcím). Az NN/g kimondja, hogy
+ *      „shorter pages make tables of contents unnecessary"; küszöb nélkül a
+ *      jegyzék minden rövid cikk elé odakerülne.
+ *  G3  Laponként legfeljebb EGY elsődleges cselekvés (B6.5).
+ *  G4  Minden felirat a §3.2 CTA-szótárból; új felirat kitalálása tilos
+ *      (WCAG 2.2 3.2.4 Consistent Identification).
+ *  G5  Ellenőrzés-dátum ELLENŐRZÉS NÉLKÜL nem jelenhet meg, és a
+ *      szerző-blokk címe sem állíthat meg nem történt ellenőrzést.
+ *  G6  A GYIK strukturált adata a LÁTHATÓ listából épül (Google: *Structured
+ *      data general policies*).
+ *  G7  Kvirtmínusz (U+2014) sehol — sem a kódban, sem a kimeneten (§3.1.2).
+ *  G8  A mért CSS-küszöbök: a kéthasábos rács track-korlátai és a CTA-sáv
+ *      56 px-es zárótávja (a hamis lapvég ellen).
+ *
+ * A tesztkörnyezet `node` (nincs jsdom), ezért a SZERVER-RENDELT kimenetet
+ * mérjük — pontosan azt, amit a JS nélküli látogató és a keresőrobot lát.
+ */
+
+const REPO = fileURLToPath(new URL('..', import.meta.url))
+
+const render = (element: Parameters<typeof renderToStaticMarkup>[0]): string =>
+  renderToStaticMarkup(element)
+
+// ---------------------------------------------------------------------------
+// Fixture-építők
+// ---------------------------------------------------------------------------
+
+function textNode(text: string): Record<string, unknown> {
+  return { type: 'text', detail: 0, format: 0, mode: 'normal', style: '', text, version: 1 }
+}
+
+function paragraph(text: string): Record<string, unknown> {
+  return {
+    type: 'paragraph',
+    direction: 'ltr',
+    format: '',
+    indent: 0,
+    version: 1,
+    children: [textNode(text)],
+  }
+}
+
+function heading(tag: string, text: string): Record<string, unknown> {
+  return {
+    type: 'heading',
+    tag,
+    direction: 'ltr',
+    format: '',
+    indent: 0,
+    version: 1,
+    children: [textNode(text)],
+  }
+}
+
+function lexical(children: Record<string, unknown>[]): Record<string, unknown> {
+  return {
+    root: { type: 'root', children, direction: 'ltr', format: '', indent: 0, version: 1 },
+  }
+}
+
+/** Adott szószámú, valódi szavakból álló bekezdés. */
+function words(count: number): string {
+  return Array.from({ length: count }, (_, index) => `szo${index + 1}`).join(' ')
+}
+
+/**
+ * Poszt-fixture.
+ *
+ * A `Record<string, unknown>` + kettős konverzió SZÁNDÉKOS: a cikkoldal öt
+ * olyan mezőt is olvas (`faq`, `ctaCourse`, `reviewedBy`, `reviewedAt`,
+ * `nextReviewAt`), amelyet a séma-kör (E-csomag) most vezet be, tehát a
+ * generált `Post` típus még nem ismeri. A felület szerződése épp az, hogy
+ * ezek nélkül is helyesen működik, velük pedig kódváltozás nélkül gazdagodik
+ * — ezt csak akkor tudjuk mérni, ha a fixture ki tudja tölteni őket.
+ */
+function post(overrides: Record<string, unknown> = {}): Post {
+  const base: Record<string, unknown> = {
+    id: 1,
+    title: 'Miért zsibbad a kezem?',
+    slug: 'miert-zsibbad-a-kezem',
+    excerpt: 'Mit jelent a zsibbadás, mit tehetsz otthon, és mikor fordulj szakemberhez.',
+    status: 'published',
+    publishedAt: '2026-08-21T08:00:00.000Z',
+    updatedAt: '2026-08-21T08:00:00.000Z',
+    createdAt: '2026-08-20T08:00:00.000Z',
+    content: lexical([paragraph('Rövid bevezető.')]),
+    categories: [{ id: 5, title: 'Kézrehabilitáció', slug: 'kezrehabilitacio' }],
+  }
+  return { ...base, ...overrides } as unknown as Post
+}
+
+/** A kimenet látható szövege (címkék nélkül, entitás-feloldással). */
+function text(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&#x27;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** A kimenetben ténylegesen kiosztott id-k. */
+function idsOf(html: string): string[] {
+  return [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]!)
+}
+
+/** A lap belső (horgony-) hivatkozásai. */
+function anchorHrefs(html: string): string[] {
+  return [...html.matchAll(/href="#([^"]+)"/g)].map((match) => match[1]!)
+}
+
+/** A JSON-LD blokkok feloldott tartalma. */
+function jsonLdBlocks(html: string): Record<string, unknown>[] {
+  return [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(
+    (match) => JSON.parse(match[1]!.replace(/\\u003c/g, '<')) as Record<string, unknown>,
+  )
+}
+
+/** Hosszú, tagolt cikk: 5 szakaszcím és 900+ szó. */
+const HOSSZU_CIKK = lexical([
+  heading('h2', 'Miért zsibbad a kéz'),
+  paragraph(words(300)),
+  heading('h2', 'Melyik ujjad zsibbad'),
+  paragraph(words(300)),
+  heading('h2', 'Mit tehetsz otthon'),
+  paragraph(words(300)),
+  heading('h2', 'Mikor fordulj szakemberhez'),
+  paragraph(words(50)),
+  heading('h2', 'Források'),
+  paragraph(words(50)),
+])
+
+// ---------------------------------------------------------------------------
+// G1 — horgony és tartalomjegyzék
+// ---------------------------------------------------------------------------
+
+describe('G1 — a tartalomjegyzék és a törzs horgonyai nem csúszhatnak szét', () => {
+  const html = render(createElement(PostArticle, { post: post({ content: HOSSZU_CIKK }) }))
+
+  it('a törzs MINDEN szakaszcíme kap horgonyt, magyar ékezetekkel is', () => {
+    expect(html).toContain('<h2 id="miert-zsibbad-a-kez">')
+    expect(html).toContain('<h2 id="melyik-ujjad-zsibbad">')
+    expect(html).toContain('<h2 id="forrasok">')
+  })
+
+  it('a jegyzék MINDEN hivatkozása létező horgonyra mutat ugyanazon a lapon', () => {
+    const ids = new Set(idsOf(html))
+    const hrefs = anchorHrefs(html)
+    expect(hrefs.length).toBeGreaterThan(0)
+    for (const href of hrefs) {
+      expect(ids.has(href)).toBe(true)
+    }
+  })
+
+  it('a jegyzék tételei a szakaszcímek szövegét és SORRENDJÉT hozzák', () => {
+    const lista = html.slice(html.indexOf('kc-post-toc__list'), html.indexOf('</ol>'))
+    const sorrend = [...lista.matchAll(/href="#([^"]+)"/g)].map((match) => match[1]!)
+    expect(sorrend).toEqual([
+      'miert-zsibbad-a-kez',
+      'melyik-ujjad-zsibbad',
+      'mit-tehetsz-otthon',
+      'mikor-fordulj-szakemberhez',
+      'forrasok',
+    ])
+  })
+
+  it('egyetlen id sem fordul elő kétszer a lapon', () => {
+    const ids = idsOf(html)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('a nav-nak van hozzáférhető neve (aria-labelledby → létező címsor)', () => {
+    expect(html).toContain('aria-labelledby="tudastar-toc-cim"')
+    expect(html).toContain('id="tudastar-toc-cim"')
+  })
+
+  it('pontosan EGY h1 van a lapon (a cikk címe)', () => {
+    expect([...html.matchAll(/<h1[\s>]/g)]).toHaveLength(1)
+  })
+
+  it('azonos szövegű szakaszcímek külön horgonyt kapnak (ütközés-feloldás)', () => {
+    const bejegyzesek = headingsOf(
+      lexical([heading('h2', 'Gyakorlatok'), heading('h2', 'Gyakorlatok'), heading('h2', 'Gyakorlatok')]),
+    )
+    expect(bejegyzesek.map((entry) => entry.id)).toEqual([
+      'gyakorlatok',
+      'gyakorlatok-2',
+      'gyakorlatok-3',
+    ])
+  })
+
+  it('tartalmi szakaszcím nem veheti el a lap saját horgonyait', () => {
+    const bejegyzesek = headingsOf(
+      lexical([heading('h2', 'Tartalom'), heading('h2', 'Gyakori kérdések')]),
+    )
+    for (const entry of bejegyzesek) {
+      expect(RESERVED_ANCHOR_IDS).not.toContain(entry.id)
+    }
+  })
+
+  it('a tartalmi h1 a jegyzékben is h2-ként szerepel (a szerializáló lágyítása)', () => {
+    expect(headingsOf(lexical([heading('h1', 'Bevezető')]))[0]!.tag).toBe('h2')
+  })
+
+  it('üres (csak írásjeles) szakaszcím is kap stabil horgonyt', () => {
+    expect(headingsOf(lexical([heading('h2', '???')]))[0]!.id).toBe('szakasz-1')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// G2 — a jegyzék megjelenési küszöbe
+// ---------------------------------------------------------------------------
+
+describe('G2 — tartalomjegyzék csak ott, ahol segít', () => {
+  it('a küszöb: 800 szónál hosszabb VAGY legalább 5 szakaszcím', () => {
+    expect(shouldShowToc(801, 0)).toBe(true)
+    expect(shouldShowToc(0, 5)).toBe(true)
+    expect(shouldShowToc(800, 4)).toBe(false)
+    expect(shouldShowToc(0, 0)).toBe(false)
+  })
+
+  it('hosszú, tagolt cikken MEGJELENIK', () => {
+    const html = render(createElement(PostArticle, { post: post({ content: HOSSZU_CIKK }) }))
+    expect(html).toContain('kc-post-toc')
+    expect(text(html)).toContain('Ezen az oldalon')
+  })
+
+  it('rövid cikken NEM jelenik meg', () => {
+    const rovid = lexical([heading('h2', 'Egy szakasz'), paragraph(words(120))])
+    const html = render(createElement(PostArticle, { post: post({ content: rovid }) }))
+    expect(html).not.toContain('kc-post-toc')
+    expect(text(html)).not.toContain('Ezen az oldalon')
+  })
+
+  it('a GYIK címsora a jegyzék VÉGÉN áll (a bejáró nem látja, a lap igen)', () => {
+    const html = render(
+      createElement(PostArticle, {
+        post: post({
+          content: HOSSZU_CIKK,
+          faq: [{ question: 'Meddig tart a zsibbadás?', answer: 'Az okától függ.' }],
+        }),
+      }),
+    )
+    const lista = html.slice(html.indexOf('kc-post-toc__list'), html.indexOf('</ol>'))
+    const sorrend = [...lista.matchAll(/href="#([^"]+)"/g)].map((match) => match[1]!)
+    expect(sorrend[sorrend.length - 1]).toBe('gyakori-kerdesek')
+    expect(html).toContain('id="gyakori-kerdesek"')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// G3 + G4 — a kurzus-ajánló: egy cselekvés, szótári felirattal
+// ---------------------------------------------------------------------------
+
+const KURZUS = {
+  id: 7,
+  status: 'published',
+  slug: 'kezrehabilitacio-otthon',
+  sku: 'KEZ-1',
+  displayTitle: 'Kézrehabilitáció otthon',
+  shortDescription: 'Vezetett gyakorlatsor csukló- és kézpanaszokra, otthoni tempóban.',
+  priceInHUFEnabled: true,
+  priceInHUF: 19900,
+}
+
+describe('G3 + G4 — kurzus-ajánló: egy elsődleges cselekvés, szótári felirattal', () => {
+  it('kapcsolt kurzus nélkül a kurzuslistára visz, a szótár feliratával', () => {
+    const html = render(createElement(PostArticle, { post: post() }))
+    expect(text(html)).toContain(ctaLabel('course-list-open'))
+    expect(html).toContain('href="/kurzusok"')
+  })
+
+  it('kapcsolt kurzussal a kurzusoldalra visz, MÁSODLAGOS súllyal és ár-ténnyel', () => {
+    const html = render(createElement(PostArticle, { post: post({ ctaCourse: KURZUS }) }))
+    expect(text(html)).toContain(ctaLabel('course-sales-open'))
+    expect(html).toContain('href="/kurzusok/kezrehabilitacio-otthon"')
+    expect(html).toContain('kc-button--secondary')
+    // Az ár a gomb közvetlen közelében áll (Baymard B6.2).
+    expect(text(html)).toContain('19 900')
+  })
+
+  it('NEM közzétett kurzusra nem mutatunk halott linket', () => {
+    const html = render(
+      createElement(PostArticle, { post: post({ ctaCourse: { ...KURZUS, status: 'draft' } }) }),
+    )
+    expect(html).not.toContain('href="/kurzusok/kezrehabilitacio-otthon"')
+    expect(text(html)).toContain(ctaLabel('course-list-open'))
+  })
+
+  it('laponként legfeljebb EGY elsődleges gomb (mindkét ágon)', () => {
+    for (const fixture of [post(), post({ ctaCourse: KURZUS })]) {
+      const html = render(createElement(PostArticle, { post: fixture }))
+      expect([...html.matchAll(/kc-button--primary/g)].length).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('a panel nem ígér gyógyulást, arányt, időt és nem sürget', () => {
+    const tiltott = ['garant', 'gyógyul', '%', 'már csak', 'siess', 'utolsó']
+    const html = text(render(createElement(PostArticle, { post: post() }))).toLowerCase()
+    for (const szo of tiltott) {
+      expect(html).not.toContain(szo)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// G5 — szerző- és lektor-blokk
+// ---------------------------------------------------------------------------
+
+const SZERZO = { id: 2, name: 'Kocsis Kata', credentials: 'gyógytornász, kézterapeuta' }
+
+describe('G5 — a szerző-blokk csak azt állítja, ami megtörtént', () => {
+  it('lektorálás nélkül a cím „A cikket írta", és NINCS dátum-sor', () => {
+    const html = render(createElement(PostArticle, { post: post({ author: SZERZO }) }))
+    const latszik = text(html)
+    expect(latszik).toContain('A cikket írta')
+    expect(latszik).not.toContain('A cikket írta és ellenőrizte')
+    expect(latszik).not.toContain('Utoljára ellenőrizve')
+    expect(latszik).not.toContain('Következő ellenőrzés')
+  })
+
+  it('lektorálással a cím bővül, és a két dátum kiíródik', () => {
+    const html = render(
+      createElement(PostArticle, {
+        post: post({
+          author: SZERZO,
+          reviewedBy: { id: 3, name: 'Kiss Kata', credentials: 'gyógytornász' },
+          reviewedAt: '2026-08-21T08:00:00.000Z',
+          nextReviewAt: '2028-08-21T08:00:00.000Z',
+        }),
+      }),
+    )
+    const latszik = text(html)
+    expect(latszik).toContain('A cikket írta és ellenőrizte')
+    expect(latszik).toContain('Szakmailag ellenőrizte: Kiss Kata, gyógytornász')
+    expect(latszik).toContain('Utoljára ellenőrizve: 2026. augusztus 21.')
+    expect(latszik).toContain('Következő ellenőrzés: 2028. augusztus 21.')
+  })
+
+  it('a byline a fejlécben a végzettséget is kimondja (Google E-E-A-T „Who")', () => {
+    const html = render(createElement(PostArticle, { post: post({ author: SZERZO }) }))
+    expect(text(html)).toContain('Írta: Kocsis Kata, gyógytornász, kézterapeuta')
+  })
+
+  it('szerző és lektorálás nélkül a blokk elmarad (nem üres keret)', () => {
+    const html = render(createElement(PostArticle, { post: post() }))
+    expect(html).not.toContain('kc-post-author')
+  })
+
+  it('a szerző-olvasó KIZÁRÓLAG a négy publikus mezőt adja tovább', () => {
+    // A `getPostBySlug` depth: 2 + overrideAccess: true hívása a szerzőt
+    // TELJES user-dokumentumként populálja (e-mail, jelszó-hash, salt,
+    // szerepkör, vásárlások). Az olvasó ezért fehérlistás: ha bárki
+    // kiterjeszti (pl. szétteríti a nyers objektumot), ez a teszt bukik.
+    const szemely = authorPersonOf(
+      post({
+        author: {
+          ...SZERZO,
+          email: 'kata@example.invalid',
+          role: 'owner',
+          hash: 'titkos-hash',
+          salt: 'titkos-salt',
+          purchases: [7],
+        },
+      }),
+    )
+    expect(szemely).not.toBeNull()
+    expect(Object.keys(szemely!).sort()).toEqual(['bioShort', 'credentials', 'name', 'portrait'])
+  })
+
+  it('a renderelt lapon nincs egyetlen user-titok sem', () => {
+    const html = render(
+      createElement(PostArticle, {
+        post: post({
+          author: {
+            ...SZERZO,
+            email: 'kata@example.invalid',
+            role: 'owner',
+            hash: 'titkos-hash',
+            salt: 'titkos-salt',
+          },
+        }),
+      }),
+    )
+    for (const titok of ['kata@example.invalid', 'owner', 'titkos-hash', 'titkos-salt']) {
+      expect(html).not.toContain(titok)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// G6 — GYIK: a séma a látható listából
+// ---------------------------------------------------------------------------
+
+describe('G6 — a GYIK strukturált adata a LÁTHATÓ listából épül', () => {
+  const faq = [
+    { question: 'Meddig tart a zsibbadás?', answer: 'Az okától függ.' },
+    { question: 'Kell-e sín?', answer: 'Az okától és a tünetektől függ.' },
+    { question: '', answer: 'Kérdés nélküli válasz.' },
+    { question: 'Válasz nélküli kérdés?', answer: '' },
+    { question: 'Harmadik?', answer: 'Igen.' },
+    { question: 'Negyedik?', answer: 'Igen.' },
+    { question: 'Ötödik?', answer: 'Igen.' },
+    { question: 'Hatodik?', answer: 'Igen.' },
+    { question: 'Hetedik?', answer: 'Igen.' },
+  ]
+  const html = render(createElement(PostArticle, { post: post({ faq }) }))
+
+  it('a hiányos tétel sem a listába, sem a sémába nem kerül be', () => {
+    expect(text(html)).not.toContain('Kérdés nélküli válasz')
+    expect(text(html)).not.toContain('Válasz nélküli kérdés')
+  })
+
+  it('legfeljebb HAT tétel jelenik meg (NHS felsorolás-plafon)', () => {
+    expect([...html.matchAll(/kc-faq__item/g)]).toHaveLength(6)
+  })
+
+  it('a FAQPage séma kérdései PONTOSAN a látható kérdések', () => {
+    const faqPage = jsonLdBlocks(html).find((block) => block['@type'] === 'FAQPage')
+    expect(faqPage).toBeDefined()
+    const mainEntity = faqPage!.mainEntity as { name: string }[]
+    const lathato = [...html.matchAll(/class="kc-faq__question">([^<]+)</g)].map((m) => m[1]!)
+    expect(mainEntity.map((entry) => entry.name)).toEqual(lathato)
+  })
+
+  it('GYIK nélküli cikken nincs sem szekció, sem FAQPage séma', () => {
+    const ures = render(createElement(PostArticle, { post: post() }))
+    expect(ures).not.toContain('kc-post-faq')
+    expect(jsonLdBlocks(ures).some((block) => block['@type'] === 'FAQPage')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Kapcsolódó cikkek, kategória-címke, olvasási idő
+// ---------------------------------------------------------------------------
+
+describe('kapcsolódó blokk, kategória-címke, olvasási idő', () => {
+  const kapcsolodo = (id: number, categoryId: number): Post =>
+    post({
+      id,
+      title: `Kapcsolódó cikk ${id}`,
+      slug: `kapcsolodo-${id}`,
+      categories: [{ id: categoryId, title: 'Kézrehabilitáció', slug: 'kezrehabilitacio' }],
+    })
+
+  it('a cím megnevezi a témát, ha MINDEN kapcsolódó cikk osztozik rajta', () => {
+    expect(relatedHeading(post(), [kapcsolodo(2, 5), kapcsolodo(3, 5)])).toBe(
+      'További cikkek a témában: Kézrehabilitáció',
+    )
+  })
+
+  it('vegyes témájú ajánlónál az általános cím áll (nem állítunk valótlant)', () => {
+    expect(relatedHeading(post(), [kapcsolodo(2, 5), kapcsolodo(3, 9)])).toBe(
+      'További cikkek a Tudástárból',
+    )
+  })
+
+  it('a fejlécben PONTOSAN egy kategória-címke áll', () => {
+    const html = render(
+      createElement(PostArticle, {
+        post: post({
+          categories: [
+            { id: 5, title: 'Kézrehabilitáció', slug: 'kezrehabilitacio' },
+            { id: 6, title: 'Műtét után', slug: 'mutet-utan' },
+          ],
+        }),
+      }),
+    )
+    const fejlec = html.slice(0, html.indexOf('</h1>'))
+    expect([...fejlec.matchAll(/kc-badge--info/g)]).toHaveLength(1)
+    expect(fejlec).not.toContain('Műtét után')
+  })
+
+  it('nem közzétett kapcsolódó cikk nem jelenik meg', () => {
+    const html = render(
+      createElement(PostArticle, {
+        post: post(),
+        related: [{ ...kapcsolodo(2, 5), status: 'draft' } as Post],
+      }),
+    )
+    expect(html).not.toContain('kapcsolodo-2')
+  })
+
+  it('az olvasási idő becslés-jelleget jelöl, és VALÓDI szavakból számol', () => {
+    // 400 valódi szó → kb. 2 perc. A nyers fa-bejárás a mező-értékeket
+    // (`paragraph`, `ltr`, `text`, `normal`) is szónak számolná, és 3 percet
+    // adna — ez a teszt pontosan ezt a különbséget méri.
+    const html = render(
+      createElement(PostArticle, { post: post({ content: lexical([paragraph(words(400))]) }) }),
+    )
+    expect(text(html)).toContain('kb. 2 perc olvasás')
+  })
+
+  it('a szó-számláló csak a szöveg-csomópontokat számolja', () => {
+    expect(wordCountOf(lexical([paragraph(words(400))]))).toBe(400)
+    expect(plainTextOf(lexical([heading('h2', 'Cím'), paragraph('Egy két')]))).toBe('Cím Egy két')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A lista-oldal szabálya
+// ---------------------------------------------------------------------------
+
+describe('lista-oldal — a kategória-szűrő megjelenési küszöbe', () => {
+  it('három cikkes kategória VAGY öt cikk kell hozzá', () => {
+    expect(shouldShowCategoryFilter(3, 0)).toBe(true)
+    expect(shouldShowCategoryFilter(0, 5)).toBe(true)
+    expect(shouldShowCategoryFilter(2, 4)).toBe(false)
+    expect(shouldShowCategoryFilter(0, 0)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// G7 — mikroszöveg
+// ---------------------------------------------------------------------------
+
+describe('G7 — kvirtmínusz (U+2014) sehol', () => {
+  const forrasok = [
+    'components/content/PostArticle.tsx',
+    'components/content/PostToc.tsx',
+    'components/content/PostFaq.tsx',
+    'components/content/PostAuthorBox.tsx',
+    'components/content/PostCourseCta.tsx',
+    'components/content/PostBody.tsx',
+    'components/content/post-article.ts',
+    'components/content/post-outline.ts',
+    'components/content/post-list.ts',
+    'app/(frontend)/blog/page.tsx',
+    'app/(frontend)/blog/[slug]/page.tsx',
+  ]
+
+  it('a komponensek SZÖVEG-literáljaiban nincs kvirtmínusz', () => {
+    for (const relativ of forrasok) {
+      const forras = readFileSync(`${REPO}${relativ}`, 'utf8')
+      // A kommentek magyarázó szövegek, nem a felület mikroszövegei.
+      const kodCsak = forras.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+      expect(kodCsak, `${relativ} kvirtmínuszt tartalmaz`).not.toContain('—')
+    }
+  })
+
+  it('a renderelt cikkoldalon sincs kvirtmínusz', () => {
+    const html = render(
+      createElement(PostArticle, {
+        post: post({ author: SZERZO, ctaCourse: KURZUS, content: HOSSZU_CIKK }),
+      }),
+    )
+    expect(html).not.toContain('—')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// G8 — a mért CSS-küszöbök
+// ---------------------------------------------------------------------------
+
+describe('G8 — a mért CSS-küszöbök nem csúszhatnak vissza', () => {
+  const cikkCss = readFileSync(`${REPO}app/(frontend)/styles/blocks/post-view.css`, 'utf8')
+  const listaCss = readFileSync(`${REPO}app/(frontend)/styles/blocks/tudastar-lista.css`, 'utf8')
+  const kodCsak = (forras: string): string => forras.replace(/\/\*[\s\S]*?\*\//g, '')
+
+  it('a poszt-rács auto-fit alapú, 26rem alsó és 34rem felső track-korláttal', () => {
+    const szabaly = kodCsak(listaCss)
+    expect(szabaly).toContain('.kc-card-grid.kc-card-grid--posts')
+    expect(szabaly).toContain('repeat(auto-fit, minmax(min(100%, 26rem), 34rem))')
+  })
+
+  it('a CTA-sáv és a kapcsolódó blokk közti táv 56 px (a küszöb 72 px)', () => {
+    const szabaly = kodCsak(cikkCss)
+    expect(szabaly).toMatch(
+      /\.kc-section\.kc-post-cta--elotte-kapcsolodo\s*\{\s*padding-block-end:\s*var\(--kc-space-5\);/,
+    )
+    expect(szabaly).toMatch(
+      /\.kc-section\.kc-post-related\s*\{\s*padding-block-start:\s*var\(--kc-space-6\);/,
+    )
+  })
+
+  it('a tartalomjegyzék linkjei 44 px-es érintőcélt kapnak', () => {
+    expect(kodCsak(cikkCss)).toMatch(/\.kc-post-toc__list a\s*\{[^}]*min-height:\s*2\.75rem;/)
+  })
+
+  it('a cikkoldal stíluslapja NEM tartalmaz mozgást (WCAG 2.2 2.3.3)', () => {
+    const szabaly = kodCsak(cikkCss)
+    expect(szabaly).not.toMatch(/\btransition\b/)
+    expect(szabaly).not.toMatch(/\banimation\b/)
+    expect(szabaly).not.toMatch(/\btransform\b/)
+  })
+
+  it('betűméret kizárólag a három tokenről (a skála zárt)', () => {
+    for (const forras of [cikkCss, listaCss]) {
+      const meretek = [...kodCsak(forras).matchAll(/font-size:\s*([^;]+);/g)].map((m) => m[1]!.trim())
+      for (const meret of meretek) {
+        expect(['var(--kc-font-l)', 'var(--kc-font-m)', 'var(--kc-font-s)']).toContain(meret)
+      }
+    }
+  })
+
+  it('a nyomtatás kiírja a forrás-linkek webcímét', () => {
+    expect(kodCsak(cikkCss)).toContain("content: ' (' attr(href) ')'")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// MÉRÉS — a küszöbök a VALÓDI CSS-ből és a VALÓDI metszetekből számolva
+// ---------------------------------------------------------------------------
+
+/**
+ * Miért számítás és nem böngésző: a repónak nincs playwright-függősége, a
+ * CI-ban nincs böngésző, egy böngészős teszt tehát vagy elbukna, vagy NÉMÁN
+ * kimaradna. A modell a `helpers/css-geometria.ts` és a
+ * `helpers/font-metrics.ts` már kalibrált harnessze (lásd
+ * `reflow-hasabmeres.test.ts` kalibrációs blokkját): a kaszkádot a valódi
+ * stíluslapokból, a szó-szélességet a `public/fonts/*.woff2` `hmtx`/`HVAR`
+ * tábláiból olvassa. Kerning nélkül számol, ezért FELSŐ becslés — a
+ * biztonságos oldalon téved.
+ */
+const GYOKER_UT = fileURLToPath(new URL('../..', import.meta.url))
+const GYOKER_BETU = 16
+
+const LAPOK = [
+  `${REPO}app/(frontend)/styles/tokens.css`,
+  `${REPO}app/(frontend)/styles/base.css`,
+  `${REPO}app/(frontend)/styles/ui.css`,
+  `${REPO}app/(frontend)/styles/content.css`,
+  `${REPO}app/(frontend)/styles/blocks/post-view.css`,
+  `${REPO}app/(frontend)/styles/blocks/tudastar-lista.css`,
+]
+
+const lapNezetablakra = (nezetablak: number) => stilusLapNezetablakra(LAPOK, nezetablak)
+
+/** Osztály-gyökér elem a kaszkád-modellhez. */
+const osztalyElem = (osztaly: string, ostag: string | null = null): Elem => ({
+  elemnev: '',
+  szulo: null,
+  osztaly,
+  ostagOsztaly: ostag,
+})
+
+/** Egy CSS-érték feloldva és pixelre váltva adott nézetablakon. */
+function px(
+  lap: readonly ReturnType<typeof szabalyok>[number][],
+  ertek: string,
+  nezetablak: number,
+  szuloBetu = GYOKER_BETU,
+): number {
+  return hosszPx(varFeloldas(ertek, tokenek(lap)), nezetablak, szuloBetu, GYOKER_BETU)
+}
+
+describe('MÉRÉS — érintőcél, térköz, rács és sorhossz', () => {
+  for (const nezetablak of [320, 1440]) {
+    const lap = lapNezetablakra(nezetablak)
+
+    it(`${nezetablak} px: a tartalomjegyzék linkjének érintőcélja ≥ 44 px`, () => {
+      const link: Elem = {
+        elemnev: 'a',
+        szulo: osztalyElem('.kc-post-toc__list'),
+        osztaly: null,
+        ostagOsztaly: '.kc-post-toc__list',
+      }
+      const magassag = sajatErtek(lap, link, 'min-height')
+      expect(magassag).not.toBeNull()
+      // WCAG 2.2 2.5.8 (AA) 24 px-et kér; a repó a 2.5.5 (AAA) 44 px-es szintjén áll.
+      expect(px(lap, magassag!, nezetablak)).toBeGreaterThanOrEqual(44)
+    })
+
+    it(`${nezetablak} px: a CTA-sáv és a kapcsolódó blokk közti táv ≤ 72 px`, () => {
+      const alap = sajatErtek(lap, osztalyElem('.kc-section'), 'padding-block')
+      const ctaVeg = sajatErtek(
+        lap,
+        osztalyElem('.kc-section.kc-post-cta--elotte-kapcsolodo'),
+        'padding-block-end',
+      )
+      const kapcsolodoEleje = sajatErtek(
+        lap,
+        osztalyElem('.kc-section.kc-post-related'),
+        'padding-block-start',
+      )
+      expect(ctaVeg).not.toBeNull()
+      expect(kapcsolodoEleje).not.toBeNull()
+      const tav = px(lap, ctaVeg!, nezetablak) + px(lap, kapcsolodoEleje!, nezetablak)
+      expect(tav).toBeLessThanOrEqual(72)
+      // A felülírás nélkül a táv a szekció-alapból jönne, és ÁTLÉPNÉ a küszöböt:
+      // ez teszi a mérést értelmessé (nem a semmit méri).
+      expect(2 * px(lap, alap!, nezetablak)).toBeGreaterThan(72)
+    })
+  }
+
+  it('1440 px: a poszt-rács geometriája KIZÁRJA a harmadik hasábot', () => {
+    const lap = lapNezetablakra(1440)
+    const sav = sajatErtek(lap, osztalyElem('.kc-card-grid.kc-card-grid--posts'), 'grid-template-columns')
+    expect(sav).not.toBeNull()
+    const hatarok = /minmax\(\s*min\(100%,\s*([^)]+)\)\s*,\s*([^)]+)\)/.exec(sav!)
+    expect(hatarok).not.toBeNull()
+    const alsoTrack = px(lap, hatarok![1]!, 1440)
+    const felsoTrack = px(lap, hatarok![2]!, 1440)
+    const rescek = px(lap, sajatErtek(lap, osztalyElem('.kc-card-grid'), 'gap')!, 1440)
+    const konteneri =
+      px(lap, sajatErtek(lap, osztalyElem('.kc-container'), 'max-width')!, 1440) -
+      2 * px(lap, sajatErtek(lap, osztalyElem('.kc-container'), 'padding-inline')!, 1440)
+
+    // MÉRT: alsó track 416 px, felső 544 px, rés 24 px, tartalom-hasáb 1072 px.
+    expect(alsoTrack).toBe(416)
+    expect(felsoTrack).toBe(544)
+    // Két hasáb befér, három matematikailag nem — külön médialekérdezés nélkül.
+    expect(2 * alsoTrack + rescek).toBeLessThanOrEqual(konteneri)
+    expect(3 * alsoTrack + 2 * rescek).toBeGreaterThan(konteneri)
+  })
+
+  it('a cikkoldal panel-szövegeinek sorhossza a WCAG 1.4.8 (AAA) 80 karakteres plafonja alatt marad', () => {
+    const nunito = betuMetrika(
+      [
+        `${GYOKER_UT}public/fonts/nunito-sans-var-latin.woff2`,
+        `${GYOKER_UT}public/fonts/nunito-sans-var-latin-ext.woff2`,
+      ],
+      400,
+    )
+    for (const nezetablak of [320, 390, 768, 1440, 1920]) {
+      const lap = lapNezetablakra(nezetablak)
+      const t = tokenek(lap)
+      const betumeret = hosszPx(varFeloldas('var(--kc-font-m)', t), nezetablak, GYOKER_BETU, GYOKER_BETU)
+      const gutter = hosszPx(varFeloldas('var(--kc-container-gutter)', t), nezetablak, GYOKER_BETU, GYOKER_BETU)
+      const szukMax = hosszPx(varFeloldas('var(--kc-container-narrow)', t), nezetablak, GYOKER_BETU, GYOKER_BETU)
+      // A panel belső térköze és a mérték-korlát a VALÓDI szabályokból jön,
+      // nem beírt konstansból: ha bárki átírja őket, ez a mérés jelez.
+      const kartyaBelso = hosszPx(
+        varFeloldas(sajatErtek(lap, osztalyElem('.kc-card--padded'), 'padding')!, t),
+        nezetablak,
+        GYOKER_BETU,
+        GYOKER_BETU,
+      )
+      const panelKorlat = hosszPx(
+        varFeloldas(sajatErtek(lap, osztalyElem('.kc-post-cta__panel'), 'max-width')!, t),
+        nezetablak,
+        GYOKER_BETU,
+        GYOKER_BETU,
+      )
+      const konteneri = Math.min(nezetablak, szukMax) - 2 * gutter
+      const doboz = Math.min(konteneri, panelKorlat) - 2 * kartyaBelso - 2
+      // Átlagos magyar karakterszélesség a VALÓDI metszetből, a saját
+      // mikroszövegünkön mérve (nem angol mintán, nem becslésből).
+      const minta = 'A cikkek a tájékozódáshoz szólnak. Ha vezetett, videós gyakorlást keresel otthonra.'
+      const atlag = szoSzelessegPx(nunito, minta, betumeret) / [...minta].length
+      const karakterPerSor = doboz / atlag
+      expect(karakterPerSor, `${nezetablak} px: ${karakterPerSor.toFixed(1)} karakter/sor`).toBeLessThanOrEqual(80)
+      expect(doboz, `${nezetablak} px: ${doboz} px doboz`).toBeGreaterThan(0)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// MÉRÉS — kontraszt (WCAG 2.2, 1.4.3 és 1.4.11), a tokens.css értékeiből
+// ---------------------------------------------------------------------------
+
+/** sRGB hex → relatív luminancia (WCAG 2.2, „relative luminance" definíció). */
+function luminancia(hex: string): number {
+  const szam = hex.replace('#', '')
+  const csatornak = [szam.slice(0, 2), szam.slice(2, 4), szam.slice(4, 6)].map((resz) => {
+    const c = parseInt(resz, 16) / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * csatornak[0]! + 0.7152 * csatornak[1]! + 0.0722 * csatornak[2]!
+}
+
+/** Kontraszt-arány két színpárra (WCAG 2.2, „contrast ratio"). */
+function kontraszt(elso: string, masodik: string): number {
+  const a = luminancia(elso)
+  const b = luminancia(masodik)
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+}
+
+describe('MÉRÉS — kontraszt: minden szövegpár AA felett', () => {
+  const lap = lapNezetablakra(1440)
+  const t = tokenek(lap)
+  const szin = (nev: string): string => varFeloldas(`var(${nev})`, t).trim()
+
+  const SZOVEG_PAROK: readonly [string, string, string][] = [
+    ['tartalomjegyzék linkje a fehér dobozon', '--kc-color-link', '--kc-color-surface-raised'],
+    ['tartalomjegyzék hover', '--kc-color-link-hover', '--kc-color-surface-raised'],
+    ['jegyzék-cím, szerző neve fehéren', '--kc-color-text', '--kc-color-surface-raised'],
+    ['végzettség, bio, dátum fehéren', '--kc-color-text-muted', '--kc-color-surface-raised'],
+    ['cikk-hero címe a tint sávon', '--kc-color-text', '--kc-color-surface-tint'],
+    ['byline és meta a tint sávon', '--kc-color-text-muted', '--kc-color-surface-tint'],
+    ['elsődleges gomb felirata', '--kc-color-on-primary', '--kc-color-primary'],
+    ['másodlagos gomb felirata a fehér panelen', '--kc-color-text', '--kc-color-surface-raised'],
+  ]
+
+  for (const [nev, elotet, hatter] of SZOVEG_PAROK) {
+    it(`${nev}: ≥ 4,5:1`, () => {
+      const arany = kontraszt(szin(elotet), szin(hatter))
+      expect(arany, `${nev}: ${arany.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5)
+    })
+  }
+
+  it('nem-szöveges elem (másodlagos gomb kerete) ≥ 3:1', () => {
+    const arany = kontraszt(szin('--kc-color-text'), szin('--kc-color-surface-raised'))
+    expect(arany).toBeGreaterThanOrEqual(3)
+  })
+
+  it('fókuszgyűrű a három világos felületen ≥ 3:1', () => {
+    for (const hatter of ['--kc-color-surface-raised', '--kc-color-bg', '--kc-color-surface-tint']) {
+      const arany = kontraszt(szin('--kc-color-focus'), szin(hatter))
+      expect(arany, `${hatter}: ${arany.toFixed(2)}:1`).toBeGreaterThanOrEqual(3)
+    }
+  })
+})
+
+describe('MÉRÉS — 320 px reflow: a saját feliratok elférnek (WCAG 2.2 1.4.10)', () => {
+  const lap = lapNezetablakra(320)
+  const t = tokenek(lap)
+  const NUNITO = [
+    `${GYOKER_UT}public/fonts/nunito-sans-var-latin.woff2`,
+    `${GYOKER_UT}public/fonts/nunito-sans-var-latin-ext.woff2`,
+  ]
+  const merEm = (ertek: string): number =>
+    hosszPx(varFeloldas(ertek, t), 320, GYOKER_BETU, GYOKER_BETU)
+
+  /** A szűk konténer tartalom-hasábja 320 px-en. */
+  const konteneri = 320 - 2 * merEm('var(--kc-container-gutter)')
+  /** A fehér panel belseje (kártya-padding és 1px keret levonva). */
+  const panel = konteneri - 2 * merEm('var(--kc-space-5)') - 2
+
+  it('a gombfeliratok leghosszabb szava befér a panel gombjába', () => {
+    const felkover = betuMetrika(NUNITO, 700)
+    const betumeret = merEm('var(--kc-font-m)')
+    // A gomb belső vízszintes térköze 2 × --kc-space-5, kerete 2 × 2 px.
+    const gombDoboz = panel - 2 * merEm('var(--kc-space-5)') - 4
+    for (const felirat of [ctaLabel('course-list-open'), ctaLabel('course-sales-open')]) {
+      for (const szo of felirat.split(' ')) {
+        const szelesseg = szoSzelessegPx(felkover, szo, betumeret)
+        expect(szelesseg, `„${szo}" ${szelesseg.toFixed(1)} px / ${gombDoboz} px`).toBeLessThanOrEqual(gombDoboz)
+      }
+    }
+  })
+
+  it('a panelek saját feliratainak leghosszabb szava befér a hasábba', () => {
+    const normal = betuMetrika(NUNITO, 400)
+    const felkover = betuMetrika(NUNITO, 700)
+    const betumeret = merEm('var(--kc-font-m)')
+    const cimkek: readonly [string, ReturnType<typeof betuMetrika>][] = [
+      ['Ezen az oldalon', felkover],
+      ['A cikket írta és ellenőrizte', felkover],
+      ['Szakmailag ellenőrizte:', normal],
+      ['Utoljára ellenőrizve:', normal],
+      ['Következő ellenőrzés:', normal],
+      ['Hogyan tovább?', felkover],
+      [ctaLabel('about-open'), normal],
+    ]
+    for (const [cimke, metrika] of cimkek) {
+      for (const szo of cimke.split(' ')) {
+        const szelesseg = szoSzelessegPx(metrika, szo, betumeret)
+        expect(szelesseg, `„${szo}" ${szelesseg.toFixed(1)} px / ${panel} px`).toBeLessThanOrEqual(panel)
+      }
+    }
+  })
+})
