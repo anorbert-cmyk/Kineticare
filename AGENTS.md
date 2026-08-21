@@ -284,6 +284,16 @@ Alügynök (Task): ha a vezető nem köt ki mást, a gyors felderítés Composer
 a hosszú megvalósítás Grok 4.6. Az Auto-t ne tedd a csapat egyetlen
 modelljének.
 
+A `.cursor/agents/` mappában a csapattal megosztott, Kineticare-specifikus
+Cursor-subagentek élnek. A `kineticare-bugbot` a teljes `main` ág
+Bugbot-stílusú hibavadászata (fizetés, jogosultság, számla, videó, tilos
+zónák). Használd, ha a teljes `main`t vagy a production-kritikus utakat
+kell átnézni, nem egy feature-PR diffjét:
+
+```
+Use the kineticare-bugbot subagent to review the entire main branch
+```
+
 ## Környezeti változók
 
 Az `.env.example` a teljes, kommentezett referencia (kulcsok, értékek nélkül).

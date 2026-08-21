@@ -117,6 +117,8 @@ gomb-gráf), `docs/gomb-inventar.md` (CTA-szótár), `docs/gomb-kontraszt-audit.
   szabad. Cursorból dolgozva a picker/Cloud Agent modelljeiről az `AGENTS.md`
   „Cursor-modellek" szekciója szól; az ott felsorolt modellek a Cursor
   KÉSZLETÉT írják le, nem írják felül a csapat Opus-alapbeállítását.
+  A teljes `main` Bugbot-átnézéséhez a
+  `.cursor/agents/kineticare-bugbot.md` projekt-subagentet használd.
 
 ## Üzemeltetési tanulságok — élesben szerzett
 
