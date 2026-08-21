@@ -9,11 +9,13 @@ import {
   PROGRESS_PAGE_SIZE,
 } from '../admin/course-progress-handler'
 import { buildCurriculum } from '../curriculum/curriculum'
+import { logger } from '../logger'
 import {
   buildCourseEngagementReport,
   type CourseEngagementInput,
   type CourseEngagementReport,
 } from './engagement'
+import { trimTruncatedProgress } from './progress-truncation'
 import { readStatisticsPages } from './query'
 
 /**
@@ -28,16 +30,27 @@ import { readStatisticsPages } from './query'
  *   futhasson.
  * - A kurzusonkénti CIKLUS szándékos: a webshopban kevés kurzus van (a
  *   plafon is ezt tükrözi), és a soros lekérdezés kíméli az adatbázist —
- *   párhuzamosításra itt nincs szükség.
+ *   párhuzamosításra itt nincs szükség. MÉRVE (2026-08-21, injektált mockkal,
+ *   a `payload.find` hívásait számolva): 12 kurzus / 200 diák → 25 hívás;
+ *   50 kurzus / 500 diák → 201; a plafonon, 200 kurzus / 1000 diák → 1404.
+ *   A mai kínálat néhány kurzus, tehát a valós hívásszám húsz körül van; a
+ *   párhuzamosítás itt bonyolultságot venne a ma nem létező terhelésért.
+ *   Ha a kínálat egyszer tucatnyi fölé nő, ez a szám a felülvizsgálat jele.
+ * - Egy kurzus hibája NEM viheti el az egész szekciót: a ciklus kurzusonként
+ *   fog hibát, naplózza, átugorja az adott kurzust, és a kimaradt darabszámot
+ *   a jelentés `skipped` mezője viszi ki a felületre. Néma kihagyás nincs.
  * - A felső korlátok a kurzus-haladás handler plafonjainak FELE
  *   (src/lib/admin/course-progress-handler.ts): ez a nézet MINDEN kurzust
  *   egy kérésben aggregál, a handler egyet — a memória-költségvetés így
  *   marad összemérhető. Az importált konstansokból számolódnak, tehát a
  *   két hely nem tud szétcsúszni.
- * - Csonkolásnál a számok ALSÓ becslések (a be nem olvasott sorok
- *   hiányoznak); a `truncated` jelzést a nézet magyarul kimondja. A
- *   hallgatónkénti PONTOS adat a kurzus szerkesztőlapján él, ahol a
- *   handler user-határon vág — ott a megjelenített sor sosem hamis.
+ * - Csonkolásnál a számok ALSÓ becslések, de SOSEM hamisak: a haladás-lista
+ *   plafonján túli diákok kimaradnak a sorból (`trimTruncatedProgress`),
+ *   nem pedig „nem kezdte el"-ként jelennek meg. Enélkül egy kész diák a
+ *   „nem kezdte el" oszlopba esne, vagyis a torzítás iránya ELLENTÉTES
+ *   lenne a `truncated` figyelmeztetés ígéretével. A `truncated` jelzést a
+ *   nézet magyarul kimondja; a hallgatónkénti pontos adat a kurzus
+ *   szerkesztőlapján él, ahol a handler UGYANEZT a közös szabályt hívja.
  * - A tananyaghoz `depth: 0` elég (a course-progress-handler mintája): az
  *   összesítés a mellékleteket nem használja, a lekérdezés így olcsóbb.
  */
@@ -153,6 +166,7 @@ export async function queryCourseEngagement(
   )
 
   let truncated = productsPage.truncated
+  let skipped = 0
   const inputs: CourseEngagementInput[] = []
 
   for (const doc of productsPage.docs) {
@@ -161,79 +175,99 @@ export async function queryCourseEngagement(
       continue
     }
 
-    // „Hozzáfér" = akinek a purchases listája tartalmazza a terméket — a
-    // course-progress handler definíciója. Csak az azonosító kell: a nevet
-    // és az e-mailt ez a nézet nem mutatja, a névsor a kurzus lapján él.
-    const enrollmentPage = await readStatisticsPages<EngagementEnrollmentDoc>(
-      (page, limit) =>
-        deps.payload.find({
-          collection: 'users',
-          where: { purchases: { equals: productId } },
-          depth: 0,
-          page,
-          limit,
-          sort: 'id',
-          select: ENROLLMENT_SELECT,
-          overrideAccess: true,
-        }) as Promise<FindResultLike<EngagementEnrollmentDoc>>,
-      ENROLLMENT_PAGE_SIZE,
-      ENGAGEMENT_ENROLLMENT_MAX,
-    )
+    try {
+      // „Hozzáfér" = akinek a purchases listája tartalmazza a terméket — a
+      // course-progress handler definíciója. Csak az azonosító kell: a nevet
+      // és az e-mailt ez a nézet nem mutatja, a névsor a kurzus lapján él.
+      const enrollmentPage = await readStatisticsPages<EngagementEnrollmentDoc>(
+        (page, limit) =>
+          deps.payload.find({
+            collection: 'users',
+            where: { purchases: { equals: productId } },
+            depth: 0,
+            page,
+            limit,
+            sort: 'id',
+            select: ENROLLMENT_SELECT,
+            overrideAccess: true,
+          }) as Promise<FindResultLike<EngagementEnrollmentDoc>>,
+        ENROLLMENT_PAGE_SIZE,
+        ENGAGEMENT_ENROLLMENT_MAX,
+      )
 
-    // A `watchedAt` itt nem kell: az összesítő totals-blokkja (elkezdte,
-    // befejezte, átlag) nem használja, csak a hallgatónkénti utolsó
-    // aktivitás — az pedig a kurzuslap dolga.
-    const progressPage = await readStatisticsPages<EngagementProgressDoc>(
-      (page, limit) =>
-        deps.payload.find({
-          collection: 'course-progress',
-          where: { product: { equals: productId } },
-          depth: 0,
-          page,
-          limit,
-          sort: ['user', 'id'],
-          select: PROGRESS_SELECT,
-          overrideAccess: true,
-        }) as Promise<FindResultLike<EngagementProgressDoc>>,
-      PROGRESS_PAGE_SIZE,
-      ENGAGEMENT_PROGRESS_MAX,
-    )
+      // A `watchedAt` itt nem kell: az összesítő totals-blokkja (elkezdte,
+      // befejezte, átlag) nem használja, csak a hallgatónkénti utolsó
+      // aktivitás — az pedig a kurzuslap dolga.
+      const progressPage = await readStatisticsPages<EngagementProgressDoc>(
+        (page, limit) =>
+          deps.payload.find({
+            collection: 'course-progress',
+            where: { product: { equals: productId } },
+            depth: 0,
+            page,
+            limit,
+            sort: ['user', 'id'],
+            select: PROGRESS_SELECT,
+            overrideAccess: true,
+          }) as Promise<FindResultLike<EngagementProgressDoc>>,
+        PROGRESS_PAGE_SIZE,
+        ENGAGEMENT_PROGRESS_MAX,
+      )
 
-    truncated = truncated || enrollmentPage.truncated || progressPage.truncated
+      truncated = truncated || enrollmentPage.truncated || progressPage.truncated
 
-    const enrollments: CourseEnrollment[] = []
-    for (const enrollmentDoc of enrollmentPage.docs) {
-      const userId = finiteId(enrollmentDoc.id)
-      if (userId === null) {
-        continue
+      const enrollments: CourseEnrollment[] = []
+      for (const enrollmentDoc of enrollmentPage.docs) {
+        const userId = finiteId(enrollmentDoc.id)
+        if (userId === null) {
+          continue
+        }
+        enrollments.push({ userId, email: '', name: null })
       }
-      enrollments.push({ userId, email: '', name: null })
-    }
 
-    const progressRows: CourseProgressStatRow[] = []
-    for (const row of progressPage.docs) {
-      const userId = relationshipId(row.user)
-      const videoRef = trimmedOrNull(row.videoRef)
-      if (userId === null || videoRef === null) {
-        continue
+      const progressRows: CourseProgressStatRow[] = []
+      for (const row of progressPage.docs) {
+        const userId = relationshipId(row.user)
+        const videoRef = trimmedOrNull(row.videoRef)
+        if (userId === null || videoRef === null) {
+          continue
+        }
+        progressRows.push({ userId, videoRef })
       }
-      progressRows.push({ userId, videoRef })
-    }
 
-    inputs.push({
-      productId,
-      title: productLabel(doc, productId),
-      audience: doc.audience,
-      // hasAccess: true — az admin a teljes szerkezetet látja; a modellből
-      // ebben a nézetben csak a leckeszám (nevező) hasznosul, GUID nem megy ki.
-      curriculum: buildCurriculum(
-        { modules: doc.modules ?? null, videos: doc.videos ?? null },
-        true,
-      ),
-      enrollments,
-      progressRows,
-    })
+      // A haladás-lista plafonjánál az utolsó felhasználó sorai félbevághatók.
+      // A közös szabály eldobja őt és a nála nagyobb azonosítójú diákokat —
+      // így a sor kevesebb diákot összesít, de amit mutat, az igaz.
+      const teljes = trimTruncatedProgress({
+        progressRows,
+        enrollments,
+        truncated: progressPage.truncated,
+      })
+
+      inputs.push({
+        productId,
+        title: productLabel(doc, productId),
+        audience: doc.audience,
+        // hasAccess: true — az admin a teljes szerkezetet látja; a modellből
+        // ebben a nézetben csak a leckeszám (nevező) hasznosul, GUID nem megy ki.
+        curriculum: buildCurriculum(
+          { modules: doc.modules ?? null, videos: doc.videos ?? null },
+          true,
+        ),
+        enrollments: teljes.enrollments,
+        progressRows: teljes.progressRows,
+      })
+    } catch (error) {
+      // Egyetlen rossz kurzus (hibás tananyag-szerkezet, megbicsakló
+      // adatbázis-hívás) ne vigye el a többi kurzus jelentését. Az azonosító
+      // és a hiba a naplóba megy; a felület a `skipped` számot mondja ki.
+      skipped += 1
+      logger.warn('statisztika: a kurzus hatás-sora kimaradt (hiba)', {
+        productId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
-  return buildCourseEngagementReport(inputs, { truncated })
+  return buildCourseEngagementReport(inputs, { truncated, skipped })
 }

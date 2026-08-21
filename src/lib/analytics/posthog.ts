@@ -69,6 +69,29 @@ export const ANALYTICS_EVENTS = {
   lessonCompleted: 'lesson_completed',
   moduleCompleted: 'module_completed',
   courseCompleted: 'course_completed',
+
+  // ─── LEAD-FUNNEL (2026-08-21, tulajdonosi kör) ──────────────────────────
+  // A nem-vásárlói konverziók. Minden űrlaphoz KÉT esemény tartozik: a
+  // beküldés SZÁNDÉKA és a SIKERES beküldés. A kettő különbsége maga a
+  // mérőszám — ha sok a `lead_submitted` és kevés a `lead_succeeded`, akkor
+  // az űrlap vagy a szerver hibázik. Ez a néma beküldési hibák egyetlen
+  // külső jelzője: a szerveroldali napló csak azt látja, ami ODAÉRT.
+  leadSubmitted: 'lead_submitted',
+  leadSucceeded: 'lead_succeeded',
+
+  // ─── VIDEÓ-MÉLYSÉG ─────────────────────────────────────────────────────
+  // A `lesson_completed` csak a VÉGÉT jelzi; a lemorzsolódás viszont attól
+  // függetlenül érdekes, hogy hol állnak meg. A mérföldkövek leckénként
+  // EGYSZER mennek ki (a küldő oldalán retesszel), különben a visszatekerés
+  // többszörözné őket, és a tölcsér hamis képet adna.
+  videoStarted: 'video_started',
+  videoMilestone: 'video_milestone',
+
+  // ─── HIBAKÖVETÉS ───────────────────────────────────────────────────────
+  // ÜZLETI (nem JS-kivétel) hiba: a pénztár elutasító ágai. A tényleges
+  // JS-kivételeket a PostHog saját `$exception` eseménye viszi, a
+  // `captureAnalyticsException` segédleten át.
+  checkoutFailed: 'checkout_failed',
 } as const
 export type AnalyticsEventName = (typeof ANALYTICS_EVENTS)[keyof typeof ANALYTICS_EVENTS]
 
@@ -98,6 +121,18 @@ export function buildPostHogOptions(): Partial<PostHogConfig> {
     capture_pageview: false,
     capture_pageleave: true,
     persistence: 'localStorage+cookie',
+    // MUNKAMENET-FELVÉTEL KIKAPCSOLVA — tulajdonosi döntés (2026-08-21):
+    // „Csak események és funnelek." A felvétel a legnagyobb adatvédelmi
+    // súlyú funkció (a látogató képernyőjét rögzíti), és külön jogi szöveget
+    // kíván az adatkezelési tájékoztatóban — az pedig ma még a Barionról sem
+    // rendelkezik, tehát a szöveg előbb ügyvédi kézre vár.
+    //
+    // MIÉRT ITT, ÉS NEM A POSTHOG FELÜLETÉN: a projekt-oldali kapcsolót
+    // bárki átbillentheti anélkül, hogy a kódban nyoma maradna. A kliens
+    // oldali `disable_session_recording` viszont a felvételt már az
+    // INDULÁSKOR letiltja, tehát a projekt-beállítástól függetlenül érvényes.
+    // Ez a kettő közül a szigorúbb — szándékosan.
+    disable_session_recording: true,
   }
 }
 
@@ -183,6 +218,68 @@ export function captureAnalyticsEvent(
     return
   }
   posthog.capture(event, properties)
+}
+
+/**
+ * ═══ AZONOSÍTÁS ═══════════════════════════════════════════════════════════
+ *
+ * MIÉRT KELL EGYÁLTALÁN. A `buildPostHogOptions` `person_profiles:
+ * 'identified_only'` beállítást ad — vagyis person-profil KIZÁRÓLAG akkor
+ * jön létre, ha valaha lefut egy `identify()`. 2026-08-21-ig a repóban
+ * EGYETLEN `identify()` hívás sem volt, tehát a profilok száma tartósan
+ * nulla lett volna: minden esemény anonim marad, és a „ki tért vissza",
+ * „kik morzsolódtak le", „mekkora a megtartás" kérdések megválaszolhatatlanok.
+ * A beállítás önmagában helyes (költség- és adatminimalizálás), csak épp
+ * hiányzott mellőle a párja.
+ *
+ * MI AZ AZONOSÍTÓ. A Payload `users.id` — szám, a saját rendszerünkön kívül
+ * semmit nem jelent. **E-mail-cím, név és IP SOHA nem mehet be**: az
+ * azonosító önmagában ne legyen személyes adat, hogy a PostHog-oldali
+ * tárolás a lehető legkevesebbet tudja a látogatóról. (A logger redact-
+ * listája a NAPLÓRA véd, a PostHog-hívásra nem — itt kézzel kell fegyelem.)
+ *
+ * A `String(userId)` azért kell, mert a PostHog distinct_id-je sztring; a
+ * szám-azonosító implicit konverziója verzióról verzióra változhat.
+ */
+export function identifyUser(userId: number | string): boolean {
+  if (!initialized || typeof window === 'undefined') {
+    return false
+  }
+  posthog.identify(String(userId))
+  return true
+}
+
+/**
+ * Kijelentkezéskor: az azonosság elengedése.
+ *
+ * MIÉRT KÖTELEZŐ. `reset()` nélkül a kijelentkezés utáni események továbbra
+ * is az ELŐZŐ felhasználó profiljára mennének. Közös gépen (rendelői tablet,
+ * családi laptop) ez két különböző ember viselkedését olvasztaná egy
+ * profilba — ez egyszerre mérési hiba és adatvédelmi hiba.
+ */
+export function resetAnalyticsIdentity(): void {
+  if (!initialized || typeof window === 'undefined') {
+    return
+  }
+  posthog.reset()
+}
+
+/**
+ * JS-kivétel rögzítése (PostHog `$exception`).
+ *
+ * A `captureException` a posthog-js 1.413.3 publikus API-ja
+ * (`captureException(error: unknown, additionalProperties?: Properties)`) —
+ * a szignatúrát a telepített típusdefinícióból ellenőriztük, nem emlékezetből.
+ *
+ * A `context` SZABAD szöveg, de ugyanaz a tilalom áll rá, mint az
+ * eseménytulajdonságokra: személyes adat nem kerülhet bele. Ezért vesz át
+ * rövid, gépi címkét (pl. 'checkout-submit'), nem a felhasználó bevitelét.
+ */
+export function captureAnalyticsException(error: unknown, context: string): void {
+  if (!initialized || typeof window === 'undefined') {
+    return
+  }
+  posthog.captureException(error, { kc_context: context })
 }
 
 /**

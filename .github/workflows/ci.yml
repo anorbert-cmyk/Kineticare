@@ -116,6 +116,21 @@ jobs:
         run: npm ci --legacy-peer-deps
       - name: Typecheck
         run: npm run typecheck
+      # A `src/payload-types.ts` GENERÁLT fájl, de kézzel commitolt: ha a
+      # collection-séma változik és a generálás elmarad, a típusok némán
+      # elcsúsznak a valóságtól, és a typecheck attól még zöld marad (a régi
+      # típusok önmagukban konzisztensek). Ez a lépés újragenerálja és
+      # összeveti — eltérésnél a CI megbukik, a diffet pedig kiírja, hogy
+      # látszódjon, mi maradt ki. Mérve: a `payload generate:types` sem
+      # adatbázist, sem PAYLOAD_SECRET-et nem igényel, ezért futhat még a
+      # teszt-adatbázis env beállítása ELŐTT.
+      - name: Generált típusok frissessége
+        run: |
+          npm run generate:types
+          if ! git diff --exit-code -- src/payload-types.ts; then
+            echo "::error::A src/payload-types.ts elavult. Futtasd: npm run generate:types, és commitold az eredményt."
+            exit 1
+          fi
       # A DATABASE_URI a fenti service-konténerre mutat; jelszót NEM tartalmaz
       # (trust-auth), tehát nem titok. A PAYLOAD_SECRET viszont titok-ALAKÚ,
       # ezért — a build jobbal azonos mintára — futásidőben generált, eldobható,

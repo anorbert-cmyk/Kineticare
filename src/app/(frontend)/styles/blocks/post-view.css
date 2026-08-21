@@ -1,0 +1,250 @@
+/**
+ * Tudástár — CIKKOLDAL (PostArticle és a hozzá tartozó blokkok).
+ *
+ * Betöltés: a komponensek maguk importálják (PostToc, PostFaq, PostAuthorBox,
+ * PostCourseCta, PostArticle) — ugyanaz a minta, mint a knowledge.css-nél: a
+ * stílus akkor is jön, ha a lapot más útvonal állítja össze.
+ *
+ * ═══ AMI ITT NINCS ═══
+ * Nulla új szín, nulla új betű, nulla új betűméret: minden érték `var(--kc-*)`
+ * tokenről jön, a betűméret kizárólag a HÁROM token valamelyike
+ * (`--kc-font-l/m/s`) — az őr a `src/__tests__/tipografia-harom-meret.test.ts`.
+ *
+ * ═══ MOZGÁS ═══
+ * Ez a lap SZÁNDÉKOSAN nem tartalmaz `transition`-t, `animation`-t és
+ * hover-`transform`-ot. A cikkoldal olvasásra való; a nem lényegi mozgás a
+ * WCAG 2.2 **2.3.3** (Animation from Interactions) hatálya alá esne, és
+ * kockázat nélkül elhagyható. Ami mozog rajta (a szerző-blokk szöveglinkje és
+ * a kapcsolódó kártyák), az a közös `content.css` / `knowledge.css`
+ * szabályaiból jön, ahol a `prefers-reduced-motion` ág már ott van; a
+ * `base.css` globális kill-switche (225–237. sor) ezen felül minden
+ * átmenetet levág csökkentett mozgásnál.
+ *
+ * ═══ CÍMSOR-MÉRETEK: MIÉRT M A PANELEKEN ═══
+ * A cikk TARTALMI szakaszcímei (a törzs H2-i és a „Gyakori kérdések") az L
+ * méreten állnak, a címsor-betűvel — ezek a lap olvasandó szakaszai. A
+ * KÍSÉRŐ paneleké (tartalomjegyzék, szerző-blokk, kurzus-ajánló) M méret,
+ * törzs-betűvel, 700-as súllyal: a szintet a súly, a betűcsalád és a pozíció
+ * jelöli, nem a méret. Ez a repó bevett elve (content.css h3–h6 magyarázata),
+ * és a kompakt panel épp azért kompakt, hogy ne adjon HAMIS LAPVÉGET a
+ * cikk után (NN/g, *Related Content Boosts Pageviews, When Done Right*).
+ *
+ * ═══ KONTRASZT (a tokens.css jegyzőkönyvéből, számolt értékek) ═══
+ * ink fehéren 15,63:1 · ink a tinten 13,53:1 · ink-soft fehéren 9,30:1 ·
+ * ink-soft a tinten 8,05:1 · accent-deep fehéren 5,45:1 · fehér az
+ * accent-deepen 5,45:1 — mind az AA 4,5:1 fölött. Az `accent` (#3d78aa)
+ * SZÖVEGET nem hordoz ezen a lapon, csak a közös kártya-nyelv dekorációját.
+ */
+
+/* ---- Tartalomjegyzék („Ezen az oldalon") ---------------------------------
+   Fehér doboz a lap-háttéren, a törzs elején. NEM ragadós és NEM oldalsáv:
+   a ragadó elem a meglévő ragadós fejléc és süti-sáv mellett a WCAG 2.2
+   2.4.11 (Focus Not Obscured) kockázata (docs/tudastar-ux-terv.md 5.4). */
+
+.kc-post-toc {
+  margin: 0 0 var(--kc-space-6);
+  padding: var(--kc-space-5);
+  border: 1px solid var(--kc-color-border);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-surface-raised);
+}
+
+.kc-post-toc__title {
+  margin: 0 0 var(--kc-space-2);
+  font-family: var(--kc-font-body);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-color-text);
+}
+
+/* Számozott lista: a cikk szakaszainak SORRENDJE információ. */
+.kc-post-toc__list {
+  margin: 0;
+  padding-left: var(--kc-space-5);
+  color: var(--kc-color-text-muted);
+}
+
+/* 44 px-es érintőcél: a WCAG 2.2 2.5.8 (AA) 24 px-et kér, a repó gyakorlata a
+   2.5.5 (AAA) 44 px-es szintjén áll (a szűrő-chipek és a gombok is ilyenek). */
+.kc-post-toc__list a {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  color: var(--kc-color-link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.25em;
+}
+
+.kc-post-toc__list a:hover {
+  color: var(--kc-color-link-hover);
+}
+
+/* ---- Gyakori kérdések a cikk törzsében ------------------------------------
+   A megjelenést a közös blocks/faq.css adja (azonos harmonika-nyelv a
+   kezdőlapon, a kurzusoldalon és itt — WCAG 3.2.4). Itt csak a törzsbeli
+   ritmusa áll: ugyanaz a szakaszcím-fölötti köz, mint a tartalmi H2-ké
+   (content.css: --kc-space-7). */
+.kc-post-faq {
+  margin-top: var(--kc-space-7);
+}
+
+/* ---- Szerző- és lektor-blokk ---------------------------------------------
+   A TÖRZS zárása, nem a lábléc: az NHS 2018-as tesztelése szerint a
+   láblécbe, elválasztó vonal mögé tett ellenőrzés-dátumot a felhasználók nem
+   vették észre, a fő tartalomhoz közelebb tettet igen. */
+
+.kc-post-author {
+  margin-top: var(--kc-space-7);
+}
+
+.kc-post-author__title {
+  margin: 0 0 var(--kc-space-4);
+  font-family: var(--kc-font-body);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-color-text);
+}
+
+.kc-post-author__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--kc-space-4);
+}
+
+/* 72px arckép (--kc-space-8). Kör alakú kivágás; a kép DEKORATÍV alt-tal megy
+   ki, mert a nevet a mellette álló szöveg már kimondja (WCAG 1.1.1). */
+.kc-post-author__portrait {
+  display: block;
+  overflow: hidden;
+  width: var(--kc-space-8);
+  height: var(--kc-space-8);
+  flex: none;
+  border-radius: var(--kc-radius-full);
+  background-color: var(--kc-color-surface-tint);
+}
+
+.kc-post-author__portrait img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A szöveg-oszlop szűkülhet, de a mértéknél nem lesz szélesebb (B1.1). */
+.kc-post-author__person {
+  min-width: 0;
+  flex: 1 1 18rem;
+  max-width: var(--kc-measure);
+}
+
+.kc-post-author__name {
+  margin: 0;
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-color-text);
+}
+
+.kc-post-author__credentials,
+.kc-post-author__bio {
+  margin: var(--kc-space-1) 0 0;
+  font-size: var(--kc-font-m);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-post-author__link {
+  margin-top: var(--kc-space-2);
+}
+
+/* Ellenőrzés-dátumok: hajszálvonal fölött, apróbetűvel, halkabb színnel —
+   az NHS „Page last reviewed" / „Next review due" mintája. */
+.kc-post-author__reviewed {
+  margin-top: var(--kc-space-4);
+  padding-top: var(--kc-space-4);
+  border-top: 1px solid var(--kc-color-border);
+  font-size: var(--kc-font-s);
+  color: var(--kc-color-text-muted);
+}
+
+.kc-post-author__reviewed p {
+  margin: 0;
+}
+
+.kc-post-author__reviewed p + p {
+  margin-top: var(--kc-space-1);
+}
+
+/* ---- Kurzus-ajánló panel --------------------------------------------------
+   Kompakt, kép nélküli panel a tint sávon, a lap saját tokenjeivel: se új
+   szín, se hirdetés-arányú doboz (NN/g Banner Blindness; B4.2). */
+
+.kc-post-cta__panel {
+  max-width: var(--kc-measure);
+}
+
+.kc-post-cta__title {
+  margin: 0 0 var(--kc-space-3);
+  font-family: var(--kc-font-body);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+  line-height: var(--kc-leading-heading);
+  color: var(--kc-color-text);
+}
+
+.kc-post-cta__text {
+  margin: 0 0 var(--kc-space-5);
+  font-size: var(--kc-font-m);
+  line-height: var(--kc-leading-body);
+  color: var(--kc-color-text-muted);
+}
+
+/* Az ÁR-TÉNY és a gomb egy sorban: a döntéshez szükséges tény a cselekvés
+   közvetlen közelében áll (Baymard; docs/ux-belso-oldalak-kutatas.md B6.2). */
+.kc-post-cta__action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--kc-space-3);
+  margin: 0;
+}
+
+/* ---- A CTA-sáv és a kapcsolódó blokk távolsága ----------------------------
+   MÉRT KÜSZÖB (docs/tudastar-ux-terv.md 5.8): a panel alja és a kapcsolódó
+   blokk címsora közt legfeljebb 72 px (--kc-space-8) üres függőleges táv
+   lehet, különben a lap HAMIS LAPVÉGET jelez, és az olvasó megáll (NN/g,
+   *Related Content Boosts Pageviews, When Done Right*).
+
+   A közös `.kc-section` alapja 48 px (900 px felett 88 px) padding mindkét
+   oldalon, ami 96, illetve 176 px-t adna. A két kétosztályos szelektor
+   SPECIFICITÁSBÓL írja felül az alapot és a médialekérdezését is, tehát a
+   mért érték minden nézetablakon azonos:
+
+       24 px (--kc-space-5) + 32 px (--kc-space-6) = 56 px  ≤  72 px
+
+   Ha nincs kapcsolódó blokk, a `--elotte-kapcsolodo` módosító nem kerül fel,
+   és a CTA-sáv az alap szekció-paddinggel zár. */
+
+.kc-section.kc-post-cta--elotte-kapcsolodo {
+  padding-block-end: var(--kc-space-5);
+}
+
+.kc-section.kc-post-related {
+  padding-block-start: var(--kc-space-6);
+}
+
+/* ---- Nyomtatás ------------------------------------------------------------
+   A papírra nyomtatott forráshivatkozás link nélkül értéktelen, márpedig a
+   látogató a gyakorlatsorát és a forrásjegyzékét viszi el (a motion.css már
+   ma is számol a nyomtatással). A hivatkozás címe a szövegben marad, a
+   webcím zárójelben mögé kerül. */
+@media print {
+  .kc-post-body a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: var(--kc-font-s);
+  }
+}

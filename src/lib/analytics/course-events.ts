@@ -96,3 +96,72 @@ export function trackCourseCompleted(
     lessonCount: input.lessonCount,
   })
 }
+
+/**
+ * ═══ VIDEÓ-MÉLYSÉG ════════════════════════════════════════════════════════
+ *
+ * MIÉRT KELL A `lesson_completed` MELLÉ. A `lesson_completed` csak a lecke
+ * VÉGÉT jelzi, tehát a tölcsér a „megnyitotta" és a „befejezte" közt egyetlen
+ * nagy, átláthatatlan lépés. A lemorzsolódás viszont épp itt történik: a
+ * kérdés az, hogy MEDDIG jutottak el a videóban. A négy mérföldkő ezt a
+ * szakaszt bontja mérhető lépésekre.
+ *
+ * MIT MÉR PONTOSAN: a LEJÁTSZÓFEJ elért MÉLYSÉGÉT (pozíció / hossz) — nem a
+ * ténylegesen megnézett másodperceket. A kettő szándékosan KÜLÖNBÖZIK, és
+ * kiegészíti egymást:
+ *  - a mélység a „meddig jutott el" kérdésre válaszol (tölcsér, lemorzsolódás);
+ *  - a szkippelés-ellenes LEFEDETTSÉG (src/lib/stream/watched-coverage.ts) a
+ *    „tényleg megnézte-e" kérdésre — ez hajtja az automatikus készre jelölést
+ *    és rajta keresztül a `lesson_completed`-et.
+ * Ha a mélységet is lefedettségre alapoznánk, a 100%-os mérföldkő gyakorlatilag
+ * SOSEM teljesülne (a videók végén stáblista, elköszönés van — a készre
+ * jelölés is ezért 90%-nál húzza a határt), tehát a tölcsér utolsó lépése
+ * tartósan nulla maradna.
+ *
+ * A KÜSZÖBÖK és a „mérföldkövenként EGYSZER" szabály a bevett sztenderdet
+ * követi: a GOV.UK GA4 videó-követője a 25/50/75%-ot és a videó végét méri, és
+ * „ezek az események videónként és oldalanként CSAK EGYSZER tüzelnek" — a
+ * visszatekerés tehát nem küldi újra őket
+ * (https://docs.publishing.service.gov.uk/repos/govuk_publishing_components/analytics-ga4/trackers/ga4-video-tracker.html).
+ * A GA4 saját `video_progress` eseménye ugyanezt a `video_percent` alapú,
+ * mérföldkövenként egyszeri sémát használja. A RETESZ maga nem itt, hanem a
+ * hívó oldalán, tiszta és tesztelhető formában él
+ * (src/components/account/player/analytics.ts — `createVideoDepthTracker`).
+ */
+
+/** A mért videó-mélységek százalékban. A riportok pontosan ezekre bontanak. */
+export const VIDEO_MILESTONE_PERCENTS = [25, 50, 75, 100] as const
+
+/** Egy mérföldkő százaléka. Szűk unió: tetszőleges számot a típus nem enged át. */
+export type VideoMilestonePercent = (typeof VIDEO_MILESTONE_PERCENTS)[number]
+
+/** A videó-események közös azonosítása: melyik kurzus melyik leckéje. */
+export interface VideoEventInput extends CourseEventCourse {
+  /** A lecke STABIL refje (BSON ObjectID vagy Bunny-GUID) — nem személyes adat. */
+  lessonRef: string
+}
+
+/**
+ * A lecke videója TÉNYLEGESEN elindult — leckénként EGYSZER.
+ *
+ * Nem a lecke megnyitása: a megnyitás felfújná a számot (aki csak
+ * belekattint, elindítottnak látszana), és a mérföldkövek nevezője hamis
+ * lenne. Az indulás bizonyítéka a lejátszótól érkező, ELŐREHALADÓ pozíció.
+ */
+export function trackVideoStarted(input: VideoEventInput): void {
+  captureAnalyticsEvent(ANALYTICS_EVENTS.videoStarted, {
+    ...courseProps(input),
+    lessonRef: input.lessonRef,
+  })
+}
+
+/** Egy videó-mélység mérföldkő — leckénként és mérföldkövenként EGYSZER. */
+export function trackVideoMilestone(
+  input: VideoEventInput & { percent: VideoMilestonePercent },
+): void {
+  captureAnalyticsEvent(ANALYTICS_EVENTS.videoMilestone, {
+    ...courseProps(input),
+    lessonRef: input.lessonRef,
+    percent: input.percent,
+  })
+}

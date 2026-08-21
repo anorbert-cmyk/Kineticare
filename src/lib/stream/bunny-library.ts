@@ -18,7 +18,15 @@
  *
  * A válasz mezői a gyakorlatban PascalCase ÉS camelCase alakban is előfordulnak;
  * a parser mindkettőt elfogadja.
+ *
+ * A hivatalos séma (PaginationListOfVideoModel) négy felső szintű mezőt ad:
+ * `totalItems`, `currentPage`, `itemsPerPage`, `items`. Az `itemsPerPage`
+ * alapértéke 100. A VideoModel-ben a `guid` KÖTELEZŐ mező (minLength: 1) —
+ * ezért a GUID nélküli sor szerződésszegés, nem normál eset; lásd a
+ * BunnyLibraryListPage fejkommentjét.
  */
+
+import { logger, type Logger } from '../logger'
 
 export const BUNNY_STREAM_API_ORIGIN = 'https://video.bunnycdn.com'
 
@@ -42,6 +50,11 @@ export interface BunnyLibraryList {
   videos: BunnyLibraryVideo[]
   totalItems: number | null
   truncated: boolean
+  /**
+   * Ahány nyers tételt a parser GUID híján eldobott. Nulla a normál eset;
+   * pozitív érték néma adatvesztést jelentene, ezért számláljuk és naplózzuk.
+   */
+  droppedItems: number
 }
 
 export type BunnyLibraryListResult =
@@ -134,28 +147,78 @@ export function parseBunnyLibraryVideo(value: unknown): BunnyLibraryVideo | null
   }
 }
 
-export function parseBunnyLibraryListPayload(
+/**
+ * Egy listaoldal feldolgozott alakja: a lista ÉS a lapozáshoz kellő
+ * nyers számok.
+ *
+ * ═══ MIÉRT A NYERS TÉTELSZÁM DÖNT (2026-08-21-i javítás) ═══
+ * A lapozás megállási feltétele korábban a PARSE-OLT videók számát nézte
+ * (`parsed.videos.length < itemsPerPage`). A parser viszont eldobja a GUID
+ * nélküli sort, ezért egyetlen ilyen tétel egy tele, 100-as oldalon 99 videót
+ * adott, a ciklus „ez már nem tele oldal” alapon megállt, és a 2–5. oldal
+ * SOSEM jött be — ráadásul csonka-figyelmeztetés nélkül, mert az is ugyanezen
+ * az ágon dőlt el. A munkatárs így hiánytalannak látott egy csonka listát, és
+ * rossz azonosítót köthetett a fizetős leckéhez.
+ *
+ * A hivatalos sémában a `guid` kötelező, tehát a GUID nélküli sor a Bunny
+ * szerződésszegése (feltöltés alatti vagy hibás felvételnél láttuk). Épp ezért
+ * nem szabad rá építeni a lapozást: a döntés a NYERS `items.length`-en és a
+ * válasz által jelentett `itemsPerPage`-en áll, a szűrés eredményétől
+ * függetlenül. Az eldobott tételek száma nem vész el: számláljuk
+ * (`droppedItemCount`) és naplózzuk.
+ */
+export interface BunnyLibraryListPage {
+  list: BunnyLibraryList
+  /** A válasz `items` tömbjének hossza — szűrés ELŐTT. */
+  rawItemCount: number
+  /** Ahány nyers tételt GUID híján el kellett dobni. */
+  droppedItemCount: number
+  /** A válasz által jelentett oldalméret (`itemsPerPage`), ha pozitív egész. */
+  pageSize: number | null
+}
+
+export function parseBunnyLibraryListPage(
   payload: unknown,
   meta: { kind: BunnyLibraryKind; libraryId: string; truncated?: boolean },
-): BunnyLibraryList | null {
+): BunnyLibraryListPage | null {
   const record = asRecord(payload)
   if (record === null) {
     return null
   }
+  const items = readItems(record)
   const videos: BunnyLibraryVideo[] = []
-  for (const item of readItems(record)) {
+  for (const item of items) {
     const video = parseBunnyLibraryVideo(item)
     if (video !== null) {
       videos.push(video)
     }
   }
+  const droppedItemCount = items.length - videos.length
+  const reportedPageSize = readNumber(record, 'itemsPerPage', 'ItemsPerPage')
   return {
-    kind: meta.kind,
-    libraryId: meta.libraryId,
-    videos,
-    totalItems: readNumber(record, 'totalItems', 'TotalItems'),
-    truncated: meta.truncated === true,
+    list: {
+      kind: meta.kind,
+      libraryId: meta.libraryId,
+      videos,
+      totalItems: readNumber(record, 'totalItems', 'TotalItems'),
+      truncated: meta.truncated === true,
+      droppedItems: droppedItemCount,
+    },
+    rawItemCount: items.length,
+    droppedItemCount,
+    pageSize:
+      reportedPageSize !== null && Number.isInteger(reportedPageSize) && reportedPageSize > 0
+        ? reportedPageSize
+        : null,
   }
+}
+
+/** Kényelmi alak: csak a lista kell, a lapozás nyers számai nélkül. */
+export function parseBunnyLibraryListPayload(
+  payload: unknown,
+  meta: { kind: BunnyLibraryKind; libraryId: string; truncated?: boolean },
+): BunnyLibraryList | null {
+  return parseBunnyLibraryListPage(payload, meta)?.list ?? null
 }
 
 function readEnv(name: string): string | null {
@@ -189,6 +252,11 @@ export interface ListBunnyLibraryVideosDeps {
   page?: number
   itemsPerPage?: number
   search?: string
+  /**
+   * Naplózó az eldobott tételekhez. A route-handler a kérés-azonosítóval
+   * kötött child loggerét adhatja át; enélkül a modul-szintű logger megy.
+   */
+  log?: Pick<Logger, 'warn'>
 }
 
 const DEFAULT_PAGE_SIZE = 100
@@ -227,9 +295,13 @@ export async function listBunnyLibraryVideos(
   }
 
   const itemsPerPage = deps.itemsPerPage ?? DEFAULT_PAGE_SIZE
+  const log = deps.log ?? logger.child({ module: 'bunny-library' })
   const collected: BunnyLibraryVideo[] = []
   let totalItems: number | null = null
   let truncated = false
+  /** Nyers (szűrés előtti) tételszám összesen — ezen áll a lapozás döntése. */
+  let rawSeen = 0
+  let droppedItems = 0
   const startPage = deps.page ?? 1
   const pagesToRead = deps.page !== undefined ? 1 : MAX_PAGES
 
@@ -290,7 +362,7 @@ export async function listBunnyLibraryVideos(
       }
     }
 
-    const parsed = parseBunnyLibraryListPayload(payload, {
+    const parsed = parseBunnyLibraryListPage(payload, {
       kind: deps.kind,
       libraryId: config.libraryId,
     })
@@ -301,15 +373,38 @@ export async function listBunnyLibraryVideos(
         message: 'A Bunny videótár válasza nem értelmezhető.',
       }
     }
-    collected.push(...parsed.videos)
-    if (parsed.totalItems !== null) {
-      totalItems = parsed.totalItems
+    collected.push(...parsed.list.videos)
+    rawSeen += parsed.rawItemCount
+    if (parsed.list.totalItems !== null) {
+      totalItems = parsed.list.totalItems
     }
-    if (parsed.videos.length < itemsPerPage) {
-      truncated = false
+    if (parsed.droppedItemCount > 0) {
+      droppedItems += parsed.droppedItemCount
+      log.warn('bunny-library: GUID nélküli tétel maradt ki a listából', {
+        kind: deps.kind,
+        libraryId: config.libraryId,
+        page,
+        rawItemCount: parsed.rawItemCount,
+        droppedItemCount: parsed.droppedItemCount,
+      })
+    }
+
+    /**
+     * Tele volt-e az oldal? A viszonyítási alap a válasz által jelentett
+     * oldalméret, de sosem több a kértnél: ha a Bunny lejjebb szabja a
+     * lapméretet, a kisebb szám a helyes küszöb, ha viszont nagyobbat
+     * jelentene, a kért méret marad — így a ciklus inkább tovább lapoz, mint
+     * hogy némán elhagyjon egy oldalt.
+     */
+    const effectivePageSize =
+      parsed.pageSize === null ? itemsPerPage : Math.min(itemsPerPage, parsed.pageSize)
+    if (parsed.rawItemCount < effectivePageSize) {
       break
     }
-    if (offset === pagesToRead - 1 && (totalItems === null || collected.length < totalItems)) {
+    if (totalItems !== null && rawSeen >= totalItems) {
+      break
+    }
+    if (offset === pagesToRead - 1) {
       truncated = true
     }
   }
@@ -321,7 +416,10 @@ export async function listBunnyLibraryVideos(
       libraryId: config.libraryId,
       videos: collected,
       totalItems,
-      truncated,
+      // Az eldobott tétel is hiány a listában: a felület ilyenkor is a
+      // „keresd a Bunny felületén” figyelmeztetést mutassa.
+      truncated: truncated || droppedItems > 0,
+      droppedItems,
     },
   }
 }

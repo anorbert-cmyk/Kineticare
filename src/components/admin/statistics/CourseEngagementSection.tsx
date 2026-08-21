@@ -78,6 +78,22 @@ export function CourseEngagementSection({
               pontos, hallgatónkénti adat a kurzus lapján érhető el.
             </p>
           ) : null}
+          {/* A hibára kimaradt kurzusokat KIMONDJUK. Egy csendben eltűnt sor
+              rosszabb, mint egy hiányt jelző mondat: a munkatárs azt hinné,
+              hogy az a kurzus nem is létezik. A részleteket (melyik kurzus,
+              milyen hiba) a szerveroldali napló őrzi. */}
+          {engagement.skipped > 0 ? (
+            <p
+              style={{
+                ...noticeStyle,
+                marginBottom: 'var(--kc-as-space-4, calc(var(--base) * 1))',
+              }}
+            >
+              {engagement.skipped === 1
+                ? 'Egy kurzus adata technikai hiba miatt kimaradt ebből a táblából. A többi sor teljes.'
+                : `${engagement.skipped.toLocaleString('hu-HU')} kurzus adata technikai hiba miatt kimaradt ebből a táblából. A többi sor teljes.`}
+            </p>
+          ) : null}
           {/* role="region" + aria-labelledby + tabIndex: a keskeny viewporton
               görgethető táblát billentyűzetről is lehessen görgetni (WCAG
               2.1.1; axe: scrollable-region-focusable; a minta Adrian Roselli

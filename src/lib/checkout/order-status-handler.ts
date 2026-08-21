@@ -12,12 +12,46 @@ import { generateRequestId, getRequestId } from '../request-id'
  * - bejelentkezés kötelező (payload.auth); anon → 401;
  * - CSAK a saját rendelés: a lekérdezés customer=user.id szűrővel történik —
  *   más orderNumber esetén 404 (ne szivárogjon ki, létezik-e a rendelés);
- * - CSAK a { status, productId } mezők — a productId az ELSŐ tétel termék-id-je
- *   (null, ha nem feloldható): a köszönőoldal „Újrapróbálom" gombja ezzel tud
- *   a /penztar?termek={id} útvonalra mutatni. Nem érzékeny adat: a vásárló a
- *   SAJÁT rendelésének a termékét látja, amit a fiókja amúgy is megjelenít.
- *   Egyéb rendelésadat (customer, összegek, tételek) továbbra sem megy ki.
+ * - CSAK a { status, productId, totalHufSnapshot, currency } mezők — a productId
+ *   az ELSŐ tétel termék-id-je (null, ha nem feloldható): a köszönőoldal
+ *   „Újrapróbálom" gombja ezzel tud a /penztar?termek={id} útvonalra mutatni.
+ *   Nem érzékeny adat: a vásárló a SAJÁT rendelésének a termékét látja, amit a
+ *   fiókja amúgy is megjelenít. Egyéb rendelésadat (customer, customerEmail,
+ *   tételek, számlaadat, Barion-azonosítók) továbbra sem megy ki.
+ *
+ * ═══ MIÉRT MEHET KI A VÉGÖSSZEG (2026-08-21, bevétel-mérés) ═══
+ * A `totalHufSnapshot` + `currency` a köszönőoldal `purchase_confirmed`
+ * eseményéhez kell: összeg nélkül a PostHogban NEM készíthető bevétel-riport,
+ * a tölcsér utolsó lépése értéktelen szám marad.
+ *
+ * NEM SZIVÁRGÁS, mert a fenti `payload.find` a `customer: { equals: user.id }`
+ * feltételre szűkít: a végpont KIZÁRÓLAG a bejelentkezett vevő SAJÁT
+ * rendelését adja vissza, idegen rendelésszámra 404 megy (nem összeg). A vevő
+ * tehát a saját, ÉPP MOST kifizetett összegét látja — pontosan azt, amit a
+ * banki fizetőoldal és a fiókja rendeléslistája (AccountView) is megmutat neki.
+ *
+ * A mérvadó mező a `totalHufSnapshot` („a rendelés végösszege a
+ * megrendeléskor", src/payload-types.ts); a plugin `amount` mezője ezt tükrözi,
+ * ezért az csak TARTALÉK. Ha egyik sem értelmezhető szám, `null` megy ki — a
+ * köszönőoldal ilyenkor összeg NÉLKÜL küldi az eseményt, nem tippel.
  */
+
+/**
+ * Nem-negatív, véges összeg vagy null. A 0 SZÁNDÉKOSAN érvényes: ingyenes
+ * (0 Ft-os) rendelésnél a nulla a valódi bevétel, nem hiányzó adat.
+ */
+function readOrderTotal(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
+/**
+ * A pénznem normalizálása (ISO-4217, nagybetűs) — ugyanaz a szabály, mint a
+ * Barion-összevetésben (src/lib/order-status/apply-barion-state.ts).
+ */
+function readCurrency(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim().toUpperCase() : null
+}
+
 export interface OrderStatusHandlerDeps {
   getPayload: () => Promise<Payload>
 }
@@ -77,7 +111,14 @@ export function createOrderStatusHandler(
             ? firstProduct.id
             : null
 
-      return NextResponse.json({ status: order.status, productId }, { status: 200 })
+      // A végösszeg: elsődlegesen a megrendeléskori pillanatkép, tartalékként a
+      // plugin `amount` mezője. Érvénytelen/hiányzó érték → null (lásd a fejlécet).
+      const totalHufSnapshot = readOrderTotal(order.totalHufSnapshot) ?? readOrderTotal(order.amount)
+
+      return NextResponse.json(
+        { status: order.status, productId, totalHufSnapshot, currency: readCurrency(order.currency) },
+        { status: 200 },
+      )
     } catch (error) {
       log.error('order-status: váratlan technikai hiba', {
         error: error instanceof Error ? error.message : String(error),
