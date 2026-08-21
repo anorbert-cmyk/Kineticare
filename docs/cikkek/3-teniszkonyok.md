@@ -15,7 +15,7 @@ azonosítóival. A cikkben szereplő minden szám ezekből van, szó szerint.
 | Azonosító | Forrás | Hol használtuk |
 |---|---|---|
 | TK1 | NHS. *Tennis elbow.* https://www.nhs.uk/conditions/tennis-elbow/ · felülvizsgálva 2024-05-31 · következő felülvizsgálat 2027-05-31 · hozzáférés 2026-08-21 | mi ez, tünetek, a fájdalom helye és mértéke, okok, életkor, otthoni lista, hideg- és melegborogatás ideje, pánt és rögzítő, ibuprofén gél figyelmeztetése, háziorvos 2 hétnél, gyógytorna 6 hétnél, gyógytornás módszerek, műtét 6–12 hónapnál, „egy évnél tovább is eltarthat” |
-| TK2 | AAOS OrthoInfo. *Tennis Elbow (Lateral Epicondylitis).* https://www.orthoinfo.org/en/diseases--conditions/tennis-elbow-lateral-epicondylitis/ · hozzáférés 2026-08-21 | elhasználódás és mikroszakadás, ECRB-ín és a lateralis epicondylus, 30–50 év, foglalkozások, égő érzés, gyenge szorítóerő, éjszakai fájdalom, rontó mozdulatok, 80–95% és 80–90% |
+| TK2 | AAOS OrthoInfo. *Tennis Elbow (Lateral Epicondylitis).* https://www.orthoinfo.org/diseases--conditions/tennis-elbow-lateral-epicondylitis/ · hozzáférés 2026-08-21 | elhasználódás és mikroszakadás, ECRB-ín és a lateralis epicondylus, 30–50 év, foglalkozások, égő érzés, gyenge szorítóerő, éjszakai fájdalom, rontó mozdulatok, 80–95% és 80–90% |
 | TK3 | Smidt N és mtsai. *Corticosteroid injections, physiotherapy, or a wait-and-see policy for lateral epicondylitis: a randomised controlled trial.* Lancet. 2002;359(9307):657–662. PMID 11879861. | 185 beteg, háziorvosi ellátás, legalább 6 hete tartó panasz, 6 hetes és 52 hetes sikerarányok, magas kiújulás az injekciós csoportban |
 | TK4 | Bisset L és mtsai. *Mobilisation with movement and exercise, corticosteroid injection, or wait and see for tennis elbow: randomised trial.* BMJ. 2006;333(7575):939. PMID 17012266. | 198 résztvevő, 18–65 év, 65-ből 47 visszaesés, 52 hétnél nincs különbség, kevesebb kiegészítő kezelés, a szerzők óvatosságra intő zárómondata |
 | TK5 | Karanasios S és mtsai. *Exercise interventions in lateral elbow tendinopathy have better outcomes than passive interventions, but the effects are small.* Br J Sports Med. 2021;55(9):477–485. PMID 33148599. | 30 vizsgálat, 2123 résztvevő, kicsi hatás, alacsony és nagyon alacsony bizonyosság, fájdalommentes szorítóerő 12,15 / 22,45 / 18, a gyakorlatprogramok szórása |
@@ -177,6 +177,14 @@ Egy évnél megfordult a sorrend. 52 hétnél a gyógytornás csoport 91%-a, a
 várakozó csoport 83%-a és az injekciós csoport 69%-a számolt be sikeres
 kimenetelről. *(Smidt és mtsai, 2002)*
 
+Ezt a két számot nem szabad egymás mellé tenni magyarázat nélkül. A gyógytorna
+és a várakozás közötti különbség ebben a vizsgálatban nem volt statisztikailag
+jelentős. *(Smidt és mtsai, 2002)*
+
+A szerzők zárógondolata is ezt tükrözi: a gyógytorna és a várakozás közötti
+választás a rendelkezésre álló erőforrásoktól is függhet, mert a gyógytorna
+viszonylagos többlete kicsi. *(Smidt és mtsai, 2002)*
+
 A vizsgálat azt is leírja, hogy az injekciós csoportban magas volt a kiújulás
 aránya. *(Smidt és mtsai, 2002)*
 
@@ -227,6 +235,11 @@ középtávon 22,45 (95% CI 3,63 és 41,3 között), hosszú távon 18 (95% CI 1
 A megbízhatósági tartományok itt szélesek, és a szerzők a bizonyosság szintjét
 alacsonynak jelölték. A mértékegységet a közlemény összefoglalója nem adja meg,
 ezért mi sem írunk oda semmit. *(Karanasios és mtsai, 2021)*
+
+Az AAOS OrthoInfo egy külön fenntartást is megfogalmaz. Szerinte a
+szteroidinjekciót teniszkönyöknél nagyon takarékosan kell használni, mert a
+túlzott használat idővel gyengítheti a felkarcsont külső bütykét, ahol az ECRB
+ina tapad. *(AAOS OrthoInfo)*
 
 Ebből nem következik, hogy az injekció rossz döntés. Azt jelenti, hogy érdemes
 megbeszélned a kezelőorvosoddal, mit vársz tőle, és mikor.
@@ -288,7 +301,9 @@ gyakorlatok paraméterei nagyon eltérőek voltak. *(Yoon és mtsai, 2021)*
 
 Ha egy rövid, vezetett kóstolót keresel, ingyenesen elérhető
 [az SOS Kézrelax villámkurzus](/kurzusok/sos-kezrelax-villamkurzus), amelyben a
-könyök tehermentesítése is szerepel.
+könyök tehermentesítése is szerepel. Ebben megmutatjuk, mit vizsgálunk mi az
+egyes kórképeknél. Ezek tájékozódásra valók: a diagnózist orvosi vizsgálat adja
+meg, nem egy otthon elvégzett teszt.
 
 ## Mikor menj gyógytornászhoz vagy orvoshoz?
 
@@ -311,6 +326,9 @@ Az AAOS OrthoInfo két számot ad ehhez. A betegek körülbelül 80–95%-a sike
 jár a nem műtéti kezeléssel, a teniszkönyök-műtét pedig a betegek 80–90%-ánál
 sikeres. *(AAOS OrthoInfo, hozzáférés 2026. augusztus 21.)*
 
+A második számhoz az AAOS OrthoInfo rögtön hozzáteszi a fenntartását is: a
+műtét után nem ritka az erővesztés. *(AAOS OrthoInfo)*
+
 A műtétről mindig orvos dönt. Mi nem beszélünk le róla, és azt sem ígérjük,
 hogy elkerülhető.
 
@@ -318,8 +336,13 @@ hogy elkerülhető.
 
 Van néhány jel, amelynél nem gyakorlat kell, hanem azonnali ellátás.
 
-Sérülés után azonnali ellátás kell, ha a kar vagy a csukló zsibbad és bizsereg.
-Ugyanez érvényes, ha a csont kiáll a bőrből, vagy ha a kar alakja megváltozott.
+Sérülés után az NHS négy jelet sorol a mentőhívást igénylők közé:
+
+- a kar vagy a csukló zsibbad és bizsereg,
+- erősen vérző seb van rajta,
+- a csont kiáll a bőrből,
+- a kar alakja megváltozott.
+
 *(NHS, Broken arm or wrist, 2023. május 26-i felülvizsgálat)*
 
 Hívj 112-t, ha az arc egyik fele lelóg, az egyik kar erőtlen vagy zsibbadt, és
@@ -333,8 +356,8 @@ Aznap kérj orvosi ellátást, ha a kéz egy részén vagy egészén megszűnt a
 *(NHS, Wrist pain, 2025. november 5-i felülvizsgálat)*
 
 Ugyanígy sürgős, ha a fájdalom nagyon erős, ha ájulásérzés vagy hányinger
-kíséri, vagy ha a végtag alakja, illetve színe megváltozott. Sürgős a nagyon
-fájdalmas, forró vagy piros duzzanat is. *(NHS, Wrist pain)*
+kíséri, vagy ha a végtag alakja, illetve színe megváltozott. Sürgős a csuklón
+lévő nagyon fájdalmas, forró vagy piros csomó is. *(NHS, Wrist pain)*
 
 Napokon belül menj orvoshoz, ha bármilyen bizsergés vagy érzéskiesés van a
 kezeden. Ugyanez érvényes akkor is, ha láz társul a panaszhoz. *(NHS, Wrist
@@ -372,7 +395,7 @@ első.
   vagy megszűnt érzésnél nem gyakorlat kell, hanem orvos vagy mentő. *(NHS,
   Broken arm or wrist; NHS, Wrist pain)*
 - **Láz vagy fertőzésre utaló jel van.** Forró, piros, nagyon fájdalmas
-  duzzanatnál orvosi vizsgálat kell. *(NHS, Wrist pain)*
+  csomónál orvosi vizsgálat kell. *(NHS, Wrist pain)*
 - **Éles fájdalom kísér.** A gyakorlatok nem kell, hogy fájjanak. Éles fájdalom
   esetén hagyd abba, és kérj szakmai segítséget. Ez a saját kurzusaink
   ellenjavallati szabálya is.
@@ -381,9 +404,9 @@ első.
 - **Két hét után sem javult.** Az NHS szerint ilyenkor háziorvoshoz kell
   fordulni, nem egy újabb otthoni körhöz. *(NHS, Tennis elbow)*
 
-Egy dolgot itt is kimondunk. A gyakorlatok hatásáról szóló legnagyobb
-összesítés szerint a hatás kicsi, és a bizonyosság alacsony. *(Karanasios és
-mtsai, Br J Sports Med, 2021)*
+Ezt itt is kimondjuk. A gyakorlatok hatásáról szóló legnagyobb összesítés
+szerint a hatás kicsi, és a bizonyosság alacsony. *(Karanasios és mtsai,
+Br J Sports Med, 2021)*
 
 Ezért nem ígérünk gyógyulást. És azt sem javasoljuk, hogy a gyakorlás miatt
 halogasd a vizsgálatot.
@@ -408,8 +431,19 @@ találod meg.
 A program 5 perces miniblokkokból áll, hogy rövid alkalmakra is elférjen a
 napodban.
 
-Vásárlás előtt ezt is tudnod kell. A gyakorlatozás hatása a mai összesítések
-szerint kicsi, és a bizonyosság alacsony. *(Karanasios és mtsai, 2021)*
+Vásárlás előtt két dolgot tudnod kell.
+
+Az egyik a saját ellenjavallatunk. A program leírásában szerepel, hogy nem javasoljuk, ha:
+
+- traumás sérülésed volt, és az orvos még nem enged mindent csinálni,
+- már jelentkezett érzéskiesés,
+- régebb óta tart jelentős gyengülés a szorítóerődben,
+- műtétre vársz.
+
+Ilyenkor előbb a kivizsgálás következik.
+
+A másik a bizonyíték. A gyakorlatozás hatása a mai összesítések szerint kicsi, és
+a bizonyosság alacsony. *(Karanasios és mtsai, 2021)*
 
 Ezért mi nem gyógyulást ígérünk. Vezetett alkalmakat kínálunk arra az
 időszakra, amíg a kezelésről döntesz az orvosoddal.
@@ -425,9 +459,10 @@ rehabilitációjával foglalkozunk.
 Kocsis Kata gyógytornász, sportrehabilitációs tréner, gyógy- és sportmasszőr.
 Kiss Kata gyógytornász, manuálterapeuta, sportrehabilitációs tréner.
 
-A könyök a saját tananyagunkban is önálló téma. A „Bevezetés a kéz, a csukló-
-és könyökízület rehabilitációs lehetőségeibe” akkreditált tantermi képzés
-instruktorai vagyunk, 12 kreditpont, SZTK-A-33553/2024.
+A könyök a saját tananyagunkban is önálló téma. A ProBody Stúdió
+sportrehabilitációs tréner képzésén a „Bevezetés a kéz, a csukló- és
+könyökízület rehabilitációs lehetőségeibe” tantermi kurzus instruktorai
+vagyunk (2024, 2025, 2026, Budapest).
 
 Ez a szakmai háttér a szerző hitelességét igazolja. A cikkben szereplő klinikai
 állítások mellett ettől függetlenül ott a forrás.
@@ -446,7 +481,7 @@ Ez a szakmai háttér a szerző hitelességét igazolja. A cikkben szereplő kli
   · felülvizsgálva 2023. május 26. · hozzáférés: 2026-08-21.
 - AAOS OrthoInfo. *Tennis Elbow (Lateral Epicondylitis).* American Academy of
   Orthopaedic Surgeons.
-  https://www.orthoinfo.org/en/diseases--conditions/tennis-elbow-lateral-epicondylitis/
+  https://www.orthoinfo.org/diseases--conditions/tennis-elbow-lateral-epicondylitis/
   · hozzáférés: 2026-08-21.
 - Smidt N, van der Windt DA, Assendelft WJ, Devillé WL, Korthals-de Bos IB,
   Bouter LM. *Corticosteroid injections, physiotherapy, or a wait-and-see policy
@@ -537,7 +572,7 @@ Minden klinikai állítás egy sor. **Forrás nélküli klinikai állítás: 0 d
 | 48 | Stroke-jelek: lelógó arcfél, erőtlen vagy zsibbadt kar, akadozó beszéd; 112 | VZ1 | nincs szám |
 | 49 | A 24 órán belül elmúlt stroke-tünet is azonnali segítséget igényel | VZ1 | igen: 24 óra |
 | 50 | Aznap orvos: megszűnt érzés a kézen | VZ2 | nincs szám |
-| 51 | Aznap orvos: nagyon erős fájdalom, ájulásérzés, hányinger, alak- vagy színváltozás, forró piros duzzanat | VZ2 | nincs szám |
+| 51 | Aznap orvos: nagyon erős fájdalom, ájulásérzés, hányinger, alak- vagy színváltozás, forró piros CSOMÓ a csuklón („a lump on your wrist”) | VZ2 | nincs szám |
 | 52 | Napokon belül orvos: bizsergés, érzéskiesés, láz | VZ2 | nincs szám |
 | 53 | Cukorbetegség mellett a kézpanasz komolyabb lehet | VZ2 | nincs szám |
 | 54 | Az NHS a csökkentést is felsorolja a kerülés mellett | TK1 | nincs szám |
@@ -552,10 +587,13 @@ program célterülete), a saját ellenjavallati szabályaink, és a
 
 1. **A golfkönyök-összevetés kimaradt, szándékosan.** A C3 kiírás feltételhez
    kötötte: csak akkor írható meg, ha a TK2 oldalán a belső oldali forma szó
-   szerint szerepel. A `www.orthoinfo.org` teniszkönyök-oldalát 2026-08-21-én
-   megnyitottuk, és **nem szerepel rajta sem a golfer's elbow, sem a medial
-   epicondylitis**. Ezért a kiírás szerinti tartalék zárómondat került be. A
-   mért autocomplete-ben viszont ott a `golfkönyök vs teniszkönyök` alak
+   szerint szerepel. **Az indoklás pontosítva 2026-08-21-én** (tényellenőrzés,
+   M5): a TK2 oldal SZÖVEGTÖRZSE valóban nem tárgyalja a golfkönyököt és a
+   medialis epicondylitist, de a kapcsolódó anyagok között szerepel a
+   „Therapeutic Exercise Program for Epicondylitis (Tennis Elbow / Golfer's
+   Elbow)” tétel. Egy puszta hivatkozás-cím viszont nem klinikai állítás, ezért
+   a tartalmi döntés (a golfkönyök-összevetés kihagyása) érvényben marad. A
+   mért autocomplete-ben ott a `golfkönyök vs teniszkönyök` alak
    (`docs/monid-adatok-teljes.md` 3.4). Ha ezt le akarjuk fedni, előbb forrás
    kell a forrásbázisba, utána bővíthető a szakasz.
 2. **Forrásütközés a „gyulladás” szó körül.** A TK1 (NHS) rövid oksági mondata
@@ -593,3 +631,15 @@ program célterülete), a saját ellenjavallati szabályaink, és a
    `www.orthoinfo.org` címre. A forrásjegyzékben az új cím szerepel, de a
    `docs/orvosi-forrasbazis.md` 4. szakaszának TK2 sorában még a régi áll.
    Ennek javítása a forrásbázis gazdájának a dolga, nem a cikkíróé.
+
+8. **Tényellenőrző kör, 2026-08-21.** A `docs/cikkek-tenyellenorzes.md` alapján
+   ebbe a cikkbe bekerült a Smidt-vizsgálat „nem szignifikáns” minősítése (J5),
+   az AAOS műtéti erővesztés-fenntartása (J6), a szteroidinjekció takarékos
+   használatára intő AAOS-mondat (M4), a mentőhívós lista negyedik tétele, az
+   erősen vérző seb (M11), a kurzus saját ellenjavallata a CTA elé (B2 elve), és
+   az SOS Kézrelax melletti pontosítás, hogy a bemutatott tesztek tájékozódásra
+   valók (J16). **Az SZTK-A-33553/2024 akkreditációs szám és a 12 kreditpont
+   KIKERÜLT** a szerzői dobozból (B3), mert a repó saját leltára
+   (`docs/tartalom-leltar-regi-oldal.md` E17, Ny6) nyitottként tartja nyilván,
+   érvényes-e 2026-ban. Helyette a repóból tételesen igazolható instruktori
+   szerep maradt. Tételes lista: `docs/cikkek-javitas-naplo.md`.

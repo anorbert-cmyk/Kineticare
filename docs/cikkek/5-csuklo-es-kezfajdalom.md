@@ -63,10 +63,29 @@ arra nincs forrásunk. YouTube-link nincs a szövegben.
 | `heroImage`, `ogImage` | üresen marad |
 
 **Belső linkek a törzsben:** `/blog/csuklotores-utani-gyogytorna`,
-`/blog/de-quervain-szindroma`, `/blog/keztoalagut-szindroma`, `/blog/pattano-ujj`,
+`/blog/keztoalagut-szindroma`, `/blog/pattano-ujj`,
 `/blog/miert-zsibbad-a-kezem`, `/blog/teniszkonyok`,
 `/kurzusok/sos-kezrelax-villamkurzus`, `/kurzusok/otthoni-kezrehab-program`.
 Egyik link sem áll magában bekezdésben, és egyik sem YouTube-cím.
+
+**A `/blog/de-quervain-szindroma` link KIKERÜLT a törzsből** (tényellenőrzés,
+J12): a C9 cikk `publishedAt` értéke 2026-09-09, ez a cikk 09-05-én jelenik meg,
+tehát a törzsbe ágyazott link négy napig 404-re mutatna. A `relatedPosts` mező
+érintetlen, mert a CMS a nem létező rekordot kihagyja. Ha a C9 az első hullámmal
+jelenik meg, a link visszatehető (vezetői döntés).
+
+**Nyitott forrás-kérdés a lektorálóknak (a 4. cikkel azonos, tényellenőrzés J9).**
+A gennyes ínhüvelygyulladás négy jelének felsorolását (duzzadt ujj, félig
+behajlított tartás, nyújtásra erős fájdalom, nyomásérzékenység az ínhüvely
+mentén) a `docs/orvosi-forrasbazis.md` 1.2 táblázata adja, VZ5 és VZ6 alapján. A
+két közlemény ABSZTRAKTJA viszont csak „Kanavel's four cardinal signs” néven
+hivatkozik rájuk, a tételes felsorolás a teljes szövegben van, ami egyik
+közleménynél sem szabadon hozzáférhető (2026-08-21-én ellenőrizve: a PubMed
+egyiknél sem ad PMC teljes szöveget). A felsorolást BENNE HAGYTUK, mert kivétele
+csökkentené az olvasó biztonságát. **A forrásbázis gazdájának tételesen
+felsoroló forrást kell beemelnie az 1.2 táblázatba**, például a StatPearls
+„Pyogenic Flexor Tenosynovitis” fejezetét (NCBI Bookshelf, NBK576414), és utána
+mindkét cikk arra hivatkozzon.
 
 ---
 
@@ -94,7 +113,7 @@ Az NHS csuklófájdalom-oldala tünetek szerint sorolja fel a lehetséges okokat
 - Éjjel erősödő sajgás, bizsergés vagy zsibbadás az ujjakban, a kézben és a karban, gyenge hüvelykujj: kéztőalagút-szindróma lehet. *(NHS, Wrist pain)*
 - Sima tapintású, néha fájdalmas csomó a csukló tetején: ganglion lehet. *(NHS, Wrist pain)*
 
-A hüvelykujj tövénél jelentkező panaszról külön is írtunk [a De Quervain-szindrómáról szóló cikkünkben](/blog/de-quervain-szindroma). Ha a fájdalom mellett éjszakai zsibbadás is van, akkor [a kéztőalagút-szindrómáról szóló cikkünk](/blog/keztoalagut-szindroma) áll közelebb hozzád.
+A hüvelykujj tövénél jelentkező panasz a De Quervain-szindróma felé mutat, arról külön cikk készül. Ha a fájdalom mellett éjszakai zsibbadás is van, akkor [a kéztőalagút-szindrómáról szóló cikkünk](/blog/keztoalagut-szindroma) áll közelebb hozzád.
 
 Ha a csuklód eltört, és már túl vagy a gipszen, akkor [a csuklótörés utáni időszakról szóló cikkünket](/blog/csuklotores-utani-gyogytorna) olvasd tovább.
 
@@ -186,7 +205,7 @@ Gyógyszerről és adagolásról ebben a cikkben nem adunk tanácsot. Az NHS sze
 
 A sín kiválasztásában is a gyógyszerész az első segítség. Az NHS megemlíti a hajlékony gumisínt is arra az esetre, ha közben használnod kell a csuklód. *(NHS, Wrist pain)*
 
-Ha egy rövid, vezetett kóstoló segítene a mozgatáshoz, ingyenesen elérhető [az SOS Kézrelax villámkurzus](/kurzusok/sos-kezrelax-villamkurzus). Ez a kézre, a csuklóra és a könyökre fókuszál.
+Ha egy rövid, vezetett kóstoló segítene a mozgatáshoz, ingyenesen elérhető [az SOS Kézrelax villámkurzus](/kurzusok/sos-kezrelax-villamkurzus). Ez a kézre, a csuklóra és a könyökre fókuszál. Ebben megmutatjuk, mit vizsgálunk mi az egyes kórképeknél. Ezek tájékozódásra valók: a diagnózist orvosi vizsgálat adja meg, nem egy otthon elvégzett teszt.
 
 ## Milyen orvoshoz fordulj csuklófájdalommal, és mikor?
 
@@ -267,7 +286,7 @@ Ez a két hét nem büntetés, hanem az NHS által megadott küszöb. Ugyanezen 
 
 Ha a kivizsgálás nem talált sürgős okot, jöhet a fokozatos, rendszeres gyakorlás. Az NHS szerint a kéz és a csukló kíméletes mozgatása enyhítheti az enyhe fájdalmat és a merevséget. *(NHS, Wrist pain)*
 
-A mozgatás módját, mértékét és ütemét viszont érdemes vezetve csinálni. Gyógytornászként ilyenkor azt nézzük meg, milyen terhelés éri a kezed, és ehhez igazítjuk a gyakorlást.
+A mozgatás módját, mértékét és ütemét viszont érdemes vezetve csinálni. Gyógytornászként ilyenkor az az első kérdés, milyen terhelés éri a kezed, és ehhez kell igazítani a gyakorlást.
 
 Otthon jellemzően nem a gyakorlat hiányzik. A sorrend és az adagolás az, ami nehéz egyedül.
 
@@ -278,6 +297,15 @@ Rendszert és sorrendet ad a gyakorlásba, nem gyógyulást.
 Az Otthoni KézRehab Programot csukló-, ujj-, alkar- és könyökpanaszokra állítottuk össze. 4 modulnyi videóanyagból áll, 50+ videós gyakorlattal.
 
 A gyakorlatok 5 perces miniblokkokba vannak rendezve, hogy egy rövid alkalom is elférjen a napodban. A részleteket [az Otthoni KézRehab Program oldalán](/kurzusok/otthoni-kezrehab-program) találod.
+
+Vásárlás előtt ezt tudnod kell. A program leírásában szerepel, hogy nem javasoljuk, ha:
+
+- traumás sérülésed volt, és az orvos még nem enged mindent csinálni,
+- már jelentkezett érzéskiesés,
+- régebb óta tart jelentős gyengülés a szorítóerődben,
+- műtétre vársz.
+
+Ilyenkor előbb a kivizsgálás következik.
 
 Amit nem ígérünk: gyógyulást, gyógyulási arányt és gyógyulási időt. Erre nincs adatunk, és nem is állítunk ilyet.
 
@@ -295,7 +323,7 @@ Kiss Kata gyógytornász, manuálterapeuta, sportrehabilitációs tréner. Kocsi
 
 Mindketten elvégeztük 2024-ben Kate Thorn CHT distalis radius törés és De Quervain kurzusait. Ugyanebben az évben Daphne Xuan MPT „Functional Anatomy of the Hand” kurzusát is.
 
-Oktatunk is. A „Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe” akkreditált tantermi képzés instruktorai vagyunk, 12 kreditpont, SZTK-A-33553/2024.
+Oktatunk is. A ProBody Stúdió sportrehabilitációs tréner képzésén a „Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe” tantermi kurzus instruktorai vagyunk (2024, 2025, 2026, Budapest).
 
 Ez a szakmai háttér a szerző hitelességét igazolja. A cikkben szereplő klinikai állítások mellett ettől függetlenül ott a forrás.
 
@@ -415,9 +443,13 @@ A cikk általános tájékoztatás, nem helyettesíti a szakorvosi vizsgálatot 
   miniblokkok, csukló-, ujj-, alkar- és könyökpanaszok): a repóban élő
   termékleírásból, `src/scripts/restore-legacy-content.ts`.
 - Szerzői hitelesítők (végzettség, Kate Thorn CHT és Daphne Xuan MPT kurzusai,
-  akkreditált képzés, 12 kreditpont, SZTK-A-33553/2024):
-  `docs/tudastar-hangnem-es-technika.md` 1.7. Ezek a szerző hitelességét
-  igazolják, nem klinikai állítást.
+  a ProBody Stúdió képzésén betöltött instruktori szerep 2024, 2025 és 2026
+  évekre): `docs/tudastar-hangnem-es-technika.md` 1.7 és
+  `src/scripts/restore-legacy-content.ts` 907. sor. Ezek a szerző hitelességét
+  igazolják, nem klinikai állítást. **Az SZTK-A-33553/2024 akkreditációs szám és
+  a 12 kreditpont a 2026-08-21-i tényellenőrző kör B3 pontja miatt KIKERÜLT** a
+  szövegből, mert a repó saját leltára (`docs/tartalom-leltar-regi-oldal.md`
+  E17, Ny6) nyitottként tartja nyilván, érvényes-e 2026-ban.
 
 ## A vezetőnek szóló jelzések
 

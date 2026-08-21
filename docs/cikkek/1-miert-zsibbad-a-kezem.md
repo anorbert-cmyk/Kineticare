@@ -7,7 +7,7 @@
 > **Készült:** 2026-08-21. **Írta:** cikkíró ügynök, a vezető ellenőrzésére.
 > **Minden klinikai állítás forrása** a `docs/orvosi-forrasbazis.md` valamelyik
 > tétele. Forrás nélküli klinikai állítás a szövegben nincs (az öntesztet lásd
-> az „Állítás és forrás" táblázatban).
+> az „Állítás és forrás” táblázatban).
 >
 > **Elsődleges forrásellenőrzés.** A cikkíró nem csak a forrásbázisra
 > támaszkodott: mind a 12 hivatkozott forrást ELSŐ KÉZBŐL is megnyitotta
@@ -18,10 +18,16 @@
 > közé sorolja, nem az aznapi ellátás közé. A cikk a szigorúbb, helyes
 > besorolást követi.
 >
-> **A kvirtmínuszról:** a feladatkiírás a fájl elejére a „LEKTORÁLANDÓ VÁZLAT —
-> …" alakot kérte, a `docs/ui-sztenderdek.md` §3.1 viszont magyar szövegben
-> tiltja a kvirtmínuszt (—), és a cikk-lint L3 szabálya is nulla darabot enged.
-> A jelzés ezért ponttal szerepel, szó szerint ugyanazokkal a szavakkal.
+> **A kvirtmínuszról:** a feladatkiírás a fájl elejére kvirtmínusszal elválasztott
+> „LEKTORÁLANDÓ VÁZLAT” jelzést kért. A `docs/ui-sztenderdek.md` §3.1 viszont
+> magyar szövegben tiltja a kvirtmínuszt (U+2014), és a cikk-lint L3 szabálya is
+> nulla darabot enged. A jelzés ezért ponttal szerepel, szó szerint ugyanazokkal
+> a szavakkal.
+>
+> **Javítás 2026-08-21-én** (tényellenőrző kör, `docs/cikkek-tenyellenorzes.md`):
+> a mentőhívási szint a cikk elejére került (B1), a kurzus saját ellenjavallata
+> bekerült az ajánlás mellé (B2), és hat forrás másik fele is a szövegbe került
+> (J10, J11, J14, J15, J16, M1). A tételes lista: `docs/cikkek-javitas-naplo.md`.
 
 ---
 
@@ -77,11 +83,43 @@ nem publikálható.
 Felébredsz éjjel, mert elzsibbadt a kezed. Megrázod, és lassan visszatér az
 érzés. Reggelre elmúlik, másnap éjjel újra kezdődik.
 
-A kéz zsibbadás az egyik leggyakoribb panasz, amivel a praxisunkban
-találkozunk. Sokan hónapokig várnak vele, mert nem fáj eléggé.
+Zsibbadásnál könnyű halogatni a kivizsgálást, mert nem fáj annyira, hogy
+sürgősnek érezd.
 
 Végigmegyünk azon, mit jelezhet a zsibbadás, mit tehetsz otthon, és mikor kell
 orvoshoz fordulni. Diagnózist nem adunk: azt vizsgálat nélkül nem lehet.
+
+## Előbb ezt: mikor kell azonnal mentőt hívni?
+
+Van néhány jel, aminél nem cikket kell olvasni, hanem a 112-t hívni. Ezért áll
+ez a szakasz elöl, és nem a végén.
+
+**Stroke jelei.** Lelóg az arc egyik fele, erőtlen vagy zsibbadt az egyik kar,
+akadozik a beszéd. Ugyanígy sürgős a test egyik oldalára kiterjedő erőtlenség
+vagy zsibbadás, a homályos látás, a hirtelen erős fejfájás és a szédülés.
+Ilyenkor azonnal hívj mentőt, Magyarországon a 112-t. *(NHS, Stroke, Symptoms,
+2024. szeptember 12-i felülvizsgálat)*
+
+Az NHS ezt külön kiemeli: ha a stroke jelei már el is múltak, de 24 órán belül
+megvoltak, akkor is azonnali segítség kell. *(NHS, Stroke, Symptoms)*
+
+**Sérülés után.** Az NHS négy jelet sorol a mentőhívást igénylők közé:
+
+- a sérült kar vagy csukló zsibbad, bizsereg,
+- erősen vérző seb van rajta,
+- a csont kiáll a bőrből,
+- a kar vagy a csukló alakja megváltozott.
+
+*(NHS, Broken arm or wrist, 2023. május 26-i felülvizsgálat)*
+
+**Ha megijedtél.** Amikor a zsibbadás mellett olyan tünet is jelentkezik, ami
+megrémít, például mellkasi panasz vagy rosszullét, ne a keresőben keresd a
+választ. Hívd a 112-t. Ezt telefonon percek alatt eldöntik. Egy cikkből nem
+lehet.
+
+Ez a szakasz a sürgős eseteket sorolja. Amikor nem sürgős, de orvos kell, azt a
+„Mikor fordulj azonnal orvoshoz?” és a „Mikor kell kivizsgálás, ha nem sürgős?”
+szakaszban szedtük össze.
 
 ## Mit jelent, ha zsibbad a kezed?
 
@@ -118,7 +156,7 @@ lehetőségeket is végigvesszük a
 **A gyűrűs- és a kisujj.** A könyöknél becsípődő singideg leggyakoribb tünete
 éppen ez: időszakos zsibbadás és bizsergés a gyűrűs- és a kisujjban. Ez a felső
 végtag második leggyakoribb perifériás idegbecsípődése. *(Graf és mtsai, Modern
-Treatment of Cubital Tunnel Syndrome, 2023)*
+Treatment of Cubital Tunnel Syndrome, 2023, teljes szöveg: PMC10382899)*
 
 **Az egész kar.** A nyaki gerincből kiinduló idegi panasz jellemzően nyak- vagy
 karfájdalommal jelentkezik. A szakirodalom kifejezetten kiemeli, hogy ezt el kell
@@ -155,16 +193,11 @@ Raynaud-jelenség, becsípődött ideg, gyógyszermellékhatás: mindegyik
 jelentkezhet a bal és a jobb kézen is. *(NHS, Pins and needles, 2024. január
 4-i felülvizsgálat)*
 
-Egy kivétel viszont van, és ez életmentő. Figyeld ezt az együttállást: a
-zsibbadás hirtelen kezdődik a test egyik oldalán, mellette lelóg az arc egyik
-fele, erőtlen a kar vagy akadozik a beszéd.
-
-Ez stroke gyanúja. Ilyenkor azonnal hívj mentőt, Magyarországon a 112-t.
-*(NHS, Stroke, Symptoms, 2024. szeptember 12-i felülvizsgálat)*
-
-Az NHS ezt is hozzáteszi: ha a stroke jelei már el is múltak, de 24 órán belül
-megvoltak, akkor is azonnali segítség kell. *(NHS, Stroke, Symptoms, 2024.
-szeptember 12-i felülvizsgálat)*
+Egy kivétel viszont van, és ez életmentő. Ha a zsibbadás hirtelen kezdődik a
+test egyik oldalán, és mellette lelóg az arc egyik fele, erőtlen a kar vagy
+akadozik a beszéd, az stroke gyanúja. Ilyenkor azonnal a 112-t kell hívni,
+ahogy a cikk elején is írjuk. *(NHS, Stroke, Symptoms, 2024. szeptember 12-i
+felülvizsgálat)*
 
 ## Mi okozhat még zsibbadást?
 
@@ -193,11 +226,21 @@ needles, 2024. január 4-i felülvizsgálat)*
 A könyöknél becsípődő singideg is okozhat zsibbadást. Az éjszakai sín itt gyakori
 javaslat, a bizonyíték viszont gyenge.
 
-Egy 2025-ös szisztematikus áttekintés mindössze egyetlen randomizált vizsgálatot
-talált, magas torzítási kockázattal. A bizonyosság szintjét nagyon alacsonynak
-minősítette, és a szerzők szerint ma nem eldönthető, ajánlható-e.
+Egy 2025-ös szisztematikus áttekintés egyetlen olyan randomizált vizsgálatot
+talált, amely a sínt kontrollcsoporthoz hasonlította. Ez a vizsgálat magas
+torzítási kockázatú volt, és nem talált különbséget a csoportok között.
 *(Bateman és mtsai, Effectiveness of night splints for cubital tunnel syndrome,
 2025)*
+
+Egy további randomizált és három egykarú vizsgálat azt jelezte, hogy az enyhe
+és közepes esetek többsége javul az éjszakai sín mellett. Ezek is magas, súlyos
+vagy kritikus torzítási kockázatúak, és a szerzők kiírják: nem tudni, hogy a
+javulás a kezeléstől vagy pusztán az idő múlásától volt-e. *(Bateman és mtsai,
+2025)*
+
+A bizonyosság szintjét az áttekintés nagyon alacsonynak minősítette, és a
+szerzők szerint jelenleg nem eldönthető, ajánlható-e az éjszakai sín ennél az
+állapotnál. *(Bateman és mtsai, 2025)*
 
 ### Tényleg a sok gépeléstől van?
 
@@ -237,10 +280,21 @@ pont a sín javára, a megbízhatósági tartomány 0,82 ponttal jobb és 0,08 p
 rosszabb között. Ez a klinikailag érdemi 1 pontos küszöb alatt marad, alacsony
 bizonyossági szinttel. *(Karjalainen és mtsai, Cochrane, 2023)*
 
-A szerzők záró következtetése mégis a sín mellett szól. A sín olcsó beavatkozás,
-tartós ártalma nem ismert, ezért a kis hatás is indokolhatja a használatát,
-különösen annál, aki nem szeretne műtétet vagy injekciót. *(Karjalainen és mtsai,
+A szerzői következtetés első mondatával kell kezdeni, mert az a fejmondat.
+Nincs elég bizonyíték annak eldöntésére, használ-e a sín a
+kéztőalagút-szindrómában szenvedőknek. *(Karjalainen és mtsai, Cochrane, 2023)*
+
+A korlátozott bizonyíték a tünetek és a kézfunkció kis javulását nem zárja ki, de
+ez a javulás lehet, hogy klinikailag nem érdemi. *(Karjalainen és mtsai,
 Cochrane, 2023)*
+
+És csak ezután jön a mondat, amit sokat idéznek. A sín olcsó beavatkozás, tartós
+ártalma nem ismert, ezért a kis hatás is indokolhatja a használatát, különösen
+annál, aki nem szeretne műtétet vagy injekciót. *(Karjalainen és mtsai,
+Cochrane, 2023)*
+
+A kettő együtt adja ki a valós képet. Nem tudjuk, hogy használ-e, de olcsó és
+ártalmatlan, tehát megpróbálható.
 
 Egyet viszont nem ígérhetünk. A Cochrane-áttekintés bizonytalannak mondja, hogy
 a sín csökkenti-e a műtétre küldés arányát: a bizonyosság szintje itt nagyon
@@ -273,14 +327,22 @@ nem műtéti módszereket, amelyek nem javítják a páciens által jelentett ho
 távú eredményt. Ezen a listán a gyakorlatozás, a masszázs és a manuálterápia is
 szerepel. *(AAOS, Management of Carpal Tunnel Syndrome, 2024)*
 
+Az érem másik oldalát is kiírjuk. Ugyanennél a pontnál az ajánlás erőssége
+„Limited (Downgraded)”, vagyis az irányelv maga minősítette le. Az indoklás
+szerint azért, mert a bevont kezelések, a vizsgálatok minősége, a
+kontrollcsoportok és az utánkövetési idők nagyon eltérőek voltak. *(AAOS,
+Management of Carpal Tunnel Syndrome, 2024)*
+
 Az AAOS irányelve azt is kimondja, hogy a konzervatív módszerek között nincs
 jelentős különbség a páciens által jelentett eredményekben. *(AAOS, Management of
 Carpal Tunnel Syndrome, 2024)*
 
 Ezt nem hallgatjuk el, mert a döntésed a tiéd. A rendezett otthoni gyakorlás
 attól még segíthet a tünetek kezelésében és a terhelés átalakításában. Aki egy
-rövid, vezetett kezdéssel indulna, annak jó belépő az ingyenes
-[SOS Kézrelax villámkurzusunk](/kurzusok/sos-kezrelax-villamkurzus).
+rövid, vezetett kezdéssel indulna, annak belépő az ingyenes
+[SOS Kézrelax villámkurzusunk](/kurzusok/sos-kezrelax-villamkurzus). A
+villámkurzusban látod, mit vizsgálunk mi az egyes kórképeknél. Ezek tájékozódásra
+valók: a diagnózist orvosi vizsgálat adja meg, nem egy otthon elvégzett teszt.
 
 ### Amit a terhelésen változtathatsz
 
@@ -340,10 +402,11 @@ felülvizsgálat)*
 
 ### Sérülés után: ezeknél is mentő kell
 
-Sérülés után az NHS az alábbi jeleket a mentőhívást igénylők közé sorolja.
+Sérülés után az NHS az alábbi négy jelet a mentőhívást igénylők közé sorolja.
 *(NHS, Broken arm or wrist, 2023. május 26-i felülvizsgálat)*
 
 - A sérült kar vagy csukló zsibbad, bizsereg.
+- Erősen vérző seb van rajta.
 - A csont kiáll a bőrből.
 - A kar vagy a csukló alakja megváltozott, vagy szokatlan szögben áll.
 
@@ -355,7 +418,7 @@ felülvizsgálat)*
 - A kéz egy részén vagy egészén megszűnt az érzés.
 - Erős csuklófájdalom ájulásérzéssel, hányingerrel, lázzal vagy hidegrázással.
 - A csukló alakja vagy színe megváltozott.
-- A csuklón lévő duzzanat nagyon fájdalmas, forró vagy piros.
+- A csuklódon lévő csomó nagyon fájdalmas, forró vagy piros.
 - Reccsenő, csikorgó vagy pattanó hangot hallottál a sérüléskor.
 - Nem tudod mozgatni a csuklód, vagy nem tudsz megfogni semmit.
 
@@ -393,8 +456,8 @@ Ilyenkor a rendezett, fokozatosan felépített otthoni gyakorlás a következő 
 Kiss Kata és Kocsis Kata vagyunk, gyógytornászok és sportrehabilitációs trénerek.
 Évek óta elsősorban a kéz rehabilitációjával foglalkozunk.
 
-Azt látjuk, hogy a legtöbben nem a kitartással vannak bajban. Azzal, hogy nincs
-sorrend, és nincs adagolás.
+Otthon jellemzően nem a kitartás hiányzik. A sorrend és az adagolás az, ami
+nehéz egyedül.
 
 Az [Otthoni KézRehab Program](/kurzusok/otthoni-kezrehab-program) pontosan ezt a
 hiányt tölti be. Csukló-, ujj-, alkar- és könyökpanaszokra állítottuk össze:
@@ -402,6 +465,16 @@ hiányt tölti be. Csukló-, ujj-, alkar- és könyökpanaszokra állítottuk ö
 
 Ha nem tudsz rendelői alkalmakra járni, ezt otthon, a saját tempódban végezheted.
 Nincs időpont, nincs bérlet, és bármikor visszanézheted.
+
+**Vásárlás előtt ezt tudnod kell, és pont ennek a cikknek az olvasóira
+tartozik.** A program leírásában szerepel, hogy nem javasoljuk, ha:
+
+- már jelentkezett érzéskiesés,
+- régebb óta tart jelentős gyengülés a szorítóerődben,
+- izomtömeg-vesztés látszik a tenyereden,
+- műtétre vársz.
+
+Ilyenkor előbb a kivizsgálás következik, nem a gyakorlás.
 
 Amit nem ígérünk: nem gyógyítunk meg, és nem váltjuk ki a műtéti döntést.
 A kurzus nem helyettesíti a szakorvosi vizsgálatot és a kontrollt. Ha a
@@ -428,7 +501,7 @@ kivizsgálás sürgős okot talál, azt kell követni.
    [Management of Carpal Tunnel Syndrome. Evidence-Based Clinical Practice Guideline](https://www.aaos.org/globalassets/quality-and-practice-resources/carpal-tunnel/carpal-tunnel-2024/cts-cpg.pdf).
    Elfogadva: 2024-05-18. Hozzáférés: 2026-08-21. (forrásbázis: CTS2)
 7. AAOS OrthoInfo.
-   [Carpal Tunnel Syndrome](https://www.orthoinfo.org/en/diseases--conditions/carpal-tunnel-syndrome/).
+   [Carpal Tunnel Syndrome](https://www.orthoinfo.org/diseases--conditions/carpal-tunnel-syndrome/).
    Szerző: Tyler Steven Pidgeon, MD, FAAOS; lektor: Thomas Ward Throckmorton, MD,
    FAAOS. Hozzáférés: 2026-08-21. (forrásbázis: CTS9)
 8. Karjalainen TV, Lusa V, Page MJ, O'Connor D, Massy-Westropp N, Peters SE.
@@ -442,7 +515,8 @@ kivizsgálás sürgős okot talál, azt kell követni.
 10. Graf A, Ahmed AS, Roundy R, Gottschalk MB, Dempsey A.
     [Modern Treatment of Cubital Tunnel Syndrome: Evidence and Controversy](https://pubmed.ncbi.nlm.nih.gov/37521554/).
     J Hand Surg Glob Online. 2023;5(4):547-560. DOI: 10.1016/j.jhsg.2022.07.008.
-    PMID: 37521554. Hozzáférés: 2026-08-21. (forrásbázis: ZS5)
+    PMID: 37521554. Teljes szöveg: https://pmc.ncbi.nlm.nih.gov/articles/PMC10382899/
+    Hozzáférés: 2026-08-21. (forrásbázis: ZS5)
 11. Bateman M, Swaile H, Tambe A.
     [Effectiveness of night splints for cubital tunnel syndrome: A systematic review](https://pubmed.ncbi.nlm.nih.gov/40385935/).
     Hand Ther. 2025;30(3):105-112. DOI: 10.1177/17589983251336157. PMID: 40385935.
@@ -468,19 +542,19 @@ klinikai állítás egy sor. Forrás nélküli klinikai állítás: **0 darab**.
 |---|---|---|---|
 | 1 | A zsibbadás lehetséges okai: cukorbetegség, Raynaud, hiperventilláció, isiász, sclerosis multiplex | ZS1 | nincs szám |
 | 2 | Tartós zsibbadás okai: kemoterápia, HIV-gyógyszer, görcsgátló, antibiotikum, ólom, sugárzás, rossz táplálkozás, becsípődött ideg, idegkárosodás, alkohol | ZS1 | nincs szám |
-| 3 | „Ne diagnosztizáld magad, menj háziorvoshoz, ha aggódsz" | ZS1 | idézet, tartalmi fordítás |
+| 3 | „Ne diagnosztizáld magad, menj háziorvoshoz, ha aggódsz” | ZS1 | idézet, tartalmi fordítás |
 | 4 | A kéztőalagút-szindróma a középideg nyomás okozta károsodása, jellemzően a hüvelyk-, mutató- és középső ujjban | CTS3 (háttérszakasz) | nincs szám |
 | 5 | A CTS zsibbadása elsősorban a hüvelyk-, mutató-, középső és gyűrűsujjat érinti | CTS9 | nincs szám |
 | 6 | A singideg-becsípődés leggyakoribb tünete időszakos zsibbadás a gyűrűs- és kisujjban | ZS5 | nincs szám |
-| 7 | A singideg-becsípődés a felső végtag második leggyakoribb perifériás idegbecsípődése | ZS5 | „második" egyezik |
+| 7 | A singideg-becsípődés a felső végtag második leggyakoribb perifériás idegbecsípődése | ZS5 | „második” egyezik |
 | 8 | A nyaki eredetű panasz nyak- vagy karfájdalommal jelentkezik, és el kell különíteni a perifériás becsípődésektől és a vállpanaszoktól | ZS3 | nincs szám |
 | 9 | A CTS tünetei lassan indulnak, jönnek-mennek, éjjel a legerősebbek | CTS1 | nincs szám |
 | 10 | A tünetek gyakran felébresztik az embert; a kéz rázogatása sokaknál enyhíti; ügyetlenség, tárgyak elejtése | CTS9 | nincs szám |
 | 11 | Stroke-jelek: arclelógás, kar erőtlensége, akadozó beszéd; azonnal mentő | VZ1 | nincs szám |
 | 12 | Ha a stroke tünetei 24 órán belül voltak, akkor is azonnali segítség kell | VZ1 | 24 óra egyezik |
 | 13 | Stroke egyéb jelei: egyoldali erőtlenség vagy zsibbadás, homályos látás, hirtelen erős fejfájás, szédülés | VZ1 | nincs szám |
-| 14 | Az éjszakai sín bizonyítéka a singideg-becsípődésnél: egyetlen RCT, magas torzítási kockázat, nagyon alacsony bizonyosság, nem eldönthető | ZS6 | „egyetlen" egyezik |
-| 15 | A sok billentyűzethasználat és a CTS összefüggése nem igazolt; munkacsoporti konszenzus, nagyon alacsony bizonyítékminőség | CTS2 | „Very Low", „Consensus" egyezik |
+| 14 | Az éjszakai sín bizonyítéka a singideg-becsípődésnél: egyetlen RCT, magas torzítási kockázat, nagyon alacsony bizonyosság, nem eldönthető | ZS6 | „egyetlen” egyezik |
+| 15 | A sok billentyűzethasználat és a CTS összefüggése nem igazolt; munkacsoporti konszenzus, nagyon alacsony bizonyítékminőség | CTS2 | „Very Low”, „Consensus” egyezik |
 | 16 | A csuklósínt akár 6 hétig kell viselni, mire javulni kezd | CTS1 | 6 hét egyezik |
 | 17 | Cochrane: 29 vizsgálat, 1937 felnőtt | CTS3 | 29 és 1937 egyezik |
 | 18 | Éjszakai sín kontra semmi, általános javulás: RR 3,86 (95% CI 2,29 és 6,51 között), 1 vizsgálat, 80 fő, alacsony bizonyosság | CTS3 | mind egyezik |
@@ -490,25 +564,39 @@ klinikai állítás egy sor. Forrás nélküli klinikai állítás: **0 darab**.
 | 22 | Sín-mellékhatás: 40-ből 7 (18%) múló panasz, a kontrollcsoportban 0; alacsony bizonyosság, a CI a hatás hiányát is tartalmazta | CTS3 | 40, 7, 18%, 0 egyezik |
 | 23 | Az AAOS OrthoInfo szerint egyes pácienseknek segíthetnek a középideg mozgását támogató gyakorlatok | CTS9 | nincs szám |
 | 24 | Idegsiklatás: 13 vizsgálat, ebből 6 gyenge minőségű; a szokásos konzervatív ellátás tűnik a legjobbnak a fájdalomra; az idegsiklatás kiegészítő | CTS10 | 13 és 6 egyezik |
-| 25 | Az AAOS 2024 magas minőségű bizonyítékra hivatkozva sorolja a gyakorlatozást, a masszázst és a manuálterápiát azok közé, amelyek nem javítják a hosszú távú, páciens által jelentett eredményt | CTS2 | „High" egyezik |
+| 25 | Az AAOS 2024 magas minőségű bizonyítékra hivatkozva sorolja a gyakorlatozást, a masszázst és a manuálterápiát azok közé, amelyek nem javítják a hosszú távú, páciens által jelentett eredményt | CTS2 | „High” egyezik |
 | 26 | Az AAOS 2024 szerint a konzervatív módszerek között nincs jelentős különbség a páciens által jelentett eredményekben | CTS2 | egyezik |
 | 27 | NHS otthoni tanács: pihentetés, finom mozgatás, a panaszt okozó tevékenység csökkentése (gépelés, rezgő szerszám, hangszer), éjszakai sín | VZ2/CSF1 | nincs szám |
 | 28 | A gyógyszerész segít a fájdalomcsillapító és a sín kiválasztásában, és abban, kell-e orvos | VZ2/CSF1 | nincs szám |
 | 29 | Sérülés után az első 2-3 napban nincs melegítés és forró fürdő, nincs nehézemelés és erős szorítás | VZ2/CSF1 | 2-3 nap egyezik |
 | 30 | Sérülés utáni zsibbadás vagy bizsergés, kiálló csont, alak- vagy szögváltozás: MENTŐHÍVÁS szintje | VZ3 | nincs szám |
-| 31 | Megszűnt érzés a kézen; erős fájdalom ájulásérzéssel, hányingerrel, lázzal; alak- vagy színváltozás; nagyon fájdalmas, forró, piros duzzanat; reccsenő hang a sérüléskor; mozgathatatlan csukló: aznapi ellátás | VZ2 | nincs szám |
+| 31 | Megszűnt érzés a kézen; erős fájdalom ájulásérzéssel, hányingerrel, lázzal; alak- vagy színváltozás; nagyon fájdalmas, forró, piros csomó a csuklón; reccsenő hang a sérüléskor; mozgathatatlan csukló: aznapi ellátás | VZ2 | nincs szám |
 | 32 | Bármilyen bizsergés vagy érzéskiesés a kézen orvosi kivizsgálást igényel | VZ2 | nincs szám |
 | 33 | Két hét otthoni kezelés után sem javuló panasznál orvos kell | VZ2 | 2 hét egyezik |
 | 34 | Cukorbetegség mellett a kézpanasz komolyabb lehet | VZ2 | nincs szám |
 | 35 | A CTS tüneteivel orvoshoz kell fordulni, ha romlanak vagy nem múlnak | CTS1 | nincs szám |
-| 36 | A CTS néha magától rendeződik néhány hónap alatt, különösen terhesség esetén | CTS1 | „néhány hónap" egyezik |
+| 36 | A CTS néha magától rendeződik néhány hónap alatt, különösen terhesség esetén | CTS1 | „néhány hónap” egyezik |
+
+**Kiegészítés a 2026-08-21-i tényellenőrző kör után.** Négy sor változott vagy
+került be, ezek forrása is ellenőrizve:
+
+| # | Állítás a cikkben | Forrás | Szám szó szerint egyezik? |
+|---|---|---|---|
+| 14b | A Bateman-áttekintésben egy további RCT és három egykarú vizsgálat azt jelezte, hogy az enyhe és közepes esetek többsége javul, de nem tudni, a kezeléstől vagy az idő múlásától | ZS6 | „One additional RCT”, „three single-arm studies” egyezik |
+| 25b | Az AAOS 2024 ugyanennél a pontnál „Limited (Downgraded)” ajánláserősséget ad, az indoklás a kezelések, a vizsgálatminőség, a kontrollcsoportok és az utánkövetési idők eltérése | CTS2 | „Limited (Downgraded)” egyezik |
+| 30b | A sérülés utáni mentőhívós lista NÉGY tételes, benne az erősen vérző seb | VZ3 | „a bad cut that is bleeding heavily” egyezik |
+| 31b | A csuklón lévő CSOMÓ (nem duzzanat) nagyon fájdalmas, forró vagy piros | VZ2 | „a lump on your wrist” egyezik |
 
 **Nem klinikai állítások a szövegben** (a lektornak külön ellenőrizendők):
-a nyitás „az egyik leggyakoribb panasz, amivel a praxisunkban találkozunk"
-mondata a két gyógytornász saját tapasztalata, nem forrásolt epidemiológiai
-adat. A kurzus leírása („csukló-, ujj-, alkar- és könyökpanaszokra") a meglévő
-termékleírásból való. Az „éles fájdalom esetén hagyd abba" és a „műtét után a
-kezelőorvos jóváhagyásával" a kurzusok saját ellenjavallati szövege.
+a nyitás „könnyű halogatni a kivizsgálást” mondata helyzetleírás, nem forrásolt
+epidemiológiai adat (a korábbi, praxisra hivatkozó változatot a tényellenőrzés
+J11 pontja miatt cseréltük). A „Ha megijedtél” bekezdés útbaigazítás, nem
+klinikai állítás: nem mondja meg, mit jelent a mellkasi panasz, csak azt, hogy
+hova kell fordulni vele. **Ezt a bekezdést a két gyógytornásznak külön jóvá kell
+hagynia.** A kurzus leírása („csukló-, ujj-, alkar- és könyökpanaszokra”) és az
+ellenjavallati felsorolás a meglévő termékleírásból való, betűhíven. Az „éles
+fájdalom esetén hagyd abba” és a „műtét után a kezelőorvos jóváhagyásával” a
+kurzusok saját ellenjavallati szövege.
 
 ## A cikkíró javaslata a vezetőnek: GYIK-blokk (NEM része a kiírásnak)
 

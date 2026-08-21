@@ -21,6 +21,54 @@
 
 ---
 
+## 0/A. ÁLLAPOT a javítási kör után (2026-08-21)
+
+> **Ez a szakasz csak a státuszt vezeti át. A fenti megállapítások szövege
+> változatlan: sem törölve, sem gyengítve nincsenek.** A tételes átvezetés
+> (mit, hol, mire, milyen forrásra hivatkozva) a `docs/cikkek-javitas-naplo.md`
+> fájlban áll. A cikkek **továbbra is lektorálásra váró munkaanyagok**: a
+> javítás nem helyettesíti Kocsis Kata és Kiss Kata szakmai jóváhagyását.
+
+| Tétel | Állapot | Egy mondatban |
+|---|---|---|
+| **B1** | **LEZÁRVA** | A 4. cikk elejére új „Előbb ezt: mikor kell azonnal mentőt hívni?” szakasz került (Kanavel-jelek + 112 + sürgősségi osztály + stroke-sor), és a 112 a cikk végi szakaszban is kimondva. Az 1. cikkben a mentőhívási szint ELŐRE került, a mért `bal kéz zsibbadás hányinger` keresési alak miatt. |
+| **B2** | **LEZÁRVA** | A kurzus saját ellenjavallata (`restore-legacy-content.ts`, `kezrehabLongDescription`) bekerült az 1. és a 2. cikk CTA-szakaszába, és az egységesség miatt a 3., 4., 5. cikkébe is. |
+| **B3** | **A KOCKÁZATOS ÁLLÍTÁS ELTÁVOLÍTVA, TULAJDONOSI DÖNTÉSRE VÁR** | Az SZTK-A-33553/2024 szám és a 12 kreditpont mind az öt cikkből KIKERÜLT. Helyette a repóból tételesen igazolható alak áll: „A ProBody Stúdió sportrehabilitációs tréner képzésén a … tantermi kurzus instruktorai vagyunk (2024, 2025, 2026, Budapest)” (`restore-legacy-content.ts` 907. sor). **Teendő: a tulajdonos vagy a két gyógytornász igazolja a 2026-os érvényességet; ha megvan, a szám visszatehető. Ha nem, a `/rolunk` és a `/szolgaltatasok` oldalt is át kell nézni (E17).** |
+| **B4** | **LEZÁRVA** | A 6. cikkbe két helyre bekerült az irányelv teljes állítása: hét bevont vizsgálat (egy magas, hat közepes), az egyetlen magas minőségű a felügyelt terápia javára hat hétnél és hat hónapnál, egy közepes szintén a harmadik héten, egy az önálló gyakorlást hozta ki jobbnak, négy nem talált különbséget. A RATIONALE a PDF 20. oldaláról visszaolvasva. |
+| **J1** | LEZÁRVA (1. és 2. cikk) | A Cochrane-következtetés fejmondata mindkét cikkben elöl áll. |
+| **J2** | LEZÁRVA | „hat kockázati tényező”; az NHS-oldal letöltve, a lista megszámolva. |
+| **J3** | LEZÁRVA | „egyetlen, 111 fős vizsgálatból, közepes bizonyossággal”. |
+| **J4** | LEZÁRVA | A „drágább is volt” mondat kikerült; a nullát tartalmazó CI és a közlemény óvatosabb következtetése áll ott. |
+| **J5** | LEZÁRVA | „a különbség nem volt statisztikailag jelentős”, plusz a szerzők „relative gain is small” zárógondolata. |
+| **J6** | LEZÁRVA | Bekerült: „a műtét után nem ritka az erővesztés”. |
+| **J7** | LEZÁRVA | A 4. cikk kimondja, hogy a két áttekintés nem ért egyet a sín típusáról, és hogy a kérdés nincs eldöntve. |
+| **J8** | LEZÁRVA | Hatókör-jelzés: a vizsgálat kizárta a pattanó hüvelykujjat, a 4-es fokozatot és a kettőnél több érintett ujjat; a sín éjszakai nyújtósín volt. |
+| **J9** | **NYITVA, indoklással** | A négy Kanavel-jel BENNE MARAD (kivétele biztonsági visszalépés lenne). Ellenőrizve: egyik közleménynek sincs szabadon hozzáférhető teljes szövege. **A forrásbázis gazdájára tartozik**, hogy tételesen felsoroló forrást emeljen az 1.2 táblázatba. A 4. cikk jelzése kiegészítve, és ugyanez a jelzés bekerült az 5. cikkbe is. |
+| **J10** | **RÉSZBEN LEZÁRVA** | Az állítás a Graf 2023 teljes szövegéből (PMC10382899) visszaigazolva, a cikk hivatkozása pontosítva, a PMC-cím bekerült a forrásjegyzékbe. **A forrásbázis 3. szakaszának bővítése a fájl gazdájára tartozik.** |
+| **J11** | LEZÁRVA | A négy praxis-mondatból három helyzetleírásra cserélve, egy pontosítva. **Ha a két gyógytornász vállalja őket szó szerint, bármelyik visszatehető.** |
+| **J12** | LEZÁRVA a törzsben | A `/blog/de-quervain-szindroma` törzsbe ágyazott linkje a 4. és 5. cikkből kikerült, a `relatedPosts` marad. **A megjelenési sorrend vezetői döntés.** |
+| **J13** | LEZÁRVA | A 6. cikkbe bekerült az AAOS „can last forever” fenntartása és a NICE NG38 1.6.10 második fele (maradandó hatás az életminőségre). |
+| **J14** | LEZÁRVA | „csomó” az 1. cikkben és két helyen a 3. cikkben; az NHS „a lump on your wrist” mondata visszaolvasva. |
+| **J15** | LEZÁRVA | „egyetlen olyan randomizált vizsgálatot, amely a sínt kontrollcsoporthoz hasonlította”, plusz a további RCT és a „kezeléstől vagy az időtől?” kérdés. |
+| **J16** | LEZÁRVA a cikkek oldalán | Mind az öt SOS Kézrelax-link mellett ott a pontosítás: a bemutatott tesztek tájékozódásra valók, a diagnózist orvosi vizsgálat adja. **A termékszöveg pontosítása továbbra is tulajdonosi döntés.** |
+| **M1** | átvezetve | Az AAOS „Limited (Downgraded)” ajánláserőssége és a leminősítés indoklása bekerült az 1. és a 2. cikkbe. |
+| **M2, M3** | átvezetve | A 2. cikkbe bekerült a Cochrane 2024 fejmondata, a mellékhatás-arányok (61% vs 41%, nagyon alacsony bizonyosság) és az NHS „Surgery usually cures CTS” mondata. |
+| **M4** | átvezetve | A 3. cikkbe bekerült az AAOS szteroid-fenntartása („very sparingly”). |
+| **M5** | átvezetve | A 3. cikk vezetői jelzése pontosítva: az AAOS-oldal kapcsolódó anyagai között ott a golfer's elbow, de a szövegtörzs nem tárgyalja, ezért a tartalmi döntés áll. |
+| **M7** | átvezetve a cikkekben | Az orthoinfo-címek a kanonikus, `/en/` nélküli alakra egységesítve. A forrásbázis 12.2 táblázata más gazdához tartozik. |
+| **M8** | átvezetve | Mind a hat cikk H1-e azonos, ponttal; kvirtmínusz a cikkek törzsében 0. |
+| **M9, M10** | átvezetve | A 6. cikkben a gipsz alatti jelek szintje kiírva (sürgős tanács, nem mentőhívás), és bekerült a stroke-sor is, a többi öt cikkel egységesen. |
+| **M11** | átvezetve | Az erősen vérző seb bekerült az 1. és a 3. cikk mentőhívós listájába. |
+| **M12** | átvezetve | A 4. cikk otthoni szakasza élesítve: az NHS öngyógyító listája csak terhelés-csökkentés és fájdalomcsillapító, a sínezés a háziorvosi vagy szakorvosi kezelések között van. |
+| **M6** | NYITVA | Az NHS `/symptoms/` útvonalra költözése a forrásbázis 12.2 táblázatának gazdájára tartozik. |
+
+**Nyitva maradt, döntést igénylő tételek:** B3 (tulajdonos), J9 és J10 (a
+forrásbázis gazdája), J11 (a két gyógytornász), J12 (megjelenési sorrend),
+J16 termékszöveg-fele (tulajdonos), M6 (forrásbázis). Ezek a 6. szakaszban
+felsorolt nyitott kérdésekkel egyeznek.
+
+---
+
 ## 0. Összefoglaló a vezetőnek
 
 **A hat cikk számszerű pontossága kiemelkedő.** Több mint 80 számot, arányt,
@@ -51,6 +99,8 @@ forrásolvasat pont abban a pontban, amely a termék legfontosabb szakmai érve.
 
 ### B1. A 4. cikkben (pattanó ujj) nincs mentőhívási szint, és a 112 sem szerepel
 
+> **ÁLLAPOT (2026-08-21): LEZÁRVA.** A 4. cikk elejére új mentőhívási szakasz került (112 + sürgősségi osztály + stroke-sor), és a 112 a cikk végi szakaszban is kimondva. Az 1. cikkben a figyelmeztetés ELŐRE került. Részletek: `docs/cikkek-javitas-naplo.md` B1.
+
 **Fájl:** `docs/cikkek/4-pattano-ujj.md`
 
 **Mit mértem.** A cikk egyetlen karaktert sem tartalmaz a `112`, a `mentő` és a
@@ -80,6 +130,8 @@ indokolta, miért emelte be a stroke-sort egy könyök-cikkbe. A 4. cikkben ez e
 ---
 
 ### B2. Az 1. és a 2. cikk olyan olvasónak ajánlja a kurzust, akit a kurzus SAJÁT ellenjavallata kizár
+
+> **ÁLLAPOT (2026-08-21): LEZÁRVA.** A kurzus saját ellenjavallata bekerült az 1. és a 2. cikkbe, és az egységesség miatt a 3., 4., 5. cikkbe is. Részletek: `docs/cikkek-javitas-naplo.md` B2.
 
 **Fájlok:** `docs/cikkek/1-miert-zsibbad-a-kezem.md`, `docs/cikkek/2-keztoalagut-szindroma.md`
 
@@ -113,6 +165,8 @@ vezetett otthoni program?” szakaszába kerüljön be a 6. cikk mintája szerin
 ---
 
 ### B3. Az akkreditációs szám 2026-os érvényessége a repóban NYITOTT kérdés, mégis öt cikk jelen idejű hitelesítő adatként közli
+
+> **ÁLLAPOT (2026-08-21): A SZÁM ELTÁVOLÍTVA, TULAJDONOSI DÖNTÉSRE VÁR.** Az SZTK-A-33553/2024 és a 12 kreditpont mind az öt cikkből kikerült; helyette a `restore-legacy-content.ts` 907. sorából igazolható instruktori szerep áll. A megállapítás érvényben marad, amíg a tulajdonos nem igazolja a 2026-os érvényességet. Részletek: `docs/cikkek-javitas-naplo.md` B3.
 
 **Fájlok:** 2., 3., 4., 5. és 6. cikk, mindegyik „Kik írták ezt a cikket?” szakasza.
 
@@ -149,6 +203,8 @@ azok rendben vannak (`src/scripts/restore-legacy-content.ts` 861-868. sor).
 ---
 
 ### B4. A 6. cikk kihagyja, hogy az AAOS/ASSH irányelv EGYETLEN magas minőségű vizsgálata a FELÜGYELT terápia javára szólt
+
+> **ÁLLAPOT (2026-08-21): LEZÁRVA.** A 6. cikkbe két helyre bekerült az irányelv teljes állítása, a hét bevont vizsgálat tételes bontásával (a RATIONALE a PDF 20. oldaláról visszaolvasva). Részletek: `docs/cikkek-javitas-naplo.md` B4.
 
 **Fájl:** `docs/cikkek/6-csuklotores-utani-gyogytorna.md`, „Otthoni gyakorlás vagy
 felügyelt gyógytorna?” szakasz.
@@ -189,6 +245,8 @@ provide a benefit on average.”*
 
 ### J1. A Cochrane sín-áttekintés zárókövetkeztetésének ELSŐ mondata kimarad (1. és 2. cikk)
 
+> **ÁLLAPOT: LEZÁRVA** mindkét cikkben (a fejmondat elöl áll).
+
 Az 1. és a 2. cikk is a kedvező zárómondattal érvel, a 2. cikk így vezeti fel:
 *„A szerzők zárómondata a legfontosabb.”* A Cochrane 2023 (PMID 36848651)
 AUTHORS' CONCLUSIONS szakasza viszont ezzel **kezdődik**:
@@ -203,6 +261,8 @@ kedvező felét idézi, ott is pótolni kell.
 
 ### J2. „Az NHS HÉT kockázati tényezőt nevez meg”, de az NHS-oldalon HAT pont van (2. cikk)
 
+> **ÁLLAPOT: LEZÁRVA** („hat kockázati tényező”; az NHS-oldal letöltve, a lista megszámolva).
+
 Az `nhs.uk/conditions/carpal-tunnel-syndrome/` oldal „You're more at risk of CTS if
 you:” listája hat pontból áll. Az „arthritis or diabetes” egyetlen felsorolási elem,
 a cikk kettőnek számolja. A tartalom így is pontos, a **szám** hibás.
@@ -211,6 +271,8 @@ ott is érdemes jelezni.
 
 ### J3. Az RR 0,84 egyetlen, 111 fős vizsgálatból származik, ez nincs kiírva (2. cikk)
 
+> **ÁLLAPOT: LEZÁRVA** („egyetlen, 111 fős vizsgálatból, közepes bizonyossággal”).
+
 Ashworth 2023 (PMID 36722795): *„The requirement for surgery probably reduces slightly
 in the LCI group at one year (risk ratio 0.84, 95% CI 0.72 to 0.98; **1 RCT, 111
 participants**, moderate-certainty evidence).”* A cikk az RR-t és a CI-t pontosan adja,
@@ -218,6 +280,8 @@ a mintaméretet nem. Ugyanez a cikk máshol viszont kiírja („egyetlen, 80 fő
 vizsgálatból”), tehát a mérce megvan, csak itt nem alkalmazza.
 
 ### J4. „Az injekció ráadásul drágább is volt”, pedig a különbség nem szignifikáns (2. cikk)
+
+> **ÁLLAPOT: LEZÁRVA** (a „drágább is volt” mondat kikerült; a nullát tartalmazó CI és a közlemény saját következtetése áll ott).
 
 Burton 2023 (PMID 35394019): *„CSI was more costly [mean difference £68.59
 (95% CI: -120.84, 291.24)]”*. A megbízhatósági tartomány tehát a nullát is tartalmazza.
@@ -228,6 +292,8 @@ költséghatékonyabb a sínnél.”
 
 ### J5. A Smidt-féle 91% és 83% mellől hiányzik, hogy a különbség NEM szignifikáns (3. cikk)
 
+> **ÁLLAPOT: LEZÁRVA** (a „nem szignifikáns” minősítés és a szerzők zárógondolata is bekerült).
+
 Smidt 2002 (PMID 11879861) FINDINGS: *„Physiotherapy had better results than a
 wait-and-see policy, **but differences were not significant**.”* Az INTERPRETATION
 pedig: *„…since the relative gain of physiotherapy is small.”* A cikk a 91%-ot és a
@@ -237,11 +303,15 @@ közötti különbség ebben a vizsgálatban nem volt statisztikailag jelentős.
 
 ### J6. A 80-90%-os műtéti sikerarány mellől kimarad az AAOS saját fenntartása (3. cikk)
 
+> **ÁLLAPOT: LEZÁRVA** (bekerült: „a műtét után nem ritka az erővesztés”).
+
 AAOS OrthoInfo, Tennis Elbow: *„Tennis elbow surgery is considered successful in 80 to
 90% of patients. **However, it is not uncommon to experience a loss of strength.**”*
 A cikk a százalékot adja, a második mondatot nem. **Javítás:** a fenntartás kerüljön be.
 
 ### J7. A sín-típusról két forrás mást mond, a cikk csak az egyiket hozza (4. cikk)
+
+> **ÁLLAPOT: LEZÁRVA** (a 4. cikk kimondja, hogy a két forrás nem ért egyet, és hogy a kérdés nincs eldöntve).
 
 - McKenna 2026 (PMID 41362294): a PIP-ízületet rögzítő sín jobban teljesített az
   MCP-nél, és a szerzők ezt ajánlják.
@@ -255,6 +325,8 @@ kimondani, hogy a források nem értenek egyet. **Javítás:** ugyanez a minta i
 
 ### J8. A 68,9%-os és a fokozat szerinti számok forrása KIZÁRTA a pattanó hüvelykujjat (4. cikk)
 
+> **ÁLLAPOT: LEZÁRVA** (hatókör-jelzés a számok mellé, az éjszakai sín tényével együtt).
+
 Minkhorst 2025 (PMID 40449569), Exclusion criteria: *„previous treatment with either a
 splint or cortisone injection, **trigger thumb**, >2 digits involved, grade 4 trigger,
 or an allergy to cortisone”*. A vizsgálat sínje ezen felül **éjszakai** nyújtósín volt
@@ -266,6 +338,8 @@ közli. **Javítás:** egy mondat a számok mellé: „Ebbe a vizsgálatba nem k
 pattanó hüvelykujj, a legsúlyosabb, 4-es fokozat és a kettőnél több érintett ujj.”
 
 ### J9. A Kanavel-féle négy jel felsorolására a hivatkozott absztraktok nem adnak fedezetet (4. és 5. cikk)
+
+> **ÁLLAPOT: NYITVA, indoklással.** A négy jel BENNE MARAD, mert kivétele biztonsági visszalépés lenne. Ellenőrizve: egyik közleménynek sincs szabadon hozzáférhető teljes szövege. A tételesen felsoroló forrás beemelése az 1.2 táblázatba a forrásbázis gazdájára tartozik. A 4. cikk jelzése kiegészítve, és ugyanez a jelzés bekerült az 5. cikkbe is.
 
 Sem a Hyatt és Bagg 2017 (PMID 28336044), sem a Langer 2021 (PMID 34134159)
 absztraktja nem sorolja fel a négy jelet, csak névvel hivatkozik rájuk
@@ -282,6 +356,8 @@ tételesen felsoroló forrás, és utána mindkét cikk arra hivatkozzon.
 
 ### J10. A gyűrűs- és kisujj-mintázat állítása nem a forrásbázisból való (1. cikk)
 
+> **ÁLLAPOT: RÉSZBEN LEZÁRVA.** Az állítás a Graf 2023 teljes szövegéből (PMC10382899) visszaigazolva, a cikk hivatkozása pontosítva, a PMC-cím a forrásjegyzékben. A forrásbázis 3. szakaszának bővítése a fájl gazdájára tartozik.
+
 A cikk: *„A könyöknél becsípődő singideg **leggyakoribb tünete** éppen ez: időszakos
 zsibbadás és bizsergés a gyűrűs- és a kisujjban. (Graf és mtsai, 2023)”*
 
@@ -297,6 +373,8 @@ intermittent numbness and tingling in the ulnar ring and small fingers.”*
 cikkben. Eljárási hiba, nem tartalmi.
 
 ### J11. Kitalált elsőszemélyű praxis-állítások három cikkben (1., 5., 6. cikk)
+
+> **ÁLLAPOT: LEZÁRVA.** Három mondat helyzetleírásra cserélve, egy pontosítva. Ha a két gyógytornász vállalja őket szó szerint, bármelyik visszatehető.
 
 A 3. cikk vezetőnek szóló 6. jelzése mondja ki a helyes szabályt: *„Praxis-tapasztalatot
 nem írtunk a cikkbe. … Ilyen mondatot nem találtunk ki: azt csak a két gyógytornász
@@ -319,6 +397,8 @@ mintája szerint.
 
 ### J12. Négy belső link olyan cikkre mutat, ami ebben a hullámban nem jelenik meg
 
+> **ÁLLAPOT: LEZÁRVA a törzsben.** A `/blog/de-quervain-szindroma` törzsbe ágyazott linkje a 4. és 5. cikkből kikerült, a `relatedPosts` marad. A megjelenési sorrend vezetői döntés.
+
 `/blog/de-quervain-szindroma` négyszer szerepel a törzsszövegben (2., 4. és 5. cikk),
 és a 2., 4., 5. cikk `relatedPosts` mezőjében is. A `docs/tudastar-tartalmi-terv.md`
 181. és 187. sora szerint ez a C9 cikk, `publishedAt` 2026-09-09. A rá mutató cikkek
@@ -330,6 +410,8 @@ körben kimaradnak. A `relatedPosts` hivatkozás önmagában nem baj (a CMS kiha
 nem létező rekordot), a törzsszövegbe ágyazott link viszont igen.
 
 ### J13. A 6. cikk csak a javuló idővonalat adja, a maradandó panasz lehetőségét nem
+
+> **ÁLLAPOT: LEZÁRVA** (az AAOS „can last forever” fenntartása és a NICE NG38 1.6.10 második fele is bekerült).
 
 Az AAOS OrthoInfo distalis radius oldala ezt is tartalmazza:
 *„Some people can also have mild stiffness or aching for 2 years or longer. **In some
@@ -346,6 +428,8 @@ elvárást ad. **Javítás:** a „Türelem” pontnál kerüljön be az AAOS fe
 
 ### J14. „Duzzanat” szerepel ott, ahol az NHS „csomót” ír (1. és 3. cikk)
 
+> **ÁLLAPOT: LEZÁRVA** (az 1. cikkben és két helyen a 3. cikkben „csomó”).
+
 Az NHS wrist pain oldal sürgős listája: *„you have **a lump** on your wrist that's very
 painful, hot or red”*. Az 1. és a 3. cikk „duzzanatot” ír, az 5. cikk helyesen
 „csomót”. A duzzanat tágabb fogalom, mint a csomó, tehát a fordítás felfelé tolja a
@@ -353,6 +437,8 @@ sürgősségi kört. Biztonságos irányú tévedés, de pontatlan. A forrásbá
 táblázata is „duzzanatot” ír, ott is javítandó.
 
 ### J15. „Mindössze egyetlen randomizált vizsgálatot talált”, valójában kettőt (1. cikk)
+
+> **ÁLLAPOT: LEZÁRVA** (a pontos megfogalmazás plusz a további RCT és a „kezeléstől vagy az időtől?” kérdés).
 
 Bateman 2025 (PMID 40385935) RESULTS: *„We identified only one randomised controlled
 trial (RCT), with high overall risk of bias, **that compared night splints to a control
@@ -369,6 +455,8 @@ javult, csak nem lehet tudni, a kezeléstől-e. A „nagyon alacsony bizonyossá
 hasonlította”.
 
 ### J16. A cikkek „ne diagnosztizáld magad” mellé olyan kurzust linkelnek, ami öntesztet ígér
+
+> **ÁLLAPOT: LEZÁRVA a cikkek oldalán.** Mind az öt link mellett ott a pontosítás. A termékszöveg pontosítása tulajdonosi döntés marad.
 
 Az SOS Kézrelax villámkurzus saját leírása
 (`src/scripts/restore-legacy-content.ts`, `kezrelaxLongDescription`, 1841. sor):

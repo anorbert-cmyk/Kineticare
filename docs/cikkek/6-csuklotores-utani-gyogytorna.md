@@ -51,6 +51,7 @@ azonosítójával. A teljes, hozzáférési dátumos jegyzék a cikk végén ál
 | CST7 | Parkitny L és mtsai. Post-fracture serum cytokine levels are not associated with a later diagnosis of complex regional pain syndrome. BMC Neurol. 2022. PMID 36224537. | Lektorált közlemény |
 | CST8 | Serôdio IN és mtsai. Preventing Complex Regional Pain Syndrome After Distal Radius Fracture. J Funct Morphol Kinesiol. 2026. PMID 42029526. | Szisztematikus áttekintés |
 | CST9 | NHS. Complex regional pain syndrome. Felülvizsgálva 2022-10-27. | Nemzeti egészségügyi szolgálat |
+| VZ1 | NHS. Stroke, Symptoms. Felülvizsgálva 2024-09-12. | Nemzeti egészségügyi szolgálat |
 | VZ2 | NHS. Wrist pain (Hand pain sorozat). Felülvizsgálva 2025-11-05. | Nemzeti egészségügyi szolgálat |
 
 **A CST6 és a CST7 szerepe.** Ez a két közlemény a szövegben SZÁM nélkül
@@ -143,6 +144,8 @@ Erre nincs egyetlen szám, mert a munkaterhelés mindenkinél más. Egy irodai n
 
 Amit kérhetsz, az a konkrét tájékoztatás. A NICE irányelve szerint a törést ellátó csapatnak szóban és írásban is meg kell adnia a várható kimenetelt, benne a szokásos tevékenységekhez való visszatérés idejével. *(NICE, NG38, 1.6.10)*
 
+Ugyanennek a pontnak van egy második fele is, és ez legalább ilyen fontos. Az irányelv szerint arról is tájékoztatni kell, mekkora eséllyel marad maradandó hatás az életminőségre: fájdalom, funkcióvesztés vagy lelki következmény. *(NICE, NG38, 1.6.10)*
+
 Ugyanez a pont előírja a terhelésre és a felső végtag terhelhetőségére vonatkozó tájékoztatást is. *(NICE, NG38, 1.6.10)*
 
 Addig pedig egy egyszerű szabály él: ne vezess, és ne emelj nehezet, amíg meg nem mondják, hogy szabad. *(NHS, Broken arm or wrist)*
@@ -167,6 +170,12 @@ Az irányelv ki is mondja: jelenleg nincs elég bizonyíték annak eldöntésér
 
 És hozzáteszi: egy általános tiltás korlátozná a hozzáférést azoknak, akik profitálnának a felügyelt terápiából. *(AAOS és ASSH irányelv, 2020)*
 
+A bevont vizsgálatokat is érdemes tételesen látni, mert az összkép enélkül féloldalas. Az irányelvbe hét vizsgálat került be: egy magas és hat közepes minőségű. *(AAOS és ASSH irányelv, 2020)*
+
+Ez a hét így oszlik meg. Az egyetlen magas minőségű vizsgálat a **felügyelt** terápia javára döntött, hat hétnél és hat hónapnál is. Egy közepes minőségű vizsgálat szintén a felügyelt terápia javára döntött, a sérülés vagy a műtét utáni harmadik héten. Egy másik az önálló gyakorlást hozta ki jobbnak hat hétnél, négy pedig nem talált különbséget. *(AAOS és ASSH irányelv, 2020)*
+
+Ezt a bontást azért írjuk ki, mert a mi érdekünk ellen szól. Az otthoni programot áruljuk, és a legjobb minőségű vizsgálat mégis a felügyelt terápia mellett szólt. Az irányelv összegzése emiatt marad az, ami: a bizonyíték nem következetes, és a kérdés nincs eldöntve.
+
 A Cochrane 2015-ös áttekintése 26 vizsgálatot és 1269 beteget nézett át. Mind a 23 összehasonlítás bizonyítékát alacsony vagy nagyon alacsony minőségűnek minősítette, ami jelentős bizonytalanságot jelent. *(Handoll és Elliott, Cochrane, 2015)*
 
 A vizsgálatok többsége kicsi volt, és magas torzítási kockázatú. *(Handoll és Elliott, Cochrane, 2015)*
@@ -175,7 +184,7 @@ Ezt azért írjuk le, mert így őszinte. Nem az a kérdés, hogy otthon gyakoro
 
 Az a kérdés, hogy rendszeresen, jó sorrendben és fokozatosan gyakorolsz-e. A NICE irányelve a beteg aktív részvételét nevezi kulcsnak a rehabilitáció céljainak eléréséhez. *(NICE, NG38, 1.6.10)*
 
-A praxisunkban azt látjuk, hogy sokan program nélkül kezdenek neki otthon. A gyakorlat önmagában kevés: a sorrend és az adagolás számít.
+Otthon jellemzően nem a gyakorlat hiányzik. A sorrend és az adagolás az, ami nehéz egyedül.
 
 ## Mire figyelj, amíg a gipsz rajtad van?
 
@@ -197,7 +206,9 @@ Sérülés után azonnali ellátás kell, ha a kar vagy a csukló zsibbad, bizse
 
 Aznap fordulj orvoshoz, ha a kéz egy részén vagy egészén megszűnt az érzés. *(NHS, Wrist pain)*
 
-A gipsz alatti figyelmeztető jelekkel sem szabad várni: erősödő fájdalom, zsibbadás, elszíneződés, láz vagy váladék. *(NHS, Broken arm or wrist)*
+Egy jel, ami nem a csuklóról szól, de minden kézpanaszos cikkünkben kiírjuk. Ha lelóg az arcod egyik fele, ha erőtlen vagy zsibbadt az egyik karod, és ha akadozik a beszéded, azonnal hívj mentőt. Az NHS ezt külön kiemeli: ha a jelek már el is múltak, de 24 órán belül megvoltak, akkor is azonnali segítség kell. *(NHS, Stroke, Symptoms, 2024. szeptember 12-i felülvizsgálat)*
+
+A gipsz alatti figyelmeztető jelekkel sem szabad várni: erősödő fájdalom, zsibbadás, elszíneződés, láz vagy váladék. Ezeket az NHS a sürgős tanácsadás szintjére sorolja, nem a mentőhíváséra, de halogatni ezeket sem szabad. *(NHS, Broken arm or wrist)*
 
 A gipszlevétel utáni időszaknak van egy külön figyelmeztető jele. Ha a fájdalom sokkal erősebb és tartósabb, mint amit a sérülés indokolna, orvosi kivizsgálás kell. *(NHS, Complex regional pain syndrome)*
 
@@ -231,6 +242,8 @@ Négy elven áll: fokozatosság, rendszeresség, fájdalomhatár és türelem.
 
 **Türelem.** A merevség a gipszlevétel utáni egy-két hónapban javul a legtöbbet, és legalább két évig tovább javul. *(AAOS OrthoInfo)*
 
+Az AAOS OrthoInfo fenntartását is kiírjuk, mert enélkül hamis elvárást adnánk. Egyeseknél az enyhe merevség vagy sajgás két évnél is tovább megmarad, és vannak esetek, amikor véglegesen megmarad. Ez gyakoribb súlyos sérülés után, 50 év fölött, és artrózis mellett. Ugyanez a forrás hozzáteszi, hogy a merevség ilyenkor általában enyhe, és jellemzően nem változtatja meg, mennyire jól működik a kar. *(AAOS OrthoInfo)*
+
 Ha a gipsz után zsibbadás is megjelenik az ujjaidban, arról külön írtunk [a kézzsibbadás okairól szóló cikkünkben](/blog/miert-zsibbad-a-kezem).
 
 Ha a fájdalom a csuklódon kívül a kézfejedre vagy az alkarodra is kiterjed, akkor [a csukló- és kézfájdalomról szóló cikkünk](/blog/csuklo-es-kezfajdalom) is segít eligazodni.
@@ -253,11 +266,13 @@ Rendszert és sorrendet ad, nem gyógyulást.
 
 Az [Otthoni KézRehab Programot](/kurzusok/otthoni-kezrehab-program) csukló-, ujj-, alkar- és könyökpanaszokra állítottuk össze. A gyakorlatok 5 perces miniblokkokban vannak, hogy rövid alkalmakra is elférjenek a napodban.
 
-Egy dolgot itt is kiírunk, mert vásárlás előtt tudnod kell. A program leírásában szerepel, hogy nem javasoljuk, ha traumás sérülésed volt, és az orvos még nem enged mindent csinálni.
+Vásárlás előtt ezt tudnod kell. A program leírásában szerepel, hogy nem javasoljuk, ha traumás sérülésed volt, és az orvos még nem enged mindent csinálni.
 
 Csuklótörés után tehát a sorrend így néz ki: előbb az orvosi engedély, utána a program. Ha az orvosod korlátoz, várd meg a jóváhagyását.
 
-Az irányelvi képet itt is kimondjuk. Az AAOS és az ASSH közös irányelve szerint az otthoni gyakorlatprogram és a felügyelt terápia eredménye között nem mutatkozott különbség, de a bizonyíték korlátozott. *(AAOS és ASSH irányelv, 2020)*
+Az irányelvi képet itt is kimondjuk, a teljes felével együtt. Az AAOS és az ASSH közös irányelve szerint a bizonyíték nem következetes, és nem mutat különbséget az otthoni gyakorlatprogram és a felügyelt terápia eredménye között. A bevont hét vizsgálatból viszont az egyetlen magas minőségű a **felügyelt** terápia javára döntött, hat hétnél és hat hónapnál is. *(AAOS és ASSH irányelv, 2020)*
+
+Vagyis ha van módod felügyelt gyógytornára járni, a bizonyíték nem beszél le róla. Ez a program annak való, akinek nincs, vagy akinek a rendelői alkalmak mellé kell napi rendszer.
 
 Ezért nem gyógyulást ígérünk. Vezetett, sorrendbe rakott alkalmakat kínálunk arra az időszakra, amíg a csuklód visszaszokik a hétköznapokhoz.
 
@@ -271,7 +286,7 @@ Kocsis Kata gyógytornász, sportrehabilitációs tréner, gyógy- és sportmass
 
 Mindketten elvégeztük Kate Thorn CHT (AHTA) distalis radius törésről szóló kurzusát 2024-ben.
 
-Oktatunk is. A „Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe” akkreditált tantermi képzés instruktorai vagyunk, 12 kreditpont, SZTK-A-33553/2024.
+Oktatunk is. A ProBody Stúdió sportrehabilitációs tréner képzésén a „Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe” tantermi kurzus instruktorai vagyunk (2024, 2025, 2026, Budapest).
 
 Ez a szakmai háttér a szerző hitelességét igazolja. A cikkben szereplő klinikai állítások mellett ettől függetlenül ott a forrás.
 
@@ -319,6 +334,9 @@ Ez a szakmai háttér a szerző hitelességét igazolja. A cikkben szereplő kli
 10. NHS. [Wrist pain](https://www.nhs.uk/symptoms/hand-pain/wrist-pain/).
     Felülvizsgálva: 2025-11-05, következő felülvizsgálat: 2028-11-05.
     Hozzáférés: 2026-08-21. (forrásbázis: VZ2)
+11. NHS. [Stroke: Symptoms](https://www.nhs.uk/conditions/stroke/symptoms/).
+    Felülvizsgálva: 2024-09-12, következő felülvizsgálat: 2027-09-12.
+    Hozzáférés: 2026-08-21. (forrásbázis: VZ1, ZS2)
 
 ## Fontos tudnivaló
 
@@ -385,14 +403,26 @@ felsorolja a forrásbázis gazdájának.
 | 42 | A probiotikum és az aszpirin nem csökkentette az előfordulást | CST8 | igen | nincs szám |
 | 43 | A C-vitamin megítélése vegyes és vitatott | CST8 | igen | nincs szám |
 | 44 | A korai aktív rehabilitáció és a fokozatos mobilizáció ígéretesnek tűnik, de a bizonyíték korlátozott és heterogén | CST8 | igen | nincs szám |
+| 45 | Az irányelvbe hét vizsgálat került be: egy magas és hat közepes minőségű | CST3 | kiegészítés | igen (1 high, 6 moderate) |
+| 46 | Az egyetlen magas minőségű vizsgálat a felügyelt terápia javára döntött hat hétnél és hat hónapnál; egy közepes minőségű a harmadik héten; egy az önálló gyakorlást hozta ki jobbnak hat hétnél; négy nem talált különbséget | CST3 | kiegészítés | igen (a RATIONALE bontása, 20. o.) |
+| 47 | A NICE NG38 1.6.10 arról is tájékoztatást ír elő, mekkora eséllyel marad maradandó hatás az életminőségre (fájdalom, funkcióvesztés, lelki következmény) | CST5 | kiegészítés | nincs szám |
+| 48 | Egyeseknél az enyhe merevség vagy sajgás két évnél is tovább tart, és véglegesen is megmaradhat; gyakoribb súlyos sérülés után, 50 év fölött és artrózis mellett; a merevség ilyenkor általában enyhe, és jellemzően nem változtatja meg a kar működését | CST2 | kiegészítés | igen (2 év, 50 év) |
+| 49 | Stroke-jelek: lelógó arcfél, erőtlen vagy zsibbadt kar, akadozó beszéd, azonnal mentő; a 24 órán belül elmúlt tünet is azonnali segítséget igényel | VZ1 | igen (forrásbázis 1.1) | igen (24 óra) |
+| 50 | A gipsz alatti figyelmeztető jeleket az NHS a sürgős tanácsadás szintjére sorolja, nem a mentőhíváséra | CST1 | kiegészítés | nincs szám |
 
 **Nem klinikai állítások a szövegben** (ezért nincs orvosi forrásuk, de mind
 ellenőrizhető a repóból): a program csukló-, ujj-, alkar- és könyökpanaszokra
 készült, a gyakorlatok 5 perces miniblokkokban vannak, és a programot nem
 javasoljuk traumás sérülés után, amíg az orvos nem enged mindent
 (`src/scripts/restore-legacy-content.ts`, `kezrehabLongDescription`). A szerzői
-titulusok, a Kate Thorn CHT kurzus és az akkreditált képzés adatai a
-`docs/tudastar-hangnem-es-technika.md` 1.1 és 1.7 pontjából valók, betűhíven.
+titulusok és a Kate Thorn CHT kurzus adatai a
+`docs/tudastar-hangnem-es-technika.md` 1.1 és 1.7 pontjából valók, betűhíven. Az
+instruktori szerep (ProBody Stúdió, 2024, 2025, 2026, Budapest) a
+`src/scripts/restore-legacy-content.ts` 907. sorából igazolható. **Az
+SZTK-A-33553/2024 akkreditációs szám és a 12 kreditpont a 2026-08-21-i
+tényellenőrző kör B3 pontja miatt KIKERÜLT**, mert a repó saját leltára
+(`docs/tartalom-leltar-regi-oldal.md` E17, Ny6) nyitottként tartja nyilván,
+érvényes-e 2026-ban.
 
 ---
 
