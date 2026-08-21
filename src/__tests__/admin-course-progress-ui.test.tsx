@@ -12,10 +12,20 @@ import {
   TARGET_SIZE,
 } from '../components/admin/course-progress-styles'
 import { LessonDropOffTable, StudentsTable } from '../components/admin/course-progress-tables'
+import {
+  readProgressDeepLink,
+  PROGRESS_DEEP_LINK_PARAM,
+  PROGRESS_PANEL_ANCHOR,
+} from '../components/admin/course-progress-view'
 import type {
   CourseLessonDropOff,
   CourseStudentProgress,
 } from '../lib/admin/course-progress-stats'
+import {
+  courseProgressHref,
+  COURSE_PROGRESS_ANCHOR,
+  COURSE_PROGRESS_FILTER_PARAM,
+} from '../lib/statistics/course-links'
 
 /**
  * ŐR — A KURZUS-HALADÁS PANEL AKADÁLYMENTESSÉGE ÉS SZÓHASZNÁLATA.
@@ -381,7 +391,8 @@ describe('Mély link — a panel bekötése (audit 1. pont)', () => {
   })
 
   it('automata betöltés CSAK akkor, ha a link kérte', () => {
-    expect(PANEL_KOD).toContain('if (deepLinkStatus === null || productId === null')
+    expect(PANEL_KOD).toContain('deepLinkStatus === null ||')
+    expect(PANEL_KOD).toContain('productId === null ||')
     expect(PANEL_KOD).toContain('autoLoadStarted.current')
   })
 
@@ -393,8 +404,10 @@ describe('Mély link — a panel bekötése (audit 1. pont)', () => {
     expect(PANEL_KOD).not.toContain("behavior: 'smooth'")
   })
 
-  it('a szerepkör-kapu VÁLTOZATLANUL a helyén van', () => {
-    expect(PANEL_KOD).toContain('if (!hasStaffOrOwnerRole(user))')
+  it('a szerepkör-kapu VÁLTOZATLANUL a helyén van, és az automata betöltés is mögötte', () => {
+    expect(PANEL_KOD).toContain('const staffOrOwner = hasStaffOrOwnerRole(user)')
+    expect(PANEL_KOD).toContain('if (!staffOrOwner) {')
+    expect(PANEL_KOD).toContain('!staffOrOwner ||')
   })
 
   it('hibaágon SEM naplóz hallgatói objektumot', () => {
@@ -402,5 +415,34 @@ describe('Mély link — a panel bekötése (audit 1. pont)', () => {
     // (audit 6.5), ezért a panel egyáltalán nem naplóz.
     expect(PANEL_KOD).not.toContain('console.')
     expect(PANEL_KOD).not.toContain('logger')
+  })
+})
+
+/* ───────── A mély link KÉT VÉGE: a Statisztika írja, a panel olvassa ───────── */
+
+describe('Mély link — a két felület szerződése összeér (audit 1. pont)', () => {
+  /**
+   * A linket a Statisztika oldal állítja elő (`src/lib/statistics/course-links.ts`),
+   * a panel olvassa (`readProgressDeepLink`). A két fél KÜLÖN modulban él, tehát
+   * némán szét tudna csúszni: ez a teszt az egyiket a másikba vezeti át.
+   */
+  it('a paraméter és a horgony neve mindkét oldalon ugyanaz', () => {
+    expect(PROGRESS_DEEP_LINK_PARAM).toBe(COURSE_PROGRESS_FILTER_PARAM)
+    expect(PROGRESS_PANEL_ANCHOR).toBe(COURSE_PROGRESS_ANCHOR)
+  })
+
+  it('a Statisztika által épített linkből a panel PONTOSAN azt a szűrőt olvassa ki', () => {
+    for (const status of ['nem-kezdte', 'folyamatban', 'befejezte'] as const) {
+      const href = courseProgressHref(42, status)
+      expect(href).toBe(`/admin/collections/products/42?haladas=${status}#kurzus-haladas`)
+      const query = href.slice(href.indexOf('?'), href.indexOf('#'))
+      expect(readProgressDeepLink(query)).toBe(status)
+    }
+  })
+
+  it('szűrő nélküli linknél NINCS automata betöltés (a gombra töltés marad)', () => {
+    const href = courseProgressHref(42)
+    expect(href).not.toContain('?')
+    expect(readProgressDeepLink('')).toBeNull()
   })
 })

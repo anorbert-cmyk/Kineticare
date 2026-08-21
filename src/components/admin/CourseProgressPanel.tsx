@@ -78,7 +78,10 @@ import {
  * szűrőt és odagörget: a válaszig vezető út így háromról egy kattintásra
  * csökken. Paraméter nélkül minden marad a régi, gombra induló viselkedésnél,
  * tehát a fenti teljesítmény-indok sértetlen. Ismeretlen vagy hibás értéknél a
- * panel úgy viselkedik, mintha nem lenne paraméter (nem dob hibát).
+ * panel úgy viselkedik, mintha nem lenne paraméter (nem dob hibát). Az automata
+ * betöltés a KLIENS-OLDALI szerepkör-kapu MÖGÖTT áll: aki nem munkatárs vagy
+ * tulajdonos, annál el sem indul (a végpont saját szerver-oldali kapuja
+ * változatlanul az igazi védelem, ez csak fölösleges 403-at spórol).
  *
  * ═══ AKADÁLYMENTESSÉG ═══
  * A kördiagram DEKORATÍV (`aria-hidden`): az információt a mellette álló
@@ -338,6 +341,7 @@ export function CourseProgressPanel() {
   const autoLoadStarted = useRef(false)
 
   const productId = typeof id === 'number' || typeof id === 'string' ? String(id) : null
+  const staffOrOwner = hasStaffOrOwnerRole(user)
 
   /**
    * A lekérdezés eredményének bevezetése az állapotba.
@@ -380,13 +384,18 @@ export function CourseProgressPanel() {
    * Interactions — https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html).
    */
   useEffect(() => {
-    if (deepLinkStatus === null || productId === null || autoLoadStarted.current) {
+    if (
+      deepLinkStatus === null ||
+      productId === null ||
+      !staffOrOwner ||
+      autoLoadStarted.current
+    ) {
       return
     }
     autoLoadStarted.current = true
     document.getElementById(PROGRESS_PANEL_ANCHOR)?.scrollIntoView({ block: 'start' })
     void fetchCourseProgress(productId).then(applyResult)
-  }, [applyResult, deepLinkStatus, productId])
+  }, [applyResult, deepLinkStatus, productId, staffOrOwner])
 
   /** Ugyanarra az oszlopra kattintva megfordul az irány. */
   const toggleSort = (key: StudentSortKey): void => {
@@ -407,7 +416,7 @@ export function CourseProgressPanel() {
     )
   }
 
-  if (!hasStaffOrOwnerRole(user)) {
+  if (!staffOrOwner) {
     return (
       <div className="field-type kc-course-progress" id={PROGRESS_PANEL_ANCHOR} style={panelStyle}>
         <PanelHeading />
