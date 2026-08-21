@@ -147,17 +147,69 @@ Ezek nem javaslatok, hanem a kiírás részei.
 | H9 | Gondolatjel töltelék-elválasztóként, vegyes tegezés-magázás | több felirat |
 | H10 | A dokumentáció azt állítja, „az N+1 megszűnt" — a kód szerint nem szűnt meg | `docs/review-2026-08-21-statisztika-bunny.md` |
 
-## 8. Nyitott, tulajdonosi döntést igénylő kérdések
+## 8. A négy nyitott kérdés — eldöntve (2026-08-21)
 
-1. **Az „elakadt" küszöbe hány nap?** 14 vagy 30. Üzleti döntés: mennyi idő
-   után hívja fel a hallgatót. (Új állapot NEM kell — ez szűrő, nem negyedik
-   címke: aki „elakadt", az egyszerre „folyamatban" is van.)
-2. **„Beiratkozott" vagy „Hozzáfér"?** Ma három szó él ugyanarra a tényre. Az
-   egységesítés visszafordítana egy korábbi döntést.
-3. **A `--theme-error-500` bukását** az admin egészére javítsuk (kihat a
-   Payload gyári hibaüzeneteire is), vagy csak a saját komponenseinkben?
-4. **Van-e elfogadható saját célszám a befejezési arányra?** Külső viszonyítás
-   erre a szegmensre nincs — a cél csak saját alapvonalból képezhető.
+A tulajdonos ezeket a vezetőre bízta („oldd meg nélkülem"). A döntések
+indoklással, hogy később visszakereshetők legyenek.
+
+### 8.1 Az „elakadt" küszöbe: **14 nap**
+
+Nem 30. Két ok:
+
+1. **Ez napi gyakorlásra épülő termék.** A kurzus ígérete szó szerint az, hogy
+   „naponta néhány perc is elég". Aki két hete nem nyitotta meg, annál a
+   szokás már megtört, nem csak lassult. A 30 nap ehhez a termékhez késő.
+2. **Egy szám legyen, ne kettő.** A magyar elállási jog 14 nap
+   (45/2014. Korm. rendelet). Ha az „elakadt" küszöb is 14, a tulajdonosnak
+   egyetlen határidőt kell fejben tartania, nem kettőt.
+
+Fontos, hogy ez **szűrő, nem negyedik állapot**: aki elakadt, az egyszerre
+„folyamatban" is van. Negyedik címke kategóriahibát vinne a hármasba.
+
+### 8.2 Szóhasználat: **„Hozzáfér"**, mindkét felületen egyszerre
+
+A 2026-08-20-i audit nem azt döntötte el, melyik szó a jobb — azt döntötte el,
+hogy a két felület **ugyanazt** mondja (WCAG 2.2 **3.2.4**). Az alapkérdés
+nyitva maradt. A döntés most:
+
+- **„Hozzáfér"**, mert ez írja le, ami történt: a vevő megvásárolta és
+  hozzáférést kapott. Webshopban senki nem „iratkozik be".
+- A `users` mező már ma is **„Megvásárolt kurzusok"** — vásárlás-nyelv,
+  nem iskolai.
+- **A döntő érv:** a hozzáférést ADÓ panel már ma is így beszél
+  („Hozzáférés adása", „Hozzáférés megadva"). Vagyis nem új szót vezetünk be,
+  hanem a meglévő kettőből ahhoz igazodunk, amelyik a cselekvést végzi.
+
+A két felület **együtt** változik, egy PR-ben, hogy a 3.2.4-konzisztencia
+egyetlen pillanatra se sérüljön.
+
+### 8.3 A Payload hibaszíne: **csak a saját komponenseinkben**
+
+Nem írjuk felül az admin egészére. Indok:
+
+- A globális felülírás a **Payload gyári hibaüzeneteit is** átszínezné, az
+  egész adminban, minden űrlapon. Nagy hatósugár, nehezen tesztelhető,
+  és a keretrendszer saját kontraszt-feltevéseit boríthatja.
+- A saját komponenseink **körülhatárolt felület**, és van már működő
+  márka-tokenünk (#b3261e, mérve **6,54:1** — bőven a küszöb felett), ami a
+  statisztika-oldalon már ma is fut.
+
+Tehát: a saját komponensekben a márka-tokenre cserélünk, a Payload
+globálisához nem nyúlunk.
+
+### 8.4 Célszám a befejezési arányra: **nincs, és nem is lesz külső**
+
+A kutatás egyértelmű: fizetős, önálló platformon futó, kis közönségű magyar
+kurzusra **megbízható nyilvános viszonyítási szám nem létezik**. Ami a
+keresésben előjön, az forrás nélküli tartalommarketing.
+
+Ezért a felület **nem tűz ki célszámot**. Helyette a saját alapvonalat mutatja:
+az arányt az **előző időszakhoz** mérve. Ez az egyetlen becsületes viszonyítás,
+és egyben cselekvésre késztető is („romlott a múlt hónaphoz képest" → utána kell
+nézni), miközben egy kitalált 40%-os cél csak szorongást keltene.
+
+Az első hónapok számai lesznek az alapvonal. Amíg nincs elég adat, a felület
+ezt mondja ki, nem trendet hazudik.
 
 ## 9. Amit a kutatás a viszonyítási számokról mondott
 
