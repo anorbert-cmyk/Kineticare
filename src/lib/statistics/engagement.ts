@@ -43,6 +43,15 @@ export interface CourseEngagementReport {
   courses: CourseEngagementRow[]
   /** Igaz, ha bármely lekérdezés a felső korlát miatt csonkolt. */
   truncated: boolean
+  /**
+   * Hány kurzus maradt ki technikai hiba miatt.
+   *
+   * A lekérdező kurzusonként kap hibát (rossz tananyag-szerkezet, egy
+   * megbicsakló adatbázis-hívás), és a hibás kurzust ÁTUGORJA, hogy a
+   * többiről szóló jelentés megmaradjon. A hiányzó sort viszont nem
+   * hallgatjuk el: ez a szám vezeti ki a felületre.
+   */
+  skipped: number
 }
 
 /** Egy kurzus nyers bemenete — a lekérdező (engagement-query) állítja elő. */
@@ -83,10 +92,11 @@ export function buildCourseEngagementRow(input: CourseEngagementInput): CourseEn
  */
 export function buildCourseEngagementReport(
   inputs: readonly CourseEngagementInput[],
-  options?: { truncated?: boolean },
+  options?: { truncated?: boolean; skipped?: number },
 ): CourseEngagementReport {
   const courses = inputs
     .map(buildCourseEngagementRow)
     .sort((a, b) => b.enrolled - a.enrolled || a.title.localeCompare(b.title, 'hu'))
-  return { courses, truncated: options?.truncated === true }
+  const skipped = typeof options?.skipped === 'number' && options.skipped > 0 ? options.skipped : 0
+  return { courses, truncated: options?.truncated === true, skipped }
 }
