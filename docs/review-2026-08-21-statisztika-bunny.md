@@ -2,7 +2,10 @@
 
 > **Kinek szól:** tulajdonos, reviewer, a következő javító ügynök.
 > **Önálló dokumentum:** a session mulandó állapotára nem támaszkodik.
-> **A kódot ez a kör nem módosította.** A találatok javítása külön munka.
+> **A kódot ez a kör nem módosította.** A találatok javítása külön munka volt —
+> a 10. szakasz mondja meg, melyik találat hol zárult le.
+> **A 0–9. szakasz a 2026-08-21-i vizsgálat pillanatképe, változatlanul.**
+> Ha az itteni „javítás nem indult” és a 10. szakasz ellentmond, a 10. az érvényes.
 
 ## 0. Egy percben
 
@@ -411,3 +414,58 @@ auditálta.
 - Tilos zónák és üzemeltetés: `CLAUDE.md`, `AGENTS.md`
 - Demo-kör statisztika-ígérete: `docs/demo-kornyezet.md` (a seed-lánc a
   tartományban nem kapott tesztet)
+
+---
+
+## 10. Lezárás — hol zárult le melyik találat (2026-08-21, este)
+
+Ez a szakasz a jegyzőkönyv felvétele UTÁN keletkezett. A 0–9. szakasz a
+vizsgálat pillanatképe; ez itt a kimenetel. Minden sor ellenőrizve a
+`main` fájljain, nem emlékezetből.
+
+### 10.1 A tizenegy F-találat
+
+Mind a tizenegy javítva, egy körben: **PR #129** (`c3940cb`,
+„PostHog-analitika, biztonsági javítások (F1–F11) és a Tudástár cikkoldala”).
+
+| # | Hol zárult le a `main`-ben | Mi lett a fogás |
+| --- | --- | --- |
+| F1 | `src/lib/statistics/progress-truncation.ts` (új) | A vágás szabálya EGY helyre került: ha a progress-lap csonkolt, az utolsó user MINDEN sora kiesik, és a beiratkozásokból is kiesik minden `userId >= hiányos-user`. Így kész diák nem látszhat „Nem kezdte el”-nek. Őr-teszt kíséri. |
+| F2 | `query.ts` — `PAGED_ORDER_SORT` | A lapozás `['-createdAt', 'id']` szerint determinisztikus; azonos időbélyegnél nincs többé átugrott vagy kétszer olvasott rendelés. |
+| F3 | `query.ts` — `quantityOf()` | Hiányzó vagy értelmetlen `quantity` esetén 1 az alapérték, nem 0 — a tétel nem tűnik el a bevételből. |
+| F4 | `src/lib/date/budapest.ts` | Az `isIsoDateString` már naptárilag is ellenőriz (szökőév 4/100/400); a `budapestMonthKey` érvénytelen dátumon `null`-t ad, nem `RangeError`-t dob. |
+| F5 | `src/lib/stream/bunny-library.ts` | A lapozás megállási feltétele a NYERS tételszámot nézi, nem a parse-oltat. Korábban egyetlen GUID nélküli sor egy tele, 100-as oldalt 99-esre csonkított, a ciklus „nem tele oldal” alapon megállt, és a 2–5. oldal sosem jött be — csonka-figyelmeztetés nélkül. |
+| F6 | `BunnyLibraryPanel.tsx` | A panel reducerré alakult, és minden ág őrzi a `kind`-et: a beérkező találat eldobásra kerül, ha `action.kind !== state.kind`. Így a váltás előtt indított kérés válasza nem írhatja felül az új tár listáját. |
+| F7 | `engagement-query.ts` | Az N+1 megszűnt; a kurzusonkénti hiba `skipped`-ként a FELÜLETRE megy ki, néma kihagyás nincs. |
+| F8 | `query.ts` — `countOrderFunnel()` | A tölcsér hat száma hat `payload.count()`-ból jön, nem 20 000 sor beolvasásából. |
+| F9 | `FunnelSection.tsx` | A szöveg kimondja: a részlegesen visszatérített rendelés `paid` marad, ezért a bevételben a TELJES összegével szerepel. |
+| F10 | `bunny-library-handler.ts` | Az útvonal rate limit mögött van, 429 + `rateLimitHeaders`. |
+| F11 | `.cursor/start.sh` | A cluster verziója `pg_lsclusters`-ből jön, nem beégetve; a jelszó STDIN-en megy, nem a `psql -c` argv-jén — így nem látszik a `/proc`-ban és nem kerül statement logba (L1 is ezzel zárult). |
+
+### 10.2 Az alacsonyabb súlyú tételek
+
+- **L1** — az F11-gyel együtt lezárva (jelszó STDIN-en).
+- **L4** — a `sass` KIMONDVA szerepel a `package.json`-ban, nem transitive
+  függőségként lóg.
+- **L12** — a CI-ben őr áll: a `generate:types` után `git diff --exit-code`
+  bukik, ha a committed `src/payload-types.ts` elavult. Az őr mutációval
+  igazolva: mesterséges mezővel a lépés hangosan elbukik.
+- **L2, L3, L5–L11, L13** — nem zárultak le ebben a körben. A következő
+  javító kör anyaga.
+
+### 10.3 Ami továbbra is nyitva van
+
+1. **A `feat/kurzusoldal-velemenyek` továbbra sem mergelendő.** A 8. szakasz
+   7. határozata érvényben; az ág tartalmi tulajdonosi döntésre vár.
+2. **A `#127` és `#128` audit nélkül maradt** (8. szakasz 6. pont).
+3. **Tulajdonosi döntésre vár:** a vészhelyzeti panel séma-formája
+   (dedikált `Posts` mező vagy szerkesztő-blokk), az akkreditációs szám 2026-os
+   érvényessége, a hat cikkvázlat gyógytornász-átnézése, valamint a
+   `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` (a kapcsolati űrlapot ma
+   csak az IP-alapú rate limit védi).
+4. **Megtalálva, nem javítva:** a `course-cards.css` rácsa ugyanabba a CSS
+   Grid-fizikába fut, mint amit a Tudástár listánál javítottunk — a
+   `course-cards.css:79` `repeat(auto-fit, minmax(min(100%, 18rem), 26rem))`
+   definit maximuma miatt a böngésző kevesebb hasábot számol, mint amennyi
+   kiférne (CSS Grid 1 §7.2.3.1: az ismétlésszámhoz „each track is treated as
+   its max track sizing function if that is definite”).
