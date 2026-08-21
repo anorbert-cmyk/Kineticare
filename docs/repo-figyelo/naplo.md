@@ -17,6 +17,30 @@ Feldolgozott tartomány: <régi sha>..<új sha> (N commit)
 
 ---
 
+## 2026-08-21 — Teljes main Security Review
+
+Feldolgozott tartomány: `origin/main` HEAD `80cf258` (nem digest; Cursor
+Security Review subagent, P0 auth/fizetés/számla/stream/jobok).
+
+### Mi változott
+A Security Review **megerősítette az M-17-et (High)** és az **M-06-ot
+(Medium)**. Critical nincs. **M-10** a kódban javított (refund advisory-zár);
+a megfigyelés-fájl lezárva. Az ingyenes kurzus igénylés ugyanazzal az
+e-mail-kötéssel dolgozik, de claim-levelet küld — az M-17 a fizetős
+vendégút.
+
+### Mit jelent
+Nincs új, a Bugbotnál súlyosabb rés. A fizetésjóváhagyás GetState v4 +
+összeg-assert + advisory-zár. Runtime `confirmOrder` nincs.
+
+### Tiltott zóna érintve?
+Igen, 4. pont: az M-17 javítása access/auth, emberi döntés. 1–3 és 5 nem.
+
+### Következő figyelnivaló
+M-17 termékdöntés; M-06 felhasználó-szintű zár vs. elfogadott kockázat.
+
+---
+
 ## 2026-08-21 — Teljes main Bugbot-átnézés
 
 Feldolgozott tartomány: `origin/main` HEAD `80cf258` (nem digest-futás; a

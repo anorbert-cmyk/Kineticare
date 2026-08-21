@@ -259,8 +259,14 @@ van, minden korai callback egy elveszett vásárlás kockázata.
 
 ## M-10 — Párhuzamos refundok elvesztik egymás nyomát
 
-**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Státusz:** lezárva (2026-08-21) · **Felvéve:** 2026-07-31 · **Súly:** magas
 **Hely:** `src/lib/refund/refund-order.ts:385`
+
+> **Lezárás (2026-08-21, Security Review a teljes mainen):** a pénzmozgató
+> szakasz `withAdvisoryLock` + friss újraolvasás alatt fut
+> (`refund-order.ts`, ~635–638). Két párhuzamos refund nem térít vissza
+> kétszer, és a `refunds` tömb írása sem veszít bejegyzést. A napló 2026-08-09
+> óta M-11-gyel együtt zárta; a megfigyelés-fájl státusza maradt „nyitott".
 
 A refund-folyamat végig **egyetlen, a legelején beolvasott order-pillanatképből**
 dolgozik, és a `refunds` json-t teljes tömb-felülírással írja vissza —
@@ -526,3 +532,9 @@ emberi jóváhagyással.
 2. meglévő fiókra vendég-`paid` ne írjon `purchases`-t automatikusan: a
    címzett kapjon „vedd át a vásárlást” linket, **vagy**
 3. e-mail-csere után újraigazolás, amíg a fiókon van élő `purchases`.
+
+Az **ingyenes kurzus igénylés** (`src/lib/free-course/request-access.ts`)
+ugyanúgy e-mailhez köti a meglévő fiókot, de utána `forgotPassword` belépő
+linket küld a címzett postaládájába. A postaláda gazdája így vissza tudja
+venni a fiókot. A vendég-`paid` úton ilyen claim-levél **nincs** — ezért az
+M-17 a fizetős vendégutat jelenti, nem az ingyenes igénylést.
