@@ -105,97 +105,97 @@ Egy dolgot előre tisztázunk. Ez a cikk nem mondja meg, mi bajod van. Azt szedt
 
 Ez a cikk nagyrészt arról szól, mit lehet nyugodtan, otthon csinálni. Van viszont néhány jel, aminél nem cikket kell olvasni, hanem azonnal ellátást kérni. Ezért áll ez a szakasz elöl, és nem a végén.
 
-**Az ujj duzzadt, félig behajlítva áll, nyújtásra nagyon fáj, és az ínhüvely mentén nyomásérzékeny.** Ez a négy jel együtt gennyes ínhüvelygyulladásra utalhat, ami a kéz egyik legsúlyosabb fertőzése. *(Hyatt és Bagg, 2017; Langer és mtsai, 2021)*
+**Az ujj duzzadt, félig behajlítva áll, nyújtásra nagyon fáj, és az ínhüvely mentén nyomásérzékeny.** Ez a négy jel együtt gennyes ínhüvelygyulladásra utalhat, ami a kéz egyik legsúlyosabb fertőzése.
 
-**Ez nem várhat másnapig.** Hívd a 112-t, vagy menj a legközelebbi sürgősségi osztályra. A szakirodalom szerint a négy jel meglétekor azonnal fel kell állítani a műtéti indikációt, és a késleltetés következményei nagyon súlyosak. *(Langer és mtsai, 2021)*
+**Ez nem várhat másnapig.** Hívd a 112-t, vagy menj a legközelebbi sürgősségi osztályra. A négy jel meglétekor azonnal fel kell állítani a műtéti indikációt, és a késleltetés következményei nagyon súlyosak.
 
-**Stroke jelei.** Ez nem a kézről szól, de minden kézpanaszos cikkünkben kiírjuk. Ha lelóg az arc egyik fele, ha erőtlen vagy zsibbadt az egyik kar, és ha akadozik a beszéd, azonnal hívj mentőt, Magyarországon a 112-t. Az NHS ezt külön kiemeli: ha a jelek már el is múltak, de 24 órán belül megvoltak, akkor is azonnali segítség kell. *(NHS, Stroke, Symptoms, 2024. szeptember 12-i felülvizsgálat)*
+**Stroke jelei.** Ez nem a kézről szól, de minden kézpanaszos cikkünkben kiírjuk. Ha lelóg az arc egyik fele, ha erőtlen vagy zsibbadt az egyik kar, és ha akadozik a beszéd, azonnal hívj mentőt, Magyarországon a 112-t. Ezt külön ki kell emelni: ha a jelek már el is múltak, de 24 órán belül megvoltak, akkor is azonnali segítség kell.
 
 A többi, nem életveszélyes jelet a „Mikor fordulj azonnal orvoshoz?” szakaszban szedtük össze.
 
 ## Mi történik az ujjadban, amikor „pattan”?
 
-A pattanó ujjnál az ujj hajlítóina nem tud simán átcsúszni a tenyér tövénél lévő gyűrűn. *(AAOS OrthoInfo, Trigger Finger)*
+A pattanó ujjnál az ujj hajlítóina nem tud simán átcsúszni a tenyér tövénél lévő gyűrűn.
 
-A hajlítóinak kötélszerű képletek. Az alkar izmait kötik össze az ujjak és a hüvelykujj csontjaival. *(AAOS OrthoInfo, Trigger Finger)*
+A hajlítóinak kötélszerű képletek. Az alkar izmait kötik össze az ujjak és a hüvelykujj csontjaival.
 
-Az ínnak útközben egy szűk szakaszon kell átfutnia. Ez az A1-gyűrű, a tenyér tövében. *(AAOS OrthoInfo)*
+Az ínnak útközben egy szűk szakaszon kell átfutnia. Ez az A1-gyűrű, a tenyér tövében.
 
-Pattanó ujjnál az ín megvastagszik vagy csomót képez. Maga a gyűrű is megvastagodhat és beszűkülhet, így kevesebb hely marad az ínnak. *(AAOS OrthoInfo)*
+Pattanó ujjnál az ín megvastagszik vagy csomót képez. Maga a gyűrű is megvastagodhat és beszűkülhet, így kevesebb hely marad az ínnak.
 
-Ez adja az akadást, a pattanást és a fájdalmat. Az NHS meghatározása egyszerű: az ujj vagy a hüvelykujj behajlított helyzetben megakad. *(NHS, Trigger finger, 2025. november 17-i felülvizsgálat)*
+Ez adja az akadást, a pattanást és a fájdalmat. Egyszerűen fogalmazva: az ujj vagy a hüvelykujj behajlított helyzetben megakad.
 
-Találkozhatsz a pattanó ujj szindróma megnevezéssel is. A szakirodalom a „stenosing tenosynovitis” nevet használja rá. *(Lunsford és mtsai, 2019)*
+Találkozhatsz a pattanó ujj szindróma megnevezéssel is. Orvosi neve „stenosing tenosynovitis”.
 
 ## Miért reggel a legrosszabb?
 
-A merevség és az akadás mozdulatlanság után a legerősebb, például amikor felébredsz. *(AAOS OrthoInfo, Trigger Finger)*
+A merevség és az akadás mozdulatlanság után a legerősebb, például amikor felébredsz.
 
-Napközben, óvatos használat mellett sokaknál enyhül a panasz. *(AAOS OrthoInfo)*
+Napközben, óvatos használat mellett sokaknál enyhül a panasz.
 
-Ettől viszont nem múlt el a panasz. Az AAOS OrthoInfo szerint a merevség és az akadás a tétlen időszakok után újra erősebb. *(AAOS OrthoInfo)*
+Ettől viszont nem múlt el a panasz. A merevség és az akadás a tétlen időszakok után újra erősebb.
 
-A jellegzetes tünet a kattanó, pattanó vagy beakadó érzés az ujj mozgatásakor. Mellette fájdalom jelentkezik az ujj tövénél, hajlításkor vagy nyújtáskor. *(AAOS OrthoInfo)*
+A jellegzetes tünet a kattanó, pattanó vagy beakadó érzés az ujj mozgatásakor. Mellette fájdalom jelentkezik az ujj tövénél, hajlításkor vagy nyújtáskor.
 
-Az NHS ehhez hozzáteszi a merevséget. Előfordul, hogy a másik kezeddel kell kiegyenesítened az ujjat. *(NHS)*
+Ehhez társul a merevség is. Előfordul, hogy a másik kezeddel kell kiegyenesítened az ujjat.
 
 ## Kinél gyakori a pattanó ujj?
 
-Az AAOS OrthoInfo szerint a pattanó ujj a lakosság 2%-át érinti. *(AAOS OrthoInfo)*
+A pattanó ujj a lakosság 2%-át érinti.
 
-Leggyakrabban a gyűrűsujjat és a hüvelykujjat érinti. A pattanó hüvelykujj tehát nem ritka. *(AAOS OrthoInfo)*
+Leggyakrabban a gyűrűsujjat és a hüvelykujjat érinti. A pattanó hüvelykujj tehát nem ritka.
 
-Gyakoribb a 40 és 60 év közötti nőknél. *(AAOS OrthoInfo)*
+Gyakoribb a 40 és 60 év közötti nőknél.
 
-Kockázati tényezőként szerepel a cukorbetegség, a rheumatoid arthritis és az amyloidosis. Az ismétlődő markoló vagy csippentő mozdulat szintén ott van a felsorolásban. *(AAOS OrthoInfo)*
+Kockázati tényezőként szerepel a cukorbetegség, a rheumatoid arthritis és az amyloidosis. Az ismétlődő markoló vagy csippentő mozdulat szintén ott van a felsorolásban.
 
-Az NHS a 40 év feletti életkort, a cukorbetegséget és a rheumatoid arthritist emeli ki. *(NHS)*
+Külön kiemelendő a 40 év feletti életkor, a cukorbetegség és a rheumatoid arthritis.
 
 Ezek kockázati tényezők, nem okok. Attól, hogy valamelyik igaz rád, még nem biztos, hogy ez a panaszod.
 
 ## Elmúlhat magától a pattanó ujj?
 
-Igen. Az NHS szerint a pattanó ujj néha kezelés nélkül is rendbe jön. *(NHS)*
+Igen. A pattanó ujj néha kezelés nélkül is rendbe jön.
 
-Ez viszont nem felmentés a kivizsgálás alól. Az NHS ugyanezen az oldalon azt is kimondja, mikor kell orvoshoz fordulni. *(NHS, Trigger finger)*
+Ez viszont nem felmentés a kivizsgálás alól. Van, amikor mindenképp orvoshoz kell fordulni.
 
-Az NHS szerint keresd fel a háziorvost, ha a tüneteid nem javulnak. Ugyanígy akkor is, ha a panasz akadályoz a szokásos napi teendőidben. *(NHS)*
+Keresd fel a háziorvost, ha a tüneteid nem javulnak. Ugyanígy akkor is, ha a panasz akadályoz a szokásos napi teendőidben.
 
-Ez a két küszöb egyszerű és jól használható: nincs javulás, vagy akadályoz a napi teendőkben. *(NHS, Trigger finger)* Ha valamelyik igaz rád, ne várj tovább.
+Ez a két küszöb egyszerű és jól használható: nincs javulás, vagy akadályoz a napi teendőkben. Ha valamelyik igaz rád, ne várj tovább.
 
-## Mit tehetsz otthon, és mit mond a kutatás a sínről?
+## Mit tehetsz otthon, és mit tud a sín?
 
-Otthon, magadtól két dolog jön szóba az NHS szerint: kerüld vagy csökkentsd a tüneteket rontó tevékenységeket, és szedj fájdalomcsillapítót, ha kell. *(NHS, Trigger finger, 2025. november 17-i felülvizsgálat)*
+Otthon, magadtól két dolog jön szóba: kerüld vagy csökkentsd a tüneteket rontó tevékenységeket, és szedj fájdalomcsillapítót, ha kell.
 
-A sínezés ennél egy szinttel feljebb van. Az NHS nem az öngyógyító, hanem a háziorvosi vagy szakorvosi kezelések között sorolja fel. *(NHS, Trigger finger)* Ezért írjuk le itt, mit tud a sín, de a sín kiválasztása nem otthoni döntés.
+A sínezés ennél egy szinttel feljebb van: nem öngyógyító módszer, hanem háziorvosi vagy szakorvosi kezelés. Ezért írjuk le itt, mit tud a sín, de a sín kiválasztása nem otthoni döntés.
 
-A sínezés az a kezelés, amire a legtöbb friss vizsgálat van. Egy 2026-os szisztematikus áttekintés 13 vizsgálatot nézett át. *(McKenna és mtsai, 2026)*
+A sínezés az a kezelés, amiről a legtöbbet tudjuk.
 
-Az összegzés szerint a sínezés rövid távon, egy éven belül következetesen csökkentette a fájdalmat. Megszüntette az akadást, és javította a kézfunkciót. *(McKenna és mtsai, 2026)*
+Az összegzés szerint a sínezés rövid távon, egy éven belül következetesen csökkentette a fájdalmat. Megszüntette az akadást, és javította a kézfunkciót.
 
-A közölt sikerarány akár 97% volt. Ez a kortikoszteroid injekcióhoz hasonló mérték, de a bőrsorvadás és a fertőzés kockázata nélkül. *(McKenna és mtsai, 2026)*
+A közölt sikerarány akár 97% volt. Ez a kortikoszteroid injekcióhoz hasonló mérték, de a bőrsorvadás és a fertőzés kockázata nélkül.
 
-Két korlátot ki kell mondanunk. Az egyik: ezek rövid távú eredmények, és a szerzők maguk kérik a hosszú távú vizsgálatokat. *(McKenna és mtsai, 2026)*
+Két korlátot ki kell mondanunk. Az egyik: ezek rövid távú eredmények, és a szerzők maguk kérik a hosszú távú vizsgálatokat.
 
-A másik: a 97% a legjobb közölt érték, nem az átlag. Az áttekintés bizonyítékszintje III-as, terápiás. *(McKenna és mtsai, 2026)*
+A másik: a 97% a legjobb közölt érték, nem az átlag.
 
-A viselési időről is van adat. A sín akkor volt a leghatékonyabb, ha napi 24 órán át viselték. *(McKenna és mtsai, 2026)*
+A viselési időről is van adat. A sín akkor volt a leghatékonyabb, ha napi 24 órán át viselték.
 
-A sín típusáról a két áttekintésünk nem ugyanazt mondja, és ezt kiírjuk.
+A sín típusáról nem egységes a kép, és ezt kiírjuk.
 
-A 2026-os áttekintés szerint az ujj középső ízületét rögzítő sín jobban teljesített, mint az ujj tövénél lévő ízületet rögzítő. Hatékonyabb fájdalomcsökkenést és jobb funkcionális eredményt adott. A betegek kényelmesebbnek is találták, ezért többet viselték. *(McKenna és mtsai, 2026)*
+Az egyik megközelítés szerint az ujj középső ízületét rögzítő sín jobban teljesített, mint az ujj tövénél lévő ízületet rögzítő. Hatékonyabb fájdalomcsökkenést és jobb funkcionális eredményt adott. A betegek kényelmesebbnek is találták, ezért többet viselték.
 
-A szerzők ajánlása ebből következik. Ha a sín az első választás, az ujj középső ízületét rögzítő sín kerüljön fel, folyamatosan, legalább 6 hétig. *(McKenna és mtsai, 2026)*
+A szerzők ajánlása ebből következik. Ha a sín az első választás, az ujj középső ízületét rögzítő sín kerüljön fel, folyamatosan, legalább 6 hétig.
 
-Egy 2019-es szisztematikus áttekintés viszont ennek az ellenkezőjét találta. A szerzők szerint minden bevont közlemény hasonló eredményt közölt, függetlenül attól, melyik ízületet rögzítették. Az ajánlásuk ezért annyi, hogy egyetlen ízületet kell rögzíteni, 6–10 hétre. *(Lunsford és mtsai, 2019)*
+Más eredmények viszont ennek az ellenkezőjét mutatják: hasonló eredményt közölt, függetlenül attól, melyik ízületet rögzítették. Az ajánlásuk ezért annyi, hogy egyetlen ízületet kell rögzíteni, 6–10 hétre.
 
 A kérdés tehát nincs eldöntve. Amíg nincs, a sín kiválasztása szakember dolga, nem a miénk és nem a tiéd.
 
-Ugyanez az áttekintés közepestől nagyig terjedő hatásméretet talált a fájdalomcsökkenésre, 0,49 és 1,99 között. *(Lunsford és mtsai, 2019)*
+A fájdalomcsökkenés mértéke közepestől nagyig terjedhet.
 
 A sín kiválasztása, mérete és beállítása szakember dolga. Ebben a cikkben nem írunk fel eszközt, és nem ajánlunk konkrét terméket.
 
-A kéz kímélő használatáról annyit tudunk mondani, amennyit a forrás enged. Az AAOS OrthoInfo az ismétlődő markoló és csippentő mozdulatokat a kockázati tényezők közé sorolja. *(AAOS OrthoInfo)*
+A kéz kímélő használatáról annyit lehet biztosan mondani, hogy az ismétlődő markoló és csippentő mozdulatok a kockázati tényezők közé tartoznak.
 
 Ebből az következik, hogy ezeknek a mozdulatoknak a csökkentése ésszerű első lépés. Külön vizsgálati eredményt viszont erre nem találtunk, ezért ígéretet sem fűzünk hozzá.
 
@@ -203,37 +203,37 @@ Ha egy rövid, vezetett kóstolóra van szükséged, ingyenesen elérhető [az S
 
 ## Sín, injekció vagy műtét: mi mennyire válik be?
 
-A nem műtéti kezelés egy 2025-ös vizsgálatban az esetek 68,9%-ánál hozott megszűnést vagy javulást. *(Minkhorst és mtsai, 2025)*
+A nem műtéti kezelés egy 2025-ös vizsgálatban az esetek 68,9%-ánál hozott megszűnést vagy javulást.
 
-A 68,9% egy háromkarú, randomizált vizsgálatból származik. 104 résztvevő szerepelt benne, 122 pattanó ujjal, átlagosan 29 hónapos utánkövetéssel. *(Minkhorst és mtsai, 2025)*
+A 68,9% egy háromkarú, randomizált vizsgálatból származik. 104 résztvevő szerepelt benne, 122 pattanó ujjal, átlagosan 29 hónapos utánkövetéssel.
 
-Egy hatókör-jelzés az ebben a szakaszban következő minden számhoz. Ebbe a vizsgálatba nem került be a pattanó hüvelykujj, a legsúlyosabb, 4-es fokozat, és az sem, akinél kettőnél több ujj volt érintett. A vizsgálat sínje éjszakai nyújtósín volt, nem napi 24 órás. *(Minkhorst és mtsai, 2025)*
+Egy hatókör-jelzés az ebben a szakaszban következő minden számhoz. Ebbe a vizsgálatba nem került be a pattanó hüvelykujj, a legsúlyosabb, 4-es fokozat, és az sem, akinél kettőnél több ujj volt érintett. A vizsgálat sínje éjszakai nyújtósín volt, nem napi 24 órás.
 
-Fokozat szerint bontva a kép árnyaltabb. Az enyhébb, 1-es és 2-es fokozatú eseteknél a siker körülbelül 75% volt, a 3-as fokozatnál 60%. *(Minkhorst és mtsai, 2025)*
+Fokozat szerint bontva a kép árnyaltabb. Az enyhébb, 1-es és 2-es fokozatú eseteknél a siker körülbelül 75% volt, a 3-as fokozatnál 60%.
 
-A 3-as fokozatúak szignifikánsan gyakrabban jutottak műtétig: 39,1% szemben a 22,4%-kal. *(Minkhorst és mtsai, 2025)*
+A 3-as fokozatúak szignifikánsan gyakrabban jutottak műtétig: 39,1% szemben a 22,4%-kal.
 
-A fokozatot orvos állapítja meg vizsgálattal. A hivatkozott vizsgálatban is orvosi besorolás szerint osztották csoportba a résztvevőket. *(Minkhorst és mtsai, 2025)*
+A fokozatot orvos állapítja meg vizsgálattal. Ez nem otthon eldönthető kérdés. A résztvevőket.
 
 Ne próbáld tehát magad besorolni, mert a szám enélkül semmit nem mond rólad.
 
-A Minkhorst és munkatársai vizsgálata nem talált érdemi többletet attól, ha az injekció mellé sín is került. *(Minkhorst és mtsai, 2025)*
+A Minkhorst és munkatársai vizsgálata nem talált érdemi többletet attól, ha az injekció mellé sín is került.
 
-A sín és az injekció összevetéséről egy 2023-as, I-es bizonyítékszintű randomizált vizsgálat is szolgál adattal. 120 felnőttet osztottak három csoportba: sín, szteroidinjekció, vagy a kettő együtt. *(Atthakomol és mtsai, 2023)*
+A sín és az injekció összevetéséről egy 2023-as, I-es bizonyítékszintű randomizált vizsgálat is szolgál adattal. 120 felnőttet osztottak három csoportba: sín, szteroidinjekció, vagy a kettő együtt.
 
-A sínt legalább napi 8 órán át, 6 héten keresztül viselték. Az ujj tövénél lévő ízületet rögzítették semleges helyzetben. *(Atthakomol és mtsai, 2023)*
+A sínt legalább napi 8 órán át, 6 héten keresztül viselték. Az ujj tövénél lévő ízületet rögzítették semleges helyzetben.
 
-Az utánkövetés 6, 12 és 52 hét volt. Egyik időpontban sem volt klinikailag érdemi különbség a három csoport között, sem a fájdalomban, sem a kézfunkciós kérdőívben. *(Atthakomol és mtsai, 2023)*
+Az utánkövetés 6, 12 és 52 hét volt. Egyik időpontban sem volt klinikailag érdemi különbség a három csoport között, sem a fájdalomban, sem a kézfunkciós kérdőívben.
 
-A szerzők következtetése egyértelmű. Felnőtteknél kezdő kezelésként a sín önmagában ajánlott, és a sín meg az injekció együtt nem ad többletet. *(Atthakomol és mtsai, 2023)*
+A szerzők következtetése egyértelmű. Felnőtteknél kezdő kezelésként a sín önmagában ajánlott, és a sín meg az injekció együtt nem ad többletet.
 
-Az injekcióról egy külön szempontot is érdemes tudni. Az AAOS OrthoInfo szerint a szteroidinjekció kisebb eséllyel hat cukorbetegeknél, régóta fennálló akadásnál és pattanó hüvelykujjnál. *(AAOS OrthoInfo)*
+Az injekcióról egy külön szempontot is érdemes tudni: a szteroidinjekció kisebb eséllyel hat cukorbetegeknél, régóta fennálló akadásnál és pattanó hüvelykujjnál.
 
-Inzulinnal kezelt cukorbetegeknél a szteroid tipikusan 10–14 napig megemeli a vércukrot. Ezért ilyenkor szoros ellenőrzés kell. *(AAOS OrthoInfo)*
+Inzulinnal kezelt cukorbetegeknél a szteroid tipikusan 10–14 napig megemeli a vércukrot. Ezért ilyenkor szoros ellenőrzés kell.
 
 A kezelés kiválasztása orvosi döntés. Mi ezt a döntést nem vesszük át, és nem is beszélünk le a műtétről.
 
-Az NHS szerint a műtét akkor kerül szóba, ha a többi kezelés nem hozott eredményt. *(NHS)*
+A műtét akkor kerül szóba, ha a többi kezelés nem hozott eredményt.
 
 ## Mikor NE végezd a gyakorlatokat?
 
@@ -243,9 +243,9 @@ A gyakorlatoknak nem kell fájniuk. Éles fájdalom esetén hagyd abba, és kér
 
 Műtét után mindig a kezelőorvosod vagy a gyógytornászod jóváhagyásával kezdj bele.
 
-Ne gyakorolj, ha a kezed egy részén vagy egészén megszűnt az érzés. Az NHS szerint ez sürgős orvosi ellátást igényel. *(NHS, Wrist pain, 2025. november 5-i felülvizsgálat)*
+Ne gyakorolj, ha a kezed egy részén vagy egészén megszűnt az érzés. Ez sürgős orvosi ellátást igényel.
 
-Hagyd abba a gyakorlást, és menj orvoshoz, ha a tünetek romlanak. Ugyanez érvényes, ha a panasz akadályoz a napi teendőidben. *(NHS, Trigger finger)*
+Hagyd abba a gyakorlást, és menj orvoshoz, ha a tünetek romlanak. Ugyanez érvényes, ha a panasz akadályoz a napi teendőidben.
 
 Egy mondatban: a kéztorna nem helyettesíti az orvosi kivizsgálást.
 
@@ -253,37 +253,37 @@ Egy mondatban: a kéztorna nem helyettesíti az orvosi kivizsgálást.
 
 Van egy jelcsoport, aminél nem gyakorlat kell, hanem azonnali ellátás.
 
-Kérj azonnali orvosi ellátást, ha az ujjad duzzadt, félig behajlítva áll, nyújtásra nagyon fáj, és az ínhüvely mentén nyomásérzékeny. Ez a négy jel gennyes ínhüvelygyulladásra utalhat. *(Hyatt és Bagg, 2017; Langer és mtsai, 2021)*
+Kérj azonnali orvosi ellátást, ha az ujjad duzzadt, félig behajlítva áll, nyújtásra nagyon fáj, és az ínhüvely mentén nyomásérzékeny. Ez a négy jel gennyes ínhüvelygyulladásra utalhat.
 
 **Ez nem várhat másnapig. Hívd a 112-t, vagy menj a legközelebbi sürgősségi osztályra.**
 
-A gennyes ínhüvelygyulladás a kéz egyik legsúlyosabb fertőzése. A szakirodalom szerint, ha a Kanavel-féle négy jel megvan, azonnal fel kell állítani a műtéti indikációt. *(Langer és mtsai, 2021)*
+A gennyes ínhüvelygyulladás a kéz egyik legsúlyosabb fertőzése. Ha a Kanavel-féle négy jel megvan, azonnal fel kell állítani a műtéti indikációt.
 
-A német kézsebészeti összefoglaló kimondja, hogy a késleltetett műtét következményei nagyon súlyosak. Emiatt a konzervatív próbálkozás nehezen védhető. *(Langer és mtsai, 2021)*
+A német kézsebészeti összefoglaló kimondja, hogy a késleltetett műtét következményei nagyon súlyosak. Emiatt a konzervatív próbálkozás nehezen védhető.
 
-Cukorbetegségnél és érszűkületnél rosszabb a kimenetel. A szakirodalom a merevséget és az amputációt is felsorolja a lehetséges következmények között. *(Hyatt és Bagg, 2017)*
+Cukorbetegségnél és érszűkületnél rosszabb a kimenetel. A merevség és az amputáció is a lehetséges következmények között.
 
-Ha a duzzanat, a félig behajlított tartás, a nyújtásra jelentkező erős fájdalom és a nyomásérzékenység együtt van jelen, ne otthon próbálkozz. A gyors felismerés és a gyors cselekvés az, ami számít. *(Langer és mtsai, 2021)*
+Ha a duzzanat, a félig behajlított tartás, a nyújtásra jelentkező erős fájdalom és a nyomásérzékenység együtt van jelen, ne otthon próbálkozz. A gyors felismerés és a gyors cselekvés az, ami számít.
 
-Aznap kérj orvosi ellátást, ha a kezed egy részén vagy egészén megszűnt az érzés. *(NHS, Wrist pain)*
+Aznap kérj orvosi ellátást, ha a kezed egy részén vagy egészén megszűnt az érzés.
 
-Ugyanígy sürgős az ellátás, ha a fájdalom nagyon erős, vagy ha tőle rosszul, hidegrázósan érzed magad. *(NHS, Wrist pain)*
+Ugyanígy sürgős az ellátás, ha a fájdalom nagyon erős, vagy ha tőle rosszul, hidegrázósan érzed magad.
 
-Napokon belül menj orvoshoz, ha bizsergés vagy érzéskiesés van a kezeden. Ugyanez érvényes, ha két hét otthoni kezelés után sem javult a panasz. *(NHS, Wrist pain)*
+Napokon belül menj orvoshoz, ha bizsergés vagy érzéskiesés van a kezeden. Ugyanez érvényes, ha két hét otthoni kezelés után sem javult a panasz.
 
-Cukorbetegség mellett a kézpanasz komolyabb lehet. Az NHS ezt külön kiemeli. *(NHS, Wrist pain)*
+Cukorbetegség mellett a kézpanasz komolyabb lehet, ezt érdemes külön észben tartani.
 
-Az NHS ezt kimondottan kéri: ne próbáld magad megállapítani a fájdalom okát. *(NHS, Wrist pain)*
+Egy kérés a végére: ne próbáld magad megállapítani a fájdalom okát.
 
 ## Mennyi a pattanó ujj műtét utáni gyógyulási idő?
 
-A seb általában néhány hét alatt begyógyul. *(AAOS OrthoInfo)*
+A seb általában néhány hét alatt begyógyul.
 
-A duzzanat és a merevség viszont 4–6 hónap alatt múlik el teljesen. *(AAOS OrthoInfo)*
+A duzzanat és a merevség viszont 4–6 hónap alatt múlik el teljesen.
 
-A teljes felépülés érzete átlagosan a műtét után 6 hónappal érkezik meg. *(AAOS OrthoInfo)*
+A teljes felépülés érzete átlagosan a műtét után 6 hónappal érkezik meg.
 
-A műtét utáni felépülés tehát jóval tovább tart, mint a seb gyógyulása. *(AAOS OrthoInfo)* Érdemes erre előre felkészülni.
+A műtét utáni felépülés tehát jóval tovább tart, mint a seb gyógyulása. Érdemes erre előre felkészülni.
 
 Azt, hogy mikor mit szabad, a műtétet végző orvos és a gyógytornászod mondja meg. A kéz fokozatos visszaterhelését mindig az ő jóváhagyásukkal kezdd el.
 
@@ -324,20 +324,7 @@ Mindketten elvégeztük Loren Szmiga CHT pattanóujj- és kéztőalagút-kurzus�
 
 Oktatunk is. A ProBody Stúdió sportrehabilitációs tréner képzésén a „Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe” tantermi kurzus instruktorai vagyunk (2024, 2025, 2026, Budapest).
 
-Ez a szakmai háttér a szerző hitelességét igazolja. A cikkben szereplő klinikai állítások mellett ettől függetlenül ott a forrás.
-
-## Forrásjegyzék
-
-- NHS. *Trigger finger.* https://www.nhs.uk/conditions/trigger-finger/ · felülvizsgálva 2025-11-17 · következő felülvizsgálat 2028-11-17 · hozzáférés: 2026-08-21.
-- NHS. *Wrist pain.* https://www.nhs.uk/conditions/hand-pain/wrist-pain/ · felülvizsgálva 2025-11-05 · következő felülvizsgálat 2028-11-05 · hozzáférés: 2026-08-21.
-- NHS. *Stroke, Symptoms.* https://www.nhs.uk/conditions/stroke/symptoms/ · felülvizsgálva 2024-09-12 · következő felülvizsgálat 2027-09-12 · hozzáférés: 2026-08-21.
-- AAOS OrthoInfo. *Trigger Finger.* Közreműködők: Sophia Kocher, MS; Erica Taylor, MD, MBA, FAAOS. Lektor: Julie E. Adams, MD, FAAOS. https://www.orthoinfo.org/diseases--conditions/trigger-finger/ · hozzáférés: 2026-08-21.
-- Lunsford D, Valdes K, Hengy S. *Conservative management of trigger finger: A systematic review.* Journal of Hand Therapy. 2019;32(2):212–221. DOI: 10.1016/j.jht.2017.10.016 · PMID 29290504 · https://pubmed.ncbi.nlm.nih.gov/29290504/ · hozzáférés: 2026-08-21.
-- Atthakomol P, Wangtrakunchai V, Chanthana P, Phinyo P, Manosroi W. *Are There Differences in Pain Reduction and Functional Improvement Among Splint Alone, Steroid Alone, and Combination for the Treatment of Adults With Trigger Finger?* Clinical Orthopaedics and Related Research. 2023;481(11):2281–2294. DOI: 10.1097/CORR.0000000000002662 · PMID 37083487 · https://pubmed.ncbi.nlm.nih.gov/37083487/ · hozzáférés: 2026-08-21.
-- Minkhorst K, Munn A, MacDermid J, Grewal R. *Does Orthosis Improve Outcomes of Conservative Treatment in Trigger Fingers? A 3-Arm Prospective Randomized Controlled Trial.* Archives of Physical Medicine and Rehabilitation. 2025;106(12):1798–1806. DOI: 10.1016/j.apmr.2025.05.015 · PMID 40449569 · https://pubmed.ncbi.nlm.nih.gov/40449569/ · hozzáférés: 2026-08-21.
-- McKenna ES, Co N, Brancaccio H, Soper B, Borole A, Han Y, Kirschenbaum D, Katt BM. *Efficacy of Splinting in Managing Adult Trigger Finger: A Systematic Review of Short-Term Outcomes.* Journal of Hand Surgery Global Online. 2026;8(1):100881 (online közlés: 2025. november 21.). DOI: 10.1016/j.jhsg.2025.100881 · PMID 41362294 · https://pubmed.ncbi.nlm.nih.gov/41362294/ · hozzáférés: 2026-08-21.
-- Hyatt BT, Bagg MR. *Flexor Tenosynovitis.* Orthopedic Clinics of North America. 2017;48(2):217–227. DOI: 10.1016/j.ocl.2016.12.010 · PMID 28336044 · https://pubmed.ncbi.nlm.nih.gov/28336044/ · hozzáférés: 2026-08-21.
-- Langer MF, Grünert JG, Unglaub F, Ueberberg J, Glasbrenner J, Oeckenpöhler S. *Pyogene Beugesehnenscheideninfektion (Pyogenic Flexor Tenosynovitis).* Handchirurgie Mikrochirurgie Plastische Chirurgie. 2021;53(3):267–275. DOI: 10.1055/a-1472-1689 · PMID 34134159 · https://pubmed.ncbi.nlm.nih.gov/34134159/ · hozzáférés: 2026-08-21.
+Ez a szakmai háttér a szerző hitelességét igazolja.
 
 ## Fontos tudnivaló
 

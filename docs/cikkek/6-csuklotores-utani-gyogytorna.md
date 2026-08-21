@@ -108,33 +108,33 @@ Ez a cikk arról szól, mi jön most. Mikor indul a csuklótörés utáni gyógy
 
 ## Mikor veszik le a gipszet, és mi történik utána?
 
-Ha nem kellett műtét, a gipszet jellemzően 4–6 héttel a törés után veszik le, és ekkor indul a gyógytorna. *(AAOS OrthoInfo, Distal Radius Fractures)*
+Ha nem kellett műtét, a gipszet jellemzően 4–6 héttel a törés után veszik le, és ekkor indul a gyógytorna.
 
-A leggyakoribb csuklótörés az orsócsont, vagyis a radius távolabbi végének törése. A szakmai neve distalis radius törés. *(AAOS OrthoInfo; AAOS és ASSH irányelv, 2020)*
+A leggyakoribb csuklótörés az orsócsont, vagyis a radius távolabbi végének törése. A szakmai neve distalis radius törés.
 
-A gipsz levétele után szinte mindenkinél marad merevség a csuklóban. *(AAOS OrthoInfo)*
+A gipsz levétele után szinte mindenkinél marad merevség a csuklóban.
 
-A csukló és a kar gyenge is lehet a gipsz levétele után. Ebben egy gyógytornász tud segíteni, de a merevség és a gyengeség néha több hónapig is elhúzódik. *(NHS, Broken arm or wrist)*
+A csukló és a kar gyenge is lehet a gipsz levétele után. Ebben egy gyógytornász tud segíteni, de a merevség és a gyengeség néha több hónapig is elhúzódik.
 
 Ez tehát nem visszaesés, hanem a felépülés első szakasza.
 
 ## Meddig tart a gyógyulás csuklótörés után?
 
-A felgyógyulás általában 6–8 hét, súlyosabb sérülésnél tovább. *(NHS, Broken arm or wrist)*
+A felgyógyulás általában 6–8 hét, súlyosabb sérülésnél tovább.
 
-A legtöbb csuklótörés körülbelül 3 hónap alatt gyógyul annyira, hogy a csuklót minden tevékenységre használni lehet. *(AAOS OrthoInfo)*
+A legtöbb csuklótörés körülbelül 3 hónap alatt gyógyul annyira, hogy a csuklót minden tevékenységre használni lehet.
 
-A teljes felépülés akár egy évig is eltarthat. *(AAOS OrthoInfo)*
+A teljes felépülés akár egy évig is eltarthat.
 
-A merevség a gipszlevétel vagy a műtét utáni egy-két hónapban javul a legtöbbet, és legalább két évig tovább javul. *(AAOS OrthoInfo)*
+A merevség a gipszlevétel vagy a műtét utáni egy-két hónapban javul a legtöbbet, és legalább két évig tovább javul.
 
-Ezek átlagok, nem határidők. Az AAOS OrthoInfo is kiemeli, hogy a felépülés mindenkinél más. Arról, hogy nálad mire lehet számítani, a kezelőorvosoddal érdemes beszélned. *(AAOS OrthoInfo)*
+Ezek átlagok, nem határidők. A felépülés mindenkinél más. Arról, hogy nálad mire lehet számítani, a kezelőorvosoddal érdemes beszélned.
 
 ## Mikor lehet újra sportolni csuklótörés után?
 
-Könnyű mozgás, például úszás vagy az alsótest edzése, a gipszlevétel vagy a műtét után 1–2 hónappal jöhet szóba. *(AAOS OrthoInfo)*
+Könnyű mozgás, például úszás vagy az alsótest edzése, a gipszlevétel vagy a műtét után 1–2 hónappal jöhet szóba.
 
-Megterhelőbb sport, például a síelés vagy a futball, a sérülés után 3–6 hónappal. *(AAOS OrthoInfo)*
+Megterhelőbb sport, például a síelés vagy a futball, a sérülés után 3–6 hónappal.
 
 Ezek a számok is átlagok. Hogy a te csuklód mikor bír el egy esést vagy egy ütést, azt a kezelőorvosod tudja megítélni.
 
@@ -142,91 +142,91 @@ Ezek a számok is átlagok. Hogy a te csuklód mikor bír el egy esést vagy egy
 
 Erre nincs egyetlen szám, mert a munkaterhelés mindenkinél más. Egy irodai nap és egy szerszámmal töltött nap nem ugyanaz a csuklódnak.
 
-Amit kérhetsz, az a konkrét tájékoztatás. A NICE irányelve szerint a törést ellátó csapatnak szóban és írásban is meg kell adnia a várható kimenetelt, benne a szokásos tevékenységekhez való visszatérés idejével. *(NICE, NG38, 1.6.10)*
+Amit kérhetsz, az a konkrét tájékoztatás. A törést ellátó csapatnak szóban és írásban is meg kell adnia a várható kimenetelt, benne azzal, mikor térhetsz vissza a szokásos tevékenységeidhez.
 
-Ugyanennek a pontnak van egy második fele is, és ez legalább ilyen fontos. Az irányelv szerint arról is tájékoztatni kell, mekkora eséllyel marad maradandó hatás az életminőségre: fájdalom, funkcióvesztés vagy lelki következmény. *(NICE, NG38, 1.6.10)*
+Ennek van egy második fele is, és ez legalább ilyen fontos. Arról is tájékoztatni kell, mekkora eséllyel marad maradandó hatás az életminőségre: fájdalom, funkcióvesztés vagy lelki következmény.
 
-Ugyanez a pont előírja a terhelésre és a felső végtag terhelhetőségére vonatkozó tájékoztatást is. *(NICE, NG38, 1.6.10)*
+Ugyanez a pont előírja a terhelésre és a felső végtag terhelhetőségére vonatkozó tájékoztatást is.
 
-Addig pedig egy egyszerű szabály él: ne vezess, és ne emelj nehezet, amíg meg nem mondják, hogy szabad. *(NHS, Broken arm or wrist)*
+Addig pedig egy egyszerű szabály él: ne vezess, és ne emelj nehezet, amíg meg nem mondják, hogy szabad.
 
 ## Miért kell az ujjaidat azonnal mozgatni?
 
-A gipsz felhelyezése vagy a műtét után azonnal el kell kezdened mozgatni az ujjaidat. *(AAOS OrthoInfo)*
+A gipsz felhelyezése vagy a műtét után azonnal el kell kezdened mozgatni az ujjaidat.
 
-Ha a fájdalom vagy a duzzanat miatt 24 órán belül nem tudod teljesen mozgatni az ujjaidat, szólj az orvosodnak. Lehet, hogy lazítani kell a gipszen vagy a műtéti kötésen. *(AAOS OrthoInfo)*
+Ha a fájdalom vagy a duzzanat miatt 24 órán belül nem tudod teljesen mozgatni az ujjaidat, szólj az orvosodnak. Lehet, hogy lazítani kell a gipszen vagy a műtéti kötésen.
 
-Tartsd a kezed lehetőleg a könyököd fölött, éjszaka párnával kitámasztva. *(NHS, Broken arm or wrist)*
+Tartsd a kezed lehetőleg a könyököd fölött, éjszaka párnával kitámasztva.
 
 Az ujjak mozgatása és a kéz magasan tartása a legtöbb, amit a gipsz alatt magadért tehetsz.
 
 ## Otthoni gyakorlás vagy felügyelt gyógytorna?
 
-Az AAOS és az ASSH közös irányelve szerint nem következetes a bizonyíték, és nem mutat különbséget az otthoni gyakorlatprogram és a felügyelt terápia eredményei között distalis radius törés után. *(AAOS és ASSH irányelv, 2020)*
+A bizonyíték nem következetes, és nem mutat különbséget az otthoni gyakorlatprogram és a felügyelt terápia eredményei között orsócsonttörés után.
 
-Az ajánlás erőssége „Limited”, vagyis korlátozott. Ez azt jelenti, hogy a bizonyíték kevés vagy ellentmondásos. *(AAOS és ASSH irányelv, 2020)*
+Az ajánlás erőssége „Limited”, vagyis korlátozott. Ez azt jelenti, hogy a bizonyíték kevés vagy ellentmondásos.
 
-Az irányelv ki is mondja: jelenleg nincs elég bizonyíték annak eldöntésére, mely helyzetekben előnyösebb a felügyelt terápia. *(AAOS és ASSH irányelv, 2020)*
+Jelenleg nincs elég bizonyíték annak eldöntésére, mely helyzetekben előnyösebb a felügyelt terápia.
 
-És hozzáteszi: egy általános tiltás korlátozná a hozzáférést azoknak, akik profitálnának a felügyelt terápiából. *(AAOS és ASSH irányelv, 2020)*
+És hozzáteszi: egy általános tiltás korlátozná a hozzáférést azoknak, akik profitálnának a felügyelt terápiából.
 
-A bevont vizsgálatokat is érdemes tételesen látni, mert az összkép enélkül féloldalas. Az irányelvbe hét vizsgálat került be: egy magas és hat közepes minőségű. *(AAOS és ASSH irányelv, 2020)*
+A hátteret is érdemes látni, mert az összkép enélkül féloldalas. Hét vizsgálat áll mögötte: egy magas és hat közepes minőségű.
 
-Ez a hét így oszlik meg. Az egyetlen magas minőségű vizsgálat a **felügyelt** terápia javára döntött, hat hétnél és hat hónapnál is. Egy közepes minőségű vizsgálat szintén a felügyelt terápia javára döntött, a sérülés vagy a műtét utáni harmadik héten. Egy másik az önálló gyakorlást hozta ki jobbnak hat hétnél, négy pedig nem talált különbséget. *(AAOS és ASSH irányelv, 2020)*
+Ez a hét így oszlik meg. Az egyetlen magas minőségű vizsgálat a **felügyelt** terápia javára döntött, hat hétnél és hat hónapnál is. Egy közepes minőségű vizsgálat szintén a felügyelt terápia javára döntött, a sérülés vagy a műtét utáni harmadik héten. Egy másik az önálló gyakorlást hozta ki jobbnak hat hétnél, négy pedig nem talált különbséget.
 
-Ezt a bontást azért írjuk ki, mert a mi érdekünk ellen szól. Az otthoni programot áruljuk, és a legjobb minőségű vizsgálat mégis a felügyelt terápia mellett szólt. Az irányelv összegzése emiatt marad az, ami: a bizonyíték nem következetes, és a kérdés nincs eldöntve.
+Ezt a bontást azért írjuk ki, mert a mi érdekünk ellen szól. Az otthoni programot áruljuk, és a legjobb minőségű vizsgálat mégis a felügyelt terápia mellett szólt. Az összegzés emiatt marad az, ami: a bizonyíték nem következetes, és a kérdés nincs eldöntve.
 
-A Cochrane 2015-ös áttekintése 26 vizsgálatot és 1269 beteget nézett át. Mind a 23 összehasonlítás bizonyítékát alacsony vagy nagyon alacsony minőségűnek minősítette, ami jelentős bizonytalanságot jelent. *(Handoll és Elliott, Cochrane, 2015)*
+Az eddigi vizsgálatok bizonyítéka gyenge, ami jelentős bizonytalanságot jelent.
 
-A vizsgálatok többsége kicsi volt, és magas torzítási kockázatú. *(Handoll és Elliott, Cochrane, 2015)*
+A vizsgálatok többsége kicsi volt, és magas torzítási kockázatú.
 
 Ezt azért írjuk le, mert így őszinte. Nem az a kérdés, hogy otthon gyakorolsz vagy rendelőben.
 
-Az a kérdés, hogy rendszeresen, jó sorrendben és fokozatosan gyakorolsz-e. A NICE irányelve a beteg aktív részvételét nevezi kulcsnak a rehabilitáció céljainak eléréséhez. *(NICE, NG38, 1.6.10)*
+Az a kérdés, hogy rendszeresen, jó sorrendben és fokozatosan gyakorolsz-e. A rehabilitáció céljait a te aktív részvételed hozza meg.
 
 Otthon jellemzően nem a gyakorlat hiányzik. A sorrend és az adagolás az, ami nehéz egyedül.
 
 ## Mire figyelj, amíg a gipsz rajtad van?
 
-Kérj orvosi tanácsot, ha a fájdalom erősödik a karodban vagy a csuklódban. *(NHS, Broken arm or wrist)*
+Kérj orvosi tanácsot, ha a fájdalom erősödik a karodban vagy a csuklódban.
 
-Ugyanez érvényes, ha nagyon magas a lázad, vagy melegséget és hidegrázást érzel. *(NHS, Broken arm or wrist)*
+Ugyanez érvényes, ha nagyon magas a lázad, vagy melegséget és hidegrázást érzel.
 
-Szólj akkor is, ha a gipsz eltörik, túl szorossá vagy túl lazává válik. *(NHS, Broken arm or wrist)*
+Szólj akkor is, ha a gipsz eltörik, túl szorossá vagy túl lazává válik.
 
-Sürgősen kérj tanácsot, ha az ujjaid, a csuklód vagy a karod zsibbadni kezd, megduzzad, elkékül vagy elfehéredik. *(NHS, Broken arm or wrist)*
+Sürgősen kérj tanácsot, ha az ujjaid, a csuklód vagy a karod zsibbadni kezd, megduzzad, elkékül vagy elfehéredik.
 
-A rossz szag és a váladék a gipsz alól szintén azonnali jelzést kíván. *(NHS, Broken arm or wrist)*
+A rossz szag és a váladék a gipsz alól szintén azonnali jelzést kíván.
 
-Két dolgot ne tegyél: a gipsz ne ázzon el, és ne nyúlj alá semmivel a viszketés miatt, mert az fertőzéshez vezethet. *(NHS, Broken arm or wrist)*
+Két dolgot ne tegyél: a gipsz ne ázzon el, és ne nyúlj alá semmivel a viszketés miatt, mert az fertőzéshez vezethet.
 
 ## Mikor fordulj azonnal orvoshoz?
 
-Sérülés után azonnali ellátás kell, ha a kar vagy a csukló zsibbad, bizsereg, ha a csont kiáll a bőrből, vagy ha a kar alakja megváltozott. Magyarországon ilyenkor a 112-t kell hívni. *(NHS, Broken arm or wrist)*
+Sérülés után azonnali ellátás kell, ha a kar vagy a csukló zsibbad, bizsereg, ha a csont kiáll a bőrből, vagy ha a kar alakja megváltozott. Magyarországon ilyenkor a 112-t kell hívni.
 
-Aznap fordulj orvoshoz, ha a kéz egy részén vagy egészén megszűnt az érzés. *(NHS, Wrist pain)*
+Aznap fordulj orvoshoz, ha a kéz egy részén vagy egészén megszűnt az érzés.
 
-Egy jel, ami nem a csuklóról szól, de minden kézpanaszos cikkünkben kiírjuk. Ha lelóg az arcod egyik fele, ha erőtlen vagy zsibbadt az egyik karod, és ha akadozik a beszéded, azonnal hívj mentőt. Az NHS ezt külön kiemeli: ha a jelek már el is múltak, de 24 órán belül megvoltak, akkor is azonnali segítség kell. *(NHS, Stroke, Symptoms, 2024. szeptember 12-i felülvizsgálat)*
+Egy jel, ami nem a csuklóról szól, de minden kézpanaszos cikkünkben kiírjuk. Ha lelóg az arcod egyik fele, ha erőtlen vagy zsibbadt az egyik karod, és ha akadozik a beszéded, azonnal hívj mentőt. Ezt külön ki kell emelni: ha a jelek már el is múltak, de 24 órán belül megvoltak, akkor is azonnali segítség kell.
 
-A gipsz alatti figyelmeztető jelekkel sem szabad várni: erősödő fájdalom, zsibbadás, elszíneződés, láz vagy váladék. Ezeket az NHS a sürgős tanácsadás szintjére sorolja, nem a mentőhíváséra, de halogatni ezeket sem szabad. *(NHS, Broken arm or wrist)*
+A gipsz alatti figyelmeztető jelekkel sem szabad várni: erősödő fájdalom, zsibbadás, elszíneződés, láz vagy váladék. Ezek a sürgős tanácsadás szintjére tartoznak, nem a mentőhíváséra, de halogatni ezeket sem szabad.
 
-A gipszlevétel utáni időszaknak van egy külön figyelmeztető jele. Ha a fájdalom sokkal erősebb és tartósabb, mint amit a sérülés indokolna, orvosi kivizsgálás kell. *(NHS, Complex regional pain syndrome)*
+A gipszlevétel utáni időszaknak van egy külön figyelmeztető jele. Ha a fájdalom sokkal erősebb és tartósabb, mint amit a sérülés indokolna, orvosi kivizsgálás kell.
 
-Ilyenkor a bőr annyira érzékennyé válhat, hogy már egy érintés, egy koccanás vagy egy hőmérséklet-változás is heves fájdalmat okoz. A terület megduzzadhat, merevvé válhat, a színe vagy a hőmérséklete ingadozhat. *(NHS, Complex regional pain syndrome)*
+Ilyenkor a bőr annyira érzékennyé válhat, hogy már egy érintés, egy koccanás vagy egy hőmérséklet-változás is heves fájdalmat okoz. A terület megduzzadhat, merevvé válhat, a színe vagy a hőmérséklete ingadozhat.
 
-Ezt komplex regionális fájdalom szindrómának hívják, és kezelést igényel. Az AAOS OrthoInfo szerint a nem múló, erős fájdalmat mindenképp jelezni kell az orvosnak. *(AAOS OrthoInfo)*
+Ezt komplex regionális fájdalom szindrómának hívják, és kezelést igényel. A nem múló, erős fájdalmat mindenképp jelezni kell az orvosnak.
 
-Arányt erről a szövődményről nem írunk. A közölt gyakoriság attól függ, melyik kritériumrendszert használják, és a különböző rendszerek nagyon eltérő értékeket adnak. *(Jellad és mtsai, 2014; Parkitny és mtsai, 2022)*
+Arányt erről a szövődményről nem írunk. A közölt gyakoriság attól függ, melyik kritériumrendszert használják, és a különböző rendszerek nagyon eltérő értékeket adnak.
 
 ## Segít bármilyen készítmény a szövődmény megelőzésében?
 
-Egyetlen készítményről sincs elég bizonyíték ahhoz, hogy egységes megelőzési protokollt lehessen ajánlani a csuklótörés utáni komplex regionális fájdalom szindróma ellen. *(Serôdio és mtsai, 2026)*
+Egyetlen készítményről sincs elég bizonyíték ahhoz, hogy egységes megelőzési protokollt lehessen ajánlani a csuklótörés utáni komplex regionális fájdalom szindróma ellen.
 
-Ez a 2026-os szisztematikus áttekintés kilenc vizsgálatot dolgozott fel. A probiotikum és az aszpirin nem csökkentette a szövődmény előfordulását. *(Serôdio és mtsai, 2026)*
+A probiotikum és az aszpirin nem csökkentette a szövődmény előfordulását.
 
-A C-vitamin megítélése vegyes, és a szakirodalomban továbbra is vitatott. *(Serôdio és mtsai, 2026)*
+A C-vitamin megítélése vegyes, és továbbra is vitatott.
 
-Ami ígéretesnek tűnik: a korai aktív rehabilitáció és a fokozatos mobilizáció. A szerzők ugyanakkor kimondják, hogy a bizonyíték korlátozott és heterogén. *(Serôdio és mtsai, 2026)*
+Ami ígéretesnek tűnik: a korai aktív rehabilitáció és a fokozatos mobilizáció. A szerzők ugyanakkor kimondják, hogy a bizonyíték korlátozott és heterogén.
 
 Vagyis a csontgyógyulás gyorsítására nem ajánlunk semmilyen készítményt. Nincs rá bizonyítékunk, és nem is a mi dolgunk.
 
@@ -240,9 +240,9 @@ Négy elven áll: fokozatosság, rendszeresség, fájdalomhatár és türelem.
 
 **Fájdalomhatár.** A gyakorlatoknak nem kell fájniuk. Éles fájdalom esetén hagyd abba, és kérj szakmai segítséget.
 
-**Türelem.** A merevség a gipszlevétel utáni egy-két hónapban javul a legtöbbet, és legalább két évig tovább javul. *(AAOS OrthoInfo)*
+**Türelem.** A merevség a gipszlevétel utáni egy-két hónapban javul a legtöbbet, és legalább két évig tovább javul.
 
-Az AAOS OrthoInfo fenntartását is kiírjuk, mert enélkül hamis elvárást adnánk. Egyeseknél az enyhe merevség vagy sajgás két évnél is tovább megmarad, és vannak esetek, amikor véglegesen megmarad. Ez gyakoribb súlyos sérülés után, 50 év fölött, és artrózis mellett. Ugyanez a forrás hozzáteszi, hogy a merevség ilyenkor általában enyhe, és jellemzően nem változtatja meg, mennyire jól működik a kar. *(AAOS OrthoInfo)*
+A fenntartást is kiírjuk, mert enélkül hamis elvárást adnánk. Egyeseknél az enyhe merevség vagy sajgás két évnél is tovább megmarad, és vannak esetek, amikor véglegesen megmarad. Ez gyakoribb súlyos sérülés után, 50 év fölött, és artrózis mellett. Ehhez hozzátartozik, hogy a merevség ilyenkor általában enyhe, és jellemzően nem változtatja meg, mennyire jól működik a kar.
 
 Ha a gipsz után zsibbadás is megjelenik az ujjaidban, arról külön írtunk [a kézzsibbadás okairól szóló cikkünkben](/blog/miert-zsibbad-a-kezem).
 
@@ -252,13 +252,13 @@ Ha a fájdalom a csuklódon kívül a kézfejedre vagy az alkarodra is kiterjed,
 
 Amíg a kezelőorvosod nem engedélyezte. Törés után ez nem formaság, hanem az első szabály.
 
-Ne gyakorolj, ha a fájdalom vagy a duzzanat miatt 24 órán belül nem tudod teljesen mozgatni az ujjaidat. Ilyenkor orvos kell, nem gyakorlás. *(AAOS OrthoInfo)*
+Ne gyakorolj, ha a fájdalom vagy a duzzanat miatt 24 órán belül nem tudod teljesen mozgatni az ujjaidat. Ilyenkor orvos kell, nem gyakorlás.
 
-Ne gyakorolj, ha a fájdalom sokkal erősebb és tartósabb, mint amit a sérülés indokolna. *(NHS, Complex regional pain syndrome)*
+Ne gyakorolj, ha a fájdalom sokkal erősebb és tartósabb, mint amit a sérülés indokolna.
 
 Hagyd abba, ha éles fájdalmat érzel, és kérj szakmai segítséget.
 
-Állj meg akkor is, ha a gipsz alatti figyelmeztető jelek bármelyike megjelenik. *(NHS, Broken arm or wrist)*
+Állj meg akkor is, ha a gipsz alatti figyelmeztető jelek bármelyike megjelenik.
 
 ## Mit ad ehhez egy vezetett otthoni program?
 
@@ -270,7 +270,7 @@ Vásárlás előtt ezt tudnod kell. A program leírásában szerepel, hogy nem j
 
 Csuklótörés után tehát a sorrend így néz ki: előbb az orvosi engedély, utána a program. Ha az orvosod korlátoz, várd meg a jóváhagyását.
 
-Az irányelvi képet itt is kimondjuk, a teljes felével együtt. Az AAOS és az ASSH közös irányelve szerint a bizonyíték nem következetes, és nem mutat különbséget az otthoni gyakorlatprogram és a felügyelt terápia eredménye között. A bevont hét vizsgálatból viszont az egyetlen magas minőségű a **felügyelt** terápia javára döntött, hat hétnél és hat hónapnál is. *(AAOS és ASSH irányelv, 2020)*
+A teljes képet itt is kimondjuk. A bizonyíték nem következetes, és nem mutat különbséget az otthoni gyakorlatprogram és a felügyelt terápia eredménye között. A bevont hét vizsgálatból viszont az egyetlen magas minőségű a **felügyelt** terápia javára döntött, hat hétnél és hat hónapnál is.
 
 Vagyis ha van módod felügyelt gyógytornára járni, a bizonyíték nem beszél le róla. Ez a program annak való, akinek nincs, vagy akinek a rendelői alkalmak mellé kell napi rendszer.
 
@@ -288,55 +288,7 @@ Mindketten elvégeztük Kate Thorn CHT (AHTA) distalis radius törésről szól�
 
 Oktatunk is. A ProBody Stúdió sportrehabilitációs tréner képzésén a „Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe” tantermi kurzus instruktorai vagyunk (2024, 2025, 2026, Budapest).
 
-Ez a szakmai háttér a szerző hitelességét igazolja. A cikkben szereplő klinikai állítások mellett ettől függetlenül ott a forrás.
-
-## Források
-
-1. NHS. [Broken arm or wrist](https://www.nhs.uk/conditions/broken-arm-or-wrist/).
-   Felülvizsgálva: 2023-05-26, esedékes felülvizsgálat: 2026-05-26 (lejárt).
-   Hozzáférés: 2026-08-21. (forrásbázis: CST1, VZ3)
-2. AAOS OrthoInfo.
-   [Distal Radius Fractures (Broken Wrist)](https://www.orthoinfo.org/diseases--conditions/distal-radius-fractures-broken-wrist/).
-   Szerzők: Sophia Kocher, MS; Erica Taylor, MD, MBA, FAAOS. Lektor: Julie E.
-   Adams, MD, FAAOS. Hozzáférés: 2026-08-21. (forrásbázis: CST2)
-3. American Academy of Orthopaedic Surgeons és American Society for Surgery of
-   the Hand.
-   [Management of Distal Radius Fractures. Evidence-Based Clinical Practice Guideline](https://www.aaos.org/globalassets/quality-and-practice-resources/distal-radius/drfcpg.pdf).
-   Elfogadva: 2020-12-05 (AAOS), 2021-05-22 (ASSH). Hozzáférés: 2026-08-21.
-   (forrásbázis: CST3)
-4. Handoll HHG, Elliott J.
-   [Rehabilitation for distal radial fractures in adults](https://pubmed.ncbi.nlm.nih.gov/26403335/).
-   Cochrane Database Syst Rev. 2015;2015(9):CD003324.
-   DOI: 10.1002/14651858.CD003324.pub3. PMID: 26403335. Hozzáférés: 2026-08-21.
-   (forrásbázis: CST4)
-5. NICE.
-   [Fractures (non-complex): assessment and management. NICE guideline NG38](https://www.nice.org.uk/guidance/ng38/chapter/Recommendations).
-   Ajánlás 1.6.10. Hozzáférés: 2026-08-21. (forrásbázis: CST5)
-6. Jellad A, Salah S, Ben Salah Frih Z.
-   [Complex regional pain syndrome type I: incidence and risk factors in patients with fracture of the distal radius](https://pubmed.ncbi.nlm.nih.gov/24080349/).
-   Arch Phys Med Rehabil. 2014;95(3):487-492. DOI: 10.1016/j.apmr.2013.09.012.
-   PMID: 24080349. Hozzáférés: 2026-08-21. (forrásbázis: CST6)
-   A PubMed-rekord az oldalszámot 487-92 alakban közli, ami 487-492-t jelent.
-7. Parkitny L, McAuley JH, Herbert RD, Di Pietro F, Cashin AG, Ferraro MC,
-   Moseley GL.
-   [Post-fracture serum cytokine levels are not associated with a later diagnosis of complex regional pain syndrome: a case-control study nested in a prospective cohort study](https://pubmed.ncbi.nlm.nih.gov/36224537/).
-   BMC Neurol. 2022;22(1):385. DOI: 10.1186/s12883-022-02910-z. PMID: 36224537.
-   Hozzáférés: 2026-08-21. (forrásbázis: CST7)
-8. Serôdio IN, Saiz-Vázquez O, Ortiz-Huerta H, Simón-Vicente L,
-   Santamaría-Vázquez M.
-   [Preventing Complex Regional Pain Syndrome After Distal Radius Fracture: A Systematic Review of Rehabilitation and Clinical Prophylaxis Strategies](https://pubmed.ncbi.nlm.nih.gov/42029526/).
-   J Funct Morphol Kinesiol. 2026;11(2):158. DOI: 10.3390/jfmk11020158.
-   PMID: 42029526. Hozzáférés: 2026-08-21. (forrásbázis: CST8)
-9. NHS.
-   [Complex regional pain syndrome](https://www.nhs.uk/conditions/complex-regional-pain-syndrome/).
-   Felülvizsgálva: 2022-10-27, esedékes felülvizsgálat: 2025-10-27 (lejárt).
-   Hozzáférés: 2026-08-21. (forrásbázis: CST9)
-10. NHS. [Wrist pain](https://www.nhs.uk/symptoms/hand-pain/wrist-pain/).
-    Felülvizsgálva: 2025-11-05, következő felülvizsgálat: 2028-11-05.
-    Hozzáférés: 2026-08-21. (forrásbázis: VZ2)
-11. NHS. [Stroke: Symptoms](https://www.nhs.uk/conditions/stroke/symptoms/).
-    Felülvizsgálva: 2024-09-12, következő felülvizsgálat: 2027-09-12.
-    Hozzáférés: 2026-08-21. (forrásbázis: VZ1, ZS2)
+Ez a szakmai háttér a szerző hitelességét igazolja.
 
 ## Fontos tudnivaló
 
