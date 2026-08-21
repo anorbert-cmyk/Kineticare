@@ -42,6 +42,7 @@ import {
   extractArticleBody,
   markdownToLexical,
 } from '../lib/tudastar/markdown-to-lexical'
+import { kulcsszoFor } from '../lib/tudastar/seo-kulcsszavak'
 import config from '../payload.config'
 
 /**
@@ -66,6 +67,10 @@ export interface ForditottCikk {
   excerpt: string
   content: ReturnType<typeof markdownToLexical>
   szoszam: number
+  /** A mért kulcsszó-célzásból jövő SEO-cím. */
+  seoTitle: string
+  /** A mért kulcsszó-célzásból jövő SEO-leírás. */
+  seoDescription: string
 }
 
 /** Egy cikkfájl beolvasása és fordítása. Hibára DOB, nem ugrik át. */
@@ -73,12 +78,28 @@ export function cikketFordit(cikkekDir: string, fajl: string, slug: string): For
   const nyers = readFileSync(path.join(cikkekDir, fajl), 'utf8')
   const { title, lines } = extractArticleBody(nyers)
   const content = markdownToLexical(lines)
+
+  // A SEO-mezők a MÉRT kulcsszó-célzásból jönnek (src/lib/tudastar/seo-kulcsszavak.ts),
+  // nem a cikk címéből. Enélkül a `buildDocMetadata` fallback-lánca a címet és a
+  // bevezetőt használná — jó magyar mondatok, de nem a keresett kifejezéssel
+  // kezdenek. Hiányzó célzásra DOBUNK: a néma visszaesés a fallbackre pont az a
+  // hiba, amit ez a modul megszüntet.
+  const kulcsszo = kulcsszoFor(slug)
+  if (kulcsszo === undefined) {
+    throw new Error(
+      `Nincs mért kulcsszó-célzás a(z) „${slug}” cikkhez. Vedd fel a ` +
+        'src/lib/tudastar/seo-kulcsszavak.ts CIKK_KULCSSZAVAK listájába, mérésre hivatkozva.',
+    )
+  }
+
   return {
     slug,
     title,
     excerpt: excerptFrom(lines),
     content,
     szoszam: lines.join(' ').split(/\s+/).filter(Boolean).length,
+    seoTitle: kulcsszo.seoTitle,
+    seoDescription: kulcsszo.seoDescription,
   }
 }
 
@@ -101,6 +122,7 @@ async function main(): Promise<void> {
       slug: cikk.slug,
       cim: cikk.title,
       szoszam: cikk.szoszam,
+      seoTitle: cikk.seoTitle,
     })
   }
 
@@ -131,6 +153,8 @@ async function main(): Promise<void> {
       slug: cikk.slug,
       excerpt: cikk.excerpt,
       content: cikk.content,
+      seoTitle: cikk.seoTitle,
+      seoDescription: cikk.seoDescription,
       // Mindkét állapotmezőt kiírjuk, ahogy a `seed.ts` és a
       // `restore-legacy-content.ts` is teszi: a `_status` a Payload technikai
       // verzió-állapota, a `status` pedig a nyilvános szűrők (PUBLISHED_WHERE,

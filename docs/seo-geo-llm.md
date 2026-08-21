@@ -188,3 +188,77 @@ hangnemben.
 > **Amit NE csináljunk:** `llms.txt`-t elsődleges stratégiaként. Nem hivatalos
 > szabvány, és nincs bizonyított összefüggés a magasabb idézési aránnyal. A
 > schema, a FAQ és a jól strukturált tartalom sokkal többet ér.
+
+---
+
+## 5. A Tudástár cikkeinek MÉRT kulcsszó-célzása (2026-08-21)
+
+Ez a szakasz a Monid-mérés és a kód közötti hidat rögzíti. Az egyetlen normatív
+forrás a `src/lib/tudastar/seo-kulcsszavak.ts`; ez a tábla csak összefoglal.
+
+### 5.1 Miért nem elég a cikk címe
+
+A `posts.seoTitle` és `seoDescription` üresen maradt a betöltéskor, ezért a
+`buildDocMetadata` fallback-lánca a cikk CÍMÉT és a BEVEZETŐJÉT használta. Az
+így kapott cím jó magyar mondat, de nem a keresett kifejezéssel kezd. A mérés
+szerint viszont minden célkifejezés nehézsége **0–17** a százas skálán, vagyis
+a rés valóban nyitva áll, és a pontos célzás dönt.
+
+### 5.2 A célzás
+
+| Cikk | Elsődleges kifejezés | Havi keresés | Nehézség |
+| --- | --- | ---: | ---: |
+| `miert-zsibbad-a-kezem` | kéz zsibbadás | 450 | 17 |
+| `keztoalagut-szindroma` | kéztőalagút szindróma | 1 200 | 5 |
+| `teniszkonyok` | teniszkönyök | 3 500 | 13 |
+| `pattano-ujj` | pattanó ujj | 800 | **0** |
+| `csuklo-es-kezfajdalom` | csuklófájdalom | 150 | **0** |
+| `csuklotores-utani-gyogytorna` | csuklótörés utáni gyógytorna | 100 | **0** |
+
+**A „házilag” a mi szavunk.** A `kéztő alagút szindróma kezelése házilag` havi
+**1 600** keresés, és a legerősebb versenytárs is csak a **6. helyen** áll rá.
+Ez pontosan az Otthoni KézRehab Program ígérete, ezért ahol a cikk tényleg
+erről szól, ott a szó bekerül a CÍMBE, nem csak a szövegbe.
+
+### 5.3 Amit a strukturált adat visz
+
+Az `articleJsonLd` a mért kifejezéseket két mezőben adja tovább:
+
+- **`keywords`** — a schema.org szerint a `CreativeWork`-ön áll (tehát az
+  `Article`-on is), és „multiple textual entries in a keywords list are
+  typically delimited by commas”. Ez az egyetlen hely, ahol a Monid-mérés
+  kifejezései GÉPI olvasásra is kikerülnek az oldalról.
+- **`about`** — a cikk tárgya entitásként. Nevesített betegségnél
+  `MedicalCondition`, panasznál `MedicalSignOrSymptom`; a schema.org
+  hierarchiája szerint az utóbbi az előbbi leszármazottja
+  (Thing > MedicalEntity > MedicalCondition > MedicalSignOrSymptom).
+
+**Amit szándékosan NEM tettünk:** az `@type`-ot nem cseréltük `MedicalWebPage`-re.
+Az ugyanis a `WebPage` leszármazottja, nem az `Article`-é — a csere a
+cikk-szemantikát veszítené el, amit a Google a cikk-találatokhoz használ. A
+`meta name="keywords"` szintén kimaradt: a Google évek óta nem rangsorol
+alapján, tehát cargo-cult lenne.
+
+### 5.4 Hossz-korlátok, mérve
+
+| Mező | Korlát | Miért |
+| --- | --- | --- |
+| `seoTitle` | 47 karakter | a keret-layout ` \| Kineticare` utótagot fűz hozzá (13 karakter), a teljes alak így fér a jellemzően megjelenített ~60 karakterbe |
+| `seoDescription` | 110–160 karakter | a Google jellemzően 155–160 karaktert mutat; ennél rövidebb nem mond eleget |
+
+A hat cikk teljes címe mérve **51–59** karakter. Az őr (`src/__tests__/tudastar-seo-kulcsszavak.test.ts`)
+a korlátot, a kulcsszó jelenlétét, a gondolatjel-tilalmat és a
+kannibalizáció-mentességet is ellenőrzi.
+
+### 5.5 Ami nyitva maradt
+
+- **FAQ-séma a cikkekhez.** A `postFaqItems` és a `PostFaq` komponens KÉSZ, de a
+  `posts.faq` mező nincs a sémában, ezért ma mindig üres. Bevezetése migrációt
+  igényel. Az AI-válaszokban ez lenne a legnagyobb egyedi nyereség, mert a
+  cikkek alcímei már ma is kérdés alakúak.
+- **Szerző a cikkeken.** A `posts.author` kapcsolat nincs kitöltve, ezért az
+  `articleJsonLd` szerzője a szervezet neve. E-E-A-T szempontból a két
+  gyógytornász nevesítése volna a helyes (`docs/seo-geo-llm.md` 2.3).
+- **`og:image`.** Sem a cikkeknek, sem a keret-layoutnak nincs megosztási képe,
+  ezért minden megosztás kép nélkül jelenik meg. Ez tulajdonosi döntés
+  (márka-kép, 1200×630).

@@ -433,8 +433,23 @@ export function articleJsonLd(args: {
   path: string
   authorName?: string
   imageUrl?: string
+  /**
+   * A cikk MÉRT célkifejezései (`src/lib/tudastar/seo-kulcsszavak.ts`).
+   *
+   * A schema.org szerint (ellenőrizve 2026-08-21) a `keywords` a CreativeWork-ön
+   * áll, tehát az Article-on is érvényes, és „multiple textual entries in a
+   * keywords list are typically delimited by commas”. Ez az egyetlen hely, ahol
+   * a Monid-mérés kifejezései gépi olvasásra is kikerülnek az oldalról.
+   */
+  keywords?: readonly string[]
+  /**
+   * A cikk tárgya entitásként. Nevesített betegségnél `MedicalCondition`,
+   * panasznál `MedicalSignOrSymptom` — a schema.org hierarchiája szerint az
+   * utóbbi az előbbi leszármazottja.
+   */
+  about?: { tipus: 'MedicalCondition' | 'MedicalSignOrSymptom'; nev: string }
 }): Record<string, unknown> {
-  const { post, path, authorName, imageUrl } = args
+  const { post, path, authorName, imageUrl, keywords, about } = args
   return {
     '@context': 'https://schema.org',
     '@type': 'Article',
@@ -448,6 +463,10 @@ export function articleJsonLd(args: {
     ...(typeof post.publishedAt === 'string' ? { datePublished: post.publishedAt } : {}),
     ...(typeof post.updatedAt === 'string' ? { dateModified: post.updatedAt } : {}),
     ...(imageUrl ? { image: [imageUrl] } : {}),
+    ...(keywords !== undefined && keywords.length > 0
+      ? { keywords: keywords.join(', ') }
+      : {}),
+    ...(about !== undefined ? { about: { '@type': about.tipus, name: about.nev } } : {}),
     author: {
       '@type': 'Person',
       name: authorName ?? SITE_NAME,
