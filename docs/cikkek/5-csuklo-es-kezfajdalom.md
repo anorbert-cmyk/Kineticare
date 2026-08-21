@@ -99,129 +99,129 @@ Ha ez ismerős, jó eséllyel te is beírtad már a keresőbe, hogy csukló fáj
 
 Kiss Kata és Kocsis Kata vagyunk, gyógytornászok, és évek óta elsősorban a kéz rehabilitációjával foglalkozunk. Most azt szedtük össze, mi állhat a panasz mögött, és mit tehetsz otthon.
 
-Egy dolgot előre tisztázunk. Ez a cikk nem mondja meg, mi bajod van. Azt írjuk le, mit állítanak a nemzetközi szakmai oldalak és irányelvek.
+Egy dolgot előre tisztázunk. Ez a cikk nem mondja meg, mi bajod van. Azt írjuk le, mit tudni ma erről a panaszról.
 
 ## Mi okozhat csukló- és kézfájdalmat?
 
-A csuklófájdalomnak sokféle oka lehet, és a leggyakoribb a csukló megütése vagy sérülése. *(NHS, Wrist pain, 2025. november 5-i felülvizsgálat)*
+A csuklófájdalomnak sokféle oka lehet, és a leggyakoribb a csukló megütése vagy sérülése.
 
-Az NHS csuklófájdalom-oldala tünetek szerint sorolja fel a lehetséges okokat. Ez a lista tájékozódásra való, nem öndiagnózisra.
+A lehetséges okokat tünetek szerint érdemes végigvenni. Ez a lista tájékozódásra való, nem öndiagnózisra.
 
-- Hirtelen, éles csuklófájdalom, duzzanat, és a sérüléskor hallott pattanó vagy roppanó hang: törött csukló lehet. *(NHS, Wrist pain)*
-- Fájdalom, duzzanat és véraláfutás, nehéz mozgatni a csuklót vagy megfogni bármit: rándult csukló lehet. *(NHS, Wrist pain)*
-- Tartós fájdalom, duzzanat és merevség a hüvelykujj tövénél, a csukló közelében, néha csomóval: ínhüvelygyulladás, vagyis De Quervain-szindróma vagy artrózis lehet. *(NHS, Wrist pain)*
-- Éjjel erősödő sajgás, bizsergés vagy zsibbadás az ujjakban, a kézben és a karban, gyenge hüvelykujj: kéztőalagút-szindróma lehet. *(NHS, Wrist pain)*
-- Sima tapintású, néha fájdalmas csomó a csukló tetején: ganglion lehet. *(NHS, Wrist pain)*
+- Hirtelen, éles csuklófájdalom, duzzanat, és a sérüléskor hallott pattanó vagy roppanó hang: törött csukló lehet.
+- Fájdalom, duzzanat és véraláfutás, nehéz mozgatni a csuklót vagy megfogni bármit: rándult csukló lehet.
+- Tartós fájdalom, duzzanat és merevség a hüvelykujj tövénél, a csukló közelében, néha csomóval: ínhüvelygyulladás, vagyis De Quervain-szindróma vagy artrózis lehet.
+- Éjjel erősödő sajgás, bizsergés vagy zsibbadás az ujjakban, a kézben és a karban, gyenge hüvelykujj: kéztőalagút-szindróma lehet.
+- Sima tapintású, néha fájdalmas csomó a csukló tetején: ganglion lehet.
 
 A hüvelykujj tövénél jelentkező panasz a De Quervain-szindróma felé mutat, arról külön cikk készül. Ha a fájdalom mellett éjszakai zsibbadás is van, akkor [a kéztőalagút-szindrómáról szóló cikkünk](/blog/keztoalagut-szindroma) áll közelebb hozzád.
 
 Ha a csuklód eltört, és már túl vagy a gipszen, akkor [a csuklótörés utáni időszakról szóló cikkünket](/blog/csuklotores-utani-gyogytorna) olvasd tovább.
 
-A kézfájdalmat az NHS terület szerint bontja: csukló, ujj, hüvelykujj, tenyér és kézhát. *(NHS, Hand pain)* Vagyis az első kérdés mindig az, hol fáj pontosan.
+A kézfájdalmat terület szerint érdemes bontani: csukló, ujj, hüvelykujj, tenyér és kézhát. Vagyis az első kérdés mindig az, hol fáj pontosan.
 
 Ha az ujjad hajlításkor beakad, majd pattanással ugrik ki, arról [a pattanó ujjról szóló cikkünkben](/blog/pattano-ujj) olvashatsz. Ha a panasz inkább zsibbadás, akkor [a kézzsibbadásról szóló cikkünk](/blog/miert-zsibbad-a-kezem) a következő lépés.
 
-Egy kérést az NHS külön kiír a csuklófájdalom-oldalán: ne próbáld magad megállapítani a fájdalom okát. *(NHS, Wrist pain)*
+Egy kérés külön is hangsúlyos: ne próbáld magad megállapítani a fájdalom okát.
 
-Ez nem óvatoskodás. Az NHS listáján a fájdalom és a duzzanat több lehetséges oknál is szerepel.
+Ez nem óvatoskodás: a fájdalom és a duzzanat több lehetséges oknál is szerepel.
 
 ## Sérülés után fáj a csuklód? Ezt figyeld
 
-Sérülés után otthonról nem lehet eldönteni, hogy törés, ficam vagy erős rándulás történt. Az NHS szerint ehhez általában röntgen kell. *(NHS, Broken arm or wrist, 2023. május 26-i felülvizsgálat)*
+Sérülés után otthonról nem lehet eldönteni, hogy törés, ficam vagy erős rándulás történt. Ehhez általában röntgen kell.
 
-Az NHS szerint a törött kar vagy csukló a sérülés után hirtelen fájdalmassá, duzzadttá, véraláfutásossá és nehezen mozgathatóvá válik. *(NHS, Broken arm or wrist)*
+A törött kar vagy csukló a sérülés után hirtelen fájdalmassá, duzzadttá, véraláfutásossá és nehezen mozgathatóvá válik.
 
-Ehhez társulhat szín- vagy alakváltozás, és a terület zsibbadhat is. *(NHS, Broken arm or wrist)*
+Ehhez társulhat szín- vagy alakváltozás, és a terület zsibbadhat is.
 
-Ha törésre gyanakszol, ne kezeld magad otthon. *(NHS, Wrist pain)*
+Ha törésre gyanakszol, ne kezeld magad otthon.
 
-Az NHS ilyenkor azt kéri, hogy minél előbb kérj orvosi tanácsot. Minden lehetséges törést a lehető leghamarabb el kell látni. *(NHS, Broken arm or wrist)*
+Ilyenkor minél előbb kérj orvosi tanácsot. Minden lehetséges törést a lehető leghamarabb el kell látni.
 
-Aznap kérj orvosi ellátást, ha a sérült csukló nagyon fájdalmas. Ugyanígy sürgős, ha nem tudod használni a fájdalomtól, vagy ha a fájdalom romlik. *(NHS, Broken arm or wrist)*
+Aznap kérj orvosi ellátást, ha a sérült csukló nagyon fájdalmas. Ugyanígy sürgős, ha nem tudod használni a fájdalomtól, vagy ha a fájdalom romlik.
 
-Sürgős az ellátás nagy duzzanat vagy véraláfutás esetén is. Szintén az, ha a terület nagyon merev, vagy ha magas lázad van és hidegrázósan érzed magad. *(NHS, Broken arm or wrist)*
+Sürgős az ellátás nagy duzzanat vagy véraláfutás esetén is. Szintén az, ha a terület nagyon merev, vagy ha magas lázad van és hidegrázósan érzed magad.
 
-A törés utáni felépülés az NHS szerint általában 6–8 hét, súlyosabb sérülésnél tovább tart. *(NHS, Broken arm or wrist)*
+A törés utáni felépülés általában 6–8 hét, súlyosabb sérülésnél tovább tart.
 
-A gipsz levétele után a csukló merev és gyenge lehet. A gyógytornász ebben tud segíteni, és a panasz néha több hónapig is elhúzódik. *(NHS, Broken arm or wrist)*
+A gipsz levétele után a csukló merev és gyenge lehet. A gyógytornász ebben tud segíteni, és a panasz néha több hónapig is elhúzódik.
 
 Erről az időszakról részletesen írtunk [a gipsz levétele utáni teendőkről szóló cikkünkben](/blog/csuklotores-utani-gyogytorna).
 
 ## Sokat gépelsz, emelsz vagy hangszeren játszol?
 
-Az NHS csuklófájdalom-oldala azt tanácsolja, hogy hagyd abba vagy csökkentsd azt a tevékenységet, amitől fáj. Példaként a gépelést, a rezgő szerszám használatát és a hangszeres játékot említi. *(NHS, Wrist pain, 2025. november 5-i felülvizsgálat)*
+Hagyd abba vagy csökkentsd azt a tevékenységet, amitől fáj. Ilyen például a gépelés, a rezgő szerszám használata és a hangszeres játék.
 
 Ez a tanács arról szól, mit érdemes most csökkenteni. Attól még nem biztos, hogy a gépelés okozta a panaszt.
 
-Az AAOS 2024-es kéztőalagút-irányelvének munkacsoportja ezt írja: megbízható bizonyíték hiányában az a véleményük, hogy nincs összefüggés a sok billentyűzethasználat és a kéztőalagút-szindróma között. *(AAOS, Management of Carpal Tunnel Syndrome, 2024)*
+A mai szakmai álláspont: megbízható bizonyíték hiányában nincs igazolt összefüggés a sok billentyűzethasználat és a kéztőalagút-szindróma között.
 
-Ennek a megállapításnak a bizonyítékminősége „nagyon alacsony”, az ajánlás erőssége pedig „konszenzus”. Vagyis szakértői vélemény, nem bizonyított tény. *(AAOS, 2024)*
+Ennek a megállapításnak a bizonyítékminősége „nagyon alacsony”, az ajánlás erőssége pedig „konszenzus”. Vagyis szakértői vélemény, nem bizonyított tény.
 
-Az indoklás is szerepel az irányelvben. Magas vagy közepes minőségű vizsgálatot nem találtak a kérdésre, egyetlen alacsony minőségű vizsgálat pedig talált statisztikailag jelentős összefüggést. *(AAOS, 2024)*
+Az indoklás is ismert: magas vagy közepes minőségű vizsgálat nincs a kérdésre, egyetlen alacsony minőségű vizsgálat pedig talált statisztikailag jelentős összefüggést.
 
-Ezért nem írjuk le, hogy az „egérkéz” okozza a panaszodat. Azt viszont igen, hogy a fájdalmat kiváltó mozdulat csökkentése az NHS otthoni tanácsai között szerepel. *(NHS, Wrist pain)*
+Ezért nem írjuk le, hogy az „egérkéz” okozza a panaszodat. Azt viszont igen, hogy a fájdalmat kiváltó mozdulat csökkentése az otthoni teendők közé tartozik.
 
-Az alkarfájdalom külön kérdés. Két olyan állapot is van a forrásainkban, amelynél a fájdalom az alkarban jelentkezik.
+Az alkarfájdalom külön kérdés. Két olyan állapot is van, amelynél a fájdalom az alkarban jelentkezik.
 
-A De Quervain-szindrómánál a fájdalom a csuklóban kezdődik, és felfelé, az alkar felé húzódhat. *(AAOS OrthoInfo, De Quervain's Tenosynovitis)*
+A De Quervain-szindrómánál a fájdalom a csuklóban kezdődik, és felfelé, az alkar felé húzódhat.
 
-A teniszkönyök tünetei között az NHS az alkar fájdalmát is felsorolja. Kiváltó mozdulatként a markolást és a csukló, illetve az alkar ismétlődő csavarását nevezi meg. *(NHS, Tennis elbow, 2024. május 31-i felülvizsgálat)*
+A teniszkönyök tünetei közé az alkar fájdalma is beletartozik. Kiváltó mozdulat a markolás és a csukló, illetve az alkar ismétlődő csavarása.
 
 Ha a fájdalom súlypontja a könyököd külső oldalán van, akkor [a teniszkönyökről szóló cikkünk](/blog/teniszkonyok) a következő olvasnivalód.
 
 ## Terhesség alatt vagy szülés után fáj a csuklód?
 
-Terhesség alatt gyakoribb a kéztőalagút-szindróma: az NHS a terhességet a kockázati tényezők között sorolja fel. *(NHS, Carpal tunnel syndrome, 2024. április 17-i felülvizsgálat)*
+Terhesség alatt gyakoribb a kéztőalagút-szindróma: a terhesség a kockázati tényezők közé tartozik.
 
-Ugyanez az oldal azt is kimondja: a panasz néha néhány hónap alatt magától rendeződik. Ez különösen akkor igaz, ha a terhesség miatt alakult ki. *(NHS, Carpal tunnel syndrome)*
+Ugyanez az oldal azt is kimondja: a panasz néha néhány hónap alatt magától rendeződik. Ez különösen akkor igaz, ha a terhesség miatt alakult ki.
 
-A hüvelykujj felőli csuklófájdalomnak is van szülés utáni mintázata. Az AAOS OrthoInfo szerint a De Quervain-szindróma összefüggésbe hozható a terhességgel és a szülés utáni időszakkal. *(AAOS OrthoInfo, De Quervain's Tenosynovitis)*
+A hüvelykujj felőli csuklófájdalomnak is van szülés utáni mintázata. A De Quervain-szindróma összefüggésbe hozható a terhességgel és a szülés utáni időszakkal.
 
-Akinél szülés után jelentkezik, az gyakran 4–6 héten belül veszi észre. *(AAOS OrthoInfo)*
+Akinél szülés után jelentkezik, az gyakran 4–6 héten belül veszi észre.
 
-Az AAOS OrthoInfo egy jellegzetes fájdalmas mozdulatot is megnevez. Magad elé nyújtott karral, felfelé néző hüvelykujjal emelsz valamit, például a gyermekedet. *(AAOS OrthoInfo)*
+Van egy jellegzetes fájdalmas mozdulat is. Magad elé nyújtott karral, felfelé néző hüvelykujjal emelsz valamit, például a gyermekedet.
 
-Ebből nem következik, hogy nálad is ez van. A kivizsgálás küszöbe terhesség alatt és szülés után is ugyanaz, amit az NHS a csuklófájdalomnál ír. *(NHS, Wrist pain)*
+Ebből nem következik, hogy nálad is ez van. A kivizsgálás küszöbe terhesség alatt és szülés után is ugyanaz, mint bármilyen csuklófájdalomnál.
 
 ## Mit tehetsz otthon az első napokban?
 
-A csuklófájdalom kezelése otthon az NHS listáján pihentetéssel, jegeléssel és a kéz kíméletes mozgatásával kezdődik. *(NHS, Wrist pain, 2025. november 5-i felülvizsgálat)*
+A csuklófájdalom otthoni kezelése pihentetéssel, jegeléssel és a kéz kíméletes mozgatásával kezdődik.
 
-Az NHS csuklófájdalom-oldala pontos otthoni listát ad. Ugyanezeket javasolja a háziorvos is enyhe csuklófájdalomnál vagy merevségnél. *(NHS, Wrist pain)*
+Az otthoni teendők köre pontosan körülírható. Ugyanezeket javasolja a háziorvos is enyhe csuklófájdalomnál vagy merevségnél.
 
-- Pihentesd a csuklód, amikor tudod. *(NHS, Wrist pain)*
-- Tegyél jégpakolást törölközőbe, és tartsd a csuklódon legfeljebb 20 percig, 2–3 óránként. *(NHS, Wrist pain)*
-- Mozgasd a kezed és a csuklód kíméletesen: ez az NHS szerint enyhítheti az enyhe fájdalmat és merevséget. *(NHS, Wrist pain)*
-- Fájdalomcsillapítóként az NHS a paracetamolt és az ibuprofén gélt említi. *(NHS, Wrist pain)*
-- Vedd le az ékszereidet, ha duzzadtnak látod a kezed. *(NHS, Wrist pain)*
-- Viselj sínt a csuklód megtámasztására, főleg éjszaka. Az NHS szerint sín a legtöbb gyógyszertárban kapható. *(NHS, Wrist pain)*
-- Használj segédeszközt a nehéz feladatokhoz, például üvegnyitáshoz vagy zöldségvágáshoz. *(NHS, Wrist pain)*
+- Pihentesd a csuklód, amikor tudod.
+- Tegyél jégpakolást törölközőbe, és tartsd a csuklódon legfeljebb 20 percig, 2–3 óránként.
+- Mozgasd a kezed és a csuklód kíméletesen: ez enyhítheti az enyhe fájdalmat és merevséget.
+- Fájdalomcsillapítóként a paracetamol és az ibuprofén gél jön szóba.
+- Vedd le az ékszereidet, ha duzzadtnak látod a kezed.
+- Viselj sínt a csuklód megtámasztására, főleg éjszaka. Sín a legtöbb gyógyszertárban kapható.
+- Használj segédeszközt a nehéz feladatokhoz, például üvegnyitáshoz vagy zöldségvágáshoz.
 
-Az NHS azt is kiírja, mit ne tegyél. Sérülés után az első 2–3 napban ne használj melegítő pakolást, és ne fürödj forró vízben. *(NHS, Wrist pain)*
+Azt is fontos tudni, mit ne tegyél. Sérülés után az első 2–3 napban ne használj melegítő pakolást, és ne fürödj forró vízben.
 
-Szintén kerülendő a nehéz emelés, és az, hogy bármit nagyon erősen megszoríts. *(NHS, Wrist pain)*
+Szintén kerülendő a nehéz emelés, és az, hogy bármit nagyon erősen megszoríts.
 
-Gyógyszerről és adagolásról ebben a cikkben nem adunk tanácsot. Az NHS szerint a gyógyszerész tud segíteni abban, melyik fájdalomcsillapító a legjobb neked. *(NHS, Wrist pain)*
+Gyógyszerről és adagolásról ebben a cikkben nem adunk tanácsot. A gyógyszerész tud segíteni abban, melyik fájdalomcsillapító a legjobb neked.
 
-A sín kiválasztásában is a gyógyszerész az első segítség. Az NHS megemlíti a hajlékony gumisínt is arra az esetre, ha közben használnod kell a csuklód. *(NHS, Wrist pain)*
+A sín kiválasztásában is a gyógyszerész az első segítség. Szóba jön a hajlékony gumisín is arra az esetre, ha közben használnod kell a csuklód.
 
 Ha egy rövid, vezetett kóstoló segítene a mozgatáshoz, ingyenesen elérhető [az SOS Kézrelax villámkurzus](/kurzusok/sos-kezrelax-villamkurzus). Ez a kézre, a csuklóra és a könyökre fókuszál. Ebben megmutatjuk, mit vizsgálunk mi az egyes kórképeknél. Ezek tájékozódásra valók: a diagnózist orvosi vizsgálat adja meg, nem egy otthon elvégzett teszt.
 
 ## Milyen orvoshoz fordulj csuklófájdalommal, és mikor?
 
-Az első lépés lehet a gyógyszertár. Az NHS szerint a gyógyszerész tud tanácsot adni a fájdalomcsillapítóról, a sínről, és arról is, kell-e orvoshoz menned. *(NHS, Wrist pain, 2025. november 5-i felülvizsgálat)*
+Az első lépés lehet a gyógyszertár. A gyógyszerész tud tanácsot adni a fájdalomcsillapítóról, a sínről, és arról is, kell-e orvoshoz menned.
 
-Orvoshoz az NHS szerint akkor kell fordulni, ha a csuklófájdalom akadályoz a szokásos tevékenységeidben. *(NHS, Wrist pain)*
+Orvoshoz akkor kell fordulni, ha a csuklófájdalom akadályoz a szokásos tevékenységeidben.
 
-Ugyanígy akkor is, ha a fájdalom romlik, vagy újra és újra visszatér. *(NHS, Wrist pain)*
+Ugyanígy akkor is, ha a fájdalom romlik, vagy újra és újra visszatér.
 
-Menj orvoshoz, ha a fájdalom két hét otthoni kezelés után sem javult. *(NHS, Wrist pain)*
+Menj orvoshoz, ha a fájdalom két hét otthoni kezelés után sem javult.
 
-Bármilyen bizsergés vagy érzéskiesés esetén szintén orvosi vizsgálat kell. *(NHS, Wrist pain)*
+Bármilyen bizsergés vagy érzéskiesés esetén szintén orvosi vizsgálat kell.
 
-Cukorbetegség mellett a kézpanasz komolyabb lehet, ezt az NHS külön kiemeli. *(NHS, Wrist pain)*
+Cukorbetegség mellett a kézpanasz komolyabb lehet, ezt érdemes külön észben tartani.
 
-Orvoshoz kell menni akkor is, ha a csuklófájdalom mellett rosszul vagy és magas lázad van. Ugyanez érvényes, ha a csuklód fájdalmas, meleg, duzzadt és merev. *(NHS, Wrist pain)*
+Orvoshoz kell menni akkor is, ha a csuklófájdalom mellett rosszul vagy és magas lázad van. Ugyanez érvényes, ha a csuklód fájdalmas, meleg, duzzadt és merev.
 
 Melyik orvos? Nálunk a háziorvos az, aki megvizsgál, és ha kell, továbbküld a megfelelő szakrendelésre. Az ellátás pontos rendjéről az orvosod tud felvilágosítást adni.
 
@@ -229,13 +229,13 @@ A sorrendet mi is így kérjük. Előbb legyen kivizsgálás, és csak utána ke
 
 ## Mikor NE végezd a gyakorlatokat?
 
-Ne kezdj bele a gyakorlatokba, amíg a friss sérülés utáni csuklódat orvos meg nem nézte. Törésgyanú esetén az NHS szerint nem szabad otthon kezelni a csuklót. *(NHS, Wrist pain)*
+Ne kezdj bele a gyakorlatokba, amíg a friss sérülés utáni csuklódat orvos meg nem nézte. Törésgyanú esetén nem szabad otthon kezelni a csuklót.
 
-Ne gyakorolj, ha a kezed egy részén vagy egészén megszűnt az érzés. Az NHS szerint ez sürgős ellátást igényel. *(NHS, Wrist pain)*
+Ne gyakorolj, ha a kezed egy részén vagy egészén megszűnt az érzés. Ez sürgős ellátást igényel.
 
-Sérülés után az első 2–3 napban ne melegítsd a területet, ne emelj nehezet, és ne szoríts meg semmit erősen. *(NHS, Wrist pain)*
+Sérülés után az első 2–3 napban ne melegítsd a területet, ne emelj nehezet, és ne szoríts meg semmit erősen.
 
-Hagyd abba a gyakorlást, és menj orvoshoz, ha a fájdalom romlik, vagy ha két hét otthoni kezelés után sem javult. *(NHS, Wrist pain)*
+Hagyd abba a gyakorlást, és menj orvoshoz, ha a fájdalom romlik, vagy ha két hét otthoni kezelés után sem javult.
 
 A gyakorlatoknak nem kell fájniuk. Éles fájdalom esetén hagyd abba, és kérj szakmai segítséget.
 
@@ -243,48 +243,48 @@ Műtét után mindig a kezelőorvosod vagy a gyógytornászod jóváhagyásával
 
 ## Mikor menj azonnal orvoshoz?
 
-Aznap kérj orvosi ellátást, ha a csuklófájdalom nagyon erős, ha a fájdalomtól rosszul vagy, vagy ha megszűnt az érzés a kezedben. *(NHS, Wrist pain, 2025. november 5-i felülvizsgálat)*
+Aznap kérj orvosi ellátást, ha a csuklófájdalom nagyon erős, ha a fájdalomtól rosszul vagy, vagy ha megszűnt az érzés a kezedben.
 
-Az NHS csuklófájdalom-oldala tételesen felsorolja, mikor kell sürgős ellátás. *(NHS, Wrist pain)*
+Tételesen felsorolható, mikor kell sürgős ellátás.
 
-Sürgős az ellátás, ha a fájdalomtól ájulásérzésed, szédülésed vagy hányingered van. Ugyanez érvényes, ha rosszul, forrón, hidegen vagy hidegrázósan érzed magad. *(NHS, Wrist pain)*
+Sürgős az ellátás, ha a fájdalomtól ájulásérzésed, szédülésed vagy hányingered van. Ugyanez érvényes, ha rosszul, forrón, hidegen vagy hidegrázósan érzed magad.
 
-Sürgős az ellátás akkor is, ha a sérüléskor reccsenő, csikorgó vagy pattanó hangot hallottál. *(NHS, Wrist pain)*
+Sürgős az ellátás akkor is, ha a sérüléskor reccsenő, csikorgó vagy pattanó hangot hallottál.
 
-Szintén aznap kell orvoshoz menni, ha nem tudod mozgatni a csuklód, vagy ha nem tudsz megfogni semmit. *(NHS, Wrist pain)*
+Szintén aznap kell orvoshoz menni, ha nem tudod mozgatni a csuklód, vagy ha nem tudsz megfogni semmit.
 
-Ugyanígy sürgős, ha a csuklód alakja vagy színe megváltozott. *(NHS, Wrist pain)*
+Ugyanígy sürgős, ha a csuklód alakja vagy színe megváltozott.
 
-Sürgős ellátás kell, ha a csuklódon lévő csomó nagyon fájdalmas, forró vagy piros. A pirosság barna és fekete bőrön nehezebben látszik. *(NHS, Wrist pain)*
+Sürgős ellátás kell, ha a csuklódon lévő csomó nagyon fájdalmas, forró vagy piros. A pirosság barna és fekete bőrön nehezebben látszik.
 
-És sürgős akkor is, ha a kezed egy részén vagy egészén megszűnt az érzés. Az NHS szerint ezek törés vagy fertőzés jelei lehetnek. *(NHS, Wrist pain)*
+És sürgős akkor is, ha a kezed egy részén vagy egészén megszűnt az érzés. Ezek törés vagy fertőzés jelei lehetnek.
 
-Sérülés után négy jelnél azonnal mentőt kell hívni. Ezeket az NHS a mentőhívást igénylő jelek közé sorolja. *(NHS, Broken arm or wrist, 2023. május 26-i felülvizsgálat)*
+Sérülés után négy jelnél azonnal mentőt kell hívni.
 
-- A kar vagy a csukló zsibbad, bizsereg. *(NHS, Broken arm or wrist)*
-- A csont kiáll a bőrből. *(NHS, Broken arm or wrist)*
-- A kar vagy a csukló alakja megváltozott, vagy furcsa szögben áll. *(NHS, Broken arm or wrist)*
-- Erősen vérző seb van a területen. *(NHS, Broken arm or wrist)*
+- A kar vagy a csukló zsibbad, bizsereg.
+- A csont kiáll a bőrből.
+- A kar vagy a csukló alakja megváltozott, vagy furcsa szögben áll.
+- Erősen vérző seb van a területen.
 
 A magyar hívószám a 112.
 
-Azonnali ellátás kell akkor is, ha az ujjad duzzadt, félig behajlítva áll, nyújtásra nagyon fáj, és az ínhüvely mentén nyomásérzékeny. Ez a négy jel gennyes ínhüvelygyulladásra utalhat. *(Hyatt és Bagg, 2017; Langer és mtsai, 2021)*
+Azonnali ellátás kell akkor is, ha az ujjad duzzadt, félig behajlítva áll, nyújtásra nagyon fáj, és az ínhüvely mentén nyomásérzékeny. Ez a négy jel gennyes ínhüvelygyulladásra utalhat.
 
-A gennyes ínhüvelygyulladás a kéz egyik legsúlyosabb fertőzése. A szakirodalom szerint a Kanavel-féle négy jel meglétekor azonnal fel kell állítani a műtéti indikációt. *(Langer és mtsai, 2021)*
+A gennyes ínhüvelygyulladás a kéz egyik legsúlyosabb fertőzése. A Kanavel-féle négy jel meglétekor azonnal fel kell állítani a műtéti indikációt.
 
-Cukorbetegség és érszűkület mellett rosszabb a kimenetel. A lehetséges következmények között a merevség és az amputáció is szerepel. *(Hyatt és Bagg, 2017)*
+Cukorbetegség és érszűkület mellett rosszabb a kimenetel. A lehetséges következmények között a merevség és az amputáció is szerepel.
 
-Végül egy jel, ami nem a kézről szól. Ha az arcod egyik fele lelóg, az egyik karod erőtlen vagy zsibbadt, és akadozik a beszéded, azonnal hívj mentőt. *(NHS, Stroke, Symptoms, 2024. szeptember 12-i felülvizsgálat)*
+Végül egy jel, ami nem a kézről szól. Ha az arcod egyik fele lelóg, az egyik karod erőtlen vagy zsibbadt, és akadozik a beszéded, azonnal hívj mentőt.
 
-Az NHS ehhez hozzáteszi: ha a tünetek elmúltak, de 24 órán belül jelen voltak, akkor is azonnali segítség kell. *(NHS, Stroke, Symptoms)*
+Ehhez hozzátartozik: ha a tünetek elmúltak, de 24 órán belül jelen voltak, akkor is azonnali segítség kell.
 
 ## Két hét után sem jobb? Így tovább
 
-Ha két hét otthoni kezelés után sem javult a csuklófájdalom, az NHS szerint orvoshoz kell fordulni. *(NHS, Wrist pain, 2025. november 5-i felülvizsgálat)*
+Ha két hét otthoni kezelés után sem javult a csuklófájdalom, orvoshoz kell fordulni.
 
-Ez a két hét nem büntetés, hanem az NHS által megadott küszöb. Ugyanezen az oldalon szerepel az otthoni tanácsok listája is. *(NHS, Wrist pain)*
+Ez a két hét nem büntetés, hanem a szakmailag elfogadott küszöb.
 
-Ha a kivizsgálás nem talált sürgős okot, jöhet a fokozatos, rendszeres gyakorlás. Az NHS szerint a kéz és a csukló kíméletes mozgatása enyhítheti az enyhe fájdalmat és a merevséget. *(NHS, Wrist pain)*
+Ha a kivizsgálás nem talált sürgős okot, jöhet a fokozatos, rendszeres gyakorlás. A kéz és a csukló kíméletes mozgatása enyhítheti az enyhe fájdalmat és a merevséget.
 
 A mozgatás módját, mértékét és ütemét viszont érdemes vezetve csinálni. Gyógytornászként ilyenkor az az első kérdés, milyen terhelés éri a kezed, és ehhez kell igazítani a gyakorlást.
 
@@ -325,20 +325,7 @@ Mindketten elvégeztük 2024-ben Kate Thorn CHT distalis radius törés és De Q
 
 Oktatunk is. A ProBody Stúdió sportrehabilitációs tréner képzésén a „Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe” tantermi kurzus instruktorai vagyunk (2024, 2025, 2026, Budapest).
 
-Ez a szakmai háttér a szerző hitelességét igazolja. A cikkben szereplő klinikai állítások mellett ettől függetlenül ott a forrás.
-
-## Forrásjegyzék
-
-- NHS. *Wrist pain.* https://www.nhs.uk/conditions/hand-pain/wrist-pain/ · felülvizsgálva 2025-11-05 · következő felülvizsgálat 2028-11-05 · hozzáférés: 2026-08-21.
-- NHS. *Hand pain.* https://www.nhs.uk/conditions/hand-pain/ · hozzáférés: 2026-08-21.
-- NHS. *Broken arm or wrist.* https://www.nhs.uk/conditions/broken-arm-or-wrist/ · felülvizsgálva 2023-05-26 · a jelzett következő felülvizsgálat (2026-05-26) lejárt · hozzáférés: 2026-08-21.
-- NHS. *Carpal tunnel syndrome.* https://www.nhs.uk/conditions/carpal-tunnel-syndrome/ · felülvizsgálva 2024-04-17 · következő felülvizsgálat 2027-04-17 · hozzáférés: 2026-08-21.
-- NHS. *Tennis elbow.* https://www.nhs.uk/conditions/tennis-elbow/ · felülvizsgálva 2024-05-31 · következő felülvizsgálat 2027-05-31 · hozzáférés: 2026-08-21.
-- NHS. *Stroke: symptoms.* https://www.nhs.uk/conditions/stroke/symptoms/ · felülvizsgálva 2024-09-12 · következő felülvizsgálat 2027-09-12 · hozzáférés: 2026-08-21.
-- American Academy of Orthopaedic Surgeons. *Management of Carpal Tunnel Syndrome. Evidence-Based Clinical Practice Guideline.* Elfogadta az AAOS igazgatótanácsa 2024. május 18-án. https://www.aaos.org/globalassets/quality-and-practice-resources/carpal-tunnel/carpal-tunnel-2024/cts-cpg.pdf · hozzáférés: 2026-08-21.
-- AAOS OrthoInfo. *De Quervain's Tenosynovitis.* Szerzők: Sophia Kocher, MS; Erica Taylor, MD, MBA, FAAOS. Lektor: Julie E. Adams, MD, FAAOS. https://www.orthoinfo.org/diseases--conditions/de-quervains-tendinosis/ · hozzáférés: 2026-08-21.
-- Hyatt BT, Bagg MR. *Flexor Tenosynovitis.* Orthopedic Clinics of North America. 2017;48(2):217–227. DOI: 10.1016/j.ocl.2016.12.010 · PMID 28336044 · https://pubmed.ncbi.nlm.nih.gov/28336044/ · hozzáférés: 2026-08-21.
-- Langer MF, Grünert JG, Unglaub F, Ueberberg J, Glasbrenner J, Oeckenpöhler S. *Pyogene Beugesehnenscheideninfektion (Pyogenic Flexor Tenosynovitis).* Handchirurgie Mikrochirurgie Plastische Chirurgie. 2021;53(3):267–275. DOI: 10.1055/a-1472-1689 · PMID 34134159 · https://pubmed.ncbi.nlm.nih.gov/34134159/ · hozzáférés: 2026-08-21.
+Ez a szakmai háttér a szerző hitelességét igazolja.
 
 ## Fontos tudnivaló
 

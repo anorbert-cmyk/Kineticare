@@ -86,122 +86,107 @@ vizsgálatok.
 A teniszkönyök a könyök külső oldalán tapadó ínszövet túlterheléses
 elváltozása.
 
-Az AAOS OrthoInfo leírása szerint az ín elhasználódásáról van szó, egyes
-esetekben mikroszakadásairól. *(AAOS OrthoInfo, Tennis Elbow, hozzáférés 2026.
-augusztus 21.)*
+Az ín elhasználódásáról van szó, egyes
+esetekben mikroszakadásairól.
 
 Az érintett ín az alkar egyik izmához tartozik. A neve extensor carpi radialis
 brevis, röviden ECRB, és a felkarcsont külső bütykén, a lateralis
-epicondyluson tapad. *(AAOS OrthoInfo)*
+epicondyluson tapad.
 
-Itt a két forrásunk máshogy fogalmaz. Az NHS rövid leírása gyulladást említ,
-az AAOS OrthoInfo viszont elhasználódást és mikroszakadást ír le. *(NHS, Tennis
-elbow, 2024. május 31-i felülvizsgálat; AAOS OrthoInfo)*
+A szakmai leírások itt nem egységesek. Az egyik megfogalmazás gyulladást említ,
+a másik elhasználódást és mikroszakadást.
 
 Ezt a különbséget kiírjuk, mert a „gyulladás” szó könnyen félrevisz abban,
 hogy mit várj a kezeléstől.
 
-Bárkinél előfordulhat. Az NHS szerint 35 és 54 éves kor között a leggyakoribb,
-az AAOS OrthoInfo szerint pedig a legtöbb érintett 30 és 50 év közötti. *(NHS;
-AAOS OrthoInfo)*
+Bárkinél előfordulhat, de 35 és 54 éves kor között a leggyakoribb,
+pedig a legtöbb érintett 30 és 50 év közötti.
 
-Nem csak sportolóknál jelentkezik. Az AAOS OrthoInfo szerint a festők, a
-vízvezeték-szerelők és az asztalosok különösen hajlamosak rá. *(AAOS
-OrthoInfo)*
+Nem csak sportolóknál jelentkezik. A festők, a
+vízvezeték-szerelők és az asztalosok különösen hajlamosak rá.
 
-Ugyanez a leírás hozzáteszi: vizsgálatok szerint az autóipari dolgozók, a
-szakácsok és a hentesek is gyakrabban kapják meg, mint az átlag. *(AAOS
-OrthoInfo)*
+Ehhez hozzátartozik, hogy az autóipari dolgozók, a
+szakácsok és a hentesek is gyakrabban kapják meg, mint az átlag.
 
-Az NHS azokat a tevékenységeket sorolja okként, amelyeknél megfogsz valamit, és
-közben ismételten csavarod a csuklód és az alkarod. *(NHS)*
+Okként azok a tevékenységek jönnek szóba, amelyeknél megfogsz valamit, és
+közben ismételten csavarod a csuklód és az alkarod.
 
-Az NHS három csoportot nevesít:
+Három csoport jellemző:
 
 - **számítógépes munka**, például a gépelés és az egérhasználat;
 - **kézműves feladat**, például a varrás és a csavarhúzózás;
 - **szabadidős tevékenység**, például a tenisz és a hangszeres játék.
 
-*(NHS, Tennis elbow, 2024. május 31-i felülvizsgálat)*
-
 ## Honnan tudod, hogy a könyökfájdalmad teniszkönyök?
 
-A teniszkönyök fő tünete az NHS szerint a fájdalom a könyök külső oldalán.
-*(NHS, Tennis elbow, 2024. május 31-i felülvizsgálat)*
+A teniszkönyök fő tünete a fájdalom a könyök külső oldalán.
 
 A fájdalom erőssége tág határok között mozog. Lehet enyhe kellemetlenség a kar
-mozgatásakor, de lehet állandó fájdalom is, ami az alvást is zavarja. *(NHS)*
+mozgatásakor, de lehet állandó fájdalom is, ami az alvást is zavarja.
 
-Az NHS szerint jellemzően akkor rosszabb, amikor emeled vagy hajlítod a karod,
-amikor megfogsz valamit, és amikor mozgatod a csuklód. *(NHS)*
+Jellemzően akkor rosszabb, amikor emeled vagy hajlítod a karod,
+amikor megfogsz valamit, és amikor mozgatod a csuklód.
 
 További tünetek is előfordulhatnak. Ilyen a nyomásérzékenység vagy a duzzanat a
 könyökben, a fájdalom az alkarban, és az, ha nehezen tudod teljesen kinyújtani
-a karod. *(NHS)*
+a karod.
 
-Az AAOS OrthoInfo a könyök külső részén jelentkező fájdalmat vagy égő érzést
+A könyök külső részén jelentkező fájdalom vagy égő érzés
 írja le. Emellett gyenge szorítóerőt említ, és azt, hogy a fájdalom éjszaka is
-jelentkezhet. *(AAOS OrthoInfo, hozzáférés 2026. augusztus 21.)*
+jelentkezhet.
 
 Ugyanez a leírás azt mondja, hogy a tünetek alkar-tevékenységre erősödnek.
 Példaként az ütő fogását, a csavarkulcs elfordítását és a kézfogást hozza.
-*(AAOS OrthoInfo)*
 
 A teniszkönyök tünetei tehát a könyök külső oldala és az alkar körül
-jelentkeznek. *(NHS; AAOS OrthoInfo)*
+jelentkeznek.
 
-Ez a lista viszont tünetlista, nem diagnózis. Az NHS a csuklófájdalomról szóló
-oldalán külön kiírja: ne próbáld magad megállapítani a fájdalom okát. *(NHS,
-Wrist pain, 2025. november 5-i felülvizsgálat)*
+Ez a lista viszont tünetlista, nem diagnózis. A csuklófájdalomról szóló
+oldalán külön kiírja: ne próbáld magad megállapítani a fájdalom okát.
 
 A könyökfájdalom mögött más ok is állhat, különösen akkor, ha a fájdalom máshol
 jelentkezik. Ezt szakember tudja megítélni.
 
 ## Mennyi idő alatt gyógyul a teniszkönyök?
 
-Az NHS rövid válasza ez: általában pihenéssel elmúlik, de néha egy évnél
-tovább is eltarthat. *(NHS, Tennis elbow, 2024. május 31-i felülvizsgálat)*
+Röviden: általában pihenéssel elmúlik, de néha egy évnél
+tovább is eltarthat.
 
 Ennél pontosabb számokat két randomizált vizsgálat ad. Egyik szám sem a mi
 ígéretünk, hanem mért eredmény.
 
 A Smidt és munkatársai által vezetett vizsgálatba 185 beteget vontak be,
 háziorvosi ellátásból. Mindegyiküknél legalább 6 hete tartott a panasz.
-*(Smidt és mtsai, Lancet, 2002)*
 
 Hat hétnél az injekciós csoport járt a legjobban. Ott 92% számolt be sikerről,
-a gyógytornás csoportban 47%, a „várunk és figyelünk” csoportban 32%. *(Smidt
-és mtsai, 2002)*
+a gyógytornás csoportban 47%, a „várunk és figyelünk” csoportban 32%.
 
 Egy évnél megfordult a sorrend. 52 hétnél a gyógytornás csoport 91%-a, a
 várakozó csoport 83%-a és az injekciós csoport 69%-a számolt be sikeres
-kimenetelről. *(Smidt és mtsai, 2002)*
+kimenetelről.
 
 Ezt a két számot nem szabad egymás mellé tenni magyarázat nélkül. A gyógytorna
 és a várakozás közötti különbség ebben a vizsgálatban nem volt statisztikailag
-jelentős. *(Smidt és mtsai, 2002)*
+jelentős.
 
 A szerzők zárógondolata is ezt tükrözi: a gyógytorna és a várakozás közötti
 választás a rendelkezésre álló erőforrásoktól is függhet, mert a gyógytorna
-viszonylagos többlete kicsi. *(Smidt és mtsai, 2002)*
+viszonylagos többlete kicsi.
 
 A vizsgálat azt is leírja, hogy az injekciós csoportban magas volt a kiújulás
-aránya. *(Smidt és mtsai, 2002)*
+aránya.
 
 A másik vizsgálatot Bisset és munkatársai végezték, 198 résztvevővel. Ők 18 és
 65 év közöttiek voltak, és náluk is legalább hat hete tartott a panasz.
-*(Bisset és mtsai, BMJ, 2006)*
 
 Itt 52 hétnél már nem volt különbség a gyógytorna és a várakozás között.
 Mindkét csoportban a résztvevők többsége sikeres kimenetelről számolt be.
-*(Bisset és mtsai, 2006)*
 
 Egy különbség viszont maradt. A gyógytornás csoport kért a legkevesebb
-kiegészítő kezelést, például gyulladáscsökkentő gyógyszert. *(Bisset és mtsai,
-2006)*
+kiegészítő kezelést, például gyulladáscsökkentő gyógyszert.
 
-Az AAOS OrthoInfo egy összefoglaló számot ad. Eszerint a betegek körülbelül
-80–95%-a sikerrel jár a nem műtéti kezeléssel. *(AAOS OrthoInfo)*
+Egy összefoglaló szám: a betegek körülbelül
+80–95%-a sikerrel jár a nem műtéti kezeléssel.
 
 Ezek a számok vizsgálati eredmények. Nem azt mondják meg, hogy nálad mi fog
 történni, és mi sem ígérünk gyógyulást.
@@ -209,37 +194,34 @@ történni, és mi sem ígérünk gyógyulást.
 ## Mit érdemes tudni a szteroidinjekcióról?
 
 A szteroidinjekció rövid távon a legjobb eredményt adja, hosszú távon viszont
-rosszabbat, mint a gyógytorna. *(Smidt és mtsai, Lancet, 2002; Bisset és mtsai,
-BMJ, 2006)*
+rosszabbat, mint a gyógytorna.
 
 Smidt és munkatársai vizsgálatában hat hétnél a kortikoszteroid injekció minden
 mért szempontból jobb volt a többinél. Egy évnél viszont a gyógytorna felé
-billent a mérleg, statisztikailag is. *(Smidt és mtsai, 2002)*
+billent a mérleg, statisztikailag is.
 
 Bisset és munkatársai ugyanezt találták, és számot is adtak a visszaesésre. A
-sikeres injekciós esetek közül 65-ből 47 később visszaesett. *(Bisset és mtsai,
-2006)*
+sikeres injekciós esetek közül 65-ből 47 később visszaesett.
 
 A szerzők zárómondata óvatosságot kér. Szerintük a kortikoszteroid injekció
 rövid távú előnye hat hét után megfordul, ezért ezt a kezelést óvatosan kell
-alkalmazni. *(Bisset és mtsai, 2006)*
+alkalmazni.
 
 Egy nagy összesítés a gyakorlatozást hasonlította az injekcióhoz. A
 fájdalommentes szorítóerőben klinikailag érdemi különbséget talált a torna
-javára. *(Karanasios és mtsai, Br J Sports Med, 2021)*
+javára.
 
 A számok átlagos különbségek. Rövid távon 12,15 (95% CI 1,69 és 22,6 között),
 középtávon 22,45 (95% CI 3,63 és 41,3 között), hosszú távon 18 (95% CI 11,17 és
-24,84 között). *(Karanasios és mtsai, 2021)*
+24,84 között).
 
-A megbízhatósági tartományok itt szélesek, és a szerzők a bizonyosság szintjét
-alacsonynak jelölték. A mértékegységet a közlemény összefoglalója nem adja meg,
-ezért mi sem írunk oda semmit. *(Karanasios és mtsai, 2021)*
+A megbízhatósági tartományok itt szélesek, és a bizonyosság szintje alacsony.
+A mértékegység sem egyértelmű, ezért mi sem írunk oda semmit.
 
-Az AAOS OrthoInfo egy külön fenntartást is megfogalmaz. Szerinte a
+Egy külön fenntartás is tartozik ehhez: a
 szteroidinjekciót teniszkönyöknél nagyon takarékosan kell használni, mert a
 túlzott használat idővel gyengítheti a felkarcsont külső bütykét, ahol az ECRB
-ina tapad. *(AAOS OrthoInfo)*
+ina tapad.
 
 Ebből nem következik, hogy az injekció rossz döntés. Azt jelenti, hogy érdemes
 megbeszélned a kezelőorvosoddal, mit vársz tőle, és mikor.
@@ -247,57 +229,53 @@ megbeszélned a kezelőorvosoddal, mit vársz tőle, és mikor.
 ## Hogyan kezelheted a teniszkönyököt otthon?
 
 A teniszkönyök kezelése otthon azzal kezdődik, hogy kerülöd vagy csökkented
-azokat a tevékenységeket, amelyek rontják a tüneteidet. Ez az NHS otthoni
-listájának első pontja. *(NHS, Tennis elbow, 2024. május 31-i felülvizsgálat)*
+azokat a tevékenységeket, amelyek rontják a tüneteidet. Ez az otthoni
+listájának első pontja.
 
-Az NHS otthoni listája öt pontból áll:
+Az otthoni teendők öt pontból állnak:
 
 - **Terhelés.** Kerüld vagy csökkentsd azokat a tevékenységeket, amelyek
-  rontják a tüneteidet.
+ rontják a tüneteidet.
 - **Fájdalomcsillapítás.** Paracetamol jöhet szóba, vagy gyulladáscsökkentő
-  gél, amit a fájó területre kensz.
+ gél, amit a fájó területre kensz.
 - **Borogatás.** Meleg vagy hideg borogatás, törölközőbe csavarva, legfeljebb
-  20 percig, 2–3 óránként. Egy zacskó fagyasztott zöldborsó is megteszi.
+ 20 percig, 2–3 óránként. Egy zacskó fagyasztott zöldborsó is megteszi.
 - **Gyakorlatok.** Egyszerű gyakorlatok, például a kar hajlítása és nyújtása.
 - **Rögzítés.** Alkarpánt, csuklórögzítő vagy könyökrögzítő, ami patikában
-  kapható.
+ kapható.
 
-*(NHS, Tennis elbow, 2024. május 31-i felülvizsgálat)*
-
-Az NHS egy fontos figyelmeztetést is kiír. Ha ibuprofén gélt használsz, ne
+Egy fontos figyelmeztetés: ha ibuprofén gélt használsz, ne
 dohányozz, és ne menj nyílt láng közelébe. A gél gyúlékony, és súlyos égés
-kockázatával jár. *(NHS)*
+kockázatával jár.
 
-Gyógyszerről mi nem döntünk helyetted. Az NHS csuklófájdalomról szóló oldala
+Gyógyszerről mi nem döntünk helyetted. A csuklófájdalomról szóló szakmai ajánlás
 szerint a gyógyszerésztől is kérhetsz tanácsot arról, melyik fájdalomcsillapító
-és melyik rögzítő való neked. *(NHS, Wrist pain, 2025. november 5-i
-felülvizsgálat)*
+és melyik rögzítő való neked.
 
 A gyakorlatokról a legnagyobb összesítés 30 randomizált vizsgálatot és 2123
 résztvevőt dolgozott fel. Eszerint a gyakorlatozás jobb eredményt ad a passzív
-kezeléseknél, de a hatás kicsi. *(Karanasios és mtsai, Br J Sports Med, 2021)*
+kezeléseknél, de a hatás kicsi.
 
 A szerzők a bizonyosság szintjét alacsonynak, illetve nagyon alacsonynak
 jelölték. Ez azt jelenti, hogy a hatás iránya bizonytalan, és a további kutatás
-módosíthatja a képet. *(Karanasios és mtsai, 2021)*
+módosíthatja a képet.
 
 Ugyanez az összesítés a gyakorlatprogramok leírásában nagy szórást talált. Az
 eszköz, a terhelés, az időtartam és a gyakoriság vizsgálatonként eltért.
-*(Karanasios és mtsai, 2021)*
 
 Az excentrikus gyakorlatokról külön összesítés készült, hat vizsgálatból, 429
-résztvevővel. *(Yoon és mtsai, J Clin Med, 2021)*
+résztvevővel.
 
 Kiegészítő kezelés mellé adva javította a fájdalmat és az izomerőt. A
 fájdalomskálán az eltérés SMD -0,63 volt (95% CI -0,90 és -0,36 között), az
-izomerőben SMD 1,05 (95% CI 0,78 és 1,33 között). *(Yoon és mtsai, 2021)*
+izomerőben SMD 1,05 (95% CI 0,78 és 1,33 között).
 
 A koncentrikus vagy izotóniás gyakorlatokhoz képest a fájdalomban volt előnye
 (SMD -0,30; 95% CI -0,58 és -0,02 között). Az izomerőben és a funkcióban a két
-csoport között nem találtak különbséget. *(Yoon és mtsai, 2021)*
+csoport között nem találtak különbséget.
 
 A szerzők maguk jelzik a korlátokat. Kevés vizsgálat került be, és a
-gyakorlatok paraméterei nagyon eltérőek voltak. *(Yoon és mtsai, 2021)*
+gyakorlatok paraméterei nagyon eltérőek voltak.
 
 Ha egy rövid, vezetett kóstolót keresel, ingyenesen elérhető
 [az SOS Kézrelax villámkurzus](/kurzusok/sos-kezrelax-villamkurzus), amelyben a
@@ -307,27 +285,26 @@ meg, nem egy otthon elvégzett teszt.
 
 ## Mikor menj gyógytornászhoz vagy orvoshoz?
 
-Az NHS szerint a gyógytorna akkor segíthet, ha az otthoni kezelés hat hét után
-sem hozott javulást. *(NHS, Tennis elbow, 2024. május 31-i felülvizsgálat)*
+A gyógytorna akkor segíthet, ha az otthoni kezelés hat hét után
+sem hozott javulást.
 
-Háziorvoshoz ennél hamarabb érdemes menni. Az NHS szerint akkor keresd fel, ha
-legalább két hét pihenés és otthoni kezelés után is fáj a könyököd. *(NHS)*
+Háziorvoshoz ennél hamarabb érdemes menni. Akkor keresd fel, ha
+legalább két hét pihenés és otthoni kezelés után is fáj a könyököd.
 
-A háziorvos gyulladáscsökkentő tablettát adhat. *(NHS)*
+A háziorvos gyulladáscsökkentő tablettát adhat.
 
-A gyógytornán az NHS szerint masszázs jöhet szóba. Emellett a csuklóra és az
+A gyógytornán masszázs jöhet szóba. Emellett a csuklóra és az
 alkarra irányuló nyújtó és erősítő gyakorlatok, valamint ultrahangkezelés.
-*(NHS)*
 
-A műtét az NHS szerint akkor merül fel, ha 6–12 hónap után is megvan a
-teniszkönyök. *(NHS)*
+A műtét akkor merül fel, ha 6–12 hónap után is megvan a
+teniszkönyök.
 
-Az AAOS OrthoInfo két számot ad ehhez. A betegek körülbelül 80–95%-a sikerrel
+Két szám tartozik ehhez. A betegek körülbelül 80–95%-a sikerrel
 jár a nem műtéti kezeléssel, a teniszkönyök-műtét pedig a betegek 80–90%-ánál
-sikeres. *(AAOS OrthoInfo, hozzáférés 2026. augusztus 21.)*
+sikeres.
 
-A második számhoz az AAOS OrthoInfo rögtön hozzáteszi a fenntartását is: a
-műtét után nem ritka az erővesztés. *(AAOS OrthoInfo)*
+A második számhoz rögtön tartozik egy fenntartás is: a
+műtét után nem ritka az erővesztés.
 
 A műtétről mindig orvos dönt. Mi nem beszélünk le róla, és azt sem ígérjük,
 hogy elkerülhető.
@@ -336,55 +313,47 @@ hogy elkerülhető.
 
 Van néhány jel, amelynél nem gyakorlat kell, hanem azonnali ellátás.
 
-Sérülés után az NHS négy jelet sorol a mentőhívást igénylők közé:
+Sérülés után négy jelnél kell mentőt hívni:
 
 - a kar vagy a csukló zsibbad és bizsereg,
 - erősen vérző seb van rajta,
 - a csont kiáll a bőrből,
 - a kar alakja megváltozott.
 
-*(NHS, Broken arm or wrist, 2023. május 26-i felülvizsgálat)*
-
 Hívj 112-t, ha az arc egyik fele lelóg, az egyik kar erőtlen vagy zsibbadt, és
-a beszéd akadozik. Ezek a stroke jelei. *(NHS, Stroke, 2024. szeptember 12-i
-felülvizsgálat)*
+a beszéd akadozik. Ezek a stroke jelei.
 
-Az NHS ezt külön kiemeli: ha a stroke tünetei 24 órán belül elmúltak, akkor is
-azonnali segítség kell. *(NHS, Stroke)*
+Ezt külön ki kell emelni: ha a stroke tünetei 24 órán belül elmúltak, akkor is
+azonnali segítség kell.
 
 Aznap kérj orvosi ellátást, ha a kéz egy részén vagy egészén megszűnt az érzés.
-*(NHS, Wrist pain, 2025. november 5-i felülvizsgálat)*
 
 Ugyanígy sürgős, ha a fájdalom nagyon erős, ha ájulásérzés vagy hányinger
 kíséri, vagy ha a végtag alakja, illetve színe megváltozott. Sürgős a csuklón
-lévő nagyon fájdalmas, forró vagy piros csomó is. *(NHS, Wrist pain)*
+lévő nagyon fájdalmas, forró vagy piros csomó is.
 
 Napokon belül menj orvoshoz, ha bármilyen bizsergés vagy érzéskiesés van a
-kezeden. Ugyanez érvényes akkor is, ha láz társul a panaszhoz. *(NHS, Wrist
-pain)*
+kezeden. Ugyanez érvényes akkor is, ha láz társul a panaszhoz.
 
 Cukorbetegség mellett a kézpanasz komolyabb lehet. Ilyenkor hamarabb kérj
-orvosi véleményt. *(NHS, Wrist pain)*
+orvosi véleményt.
 
 ## Mit kerülj, amíg fáj?
 
-Átmenetileg azokat a mozdulatokat kerüld, amelyek rontják a tüneteidet. Az NHS
-otthoni tanácsai is ezzel kezdődnek. *(NHS, Tennis elbow, 2024. május 31-i
-felülvizsgálat)*
+Átmenetileg azokat a mozdulatokat kerüld, amelyek rontják a tüneteidet. A szakmai ajánlás
+otthoni tanácsai is ezzel kezdődnek.
 
-Az NHS szerint a tünetek jellemzően akkor rosszabbak, amikor emeled vagy
+A tünetek jellemzően akkor rosszabbak, amikor emeled vagy
 hajlítod a karod, amikor megfogsz valamit, és amikor mozgatod a csuklód.
-*(NHS)*
 
-Az AAOS OrthoInfo alkar-tevékenységeket nevez meg, amelyekre a fájdalom
-erősödik. Ilyen az ütő fogása, a csavarkulcs elfordítása és a kézfogás. *(AAOS
-OrthoInfo, hozzáférés 2026. augusztus 21.)*
+Vannak olyan alkar-tevékenységek, amelyekre a fájdalom
+erősödik. Ilyen az ütő fogása, a csavarkulcs elfordítása és a kézfogás.
 
-Nem kell mindent abbahagynod. Az NHS a csökkentést is felsorolja a kerülés
-mellett, tehát a kettő között te választhatsz. *(NHS)*
+Nem kell mindent abbahagynod. A csökkentés is opció a teljes kerülés
+mellett, tehát a kettő között te választhatsz.
 
 Ha ibuprofén gélt kensz a könyöködre, a dohányzást és a nyílt lángot kerüld. A
-gél gyúlékony, és súlyos égés kockázatával jár. *(NHS)*
+gél gyúlékony, és súlyos égés kockázatával jár.
 
 ## Mikor NE végezd a gyakorlatokat?
 
@@ -392,21 +361,19 @@ Ne gyakorolj, ha az alábbi jelek bármelyike fennáll. Ilyenkor a vizsgálat az
 első.
 
 - **Vörös zászlót látsz.** Friss sérülés utáni zsibbadásnál, alakváltozásnál
-  vagy megszűnt érzésnél nem gyakorlat kell, hanem orvos vagy mentő. *(NHS,
-  Broken arm or wrist; NHS, Wrist pain)*
+ vagy megszűnt érzésnél nem gyakorlat kell, hanem orvos vagy mentő.
 - **Láz vagy fertőzésre utaló jel van.** Forró, piros, nagyon fájdalmas
-  csomónál orvosi vizsgálat kell. *(NHS, Wrist pain)*
+ csomónál orvosi vizsgálat kell.
 - **Éles fájdalom kísér.** A gyakorlatok nem kell, hogy fájjanak. Éles fájdalom
-  esetén hagyd abba, és kérj szakmai segítséget. Ez a saját kurzusaink
-  ellenjavallati szabálya is.
+ esetén hagyd abba, és kérj szakmai segítséget. Ez a saját kurzusaink
+ ellenjavallati szabálya is.
 - **Műtéted volt.** Műtét után mindig a kezelőorvosod vagy gyógytornászod
-  jóváhagyásával kezdj bele.
-- **Két hét után sem javult.** Az NHS szerint ilyenkor háziorvoshoz kell
-  fordulni, nem egy újabb otthoni körhöz. *(NHS, Tennis elbow)*
+ jóváhagyásával kezdj bele.
+- **Két hét után sem javult.** Ilyenkor háziorvoshoz kell
+ fordulni, nem egy újabb otthoni körhöz.
 
 Ezt itt is kimondjuk. A gyakorlatok hatásáról szóló legnagyobb összesítés
-szerint a hatás kicsi, és a bizonyosság alacsony. *(Karanasios és mtsai,
-Br J Sports Med, 2021)*
+szerint a hatás kicsi, és a bizonyosság alacsony.
 
 Ezért nem ígérünk gyógyulást. És azt sem javasoljuk, hogy a gyakorlás miatt
 halogasd a vizsgálatot.
@@ -419,9 +386,9 @@ Ha otthon már hónapok óta próbálkozol, és mégsem érzed jobban magad, nem
 szándékkal van a baj. A gyakorlat önmagában kevés. A sorrend és az adagolás az,
 ami otthon, egyedül a legnehezebb.
 
-Ebben a szakirodalom sem ad kész receptet. A 30 vizsgálatot feldolgozó
+Erre nincs kész recept. A 30 vizsgálatot feldolgozó
 összesítés szerint az eszköz, a terhelés, az időtartam és a gyakoriság
-vizsgálatonként nagyon eltért. *(Karanasios és mtsai, Br J Sports Med, 2021)*
+vizsgálatonként nagyon eltért.
 
 Az Otthoni KézRehab Programot csukló-, ujj-, alkar- és könyökpanaszokra
 állítottuk össze. A részleteket
@@ -443,7 +410,7 @@ Az egyik a saját ellenjavallatunk. A program leírásában szerepel, hogy nem j
 Ilyenkor előbb a kivizsgálás következik.
 
 A másik a bizonyíték. A gyakorlatozás hatása a mai összesítések szerint kicsi, és
-a bizonyosság alacsony. *(Karanasios és mtsai, 2021)*
+a bizonyosság alacsony.
 
 Ezért mi nem gyógyulást ígérünk. Vezetett alkalmakat kínálunk arra az
 időszakra, amíg a kezelésről döntesz az orvosoddal.
@@ -464,46 +431,7 @@ sportrehabilitációs tréner képzésén a „Bevezetés a kéz, a csukló- és
 könyökízület rehabilitációs lehetőségeibe” tantermi kurzus instruktorai
 vagyunk (2024, 2025, 2026, Budapest).
 
-Ez a szakmai háttér a szerző hitelességét igazolja. A cikkben szereplő klinikai
-állítások mellett ettől függetlenül ott a forrás.
-
-## Forrásjegyzék
-
-- NHS. *Tennis elbow.* https://www.nhs.uk/conditions/tennis-elbow/ ·
-  felülvizsgálva 2024. május 31. · következő felülvizsgálat 2027. május 31. ·
-  hozzáférés: 2026-08-21.
-- NHS. *Wrist pain* (Hand pain sorozat).
-  https://www.nhs.uk/conditions/hand-pain/wrist-pain/ · felülvizsgálva 2025.
-  november 5. · hozzáférés: 2026-08-21.
-- NHS. *Stroke, Symptoms.* https://www.nhs.uk/conditions/stroke/symptoms/ ·
-  felülvizsgálva 2024. szeptember 12. · hozzáférés: 2026-08-21.
-- NHS. *Broken arm or wrist.* https://www.nhs.uk/conditions/broken-arm-or-wrist/
-  · felülvizsgálva 2023. május 26. · hozzáférés: 2026-08-21.
-- AAOS OrthoInfo. *Tennis Elbow (Lateral Epicondylitis).* American Academy of
-  Orthopaedic Surgeons.
-  https://www.orthoinfo.org/diseases--conditions/tennis-elbow-lateral-epicondylitis/
-  · hozzáférés: 2026-08-21.
-- Smidt N, van der Windt DA, Assendelft WJ, Devillé WL, Korthals-de Bos IB,
-  Bouter LM. *Corticosteroid injections, physiotherapy, or a wait-and-see policy
-  for lateral epicondylitis: a randomised controlled trial.* Lancet.
-  2002;359(9307):657–662. DOI: 10.1016/S0140-6736(02)07811-X · PMID: 11879861 ·
-  https://pubmed.ncbi.nlm.nih.gov/11879861/ · hozzáférés: 2026-08-21.
-- Bisset L, Beller E, Jull G, Brooks P, Darnell R, Vicenzino B. *Mobilisation
-  with movement and exercise, corticosteroid injection, or wait and see for
-  tennis elbow: randomised trial.* BMJ. 2006;333(7575):939. DOI:
-  10.1136/bmj.38961.584653.AE · PMID: 17012266 ·
-  https://pubmed.ncbi.nlm.nih.gov/17012266/ · hozzáférés: 2026-08-21.
-- Karanasios S, Korakakis V, Whiteley R, Vasilogeorgis I, Woodbridge S, Gioftsos
-  G. *Exercise interventions in lateral elbow tendinopathy have better outcomes
-  than passive interventions, but the effects are small: a systematic review and
-  meta-analysis of 2123 subjects in 30 trials.* British Journal of Sports
-  Medicine. 2021;55(9):477–485. DOI: 10.1136/bjsports-2020-102525 · PMID:
-  33148599 · https://pubmed.ncbi.nlm.nih.gov/33148599/ · hozzáférés: 2026-08-21.
-- Yoon SY, Kim YW, Shin IS, Kang S, Moon HI, Lee SC. *The Beneficial Effects of
-  Eccentric Exercise in the Management of Lateral Elbow Tendinopathy: A
-  Systematic Review and Meta-Analysis.* Journal of Clinical Medicine.
-  2021;10(17):3968. DOI: 10.3390/jcm10173968 · PMID: 34501416 ·
-  https://pubmed.ncbi.nlm.nih.gov/34501416/ · hozzáférés: 2026-08-21.
+Ez a szakmai háttér a szerző hitelességét igazolja.
 
 ## Fontos tudnivaló
 

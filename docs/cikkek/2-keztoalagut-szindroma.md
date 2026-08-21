@@ -63,55 +63,55 @@ Ha ez ismerős, jó eséllyel te is beírtad már a keresőbe: kéztőalagút sz
 
 Kocsis Kata és Kiss Kata vagyunk, gyógytornászok, és évek óta elsősorban a kéz rehabilitációjával foglalkozunk. Most arról írunk, mi van a műtét előtt.
 
-Egy dolgot előre leszögezünk. Ez a cikk nem mondja meg, mi bajod van. Azt szedtük össze, mit tudnak ma a nemzetközi irányelvek és az összesített vizsgálatok.
+Egy dolgot előre leszögezünk. Ez a cikk nem mondja meg, mi bajod van. Azt szedtük össze, mit tudni ma erről a panaszról.
 
 ## Mi a kéztőalagút-szindróma, és mitől alakul ki?
 
 A kéztőalagút-szindróma azt jelenti, hogy a csuklón átfutó középideg nyomás alá kerül.
 
-A csuklóban van egy szűk járat, ez a kéztőalagút. Vagy maga a járat szűkül be, vagy a benne futó inak körüli szövet duzzad meg. *(NHS, Carpal tunnel syndrome, 2024. április 17-i felülvizsgálat; AAOS OrthoInfo, Carpal Tunnel Syndrome)*
+A csuklóban van egy szűk járat, ez a kéztőalagút. Vagy maga a járat szűkül be, vagy a benne futó inak körüli szövet duzzad meg.
 
-Az AAOS OrthoInfo szerint az esetek nagy részében több tényező áll együtt a háttérben. A nők és az idősebbek gyakrabban érintettek. *(AAOS OrthoInfo)*
+Az esetek nagy részében több tényező áll együtt a háttérben. A nők és az idősebbek gyakrabban érintettek.
 
 Egyetlen okot tehát ritkán lehet megnevezni. Ez a magyarázata annak is, hogy miért nincs egyetlen, mindenkinél működő kezelés.
 
 ## Hol fáj, és mik a tünetei?
 
-A zsibbadás elsősorban a hüvelyk-, a mutató-, a középső és a gyűrűsujjat érinti, és a tünetek éjjel a legerősebbek. *(NHS; AAOS OrthoInfo)*
+A zsibbadás elsősorban a hüvelyk-, a mutató-, a középső és a gyűrűsujjat érinti, és a tünetek éjjel a legerősebbek.
 
-Az NHS ezeket sorolja fel tünetként: fájdalom vagy sajgás az ujjakban, a kézben és a karban, zsibbadás, bizsergés, gyenge hüvelykujj vagy nehéz markolás. *(NHS)*
+A jellemző tünetek: fájdalom vagy sajgás az ujjakban, a kézben és a karban, zsibbadás, bizsergés, gyenge hüvelykujj vagy nehéz markolás.
 
-Ugyanez a forrás írja le a lefolyást is. A tünetek lassan indulnak, és jönnek-mennek. *(NHS)*
+A lefolyás is jellegzetes: a tünetek lassan indulnak, és jönnek-mennek.
 
-Az AAOS OrthoInfo három jellegzetes részletet tesz hozzá. A zsibbadás gyakran felébreszt éjjel, és sokaknál a kéz rázogatása enyhíti. *(AAOS OrthoInfo)*
+Ehhez három jellegzetes részlet tartozik. A zsibbadás gyakran felébreszt éjjel, és sokaknál a kéz rázogatása enyhíti.
 
-A harmadik részlet a kézügyesség. Jellemző az ügyetlenség, és az, hogy elejted a tárgyakat. *(AAOS OrthoInfo)*
+A harmadik részlet a kézügyesség. Jellemző az ügyetlenség, és az, hogy elejted a tárgyakat.
 
-A zsibbadásnak sok más oka is lehet, a cukorbetegségtől a nyakban becsípődött idegig. Az NHS figyelmeztetése egyértelmű: ne diagnosztizáld magad. *(NHS, Pins and needles, 2024. január 4-i felülvizsgálat)* A lehetséges okokat végigvettük [a kézzsibbadásról szóló cikkünkben](/blog/miert-zsibbad-a-kezem), ha tájékozódni szeretnél.
+A zsibbadásnak sok más oka is lehet, a cukorbetegségtől a nyakban becsípődött idegig. Egy dolog viszont egyértelmű: ne diagnosztizáld magad. A lehetséges okokat végigvettük [a kézzsibbadásról szóló cikkünkben](/blog/miert-zsibbad-a-kezem), ha tájékozódni szeretnél.
 
 ## Ki kapja meg gyakrabban?
 
-Az NHS hat kockázati tényezőt nevez meg: túlsúly, terhesség, ismétlődő csuklóhajlítás vagy erős markolás, bizonyos egyéb betegségek, családi halmozódás, korábbi csuklósérülés. *(NHS)*
+Hat kockázati tényező ismert: túlsúly, terhesség, ismétlődő csuklóhajlítás vagy erős markolás, bizonyos egyéb betegségek, családi halmozódás, korábbi csuklósérülés.
 
-A hatodik pontban két betegség szerepel együtt: az ízületi gyulladás és a cukorbetegség. Az NHS ezeket egy felsorolási elemként hozza. *(NHS)*
+A hatodik ponthoz két betegség tartozik együtt: az ízületi gyulladás és a cukorbetegség.
 
-Az erős markoláshoz az NHS példát is ad: ilyen a rezgő szerszám használata. *(NHS)*
+Erős markolás például a rezgő szerszám használata.
 
-Az AAOS OrthoInfo négy továbbit tesz ehhez hozzá: örökletesen szűkebb kéztőalagút, szélsőséges csuklótartás, pajzsmirigy-egyensúlyzavar, rheumatoid arthritis. *(AAOS OrthoInfo)*
+Ehhez még négy tényező társul: örökletesen szűkebb kéztőalagút, szélsőséges csuklótartás, pajzsmirigy-egyensúlyzavar, rheumatoid arthritis.
 
-Terhességnél van egy fontos külön mondat. Az NHS szerint a panasz néha magától rendeződik néhány hónap alatt, különösen terhesség esetén. *(NHS)*
+Terhességnél van egy fontos külön szempont: a panasz néha magától rendeződik néhány hónap alatt.
 
-Ez nem azt jelenti, hogy csak várni kell. Ugyanez a forrás mondja ki: ha a tünetek romlanak vagy nem múlnak, orvoshoz kell fordulni. *(NHS)*
+Ez nem azt jelenti, hogy csak várni kell: ha a tünetek romlanak vagy nem múlnak, orvoshoz kell fordulni.
 
 ## Tényleg a sok gépelés okozza?
 
-A szakmai munkacsoport véleménye szerint a sok billentyűzethasználat és a kéztőalagút-szindróma között nincs igazolt összefüggés. *(AAOS, Management of Carpal Tunnel Syndrome, 2024)*
+A szakmai munkacsoport véleménye szerint a sok billentyűzethasználat és a kéztőalagút-szindróma között nincs igazolt összefüggés.
 
-Az AAOS 2024-es irányelve ezt konszenzusként jelöli. Ez azt jelenti, hogy megbízható bizonyíték nincs rá, a megállapítás szakértői vélemény. *(AAOS, 2024)*
+Ez szakmai konszenzus: megbízható bizonyíték nincs rá, a megállapítás szakértői vélemény.
 
 Ezért a köznyelvi „egérkéz” képet mi nem használjuk okként. Nem tudjuk igazolni.
 
-Az NHS ugyanakkor az ismétlődő csuklóhajlítást és az erős markolást a kockázati tényezők közt sorolja fel. *(NHS)* A két állítás nem mond ellent egymásnak: a csukló terhelése és kifejezetten a billentyűzethasználat két külön kérdés.
+Az ismétlődő csuklóhajlítás és az erős markolás ugyanakkor a kockázati tényezők közé tartozik. A két állítás nem mond ellent egymásnak: a csukló terhelése és kifejezetten a billentyűzethasználat két külön kérdés.
 
 ## Mit tehetsz, mielőtt műtétre kerül a sor?
 
@@ -123,79 +123,79 @@ Egyik sem gyógyulási ígéret. Mindegyiknél kiírjuk, mit mond a bizonyíték
 
 ### Éjszakai csuklósín: az első lépés
 
-Az NHS első lépésként az éjszakai csuklósínt ajánlja. *(NHS)*
+Első lépésként az éjszakai csuklósín jön szóba.
 
-Ugyanez a forrás a valós időigényt is kiírja: akár hat hét is kell, mire javulni kezd. *(NHS)*
+A valós időigény sem titok: akár hat hét is kell, mire javulni kezd.
 
-A Cochrane 2023-as áttekintése 29 vizsgálatot és 1937 felnőttet összesített. *(Karjalainen és mtsai, Cochrane, 2023)*
+Az eddigi vizsgálatok összesítéséből a következő rajzolódik ki.
 
-Kezelés nélküli összehasonlításban a sín rövid távon nagyobb eséllyel hoz általános javulást. A rövid táv itt három hónapon belüli időszakot jelent (RR 3,86; 95% CI 2,29 és 6,51 között; NNT 2; alacsony bizonyosság). *(Cochrane, 2023)*
+Kezelés nélküli összehasonlításban a sín rövid távon nagyobb eséllyel hoz általános javulást. A rövid táv itt három hónapon belüli időszakot jelent (RR 3,86; 95% CI 2,29 és 6,51 között; NNT 2; alacsony bizonyosság).
 
 Az NNT 2 azt jelenti: átlagosan két emberből egynél jelent ez többletjavulást ahhoz képest, ha semmit nem tenne.
 
-A tüneti skálán viszont kicsi a különbség. A Boston-kérdőív tünetskáláján 0,37 pont a sín javára, és ez a klinikailag érdemi 1 pontos küszöb alatt marad. *(Cochrane, 2023)*
+A tüneti skálán viszont kicsi a különbség. A Boston-kérdőív tünetskáláján 0,37 pont a sín javára, és ez a klinikailag érdemi 1 pontos küszöb alatt marad.
 
-A konfidencia-intervallum 0,82 ponttal jobb és 0,08 ponttal rosszabb között húzódik. A bizonyosság szintje alacsony, vagyis a vizsgálatok bizonytalanok a hatás nagyságában. *(Cochrane, 2023)*
+A konfidencia-intervallum 0,82 ponttal jobb és 0,08 ponttal rosszabb között húzódik. A bizonyosság szintje alacsony, vagyis a vizsgálatok bizonytalanok a hatás nagyságában.
 
-A funkcióban 0,24 pont a különbség, közepes bizonyossággal (95% CI 0,44 és 0,03 között). Ez is a klinikailag érdemi 0,7 pontos küszöb alatt van. *(Cochrane, 2023)*
+A funkcióban 0,24 pont a különbség, közepes bizonyossággal (95% CI 0,44 és 0,03 között). Ez is a klinikailag érdemi 0,7 pontos küszöb alatt van.
 
-A szerzői következtetés első mondatával kell kezdeni, mert az a fejmondat: nincs elég bizonyíték annak eldöntésére, használ-e a sín a kéztőalagút-szindrómában szenvedőknek. *(Cochrane, 2023)*
+A szerzői következtetés első mondatával kell kezdeni, mert az a fejmondat: nincs elég bizonyíték annak eldöntésére, használ-e a sín a kéztőalagút-szindrómában szenvedőknek.
 
-Ugyanez a bekezdés folytatódik így: a korlátozott bizonyíték nem zárja ki a tünetek és a kézfunkció kis javulását, de ez a javulás lehet, hogy klinikailag nem érdemi. *(Cochrane, 2023)*
+Ugyanez a bekezdés folytatódik így: a korlátozott bizonyíték nem zárja ki a tünetek és a kézfunkció kis javulását, de ez a javulás lehet, hogy klinikailag nem érdemi.
 
-És csak ezután jön a mondat, amit sokat idéznek. A sín viszonylag olcsó beavatkozás, és tartós ártalma nem valószínű. Ezért már kis hatás is indokolhatja a használatát, főleg akkor, ha valaki nem szeretne műtétet vagy injekciót. *(Cochrane, 2023)*
+És csak ezután jön a mondat, amit sokat idéznek. A sín viszonylag olcsó beavatkozás, és tartós ártalma nem valószínű. Ezért már kis hatás is indokolhatja a használatát, főleg akkor, ha valaki nem szeretne műtétet vagy injekciót.
 
 A kettő együtt adja ki a valós képet. Nem tudjuk, hogy használ-e, de olcsó és ártalmatlan, tehát megpróbálható.
 
-A hat hét helyett hat hónapos viselés a Cochrane szerint jobb lehet. A bizonyosság itt is alacsony. *(Cochrane, 2023)*
+A hat hét helyett hat hónapos viselés jobb lehet. A bizonyosság itt is alacsony.
 
-Magyarul ezt a sínt csuklórögzítőnek is hívják. Konkrét terméket nem ajánlunk. Az NHS szerint a sín és a fájdalomcsillapító kiválasztásában a gyógyszerész is tud segíteni. *(NHS, Wrist pain, 2025. november 5-i felülvizsgálat)*
+Magyarul ezt a sínt csuklórögzítőnek is hívják. Konkrét terméket nem ajánlunk. A sín és a fájdalomcsillapító kiválasztásában a gyógyszerész is tud segíteni.
 
 ### Kortikoszteroid injekció: időt vesz, nem gyógyít
 
-Az injekció a jelenlegi vizsgálatok szerint valószínűleg javítja a tüneteket három hónapon belül, de nem gyógyítja meg a panaszt.
+Az injekció valószínűleg javítja a tüneteket három hónapon belül, de nem gyógyítja meg a panaszt.
 
-A Cochrane 2023-as áttekintése 14 vizsgálatot és 994 résztvevőt összesített. Placebóhoz képest a hatás közepes bizonyosságú (SMD -0,77; 95% CI -0,94 és -0,59 között). *(Ashworth és mtsai, Cochrane, 2023)*
+Placebóhoz képest a hatás közepes bizonyosságú.
 
-A hatás hat hónapig kimutatható (SMD -0,58). A műtéti igény egy év alatt valószínűleg valamelyest csökken (RR 0,84; 95% CI 0,72 és 0,98 között). Ez az utóbbi szám egyetlen, 111 fős vizsgálatból származik, közepes bizonyossággal. *(Cochrane, 2023)*
+A hatás hat hónapig kimutatható (SMD -0,58). A műtéti igény egy év alatt valószínűleg valamelyest csökken (RR 0,84; 95% CI 0,72 és 0,98 között). Ez az utóbbi szám egyetlen, 111 fős vizsgálatból származik, közepes bizonyossággal.
 
-Az AAOS 2024-es irányelve viszont erős ajánlással rögzíti: az injekció nem hoz hosszú távú javulást. *(AAOS, 2024)*
+Erős szakmai ajánlás rögzíti viszont: az injekció nem hoz hosszú távú javulást.
 
 A kettő nem mond ellent egymásnak. Az injekció időt vesz, nem gyógyít.
 
-Az NHS ugyanezt mondja a beteg nyelvén: a szteroid injekció nem mindig gyógyít, és a panasz néhány hónap múlva visszatérhet. *(NHS)*
+A beteg nyelvén: a szteroid injekció nem mindig gyógyít, és a panasz néhány hónap múlva visszatérhet.
 
 ### Sín vagy injekció? Van rá egy 24 hónapig követett vizsgálat
 
 Rövid távon az injekció bizonyult jobbnak, két év múlva viszont már nem volt köztük különbség.
 
-Az INSTINCTS-vizsgálat 234 résztvevőt követett az alapellátásban, enyhe és közepes kéztőalagút-szindrómával. *(Chesterton és mtsai, Lancet, 2018)*
+Az INSTINCTS-vizsgálat 234 résztvevőt követett az alapellátásban, enyhe és közepes kéztőalagút-szindrómával.
 
-Hat hétnél az injekció mérhetően jobb volt. A Boston-összpontszám 2,02 lett az injekciós és 2,29 a sínes csoportban (korrigált átlagkülönbség -0,32; 95% CI -0,48 és -0,16 között; p=0,0001). *(Lancet, 2018)*
+Hat hétnél az injekció mérhetően jobb volt. A Boston-összpontszám 2,02 lett az injekciós és 2,29 a sínes csoportban (korrigált átlagkülönbség -0,32; 95% CI -0,48 és -0,16 között; p=0,0001).
 
-A 24 hónapos utánkövetés eltüntette a különbséget. Sem 12, sem 24 hónapnál nem volt statisztikailag jelentős eltérés a Boston-pontszámban és a fájdalomban. *(Burton és mtsai, Rheumatology, 2023)*
+A 24 hónapos utánkövetés eltüntette a különbséget. Sem 12, sem 24 hónapnál nem volt statisztikailag jelentős eltérés a Boston-pontszámban és a fájdalomban.
 
-24 hónapnál az injekciós csoportból kerültek többen műtétre: 22%, míg a síncsoportból 16%. *(Rheumatology, 2023)*
+24 hónapnál az injekciós csoportból kerültek többen műtétre: 22%, míg a síncsoportból 16%.
 
-A költségekről óvatosan fogalmazunk, mert a vizsgálat is óvatosan fogalmaz. A mért különbség 68,59 font volt az injekció kárára, de a megbízhatósági tartomány a nullát is tartalmazza (95% CI -120,84 és 291,24 között). A szerzők ebből azt a következtetést vonják le, hogy az injekcióval kezdeni hosszú távon valószínűleg nem költséghatékonyabb a sínnél. *(Rheumatology, 2023)*
+A költségekről óvatosan fogalmazunk, mert a vizsgálat is óvatosan fogalmaz. A mért különbség 68,59 font volt az injekció kárára, de a megbízhatósági tartomány a nullát is tartalmazza (95% CI -120,84 és 291,24 között). A szerzők ebből azt a következtetést vonják le, hogy az injekcióval kezdeni hosszú távon valószínűleg nem költséghatékonyabb a sínnél.
 
 ### Idegsiklató gyakorlatok: kiegészítőnek jó, önmagában kevés
 
 Az idegsiklató gyakorlatok önmagukban korlátozott bizonyítékkal bírnak.
 
-Az AAOS OrthoInfo a nem műtéti lehetőségek közt sorolja fel őket. Megfogalmazása szerint egyes betegeknek segíthetnek azok a gyakorlatok, amelyek a középideg szabadabb mozgását segítik. *(AAOS OrthoInfo)*
+Ezek a nem műtéti lehetőségek közé tartoznak: egyes betegeknek segíthetnek azok a gyakorlatok, amelyek a középideg szabadabb mozgását segítik.
 
-Egy 13 klinikai vizsgálatot áttekintő munka szerint a fájdalom csillapítására a szokásos konzervatív ellátás tűnik a legjobb választásnak. *(Ballestero-Pérez és mtsai, 2017)*
+Egy 13 klinikai vizsgálatot áttekintő munka szerint a fájdalom csillapítására a szokásos konzervatív ellátás tűnik a legjobb választásnak.
 
-Ugyanez a munka az idegsiklatást inkább kiegészítőnek látja, amely gyorsíthatja a funkció visszatérését. A 13 vizsgálatból 6 gyenge minőségű volt. *(Ballestero-Pérez és mtsai, 2017)*
+Ugyanez a munka az idegsiklatást inkább kiegészítőnek látja, amely gyorsíthatja a funkció visszatérését. A 13 vizsgálatból 6 gyenge minőségű volt.
 
 ### Amit őszintén el kell mondanunk a gyakorlatokról
 
-Az AAOS 2024-es irányelve szerint a konzervatív módszerek között nincs jelentős különbség a betegek által jelentett eredményekben. *(AAOS, 2024)*
+A konzervatív módszerek között nincs jelentős különbség a betegek által jelentett eredményekben.
 
-Ugyanez az irányelv felsorolja azokat a módszereket, amelyek a hosszú távú, beteg által jelentett eredményt nem javítják. A listán ott van a gyakorlatozás, a masszázs és a manuálterápia is. *(AAOS, 2024)*
+Vannak olyan módszerek, amelyek a hosszú távú, beteg által jelentett eredményt nem javítják. A listán ott van a gyakorlatozás, a masszázs és a manuálterápia is.
 
-A teljes lista ennél hosszabb. Az irányelv szerint ezek sem hoznak hosszú távú javulást: *(AAOS, 2024)*
+A teljes lista ennél hosszabb. Ezek sem hoznak hosszú távú javulást:
 
 - szájon át adott kortikoszteroid,
 - hialuronsav-injekció,
@@ -209,31 +209,31 @@ A teljes lista ennél hosszabb. Az irányelv szerint ezek sem hoznak hosszú tá
 - ózoninjekció,
 - pulzáló rádiófrekvencia.
 
-Ugyanez az irányelv a terápiás ultrahangról is kimondja, hogy nem hoz hosszú távú javulást. *(AAOS, 2024)*
+A terápiás ultrahang sem hoz hosszú távú javulást.
 
-Egy fontos részletet is kiírunk, mert enélkül féloldalas a kép. Ennél a pontnál a bizonyíték minősége „High”, az ajánlás erőssége viszont „Limited (Downgraded)”, vagyis az irányelv maga minősítette le. Az indoklás szerint azért, mert a bevont kezelések, a vizsgálatok minősége, a kontrollcsoportok és az utánkövetési idők nagyon eltérőek voltak. *(AAOS, 2024)*
+Egy fontos részletet is kiírunk, mert enélkül féloldalas a kép. A bizonyíték itt erős, az ajánlás mégis gyengébb lábakon áll: a vizsgált kezelések, a módszerek minősége és az utánkövetési idők nagyon eltérőek voltak.
 
 Ezt nem hallgatjuk el. A mi nevünk van a szövegen, és a szakmai hitelünk többet ér, mint egy szebb mondat.
 
-Az NHS óvatosabban fogalmaz: kevés bizonyíték szól amellett, hogy a kézgyakorlatok enyhítik a kéztőalagút-szindróma tüneteit. *(NHS)*
+Óvatosan kell fogalmazni: kevés bizonyíték szól amellett, hogy a kézgyakorlatok enyhítik a kéztőalagút-szindróma tüneteit.
 
 Ezért nem írjuk le, hogy a torna meggyógyítja a kéztőalagút-szindrómát. Nem gyógyítja meg.
 
-A fájdalomcsillapítóról hasonló az NHS álláspontja. Kevés bizonyíték szól amellett, hogy kezelnék a kéztőalagút-szindróma okát, ezért fontos, hogy ne hagyatkozz rájuk. *(NHS)*
+A fájdalomcsillapítóról hasonló a helyzet. Kevés bizonyíték szól amellett, hogy kezelnék a kéztőalagút-szindróma okát, ezért fontos, hogy ne hagyatkozz rájuk.
 
 Mire jó akkor a rendezett, vezetett gyakorlás? Arra, hogy legyen napi rendszered addig, amíg a kezelésről születik döntés. Ennél többet nem állítunk.
 
 ## Meddig tart, míg javul?
 
-Egyetlen válasz nincs, de a forrásaink három konkrét időtávot megadnak.
+Egyetlen válasz nincs, de három konkrét időtáv körvonalazható.
 
-- Éjszakai sín: akár hat hét, mire javulni kezd. *(NHS)*
-- Magától: néha néhány hónap alatt rendeződik, különösen terhesség esetén. *(NHS)*
-- Kortikoszteroid injekció: a hatás három hónapig biztosan, hat hónapig kimutathatóan tart. *(Cochrane, 2023)*
+- Éjszakai sín: akár hat hét, mire javulni kezd.
+- Magától: néha néhány hónap alatt rendeződik, különösen terhesség esetén.
+- Kortikoszteroid injekció: a hatás három hónapig biztosan, hat hónapig kimutathatóan tart.
 
-Ezek nem a mi ígéreteink. Ezek a forrásainkban szereplő időtávok, és minden kéz más.
+Ezek nem a mi ígéreteink, hanem a szokásos időtávok, és minden kéz más.
 
-Amire nincs forrásunk, arra nem adunk időtartamot. Inkább hiányzik, mint hogy téves legyen.
+Amiben nem vagyunk biztosak, arra nem adunk időtartamot. Inkább hiányzik, mint hogy téves legyen.
 
 ## Mikor NE végezd a gyakorlatokat?
 
@@ -243,11 +243,11 @@ A gyakorlatoknak nem kell fájniuk. Éles fájdalom esetén hagyd abba, és kér
 
 Műtét után mindig a kezelőorvosod vagy a gyógytornászod jóváhagyásával kezdj bele.
 
-Hagyd abba a gyakorlást, és menj orvoshoz, ha a tünetek romlanak vagy nem múlnak. *(NHS)*
+Hagyd abba a gyakorlást, és menj orvoshoz, ha a tünetek romlanak vagy nem múlnak.
 
-Ne gyakorolj, ha a kezed egy részén vagy egészén megszűnt az érzés. Az NHS szerint ez aznapi orvosi ellátást igényel. *(NHS, Wrist pain)*
+Ne gyakorolj, ha a kezed egy részén vagy egészén megszűnt az érzés. Ez aznapi orvosi ellátást igényel.
 
-Ha a hüvelykujjad gyengül, vagy egyre nehezebb megmarkolnod valamit, előbb orvoshoz menj. Az AAOS OrthoInfo szerint a legtöbb betegnél a kéztőalagút-szindróma idővel romlik, és ha túl sokáig marad kezeletlenül, tartós kézfunkció-károsodáshoz vezethet. *(AAOS OrthoInfo)*
+Ha a hüvelykujjad gyengül, vagy egyre nehezebb megmarkolnod valamit, előbb orvoshoz menj. A legtöbb betegnél a kéztőalagút-szindróma idővel romlik, és ha túl sokáig marad kezeletlenül, tartós kézfunkció-károsodáshoz vezethet.
 
 Egy mondatban: a torna nem helyettesíti az orvosi kivizsgálást.
 
@@ -255,51 +255,51 @@ Egy mondatban: a torna nem helyettesíti az orvosi kivizsgálást.
 
 Van néhány jel, aminél nem gyakorlat kell, hanem azonnali orvosi ellátás.
 
-Hívj 112-t, ha az arc egyik fele lelóg, az egyik kar erőtlen vagy zsibbadt, és a beszéd akadozik. Ezek a stroke jelei. *(NHS, Stroke, 2024. szeptember 12-i felülvizsgálat)*
+Hívj 112-t, ha az arc egyik fele lelóg, az egyik kar erőtlen vagy zsibbadt, és a beszéd akadozik. Ezek a stroke jelei.
 
-Az NHS ezt külön kiemeli: ha a tünetek 24 órán belül elmúltak, akkor is azonnali segítség kell. *(NHS, Stroke)*
+Ezt külön ki kell emelni: ha a tünetek 24 órán belül elmúltak, akkor is azonnali segítség kell.
 
-Sérülés után is azonnali ellátás kell, ha a kar vagy a csukló zsibbad és bizsereg. Ugyanez érvényes, ha a csont kiáll a bőrből, vagy ha a kar alakja megváltozott. *(NHS, Broken arm or wrist, 2023. május 26-i felülvizsgálat)*
+Sérülés után is azonnali ellátás kell, ha a kar vagy a csukló zsibbad és bizsereg. Ugyanez érvényes, ha a csont kiáll a bőrből, vagy ha a kar alakja megváltozott.
 
-Aznap menj orvoshoz, ha a kéz egy részén vagy egészén megszűnt az érzés. *(NHS, Wrist pain)*
+Aznap menj orvoshoz, ha a kéz egy részén vagy egészén megszűnt az érzés.
 
-Napokon belül menj orvoshoz, ha bármilyen bizsergés vagy érzéskiesés van a kezeden. Ugyanez érvényes akkor is, ha a kéztőalagút tünetei romlanak vagy nem múlnak. *(NHS, Wrist pain; NHS, Carpal tunnel syndrome)*
+Napokon belül menj orvoshoz, ha bármilyen bizsergés vagy érzéskiesés van a kezeden. Ugyanez érvényes akkor is, ha a kéztőalagút tünetei romlanak vagy nem múlnak.
 
-Cukorbetegség mellett a kézpanasz komolyabb lehet. Ilyenkor hamarabb kérj orvosi véleményt. *(NHS, Wrist pain)*
+Cukorbetegség mellett a kézpanasz komolyabb lehet. Ilyenkor hamarabb kérj orvosi véleményt.
 
 ## Mikor merül fel a műtét?
 
-A műtétről mindig orvos dönt, és akkor kerül szóba, ha a tünetek romlanak vagy nem múlnak. *(NHS)*
+A műtétről mindig orvos dönt, és akkor kerül szóba, ha a tünetek romlanak vagy nem múlnak.
 
-Az AAOS OrthoInfo szerint a legtöbb betegnél a kéztőalagút-szindróma idővel romlik. Ha túl sokáig marad kezeletlenül, tartós kézfunkció-károsodáshoz vezethet. *(AAOS OrthoInfo)*
+A legtöbb betegnél a kéztőalagút-szindróma idővel romlik. Ha túl sokáig marad kezeletlenül, tartós kézfunkció-károsodáshoz vezethet.
 
 Ezért a cikkünk nem beszél le a műtétről. Azt mutatjuk meg, mi van előtte.
 
-Az NHS a beteg nyelvén ezt mondja a műtétről: általában meggyógyítja a kéztőalagút-szindrómát. *(NHS)* Ezt is kiírjuk, mert a mi keretezésünk nem az, hogy a műtét rossz.
+A műtétről a beteg nyelvén: általában meggyógyítja a kéztőalagút-szindrómát. Ezt is kiírjuk, mert a mi keretezésünk nem az, hogy a műtét rossz.
 
-A Cochrane 2024-es áttekintése a műtétet és a nem műtéti kezelést hasonlította össze: 14 vizsgálat, 1231 résztvevő, 84%-uk nő. *(Lusa és mtsai, Cochrane, 2024)*
+Az összesített vizsgálatok a műtétet és a nem műtéti kezelést is összehasonlították.
 
-A szerzők következtetése ezzel a mondattal kezdődik: jelenleg nem tisztázott, mennyire hatékony a műtét a kéztőalagút-szindrómában szenvedőknél. *(Cochrane, 2024)*
+A szerzők következtetése ezzel a mondattal kezdődik: jelenleg nem tisztázott, mennyire hatékony a műtét a kéztőalagút-szindrómában szenvedőknél.
 
-Az összesítés szerint a műtét hosszú távon valószínűleg gyakrabban hoz klinikai javulást, mint a sín (RR 2,10; 95% CI 1,04 és 4,24 között; közepes bizonyosság). *(Cochrane, 2024)*
+Az összesítés szerint a műtét hosszú távon valószínűleg gyakrabban hoz klinikai javulást, mint a sín (RR 2,10; 95% CI 1,04 és 4,24 között; közepes bizonyosság).
 
-Klinikailag érdemi többletet a tünetekben és a kézfunkcióban viszont valószínűleg nem ad. A Boston tünetskálán 0,26 pont a műtét javára, miközben a klinikailag érdemi küszöb 1 pont. A funkcionális skálán 0,36 pont a különbség, a küszöb pedig 0,7. *(Cochrane, 2024)*
+Klinikailag érdemi többletet a tünetekben és a kézfunkcióban viszont valószínűleg nem ad. A Boston tünetskálán 0,26 pont a műtét javára, miközben a klinikailag érdemi küszöb 1 pont. A funkcionális skálán 0,36 pont a különbség, a küszöb pedig 0,7.
 
-A mellékhatásokról is van adat, és ez a műtéti döntéshez tartozik. A műtéti csoportban 98-ból 60 résztvevő (61%), a sínes csoportban 112-ből 46 (41%) számolt be mellékhatásról. A bizonyosság szintje itt nagyon alacsony, tehát ezt a különbséget nem lehet ténynek venni. *(Cochrane, 2024)*
+A mellékhatásokról is van adat, és ez a műtéti döntéshez tartozik. A műtéti csoportban 98-ból 60 résztvevő (61%), a sínes csoportban 112-ből 46 (41%) számolt be mellékhatásról. A bizonyosság szintje itt nagyon alacsony, tehát ezt a különbséget nem lehet ténynek venni.
 
-A diagnózisról is érdemes tudni egy fontos dolgot. Az AAOS 2024-es irányelve erős ajánlással mondja ki, hogy a CTS-6 klinikai pontrendszer önmagában használható a diagnózishoz, rutinszerű ultrahang vagy ENG és EMG helyett. *(AAOS, 2024)*
+A diagnózisról is érdemes tudni egy fontos dolgot. Erős szakmai ajánlás mondja ki, hogy a CTS-6 klinikai pontrendszer önmagában használható a diagnózishoz, rutinszerű ultrahang vagy ENG és EMG helyett.
 
-Ugyanez az irányelv közepes erősségű ajánlással mondja, hogy az MRI és a felső végtagi neurodinamikai tesztelés ne legyen diagnosztikus eszköz. *(AAOS, 2024)*
+Közepes erősségű ajánlás mondja, hogy az MRI és a felső végtagi neurodinamikai tesztelés ne legyen diagnosztikus eszköz.
 
 A CTS-6 az orvos eszköze. Öndiagnózisra nem való, és mi sem használjuk annak.
 
 ## Mi a helyzet a műtét után?
 
-A megszokott tevékenységekhez a műtét után körülbelül egy hónap kell. *(NHS; AAOS OrthoInfo)*
+A megszokott tevékenységekhez a műtét után körülbelül egy hónap kell.
 
-A szorító- és a csippentőerő 2–3 hónap alatt tér vissza. Súlyos idegkárosodás után ez 6–12 hónap is lehet. *(NHS; AAOS OrthoInfo)*
+A szorító- és a csippentőerő 2–3 hónap alatt tér vissza. Súlyos idegkárosodás után ez 6–12 hónap is lehet.
 
-A teljes felépülés akár egy évig is eltarthat. *(NHS; AAOS OrthoInfo)*
+A teljes felépülés akár egy évig is eltarthat.
 
 Azt, hogy mikor mit szabad, a műtétet végző orvos és a gyógytornászod mondja meg. A gyakorlást ilyenkor is csak az ő jóváhagyásukkal kezdd el.
 
@@ -324,7 +324,7 @@ Az Otthoni KézRehab Programot csukló-, ujj-, alkar- és könyökpanaszokra ál
 
 A cikk elején leírt tünetek közül kettő pont ide tartozik. Ha a hüvelykujjad gyengül, vagy elejted a tárgyakat, előbb a kivizsgálás következik, nem a gyakorlás.
 
-A másik a bizonyíték. Az AAOS 2024-es irányelve szerint a gyakorlatozás a hosszú távú, beteg által jelentett eredményt nem javítja. *(AAOS, 2024)*
+A másik a bizonyíték: a gyakorlatozás a hosszú távú, beteg által jelentett eredményt nem javítja.
 
 Ezért mi nem gyógyulást ígérünk. Rövid, vezetett alkalmakat kínálunk arra az időszakra, amíg a kezelésről dönt az orvosod.
 
@@ -342,23 +342,7 @@ Mindketten elvégeztük Loren Szmiga CHT kéztőalagút- és pattanóujj-kurzus�
 
 Oktatunk is. A ProBody Stúdió sportrehabilitációs tréner képzésén a „Bevezetés a kéz, a csukló- és könyökízület rehabilitációs lehetőségeibe” tantermi kurzus instruktorai vagyunk (2024, 2025, 2026, Budapest).
 
-Ez a szakmai háttér a szerző hitelességét igazolja. A cikkben szereplő klinikai állítások mellett ettől függetlenül ott a forrás.
-
-## Forrásjegyzék
-
-- NHS. *Carpal tunnel syndrome.* https://www.nhs.uk/conditions/carpal-tunnel-syndrome/ · felülvizsgálva 2024-04-17 · hozzáférés: 2026-08-21.
-- NHS. *Pins and needles.* https://www.nhs.uk/conditions/pins-and-needles/ · felülvizsgálva 2024-01-04 · hozzáférés: 2026-08-21.
-- NHS. *Wrist pain.* https://www.nhs.uk/conditions/hand-pain/wrist-pain/ · felülvizsgálva 2025-11-05 · hozzáférés: 2026-08-21.
-- NHS. *Stroke, Symptoms.* https://www.nhs.uk/conditions/stroke/symptoms/ · felülvizsgálva 2024-09-12 · hozzáférés: 2026-08-21.
-- NHS. *Broken arm or wrist.* https://www.nhs.uk/conditions/broken-arm-or-wrist/ · felülvizsgálva 2023-05-26 · hozzáférés: 2026-08-21.
-- American Academy of Orthopaedic Surgeons. *Management of Carpal Tunnel Syndrome. Evidence-Based Clinical Practice Guideline.* 2024. https://www.aaos.org/globalassets/quality-and-practice-resources/carpal-tunnel/carpal-tunnel-2024/cts-cpg.pdf · hozzáférés: 2026-08-21.
-- AAOS OrthoInfo. *Carpal Tunnel Syndrome.* Szerző: Tyler Steven Pidgeon, MD, FAAOS; lektor: Thomas Ward Throckmorton, MD, FAAOS. https://orthoinfo.aaos.org/en/diseases--conditions/carpal-tunnel-syndrome/ · hozzáférés: 2026-08-21.
-- Karjalainen TV, Lusa V, Page MJ, O'Connor D, Massy-Westropp N, Peters SE. *Splinting for carpal tunnel syndrome.* Cochrane Database of Systematic Reviews. 2023;2(2):CD010003. DOI: 10.1002/14651858.CD010003.pub2 · PMID 36848651 · https://pubmed.ncbi.nlm.nih.gov/36848651/ · hozzáférés: 2026-08-21.
-- Ashworth NL, Bland JDP, Chapman KM, Tardif G, Albarqouni L, Nagendran A. *Local corticosteroid injection versus placebo for carpal tunnel syndrome.* Cochrane Database of Systematic Reviews. 2023;2(2):CD015148. DOI: 10.1002/14651858.CD015148 · PMID 36722795 · https://pubmed.ncbi.nlm.nih.gov/36722795/ · hozzáférés: 2026-08-21.
-- Lusa V, Karjalainen TV, Pääkkönen M, Rajamäki TJ, Jaatinen K. *Surgical versus non-surgical treatment for carpal tunnel syndrome.* Cochrane Database of Systematic Reviews. 2024;1(1):CD001552. DOI: 10.1002/14651858.CD001552.pub3 · PMID 38189479 · https://pubmed.ncbi.nlm.nih.gov/38189479/ · hozzáférés: 2026-08-21.
-- Chesterton LS és mtsai. *The clinical and cost-effectiveness of corticosteroid injection versus night splints for carpal tunnel syndrome (INSTINCTS trial): a randomised controlled trial.* Lancet. 2018;392(10156):1423–1433. DOI: 10.1016/S0140-6736(18)31572-1 · PMID 30343858 · https://pubmed.ncbi.nlm.nih.gov/30343858/ · hozzáférés: 2026-08-21.
-- Burton C és mtsai. *The effectiveness of corticosteroid injection versus night splints for carpal tunnel syndrome: 24-month follow-up of a randomized trial.* Rheumatology (Oxford). 2023;62(2):546–554. DOI: 10.1093/rheumatology/keac219 · PMID 35394019 · https://pubmed.ncbi.nlm.nih.gov/35394019/ · hozzáférés: 2026-08-21.
-- Ballestero-Pérez R és mtsai. *Effectiveness of Nerve Gliding Exercises on Carpal Tunnel Syndrome: A Systematic Review.* Journal of Manipulative and Physiological Therapeutics. 2017;40(1):50–59. DOI: 10.1016/j.jmpt.2016.10.004 · PMID 27842937 · https://pubmed.ncbi.nlm.nih.gov/27842937/ · hozzáférés: 2026-08-21.
+Ez a szakmai háttér a szerző hitelességét igazolja.
 
 ## Fontos tudnivaló
 

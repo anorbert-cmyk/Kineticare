@@ -68,6 +68,32 @@ export const LEKTORI_JELOLESEK: readonly string[] = [
   'a cikkíró javaslata',
 ]
 
+/**
+ * Forrás-hivatkozás jelölései, amelyek a tulajdonos 2026-08-21-i döntése óta
+ * NEM kerülhetnek a nyilvános cikkszövegbe.
+ *
+ * ═══ MI EZ A DÖNTÉS ═══
+ * A cikkek eredetileg forrásjegyzékkel és mondatba épített hivatkozásokkal
+ * készültek („Az NHS szerint…”, „Az AAOS 2024-es irányelve…”). A tulajdonos
+ * kérésére ezek mind kikerültek: a törzsből 1 684 szónyi forrásjegyzék, 380
+ * zárójeles hivatkozás és 143 mondatba épített attribúció.
+ *
+ * FONTOS, HOGY EZ TUDATOS DÖNTÉS LEGYEN: a `docs/seo-geo-llm.md` 2.3 pontja a
+ * hiteles forrás megjelölését E-E-A-T-követelménynek nevezi, és egészségügyi
+ * (YMYL) tartalomnál ezt mérik a legszigorúbban. Az őr tehát nem azt mondja,
+ * hogy így jobb, hanem azt, hogy a döntés ne csússzon vissza véletlenül egy
+ * későbbi szerkesztéssel.
+ */
+export const FORRAS_JELOLESEK: readonly string[] = [
+  'NHS',
+  'AAOS',
+  'OrthoInfo',
+  'Cochrane',
+  'PMID',
+  'StatPearls',
+  'Forrásjegyzék',
+]
+
 /** Lexical szövegformátum-bitek (a Lexical TextNode formatját követve). */
 const FORMAT_BOLD = 1
 const FORMAT_ITALIC = 2
@@ -127,6 +153,17 @@ export function extractArticleBody(markdown: string): ArticleBody {
       throw new Error(
         `A cikk törzsében lektornak szóló szöveg maradt: „${jel}”. Ez a nyilvános ` +
           'oldalra és az og:description mezőbe is kikerülne. Nézd át a cikkfájl szerkezetét.',
+      )
+    }
+  }
+
+  // ŐR: forrás-hivatkozás sem maradhat a törzsben (tulajdonosi döntés, 2026-08-21).
+  for (const jel of FORRAS_JELOLESEK) {
+    if (maradek.includes(jel)) {
+      throw new Error(
+        `A cikk törzsében forrás-hivatkozás maradt: „${jel}”. A tulajdonos döntése ` +
+          'szerint a cikkszöveg nem tartalmaz forrásmegjelölést. Írd át a mondatot ' +
+          'úgy, hogy az állítás megmaradjon, a forrás neve viszont ne szerepeljen.',
       )
     }
   }

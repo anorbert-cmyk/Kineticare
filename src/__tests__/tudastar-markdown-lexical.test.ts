@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   excerptFrom,
   extractArticleBody,
+  FORRAS_JELOLESEK,
   inlineNodes,
   LEKTORI_JELOLESEK,
   markdownToLexical,
@@ -124,6 +125,17 @@ describe('T1 — a törzs kivágása', () => {
     const excerpt = excerptFrom(lines)
     expect(excerpt).not.toContain('lektorálandó')
     expect(excerpt).not.toContain('gyógytornász szakmai jóváhagyása')
+  })
+
+  it.each(CIKKEK)('%s törzsében NINCS forrás-hivatkozás', (nev) => {
+    // Tulajdonosi döntés (2026-08-21): a cikkszöveg nem tartalmaz
+    // forrásmegjelölést. Az őr azt védi, hogy ez ne csússzon vissza egy
+    // későbbi szerkesztéssel — nem azt állítja, hogy szakmailag ez a jobb.
+    const { lines } = extractArticleBody(readFileSync(cikkPath(nev), 'utf8'))
+    const torzs = lines.join('\n')
+    for (const jel of FORRAS_JELOLESEK) {
+      expect(torzs, `${nev}: forrás-hivatkozás a törzsben: ${jel}`).not.toContain(jel)
+    }
   })
 
   it('a cikk RÉSZÉT képező záró szakaszokat viszont bent tartja', () => {

@@ -97,20 +97,17 @@ ez a szakasz elöl, és nem a végén.
 **Stroke jelei.** Lelóg az arc egyik fele, erőtlen vagy zsibbadt az egyik kar,
 akadozik a beszéd. Ugyanígy sürgős a test egyik oldalára kiterjedő erőtlenség
 vagy zsibbadás, a homályos látás, a hirtelen erős fejfájás és a szédülés.
-Ilyenkor azonnal hívj mentőt, Magyarországon a 112-t. *(NHS, Stroke, Symptoms,
-2024. szeptember 12-i felülvizsgálat)*
+Ilyenkor azonnal hívj mentőt, Magyarországon a 112-t.
 
-Az NHS ezt külön kiemeli: ha a stroke jelei már el is múltak, de 24 órán belül
-megvoltak, akkor is azonnali segítség kell. *(NHS, Stroke, Symptoms)*
+Ezt külön ki kell emelni: ha a stroke jelei már el is múltak, de 24 órán belül
+megvoltak, akkor is azonnali segítség kell.
 
-**Sérülés után.** Az NHS négy jelet sorol a mentőhívást igénylők közé:
+**Sérülés után.** Négy jelnél kell mentőt hívni:
 
 - a sérült kar vagy csukló zsibbad, bizsereg,
 - erősen vérző seb van rajta,
 - a csont kiáll a bőrből,
 - a kar vagy a csukló alakja megváltozott.
-
-*(NHS, Broken arm or wrist, 2023. május 26-i felülvizsgálat)*
 
 **Ha megijedtél.** Amikor a zsibbadás mellett olyan tünet is jelentkezik, ami
 megrémít, például mellkasi panasz vagy rosszullét, ne a keresőben keresd a
@@ -126,19 +123,17 @@ szakaszban szedtük össze.
 A zsibbadás tünet, nem diagnózis. Sokféle, egymástól nagyon távoli ok állhat
 mögötte, és ezek nem ugyanazt a kezelést igénylik.
 
-Az NHS lehetséges okként a cukorbetegséget, a Raynaud-jelenséget, a
+Lehetséges okként szóba jön a cukorbetegség, a Raynaud-jelenség, a
 hiperventillációt, az isiászt és a sclerosis multiplexet is felsorolja. A
 tartósan megmaradó zsibbadás okai között a nyakban vagy a hátban becsípődött
-ideget is nevesíti. *(NHS, Pins and needles, 2024. január 4-i felülvizsgálat)*
+ideget is nevesíti.
 
 Az okok egy részénél az ideg nyomás alá kerül. A kéztőalagút-szindróma például a
 középideg nyomás okozta károsodása, és jellemzően a hüvelyk-, a mutató- és a
-középső ujjban okoz fájdalmat, zsibbadást, bizsergést. *(Karjalainen és mtsai,
-Splinting for carpal tunnel syndrome, Cochrane, 2023)*
+középső ujjban okoz fájdalmat, zsibbadást, bizsergést.
 
-Az NHS a zsibbadásról szóló oldalán egy mondatot külön kiemel: „ne diagnosztizáld magad,
-menj háziorvoshoz, ha aggódsz”. *(NHS, Pins and needles, 2024. január 4-i
-felülvizsgálat)* Mi is így gondoljuk. Az alábbi mintázatok tájékozódásra valók,
+Egy mondatot külön ki kell emelni: „ne diagnosztizáld magad,
+menj háziorvoshoz, ha aggódsz”. Mi is így gondoljuk. Az alábbi mintázatok tájékozódásra valók,
 nem öndiagnózisra.
 
 ## Melyik ujjad zsibbad? A mintázat sokat elárul
@@ -146,65 +141,56 @@ nem öndiagnózisra.
 Az érintett ujjak mintázata szűkíti a lehetséges okok körét, de önmagában nem
 elég a diagnózishoz.
 
-**A hüvelyk, a mutató és a középső ujj.** Az AAOS OrthoInfo szerint a
+**A hüvelyk, a mutató és a középső ujj.** A
 kéztőalagút-szindróma zsibbadása elsősorban a hüvelyk-, a mutató-, a középső és
-a gyűrűsujjat érinti. *(AAOS OrthoInfo, Carpal Tunnel Syndrome, hozzáférés
-2026-08-21)* Erről az állapotról külön cikkben írtunk, ott a nem műtéti
+a gyűrűsujjat érinti. Erről az állapotról külön cikkben írtunk, ott a nem műtéti
 lehetőségeket is végigvesszük a
 [kéztőalagút-szindrómáról szóló összefoglalónkban](/blog/keztoalagut-szindroma).
 
 **A gyűrűs- és a kisujj.** A könyöknél becsípődő singideg leggyakoribb tünete
 éppen ez: időszakos zsibbadás és bizsergés a gyűrűs- és a kisujjban. Ez a felső
-végtag második leggyakoribb perifériás idegbecsípődése. *(Graf és mtsai, Modern
-Treatment of Cubital Tunnel Syndrome, 2023, teljes szöveg: PMC10382899)*
+végtag második leggyakoribb perifériás idegbecsípődése.
 
 **Az egész kar.** A nyaki gerincből kiinduló idegi panasz jellemzően nyak- vagy
-karfájdalommal jelentkezik. A szakirodalom kifejezetten kiemeli, hogy ezt el kell
-különíteni a perifériás idegbecsípődésektől és a vállpanaszoktól. *(Iyer és Kim,
-Cervical radiculopathy, 2016)*
+karfájdalommal jelentkezik. Fontos kiemelni, hogy ezt el kell
+különíteni a perifériás idegbecsípődésektől és a vállpanaszoktól.
 
-Figyelj a gyűrűsujjra: az AAOS listáján és a singideg tüneteinél is szerepel.
+Figyelj a gyűrűsujjra: a jellemző tünetek közt és a singideg panaszainál is szerepel.
 Vagyis a mintázat nem döntési fa. Irányt ad, de a vizsgálatot nem pótolja.
 
 ## Miért zsibbad a kezed éjszaka?
 
 Az éjszaka erősödő kézzsibbadás a kéztőalagút-szindróma jellegzetes mintázata.
 
-Az NHS szerint a kéztőalagút-szindróma tünetei lassan indulnak, jönnek-mennek, és
-éjjel a legerősebbek. *(NHS, Carpal tunnel syndrome, 2024. április 17-i
-felülvizsgálat)*
+A kéztőalagút-szindróma tünetei lassan indulnak, jönnek-mennek, és
+éjjel a legerősebbek.
 
-Az AAOS OrthoInfo ennél is pontosabb. Leírja, hogy a tünetek gyakran felébresztik
+Ennél pontosabban: a tünetek gyakran felébresztik
 az embert, és sokaknál a kéz mozgatása vagy rázogatása enyhíti őket. Ugyanitt
-szerepel az ügyetlenség és a tárgyak elejtése is. *(AAOS OrthoInfo, Carpal Tunnel
-Syndrome, hozzáférés 2026-08-21)*
+szerepel az ügyetlenség és a tárgyak elejtése is.
 
 Ez ismerős lehet, de nem bizonyíték. Az éjszakai zsibbadásnak más oka is lehet,
-és az NHS itt is óva int az öndiagnózistól. *(NHS, Pins and needles, 2024.
-január 4-i felülvizsgálat)* Ha a mintázat rád illik, a részleteket megtalálod a
+és itt is óvatosnak kell lenni az öndiagnózissal. Ha a mintázat rád illik, a részleteket megtalálod a
 [kéztőalagút-szindrómáról szóló cikkünkben](/blog/keztoalagut-szindroma).
 
 ## Számít, hogy a bal vagy a jobb kezed zsibbad?
 
 Önmagában az oldal ritkán mondja meg az okot.
 
-Az NHS ok-listájának egyetlen tétele sem az oldaltól függ. Cukorbetegség,
+A lehetséges okok közül egyik sem az oldaltól függ. Cukorbetegség,
 Raynaud-jelenség, becsípődött ideg, gyógyszermellékhatás: mindegyik
-jelentkezhet a bal és a jobb kézen is. *(NHS, Pins and needles, 2024. január
-4-i felülvizsgálat)*
+jelentkezhet a bal és a jobb kézen is.
 
 Egy kivétel viszont van, és ez életmentő. Ha a zsibbadás hirtelen kezdődik a
 test egyik oldalán, és mellette lelóg az arc egyik fele, erőtlen a kar vagy
 akadozik a beszéd, az stroke gyanúja. Ilyenkor azonnal a 112-t kell hívni,
-ahogy a cikk elején is írjuk. *(NHS, Stroke, Symptoms, 2024. szeptember 12-i
-felülvizsgálat)*
+ahogy a cikk elején is írjuk.
 
 ## Mi okozhat még zsibbadást?
 
 A zsibbadásnak sok oka lehet, és nem mind a kézben keresendő.
 
-Az NHS a következőket sorolja fel lehetséges okként. *(NHS, Pins and needles,
-2024. január 4-i felülvizsgálat)*
+Lehetséges okok a következők.
 
 - Cukorbetegség.
 - Raynaud-jelenség, ha az ujjaid színt is váltanak.
@@ -212,8 +198,7 @@ Az NHS a következőket sorolja fel lehetséges okként. *(NHS, Pins and needles
 - Isiász, ha a hátból a lábba sugárzik.
 - Sclerosis multiplex, ha a test több pontján jelentkezik.
 
-A tartósan megmaradó zsibbadásnál az NHS ezeket nevezi meg. *(NHS, Pins and
-needles, 2024. január 4-i felülvizsgálat)*
+A tartósan megmaradó zsibbadásnál ezek jöhetnek szóba.
 
 - Kemoterápia.
 - Egyes gyógyszerek: HIV-gyógyszer, görcsgátló, bizonyos antibiotikumok.
@@ -226,31 +211,27 @@ needles, 2024. január 4-i felülvizsgálat)*
 A könyöknél becsípődő singideg is okozhat zsibbadást. Az éjszakai sín itt gyakori
 javaslat, a bizonyíték viszont gyenge.
 
-Egy 2025-ös szisztematikus áttekintés egyetlen olyan randomizált vizsgálatot
+Az eddigi kutatás egyetlen olyan vizsgálatot
 talált, amely a sínt kontrollcsoporthoz hasonlította. Ez a vizsgálat magas
 torzítási kockázatú volt, és nem talált különbséget a csoportok között.
-*(Bateman és mtsai, Effectiveness of night splints for cubital tunnel syndrome,
-2025)*
 
 Egy további randomizált és három egykarú vizsgálat azt jelezte, hogy az enyhe
 és közepes esetek többsége javul az éjszakai sín mellett. Ezek is magas, súlyos
 vagy kritikus torzítási kockázatúak, és a szerzők kiírják: nem tudni, hogy a
-javulás a kezeléstől vagy pusztán az idő múlásától volt-e. *(Bateman és mtsai,
-2025)*
+javulás a kezeléstől vagy pusztán az idő múlásától volt-e.
 
-A bizonyosság szintjét az áttekintés nagyon alacsonynak minősítette, és a
+A bizonyosság szintje nagyon alacsony, és a
 szerzők szerint jelenleg nem eldönthető, ajánlható-e az éjszakai sín ennél az
-állapotnál. *(Bateman és mtsai, 2025)*
+állapotnál.
 
 ### Tényleg a sok gépeléstől van?
 
 A sok billentyűzethasználat és a kéztőalagút-szindróma összefüggése nem igazolt.
 
-Az AAOS 2024-es irányelve így fogalmaz: megbízható bizonyíték hiányában a
+A mai szakmai álláspont: megbízható bizonyíték hiányában a
 munkacsoport véleménye szerint nincs összefüggés a sok billentyűzethasználat és a
 kéztőalagút-szindróma között. A bizonyíték minőségét itt nagyon alacsonynak
-jelölik, az ajánlás pedig szakértői konszenzus. *(AAOS, Management of Carpal
-Tunnel Syndrome, 2024)*
+jelölik, az ajánlás pedig szakértői konszenzus.
 
 Ez fontos különbség. Nem azt jelenti, hogy bizonyítottan nincs kapcsolat. Azt
 jelenti, hogy megbízható vizsgálat egyik irányban sem áll rendelkezésre.
@@ -263,42 +244,39 @@ legtöbb bizonyíték van.
 
 ### Az éjszakai csuklósín: erre van bizonyíték
 
-Az NHS első lépésként a csuklósínt ajánlja, és kiírja a valós időigényt is:
-akár 6 hetet is viselni kell, mire javulni kezd. *(NHS, Carpal tunnel syndrome,
-2024. április 17-i felülvizsgálat)*
+Első lépésként a csuklósín jön szóba, és érdemes tudni a valós időigényt is:
+akár 6 hetet is viselni kell, mire javulni kezd.
 
-A Cochrane 2023-as áttekintése 29 vizsgálatot és 1937 felnőttet dolgozott fel.
+Az eddigi vizsgálatok összesítéséből a következő rajzolódik ki.
 Az éjszakai sín viselése rövid távon nagyobb eséllyel hozott általános javulást,
 mint a kezelés nélküli állapot. A kockázati arány 3,86, a 95%-os megbízhatósági
 tartomány 2,29 és 6,51 között.
 
 Ez az eredmény egyetlen, 80 fős vizsgálatból származik, és a bizonyosság szintje
-alacsony. *(Karjalainen és mtsai, Cochrane, 2023)*
+alacsony.
 
 A tünetskálán mért javulás viszont kicsi. A Boston-kérdőív tünetskáláján 0,37
 pont a sín javára, a megbízhatósági tartomány 0,82 ponttal jobb és 0,08 ponttal
 rosszabb között. Ez a klinikailag érdemi 1 pontos küszöb alatt marad, alacsony
-bizonyossági szinttel. *(Karjalainen és mtsai, Cochrane, 2023)*
+bizonyossági szinttel.
 
 A szerzői következtetés első mondatával kell kezdeni, mert az a fejmondat.
 Nincs elég bizonyíték annak eldöntésére, használ-e a sín a
-kéztőalagút-szindrómában szenvedőknek. *(Karjalainen és mtsai, Cochrane, 2023)*
+kéztőalagút-szindrómában szenvedőknek.
 
 A korlátozott bizonyíték a tünetek és a kézfunkció kis javulását nem zárja ki, de
-ez a javulás lehet, hogy klinikailag nem érdemi. *(Karjalainen és mtsai,
-Cochrane, 2023)*
+ez a javulás lehet, hogy klinikailag nem érdemi.
 
 És csak ezután jön a mondat, amit sokat idéznek. A sín olcsó beavatkozás, tartós
 ártalma nem ismert, ezért a kis hatás is indokolhatja a használatát, különösen
-annál, aki nem szeretne műtétet vagy injekciót. *(Karjalainen és mtsai,
-Cochrane, 2023)*
+annál, aki nem szeretne műtétet vagy injekciót.
 
 A kettő együtt adja ki a valós képet. Nem tudjuk, hogy használ-e, de olcsó és
 ártalmatlan, tehát megpróbálható.
 
-Egyet viszont nem ígérhetünk. A Cochrane-áttekintés bizonytalannak mondja, hogy
+Egyet viszont nem ígérhetünk. Bizonytalan, hogy
 a sín csökkenti-e a műtétre küldés arányát: a bizonyosság szintje itt nagyon
-alacsony. *(Karjalainen és mtsai, Cochrane, 2023)* A sín tehát nem műtét-elkerülő
+alacsony. A sín tehát nem műtét-elkerülő
 eszköz, hanem egy megpróbálható lépés a döntés előtt.
 
 ### Idegsiklató gyakorlatok: kiegészítő, nem megoldás
@@ -306,36 +284,32 @@ eszköz, hanem egy megpróbálható lépés a döntés előtt.
 Az idegsiklató gyakorlatok kiegészítőként jönnek szóba, korlátozott
 bizonyítékkal.
 
-Az AAOS OrthoInfo a nem műtéti lehetőségek közt említi őket: egyes pácienseknek
+A nem műtéti lehetőségek közé tartoznak: egyes pácienseknek
 segíthetnek azok a gyakorlatok, amelyek a középideg szabadabb mozgását
-támogatják. *(AAOS OrthoInfo, Carpal Tunnel Syndrome)*
+támogatják.
 
 Egy 13 klinikai vizsgálatot áttekintő munka óvatosabb. A szerzők szerint a
 fájdalom csökkentésére a szokásos konzervatív ellátás tűnik a legmegfelelőbbnek.
 Az idegsiklatás inkább kiegészítő, amely gyorsíthatja a funkció visszatérését.
 
-A 13 vizsgálatból 6 gyenge minőségűnek bizonyult. *(Ballestero-Pérez és mtsai,
-Effectiveness of Nerve Gliding Exercises on Carpal Tunnel Syndrome, 2017)*
+A 13 vizsgálatból 6 gyenge minőségűnek bizonyult.
 
 ### Amit a gyakorlatokról őszintén el kell mondanunk
 
 A gyakorlatozás a jelenlegi bizonyíték szerint nem javítja a
 kéztőalagút-szindróma hosszú távú, páciens által jelentett eredményét.
 
-Az AAOS 2024-es irányelve magas minőségű bizonyítékra hivatkozva sorol fel olyan
+Erős bizonyíték szól olyan
 nem műtéti módszereket, amelyek nem javítják a páciens által jelentett hosszú
 távú eredményt. Ezen a listán a gyakorlatozás, a masszázs és a manuálterápia is
-szerepel. *(AAOS, Management of Carpal Tunnel Syndrome, 2024)*
+szerepel.
 
-Az érem másik oldalát is kiírjuk. Ugyanennél a pontnál az ajánlás erőssége
-„Limited (Downgraded)”, vagyis az irányelv maga minősítette le. Az indoklás
-szerint azért, mert a bevont kezelések, a vizsgálatok minősége, a
-kontrollcsoportok és az utánkövetési idők nagyon eltérőek voltak. *(AAOS,
-Management of Carpal Tunnel Syndrome, 2024)*
+Az érem másik oldalát is kiírjuk. Ez az ajánlás gyengébb lábakon áll, mert a
+vizsgált kezelések, a módszerek minősége és az utánkövetési idők nagyon
+eltérőek voltak.
 
-Az AAOS irányelve azt is kimondja, hogy a konzervatív módszerek között nincs
-jelentős különbség a páciens által jelentett eredményekben. *(AAOS, Management of
-Carpal Tunnel Syndrome, 2024)*
+Azt is fontos tudni, hogy a konzervatív módszerek között nincs
+jelentős különbség a páciens által jelentett eredményekben.
 
 Ezt nem hallgatjuk el, mert a döntésed a tiéd. A rendezett otthoni gyakorlás
 attól még segíthet a tünetek kezelésében és a terhelés átalakításában. Aki egy
@@ -349,38 +323,36 @@ valók: a diagnózist orvosi vizsgálat adja meg, nem egy otthon elvégzett tesz
 A fájdalmat vagy zsibbadást kiváltó tevékenység csökkentése az egyik első
 javasolt lépés.
 
-Az NHS ezeket ajánlja. *(NHS, Wrist pain, 2025. november 5-i felülvizsgálat)*
+Ezeket érdemes kipróbálni.
 
 - Pihentesd a csuklódat.
 - Mozgasd finoman a kezed és a csuklód.
 - Hagyd abba vagy csökkentsd a panaszt okozó tevékenységet. Ilyen lehet a
-  gépelés, a rezgő szerszám vagy a hangszeres játék.
+ gépelés, a rezgő szerszám vagy a hangszeres játék.
 - Viselj sínt, főleg éjszakára.
 
-Az NHS azt is kiemeli, hogy a gyógyszerész tud segíteni a fájdalomcsillapító és a
-sín kiválasztásában, és abban is, kell-e orvoshoz menned. *(NHS, Wrist pain, 2025.
-november 5-i felülvizsgálat)* Ez alacsony küszöbű, gyors lépés.
+Azt is érdemes tudni, hogy a gyógyszerész tud segíteni a fájdalomcsillapító és a
+sín kiválasztásában, és abban is, kell-e orvoshoz menned. Ez alacsony küszöbű, gyors lépés.
 
 ## Mikor NE végezd a gyakorlatokat?
 
 Ne gyakorolj, ha az alábbi jelek bármelyike fennáll. Ilyenkor a vizsgálat az első.
 
 - **Vörös zászlót látsz.** Stroke jeleinél, friss sérülés utáni zsibbadásnál vagy
-  megszűnt érzésnél nem gyakorlat kell, hanem orvos vagy mentő.
+ megszűnt érzésnél nem gyakorlat kell, hanem orvos vagy mentő.
 - **Éles fájdalom kísér.** A gyakorlatok nem kell, hogy fájjanak. Éles fájdalom
-  esetén hagyd abba, és kérj szakmai segítséget. Ez a saját kurzusaink
-  ellenjavallati szabálya is.
+ esetén hagyd abba, és kérj szakmai segítséget. Ez a saját kurzusaink
+ ellenjavallati szabálya is.
 - **Műtéted volt.** Műtét után mindig a kezelőorvosod vagy gyógytornászod
-  jóváhagyásával kezdj bele.
-- **Friss sérülés után vagy.** Az NHS a sérülést követő első 2-3 napban tiltja a
-  melegítő pakolást és a forró fürdőt. Nehezet emelni és erősen szorítani sem
-  szabad. *(NHS, Wrist pain, 2025. november 5-i felülvizsgálat)*
+ jóváhagyásával kezdj bele.
+- **Friss sérülés után vagy.** A sérülést követő első 2-3 napban kerülendő a
+ melegítő pakolást és a forró fürdőt. Nehezet emelni és erősen szorítani sem
+ szabad.
 
-A sín sem mindenkinél kellemetlenségmentes. A Cochrane-áttekintés egyik
+A sín sem mindenkinél kellemetlenségmentes. Az összesített vizsgálatok egyik
 vizsgálatában a sínt viselő 40 résztvevőből 7 (18%) számolt be múló
 mellékhatásról, a kezelés nélküli csoportban egy sem. A bizonyosság szintje itt
 alacsony, és a megbízhatósági tartomány a hatás hiányát is magában foglalta.
-*(Karjalainen és mtsai, Cochrane, 2023)*
 
 ## Mikor fordulj azonnal orvoshoz?
 
@@ -389,21 +361,18 @@ sérülés után zsibbad a karod.
 
 ### Stroke jelei: azonnal 112
 
-Stroke gyanújánál a mentőhívás nem várhat. *(NHS, Stroke, Symptoms, 2024.
-szeptember 12-i felülvizsgálat)*
+Stroke gyanújánál a mentőhívás nem várhat.
 
 - Lelóg az arc egyik fele, erőtlen vagy zsibbadt az egyik kar, akadozik a beszéd.
 - Erőtlenség vagy zsibbadás a test egyik oldalán, homályos látás, hirtelen erős
-  fejfájás, szédülés.
+ fejfájás, szédülés.
 
-Az NHS kiemeli: ha a stroke tünetei már elmúltak, de 24 órán belül megvoltak,
-akkor is azonnali segítség kell. *(NHS, Stroke, Symptoms, 2024. szeptember 12-i
-felülvizsgálat)*
+Fontos: ha a stroke tünetei már elmúltak, de 24 órán belül megvoltak,
+akkor is azonnali segítség kell.
 
 ### Sérülés után: ezeknél is mentő kell
 
-Sérülés után az NHS az alábbi négy jelet a mentőhívást igénylők közé sorolja.
-*(NHS, Broken arm or wrist, 2023. május 26-i felülvizsgálat)*
+Sérülés után az alábbi négy jelnél kell mentőt hívni.
 
 - A sérült kar vagy csukló zsibbad, bizsereg.
 - Erősen vérző seb van rajta.
@@ -412,8 +381,7 @@ Sérülés után az NHS az alábbi négy jelet a mentőhívást igénylők köz�
 
 ### Aznap orvos vagy ügyelet
 
-Ezeknél a jeleknél még aznap ellátás kell. *(NHS, Wrist pain, 2025. november 5-i
-felülvizsgálat)*
+Ezeknél a jeleknél még aznap ellátás kell.
 
 - A kéz egy részén vagy egészén megszűnt az érzés.
 - Erős csuklófájdalom ájulásérzéssel, hányingerrel, lázzal vagy hidegrázással.
@@ -427,21 +395,18 @@ felülvizsgálat)*
 Bármilyen tartósan megmaradó bizsergés vagy érzéskiesés a kézen orvosi
 kivizsgálást igényel.
 
-Az NHS csuklófájdalom-oldala nevesíti ezeket a helyzeteket. *(NHS, Wrist pain,
-2025. november 5-i felülvizsgálat)*
+Ezek a helyzetek jellemzőek.
 
 - Bármilyen bizsergés vagy érzéskiesés a kézen.
 - Két hét otthoni kezelés után sem javuló panasz.
 - Cukorbetegség mellett jelentkező kézpanasz, mert ilyenkor a kézproblémák
-  komolyabbak lehetnek.
+ komolyabbak lehetnek.
 
-Az NHS azt is kimondja, hogy a kéztőalagút-szindróma tüneteivel orvoshoz kell
-fordulni, ha romlanak vagy nem múlnak. *(NHS, Carpal tunnel syndrome, 2024.
-április 17-i felülvizsgálat)*
+Fontos tudni, hogy a kéztőalagút-szindróma tüneteivel orvoshoz kell
+fordulni, ha romlanak vagy nem múlnak.
 
-Jó hír is van. Az NHS szerint a kéztőalagút-szindróma néha magától rendeződik
-néhány hónap alatt, különösen akkor, ha terhesség miatt alakult ki. *(NHS, Carpal
-tunnel syndrome, 2024. április 17-i felülvizsgálat)*
+Jó hír is van. A kéztőalagút-szindróma néha magától rendeződik
+néhány hónap alatt, különösen akkor, ha terhesség miatt alakult ki.
 
 Ha a fájdalom is társul a zsibbadáshoz, arról külön írtunk a
 [csukló- és kézfájdalomról szóló cikkünkben](/blog/csuklo-es-kezfajdalom). Ha
@@ -479,59 +444,6 @@ Ilyenkor előbb a kivizsgálás következik, nem a gyakorlás.
 Amit nem ígérünk: nem gyógyítunk meg, és nem váltjuk ki a műtéti döntést.
 A kurzus nem helyettesíti a szakorvosi vizsgálatot és a kontrollt. Ha a
 kivizsgálás sürgős okot talál, azt kell követni.
-
-## Források
-
-1. NHS. [Pins and needles](https://www.nhs.uk/conditions/pins-and-needles/).
-   Felülvizsgálva: 2024-01-04, következő felülvizsgálat: 2027-01-04.
-   Hozzáférés: 2026-08-21. (forrásbázis: ZS1)
-2. NHS. [Carpal tunnel syndrome](https://www.nhs.uk/conditions/carpal-tunnel-syndrome/).
-   Felülvizsgálva: 2024-04-17, következő felülvizsgálat: 2027-04-17.
-   Hozzáférés: 2026-08-21. (forrásbázis: CTS1)
-3. NHS. [Wrist pain](https://www.nhs.uk/conditions/hand-pain/wrist-pain/).
-   Felülvizsgálva: 2025-11-05, következő felülvizsgálat: 2028-11-05.
-   Hozzáférés: 2026-08-21. (forrásbázis: VZ2, CSF1)
-4. NHS. [Stroke: Symptoms](https://www.nhs.uk/conditions/stroke/symptoms/).
-   Felülvizsgálva: 2024-09-12, következő felülvizsgálat: 2027-09-12.
-   Hozzáférés: 2026-08-21. (forrásbázis: VZ1, ZS2)
-5. NHS. [Broken arm or wrist](https://www.nhs.uk/conditions/broken-arm-or-wrist/).
-   Felülvizsgálva: 2023-05-26, esedékes felülvizsgálat: 2026-05-26 (lejárt).
-   Hozzáférés: 2026-08-21. (forrásbázis: VZ3)
-6. American Academy of Orthopaedic Surgeons.
-   [Management of Carpal Tunnel Syndrome. Evidence-Based Clinical Practice Guideline](https://www.aaos.org/globalassets/quality-and-practice-resources/carpal-tunnel/carpal-tunnel-2024/cts-cpg.pdf).
-   Elfogadva: 2024-05-18. Hozzáférés: 2026-08-21. (forrásbázis: CTS2)
-7. AAOS OrthoInfo.
-   [Carpal Tunnel Syndrome](https://www.orthoinfo.org/diseases--conditions/carpal-tunnel-syndrome/).
-   Szerző: Tyler Steven Pidgeon, MD, FAAOS; lektor: Thomas Ward Throckmorton, MD,
-   FAAOS. Hozzáférés: 2026-08-21. (forrásbázis: CTS9)
-8. Karjalainen TV, Lusa V, Page MJ, O'Connor D, Massy-Westropp N, Peters SE.
-   [Splinting for carpal tunnel syndrome](https://pubmed.ncbi.nlm.nih.gov/36848651/).
-   Cochrane Database Syst Rev. 2023;2(2):CD010003. DOI: 10.1002/14651858.CD010003.pub2.
-   PMID: 36848651. Hozzáférés: 2026-08-21. (forrásbázis: CTS3)
-9. Ballestero-Pérez R, Plaza-Manzano G, Urraca-Gesto A és mtsai.
-   [Effectiveness of Nerve Gliding Exercises on Carpal Tunnel Syndrome: A Systematic Review](https://pubmed.ncbi.nlm.nih.gov/27842937/).
-   J Manipulative Physiol Ther. 2017;40(1):50-59. DOI: 10.1016/j.jmpt.2016.10.004.
-   PMID: 27842937. Hozzáférés: 2026-08-21. (forrásbázis: CTS10)
-10. Graf A, Ahmed AS, Roundy R, Gottschalk MB, Dempsey A.
-    [Modern Treatment of Cubital Tunnel Syndrome: Evidence and Controversy](https://pubmed.ncbi.nlm.nih.gov/37521554/).
-    J Hand Surg Glob Online. 2023;5(4):547-560. DOI: 10.1016/j.jhsg.2022.07.008.
-    PMID: 37521554. Teljes szöveg: https://pmc.ncbi.nlm.nih.gov/articles/PMC10382899/
-    Hozzáférés: 2026-08-21. (forrásbázis: ZS5)
-11. Bateman M, Swaile H, Tambe A.
-    [Effectiveness of night splints for cubital tunnel syndrome: A systematic review](https://pubmed.ncbi.nlm.nih.gov/40385935/).
-    Hand Ther. 2025;30(3):105-112. DOI: 10.1177/17589983251336157. PMID: 40385935.
-    Hozzáférés: 2026-08-21. (forrásbázis: ZS6)
-12. Iyer S, Kim HJ.
-    [Cervical radiculopathy](https://pubmed.ncbi.nlm.nih.gov/27250042/).
-    Curr Rev Musculoskelet Med. 2016;9(3):272-280. DOI: 10.1007/s12178-016-9349-4.
-    PMID: 27250042. Hozzáférés: 2026-08-21. (forrásbázis: ZS3)
-
-A cikk általános tájékoztatás, nem helyettesíti a szakorvosi vizsgálatot és a
-személyre szabott kezelést. Ha bizonytalan vagy, vagy a tünetek romlanak,
-fordulj orvoshoz.
-
----
----
 
 ## Állítás és forrás: a cikkíró öntesztje
 
