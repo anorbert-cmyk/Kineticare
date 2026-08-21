@@ -117,6 +117,20 @@ Bontás `courseSku` szerint. Ez válaszolja meg: melyik kurzusnál hol esnek ki.
 Trend a `purchase_confirmed` `value` tulajdonságának **összegére** (sum),
 HUF-ban, heti bontásban. Mellé: átlagos kosárérték.
 
+> **FIGYELEM — 100-szoros hiba veszélye.** A PostHog Revenue analytics
+> beállításánál két mezőt kézzel kell megadni:
+> 1. a bevétel-tulajdonság neve: **`value`**;
+> 2. az összeg-formátum: **„decimal amount"**, NEM „minor unit" (váltópénz).
+>
+> A `totalHufSnapshot` **egész forint**, nem fillér. Ha a „minor unit"
+> beállítás marad, a PostHog századrészként értelmezi, és a bevétel
+> százszorosan téves lesz — olyan hiba, ami hihetőnek látszó számokat ad,
+> tehát sokáig észrevétlen maradhat.
+> Forrás: <https://posthog.com/docs/revenue-analytics/capture-revenue-events>
+>
+> Hiányzó összegnél a `value` kulcs KIMARAD az eseményből (nem `null`-ként
+> megy ki) — a `null` hamis nulla-bevételnek látszana az összegzésben.
+
 ### D3 — Lead-tölcsér és néma hibák
 Két idősor egy grafikonon: `lead_submitted` vs `lead_succeeded`, `forras`
 szerint bontva. **Ha a két vonal szétnyílik, az beküldési hiba** — ezt érdemes
