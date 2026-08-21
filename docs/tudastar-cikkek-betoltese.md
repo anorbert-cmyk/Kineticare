@@ -102,7 +102,18 @@ service-beállítást, ezért dedikált fájl kell):
    (referencia-változóval: `${{Postgres-c8Rg.DATABASE_URL}}`).
 4. `OWNER_TUDASTAR_CONFIRM=igen`, és ha publikálni is kell,
    `OWNER_TUDASTAR_PUBLISH=igen`.
-5. Deploy. A logban `TUDASTAR_JOB_START` … `TUDASTAR_JOB_DONE` a siker jele.
+5. Deploy. A logban `TUDASTAR_JOB_START commit=<sha>` … `TUDASTAR_JOB_DONE` a
+   siker jele.
+
+   **A `commit=` NEM dísz.** A Railway `redeploy` a MEGLÉVŐ buildet futtatja
+   újra, tehát a régi kódot — ugyanaz a csapda, mint a fő szolgáltatásnál
+   (`CLAUDE.md` 1. üzemeltetési tanulság: a „SUCCESS" deploy nem jelenti, hogy
+   az új kód fut). A kiírt SHA-t vesd össze a `main` fejével; ha nem egyezik,
+   a job RÉGI kódot futtatott, és az eredménye nem fogadható el.
+
+   Ezért figyeli a szolgáltatás a `railway.tudastar-job.json` mellett a
+   betöltő és a fordító forrásait is: így egy importer-javítás magától friss
+   buildet kap, nem kell kézzel kikényszeríteni.
 6. **A job végeztével a service törlendő** — a `sleep` csak azért van benne,
    hogy a Railway ne indítsa újra és a log olvasható maradjon.
 
