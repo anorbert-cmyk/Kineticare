@@ -15,7 +15,7 @@ import {
 import { captureAnalyticsEvent } from '@/lib/analytics/posthog'
 import { checkoutHref } from '../../lib/courses'
 import { ctaLabel } from '../../lib/cta-vocabulary'
-import { pollOrderStatus } from '../../lib/order-status-poll'
+import { pollOrderStatus, type PollResult } from '../../lib/order-status-poll'
 
 /**
  * ThankYouView — a köszönőoldal kliens-oldali viselkedése.
@@ -125,6 +125,26 @@ export function purchaseEventProperties(
   return properties
 }
 
+/**
+ * A `purchase_confirmed` CSAK akkor megy ki, ha a poll ténylegesen
+ * visszaigazolta a `paid` státuszt.
+ *
+ * Vendég-visszatérésnél a státusz-végpont 401-et ad (`unauthorized`):
+ * nincs munkamenet, a kliens NEM tudja, paid-e a rendelés. Ugyanez
+ * igaz a `not-found`, az `error` és a poll-időtúllépés (`timeout`)
+ * ágára. Hamis paid-eseményt küldeni (a Barion-visszatérés puszta
+ * tényéből) rosszabb, mint a lyukat dokumentálni — a bevétel-riport
+ * akkor fizetetlen kísérleteket is sikernek számolna.
+ *
+ * KÜLÖN, EXPORTÁLT TISZTA FÜGGVÉNY: a poll-effekt DOM nélkül nem
+ * futtatható, a kapu viszont igen. Lásd docs/posthog.md 4a.
+ */
+export function shouldEmitPurchaseConfirmed(
+  result: PollResult | { kind: 'timeout' },
+): boolean {
+  return result.kind === 'status' && result.status === 'paid'
+}
+
 const POLL_INTERVAL_MS = 2000
 const POLL_TIMEOUT_MS = 120000 // 2 perc
 
@@ -230,20 +250,23 @@ export function ThankYouView({ orderNumber }: ThankYouViewProps) {
         return
       }
 
+      // A purchase_confirmed kapuja explicit: vendég 401 / 404 / timeout
+      // SOHA nem paid-esemény. A UI `paid` ága ugyanerre a feltételre épül.
+      if (shouldEmitPurchaseConfirmed(result) && result.kind === 'status') {
+        setState({ kind: 'paid' })
+        // PostHog funnel-záró esemény, a rendelés végösszegével (no-op
+        // consent nélkül) — a tulajdonságokat lásd a purchaseEventProperties
+        // fejlécében.
+        captureAnalyticsEvent(
+          'purchase_confirmed',
+          purchaseEventProperties(pixelOrderNumber, result),
+        )
+        emitBarionPurchase(pixelOrderNumber, true)
+        return
+      }
+
       if (result.kind === 'status') {
         const status = result.status
-        if (status === 'paid') {
-          setState({ kind: 'paid' })
-          // PostHog funnel-záró esemény, a rendelés végösszegével (no-op
-          // consent nélkül) — a tulajdonságokat lásd a purchaseEventProperties
-          // fejlécében.
-          captureAnalyticsEvent(
-            'purchase_confirmed',
-            purchaseEventProperties(pixelOrderNumber, result),
-          )
-          emitBarionPurchase(pixelOrderNumber, true)
-          return
-        }
         if (status === 'cancelled' || status === 'payment_failed') {
           setState({ kind: 'failed', status, productId: result.productId })
           emitBarionPurchase(pixelOrderNumber, false)

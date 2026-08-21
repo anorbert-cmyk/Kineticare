@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { trackedLogin } from '@/components/auth/LoginForm'
 import { trackedRegister } from '@/components/auth/RegisterForm'
-import { purchaseEventProperties } from '@/components/checkout/ThankYouView'
+import {
+  purchaseEventProperties,
+  shouldEmitPurchaseConfirmed,
+} from '@/components/checkout/ThankYouView'
 import { loginUser, registerUser } from '@/lib/auth-client'
 import { createOrderStatusHandler } from '@/lib/checkout/order-status-handler'
 import { logoutUser } from '@/lib/logout-client'
@@ -478,5 +481,68 @@ describe('bevétel — a purchase_confirmed esemény tulajdonságai', () => {
   it('SZEMÉLYES ADAT nem kerül az eseménybe — csak rendelésszám, összeg, pénznem', () => {
     const properties = purchaseEventProperties('KH-2026-000123', { value: 19990, currency: 'HUF' })
     expect(Object.keys(properties).sort()).toEqual(['currency', 'orderNumber', 'value'])
+  })
+})
+
+describe('bevétel — purchase_confirmed CSAK paid státuszra megy ki', () => {
+  /**
+   * Vendég Barion-visszatérésnél a státusz-végpont 401 (`unauthorized`):
+   * nincs munkamenet, a kliens nem tudja, paid-e a rendelés. Hamis
+   * paid-eseményt küldeni rosszabb, mint a lyukat dokumentálni.
+   * A kapu a ThankYouView exportált `shouldEmitPurchaseConfirmed`
+   * függvénye — a poll-effekt DOM nélkül nem futtatható.
+   */
+  const paid = {
+    kind: 'status' as const,
+    status: 'paid' as const,
+    productId: 42,
+    value: 19990,
+    currency: 'HUF',
+  }
+
+  it('kind: status + paid → megy (a bejelentkezett, visszaigazolt ág)', () => {
+    expect(shouldEmitPurchaseConfirmed(paid)).toBe(true)
+  })
+
+  it('unauthorized / not-found / error / timeout → NEM megy', () => {
+    expect(shouldEmitPurchaseConfirmed({ kind: 'unauthorized' })).toBe(false)
+    expect(shouldEmitPurchaseConfirmed({ kind: 'not-found' })).toBe(false)
+    expect(shouldEmitPurchaseConfirmed({ kind: 'error' })).toBe(false)
+    expect(shouldEmitPurchaseConfirmed({ kind: 'timeout' })).toBe(false)
+  })
+
+  it('nem-paid státusz (elutasított, függő, törölt) → NEM megy', () => {
+    for (const status of ['created', 'payment_pending', 'payment_failed', 'cancelled', 'refunded'] as const) {
+      expect(
+        shouldEmitPurchaseConfirmed({
+          kind: 'status',
+          status,
+          productId: 42,
+          value: 19990,
+          currency: 'HUF',
+        }),
+      ).toBe(false)
+    }
+  })
+
+  it('a köszönőoldal a kapun keresztül küld — 401-es ágon nincs capture', async () => {
+    const { readFile } = await import('node:fs/promises')
+    const src = await readFile('src/components/checkout/ThankYouView.tsx', 'utf8')
+    expect(src).toContain('shouldEmitPurchaseConfirmed(result)')
+    expect(src).toMatch(
+      /if \(shouldEmitPurchaseConfirmed\(result\)[\s\S]*?captureAnalyticsEvent\(\s*'purchase_confirmed'/,
+    )
+
+    function agCaptureNelkul(kezdet: string): void {
+      const start = src.indexOf(kezdet)
+      expect(start, `hiányzik: ${kezdet}`).toBeGreaterThan(-1)
+      const veg = src.indexOf('return', start)
+      expect(veg).toBeGreaterThan(start)
+      expect(src.slice(start, veg + 6)).not.toContain('captureAnalyticsEvent')
+    }
+
+    agCaptureNelkul("result.kind === 'unauthorized'")
+    agCaptureNelkul("result.kind === 'not-found'")
+    agCaptureNelkul("setState({ kind: 'timeout' })")
   })
 })
