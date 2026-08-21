@@ -192,6 +192,13 @@ const FELIRAT_KIVETELEK: readonly FeliratKivetel[] = [
     indok: 'Morzsa (breadcrumb) elem a kurzusoldalon — helyjelölő, nem cselekvés.',
   },
   {
+    felirat: 'Tudástár',
+    fajl: 'components/content/PostArticle.tsx',
+    kategoria: 'nem-cta',
+    indok:
+      'Morzsa (breadcrumb) elem a cikkoldalon (2026-08-21) — helyjelölő, nem cselekvés; pontosan ugyanaz a szerep, mint a kurzusoldal „Kurzusok" morzsa-elemének. A gyűjtőoldal NEVE a főmenüben is „Tudástár" (§3.2 N-3: menücímke, nem CTA).',
+  },
+  {
     felirat: 'Kurzusaim',
     fajl: 'components/layout/AccountNav.tsx',
     kategoria: 'nem-cta',
@@ -438,8 +445,16 @@ const FELIRAT_KIVETELEK: readonly FeliratKivetel[] = [
  * 42 maradt; ezt a számot csak LEFELÉ szabad átírni. Ha egy javítás elfogyaszt
  * egy sort, a korlát is csökken — így a lista visszahízása külön, látható
  * mozdulatot kíván.
+ *
+ * 2026-08-21: 42 → 43, EGYETLEN sorral, és NEM felirat-adósság miatt. A
+ * cikkoldal megkapta a látható morzsamenüjét (WCAG 2.2 **3.2.3** Consistent
+ * Navigation: a kurzusoldalnak volt morzsája, a cikkoldalnak nem), és a morzsa
+ * gyűjtőoldal-eleme a lap NEVÉT viseli: „Tudástár". Ez pontosan ugyanaz a
+ * szerep, mint a kurzusoldal morzsájának „Kurzusok" eleme, ami a 184–187.
+ * soron már ott áll — helyjelölő, nem cselekvés (§3.2 N-3). Új CTA-felirat
+ * NEM keletkezett. A növelést a vezetőnek jóvá kell hagynia.
  */
-const KIVETEL_LISTA_FELSO_KORLAT = 42
+const KIVETEL_LISTA_FELSO_KORLAT = 43
 
 /**
  * A „Tovább…"-tilalom (M-7) MAI sértései. SZŰK lista: az őr megköveteli, hogy

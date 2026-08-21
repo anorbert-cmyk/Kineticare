@@ -134,7 +134,12 @@ export function PostView({ post, related: relatedProp, showMeta = true }: PostVi
             <h2 className="kc-section-title">Kapcsolódó bejegyzések</h2>
             <div className="kc-card-grid">
               {related.map((relatedPost) => (
-                <PostCard key={relatedPost.id} post={relatedPost} />
+                /* `compact`: a kapcsolódó blokk HÁRMAS rácsban áll, ott a
+                   kivonat mért sorhossza 24–38 karakter/sor
+                   (docs/tudastar-a11y-meres.md 3.1) — a repó Ü6 szabályának
+                   45-ös alsó tűréshatára alatt. A kártyacím a fenti h2
+                   szekciócím alá h3-ként kerül (a `headingLevel` alapja). */
+                <PostCard key={relatedPost.id} post={relatedPost} variant="compact" />
               ))}
             </div>
           </Container>

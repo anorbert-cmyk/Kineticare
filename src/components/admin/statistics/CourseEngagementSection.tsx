@@ -7,6 +7,7 @@ import {
   noticeStyle,
   numericStyle,
   rowHeaderStyle,
+  rowLinkStyle,
   sectionStyle,
   tableStyle,
   tableWrapStyle,
@@ -168,8 +169,13 @@ export function CourseEngagementSection({
                       {/* A link színét a custom.scss `.kc-adminstat a` szabálya
                           adja (ink + aláhúzás, hover accent-deep — a landing
                           link-nyelve); a márka-CSS nélkül a Payload saját
-                          link-stílusa érvényesül. */}
-                      <a href={`/admin/collections/products/${String(course.productId)}`}>
+                          link-stílusa érvényesül. A `rowLinkStyle` a 44 px-es
+                          cél-magasságot tartja akkor is, amikor a széles lapon
+                          a felirat egyetlen sorba fér (indoklás: styles.ts). */}
+                      <a
+                        href={`/admin/collections/products/${String(course.productId)}`}
+                        style={rowLinkStyle}
+                      >
                         Névsor és szűrés a kurzus lapján
                       </a>
                     </td>

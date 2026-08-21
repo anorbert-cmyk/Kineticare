@@ -11,6 +11,8 @@ import { getCategoryBySlug, getPosts, getPublishedProducts } from '@/lib/cms'
 import { blogJsonLd, breadcrumbJsonLd } from '@/lib/seo'
 import { freeCourseHref } from '@/lib/tudastar'
 
+import '../../../styles/blocks/tudastar-lista.css'
+
 /**
  * /blog/kategoria/[slug] — a Tudástár egy témájának listája.
  *
@@ -108,9 +110,15 @@ export default async function BlogCategoryPage({ params }: Props) {
         {posts.length === 0 ? (
           <PostsEmptyState freeCourseHref={freeHref} variant={variant} />
         ) : (
-          <div className="kc-card-grid">
+          <div className="kc-card-grid kc-card-grid--posts">
             {posts.map((post) => (
-              <PostCard key={post.id} post={post} />
+              /* Ugyanaz a kártya-beállítás, mint a `/blog` listán (a terv 4.6
+                 pontja: „Azonos a /blog-gal"): H1 alatt H2 kártyacím, és a
+                 KÉTHASÁBOS poszt-rács. A közös hármas rácsban a kivonat mért
+                 sorhossza 28,8–37,4 karakter/sor, a kéthasábosban 48,1–60,6 —
+                 a repó Ü6 szabályának 45-ös alsó tűréshatára csak az utóbbiban
+                 teljesül (styles/blocks/tudastar-lista.css). */
+              <PostCard key={post.id} post={post} headingLevel={2} />
             ))}
           </div>
         )}
