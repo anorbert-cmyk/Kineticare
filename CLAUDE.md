@@ -267,6 +267,18 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
     lennie (`-k <dir>`), és a scratchpad SZÜLŐ könyvtáraira is kell `o+x`
     bejárási jog, különben a `pg_ctl` „Permission denied"-dal áll le.
 
+22c. **A scratchpadben NEM fér el a Postgres unix socketje.** A socket teljes
+    útja legfeljebb **107 bájt** lehet, a session-scratchpad útja önmagában
+    ~90 karakter, tehát a `-k <scratchpad-alkönyvtár>` mindig elbukik:
+    `Unix-domain socket path … is too long` → `could not create any
+    Unix-domain sockets` → `FATAL`. A hiba megtévesztő, mert a `pg_ctl` csak
+    annyit ír, hogy „could not start server". **Megoldás:** kapcsold ki a unix
+    socketet és menj TCP-n: `-o "-p 5433 -k '' -h 127.0.0.1"`, a kliens pedig
+    `postgres://postgres@127.0.0.1:5433/<db>`. Mellékfeltétel: a `-l <logfile>`
+    fájlt a `pg_ctl` a `pgrun` nevében nyitja, ezért a logfájlnak LÉTEZNIE kell
+    és `pgrun`-tulajdonúnak — különben „Permission denied", és a szerver
+    naplója sosem íródik ki. (Mérve 2026-08-21.)
+
 23. **Merge után azonnal a GitHub CI és a Railway.** A squash-merge nem zárja
     a kört. A `main` CI (`ci.yml` + gitleaks) legyen zöld; a Railway-en
     tényleges `npm run build` (ne skipped), start-logban `Migrating:` /

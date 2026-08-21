@@ -6,6 +6,10 @@
 > Ez a dokumentum a `docs/kampanyterv-mert-adatokbol.md` és a
 > `docs/kulcsszavak.md` **kiegészítése és részleges helyesbítése**. Ahol
 > ellentmond nekik, ott az itteni, frissebb mérés az érvényes.
+>
+> **Folytatás:** `docs/monid-harmadik-kor.md` (a fizetett hirdetési táj, a
+> valódi Google-autocomplete kérdések cikkenként, és a betegek nyelvi mintái
+> a Google Maps véleményekből).
 
 ## 1. A legfontosabb: a versenytárs kéz-cikkei már állnak, és látszik a gyenge pontjuk
 
