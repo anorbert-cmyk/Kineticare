@@ -36,6 +36,7 @@ vi.stubGlobal('fetch', () => {
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   const original = originals.withAdvisoryLock
   if (original) {
     vi.mocked(withAdvisoryLock).mockImplementation(original)
@@ -148,5 +149,17 @@ describe('withUserPurchasesLock — drizzle nélküli (nem-production) skip', ()
 
     expect(result.wrote).toBe(true)
     expect(user.purchases).toEqual([1, 4])
+  })
+
+  it('NODE_ENV=production mellett is lefut drizzle nélküli mockon (CI-útvonal)', async () => {
+    // A production NODE_ENV a withAdvisoryLock drizzle nélküli ágát dobásra
+    // viszi; a vevő-zár ezt a mockot a folyamatbeli záron futtatja, ne dobjon.
+    vi.stubEnv('NODE_ENV', 'production')
+    const { payload, user } = createUserStore([1])
+
+    const result = await updateUserPurchases(payload, 7, (current) => [...current, 5])
+
+    expect(result.wrote).toBe(true)
+    expect(user.purchases).toEqual([1, 5])
   })
 })

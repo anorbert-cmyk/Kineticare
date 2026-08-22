@@ -44,6 +44,13 @@ function createMockPayload(options: MockOptions = {}) {
       }
       return { docs: [], totalDocs: 0 }
     }),
+    // A K1 `updateUserPurchases` a vevő-záron BELÜL findByID-val olvas újra.
+    findByID: vi.fn(async ({ collection, id }: { collection: string; id: number | string }) => {
+      if (collection === 'users' && Number(id) === user.id) {
+        return user
+      }
+      throw new Error(`váratlan findByID: ${collection} ${id}`)
+    }),
     update: vi.fn(async (args: { collection: string; data: Record<string, unknown> }) => {
       updates.push(args)
       if (args.collection === 'users') {

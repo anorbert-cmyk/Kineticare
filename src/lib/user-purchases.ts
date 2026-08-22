@@ -54,21 +54,41 @@ export function userPurchaseIds(user: { purchases?: unknown } | null | undefined
 }
 
 /**
- * A vevő-zár payloadja. Production-ben a valódi példány (beágyazott
- * `order-transition` / `refund:order` → `user-purchases` két külön
- * pool-kapcsolaton, két kulccsal — ez a helyes, holtpontra nem vezető
- * sorrend).
+ * Tesztbeli no-op drizzle: a `withAdvisoryLock` drizzle-t lát (nem dob
+ * production NODE_ENV-ben), a `transaction` viszont azonnal futtatja a `fn`-t,
+ * SQL nélkül. Így a zárkulcs a lock-tesztekben megmarad, a beágyazott
+ * rendelés-zár FIFO mockja viszont nem deadlockol.
+ */
+const SKIP_LOCK_DRIZZLE = {
+  transaction: async <T>(
+    run: (tx: { execute: (query: unknown) => Promise<unknown> }) => Promise<T>,
+  ): Promise<T> => run({ execute: async () => undefined }),
+}
+
+function isVitestRuntime(): boolean {
+  return process.env.VITEST === 'true'
+}
+
+/**
+ * A vevő-zár payloadja.
  *
- * Nem-productionben a drizzle-t levesszük: a serializáló lock-teszt mock
- * egyetlen FIFO-láncon várakoztatja a `transaction`-t, ezért a beágyazott
- * második zár deadlockolna. A `withAdvisoryLock` drizzle nélkül a `fn`-t
- * futtatja (dokumentált skip, lásd advisory-lock.ts). A K1 őr-teszt a
- * `withAdvisoryLock`-ot kulcsonként sorosítja, tehát a versenyhelyzet
- * ott is zárt.
+ * Élesben (production, nem teszt) a valódi példány megy, ha van drizzle:
+ * beágyazott `order-transition` / `refund:order` → `user-purchases` két külön
+ * pool-kapcsolaton. Nincs drizzle → a `withAdvisoryLock` dob (néma skip tilos).
+ *
+ * Teszt/dev: a drizzle-t levesszük. Production NODE_ENV + Vitest: no-op
+ * drizzle, hogy a mock Payloadon a zár ne dobjon, a zárkulcs a lock-tesztekben
+ * megmaradjon, a FIFO rendelés-zár mockja pedig ne deadlockoljon. A skip nem
+ * pusztán a `NODE_ENV`-től függ — a CI `vitest` NODE_ENV-je `test`, de
+ * `production` stub mellett is ez az út.
  */
 function payloadForUserLock(payload: Payload): Payload {
-  if (process.env.NODE_ENV === 'production') {
+  const inProduction = process.env.NODE_ENV === 'production'
+  if (inProduction && !isVitestRuntime()) {
     return payload
+  }
+  if (inProduction) {
+    return { db: { drizzle: SKIP_LOCK_DRIZZLE } } as unknown as Payload
   }
   return { db: { drizzle: undefined } } as unknown as Payload
 }
