@@ -31,11 +31,16 @@ function createMockPayload(options: MockOptions = {}) {
 
   const payload = {
     auth: vi.fn(async () => ({
-      user: options.authUser === undefined ? { id: 1, email: 'owner@example.test', role: 'owner' } : options.authUser,
+      user:
+        options.authUser === undefined
+          ? { id: 1, email: 'owner@example.test', role: 'owner' }
+          : options.authUser,
     })),
     find: vi.fn(async ({ collection }: { collection: string }) => {
       if (collection === 'users') {
-        return (options.userExists ?? true) ? { docs: [user], totalDocs: 1 } : { docs: [], totalDocs: 0 }
+        return (options.userExists ?? true)
+          ? { docs: [user], totalDocs: 1 }
+          : { docs: [], totalDocs: 0 }
       }
       if (collection === 'products') {
         return (options.productExists ?? true)
@@ -43,6 +48,12 @@ function createMockPayload(options: MockOptions = {}) {
           : { docs: [], totalDocs: 0 }
       }
       return { docs: [], totalDocs: 0 }
+    }),
+    findByID: vi.fn(async ({ collection, id }: { collection: string; id: number | string }) => {
+      if (collection === 'users' && (options.userExists ?? true) && Number(id) === user.id) {
+        return { ...user, purchases: [...user.purchases] }
+      }
+      throw new Error('Not Found')
     }),
     update: vi.fn(async (args: { collection: string; data: Record<string, unknown> }) => {
       updates.push(args)
@@ -98,7 +109,9 @@ describe('grant-purchase route — jogosultság-mátrix', () => {
   })
 
   it('200 staff szerepkörrel — a hozzáférés bekerül', async () => {
-    const { handler, updates } = handlerFor({ authUser: { id: 5, email: 'staff@example.test', role: 'staff' } })
+    const { handler, updates } = handlerFor({
+      authUser: { id: 5, email: 'staff@example.test', role: 'staff' },
+    })
 
     const response = await handler(postRequest(VALID_BODY))
     const body = (await response.json()) as { status: string; message: string }
@@ -158,7 +171,9 @@ describe('grant-purchase route — validálás és 404-ágak', () => {
   it('400, ha az indok üres', async () => {
     const { handler } = handlerFor()
 
-    const response = await handler(postRequest({ email: EMAIL, productIdOrSku: SKU, reason: '   ' }))
+    const response = await handler(
+      postRequest({ email: EMAIL, productIdOrSku: SKU, reason: '   ' }),
+    )
     const body = (await response.json()) as { error: string }
 
     expect(response.status).toBe(400)

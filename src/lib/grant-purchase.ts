@@ -4,6 +4,7 @@ import type { User } from '../payload-types'
 import { auditLogStore, writeAuditLog } from './audit'
 import { maskEmail } from './email/mask'
 import { logger, type Logger } from './logger'
+import { withUserPurchasesLock } from './user-purchases-lock'
 
 /**
  * Manuális kurzus-hozzáférés adása (grant) — transportfüggetlen szolgáltatás.
@@ -32,11 +33,7 @@ import { logger, type Logger } from './logger'
  * Technikai hiba (DB) természetesen kibillen.
  */
 
-export type GrantPurchaseStatus =
-  | 'granted'
-  | 'already-had'
-  | 'user-not-found'
-  | 'product-not-found'
+export type GrantPurchaseStatus = 'granted' | 'already-had' | 'user-not-found' | 'product-not-found'
 
 /** A termék-hivatkozás feloldásának módja — a hívó hibaüzenetéhez. */
 export type ProductRefKind = 'id' | 'sku'
@@ -108,9 +105,12 @@ export async function grantPurchase(options: GrantPurchaseOptions): Promise<Gran
   }
 
   // --- Felhasználó feloldása email alapján (NEM hozunk létre újat) -----------
+  // W9: a Payload az e-mailt kisbetűsen tárolja. A CLI/admin `Vevo@Pelda.hu`
+  // alakja trim + toLowerCase nélkül hamis „nincs ilyen user" lenne.
+  const normalizedEmail = email.trim().toLowerCase()
   const users = await payload.find({
     collection: 'users',
-    where: { email: { equals: email } },
+    where: { email: { equals: normalizedEmail } },
     limit: 1,
     depth: 0,
     overrideAccess: true,
@@ -149,62 +149,77 @@ export async function grantPurchase(options: GrantPurchaseOptions): Promise<Gran
   const product = products.docs[0]
   const productLabel = product.sku ?? String(product.id)
 
-  // --- IDEMPOTENS ellenőrzés: már megvan? (no-op, NEM hiba) -----------------
-  const owned = new Set(userPurchaseIds(user).map(String))
-  if (owned.has(String(product.id))) {
-    log.info('manuális hozzáférés: a termék már a vevőnél van — no-op', {
-      ...audit,
-      userId: user.id,
-      productId: product.id,
-      sku: product.sku,
-      result: 'already-had',
+  // --- Purchases RMW user-zár alatt: újraolvasás, majd merge/írás (K1) ------
+  const outcome = await withUserPurchasesLock(
+    payload,
+    user.id,
+    async () => {
+      const fresh = (await payload.findByID({
+        collection: 'users',
+        id: user.id,
+        depth: 0,
+        overrideAccess: true,
+      })) as User
+
+      const owned = new Set(userPurchaseIds(fresh).map(String))
+      if (owned.has(String(product.id))) {
+        log.info('manuális hozzáférés: a termék már a vevőnél van — no-op', {
+          ...audit,
+          userId: user.id,
+          productId: product.id,
+          sku: product.sku,
+          result: 'already-had',
+        })
+        return {
+          status: 'already-had' as const,
+          email,
+          productRef: productIdOrSku,
+          productRefKind,
+          userId: user.id,
+          productId: product.id,
+          productLabel,
+        }
+      }
+
+      await payload.update({
+        collection: 'users',
+        id: user.id,
+        data: { purchases: [...userPurchaseIds(fresh), product.id] },
+        overrideAccess: true,
+      })
+
+      log.info('manuális hozzáférés rögzítve', {
+        ...audit,
+        userId: user.id,
+        productId: product.id,
+        sku: product.sku,
+        result: 'granted',
+      })
+
+      return {
+        status: 'granted' as const,
+        email,
+        productRef: productIdOrSku,
+        productRefKind,
+        userId: user.id,
+        productId: product.id,
+        productLabel,
+      }
+    },
+    log,
+  )
+
+  // Az audit a zár ELENGEDÉSE után fut — a zár-tartomány csak a purchases RMW.
+  if (outcome.status === 'granted') {
+    await writeAuditLog({
+      store: auditLogStore(payload),
+      actor: options.grantedBy?.id ?? null,
+      action: 'grant-purchase',
+      entityType: 'users',
+      entityId: user.id,
+      after: { productId: product.id, sku: product.sku, reason: options.reason ?? null },
     })
-    return {
-      status: 'already-had',
-      email,
-      productRef: productIdOrSku,
-      productRefKind,
-      userId: user.id,
-      productId: product.id,
-      productLabel,
-    }
   }
 
-  // --- Hozzáférés rögzítése (missing-only, a grantPurchases mintájára) ------
-  await payload.update({
-    collection: 'users',
-    id: user.id,
-    data: { purchases: [...userPurchaseIds(user), product.id] },
-    overrideAccess: true,
-  })
-
-  log.info('manuális hozzáférés rögzítve', {
-    ...audit,
-    userId: user.id,
-    productId: product.id,
-    sku: product.sku,
-    result: 'granted',
-  })
-
-  // A strukturált napló mellett az audit-logs collectionbe is kerüljön — a
-  // manuális hozzáférés-adas az admin-felületen is nyomon követhető legyen.
-  // A writeAuditLog best-effort (sosem dob a hívó felé).
-  await writeAuditLog({
-    store: auditLogStore(payload),
-    actor: options.grantedBy?.id ?? null,
-    action: 'grant-purchase',
-    entityType: 'users',
-    entityId: user.id,
-    after: { productId: product.id, sku: product.sku, reason: options.reason ?? null },
-  })
-
-  return {
-    status: 'granted',
-    email,
-    productRef: productIdOrSku,
-    productRefKind,
-    userId: user.id,
-    productId: product.id,
-    productLabel,
-  }
+  return outcome
 }

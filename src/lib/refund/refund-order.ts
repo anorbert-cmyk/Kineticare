@@ -2,6 +2,7 @@ import type { Payload } from 'payload'
 
 import type { Order, User } from '../../payload-types'
 import { withAdvisoryLock } from '../advisory-lock'
+import { withUserPurchasesLock } from '../user-purchases-lock'
 import { auditLogStore, writeAuditLog } from '../audit'
 import { BarionApiError, fetchPaymentState, refundPayment } from '../barion'
 import { logger, type Logger } from '../logger'
@@ -261,7 +262,7 @@ function userPurchaseIds(user: User): number[] {
  *   jogosultság megmarad — a levétel kizárólag a visszatérített rendeléshez
  *   köthető hozzáférést szünteti meg.
  */
-async function revokePurchases(
+export async function revokePurchases(
   payload: Payload,
   order: Order,
   log: Logger,
@@ -282,6 +283,7 @@ async function revokePurchases(
   }
 
   // Más paid rendelés ugyanerre a termékre → a hozzáférés megmarad.
+  // Ez a lekérdezés a user-záron KÍVÜL marad (nem purchases-írás).
   const protectedIds = new Set<number>()
   for (const productId of productIds) {
     const otherPaid = await payload.find({
@@ -303,35 +305,45 @@ async function revokePurchases(
     }
   }
 
-  const user = (await payload.findByID({
-    collection: 'users',
-    id: customerId,
-    depth: 0,
-    overrideAccess: true,
-  })) as User
+  // User-szintű zár a purchases RMW körül (order → user sorrend: a hívó
+  // már tarthatja a `refund:order:<id>` zárat). A findByID a záron BELÜL
+  // fut — a zár előtt olvasott snapshotot TILOS visszaírni (K1).
+  return withUserPurchasesLock(
+    payload,
+    customerId,
+    async () => {
+      const user = (await payload.findByID({
+        collection: 'users',
+        id: customerId,
+        depth: 0,
+        overrideAccess: true,
+      })) as User
 
-  const removable = new Set(productIds.filter((id) => !protectedIds.has(id)).map(String))
-  const current = userPurchaseIds(user)
-  const remaining = current.filter((id) => !removable.has(String(id)))
+      const removable = new Set(productIds.filter((id) => !protectedIds.has(id)).map(String))
+      const current = userPurchaseIds(user)
+      const remaining = current.filter((id) => !removable.has(String(id)))
 
-  if (remaining.length === current.length) {
-    // Nincs eltávolítható jogosultság — idempotens no-op.
-    return { revoked: 0 }
-  }
+      if (remaining.length === current.length) {
+        // Nincs eltávolítható jogosultság — idempotens no-op.
+        return { revoked: 0 }
+      }
 
-  await payload.update({
-    collection: 'users',
-    id: customerId,
-    data: { purchases: remaining },
-    overrideAccess: true,
-  })
-  const revoked = current.length - remaining.length
-  log.info('refund: purchases-jogosultság levéve', {
-    userId: customerId,
-    revokedCount: revoked,
-    keptForOtherPaidOrders: [...protectedIds],
-  })
-  return { revoked }
+      await payload.update({
+        collection: 'users',
+        id: customerId,
+        data: { purchases: remaining },
+        overrideAccess: true,
+      })
+      const revoked = current.length - remaining.length
+      log.info('refund: purchases-jogosultság levéve', {
+        userId: customerId,
+        revokedCount: revoked,
+        keptForOtherPaidOrders: [...protectedIds],
+      })
+      return { revoked }
+    },
+    log,
+  )
 }
 
 /**
@@ -430,7 +442,10 @@ async function issueCorrectiveBestEffort(params: {
 }
 
 /** Rendelés-keresés orderNumber alapján (a zár előtt és a záron belül is ez fut). */
-async function findOrderByNumber(payload: Payload, orderNumber: string): Promise<Order | undefined> {
+async function findOrderByNumber(
+  payload: Payload,
+  orderNumber: string,
+): Promise<Order | undefined> {
   const found = await payload.find({
     collection: 'orders',
     where: { orderNumber: { equals: orderNumber } },
@@ -469,7 +484,10 @@ interface RefundDecision {
 function decideRefund(order: Order, input: RefundOrderInput, orderLog: Logger): RefundDecision {
   // Állapotgép-validáció: dupla refund → 409; nem paid → 409.
   if (order.status === 'refunded') {
-    throw new RefundError(409, 'Ez a rendelés már korábban teljes egészében visszatérítésre került.')
+    throw new RefundError(
+      409,
+      'Ez a rendelés már korábban teljes egészében visszatérítésre került.',
+    )
   }
   if (order.status !== 'paid') {
     throw new RefundError(
@@ -515,7 +533,10 @@ function decideRefund(order: Order, input: RefundOrderInput, orderLog: Logger): 
   if (input.amountHuf !== undefined && input.amountHuf !== null) {
     const raw = typeof input.amountHuf === 'number' ? input.amountHuf : Number(input.amountHuf)
     if (!Number.isInteger(raw) || raw <= 0) {
-      throw new RefundError(400, 'A visszatérítendő összeg (amountHuf) pozitív egész szám kell legyen.')
+      throw new RefundError(
+        400,
+        'A visszatérítendő összeg (amountHuf) pozitív egész szám kell legyen.',
+      )
     }
     if (raw > remainingHuf) {
       throw new RefundError(
@@ -788,8 +809,15 @@ export async function refundOrder(options: RefundOrderOptions): Promise<RefundOr
     orderLog,
   )
 
-  const { order, decision, transactionId, refundedTransactionStatus, statusOutcome, refunds, before } =
-    outcome
+  const {
+    order,
+    decision,
+    transactionId,
+    refundedTransactionStatus,
+    statusOutcome,
+    refunds,
+    before,
+  } = outcome
   const { amountHuf, type, reason, alreadyRefunded } = decision
   const totalRefundedHuf = alreadyRefunded + amountHuf
 
