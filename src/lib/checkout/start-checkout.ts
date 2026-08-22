@@ -353,9 +353,7 @@ function assertPurchasable(product: Product, log: Logger, priceHuf?: number): vo
  * A duplavásárlás-blokk SZŰRŐJE: a vevőt vagy a fiókja (bejelentkezve), vagy az
  * e-mail-címe (vendégként) azonosítja a rendeléseken.
  */
-type DuplicateScope =
-  | { kind: 'customer'; userId: number }
-  | { kind: 'email'; email: string }
+type DuplicateScope = { kind: 'customer'; userId: number } | { kind: 'email'; email: string }
 
 function duplicateScopeWhere(scope: DuplicateScope, productId: number): Record<string, unknown> {
   return {
@@ -545,9 +543,12 @@ async function findExistingUserIdByEmail(
     const id = docs[0]?.id
     return typeof id === 'number' ? id : null
   } catch (error) {
-    log.warn('checkout-start: a vendég e-mailhez tartozó fiók keresése sikertelen (a checkout folytatódik)', {
-      error: error instanceof Error ? error.message : String(error),
-    })
+    log.warn(
+      'checkout-start: a vendég e-mailhez tartozó fiók keresése sikertelen (a checkout folytatódik)',
+      {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    )
     return null
   }
 }
@@ -668,9 +669,10 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
           productId,
         )
       }
-      // Vendégnél a fiókhoz még nem kötött (customer nélküli) rendeléseket is
-      // meg kell nézni — azokat kizárólag az e-mail azonosítja.
-      if (buyer.customerId === null) {
+      // Vendég-`payment_pending` (`customer: null` + `customerEmail`): vendégnél
+      // ez az egyetlen hatókör, bejelentkezve pedig a customer-szűrés nem látja
+      // (W2). Ugyanaz a cím ne indíthasson második aktív Barion-terhelést.
+      if (buyer.existingUserId !== null || buyer.customerId === null) {
         await assertNoDuplicatePurchase(payload, { kind: 'email', email: buyer.email }, productId)
       }
 

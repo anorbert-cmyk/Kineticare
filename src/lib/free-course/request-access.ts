@@ -31,9 +31,14 @@ import { freeCourseEmail } from './email'
  *     jelzővel (a vendég-vásárlás és a vásárló-import ugyanezt teszi).
  *  3. Hozzáférés-adás a MEGLÉVŐ `grantFreeCoursesToUser` szolgáltatással —
  *     idempotens, missing-only, meglévő jogosultságot sosem vesz el.
+ *     Owner/staff meglévő fiókra NEM írunk purchases-t (K3): a nyilvános
+ *     űrlap nem adhat admin-jogosultságot.
  *  4. Belépő link: a Payload SAJÁT jelszó-visszaállító tokenje
  *     (`forgotPassword`, `disableEmail: true`) + a közös
  *     `buildPasswordResetUrl`. Külön, párhuzamos token-rendszer NINCS.
+ *     7 napos token CSAK új fiókra vagy `passwordSetupPending` vevőre jár —
+ *     meglévő jelszavas, owner és staff fiókra NEM (K3: a token érvénytelenítené
+ *     a valódi 1 órás jelszó-emlékeztetőt).
  *  5. Levél: a saját magyar sablon (`freeCourseEmail`) a Payload
  *     e-mail-adapterén át.
  *
@@ -304,7 +309,25 @@ export async function requestFreeCourseAccess(
     }
   }
 
-  // ── 2. Hozzáférés-adás (idempotens, missing-only) ─────────────────────────
+  // ── 2. Owner/staff meglévő fiók: sem hozzáférés, sem 7 napos token ────────
+  // A nyilvános űrlap NEM írhat purchases-t admin-fiókra, és NEM írhat 7 napos
+  // reset-tokent, ami egy valódi 1 órás jelszó-emlékeztetőt érvénytelenítene.
+  // A HTTP-válasz ettől még `ok` (fiók-felderítés elleni védelem).
+  if (!resolved.created && (resolved.user.role === 'owner' || resolved.user.role === 'staff')) {
+    log.info('ingyenes kurzus igénylése: owner/staff fiók — hozzáférés és belépő token kihagyva', {
+      ...audit,
+      userId: resolved.user.id,
+      role: resolved.user.role,
+    })
+    return {
+      status: 'ok',
+      emailDelivered: false,
+      userCreated: false,
+      grantedProductIds: [],
+    }
+  }
+
+  // ── 3. Hozzáférés-adás (idempotens, missing-only) ─────────────────────────
   // FRISS olvasás: új fióknál a Users afterChange(create) hookja már írhatott
   // purchases-t (ugyanez a grant fut ott), a `create` visszatérési doc-ja
   // viszont azt még nem tükrözi. Elavult listával a grant fölöslegesen írna.
@@ -343,7 +366,23 @@ export async function requestFreeCourseAccess(
     grantedProductIds: grant.grantedProductIds,
   })
 
-  // ── 3. Belépő link + levél ────────────────────────────────────────────────
+  // Meglévő, jelszóval rendelkező vevő: a hozzáférés MEGVAN, de 7 napos
+  // forgotPassword-token NEM jár — az érvénytelenítené a valódi 1 órás resetet.
+  const needsActivationToken = resolved.created || fresh.passwordSetupPending === true
+  if (!needsActivationToken) {
+    log.info(
+      'ingyenes kurzus igénylése: meglévő jelszavas fiók — hozzáférés megvan, 7 napos token nélkül',
+      { ...audit, userId: fresh.id },
+    )
+    return {
+      status: 'ok',
+      emailDelivered: false,
+      userCreated: false,
+      grantedProductIds: grant.grantedProductIds,
+    }
+  }
+
+  // ── 4. Belépő link + levél ────────────────────────────────────────────────
   const provider = resolveEmailProvider(env)
   if (provider.name === 'noop' || input.serverUrl === null) {
     // Se kulcs, se cím → a levél nem tud kimenni. Tokent SEM generálunk: az

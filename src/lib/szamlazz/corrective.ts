@@ -279,6 +279,12 @@ export async function issueCorrectiveInvoiceForOrder(
   const attemptsSeq = order.correctiveInvoiceAttemptsSeq ?? 0
   const previousAttempts =
     attemptsSeq === deps.refundSeq ? (order.correctiveInvoiceAttempts ?? 0) : 0
+  // K4: ha a rögzített attemptsSeq MÁS refund-sorszámé (és nem a „még semmi"
+  // 0), a previousAttempts 0 — de a kért seq bizonylata ettől még létezhet
+  // (timeout + későbbi seq kiállt, majd a korábbi job újrapróbál). Ilyenkor
+  // is le kell kérdezni, mielőtt vakon POST-olnánk.
+  const seqMismatch = attemptsSeq !== deps.refundSeq && attemptsSeq !== 0
+  const shouldLookupBeforePost = previousAttempts > 0 || seqMismatch
   if (previousAttempts >= MAX_CORRECTIVE_ATTEMPTS) {
     const reason = `a helyesbítő-kiállítási kísérletek száma kimerült (${previousAttempts}/${MAX_CORRECTIVE_ATTEMPTS})`
     log.error(
@@ -363,7 +369,7 @@ export async function issueCorrectiveInvoiceForOrder(
     // „kérés elment, válasz elveszett" esetben a bizonylat már létezhet.
     // A lekérdezés hibája szándékosan propagál (bizonytalan állapotban nem
     // szabad vakon újra beküldeni), és NEM növeli a kísérletszámot (F10).
-    if (previousAttempts > 0) {
+    if (shouldLookupBeforePost) {
       const found = await lookup(kulsoAzon, config)
       if (found) {
         return await adoptExisting(found.szamlaszam, 'retry-elotti lekerdezes')

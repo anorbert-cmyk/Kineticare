@@ -322,6 +322,21 @@ describe('POST /api/course-progress/mark-watched — auth- és hibamátrix', () 
     expect(createArgs.data.videoRef).toBe(VIDEO_REF_1)
   })
 
+  it('a törzs userId-ja NEM számít: a haladás a bejelentkezett vevőhöz kerül', async () => {
+    const otherUserId = 99
+    const { POST, create } = setup({ authUser: buyerUser })
+
+    const response = await POST(makeRequest({ ...VALID_BODY, userId: otherUserId }))
+
+    expect(response.status).toBe(200)
+    expect(create).toHaveBeenCalledTimes(1)
+    const createArgs = create.mock.calls[0]?.[0] as unknown as {
+      data: Record<string, unknown>
+    }
+    expect(createArgs.data.user).toBe(buyerUser.id)
+    expect(createArgs.data.user).not.toBe(otherUserId)
+  })
+
   it('200 idempotens: a már megnézett videó { alreadyWatched: true }, új sor nélkül', async () => {
     const { POST, create } = setup({ progressRows: [makeProgressRow()] })
 

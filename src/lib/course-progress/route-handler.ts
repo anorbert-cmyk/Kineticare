@@ -137,10 +137,7 @@ export function createMarkWatchedHandler(
       const rawBody = await readBodyWithCap(request, MAX_BODY_BYTES)
       if (rawBody === null) {
         log.warn('kurzus-haladás: túl nagy kérés-törzs', { userId: user.id })
-        return Response.json(
-          { error: 'A kérés törzse túl nagy.' },
-          { status: 413 },
-        )
+        return Response.json({ error: 'A kérés törzse túl nagy.' }, { status: 413 })
       }
       let body: unknown = {}
       if (rawBody.trim().length > 0) {
@@ -157,6 +154,7 @@ export function createMarkWatchedHandler(
         }
       }
       const parsed = (body ?? {}) as { productId?: unknown; videoRef?: unknown }
+      // A subject a payload.auth() user — a törzs userId-ja (ha van) nem számít.
 
       const result = await markVideoWatched({
         payload,

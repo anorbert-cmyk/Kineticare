@@ -170,12 +170,19 @@ describe('computeLineAmounts — negatív (korrekciós) tétel', () => {
       computeLineAmounts({ megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: -100 }),
     ).toThrow(SzamlazzApiError)
     expect(
-      computeLineAmounts({ megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: -100 }, { allowNegative: true }),
+      computeLineAmounts(
+        { megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: -100 },
+        { allowNegative: true },
+      ),
     ).toEqual({ nettoEgysegar: '-79', nettoErtek: -79, afaErtek: -21, bruttoErtek: -100 })
   })
 
   it('a kerekítés PONTOSAN az eredeti tétel tükre (teljes összegű helyesbítés nullázódik)', () => {
-    const original = computeLineAmounts({ megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: TOTAL_HUF })
+    const original = computeLineAmounts({
+      megnevezes: 'x',
+      mennyiseg: 1,
+      bruttoEgysegar: TOTAL_HUF,
+    })
     const correction = computeLineAmounts(
       { megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: -TOTAL_HUF },
       { allowNegative: true },
@@ -696,9 +703,9 @@ describe('issueCorrectiveInvoiceForOrder — seq-kulcsolt kísérlet-plafon (F1)
     const result = await issueCorrectiveInvoiceForOrder(order, {
       payload,
       config: ENABLED_CONFIG,
-      // Új seq: retry-előtti lekérdezésnek NEM szabad futnia (a kulcs még nem
-      // létezhet a Számlázz.hu-nál).
-      queryByKulsoAzon: noLookup,
+      // Seq-eltérés (attemptsSeq=1, refundSeq=2): a K4 fék lekérdez, mielőtt
+      // POST-olna. Találat nincs — az új seq kulcsa még nem létezhet.
+      queryByKulsoAzon: async () => null,
       refundSeq: 2,
       amountHuf: 2000,
       postXml: async (xml) => {
@@ -756,5 +763,38 @@ describe('issueCorrectiveInvoiceForOrder — seq-kulcsolt kísérlet-plafon (F1)
     expect(result.outcome).toBe('failed')
     expect(order.correctiveInvoiceAttemptsSeq).toBe(2)
     expect(order.correctiveInvoiceStatus).toBe('failed')
+  })
+
+  it('seq-eltérésnél (attemptsSeq=2, job refundSeq=1) lekérdezés fut, találatnál NINCS POST', async () => {
+    // K4: a seq=1 timeoutolt, a seq=2 kiállt (attemptsSeq=2). A seq=1 job
+    // újrapróbálásakor previousAttempts=0, de a bizonylat már létezhet —
+    // vak POST helyett a saját kulsoAzon-t kell lekérdezni.
+    const order = createOrder({
+      correctiveInvoiceStatus: 'issued',
+      correctiveInvoiceNumber: 'KIN-2026-10',
+      correctiveInvoiceSeq: 2,
+      correctiveInvoiceAttempts: 1,
+      correctiveInvoiceAttemptsSeq: 2,
+    })
+    const { payload } = createMockPayload(order)
+    const lookups: string[] = []
+    const result = await issueCorrectiveInvoiceForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      queryByKulsoAzon: async (kulsoAzon) => {
+        lookups.push(kulsoAzon)
+        return { szamlaszam: 'KIN-2026-9' }
+      },
+      refundSeq: 1,
+      amountHuf: REFUND_HUF,
+      postXml: async () => {
+        throw new Error('TESZT: seq-eltérésnél találat után NEM hívható POST')
+      },
+    })
+
+    expect(result).toEqual({ outcome: 'issued', correctiveInvoiceNumber: 'KIN-2026-9' })
+    expect(lookups).toEqual([`${ORDER_NUMBER}${CORRECTIVE_KULSO_AZON_INFIX}1`])
+    expect(order.correctiveInvoiceSeq).toBe(2)
+    expect(order.correctiveInvoiceNumber).toBe('KIN-2026-10')
   })
 })

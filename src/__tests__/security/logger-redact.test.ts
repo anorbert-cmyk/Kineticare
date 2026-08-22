@@ -95,4 +95,18 @@ describe('logger — az e-mail-cím redakciója', () => {
       accesskey: '[REDACTED]',
     })
   })
+
+  it('a resetPasswordToken, activationUrl és sessions kulcsok is redaktáltak (W15)', () => {
+    createLogger().info('teszt', {
+      resetPasswordToken: 'DUMMY-42',
+      activationUrl: 'DUMMY-42',
+      sessions: 'DUMMY-42',
+    })
+
+    expect(lastContext()).toEqual({
+      resetPasswordToken: '[REDACTED]',
+      activationUrl: '[REDACTED]',
+      sessions: '[REDACTED]',
+    })
+  })
 })

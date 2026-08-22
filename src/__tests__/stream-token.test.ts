@@ -533,6 +533,7 @@ describe('GET /api/stream-token route-handler', () => {
     const response = await GET(makeRequest('?productId=42'))
 
     expect(response.status).toBe(401)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
     expect(await response.json()).toEqual({
       error: 'A videó lejátszásához bejelentkezés szükséges.',
     })
@@ -545,6 +546,7 @@ describe('GET /api/stream-token route-handler', () => {
     const response = await GET(makeRequest('?productId=42'))
 
     expect(response.status).toBe(200)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
     const body = (await response.json()) as StreamTokenServiceResult
     // A szerződés két mezője, se többel, se kevesebbel — a kliens erre épül.
     expect(Object.keys(body).sort()).toEqual(['expiresAt', 'token'])
