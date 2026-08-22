@@ -15,10 +15,15 @@ import { generateInitialPassword } from '../security/initial-password'
  * modul a paid-átmenet magjából fut le, és az e-mail alapján ELDÖNTI, melyik
  * fiók kapja a rendelést:
  *
- *  - ha az e-mailhez MÁR VAN fiók → a rendelés ahhoz kötődik. A fiók nevét,
- *    jelszavát, szerepkörét és meglévő jogosultságait SOSEM írjuk felül —
- *    egy vendégként leadott rendelés nem módosíthat meglévő fiókot (a
- *    hozzáférés-beírás a `grantPurchases` missing-only logikáján megy);
+ *  - ha az e-mailhez MÁR VAN fiók, és az KÖTHETŐ (lásd K2) → a rendelés
+ *    ahhoz kötődik. A fiók nevét, jelszavát, szerepkörét és meglévő
+ *    jogosultságait SOSEM írjuk felül — egy vendégként leadott rendelés nem
+ *    módosíthat meglévő fiókot (a hozzáférés-beírás a `grantPurchases`
+ *    missing-only logikáján megy);
+ *  - ha az e-mailhez MÁR VAN fiók, de NEM KÖTHETŐ (K2: jelszavas vevő,
+ *    owner, staff) → a rendelés NEM kötődik, grant NINCS. A paid átmenet
+ *    ettől még lefut (pénz levonva, számla kimehet), owner-riasztás megy.
+ *    Séma nélküli fék: `auth.verify` tilos zóna 3+4;
  *  - ha még NINCS fiók → `customer` szerepkörrel létrejön, véletlen és
  *    eldobható kezdőjelszóval (a Payload jelszó nélkül nem hoz létre
  *    auth-rekordot). A vevő a visszaigazoló levél jelszó-beállító linkjével
@@ -57,6 +62,13 @@ export interface OrderCustomerResolution {
   /** A fiók e-mail-címe (a levél és az aktiváló link címzettje). */
   email: string | null
   name: string | null
+  /**
+   * K2 — séma nélküli fék. true, ha a vendég-fizetés meglévő, jelszavas vagy
+   * admin fiókra NEM köthető: a grant és a `customer` kötés kimarad, a paid
+   * átmenet ettől még lefut (ne maradjon grant-throw-on). A hívó ne adja át
+   * ezt a fiókot az onOrderPaid `account` mezőjének.
+   */
+  skipGrant: boolean
 }
 
 /** Relationship-érték → dokumentum-azonosító (number vagy populate-olt doc). */
@@ -127,6 +139,35 @@ function isPasswordSetupPending(user: Pick<User, 'passwordSetupPending'>): boole
 }
 
 /**
+ * K2: vendég-`paid` csak rendszer-fiókhoz köthető — új, vagy még
+ * aktiválatlan (`passwordSetupPending`) `customer`. Jelszavas vevő, owner és
+ * staff: a nyilvános előregisztráció idegen címre ne kapja meg a kurzust.
+ * A `passwordSetupPending` mező create/update access-e zárt, a publikus
+ * regisztráció nem tudja bebillenteni.
+ */
+function canBindGuestOrderToUser(user: Pick<User, 'role' | 'passwordSetupPending'>): boolean {
+  return user.role === 'customer' && isPasswordSetupPending(user)
+}
+
+function resolutionOf(
+  user: User,
+  extras: Pick<OrderCustomerResolution, 'created' | 'alreadyLinked' | 'skipGrant'> & {
+    fallbackEmail?: string | null
+    fallbackName?: string | null
+  },
+): OrderCustomerResolution {
+  return {
+    userId: user.id,
+    created: extras.created,
+    passwordSetupPending: extras.created || isPasswordSetupPending(user),
+    alreadyLinked: extras.alreadyLinked,
+    skipGrant: extras.skipGrant,
+    email: user.email ?? extras.fallbackEmail ?? null,
+    name: user.name ?? extras.fallbackName ?? null,
+  }
+}
+
+/**
  * A rendelés vevőjének feloldása — a `paid` átmenet ELŐFELTÉTELE.
  *
  * A hozzáférés-beírás (`grantPurchases`) fiók nélkül nem működik, ezért ez a
@@ -150,14 +191,7 @@ export async function resolveOrderCustomer(input: {
       depth: 0,
       overrideAccess: true,
     })) as User
-    return {
-      userId: linkedId,
-      created: false,
-      passwordSetupPending: isPasswordSetupPending(user),
-      alreadyLinked: true,
-      email: user.email ?? null,
-      name: user.name ?? null,
-    }
+    return resolutionOf(user, { created: false, alreadyLinked: true, skipGrant: false })
   }
 
   // 2. Vendég-rendelés: az e-mail az EGYETLEN kapocs. Enélkül a hozzáférés
@@ -173,10 +207,10 @@ export async function resolveOrderCustomer(input: {
   const resolved = await withAdvisoryLock(
     payload,
     orderCustomerLockKey(email),
-    async (): Promise<{ user: User; created: boolean }> => {
+    async (): Promise<{ user: User; created: boolean; bindable: boolean }> => {
       const existing = await findUserByEmail(payload, email)
       if (existing) {
-        return { user: existing, created: false }
+        return { user: existing, created: false, bindable: canBindGuestOrderToUser(existing) }
       }
 
       /**
@@ -211,24 +245,50 @@ export async function resolveOrderCustomer(input: {
           overrideAccess: true,
           depth: 0,
         })) as User
-        return { user: created, created: true }
+        return { user: created, created: true, bindable: true }
       } catch (error) {
         // VERSENYHELYZET-TARTALÉK: ha a zár kimaradt (nem-production, mockolt
         // Payload) és közben más létrehozta a fiókot, a create egyedi-kényszerbe
         // ütközik. Ilyenkor a MÁSIK szál fiókját fogadjuk el — duplikátum nem jöhet létre.
         const raced = await findUserByEmail(payload, email)
         if (raced) {
-          log.warn('fiók-feloldás: a fiókot közben egy párhuzamos szál hozta létre — azt használjuk', {
-            cimzett: maskEmail(email),
-            userId: raced.id,
-          })
-          return { user: raced, created: false }
+          log.warn(
+            'fiók-feloldás: a fiókot közben egy párhuzamos szál hozta létre — azt használjuk',
+            {
+              cimzett: maskEmail(email),
+              userId: raced.id,
+            },
+          )
+          return {
+            user: raced,
+            created: false,
+            bindable: canBindGuestOrderToUser(raced),
+          }
         }
         throw error
       }
     },
     log,
   )
+
+  if (!resolved.bindable) {
+    log.error(
+      'RIASZTÁS: vendég-fizetés meglévő, jelszavas vagy admin fiókra NEM köthető (K2) — ' +
+        'a rendelés paid lehet, a hozzáférés NEM íródik be. Owner kézi kötés kell.',
+      {
+        cimzett: maskEmail(email),
+        userId: resolved.user.id,
+        role: resolved.user.role ?? null,
+      },
+    )
+    return resolutionOf(resolved.user, {
+      created: false,
+      alreadyLinked: false,
+      skipGrant: true,
+      fallbackEmail: email,
+      fallbackName: name || null,
+    })
+  }
 
   // 3. A rendelés KÖTÉSE a fiókhoz — innentől a hozzáférés-beírás és az admin
   //    nézet is a fiókot látja. A `customer` mező a rendelésen rendszer-írású.
@@ -242,7 +302,7 @@ export async function resolveOrderCustomer(input: {
   log.info(
     resolved.created
       ? 'vendég-vásárlás: új fiók létrehozva és a rendeléshez kötve'
-      : 'vendég-vásárlás: a rendelés a meglévő fiókhoz kötve (duplikátum nem jött létre)',
+      : 'vendég-vásárlás: a rendelés a meglévő, aktiválatlan fiókhoz kötve (duplikátum nem jött létre)',
     {
       // A teljes cím SOSEM kerül naplóba — csak maszkolva, `cimzett` kulcson.
       cimzett: maskEmail(email),
@@ -251,12 +311,11 @@ export async function resolveOrderCustomer(input: {
     },
   )
 
-  return {
-    userId: resolved.user.id,
+  return resolutionOf(resolved.user, {
     created: resolved.created,
-    passwordSetupPending: resolved.created || isPasswordSetupPending(resolved.user),
     alreadyLinked: false,
-    email: resolved.user.email ?? email,
-    name: resolved.user.name ?? (name || null),
-  }
+    skipGrant: false,
+    fallbackEmail: email,
+    fallbackName: name || null,
+  })
 }

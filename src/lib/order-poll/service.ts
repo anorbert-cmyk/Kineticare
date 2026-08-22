@@ -69,10 +69,7 @@ export const INVOICE_PENDING_STALE_MS = 10 * 60 * 1000 // 10 perc
  *   számlája NEM készül el. RIASZTÁS is megy a naplóba.
  */
 export type InvoiceResweepStatus =
-  | 'done'
-  | 'skipped-disabled'
-  | 'skipped-config-error'
-  | 'queue-unavailable'
+  'done' | 'skipped-disabled' | 'skipped-config-error' | 'queue-unavailable'
 
 export interface OrderPollSummary {
   scanned: number
@@ -304,10 +301,16 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
     invoiceResweep: 'done',
   }
 
+  /**
+   * W1 — a 25-ös ablak a LEGÚJABB pendingeket veszi előre. `createdAt` ASC
+   * mellett a beragadt / elutasított sorok a fejben maradtak, és a friss
+   * Succeeded fizetés (a 26.) soha nem került a mentőhálóba. A poison-pill
+   * védelmet a szállítási-hiba számláló viszi, nem a FIFO sorrend.
+   */
   const pending = await deps.payload.find({
     collection: 'orders',
     where: { status: { equals: 'payment_pending' } },
-    sort: 'createdAt',
+    sort: '-createdAt',
     limit: ORDER_POLL_BATCH_SIZE,
     depth: 0,
     overrideAccess: true,
@@ -414,7 +417,13 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
               '(egyetlen sikeres válasz sem érkezett) — a futás megszakadt, a maradék függő ' +
               'rendelés érintetlen. Ellenőrizd a Barion-környezetet, a POSKey-t és a ' +
               'szolgáltatás állapotát; a következő ütemezett futás újrapróbálja.',
-            { barionErrorKind, httpStatus, failureClass, leadingFailures, skippedOrders: remaining },
+            {
+              barionErrorKind,
+              httpStatus,
+              failureClass,
+              leadingFailures,
+              skippedOrders: remaining,
+            },
           )
           break
         }
@@ -449,7 +458,7 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
     if (transition.transitionedToPaid) {
       await onPaid(
         order,
-        transition.customer
+        transition.customer && !transition.customer.skipGrant
           ? {
               passwordSetupPending: transition.customer.passwordSetupPending,
               alreadyLinked: transition.customer.alreadyLinked,
@@ -458,7 +467,9 @@ export async function pollPendingOrders(deps: OrderPollDeps): Promise<OrderPollS
           : undefined,
       )
       summary.transitionedPaid += 1
-      orderLog.info('order-poll: elveszett callback pótolva — a rendelés paid (utánpollolással zárult)')
+      orderLog.info(
+        'order-poll: elveszett callback pótolva — a rendelés paid (utánpollolással zárult)',
+      )
     } else if (transition.action === 'paid') {
       summary.transitionedPaid += 1
     } else if (transition.action === 'cancelled') {

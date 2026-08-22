@@ -61,12 +61,7 @@ export interface BarionCallbackProcessorDeps {
 }
 
 /** A webhook-events.result select értékei (a collection sémával szinkronban). */
-export type BarionCallbackResult =
-  | 'paid'
-  | 'cancelled'
-  | 'pending_repoll'
-  | 'rejected'
-  | 'failed'
+export type BarionCallbackResult = 'paid' | 'cancelled' | 'pending_repoll' | 'rejected' | 'failed'
 
 interface OrderLookupResult {
   order: Order
@@ -163,10 +158,7 @@ async function closeEvent(
  * üresen marad — az esemény újrafeldolgozható (a státuszt a processWebhook
  * hagyja `received`-en, lásd isNonTerminalHandlerOutcome).
  */
-async function markEventPending(
-  store: WebhookEventStore,
-  event: WebhookEventDoc,
-): Promise<void> {
+async function markEventPending(store: WebhookEventStore, event: WebhookEventDoc): Promise<void> {
   await store.update({
     collection: 'webhook-events',
     id: event.id,
@@ -283,7 +275,7 @@ export function createBarionCallbackProcessor(deps: BarionCallbackProcessorDeps)
           payload: deps.payload,
           order,
           logger: orderLog,
-          ...(transition.customer
+          ...(transition.customer && !transition.customer.skipGrant
             ? {
                 account: {
                   passwordSetupPending: transition.customer.passwordSetupPending,
@@ -347,7 +339,9 @@ export function createBarionCallbackProcessor(deps: BarionCallbackProcessorDeps)
           {
             kind: error.kind,
             httpStatus: error.httpStatus ?? null,
-            providerErrorCodes: error.providerErrors.map((providerError) => providerError.ErrorCode),
+            providerErrorCodes: error.providerErrors.map(
+              (providerError) => providerError.ErrorCode,
+            ),
             error: error.message,
           },
         )

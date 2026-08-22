@@ -402,6 +402,33 @@ async function applyBarionStateTransitionLocked(
      * feloldott fiókkal dolgozik — vendég-rendelésre is érvényes marad.
      */
     const customer = await resolveOrderCustomer({ payload, order, log })
+    if (customer.skipGrant) {
+      // K2: a meglévő jelszavas/admin fiókra NEM írunk purchases-t, a
+      // rendelést sem kötjük. A paid ettől még lefut — grant-throw a
+      // payment_pending-ben tartaná a már kifizetett rendelést.
+      const alreadyPaid = order.status === 'paid'
+      if (!alreadyPaid) {
+        if (order.status === 'created') {
+          log.warn('created státuszú rendelés ugrik paid-re (payment_pending átugorva)')
+        }
+        await payload.update({
+          collection: 'orders',
+          id: order.id,
+          data: { status: 'paid' },
+          overrideAccess: true,
+        })
+        log.info('rendelés paid-re állítva (Barion v4 verifikációval, K2 grant nélkül)')
+      } else {
+        log.info('a rendelés már paid — K2 skipGrant, jogosultság-beírás kimarad')
+      }
+      return {
+        action: 'paid',
+        duplicate: alreadyPaid,
+        transitionedToPaid: !alreadyPaid,
+        purchasesGranted: 0,
+        customer,
+      }
+    }
     // A helyi példány elavult (a customer mezőt épp most írtuk ki), a
     // jogosultság-beírás viszont ebből olvassa a vevőt.
     const orderWithCustomer: Order = { ...order, customer: customer.userId }

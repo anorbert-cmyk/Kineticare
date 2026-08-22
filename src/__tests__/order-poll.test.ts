@@ -7,6 +7,7 @@ import {
   MAX_CONSECUTIVE_TRANSPORT_FAILURES,
   MAX_LEADING_FAILURES,
   ORPHAN_ORDER_GRACE_MS,
+  ORDER_POLL_BATCH_SIZE,
   pollPendingOrders,
   STUCK_ORDER_WARN_MS,
 } from '../lib/order-poll/service'
@@ -103,12 +104,28 @@ function setup(options: SetupOptions = {}) {
   const paidCalls: number[] = []
 
   const payload = {
-    find: async ({ where }: { collection: string; where?: unknown }) => {
+    find: async ({
+      where,
+      sort,
+      limit,
+    }: {
+      collection: string
+      where?: unknown
+      sort?: string
+      limit?: number
+    }) => {
       const json = JSON.stringify(where ?? {})
       if (json.includes('"paid"')) {
         return { docs: paidResweep, totalDocs: paidResweep.length }
       }
-      return { docs: pending, totalDocs: pending.length }
+      const docs =
+        sort === '-createdAt'
+          ? [...pending].sort(
+              (left, right) => Date.parse(right.createdAt ?? '') - Date.parse(left.createdAt ?? ''),
+            )
+          : pending
+      const capped = typeof limit === 'number' ? docs.slice(0, limit) : docs
+      return { docs: capped, totalDocs: pending.length }
     },
     findByID: async ({ collection, id }: { collection: string; id: number }) => {
       // Az M5 zár a záron belül ÚJRAOLVASSA a rendelést — a mock a tárolt
@@ -122,11 +139,20 @@ function setup(options: SetupOptions = {}) {
       }
       return user
     },
-    update: async ({ collection, data }: { collection: string; data: Record<string, unknown> }) => {
+    update: async ({
+      collection,
+      id,
+      data,
+    }: {
+      collection: string
+      id?: number
+      data: Record<string, unknown>
+    }) => {
       if (collection === 'orders') {
         orderUpdates.push(data)
-        for (const order of [...pending, ...paidResweep]) {
-          Object.assign(order, data)
+        const target = [...pending, ...paidResweep].find((order) => order.id === id)
+        if (target) {
+          Object.assign(target, data)
         }
       }
       if (collection === 'users') {
@@ -188,6 +214,49 @@ describe('order-poll — elveszett callback-mentés', () => {
     expect(paidCalls).toEqual([101])
   })
 
+  it('W1: 25 régi pending + 1 friss Succeeded — a 26. is paid (újabb elöl)', async () => {
+    const freshPaymentId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    const old = Array.from({ length: ORDER_POLL_BATCH_SIZE }, (_, index) =>
+      createPendingOrder({
+        id: 400 + index,
+        orderNumber: `KH-2026-00${400 + index}`,
+        barionPaymentId: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        createdAt: isoHoursAgo(20),
+      }),
+    )
+    const fresh = createPendingOrder({
+      id: 499,
+      orderNumber: 'KH-2026-000499',
+      barionPaymentId: freshPaymentId,
+      createdAt: isoHoursAgo(0.1),
+    })
+    const { payload, onPaid, queueInvoice } = setup({ pending: [...old, fresh] })
+    const fetchState = async (paymentId: string): Promise<BarionPaymentStateResponse> => {
+      if (paymentId === freshPaymentId) {
+        return getStateResponse('Succeeded', { PaymentId: freshPaymentId })
+      }
+      throw new BarionApiError({
+        message: 'nincs ilyen fizetés',
+        kind: 'http',
+        endpoint: 'GET state',
+        httpStatus: 404,
+      })
+    }
+
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      now: NOW,
+    })
+
+    expect(summary.scanned).toBe(ORDER_POLL_BATCH_SIZE)
+    expect(fresh.status).toBe('paid')
+    expect(summary.transitionedPaid).toBe(1)
+    expect(old.every((order) => order.status === 'payment_pending')).toBe(true)
+  })
+
   /**
    * K1 — a paid-átmenet mellékhatásai (számla + visszaigazoló/aktiváló e-mail)
    * nem veszhetnek el egy félbeszakadt jogosultság-beírás miatt.
@@ -208,7 +277,9 @@ describe('order-poll — elveszett callback-mentés', () => {
         if (args.collection === 'users' && grantFails) {
           throw new Error('teszt: a jogosultság-beírás elhasal (DB-hiba)')
         }
-        return (base.payload as unknown as { update: (a: unknown) => Promise<unknown> }).update(args)
+        return (base.payload as unknown as { update: (a: unknown) => Promise<unknown> }).update(
+          args,
+        )
       },
     } as never
     const deps = {
@@ -288,16 +359,25 @@ describe('order-poll — elveszett callback-mentés', () => {
     expect(order.status).toBe('cancelled')
   })
 
-  it.each([['Prepared'], ['Started']])('Barion %s → a rendelés payment_pending marad', async (status) => {
-    const { payload, fetchState, onPaid, queueInvoice, orderUpdates } = setup({
-      stateStatus: status,
-    })
+  it.each([['Prepared'], ['Started']])(
+    'Barion %s → a rendelés payment_pending marad',
+    async (status) => {
+      const { payload, fetchState, onPaid, queueInvoice, orderUpdates } = setup({
+        stateStatus: status,
+      })
 
-    const summary = await pollPendingOrders({ payload, fetchState, onPaid, queueInvoice, now: NOW })
+      const summary = await pollPendingOrders({
+        payload,
+        fetchState,
+        onPaid,
+        queueInvoice,
+        now: NOW,
+      })
 
-    expect(summary.stillPending).toBe(1)
-    expect(orderUpdates).toHaveLength(0)
-  })
+      expect(summary.stillPending).toBe(1)
+      expect(orderUpdates).toHaveLength(0)
+    },
+  )
 
   /**
    * S2 összeg-assert: a poll-job UGYANAZT a magot futtatja, mint a callback,
@@ -360,7 +440,9 @@ describe('order-poll — árva rendelés (barionPaymentId nélkül)', () => {
   })
 
   it('24 óránál régebbi függő rendelés → stillPending + owner-riasztás (státusz marad)', async () => {
-    const stuck = createPendingOrder({ createdAt: new Date(NOW - STUCK_ORDER_WARN_MS - 60_000).toISOString() })
+    const stuck = createPendingOrder({
+      createdAt: new Date(NOW - STUCK_ORDER_WARN_MS - 60_000).toISOString(),
+    })
     const { payload, fetchState, onPaid, queueInvoice } = setup({
       pending: [stuck],
       stateStatus: 'Prepared',
@@ -819,9 +901,7 @@ describe('order-poll — a futás eleji mennyezet (MAX_LEADING_FAILURES)', () =>
       kind: 'provider',
       endpoint: 'GET x',
       httpStatus: 200,
-      providerErrors: [
-        { ErrorCode: 'SomeUnlistedAuthProblem', Title: 'x', Description: 'x' },
-      ],
+      providerErrors: [{ ErrorCode: 'SomeUnlistedAuthProblem', Title: 'x', Description: 'x' }],
     })
 
   const naplo = () => {

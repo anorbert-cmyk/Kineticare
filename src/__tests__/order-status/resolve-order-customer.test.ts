@@ -191,7 +191,40 @@ describe('resolveOrderCustomer — vendég-vásárlás fiók-feloldása', () => 
     expect(lockState.keys).toEqual([`order-customer:${EMAIL}`])
   })
 
-  it('LÉTEZŐ e-mail: nincs duplikátum és nincs felülírás (név/szerepkör/jelszó érintetlen)', async () => {
+  it('LÉTEZŐ, jelszavas vevő: NINCS kötés, NINCS grant-cél (K2), duplikátum sem', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { payload, state } = createFakePayload([
+      {
+        id: 7,
+        email: EMAIL,
+        name: 'Eredeti Név',
+        role: 'customer',
+        password: 'DUMMY-NEM-VALODI-HASH',
+        passwordSetupPending: false,
+      },
+    ])
+
+    const result = await resolveOrderCustomer({ payload, order: guestOrder(), log })
+
+    expect(result).toMatchObject({
+      userId: 7,
+      created: false,
+      alreadyLinked: false,
+      skipGrant: true,
+      passwordSetupPending: false,
+    })
+    expect(state.creates).toHaveLength(0)
+    expect(state.users).toHaveLength(2)
+    expect(state.users[1]).toMatchObject({
+      name: 'Eredeti Név',
+      role: 'customer',
+      password: 'DUMMY-NEM-VALODI-HASH',
+    })
+    expect(state.orderUpdates).toEqual([])
+    expect(logOutput(logSpy)).toContain('K2')
+  })
+
+  it('LÉTEZŐ staff/owner fiók: vendég-paid NEM kötődik (K2)', async () => {
     const { payload, state } = createFakePayload([
       {
         id: 7,
@@ -205,23 +238,14 @@ describe('resolveOrderCustomer — vendég-vásárlás fiók-feloldása', () => 
 
     const result = await resolveOrderCustomer({ payload, order: guestOrder(), log })
 
-    expect(result).toMatchObject({
-      userId: 7,
-      created: false,
-      alreadyLinked: false,
-      // Van saját jelszava → NEM jár jelszó-beállító link.
-      passwordSetupPending: false,
-    })
+    expect(result.skipGrant).toBe(true)
     expect(state.creates).toHaveLength(0)
-    // A tulajdonosi fixtúra-fiókon kívül nem keletkezett új rekord.
-    expect(state.users).toHaveLength(2)
+    expect(state.orderUpdates).toEqual([])
     expect(state.users[1]).toMatchObject({
       name: 'Eredeti Név',
       role: 'staff',
       password: 'DUMMY-NEM-VALODI-HASH',
     })
-    // Fiók-módosítás egyáltalán nem történt — csak a rendelés kötése.
-    expect(state.orderUpdates).toEqual([{ id: 101, data: { customer: 7 } }])
   })
 
   it('LÉTEZŐ, de még AKTIVÁLATLAN fiók (import/korábbi vendég-vásárlás) → továbbra is jár a jelszó-beállító link', async () => {
@@ -231,7 +255,12 @@ describe('resolveOrderCustomer — vendég-vásárlás fiók-feloldása', () => 
 
     const result = await resolveOrderCustomer({ payload, order: guestOrder(), log })
 
-    expect(result).toMatchObject({ userId: 9, created: false, passwordSetupPending: true })
+    expect(result).toMatchObject({
+      userId: 9,
+      created: false,
+      passwordSetupPending: true,
+      skipGrant: false,
+    })
   })
 
   it('PÁRHUZAMOS feldolgozás ugyanarra az e-mailre → PONTOSAN EGY fiók (idempotencia)', async () => {
@@ -291,6 +320,7 @@ describe('resolveOrderCustomer — vendég-vásárlás fiók-feloldása', () => 
       userId: 7,
       created: false,
       alreadyLinked: true,
+      skipGrant: false,
       passwordSetupPending: false,
     })
     expect(state.creates).toHaveLength(0)

@@ -532,6 +532,40 @@ describe('applyBarionStateTransition — vendég-rendelés (fiók nélküli) pai
     const userUpdate = updates.find((update) => update.collection === 'users')
     expect(userUpdate).toMatchObject({ id: users[1].id, data: { purchases: [PRODUCT_ID] } })
   })
+
+  it('K2: meglévő jelszavas vevő e-mailjére vendég-paid → paid grant NÉLKÜL', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { payload, order, users, updates } = createGuestMockPayload()
+    users.push({
+      id: 9,
+      email: 'vendeg@example.test',
+      name: 'Előregisztrált',
+      role: 'customer',
+      passwordSetupPending: false,
+      purchases: [],
+    })
+
+    const result = await applyBarionStateTransition({
+      payload,
+      order,
+      mapped: 'paid',
+      state: createState(),
+      log: createLogger({ module: 'teszt' }),
+    })
+
+    expect(result).toMatchObject({
+      action: 'paid',
+      transitionedToPaid: true,
+      purchasesGranted: 0,
+      customer: { skipGrant: true, userId: 9 },
+    })
+    expect(order.status).toBe('paid')
+    expect(order.customer).toBeNull()
+    expect(updates.filter((update) => update.collection === 'users')).toHaveLength(0)
+    expect(users.find((user) => user.id === 9)?.purchases).toEqual([])
+    expect(logOutput(logSpy)).toContain('K2')
+    logSpy.mockRestore()
+  })
 })
 
 /**
