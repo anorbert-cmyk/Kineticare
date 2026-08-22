@@ -41,6 +41,17 @@ export const HUF: Currency = {
 const adminOnlyFieldAccess = isAdminFieldAccess
 
 /**
+ * Bizonylat-állapot mezők írása (K5). Az `admin.readOnly` csak a admin UI-t
+ * védi; a staff `PATCH /api/orders/:id` ettől még átírhatná az
+ * `invoiceStatus: 'issued'`-et, és a számla-job örökre no-opolna.
+ * A rendszer `overrideAccess: true`-val ír. Merge előtt emberi review (zóna 4).
+ */
+const systemManagedWriteAccess = {
+  create: () => false,
+  update: () => false,
+} as const
+
+/**
  * Rekurzív mezőfa-bejárás: a plugin gyári mezői group/row/tabs-struktúrába
  * ágyazottak (pl. a products ár-mezői egy group → row alatt, az orders items
  * egy tabs alatt), ezért a mezőszintű access- és snapshot-bekötés így éri el őket.
@@ -973,12 +984,16 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       label: 'Számla sorszáma',
       access: {
         read: isOwnerFieldAccess,
+        ...systemManagedWriteAccess,
       },
     },
     {
       name: 'invoicePdfUrl',
       type: 'text',
       label: 'Számla PDF linkje',
+      access: {
+        ...systemManagedWriteAccess,
+      },
     },
     {
       name: 'invoiceStatus',
@@ -991,6 +1006,9 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
         { label: 'Kiállítva', value: 'issued' },
         { label: 'Sikertelen', value: 'failed' },
       ],
+      access: {
+        ...systemManagedWriteAccess,
+      },
       admin: {
         description: 'A számlázás állapota. A rendszer állítja — ne írd át.',
       },
@@ -1003,6 +1021,9 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       type: 'number',
       defaultValue: 0,
       label: 'Számla-kísérletek száma',
+      access: {
+        ...systemManagedWriteAccess,
+      },
       admin: {
         readOnly: true,
         description:
@@ -1013,6 +1034,9 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       name: 'invoiceLastError',
       type: 'text',
       label: 'Számlázás utolsó hibája',
+      access: {
+        ...systemManagedWriteAccess,
+      },
       admin: {
         readOnly: true,
         description: 'Az utolsó sikertelen számlakiállítási kísérlet hibaüzenete — hibakereséshez.',
@@ -1026,6 +1050,9 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       name: 'invoiceCompletionDate',
       type: 'text',
       label: 'Számla teljesítési dátuma',
+      access: {
+        ...systemManagedWriteAccess,
+      },
       admin: {
         readOnly: true,
         description:
@@ -1047,6 +1074,9 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
         { label: 'Stornózva', value: 'storned' },
         { label: 'Sikertelen', value: 'failed' },
       ],
+      access: {
+        ...systemManagedWriteAccess,
+      },
       admin: {
         description: 'A stornó-számla állapota. A rendszer állítja — ne írd át.',
       },
@@ -1059,6 +1089,7 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       label: 'Stornó-számla sorszáma',
       access: {
         read: isOwnerFieldAccess,
+        ...systemManagedWriteAccess,
       },
     },
     {
@@ -1066,6 +1097,9 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       type: 'number',
       defaultValue: 0,
       label: 'Stornó-kísérletek száma',
+      access: {
+        ...systemManagedWriteAccess,
+      },
       admin: {
         readOnly: true,
         description:
@@ -1076,6 +1110,9 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       name: 'stornoLastError',
       type: 'text',
       label: 'Stornó utolsó hibája',
+      access: {
+        ...systemManagedWriteAccess,
+      },
       admin: {
         readOnly: true,
         description: 'Az utolsó sikertelen stornó-kísérlet hibaüzenete — hibakereséshez.',
@@ -1095,6 +1132,9 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
         { label: 'Kiállítva', value: 'issued' },
         { label: 'Sikertelen', value: 'failed' },
       ],
+      access: {
+        ...systemManagedWriteAccess,
+      },
       admin: {
         description: 'A helyesbítő (módosító) számla állapota. A rendszer állítja — ne írd át.',
       },
@@ -1107,6 +1147,7 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       label: 'Helyesbítő számla sorszáma',
       access: {
         read: isOwnerFieldAccess,
+        ...systemManagedWriteAccess,
       },
     },
     {
@@ -1118,6 +1159,9 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       type: 'number',
       defaultValue: 0,
       label: 'Helyesbített visszatérítés sorszáma',
+      access: {
+        ...systemManagedWriteAccess,
+      },
       admin: {
         readOnly: true,
         description:
@@ -1130,6 +1174,9 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       type: 'number',
       defaultValue: 0,
       label: 'Helyesbítő-kísérletek száma',
+      access: {
+        ...systemManagedWriteAccess,
+      },
       admin: {
         readOnly: true,
         description:
@@ -1140,6 +1187,9 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       name: 'correctiveInvoiceLastError',
       type: 'text',
       label: 'Helyesbítő utolsó hibája',
+      access: {
+        ...systemManagedWriteAccess,
+      },
       admin: {
         readOnly: true,
         description: 'Az utolsó sikertelen helyesbítő-kísérlet hibaüzenete — hibakereséshez.',
@@ -1154,6 +1204,9 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       type: 'number',
       defaultValue: 0,
       label: 'Helyesbítő-kísérletek refund-sorszáma',
+      access: {
+        ...systemManagedWriteAccess,
+      },
       admin: {
         readOnly: true,
         description:
