@@ -29,7 +29,8 @@ describe('orderConfirmationEmail sablon', () => {
   })
 
   it('tárgy a rendelésszámmal, magyar szöveg, CTA a kurzusaimra', () => {
-    expect(template.subject).toBe(`Sikeres vásárlás — ${ORDER_NUMBER}`)
+    // §3.1.1: címke + érték kettősponttal, nem kvirtmínusszal.
+    expect(template.subject).toBe(`Sikeres vásárlás: ${ORDER_NUMBER}`)
     expect(template.html).toContain(ORDER_NUMBER)
     expect(template.html).toContain('https://staging.example.test/kurzusaim')
     expect(template.text).toContain(ORDER_NUMBER)
@@ -38,8 +39,8 @@ describe('orderConfirmationEmail sablon', () => {
 
   it('tételek és végösszeg (formázott HUF) szerepel', () => {
     const normalizedText = template.text.replace(/ /g, ' ')
-    expect(normalizedText).toContain('DEMO-KEZREHAB-001 — 1 db')
-    expect(normalizedText).toContain('Második kurzus — 2 db')
+    expect(normalizedText).toContain('DEMO-KEZREHAB-001, 1 db')
+    expect(normalizedText).toContain('Második kurzus, 2 db')
     expect(normalizedText).toContain('49 970')
   })
 

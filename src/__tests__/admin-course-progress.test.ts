@@ -325,6 +325,15 @@ interface MockOptions {
   progress?: Array<{ user: number; videoRef: string; watchedAt: string }>
   /** Ennyi leckéből álljon a próbakurzus (alapértelmezés: a 4 leckés demó). */
   lessonCount?: number
+  /**
+   * Mely lapozás-mezőket adja vissza a mock.
+   *
+   * A valódi Payload MINDKETTŐT megadja (`teljes`), de a csonkolás-szabály
+   * tartalék-ágait csak úgy lehet megmérni, ha a mock szándékosan elhagyja
+   * őket — pontosan ezen az ágon jelentett a felület hiánytalan adatra
+   * csonkolást.
+   */
+  pageMeta?: 'teljes' | 'csak-total' | 'egyik-sem'
 }
 
 /**
@@ -399,13 +408,14 @@ function createMockPayload(options: MockOptions = {}) {
       .map(({ entry }) => entry)
   }
 
+  const pageMeta = options.pageMeta ?? 'teljes'
   const page = <T,>(rows: T[], pageNumber = 1, limit = 10) => {
     const start = (pageNumber - 1) * limit
     const docs = rows.slice(start, start + limit)
     return {
       docs,
-      totalDocs: rows.length,
-      hasNextPage: start + docs.length < rows.length,
+      ...(pageMeta === 'egyik-sem' ? {} : { totalDocs: rows.length }),
+      ...(pageMeta === 'teljes' ? { hasNextPage: start + docs.length < rows.length } : {}),
     }
   }
 
@@ -490,8 +500,10 @@ describe('GET /api/admin/course-progress — jogosultság és validálás', () =
     // adat hiányzik, és mondja meg a teendőt (docs/ui-sztenderdek.md §2.7).
     // A korábbi `toContain('kurzus-azonosító')` a kötőjeles alakra kötötte a
     // tesztet, ezért egy jogos átfogalmazás elbuktatta.
-    expect(body.error).toContain('azonosító')
-    expect(body.error).toContain('kurzus')
+    // A két szó EGYÜTT, ebben a sorrendben kell: a korábbi, külön `toContain`
+    // páros egy „a felhasználó azonosítója… kurzus…" alakú, ROSSZ MEZŐT
+    // megnevező üzenetet is átengedett volna.
+    expect(body.error).toMatch(/kurzus\w* azonosító/i)
     expect(body.error).toMatch(/Nyisd|Frissítsd|próbáld/i)
   })
 
@@ -502,6 +514,31 @@ describe('GET /api/admin/course-progress — jogosultság és validálás', () =
       const response = await handler(getRequest(query))
       expect(response.status).toBe(400)
     }
+  })
+
+  it('MINDEN ág no-store fejlécet ad (200, 401, 403, 400, 404, 500)', async () => {
+    // A 200-as ág névvel és e-maillel azonosított hallgatók haladását
+    // hordozza; a tiltó ágak azért kapják meg, hogy egy 401/403 válasz ne
+    // ragadhasson be a bejelentkezés utánra.
+    const { handler } = handlerFor()
+    expect((await handler(getRequest())).headers.get('Cache-Control')).toBe('no-store')
+    expect((await handler(getRequest(''))).headers.get('Cache-Control')).toBe('no-store')
+
+    const anon = handlerFor({ authUser: null })
+    expect((await anon.handler(getRequest())).headers.get('Cache-Control')).toBe('no-store')
+
+    const customer = handlerFor({ authUser: { id: 9, role: 'customer' } })
+    expect((await customer.handler(getRequest())).headers.get('Cache-Control')).toBe('no-store')
+
+    const nincsKurzus = handlerFor({ productExists: false })
+    expect((await nincsKurzus.handler(getRequest())).headers.get('Cache-Control')).toBe('no-store')
+
+    const hibas = createCourseProgressHandler({
+      getPayload: async () => {
+        throw new Error('adatbázis nem elérhető')
+      },
+    })
+    expect((await hibas(getRequest())).headers.get('Cache-Control')).toBe('no-store')
   })
 
   it('404 ismeretlen kurzusnál', async () => {
@@ -645,6 +682,74 @@ describe('GET /api/admin/course-progress — 200 válasz', () => {
 
     expect(body.meta.enrollments.truncated).toBe(false)
     expect(body.notice).toBeNull()
+  })
+
+  it('pontosan a korláton, `hasNextPage` NÉLKÜL sem csonkolt (a totalDocs dönt)', async () => {
+    // MÉRT HIBA (vezetői kör, 2026-08-21): a `hasNextPage` hiányában a szabály
+    // a „tele volt az utolsó lap" becslésre esett vissza, és a PONTOSAN a
+    // korláttal egyező, TELJES halmazt is csonkoltnak jelölte — a panel
+    // hiánytalan adatra írta ki, hogy a lista csonka.
+    const exactUsers = Array.from({ length: ENROLLMENT_MAX }, (_unused, index) => ({
+      id: index + 1,
+      email: `u${String(index + 1)}@example.test`,
+      name: null,
+    }))
+    const { handler } = handlerFor({
+      users: exactUsers,
+      progress: [],
+      pageMeta: 'csak-total',
+    })
+
+    const response = await handler(getRequest())
+    const body = (await response.json()) as {
+      meta: { enrollments: { truncated: boolean; total: number | null } }
+      notice: string | null
+    }
+
+    expect(body.meta.enrollments.total).toBe(ENROLLMENT_MAX)
+    expect(body.meta.enrollments.truncated).toBe(false)
+    expect(body.notice).toBeNull()
+  })
+
+  it('a korlát FÖLÖTT `hasNextPage` nélkül is csonkoltnak jelöl', async () => {
+    const manyUsers = Array.from({ length: ENROLLMENT_MAX + 5 }, (_unused, index) => ({
+      id: index + 1,
+      email: `u${String(index + 1)}@example.test`,
+      name: null,
+    }))
+    const { handler } = handlerFor({
+      users: manyUsers,
+      progress: [],
+      pageMeta: 'csak-total',
+    })
+
+    const body = (await (await handler(getRequest())).json()) as {
+      meta: { enrollments: { truncated: boolean } }
+      notice: string | null
+    }
+    expect(body.meta.enrollments.truncated).toBe(true)
+    expect(body.notice).toContain('csonkolt')
+  })
+
+  it('EGYIK lapozás-szám nélkül a tartalék-ág marad — inkább jelez, mint hallgat', async () => {
+    // Valós Payload-válaszban ez nem fordul elő; a becslés szándékosan a
+    // hamis pozitív irányába téved, mert az elhallgatott csonkolás a
+    // súlyosabb hiba.
+    const exactUsers = Array.from({ length: ENROLLMENT_MAX }, (_unused, index) => ({
+      id: index + 1,
+      email: `u${String(index + 1)}@example.test`,
+      name: null,
+    }))
+    const { handler } = handlerFor({
+      users: exactUsers,
+      progress: [],
+      pageMeta: 'egyik-sem',
+    })
+
+    const body = (await (await handler(getRequest())).json()) as {
+      meta: { enrollments: { truncated: boolean } }
+    }
+    expect(body.meta.enrollments.truncated).toBe(true)
   })
 })
 

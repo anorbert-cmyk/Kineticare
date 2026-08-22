@@ -272,7 +272,9 @@ export function renderLayout(input: LayoutInput): Pick<EmailTemplate, 'html' | '
   </body>
 </html>`
 
-  const textLines = [`${BRAND_NAME} — ${input.heading}`, '', ...input.paragraphsText]
+  // §3.1.1: címke + érték = kettőspont, nem kvirtmínusz. Ez a fejsor MINDEN
+  // tranzakciós levél plain-text változatának első sora.
+  const textLines = [`${BRAND_NAME}: ${input.heading}`, '', ...input.paragraphsText]
 
   if (input.summary) {
     textLines.push('')
@@ -293,7 +295,8 @@ export function renderLayout(input: LayoutInput): Pick<EmailTemplate, 'html' | '
       const reszek = [row.title, row.meta, row.amount].filter(
         (resz): resz is string => typeof resz === 'string' && resz.length > 0,
       )
-      textLines.push(`- ${reszek.join(' — ')}`)
+      // §3.1.1: felsorolás-elemeket vessző köt össze („cím, 2 db, 29 980 Ft").
+      textLines.push(`- ${reszek.join(', ')}`)
     }
     if (input.items.totalLabel && input.items.totalValue) {
       textLines.push(`${input.items.totalLabel}: ${input.items.totalValue}`)

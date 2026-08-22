@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
@@ -59,6 +59,30 @@ import { ctaLabel, ctaProgressLabel } from '../../lib/cta-vocabulary'
  */
 export const URES_EMAIL_HIBA = 'Add meg az e-mail-címed.'
 
+/**
+ * ═══ MIÉRT KÉT KÜLÖN HIBA-ÁLLAPOT (2026-08-22) ═══
+ * Az üres mező hibája MEZŐ-hiba, a szerveré ŰRLAP-hiba, és a kettőnek más a
+ * gazdája. Korábban mindkettő ugyanabban a form-szintű dobozban állt, tehát a
+ * mező maga jelöletlen maradt: nem volt rajta sem `aria-invalid`, sem
+ * `aria-describedby`, sem hibakeret.
+ *
+ * WCAG 2.2 · 3.3.1 (Error Identification): „the item that is in error is
+ * identified and the error is described to the user in text" — a hiba SZÖVEGE
+ * megvolt, az AZONOSÍTÁSA hiányzott.
+ * https://www.w3.org/WAI/WCAG22/Understanding/error-identification.html
+ *
+ * GOV.UK Design System, Error message: „Put the error message … inside the
+ * <label> or <legend>, after the question text", és a mező kap piros keretet —
+ * a `Field` `error` propja pontosan ezt adja (ez a repó saját, már élő
+ * mintája: `ContactForm`).
+ * https://design-system.service.gov.uk/components/error-message/
+ *
+ * A fókusz a mérhető rész: üres mezőnél a MEZŐRE, szerverhibánál a hibadobozra
+ * kerül, mert a szerverhibát nem egy mező javításával lehet orvosolni.
+ * NN/g, Error-Message Guidelines: az üzenet legyen ott, ahol a javítás
+ * történik. https://www.nngroup.com/articles/errors-forms-design-guidelines/
+ */
+
 export interface ForgotPasswordFormProps {
   /**
    * Segédszöveg az e-mail-mező alatt (`Field.hint` → `aria-describedby`,
@@ -82,20 +106,34 @@ export function ForgotPasswordForm({ emailHint, successNote }: ForgotPasswordFor
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [fieldError, setFieldError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  const formRef = useRef<HTMLFormElement>(null)
+  const formErrorRef = useRef<HTMLDivElement>(null)
+
+  // A hibadoboz a state-tel EGYÜTT jelenik meg, tehát a fókuszálás csak a
+  // renderelés UTÁN talál elemet — ezért effektben, nem a beküldő ágban.
+  useEffect(() => {
+    if (formError !== null) {
+      formErrorRef.current?.focus()
+    }
+  }, [formError])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setFormError(null)
     if (!email.trim()) {
-      setError(URES_EMAIL_HIBA)
+      setFieldError(URES_EMAIL_HIBA)
+      formRef.current?.querySelector<HTMLInputElement>('input[name="email"]')?.focus()
       return
     }
-    setError(null)
+    setFieldError(null)
     setSubmitting(true)
     const result = await forgotPassword(email.trim())
     setSubmitting(false)
     if (!result.ok) {
-      setError(result.message ?? GENERIC_AUTH_ERROR)
+      setFormError(result.message ?? GENERIC_AUTH_ERROR)
       return
     }
     setSent(true)
@@ -115,20 +153,30 @@ export function ForgotPasswordForm({ emailHint, successNote }: ForgotPasswordFor
   }
 
   return (
-    <form className="kc-auth-form" noValidate onSubmit={handleSubmit}>
+    <form className="kc-auth-form" noValidate onSubmit={handleSubmit} ref={formRef}>
       <Field
         autoComplete="email"
+        error={fieldError ?? undefined}
         hint={emailHint}
         label="E-mail-cím"
         name="email"
-        onChange={(event) => setEmail(event.target.value)}
+        onChange={(event) => {
+          setEmail(event.target.value)
+          setFieldError(null)
+        }}
         required
         type="email"
         value={email}
       />
-      {error ? (
-        <div aria-live="assertive" className="kc-auth-form__error" role="alert">
-          {error}
+      {formError !== null ? (
+        <div
+          aria-live="assertive"
+          className="kc-auth-form__error"
+          ref={formErrorRef}
+          role="alert"
+          tabIndex={-1}
+        >
+          {formError}
         </div>
       ) : null}
       {/* §3.2 #21: e-mail indul a látogatónak, tehát elkötelezés (P-1a → E/1).

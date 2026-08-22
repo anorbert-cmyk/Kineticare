@@ -42,7 +42,12 @@ export function BunnyLibraryView(props: AdminViewServerProps) {
           videó azonosítóját a kurzus leckéjébe. A vevő és az ingyenes kurzus nézője a meglévő
           lejátszón látja a videót, feltöltés innen nem indul.
         </p>
-        <BunnyLibraryPanel />
+        {/* A panel itt közvetlenül a lap h1-e alá kerül, ezért h2-t kap: az
+            alapértelmezett h3 egy szintet átugorna (h1 → h3), és a
+            képernyőolvasót használó munkatárs hiányzó szakaszt olvasna ki
+            belőle (WCAG 2.2 SC 1.3.1). A termék-szerkesztőben a panel
+            változatlanul h3 marad. */}
+        <BunnyLibraryPanel headingLevel="h2" />
       </div>
     </AdminChrome>
   )

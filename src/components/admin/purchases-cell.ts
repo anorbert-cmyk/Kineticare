@@ -1,5 +1,6 @@
 import type { CourseStudentStatus } from '../../lib/admin/course-progress-stats'
 import type { UserCourseProgressEntry } from '../../lib/admin/user-progress-contract'
+import { NO_LESSONS_LABEL } from '../../lib/curriculum/progress'
 import { statusLabel } from './course-progress-view'
 
 /**
@@ -64,18 +65,29 @@ export function formatCourseLabel(product: PurchaseProductLike): string {
  * (`[{ id: 11, … }]`), polimorf kapcsolatnál pedig `{ relationTo, value }`
  * alakot. Mindhármat elviseli, ismeretlen elemet némán kihagy — egy hibás
  * elem nem omlaszthatja el a listát.
+ *
+ * DUPLIKÁTUM NEM MEHET TOVÁBB, a beérkezési sorrend viszont marad. A
+ * `purchases` mezőn nincs egyediség-kényszer, tehát egy kézi szerkesztés vagy
+ * egy ismételt hozzáférés-adás ugyanazt a kurzust kétszer is felviheti — a
+ * cella ilyenkor UGYANAZT a sort írta ki kétszer, ami hibának látszik.
+ * (A szerver a `purchasedProductIds`-ben ugyanígy deduplikál, tehát a két
+ * oldal így ugyanazt a kurzus-halmazt látja.)
  */
 export function readPurchaseIds(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
   }
   const ids: string[] = []
+  const seen = new Set<string>()
+  const add = (id: string): void => {
+    if (id !== '' && !seen.has(id)) {
+      seen.add(id)
+      ids.push(id)
+    }
+  }
   for (const entry of value) {
     if (typeof entry === 'number' || typeof entry === 'string') {
-      const id = String(entry).trim()
-      if (id !== '') {
-        ids.push(id)
-      }
+      add(String(entry).trim())
       continue
     }
     if (typeof entry !== 'object' || entry === null) {
@@ -84,16 +96,13 @@ export function readPurchaseIds(value: unknown): string[] {
     const record = entry as Record<string, unknown>
     const candidate = 'value' in record ? record.value : record.id
     if (typeof candidate === 'number' || typeof candidate === 'string') {
-      const id = String(candidate).trim()
-      if (id !== '') {
-        ids.push(id)
-      }
+      add(String(candidate).trim())
       continue
     }
     if (typeof candidate === 'object' && candidate !== null) {
       const nested = (candidate as Record<string, unknown>).id
       if (typeof nested === 'number' || typeof nested === 'string') {
-        ids.push(String(nested))
+        add(String(nested).trim())
       }
     }
   }
@@ -157,6 +166,10 @@ export function formatPurchaseLabels(
  *
  *   Otthoni KézRehab Program · 45% · folyamatban
  *   SOS KézRelax · 0% · nem kezdte el
+ *
+ * Ehhez jött harmadikként a „nincs tananyag" sor (lásd `NO_LESSONS_LABEL`):
+ * ott sem százalék, sem állapot-szó nem szerepel, mert egyik sem a vevőről
+ * szólna.
  *
  * Miért nincs átlag: három kurzusnál a súlyozott átlag olyan számot mutatna,
  * ami egyetlen kurzusra sem igaz. A kérdés („hol tart?") kurzusonként
@@ -257,8 +270,31 @@ export function normalizeProgressEntry(value: unknown): UserCourseProgressEntry 
   if (typeof rawPercent !== 'number' || !Number.isFinite(rawPercent)) {
     return null
   }
+  // A `lessonCount` KÖTELEZŐ a szerződésben, ezért a hiánya itt sem
+  // „alapértelmezett 0", hanem érvénytelen bejegyzés: enélkül nem tudnánk
+  // megkülönböztetni a „nincs tananyag" esetet a valódi 0%-tól, és pont az a
+  // hamis mondat jönne vissza, ami miatt a mező született.
+  const rawLessonCount = record.lessonCount
+  if (
+    typeof rawLessonCount !== 'number' ||
+    !Number.isInteger(rawLessonCount) ||
+    rawLessonCount < 0
+  ) {
+    return null
+  }
   const percent = Math.round(Math.min(100, Math.max(0, rawPercent)))
-  return { productId, percent, status }
+  return { productId, percent, status, lessonCount: rawLessonCount }
+}
+
+/**
+ * Egy felirat MONDATKÖZI alakja: a kezdőbetű kicsi, a többi változatlan.
+ *
+ * A bontás kódpontonként történik (`[...label]`), nem `charAt(0)`-lal: így
+ * egy jövőbeli, BMP-n kívüli kezdőkarakter sem szakadna ketté.
+ */
+function inlineLabel(label: string): string {
+  const [first = '', ...rest] = label
+  return first.toLocaleLowerCase('hu-HU') + rest.join('')
 }
 
 /**
@@ -274,20 +310,40 @@ export function normalizeProgressEntry(value: unknown): UserCourseProgressEntry 
  * Miért kicsi a kezdőbetű: a felirat itt nem önálló címke, hanem egy sor
  * harmadik tagmondata („Otthoni KézRehab Program · 45% · folyamatban") — a
  * mondat közepén nagy kezdőbetű a magyar helyesírás szerint hibás volna.
- *
- * A bontás kódpontonként történik (`[...label]`), nem `charAt(0)`-lal: így
- * egy jövőbeli, BMP-n kívüli kezdőkarakter sem szakadna ketté.
  */
 export function inlineStatusLabel(status: CourseStudentStatus): string {
-  const [first = '', ...rest] = statusLabel(status)
-  return first.toLocaleLowerCase('hu-HU') + rest.join('')
+  return inlineLabel(statusLabel(status))
 }
+
+/**
+ * Az üres tananyag felirata MONDATKÖZI, kisbetűs alakban („nincs tananyag").
+ *
+ * MIÉRT KÜLÖN ÁLLAPOT: a lecke `status` mezőjének alapértelmezése
+ * `processing`, ezért egy frissen feltöltött (vagy még feldolgozás alatt álló)
+ * kurzusnál NULLA az elindítható leckék száma. A közös összesítő ilyenkor
+ * — helyesen — 0%-ot és `nem-kezdte` állapotot ad, a sor viszont ebből azt
+ * állította, hogy „0% · nem kezdte el". Ez HAMIS: nem a vevőn múlt, hanem
+ * azon, hogy nincs mit elkezdeni; a munkatárs pedig e szerint keresné meg
+ * lemaradóként azt is, aki a kurzust korábban végignézte. Ilyenkor tehát sem
+ * százalék, sem állapot-szó nem jelenik meg — csak ez a tényállítás.
+ *
+ * A SZÓ nem itt születik: a `NO_LESSONS_LABEL` a vevői felület (lejátszó,
+ * „Kurzusaim" lista) felirata is (src/lib/curriculum/progress.ts). Egy
+ * fogalomra egy szó — ugyanaz a szabály, ami miatt az állapot-szótár is a
+ * panelből jön (WCAG 2.2 SC 3.2.4, Consistent Identification). Csak a
+ * kezdőbetű lesz kicsi, mert a sor tagmondata („Kurzus címe · nincs
+ * tananyag"). Színt nem kap: az információt a SZÓ hordozza (SC 1.4.1).
+ */
+export const INLINE_NO_LESSONS_LABEL = inlineLabel(NO_LESSONS_LABEL)
 
 /** Egy megjelenítendő sor a „Megvásárolt kurzusok" cellában. */
 export interface PurchaseRow {
   /** A kurzus címe (`displayTitle` → `sku` → `Kurzus #id`). */
   title: string
-  /** Kerekített százalék, ha van értelmezhető haladás-adat; egyébként `null`. */
+  /**
+   * Kerekített százalék, ha van értelmezhető haladás-adat ÉS van mit
+   * százalékolni; egyébként `null` (a „nincs tananyag" sor is ilyen).
+   */
   percent: number | null
   /** Az állapot, ha van értelmezhető haladás-adat; egyébként `null`. */
   status: CourseStudentStatus | null
@@ -353,6 +409,16 @@ export function formatPurchaseRows(
     const entry = byProduct.get(id)
     if (entry === undefined) {
       return { title, percent: null, status: null, text: title }
+    }
+    if (entry.lessonCount === 0) {
+      // Nincs elindítható lecke: sem százalék, sem állapot-szó nem állítható a
+      // vevőről (lásd INLINE_NO_LESSONS_LABEL).
+      return {
+        title,
+        percent: null,
+        status: null,
+        text: `${title} ${PROGRESS_SEPARATOR} ${INLINE_NO_LESSONS_LABEL}`,
+      }
     }
     const text = [
       title,

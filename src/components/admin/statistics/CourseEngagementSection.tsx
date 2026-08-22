@@ -1,6 +1,7 @@
 import { Fragment, type CSSProperties } from 'react'
 
 import { AUDIENCE_LABELS } from '../../../lib/course-audience'
+import { NO_LESSONS_LABEL } from '../../../lib/curriculum/progress'
 import { courseProgressHref } from '../../../lib/statistics/course-links'
 import {
   NOT_STARTED_NAME_LIMIT,
@@ -81,10 +82,18 @@ const engagementTableStyle: CSSProperties = {
   minWidth: 'calc(832 * var(--kc-as-px, 1px))',
 }
 
-const emphasizedCountStyle: CSSProperties = {
-  color: 'var(--kc-as-danger)',
-  fontWeight: 700,
-}
+/*
+ * A „Nem kezdte el" kiemelt száma OSZTÁLYT kap, nem inline színt.
+ *
+ * MÉRVE: az inline `color` a `.kc-adminstat a:hover` szabálynál erősebb (a
+ * style-attribútum minden szelektort ver), ezért a link hover-visszajelzése —
+ * amit a repó link-nyelve előír — ezen az EGY linken sosem érvényesült. A
+ * szín ezért a custom.scss `.kc-adminstat` scope-jába került (világos és sötét
+ * ág is), ahol a hover-szabály nagyobb specifikusságú, tehát felül tudja írni.
+ * A vastagítás maradhatna inline, de egy helyen tartva a kettőt nem tud
+ * szétcsúszni.
+ */
+const EMPHASIZED_COUNT_CLASS = 'kc-adminstat__count-danger'
 
 /* A számot LINKKÉ tesszük, ezért a cél-méret rá is vonatkozik: a repó
    célértéke 44 × 44 CSS px (a WCAG 2.2 SC 2.5.8 minimuma 24 × 24:
@@ -165,6 +174,31 @@ function szam(value: number): string {
 }
 
 /**
+ * A HIÁNYOSSÁGOT kimondó mondatok — a nyitható blokktól FÜGGETLENÜL.
+ *
+ * Két külön ok, két külön mondat, és mindkettő megjelenhet EGYSZERRE. Korábban
+ * `else if` kötötte őket: az `omitted` elnyomta a `truncated` mondatát, holott
+ * a kettő mást állít (az egyik ISMERT veszteséget nevez meg darabszámmal, a
+ * másik azt, hogy a lista a felső korlátba ütközött, tehát a veszteség
+ * mértékét sem tudjuk).
+ */
+function hianyMondatok(course: CourseEngagementRow, targy: 'nevsor' | 'szamok'): string[] {
+  // A záró tagmondat magyar egyeztetés miatt kétféle: a névsorról egyes, a
+  // számokról többes számban beszélünk.
+  const zaras = targy === 'nevsor' ? 'ezért ez a névsor hiányos.' : 'ezért ezek a számok hiányosak.'
+  const mondatok: string[] = []
+  if (course.omitted > 0) {
+    mondatok.push(
+      `Ebből a kurzusból ${szam(course.omitted)} hozzáférő adata nem fért bele a lekérdezésbe, ${zaras}`,
+    )
+  }
+  if (course.truncated) {
+    mondatok.push(`A kurzusnak a megjeleníthetőnél több adata van, ${zaras}`)
+  }
+  return mondatok
+}
+
+/**
  * A névsor alatti magyarázó mondatok, a KIHAGYÁS kimondásával.
  *
  * A sorrend szándékos: előbb derüljön ki, hogy a lista hiányos, és csak utána
@@ -172,14 +206,7 @@ function szam(value: number): string {
  * lényeget kapja (NN/g, F-mintázatú olvasás).
  */
 function nevsorMagyarazat(course: CourseEngagementRow): string {
-  const mondatok: string[] = []
-  if (course.omitted > 0) {
-    mondatok.push(
-      `Ebből a kurzusból ${szam(course.omitted)} hozzáférő adata nem fért bele a lekérdezésbe, ezért ez a névsor hiányos.`,
-    )
-  } else if (course.truncated) {
-    mondatok.push('A kurzusnak a megjeleníthetőnél több adata van, ezért ez a névsor hiányos.')
-  }
+  const mondatok = hianyMondatok(course, 'nevsor')
   const megnevezheto = course.notStarted - course.notStartedWithoutName
   if (megnevezheto > course.notStartedNames.length) {
     mondatok.push(
@@ -195,22 +222,56 @@ function nevsorMagyarazat(course: CourseEngagementRow): string {
   return mondatok.join(' ')
 }
 
-/** Egy kurzus nyitható „nem kezdte el" névsora, saját táblasorban. */
-function NotStartedNames({ course }: { course: CourseEngagementRow }) {
+/** Van-e a kurzusnak elindítható leckéje (lásd `CourseEngagementRow.totalLessons`). */
+function vanTananyag(course: CourseEngagementRow): boolean {
+  return course.totalLessons > 0
+}
+
+/** Megjelenik-e a nyitható névsor ennél a kurzusnál. */
+function vanNevsorBlokk(course: CourseEngagementRow): boolean {
+  return vanTananyag(course) && course.notStarted > 0
+}
+
+/**
+ * A kurzus MÁSODIK táblasora: a nyitható névsor, vagy — ha névsor nincs — a
+ * hiányosságot kimondó mondat.
+ *
+ * ═══ MIÉRT NEM CSAK A BLOKKON BELÜL ═══
+ * A kihagyás-mondat eddig KIZÁRÓLAG a nyitható blokkban élt, az pedig csak
+ * `notStarted > 0` esetén jelent meg. Vagyis pont akkor volt láthatatlan,
+ * amikor a tábla azt állítja, hogy MINDENKI elkezdte — holott a kimaradt
+ * hozzáférők között lehet olyan, aki nem. A figyelmeztetés ezért a névsortól
+ * függetlenül is megjelenik.
+ */
+function CourseNoteRow({ course }: { course: CourseEngagementRow }) {
+  const nevsor = vanNevsorBlokk(course)
+  const hiany = hianyMondatok(course, 'szamok')
+  // Nincs se névsor, se kimondanivaló hiány: a sor el sem készül. A döntés
+  // ITT él, nem a hívónál — így a feltétel nem tud két helyen szétcsúszni.
+  if (!nevsor && hiany.length === 0) {
+    return null
+  }
   return (
     <tr>
       <td style={disclosureCellStyle} colSpan={8}>
-        <details>
-          <summary style={summaryStyle}>{`Kik nem kezdték el (${szam(course.notStarted)})`}</summary>
-          {course.notStartedNames.length > 0 ? (
-            <ul style={nameListStyle}>
-              {course.notStartedNames.map((name) => (
-                <li key={name}>{name}</li>
-              ))}
-            </ul>
-          ) : null}
-          <p style={noticeInDisclosureStyle}>{nevsorMagyarazat(course)}</p>
-        </details>
+        {nevsor ? (
+          <details>
+            <summary style={summaryStyle}>{`Kik nem kezdték el (${szam(course.notStarted)})`}</summary>
+            {course.notStartedNames.length > 0 ? (
+              <ul style={nameListStyle}>
+                {course.notStartedNames.map((name, index) => (
+                  // A kulcs a névhez az INDEXET is hozzáveszi: két hallgatót
+                  // hívhatnak ugyanúgy, és a puszta név ilyenkor ütköző kulcs
+                  // lenne (a React a második elemet eldobná).
+                  <li key={`${name}-${String(index)}`}>{name}</li>
+                ))}
+              </ul>
+            ) : null}
+            <p style={noticeInDisclosureStyle}>{nevsorMagyarazat(course)}</p>
+          </details>
+        ) : (
+          <p style={noticeInDisclosureStyle}>{hiany.join(' ')}</p>
+        )}
       </td>
     </tr>
   )
@@ -309,29 +370,52 @@ export function CourseEngagementSection({
                       </th>
                       <td style={tdStyle}>{AUDIENCE_LABELS[course.audience]}</td>
                       <td style={numericStyle}>{szam(course.enrolled)}</td>
-                      <td style={numericStyle}>{szam(course.started)}</td>
-                      <td style={numericStyle}>{szam(course.completed)}</td>
-                      <td style={numericStyle}>
-                        {/* A SZÁM MAGA a link: ma három lépés kell a válaszig
-                            (kurzuslap → „Haladás betöltése" → szűrő), ez egyre
-                            csökkenti. A linkfelirat egy puszta szám, ezért az
-                            aria-label mondja ki a célt, és TARTALMAZZA a
-                            látható szöveget (WCAG 2.2 SC 2.4.4 Link Purpose és
-                            SC 2.5.3 Label in Name). Nullánál nem linkelünk:
-                            egy üres szűrt lista zsákutca lenne. */}
-                        {course.notStarted > 0 ? (
-                          <a
-                            href={courseProgressHref(course.productId, 'nem-kezdte')}
-                            style={{ ...countLinkStyle, ...emphasizedCountStyle }}
-                            aria-label={`${szam(course.notStarted)} hallgató nem kezdte el, névsor a kurzus lapján: ${course.title}`}
-                          >
-                            {szam(course.notStarted)}
-                          </a>
-                        ) : (
-                          szam(course.notStarted)
-                        )}
-                      </td>
-                      <td style={numericStyle}>{`${String(course.averagePercent)}%`}</td>
+                      {/* ═══ „MÉG NINCS TANANYAG" — KÜLÖN MEGJELENÉSI ÁLLAPOT ═══
+                          A lecke `status` mezőjének alapértelmezése `processing`,
+                          ezért egy frissen feltöltött kurzusnál NULLA az
+                          elindítható leckék száma. A közös összesítő ilyenkor
+                          — helyesen — mindenkit `nem-kezdte` állapotba sorol, a
+                          tábla viszont ebből azt állította, hogy a hozzáférők
+                          egyike sem kezdte el, sőt NÉV SZERINT fel is sorolta
+                          őket, piros kiemeléssel és mély linkkel. Ez konkrét
+                          emberekről tett hamis állítás — köztük olyanokról, akik
+                          a kurzust korábban végignézték. A négy haladás-cella
+                          ezért a TÉNYT mondja ki; a „Hozzáfér" darabszám marad,
+                          az igaz. A szöveg a vevői felület felirata
+                          (`NO_LESSONS_LABEL`), hogy egy fogalomra egy szó jusson
+                          (WCAG 2.2 SC 3.2.4). */}
+                      {vanTananyag(course) ? (
+                        <>
+                          <td style={numericStyle}>{szam(course.started)}</td>
+                          <td style={numericStyle}>{szam(course.completed)}</td>
+                          <td style={numericStyle}>
+                            {/* A SZÁM MAGA a link: ma három lépés kell a válaszig
+                                (kurzuslap → „Haladás betöltése" → szűrő), ez egyre
+                                csökkenti. A linkfelirat egy puszta szám, ezért az
+                                aria-label mondja ki a célt, és TARTALMAZZA a
+                                látható szöveget (WCAG 2.2 SC 2.4.4 Link Purpose és
+                                SC 2.5.3 Label in Name). Nullánál nem linkelünk:
+                                egy üres szűrt lista zsákutca lenne. */}
+                            {course.notStarted > 0 ? (
+                              <a
+                                href={courseProgressHref(course.productId, 'nem-kezdte')}
+                                className={EMPHASIZED_COUNT_CLASS}
+                                style={countLinkStyle}
+                                aria-label={`${szam(course.notStarted)} hallgató nem kezdte el, névsor a kurzus lapján: ${course.title}`}
+                              >
+                                {szam(course.notStarted)}
+                              </a>
+                            ) : (
+                              szam(course.notStarted)
+                            )}
+                          </td>
+                          <td style={numericStyle}>{`${String(course.averagePercent)}%`}</td>
+                        </>
+                      ) : (
+                        <td style={tdStyle} colSpan={4}>
+                          {NO_LESSONS_LABEL}
+                        </td>
+                      )}
                       <td style={tdStyle}>
                         {/* A link színét a custom.scss `.kc-adminstat a` szabálya
                             adja (ink + aláhúzás, hover accent-deep — a landing
@@ -344,7 +428,7 @@ export function CourseEngagementSection({
                         </a>
                       </td>
                     </tr>
-                    {course.notStarted > 0 ? <NotStartedNames course={course} /> : null}
+                    <CourseNoteRow course={course} />
                   </Fragment>
                 ))}
               </tbody>

@@ -411,6 +411,25 @@
   color: var(--kc-as-text);
 }
 
+/* KIEMELT DARABSZÁM (Kurzus-hatás tábla, „Nem kezdte el").
+
+   MIÉRT OSZTÁLY, ÉS NEM INLINE STÍLUS: a szín korábban a komponensben,
+   `style={{ color: … }}`-ként állt. A style-attribútum MINDEN szelektort ver,
+   ezért a fenti `a:hover` szabály — a lap link-nyelve — ezen az egy linken
+   sosem érvényesült: az egér alatt a szín nem változott, csak az aláhúzás
+   vastagsága. Osztályként a specifikusság (0,2,0) a hover (0,2,1) ALATT
+   marad, tehát nyugalomban ez a szín látszik, egér alatt és kattintás közben
+   viszont a link-nyelv veszi át.
+
+   SZÍN: a `--kc-as-danger` márka-token, világos témán #b3261e (fehéren
+   6,54:1), sötét témán #ffb4ab (7,16:1 / 9,20:1) — a két ágat maga a token
+   váltja, lásd a fenti jegyzőkönyvet és a sötét blokkot. A jelentést az
+   oszlopfejléc hordozza, a szín csak kiegészítő jelzés (WCAG 2.2 SC 1.4.1). */
+.kc-adminstat .kc-adminstat__count-danger {
+  color: var(--kc-as-danger);
+  font-weight: 700;
+}
+
 /* A görgetőkonténerek (tabla-wrap, diagram) tabindex="0"-t viselnek, hogy
    billentyűzetről is görgethetők legyenek (WCAG 2.1.1 Keyboard; axe-szabály:
    scrollable-region-focusable —

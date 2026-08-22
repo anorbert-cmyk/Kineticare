@@ -59,6 +59,10 @@ afterEach(() => {
 const FRONTEND = fileURLToPath(new URL('../app/(frontend)/', import.meta.url))
 const TOKENS = readFileSync(`${FRONTEND}styles/tokens.css`, 'utf8')
 const AUTH_CSS = readFileSync(`${FRONTEND}auth.css`, 'utf8')
+const URLAP_FORRAS = readFileSync(
+  fileURLToPath(new URL('../components/auth/ForgotPasswordForm.tsx', import.meta.url)),
+  'utf8',
+)
 
 const atallasHtml = renderToStaticMarkup(createElement(BelepesAtallasPage))
 const elfelejtettHtml = renderToStaticMarkup(createElement(ElfelejtettJelszoPage))
@@ -214,11 +218,25 @@ describe('/belepes-atallas — az űrlap', () => {
 
   it('az üres beküldésnek MAGYAR hibaüzenete van, nem néma visszatérés', () => {
     expect(URES_EMAIL_HIBA).toBe('Add meg az e-mail-címed.')
-    const forras = readFileSync(
-      fileURLToPath(new URL('../components/auth/ForgotPasswordForm.tsx', import.meta.url)),
-      'utf8',
-    )
-    expect(forras).toContain('setError(URES_EMAIL_HIBA)')
+    expect(URLAP_FORRAS).toContain('setFieldError(URES_EMAIL_HIBA)')
+  })
+
+  /**
+   * MÉRVE happy-dom-mal (2026-08-22): üres beküldés után az inputon
+   * `aria-invalid="true"`, `aria-describedby="kc-field-email-error"` és
+   * `kc-field__input--error` áll, a fókusz a MEZŐN van, és nincs duplikált
+   * form-szintű doboz ugyanerre a hibára; szerverhibánál viszont a
+   * form-szintű doboz kapja a fókuszt, és a mező NEM lesz „hibás".
+   *
+   * WCAG 2.2 · 3.3.1 (Error Identification): a hibás elemet AZONOSÍTANI kell,
+   * nem elég a hibaszöveget kiírni valahol.
+   * https://www.w3.org/WAI/WCAG22/Understanding/error-identification.html
+   */
+  it('a MEZŐ-hiba a Field `error` propján megy (aria-invalid + hibakeret), nem külön dobozban', () => {
+    expect(URLAP_FORRAS).toContain('error={fieldError ?? undefined}')
+    // A szerverhiba MARAD a form-szintű dobozban, fókuszálhatóan.
+    expect(URLAP_FORRAS).toContain('setFormError(result.message ?? GENERIC_AUTH_ERROR)')
+    expect(URLAP_FORRAS).toContain('formErrorRef.current?.focus()')
   })
 })
 
@@ -244,6 +262,21 @@ describe('.kc-auth-actions — önállóan álló hivatkozások', () => {
   it('a link nem CSAK színnel jelölt: aláhúzott (WCAG 2.2 · 1.4.1, G183)', () => {
     const szabaly = /\.kc-auth-actions a\s*\{([\s\S]*?)\}/u.exec(AUTH_CSS)?.[1] ?? ''
     expect(szabaly).toMatch(/text-decoration:\s*underline/u)
+  })
+
+  /**
+   * MÉRT REGRESSZIÓ (Chromium, 320/360/390/768/1024/1440 px, 2026-08-22): a
+   * sor `margin-top`-ja `0px` volt, tehát a `/elfelejtett-jelszo` lapon a
+   * beküldő gomb alsó éle és a link 44 px-es célfelülete MINDEN nézetben
+   * 0,00 px-re ért össze (a korábbi `.kc-auth-alt` 32 px-e elveszett). A
+   * javítás után mindkét lapon 32,00 px, a §3 táblázat 24 px-es minimuma
+   * fölött, vízszintes görgetés nélkül.
+   */
+  it('a sor FÜGGŐLEGESEN is elválik az előtte álló célfelülettől', () => {
+    const szabaly = /\.kc-auth-actions\s*\{([\s\S]*?)\}/u.exec(AUTH_CSS)?.[1] ?? ''
+    expect(szabaly).toMatch(/margin-top:\s*var\(--kc-space-6\)/u)
+    // Ugyanaz a token, mint a sor VÍZSZINTES közében — egy elem, egy ritmus.
+    expect(szabaly).toMatch(/gap:\s*0 var\(--kc-space-6\)/u)
   })
 })
 

@@ -506,6 +506,52 @@ describe('readStatisticsPages — csonkolás csak ha maradt sor', () => {
     expect(result.docs).toHaveLength(2)
     expect(result.truncated).toBe(true)
   })
+
+  /*
+   * MÉRT HIBA (vezetői kör, 2026-08-21): `hasNextPage` hiányában a szabály a
+   * „tele volt az utolsó lap" tartalék-ágra esett vissza, és így a PONTOSAN a
+   * korláttal egyező, TELJES halmazt is csonkoltnak jelölte — a felület
+   * hiánytalan adatra írta ki, hogy a számok a valóságnál kisebbek lehetnek.
+   * A hamis riasztás ugyanolyan kár, mint az elhallgatott csonkolás.
+   */
+  it('pontosan a korláton, `hasNextPage` NÉLKÜL: a totalDocs dönt', async () => {
+    const teljes = await readStatisticsPages(
+      async () => ({ docs: [{ id: 1 }, { id: 2 }], totalDocs: 2 }),
+      2,
+      2,
+    )
+    expect(teljes.truncated).toBe(false)
+
+    const csonka = await readStatisticsPages(
+      async () => ({ docs: [{ id: 1 }, { id: 2 }], totalDocs: 7 }),
+      2,
+      2,
+    )
+    expect(csonka.truncated).toBe(true)
+  })
+
+  it('a totalDocs ERŐSEBB, mint a „tele volt a lap" becslés', async () => {
+    // A lap tele van (2 = lapméret), de a szerver szerint ennyi az összes.
+    const result = await readStatisticsPages(
+      async () => ({ docs: [{ id: 1 }, { id: 2 }], totalDocs: 2, hasNextPage: true }),
+      2,
+      2,
+    )
+    // A `totalDocs` a találatok teljes száma, tehát ez a mérvadó válasz.
+    expect(result.truncated).toBe(false)
+  })
+
+  it('EGYIK szám nélkül a tartalék-ág marad — és inkább jelez, mint hallgat', async () => {
+    // Valós Payload-válasznál ez nem fordul elő (mindkét mezőt megadja),
+    // mockolt tesztben viszont igen. Ilyenkor a becslés a hamis pozitív
+    // irányába téved: inkább jelezzen csonkolást, mint hogy elhallgassa.
+    const result = await readStatisticsPages(async () => ({ docs: [{ id: 1 }, { id: 2 }] }), 2, 2)
+    expect(result.truncated).toBe(true)
+
+    // Fél lappal viszont biztosan nincs több sor.
+    const felLap = await readStatisticsPages(async () => ({ docs: [{ id: 1 }] }), 2, 1)
+    expect(felLap.truncated).toBe(false)
+  })
 })
 
 /**

@@ -156,11 +156,39 @@
    A 44 px a repó saját, szigorúbb célja (ui.css gomb-magasság), nem a minimum.
    A vízszintes köz (space-6 = 32px) azért kell, hogy a két célfelület ne
    érjen össze. Az aláhúzás WCAG 1.4.1 (G183): a linket nem jelölheti egyedül
-   a szín. */
+   a szín.
+
+   A FÜGGŐLEGES köz ugyanezért kell, és a bevezetésekor hiányzott. MÉRVE
+   (Chromium, 320/360/390/768/1024/1440 px, 2026-08-22): a
+   `/elfelejtett-jelszo` lapon a sor `margin-top`-ja `0px` volt, tehát a
+   beküldő gomb alsó éle és a „Vissza a belépéshez" 44 px-es célfelülete
+   MINDEN nézetben 0,00 px-re ért össze — a korábbi `.kc-auth-alt` 32 px-e a
+   váltáskor elveszett.
+
+   MIÉRT BAJ EZ, HA MINDKÉT CÉL AMÚGY ELÉG NAGY. WCAG 2.2 · 2.5.8 szándéka:
+   „The intent of this success criterion is to help ensure targets can be
+   easily activated without accidentally activating an adjacent target", és a
+   haszonélvezők: „Users with dexterity limitations … find it difficult to
+   accurately activate small targets when there are other targets that are too
+   close."
+   https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
+   NN/g (Aurora Harley, Touch Targets on Touchscreens, 2019): „To avoid
+   accidental taps, targets must first be big enough, and then also spaced
+   well enough". https://www.nngroup.com/articles/touch-target-size/
+
+   MIÉRT EGYSÉGESEN 32 px, ÉS NEM 24. A `/belepes-atallas` lapon a sor eddig a
+   `.kc-atallas > * + *` 24 px-ét kapta (mérve: 24,00 px mind a hat nézetben);
+   ez a szabály azonos specificitású (0,1,0), tehát a később álló
+   `.kc-auth-actions` felülírja. A 32 px mindkét lapon a §3 táblázat 24 px-es
+   minimuma FÖLÖTT van, és ugyanaz a token áll a sor vízszintes közében is:
+   egy elem, egy ritmus (WCAG 2.2 · 3.2.4 Consistent Identification).
+   MÉRT EREDMÉNY a javítás után: 32,00 px mindkét lapon, mind a hat nézetben,
+   vízszintes görgetés nélkül, a linkek célfelülete változatlanul 44 px magas. */
 .kc-auth-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0 var(--kc-space-6);
+  margin-top: var(--kc-space-6);
 }
 
 .kc-auth-actions a {

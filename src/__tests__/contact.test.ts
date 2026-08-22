@@ -13,6 +13,9 @@ import {
   validateContactForm,
   type ContactFormValues,
 } from '../app/(frontend)/kapcsolat/_lib/validation'
+import { APPOINTMENT_CONSENT_ERROR } from '../lib/appointment/validation'
+import { FREE_COURSE_CONSENT_ERROR } from '../lib/free-course/validation'
+import { NEWSLETTER_CONSENT_ERROR } from '../lib/newsletter/validation'
 
 /** Minden szempontból érvényes űrlap-állapot (a hozzájárulás bepipálva). */
 function validValues(overrides: Partial<ContactFormValues> = {}): ContactFormValues {
@@ -32,6 +35,21 @@ describe('validateContactForm', () => {
     expect(errors.consentPrivacy).toBeDefined()
     expect(errors.consentPrivacy).toContain('hozzájárulás')
     expect(isContactFormValid(errors)).toBe(false)
+  })
+
+  /**
+   * A NEGYEDIK űrlap felzárkóztatása (2026-08-22). A hozzájárulás-hiba a másik
+   * három űrlapon már a teendőt mondja meg; a kapcsolat-űrlapon a szabályt
+   * idézte („…megadása kötelező."). Ugyanaz a helyzet ugyanazt a mondatot kell
+   * kapja: WCAG 2.2 · 3.2.4 Consistent Identification.
+   * https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html
+   */
+  it('a hozzájárulás-hiba SZÓ SZERINT azonos a másik három űrlapéval (WCAG 3.2.4)', () => {
+    const errors = validateContactForm(validValues({ consentPrivacy: false }))
+    expect(errors.consentPrivacy).toBe('Pipáld be az adatkezelési hozzájárulást.')
+    expect(errors.consentPrivacy).toBe(FREE_COURSE_CONSENT_ERROR)
+    expect(errors.consentPrivacy).toBe(NEWSLETTER_CONSENT_ERROR)
+    expect(errors.consentPrivacy).toBe(APPOINTMENT_CONSENT_ERROR)
   })
 
   it('üres űrlapra minden kötelező mezőre magyar hibaüzenetet ad', () => {

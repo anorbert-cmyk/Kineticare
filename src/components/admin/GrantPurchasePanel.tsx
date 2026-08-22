@@ -170,7 +170,7 @@ export function GrantPurchasePanel() {
     }
     if (reason.trim().length === 0) {
       setSuccessMessage(null)
-      setErrorMessage('Az indok megadása kötelező — ez kerül az audit-naplóba.')
+      setErrorMessage('Add meg az indokot: ez kerül az audit-naplóba.')
       return
     }
     const label = products.find((option) => option.value === selectedProduct)?.label ?? selectedProduct
@@ -240,7 +240,7 @@ export function GrantPurchasePanel() {
       <div className="field-type" style={panelStyle}>
         <h3 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h3>
         <p style={noteStyle}>
-          Előbb mentsd a felhasználót — a hozzáférés az e-mail-cím alapján adható.
+          Előbb mentsd a felhasználót: a hozzáférés az e-mail-cím alapján adható.
         </p>
       </div>
     )

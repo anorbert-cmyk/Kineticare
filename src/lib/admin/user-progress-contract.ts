@@ -39,12 +39,40 @@ export const USER_PROGRESS_USERS_PARAM = 'users'
  */
 export const USER_PROGRESS_MAX_USERS = 100
 
+/**
+ * A legnagyobb elfogadott felhasználó-azonosító: az `int4` felső határa.
+ *
+ * A `users.id` Postgres `integer` oszlop; ennél nagyobb értékkel a lekérdezés
+ * nem „nem talál" választ ad, hanem tartomány-hibával dől el.
+ */
+const USER_ID_MAX = 2_147_483_647
+
 /** Egy kurzus haladása EGY felhasználónál. */
 export interface UserCourseProgressEntry {
   productId: number
   /** Kerekített százalék, 0–100 — a közös `summarizeCurriculum`-ból. */
   percent: number
   status: CourseStudentStatus
+  /**
+   * A kurzus ELINDÍTHATÓ leckéinek száma — a százalék nevezője.
+   *
+   * ═══ MIÉRT KÖTELEZŐ, ÉS MIÉRT EGYÁLTALÁN ═══
+   * A lecke `status` mezőjének alapértelmezése `processing`, ezért egy FRISSEN
+   * feltöltött (vagy még feldolgozás alatt álló) kurzusnál a nevező 0. A közös
+   * összesítő ilyenkor — helyesen, nullával osztás nélkül — 0%-ot és
+   * `nem-kezdte` állapotot ad, a megjelenítés viszont ebből azt a HAMIS
+   * mondatot rakta össze, hogy „0% · nem kezdte el" — miközben a vevő akár
+   * végig is nézhette a kurzust, csak épp nincs mit számolni. A „nincs
+   * tananyag" tehát KÜLÖN megjelenési állapot, és a felület csak ebből a
+   * mezőből tudja megkülönböztetni a valódi 0%-tól.
+   *
+   * KÖTELEZŐ, nem opcionális-alapértékes: a repó elve szerint a néma
+   * adatvesztés elé a FORDÍTÓ áll. Ha a mező opcionális volna, egy új
+   * hívóhely úgy is létrejöhetne, hogy nem tölti ki — és a hamis „0% · nem
+   * kezdte el" észrevétlenül visszatérne (ugyanaz az indoklás, mint a
+   * `CourseEngagementRow.omitted` mezőjénél).
+   */
+  lessonCount: number
 }
 
 /** Egy felhasználó összes (hozzáférhető) kurzusának haladása. */
@@ -79,6 +107,13 @@ export function buildUserProgressQuery(userIds: readonly number[]): string {
  * értelmezés szigorú: ami nem pozitív egész, az kimarad. Ha a nyers érték
  * üres vagy egyetlen érvényes azonosítót sem tartalmaz, üres tömb jön vissza —
  * a hívó ebből dönt a 400-as válaszról.
+ *
+ * A felső határ az `int4` maximuma (2 147 483 647), mert a `users.id` ilyen
+ * oszlop. A `Number.isInteger` ezt nem fogta: a `9e18` egész, tehát átment az
+ * értelmezésen, és a Postgres a lekérdezésnél tartomány-hibát dobott volna —
+ * vagyis egy kézzel írt URL a végpontot 500-asra vitte. A `Number.isSafeInteger`
+ * ezen felül a lebegőpontos pontatlanságot is kizárja (`2**53` fölött két
+ * különböző azonosító ugyanarra a számra kerekedne).
  */
 export function parseUserIdsParam(raw: string | null): number[] {
   if (raw === null) {
@@ -92,7 +127,12 @@ export function parseUserIdsParam(raw: string | null): number[] {
       continue
     }
     const value = Number(trimmed)
-    if (!Number.isInteger(value) || value <= 0 || seen.has(value)) {
+    if (
+      !Number.isSafeInteger(value) ||
+      value <= 0 ||
+      value > USER_ID_MAX ||
+      seen.has(value)
+    ) {
       continue
     }
     seen.add(value)

@@ -72,9 +72,12 @@ export function validateContactForm(values: ContactFormValues): ContactFormError
   }
 
   // Jogtiszta hozzájárulás: nem előpipált, explicit checkbox — enélkül a
-  // beküldés kliensoldalon blokkolva van.
+  // beküldés kliensoldalon blokkolva van. A szöveg SZÓ SZERINT azonos a másik
+  // három űrlapéval (ingyenes kurzus, hírlevél, időpontkérés): ugyanaz a
+  // helyzet = ugyanaz a mondat (WCAG 2.2 SC 3.2.4), és a teendőt mondja meg,
+  // nem a szabályt idézi (§2.7).
   if (!values.consentPrivacy) {
-    errors.consentPrivacy = 'Az adatkezelési hozzájárulás megadása kötelező.'
+    errors.consentPrivacy = 'Pipáld be az adatkezelési hozzájárulást.'
   }
 
   return errors

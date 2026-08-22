@@ -393,6 +393,7 @@ function sor(overrides: Partial<CourseEngagementRow> = {}): CourseEngagementRow 
     started: 8,
     completed: 3,
     notStarted: 4,
+    totalLessons: 20,
     averagePercent: 47,
     completionRateOfEnrolled: 25,
     completionRateOfStarted: 38,
@@ -546,10 +547,14 @@ describe('CourseEngagementSection', () => {
     const html = renderToStaticMarkup(
       createElement(CourseEngagementSection, { engagement: mintaReport }),
     )
-    // A MÁRKA danger tokenje (6,54:1 fehéren). A Payload `--theme-error-500`
-    // tartaléka KIKERÜLT: fehéren mérve 4,13:1, a 4,5:1 küszöb alatt
-    // (vezetői döntés, 2026-08-21 — a saját komponensekben márka-token).
-    expect(html).toContain('--kc-as-danger')
+    // A kiemelés OSZTÁLYON keresztül megy, nem inline színnel: az inline
+    // `color` a `.kc-adminstat a:hover` szabályt verné, tehát a link
+    // hover-visszajelzése ezen az EGY linken sosem érvényesülne.
+    expect(html).toContain('class="kc-adminstat__count-danger"')
+    // A szín továbbra is a MÁRKA danger tokenje (6,54:1 fehéren); a Payload
+    // `--theme-error-500` tartaléka KIKERÜLT (fehéren mérve 4,13:1, a 4,5:1
+    // küszöb alatt — vezetői döntés, 2026-08-21). Magát a CSS-szabályt a
+    // statisztika-elrendezes.test.tsx méri a VALÓDI custom.scss-ből.
     expect(html).not.toContain('--theme-error-500')
 
     const mindenkiElkezdte: CourseEngagementReport = {
@@ -559,7 +564,19 @@ describe('CourseEngagementSection', () => {
     const html0 = renderToStaticMarkup(
       createElement(CourseEngagementSection, { engagement: mindenkiElkezdte }),
     )
-    expect(html0).not.toContain('--kc-as-danger')
+    expect(html0).not.toContain('kc-adminstat__count-danger')
+  })
+
+  it('a kiemelt szám színe NEM inline: a hover-szabály felül tudja írni', () => {
+    // A `.kc-adminstat a:hover` specifikussága (0,2,1) nagyobb, mint az
+    // osztályé (0,2,0) — ez a rendezés adja vissza a link-nyelv
+    // hover-visszajelzését, amit az inline stílus elnyelt.
+    const html = renderToStaticMarkup(
+      createElement(CourseEngagementSection, { engagement: mintaReport }),
+    )
+    const link = /<a[^>]*kc-adminstat__count-danger[^>]*>/.exec(html)?.[0] ?? ''
+    expect(link).not.toBe('')
+    expect(link).not.toMatch(/style="[^"]*color:/)
   })
 
   it('hiányzó adatnál magyar magyarázatot mutat, nem táblát', () => {
@@ -643,6 +660,157 @@ describe('ŐR: a csonkolás miatt kihagyott hallgatókat a felület kimondja', (
       }),
     )
     expect(html).not.toContain('hiányos')
+  })
+
+  it('a figyelmeztetés akkor is látszik, ha MINDENKI elkezdte (nincs nyitható blokk)', () => {
+    // MÉRT HIBA: a mondat kizárólag a `notStarted > 0` mögötti nyitható
+    // blokkban élt, tehát pont akkor volt láthatatlan, amikor a tábla azt
+    // állítja, hogy senki nem maradt le — holott a kimaradt hozzáférők között
+    // lehet olyan, aki nem kezdte el.
+    const html = renderToStaticMarkup(
+      createElement(CourseEngagementSection, {
+        engagement: {
+          courses: [sor({ notStarted: 0, started: 12, notStartedNames: [], omitted: 5 })],
+          truncated: false,
+          skipped: 0,
+          omitted: 5,
+        },
+      }),
+    )
+    expect(html).not.toContain('<details>')
+    expect(html).toContain('5 hozzáférő adata nem fért bele a lekérdezésbe')
+  })
+
+  it('az `omitted` és a `truncated` mondata EGYSZERRE is megjelenik', () => {
+    // Korábban `else if` kötötte a kettőt: az `omitted` elnyomta a
+    // `truncated` mondatát, holott a kettő mást állít (az egyik ISMERT
+    // veszteséget nevez meg, a másik azt, hogy a veszteség mértékét sem
+    // tudjuk).
+    const html = renderToStaticMarkup(
+      createElement(CourseEngagementSection, {
+        engagement: {
+          courses: [sor({ omitted: 301, truncated: true })],
+          truncated: true,
+          skipped: 0,
+          omitted: 301,
+        },
+      }),
+    )
+    expect(html).toContain('301 hozzáférő adata nem fért bele a lekérdezésbe')
+    expect(html).toContain('A kurzusnak a megjeleníthetőnél több adata van')
+  })
+
+  it('azonos nevű hallgatók MINDEGYIKE megjelenik a névsorban', () => {
+    // A React a puszta névből képzett kulcsnál a második azonos nevű elemet
+    // eldobná — a névsor így csendben rövidülne.
+    const html = renderToStaticMarkup(
+      createElement(CourseEngagementSection, {
+        engagement: {
+          courses: [
+            sor({ notStarted: 2, notStartedNames: ['Kis Péter', 'Kis Péter'] }),
+          ],
+          truncated: false,
+          skipped: 0,
+          omitted: 0,
+        },
+      }),
+    )
+    expect(html.match(/<li>Kis Péter<\/li>/g)).toHaveLength(2)
+  })
+})
+
+/**
+ * ŐR — A 0 ELINDÍTHATÓ LECKÉS KURZUS NEM ÁLLÍT SEMMIT A VEVŐKRŐL.
+ *
+ * MÉRVE (vezetői kör, 2026-08-21): a lecke `status` alapértelmezése
+ * `processing`, ezért egy frissen feltöltött kurzusnál a nevező 0. A közös
+ * összesítő ilyenkor — helyesen — mindenkit `nem-kezdte` állapotba sorol, a
+ * tábla viszont ebből azt állította, hogy a hozzáférők egyike sem kezdte el,
+ * NÉV SZERINT felsorolva őket, piros kiemeléssel és mély linkkel. Ez konkrét
+ * emberekről tett hamis állítás. A „nincs tananyag" ezért KÜLÖN megjelenési
+ * állapot.
+ */
+describe('ŐR: a tananyag nélküli kurzus külön megjelenési állapot', () => {
+  const tananyagNelkul: CourseEngagementReport = {
+    courses: [
+      sor({
+        totalLessons: 0,
+        enrolled: 5,
+        started: 0,
+        completed: 0,
+        notStarted: 5,
+        averagePercent: 0,
+        notStartedNames: ['Bodor Anna', 'Kis Péter'],
+      }),
+    ],
+    truncated: false,
+    skipped: 0,
+    omitted: 0,
+  }
+
+  it('a haladás-cellák helyén a TÉNY áll, se százalék, se „nem kezdte el"', () => {
+    const html = renderToStaticMarkup(
+      createElement(CourseEngagementSection, { engagement: tananyagNelkul }),
+    )
+    expect(html).toContain('Még nincs tananyag')
+    // Százalék-cella nincs (a `width:100%`-féle STÍLUS-értékek nem számítanak,
+    // ezért a cella-tartalomra illesztünk).
+    expect(html).not.toMatch(/>\s*\d+%\s*</)
+  })
+
+  it('sem névsor, sem piros kiemelés, sem mély link nem jelenik meg', () => {
+    const html = renderToStaticMarkup(
+      createElement(CourseEngagementSection, { engagement: tananyagNelkul }),
+    )
+    expect(html).not.toContain('<details>')
+    expect(html).not.toContain('Bodor Anna')
+    expect(html).not.toContain('kc-adminstat__count-danger')
+    expect(html).not.toContain(courseProgressHref(42, 'nem-kezdte'))
+  })
+
+  it('a „Hozzáfér" darabszám MEGMARAD — az igaz', () => {
+    const html = renderToStaticMarkup(
+      createElement(CourseEngagementSection, { engagement: tananyagNelkul }),
+    )
+    // A kurzus sora a hozzáférők számával együtt látszik, tehát a munkatárs
+    // tudja, hogy van kinek feltölteni a tananyagot.
+    expect(html).toContain('>5</td>')
+    // A kurzus lapjára vezető link megmarad (az nem állít semmit senkiről).
+    expect(html).toContain(courseProgressHref(42))
+  })
+
+  it('a leckeszám a KÖZÖS `playable` szabályból jön, nem külön képletből', () => {
+    const feldolgozasAlatt = buildCurriculum(
+      {
+        modules: null,
+        videos: [
+          { id: 'v1', title: '1. lecke', streamAssetId: 'g1', status: 'processing', durationSec: 60 },
+        ],
+      } as Pick<Product, 'modules' | 'videos'>,
+      true,
+    )
+    const row = buildCourseEngagementRow({
+      productId: 9,
+      title: 'Új kurzus',
+      audience: 'laikus',
+      curriculum: feldolgozasAlatt,
+      enrollments: [{ userId: 1, email: '', name: 'Kis Péter' }],
+      progressRows: [],
+      ...EP,
+    })
+    expect(row.totalLessons).toBe(0)
+    // Kontroll: kész videónál már van mit számolni.
+    expect(
+      buildCourseEngagementRow({
+        productId: 9,
+        title: 'Kész kurzus',
+        audience: 'laikus',
+        curriculum: ketLeckesTananyag(),
+        enrollments: [{ userId: 1, email: '', name: 'Kis Péter' }],
+        progressRows: [],
+        ...EP,
+      }).totalLessons,
+    ).toBe(2)
   })
 })
 

@@ -83,7 +83,10 @@ export function validateContactSubmissionData(submissionData: unknown): string[]
   // Jogtiszta hozzájárulás: a szerveren is kötelező — különben közvetlen
   // REST-hívással mentődne consent nélküli személyes adat (GDPR-kockázat).
   if (fieldValue('consentPrivacy') !== 'true') {
-    errors.push('Az adatkezelési hozzájárulás megadása kötelező.')
+    // Szó szerint AZONOS a kliens-oldali és a másik három űrlap mondatával
+    // (WCAG 2.2 SC 3.2.4, konzisztens azonosítás) — a review-kör találata
+    // szerint korábban a kliens és a szerver mást mondott ugyanarra a hibára.
+    errors.push('Pipáld be az adatkezelési hozzájárulást.')
   }
 
   return errors

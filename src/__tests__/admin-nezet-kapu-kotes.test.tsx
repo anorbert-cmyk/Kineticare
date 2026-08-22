@@ -58,8 +58,9 @@ vi.mock('../lib/statistics/engagement-query', () => ({
 }))
 
 vi.mock('../components/admin/BunnyLibraryPanel', () => ({
-  BunnyLibraryPanel: () => {
-    bunnyPanelKem()
+  // A kém a PROPOKAT is rögzíti: a nézet címsor-szintje ebből mérhető.
+  BunnyLibraryPanel: (panelProps: unknown) => {
+    bunnyPanelKem(panelProps)
     return createElement('div', null, 'panel')
   },
 }))
@@ -131,5 +132,16 @@ describe('Videótár nézet: ugyanaz a kapu-kötés', () => {
   it('staff szerepkörrel a panel renderel', () => {
     renderToStaticMarkup(BunnyLibraryView(props({ role: 'staff' })))
     expect(bunnyPanelKem).toHaveBeenCalledTimes(1)
+  })
+
+  it('a nézet h2-t kér a paneltől — a lap h1-e alatt nincs címsor-ugrás', () => {
+    // A panel alapértelmezése `h3` (a termék-szerkesztő környezete), itt
+    // viszont közvetlenül a lap `h1`-e alatt ül: a h1 → h3 ugrásból a
+    // képernyőolvasót használó munkatárs hiányzó szakaszt olvasna ki
+    // (WCAG 2.2 SC 1.3.1, Info and Relationships).
+    renderToStaticMarkup(BunnyLibraryView(props({ role: 'staff' })))
+    expect(bunnyPanelKem).toHaveBeenCalledWith(
+      expect.objectContaining({ headingLevel: 'h2' }),
+    )
   })
 })
