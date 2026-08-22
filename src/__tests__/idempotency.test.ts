@@ -106,6 +106,37 @@ describe('processWebhook', () => {
     expect(docs[0].attempts).toBe(1)
   })
 
+  it('W13: pending_repoll a MAX kísérletnél failed, nem néma siker', async () => {
+    const pending: WebhookEventDoc = {
+      id: 11,
+      provider: 'barion',
+      externalId: 'payment-pending-repoll',
+      status: 'received',
+      attempts: MAX_WEBHOOK_ATTEMPTS - 1,
+      result: 'pending_repoll',
+    }
+    const { store, docs } = createMockStore([pending])
+    const handler = vi.fn(async () => ({ webhookNonTerminal: true, status: 'payment_pending' }))
+
+    const outcome = await processWebhook({
+      store,
+      provider: 'barion',
+      externalId: 'payment-pending-repoll',
+      handler,
+    })
+
+    expect(outcome).toMatchObject({
+      kind: 'failed',
+      attempts: MAX_WEBHOOK_ATTEMPTS,
+      retryable: false,
+    })
+    expect(docs[0]).toMatchObject({
+      status: 'failed',
+      attempts: MAX_WEBHOOK_ATTEMPTS,
+      lastError: expect.stringContaining('pending_repoll'),
+    })
+  })
+
   it('failed esemény újrapróbálható: attempts nő, siker esetén processed lesz', async () => {
     const { store, docs } = createMockStore()
     const failing = vi.fn(async () => {

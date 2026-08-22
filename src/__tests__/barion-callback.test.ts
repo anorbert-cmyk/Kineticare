@@ -2,9 +2,13 @@ import type { Payload } from 'payload'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 import { createBarionCallbackProcessor } from '../lib/barion-callback/process-callback'
-import { createBarionCallbackHandler } from '../lib/barion-callback/route-handler'
+import {
+  createBarionCallbackHandler,
+  UNKNOWN_BARION_CALLBACK_RULE,
+} from '../lib/barion-callback/route-handler'
 import { processWebhook, type WebhookEventDoc, type WebhookEventStore } from '../lib/idempotency'
 import { onOrderPaid } from '../lib/order-paid'
+import { SlidingWindowRateLimiter } from '../lib/security/rate-limit'
 import type { Order, User } from '../payload-types'
 
 /**
@@ -166,6 +170,7 @@ function createUser(purchases: number[] = []): User {
 interface MockPayloadOptions {
   order?: Order | null
   user?: User
+  unknownGuidLimiter?: SlidingWindowRateLimiter
 }
 
 function createMockPayload(options: MockPayloadOptions = {}) {
@@ -310,6 +315,7 @@ function setup(options: MockPayloadOptions = {}) {
     getPayload: async () => payload,
     schedule: capture.schedule,
     store,
+    ...(options.unknownGuidLimiter ? { unknownGuidLimiter: options.unknownGuidLimiter } : {}),
   })
   return { POST, store, docs, payload, calls, order, user, capture }
 }
@@ -501,7 +507,11 @@ describe('(h) aszinkron viselkedés — a 200 NEM vár a GetState-re', () => {
     expect(fetchMock).not.toHaveBeenCalled()
     // A dedup-rekord viszont már létezik (azonnal rögzítve).
     expect(docs).toHaveLength(1)
-    expect(docs[0]).toMatchObject({ provider: 'barion', externalId: PAYMENT_ID, status: 'received' })
+    expect(docs[0]).toMatchObject({
+      provider: 'barion',
+      externalId: PAYMENT_ID,
+      status: 'received',
+    })
     // A nyers body nincs tárolva — csak a strukturált paymentId.
     expect(docs[0].payload).toEqual({ paymentId: PAYMENT_ID })
 
@@ -641,38 +651,44 @@ describe('(b) duplikált callback — EXACTLY ONCE', () => {
 })
 
 describe('(c) cancelled — Canceled és Expired', () => {
-  it.each([['Canceled'], ['Expired']])('%s → payment_pending rendelés cancelled lesz', async (barionStatus) => {
-    const { POST, docs, order, capture } = setup()
-    fetchMock.mockResolvedValueOnce(getStateResponse(barionStatus))
+  it.each([['Canceled'], ['Expired']])(
+    '%s → payment_pending rendelés cancelled lesz',
+    async (barionStatus) => {
+      const { POST, docs, order, capture } = setup()
+      fetchMock.mockResolvedValueOnce(getStateResponse(barionStatus))
 
-    const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
-    expect(response.status).toBe(200)
-    await capture.runAll()
+      const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
+      expect(response.status).toBe(200)
+      await capture.runAll()
 
-    expect(order?.status).toBe('cancelled')
-    expect(docs[0]).toMatchObject({ status: 'processed', result: 'cancelled' })
-  })
+      expect(order?.status).toBe('cancelled')
+      expect(docs[0]).toMatchObject({ status: 'processed', result: 'cancelled' })
+    },
+  )
 })
 
 describe('(d) függő státusz — Prepared/Started', () => {
-  it.each([['Prepared'], ['Started']])('%s → a rendelés payment_pending marad, repoll-jelzéssel', async (barionStatus) => {
-    const { POST, docs, order, calls, capture } = setup()
-    fetchMock.mockResolvedValueOnce(getStateResponse(barionStatus))
+  it.each([['Prepared'], ['Started']])(
+    '%s → a rendelés payment_pending marad, repoll-jelzéssel',
+    async (barionStatus) => {
+      const { POST, docs, order, calls, capture } = setup()
+      fetchMock.mockResolvedValueOnce(getStateResponse(barionStatus))
 
-    const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
-    expect(response.status).toBe(200)
-    await capture.runAll()
+      const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
+      expect(response.status).toBe(200)
+      await capture.runAll()
 
-    // Státusz VÁLTOZATLAN, purchases-beírás NINCS — a poll-job (külön ticket) dolgozza fel.
-    expect(order?.status).toBe('payment_pending')
-    expect(calls.update.filter((call) => call.collection === 'orders')).toHaveLength(0)
-    expect(calls.update.filter((call) => call.collection === 'users')).toHaveLength(0)
-    // B4: a függő kimenetel NEM VÉGLEGES — a rekord újrafeldolgozható marad
-    // (received + üres processedAt), különben a később érkező végleges státusz
-    // duplikátumként veszne el.
-    expect(docs[0]).toMatchObject({ status: 'received', result: 'pending_repoll' })
-    expect(docs[0]?.processedAt ?? null).toBeNull()
-  })
+      // Státusz VÁLTOZATLAN, purchases-beírás NINCS — a poll-job (külön ticket) dolgozza fel.
+      expect(order?.status).toBe('payment_pending')
+      expect(calls.update.filter((call) => call.collection === 'orders')).toHaveLength(0)
+      expect(calls.update.filter((call) => call.collection === 'users')).toHaveLength(0)
+      // B4: a függő kimenetel NEM VÉGLEGES — a rekord újrafeldolgozható marad
+      // (received + üres processedAt), különben a később érkező végleges státusz
+      // duplikátumként veszne el.
+      expect(docs[0]).toMatchObject({ status: 'received', result: 'pending_repoll' })
+      expect(docs[0]?.processedAt ?? null).toBeNull()
+    },
+  )
 })
 
 /**
@@ -954,5 +970,35 @@ describe('orderNumber-fallback és titokvédelem', () => {
     await capture.runAll()
 
     expect(logOutput(logSpy)).not.toContain(DUMMY_POS_KEY)
+  })
+})
+
+describe('POST /api/barion/callback — W12 ismeretlen GUID IP-keret', () => {
+  it('11. ismeretlen GUID → 429, ismert PaymentId korlátlan marad', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const unknown = setup({ order: null, unknownGuidLimiter: limiter })
+    const statuses: number[] = []
+    for (let index = 0; index < UNKNOWN_BARION_CALLBACK_RULE.limit + 1; index += 1) {
+      const guid = `aaaaaaaa-bbbb-cccc-dddd-${String(index).padStart(12, '0')}`
+      const response = await unknown.POST(makeBarionRequest(guid))
+      statuses.push(response.status)
+    }
+    expect(
+      statuses.slice(0, UNKNOWN_BARION_CALLBACK_RULE.limit).every((status) => status === 200),
+    ).toBe(true)
+    expect(statuses.at(-1)).toBe(429)
+    const last = await unknown.POST(
+      makeBarionRequest(
+        `aaaaaaaa-bbbb-cccc-dddd-${String(UNKNOWN_BARION_CALLBACK_RULE.limit).padStart(12, '0')}`,
+      ),
+    )
+    expect(await last.json()).toMatchObject({ ok: false })
+    expect(last.headers.get('Retry-After')).toBeTruthy()
+    expect(unknown.docs).toHaveLength(UNKNOWN_BARION_CALLBACK_RULE.limit)
+
+    const known = setup({ unknownGuidLimiter: limiter })
+    const knownResponse = await known.POST(makeBarionRequest(PAYMENT_ID))
+    expect(knownResponse.status).toBe(200)
+    expect(await knownResponse.json()).toMatchObject({ ok: true })
   })
 })

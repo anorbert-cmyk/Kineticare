@@ -70,7 +70,7 @@ function payloadForUserLock(payload: Payload): Payload {
   if (process.env.NODE_ENV === 'production') {
     return payload
   }
-  return { db: { drizzle: undefined } } as Payload
+  return { db: { drizzle: undefined } } as unknown as Payload
 }
 
 /** Folyamatbeli sorosítás kulcsonként — a teszt/dev drizzle-skip mellett is véd. */

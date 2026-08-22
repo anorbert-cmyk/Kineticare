@@ -13,6 +13,7 @@ import {
   isPreviewCollection,
   PREVIEW_PATH,
   previewTargetPath,
+  resolvePublicOrigin,
 } from '../lib/preview/preview-target'
 import { createPreviewHandler } from '../lib/preview/route-handler'
 
@@ -152,6 +153,12 @@ describe('buildAdminPreviewUrl (az admin „Előnézet" gombja)', () => {
     expect(buildAdminPreviewUrl('pages', '')).toBeNull()
     expect(buildAdminPreviewUrl('pages', '  ')).toBeNull()
   })
+
+  it('resolvePublicOrigin: érvényes env origin győz a belső request.url fölött', () => {
+    expect(resolvePublicOrigin('http://localhost:8080/next/preview')).toBe(
+      'https://kineticare.example.test',
+    )
+  })
 })
 
 describe('/next/preview — jogosultság-ellenőrzés', () => {
@@ -210,6 +217,19 @@ describe('/next/preview — jogosultság-ellenőrzés', () => {
     )
 
     expect(harness.authHeaders()?.get('x-request-id')).toBe('teszt-keres-1')
+  })
+
+  it('proxy mögött a Location a NEXT_PUBLIC_SERVER_URL originjére épül (nem a belső hostra)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'https://kineticare.example.test')
+    const harness = harnessWithUser(staff)
+
+    const response = await harness.handler(
+      new Request('http://localhost:8080/next/preview?collection=pages&slug=rolunk'),
+    )
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('Location')).toBe('https://kineticare.example.test/rolunk')
+    vi.unstubAllEnvs()
   })
 })
 
@@ -374,9 +394,7 @@ describe('/next/exit-preview — kilépés az előnézetből', () => {
   it('kikapcsolja a draft mode-ot és visszairányít a megnézett oldalra', async () => {
     const harness = exitHarness()
 
-    const response = await harness.handler(
-      exitRequest(`?${RETURN_PATH_PARAM}=%2Fblog%2Felso-cikk`),
-    )
+    const response = await harness.handler(exitRequest(`?${RETURN_PATH_PARAM}=%2Fblog%2Felso-cikk`))
 
     expect(response.status).toBe(307)
     expect(response.headers.get('Location')).toBe(`${ORIGIN}/blog/elso-cikk`)

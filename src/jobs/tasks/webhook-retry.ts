@@ -135,7 +135,25 @@ export const webhookRetryTask: TaskConfig<WebhookRetryJobIO> = {
         handler: processor,
       })
       if (outcome.kind === 'processed' || outcome.kind === 'already-processed') {
-        succeeded += 1
+        if (
+          outcome.kind === 'processed' &&
+          outcome.nonTerminal &&
+          outcome.attempts >= MAX_WEBHOOK_ATTEMPTS
+        ) {
+          // W13 tartalék: a processWebhook már failed-re zár, ide elvileg
+          // nem jutunk. Ha mégis, ne számoljuk succeeded-nek.
+          exhausted += 1
+          failed += 1
+          logger.error('webhook-esemény újrapróbálásai kimerültek — owner beavatkozás szükséges', {
+            provider: event.provider,
+            externalId: event.externalId,
+            eventId: event.id,
+            attempts: outcome.attempts,
+            error: 'pending_repoll kimerült',
+          })
+        } else {
+          succeeded += 1
+        }
       } else if (outcome.kind === 'failed') {
         if (!outcome.retryable) {
           // A kimerülés PILLANATA: ez volt az utolsó megengedett kísérlet — a

@@ -3,7 +3,7 @@ import type { Payload } from 'payload'
 import { hasStaffOrOwnerRole } from '../../access/roles'
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
-import { isPreviewCollection, previewTargetPath } from './preview-target'
+import { isPreviewCollection, previewTargetPath, resolvePublicOrigin } from './preview-target'
 
 /**
  * GET /next/preview — piszkozat-előnézet bekapcsolása.
@@ -88,9 +88,10 @@ export function createPreviewHandler(
 
     // Szándékosan NEM Response.redirect(): az azzal létrehozott válasz fejlécei
     // csak olvashatók, így a Next nem tudná ráfűzni a draft mode sütijét.
+    // A Location bázisa a publikált origin (W11) — lásd resolvePublicOrigin.
     return new Response(null, {
       status: 307,
-      headers: { Location: new URL(target, request.url).toString() },
+      headers: { Location: new URL(target, resolvePublicOrigin(request.url)).toString() },
     })
   }
 }

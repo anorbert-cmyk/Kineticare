@@ -11,6 +11,11 @@ import {
 } from '../idempotency'
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
+import {
+  resolveRateLimitIp,
+  SlidingWindowRateLimiter,
+  type RateLimitRule,
+} from '../security/rate-limit'
 import { createBarionCallbackProcessor } from './process-callback'
 
 /**
@@ -47,13 +52,13 @@ import { createBarionCallbackProcessor } from './process-callback'
  * riasztást naplóz, a Barion retry-ja pedig nem pörög feleslegesen egy sosem
  * sikerülő híváson.
  *
- * ALAK-ELLENŐRZÉS a DB-írás ELŐTT: a végpont szándékosan kimarad a kérés-korlát
- * alól (`classifyRateLimitedRoute` — a fizetési értesítés elvesztése pénzt
- * jelent), tehát bárki korlátlanul hívhatja. Fék nélkül minden hívás EGY új
- * webhook-events sort írna (a tábla korlátlanul nőne) és EGY kimenő Barion
- * GetState-hívást indítana. Ezért a PaymentId-nek GUID-alakúnak kell lennie:
- * ami nem az, az bizonyosan nem a Bariontól jön → 400, még a dedup-írás előtt.
- * Az alakilag helyes, de ismeretlen azonosító útja változatlan (200 + riasztás).
+ * ALAK-ELLENŐRZÉS a DB-írás ELŐTT: a végpont szándékosan kimarad a globális
+ * kérés-korlát alól (`classifyRateLimitedRoute` — a fizetési értesítés
+ * elvesztése pénzt jelent), tehát a Barion saját retry-ja korlátlan. Fék
+ * nélkül minden hívás EGY új webhook-events sort írna és EGY kimenő GetState-et
+ * indítana. Ezért (1) a PaymentId-nek GUID-alakúnak kell lennie, (2) az
+ * ismeretlen (sem rendeléshez, sem webhook-eseményhez nem kötött) GUID-okra
+ * IP-keret van (W12). Az ismert PaymentId-k továbbra is korlátlanok.
  *
  * A nyers callback-bodyt szándékosan NEM tároljuk/naplózzuk — a Barion
  * callback-payloadja a PaymentId-n kívül nem hordoz releváns adatot; a
@@ -69,7 +74,21 @@ export interface BarionCallbackHandlerDeps {
    */
   schedule?: (task: () => Promise<void>) => void
   store?: WebhookEventStore
+  /** W12: ismeretlen GUID-ok IP-kerete. Ismert PaymentId-re nem fut. */
+  unknownGuidLimiter?: SlidingWindowRateLimiter
 }
+
+/**
+ * Ismeretlen (se rendelés, se webhook-esemény) GUID-ok IP-kerete. A Barion
+ * saját retry-ja ismert id-n korlátlan marad; a véletlen GUID-zápor DB-sort
+ * és GetState-et ne gyártson.
+ */
+export const UNKNOWN_BARION_CALLBACK_RULE: RateLimitRule = {
+  limit: 10,
+  windowMs: 60 * 1000,
+}
+
+const defaultUnknownGuidLimiter = new SlidingWindowRateLimiter()
 
 /**
  * A Barion PaymentId GUID (UUID) alakú — a Barion API-dokumentáció és a
@@ -77,8 +96,7 @@ export interface BarionCallbackHandlerDeps {
  * Kis- és nagybetűs hexet is elfogadunk (a Barion kisbetűset küld, de a
  * GUID-alak önmagában nem kis-nagybetű-érzékeny).
  */
-const PAYMENT_ID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PAYMENT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** Egy GUID pontosan ennyi karakter — a mintaillesztés előtti olcsó kapu. */
 export const MAX_PAYMENT_ID_LENGTH = 36
@@ -139,6 +157,7 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
 
 export function createBarionCallbackHandler(deps: BarionCallbackHandlerDeps) {
   const schedule = deps.schedule ?? ((task: () => Promise<void>) => after(task))
+  const unknownGuidLimiter = deps.unknownGuidLimiter ?? defaultUnknownGuidLimiter
 
   return async function POST(request: Request): Promise<Response> {
     const requestId = getRequestId(request.headers) ?? generateRequestId()
@@ -223,6 +242,38 @@ export function createBarionCallbackHandler(deps: BarionCallbackHandlerDeps) {
           schedule(runProcessing)
         }
         return jsonResponse({ ok: true, status: 'received' })
+      }
+
+      // W12: új GUID, nincs webhook-sor. Ha rendeléshez sem kötött, IP-keret
+      // — a véletlen GUID-zápor ne írjon sort. Ismert barionPaymentId korlátlan.
+      const knownOrder = await payload.find({
+        collection: 'orders',
+        where: { barionPaymentId: { equals: paymentId } },
+        limit: 1,
+        depth: 0,
+        overrideAccess: true,
+      })
+      if (knownOrder.totalDocs === 0) {
+        const ip = resolveRateLimitIp(request.headers)
+        const decision = unknownGuidLimiter.check(
+          `barion-callback:unknown:${ip}`,
+          UNKNOWN_BARION_CALLBACK_RULE,
+        )
+        if (!decision.allowed) {
+          eventLog.warn('barion-callback: ismeretlen GUID IP-keret kimerült', {
+            retryAfterSeconds: decision.retryAfterSeconds,
+          })
+          return Response.json(
+            {
+              ok: false,
+              error: 'Túl sok ismeretlen fizetésazonosító. Próbáld újra egy perc múlva.',
+            },
+            {
+              status: 429,
+              headers: { 'Retry-After': String(decision.retryAfterSeconds) },
+            },
+          )
+        }
       }
 
       try {

@@ -111,7 +111,11 @@ function createWebhookStore(initial: WebhookEventDoc[] = []) {
 
   const store: WebhookEventStore = {
     find: async ({ where, sort, limit }) => {
-      finds.push({ ...(where ? { where } : {}), ...(sort ? { sort } : {}), ...(limit ? { limit } : {}) })
+      finds.push({
+        ...(where ? { where } : {}),
+        ...(sort ? { sort } : {}),
+        ...(limit ? { limit } : {}),
+      })
       let matched = docs.filter((doc) => (where ? matches(doc, where) : true))
       if (sort === 'updatedAt') {
         matched = [...matched].sort(
@@ -204,10 +208,7 @@ describe('webhook-retry handler — scan-szűrő (K3 szerződés)', () => {
       and: [
         { status: { in: ['received', 'failed'] } },
         {
-          or: [
-            { attempts: { less_than: MAX_WEBHOOK_ATTEMPTS } },
-            { attempts: { exists: false } },
-          ],
+          or: [{ attempts: { less_than: MAX_WEBHOOK_ATTEMPTS } }, { attempts: { exists: false } }],
         },
       ],
     })
@@ -269,7 +270,11 @@ describe('webhook-retry handler — retry-kimenetelek', () => {
     const result = await runHandler(store)
 
     expect(result.output).toMatchObject({ retried: 1, succeeded: 0, failed: 1, exhausted: 0 })
-    expect(docs[0]).toMatchObject({ status: 'failed', attempts: 2, lastError: 'átmeneti provider-hiba' })
+    expect(docs[0]).toMatchObject({
+      status: 'failed',
+      attempts: 2,
+      lastError: 'átmeneti provider-hiba',
+    })
     const logs = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(logs).not.toContain('kimerültek')
   })
@@ -297,6 +302,27 @@ describe('webhook-retry handler — retry-kimenetelek', () => {
     const second = await runHandler(store)
     expect(second.output).toMatchObject({ scanned: 0, retried: 0, exhausted: 0 })
     expect(logSpy.mock.calls.map((call) => String(call[0])).join('\n')).not.toContain('kimerültek')
+  })
+
+  it('W13: pending_repoll kimerülés → failed + exhausted, NEM succeeded', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const event = createEvent({
+      status: 'received',
+      attempts: MAX_WEBHOOK_ATTEMPTS - 1,
+      result: 'pending_repoll',
+    })
+    const { store, docs } = createWebhookStore([event])
+    registerWebhookProcessor('barion', async () => ({ webhookNonTerminal: true }))
+
+    const result = await runHandler(store)
+
+    expect(result.output).toMatchObject({ retried: 1, succeeded: 0, failed: 1, exhausted: 1 })
+    expect(docs[0]).toMatchObject({
+      status: 'failed',
+      attempts: MAX_WEBHOOK_ATTEMPTS,
+    })
+    expect(String(docs[0]?.lastError)).toContain('pending_repoll')
+    expect(logSpy.mock.calls.map((call) => String(call[0])).join('\n')).toContain('kimerültek')
   })
 
   it('a backoffon belüli esemény kimarad (skipped), a processor nem fut', async () => {
@@ -328,11 +354,12 @@ describe('webhook-retry handler — M6 terminális rejected ág (valódi Barion-
     const event = createEvent({ externalId: PAYMENT_ID, attempts: 1 })
     const { store, docs } = createWebhookStore([event])
     // A VALÓDI Barion callback-processzor fut — a fetch egy előkészített 404.
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ Errors: [] }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      }),
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ Errors: [] }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }),
     )
     vi.stubGlobal('fetch', fetchMock)
     registerWebhookProcessor(

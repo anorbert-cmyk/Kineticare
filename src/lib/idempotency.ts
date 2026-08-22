@@ -53,9 +53,7 @@ export function isNonTerminalWebhookResult(result: string | null | undefined): b
  * duplikátumként eldobni. (A `processed` + nem terminális eredmény kombináció a
  * B4 előtti kódból maradt sorokon fordulhat elő — azok is újrafeldolgozhatók.)
  */
-export function isTerminallyProcessed(
-  event: Pick<WebhookEventDoc, 'status' | 'result'>,
-): boolean {
+export function isTerminallyProcessed(event: Pick<WebhookEventDoc, 'status' | 'result'>): boolean {
   return event.status === 'processed' && !isNonTerminalWebhookResult(event.result)
 }
 
@@ -217,6 +215,27 @@ async function attemptProcessing(
     // marad, tehát a Barion következő — ugyanarra a PaymentId-re érkező —
     // callbackje és a webhook-retry job is újra feldolgozza (B4).
     const nonTerminal = isNonTerminalHandlerOutcome(result)
+    if (nonTerminal && attempts >= MAX_WEBHOOK_ATTEMPTS) {
+      // W13: a pending_repoll kimerülése NEM lehet néma siker. A scan-szűrő
+      // (attempts < MAX) innentől kihagyja a sort; ha received-en maradna,
+      // az owner soha nem látná failed-ként, a retry-job pedig succeeded-nek
+      // számolná. Terminális failed + retryable:false → a kimerülés-riasztás lefut.
+      const message =
+        'pending_repoll kimerült — a fizetés MAX kísérlet után sem dőlt el, owner ellenőrzés kell'
+      await store.update({
+        collection: 'webhook-events',
+        id: record.id,
+        data: { status: 'failed', attempts, lastError: message },
+        overrideAccess: true,
+      })
+      return {
+        kind: 'failed',
+        eventId: record.id,
+        attempts,
+        retryable: false,
+        error: message,
+      }
+    }
     await store.update({
       collection: 'webhook-events',
       id: record.id,

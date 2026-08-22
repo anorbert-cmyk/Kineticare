@@ -1,7 +1,7 @@
 import type { Payload } from 'payload'
 
 import { ORDER_MAINTENANCE_QUEUE } from '../../jobs/queues'
-import type { Logger } from '../logger'
+import { logger as rootLogger, type Logger } from '../logger'
 
 /**
  * A Számlázz.hu-jobok sorba állítása (C4/C5).
@@ -35,6 +35,13 @@ async function queueOrderMaintenanceTask(
     // taskokat — a runtime jobs.queue létezik, ezért strukturálisan castolunk.
     const jobs = (payload as unknown as { jobs?: JobsQueueLike }).jobs
     if (typeof jobs?.queue !== 'function') {
+      const alertLog = log ?? rootLogger
+      alertLog.error(
+        'RIASZTÁS: a Payload job-sor nem érhető el (payload.jobs.queue hiányzik) — a ' +
+          `${task} task NEM állt sorba, a bizonylat elmaradhat. Ellenőrizd a Payload ` +
+          'jobs-konfigurációt és az order-maintenance queue-t.',
+        { task, ...input },
+      )
       return false
     }
     await jobs.queue({ task, input, queue: ORDER_MAINTENANCE_QUEUE })

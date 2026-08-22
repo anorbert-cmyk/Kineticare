@@ -63,6 +63,15 @@ export const stornoIssueTask: TaskConfig<StornoIssueJobIO> = {
     }
 
     const result = await issueStornoForOrder(order, { payload: req.payload })
+    if (result.outcome === 'failed' && result.reason?.includes('bizonytalan')) {
+      // W5: a job a F3 ágon no-opol (vak POST tilos). A Payload-job ettől
+      // még „sikerrel” zárulna — ez zsákutca, hangos owner-jelzés kell.
+      logger.error(
+        'RIASZTÁS: storno-issue job zsákutca — a stornó állapota bizonytalan, ' +
+          'automatikus újraküldés nincs. Ellenőrizd a Számlázz.hu-fiókot.',
+        { orderId, reason: result.reason },
+      )
+    }
     return {
       output: {
         outcome: result.outcome,

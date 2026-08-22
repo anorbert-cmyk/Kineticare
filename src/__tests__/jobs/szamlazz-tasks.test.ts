@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { correctiveInvoiceIssueTask } from '../../jobs/tasks/corrective-invoice-issue'
 import { stornoIssueTask } from '../../jobs/tasks/storno-issue'
+import * as szamlazz from '../../lib/szamlazz'
 import type { Order } from '../../payload-types'
 
 /**
@@ -100,6 +101,28 @@ describe('storno-issue task', () => {
       expect(result.output).toEqual({ outcome: 'failed', reason: 'a rendelés nem található' })
     } finally {
       restore()
+    }
+  })
+
+  it('W5: bizonytalan stornó → failed kimenet + error RIASZTÁS', async () => {
+    const restore = withAgentKey()
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      vi.spyOn(szamlazz, 'issueStornoForOrder').mockResolvedValueOnce({
+        outcome: 'failed',
+        reason: 'a stornó állapota bizonytalan — vak POST tilos',
+      })
+      const order = { id: 555, orderNumber: 'KH-2026-000777' } as unknown as Order
+      const { req } = reqWith(order)
+      const result = await runTask(stornoIssueTask, { req, input: { orderId: 555 } })
+      expect(result.output).toMatchObject({
+        outcome: 'failed',
+        reason: expect.stringContaining('bizonytalan'),
+      })
+      expect(logSpy.mock.calls.map((call) => String(call[0])).join('\n')).toContain('RIASZTÁS')
+    } finally {
+      restore()
+      logSpy.mockRestore()
     }
   })
 })
