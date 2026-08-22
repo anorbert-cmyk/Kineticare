@@ -85,10 +85,11 @@ export interface ResetPasswordHandlerDeps {
 export const RESET_MISSING_INPUT_MESSAGE =
   'Hiányzó adat: a jelszó-visszaállító link és az új jelszó is szükséges.'
 
-export const RESET_INVALID_BODY_MESSAGE = 'Érvénytelen kérés: a küldött adat nem értelmezhető.'
+export const RESET_INVALID_BODY_MESSAGE =
+  'A jelszó módosítása nem indítható: a küldött adat nem értelmezhető. Frissítsd az oldalt, és próbáld újra.'
 
 export const RESET_UNEXPECTED_ERROR_MESSAGE =
-  'Váratlan hiba történt a jelszó módosítása közben. Kérjük, próbáld újra később.'
+  'A jelszó módosítása most nem sikerült. Próbáld újra néhány perc múlva.'
 
 interface ResetPasswordRequestBody {
   token?: unknown

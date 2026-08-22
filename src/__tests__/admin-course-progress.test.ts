@@ -486,7 +486,13 @@ describe('GET /api/admin/course-progress — jogosultság és validálás', () =
     const body = (await response.json()) as { error: string }
 
     expect(response.status).toBe(400)
-    expect(body.error).toContain('kurzus-azonosító')
+    // A SZÁNDÉKOT mérjük, nem a megfogalmazást: az üzenet mondja meg, MELYIK
+    // adat hiányzik, és mondja meg a teendőt (docs/ui-sztenderdek.md §2.7).
+    // A korábbi `toContain('kurzus-azonosító')` a kötőjeles alakra kötötte a
+    // tesztet, ezért egy jogos átfogalmazás elbuktatta.
+    expect(body.error).toContain('azonosító')
+    expect(body.error).toContain('kurzus')
+    expect(body.error).toMatch(/Nyisd|Frissítsd|próbáld/i)
   })
 
   it('400 nem szám vagy nem pozitív productId esetén', async () => {
@@ -519,7 +525,8 @@ describe('GET /api/admin/course-progress — jogosultság és validálás', () =
     const body = (await response.json()) as { error: string }
 
     expect(response.status).toBe(500)
-    expect(body.error).toContain('Váratlan hiba')
+    // §2.7: a hibaüzenet a helyzetet és a teendőt mondja (nem „Váratlan hiba…").
+    expect(body.error).toContain('A kurzus-haladás most nem kérdezhető le')
   })
 })
 

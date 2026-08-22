@@ -31,7 +31,13 @@ import { refundBlockedReason, refundConfirmQuestion, validateRefundAmount } from
 
 const REQUEST_TIMEOUT_MS = 30_000
 
-const GENERIC_ERROR = 'A visszatérítés most nem sikerült. Kérjük, próbáld újra később.'
+/**
+ * A magyar mikroszöveg-szabályzat (`docs/ui-sztenderdek.md` §2.7, A/9) szerint
+ * a hibaüzenet TEGEZ és megmondja a következő lépést: a korábbi „Kérjük,
+ * próbáld újra később" udvariaskodott (GOV.UK: a „please" választást sugall
+ * ott, ahol nincs választás), és a „később"-től nem lett okosabb az olvasó.
+ */
+const GENERIC_ERROR = 'A visszatérítés most nem sikerült. Próbáld újra néhány perc múlva.'
 const NETWORK_ERROR = 'Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot, és próbáld újra.'
 
 interface OrderSummary {

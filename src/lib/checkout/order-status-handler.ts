@@ -124,7 +124,7 @@ export function createOrderStatusHandler(
         error: error instanceof Error ? error.message : String(error),
       })
       return NextResponse.json(
-        { error: 'Váratlan hiba történt. Kérjük, próbáld újra később.' },
+        { error: 'A rendelés állapota most nem kérdezhető le. Frissítsd az oldalt néhány perc múlva.' },
         { status: 500 },
       )
     }

@@ -1,0 +1,370 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { describe, expect, it } from 'vitest'
+
+/**
+ * G-UI7 — TILTOTT HIBASZAVAK ŐRE (`docs/ui-sztenderdek.md` §2.7, §6.3, A/9).
+ *
+ * MIT VÉD. A §2.7 a GOV.UK hibaüzenet-szabályait ülteti át magyarra: a
+ * hibaüzenet mondja meg, MI történt és HOGYAN javítható, és tiltja a
+ * „please" (magyarul: „Kérjük"), a „sorry" („Sajnos"), a „valid/invalid"
+ * („Érvénytelen") és a humoros („oops" → „Hopp") fordulatokat, valamint a
+ * nyers hibakódot. Indoklás a doksiból, forrással:
+ *  - GOV.UK Design System, Error messages: a „please" választást sugall ott,
+ *    ahol nincs választás; a „sorry" nem segít; a „valid/invalid" nem mondja
+ *    meg, mi a baj (§2.7, 428–431. sor).
+ *  - Baymard Institute, adaptív hibaüzenet: a szöveg a KONKRÉT megsértett
+ *    szabályt mondja meg („This email is invalid" helyett „…is missing part of
+ *    the domain") — a §2.7 magyar minta-táblázata ezt fordítja le.
+ *  - WCAG 2.2 SC 3.3.1 (Error Identification) és SC 3.3.3 (Error Suggestion).
+ *
+ * MIÉRT VÉGREHAJTHATÓ ŐR. A szabály 2026-08-16 óta le van írva, mégis 29
+ * helyen élt a „Kérjük" és 11 helyen az „Érvénytelen" (A/9 megállapítás). Egy
+ * doksi-sor nem tartja meg magát: egyetlen új hibaüzenet visszahozza a
+ * mintát anélkül, hogy bárki észrevenné.
+ *
+ * ═══ HOGYAN DÖNTI EL, MI SZÁMÍT ÜZENETNEK ═══
+ *
+ * A szabály a FELHASZNÁLÓNAK SZÓLÓ szövegre vonatkozik, NEM a kódot magyarázó
+ * kommentekre: egy komment jogosan IDÉZI a tiltott szót (pl. a
+ * `cta-vocabulary.ts:434` épp azt köti ki, hogy az E/1-es „kérem" ige NEM a
+ * tiltott „Kérjük"). Ezért az őr a forrást előbb MASZKOLJA: a soros (`//`), a
+ * blokk- és a JSX-blokk-kommentek minden karaktere szóközre cserélődik, a
+ * sortörések helyben maradnak (így a sorszám pontos).
+ * A maszkolás karakterszintű állapotgéppel megy, amely a string- és
+ * sablonliterálokat is követi — így egy szövegben álló `//` (pl. URL) nem
+ * hallgattat el egy sort, egy több soros sablonliterál pedig nem téveszti meg.
+ * Ami a maszkolás után marad, az KÓD: string-literál, sablonliterál és JSX-ben
+ * álló nyers szöveg — a látogatói mondatok mindhárom alakban előfordulnak.
+ *
+ * ═══ A SZABÁLYOK ÉS A HATÁRAIK (szándékos, dokumentált döntések) ═══
+ *
+ *  - `kérjük` / `sajnos` / `hopp`: KISBETŰS ALAKBAN IS tiltott, kivétel
+ *    nélkül. Ezeknek a szavaknak nincs jó felületi használatuk; az A/9 maga is
+ *    nevesít kisbetűs találatot (`refund/route-handler.ts:49,55`). Az E/1-es
+ *    „kérem" ige (a §3.2 #21 és a `FREE_COURSE_SUBMIT_LABEL` feliratában) MÁS
+ *    SZÓ, ezért a minta nem fogja meg — a szóhatár miatt a „kérjük" toldalékolt
+ *    alakja igen, a „kérem"/„kérhetsz" viszont nem.
+ *  - `Érvénytelen`: az őr a NAGYBETŰS, CÍMKÉZŐ alakot tiltja — pontosan azt,
+ *    ahogy a §2.7 tiltólistája írja („Érvénytelen"), és ahogy a hibás minta a
+ *    gyakorlatban megjelenik: a mondat elején, az adatra ütött címkeként
+ *    („Érvénytelen kérés…", „Érvénytelen ár…"). A kisbetűs, LEÍRÓ alakokat
+ *    („a régi link érvénytelenné válik", „lejárt vagy érvénytelen. Kérj újat.")
+ *    SZÁNDÉKOSAN nem bántja: azok nem címkéznek, hanem tényt közölnek, és a
+ *    GOV.UK antimintája a címkézés, nem maga a szó. ISMERT HATÁR: egy jövőbeli
+ *    „A cím érvénytelen." alakú üzenet így átcsúszna — ez tudatosan vállalt ár
+ *    azért, hogy az őr ne termeljen hamis riasztást a helyes mondatokra.
+ *  - `hibakód`: a §2.7 tiltja a nyers hibakódot a látogatói üzenetben. A
+ *    hibaoldalak külön őre (`hibaoldal.test.ts`) a RENDERELT szöveget méri;
+ *    ez itt a forrás-oldali párja.
+ *
+ * KIVÉTEL-LISTA NINCS, és nem is kell: a repó minden jogos előfordulása
+ * kommentben áll, amit a maszkolás már kiszűr. Ha valaha kivétel kell, az
+ * legyen egy NEVESÍTETT fájl+sor pár, indoklással — soha nem könyvtár-glob.
+ */
+
+const REPO = fileURLToPath(new URL('..', import.meta.url))
+
+/** A bejárt forrásfák (a `src/` alatt) — itt élnek a felhasználói szövegek. */
+const FAK = ['lib', 'components', 'app', 'collections'] as const
+
+/**
+ * A fákon kívüli, NEVESÍTETT extra fájl: a Payload-konfiguráció hookjai
+ * nyilvános űrlap-hibaüzeneteket dobnak (spam-ellenőrzés), tehát ugyanaz a
+ * szabály vonatkozik rájuk.
+ */
+const EXTRA_FAJLOK = ['payload.config.ts'] as const
+
+const KITERJESZTESEK = ['.ts', '.tsx'] as const
+
+interface Szabaly {
+  /** A szabály neve a bukás-üzenetben. */
+  readonly nev: string
+  /** A tiltott alak. A `g` kapcsoló kötelező (az őr minden találatot felsorol). */
+  readonly minta: RegExp
+  /** Mit kell helyette írni — ez megy a bukás-üzenetbe. */
+  readonly helyette: string
+}
+
+/**
+ * A szóhatár magyar betűkre is helyes: a `\b` az ékezetes betűt HATÁRNAK
+ * látná (pl. „érvénytelenné" → találat), ezért Unicode-betű-lookaround kell.
+ */
+const SZO_ELOTT = '(?<!\\p{L})'
+const SZO_UTAN = '(?!\\p{L})'
+
+const SZABALYOK: readonly Szabaly[] = [
+  {
+    nev: 'Kérjük',
+    minta: new RegExp(`${SZO_ELOTT}kérjük${SZO_UTAN}`, 'giu'),
+    helyette:
+      'mondd meg tegezve, MIT tegyen a látogató („Próbáld újra néhány perc múlva.", ' +
+      '„Frissítsd az oldalt, és próbáld újra.") — a „Kérjük" választást sugall ott, ahol nincs választás',
+  },
+  {
+    nev: 'Sajnos',
+    minta: new RegExp(`${SZO_ELOTT}sajnos${SZO_UTAN}`, 'giu'),
+    helyette:
+      'hagyd el a sajnálkozást, és írd le, mi történt és mi a következő lépés (GOV.UK: a „sorry" nem segít)',
+  },
+  {
+    nev: 'Hopp',
+    minta: new RegExp(`${SZO_ELOTT}hoppá?${SZO_UTAN}`, 'giu'),
+    helyette: 'a hiba nem vicc: nevezd meg a helyzetet és a teendőt, humor nélkül',
+  },
+  {
+    nev: 'Érvénytelen',
+    minta: new RegExp(`${SZO_ELOTT}Érvénytelen${SZO_UTAN}`, 'gu'),
+    helyette:
+      'mondd meg, MELYIK adat hiányzik vagy rossz, és hogyan javítható ' +
+      '(„A kurzus azonosítója hiányzik vagy nem értelmezhető. Nyisd meg újra a kurzus oldalát.")',
+  },
+  {
+    nev: 'hibakód',
+    minta: /hibakód/giu,
+    helyette: 'a látogatónak a hibakód semmit nem mond: írd le a helyzetet és a teendőt',
+  },
+]
+
+/** A maszkolás állapotai — a string- és sablonliterálok a KÓD részei maradnak. */
+type Allapot = 'kod' | 'soros-komment' | 'blokk-komment' | 'aposztrof' | 'idezojel' | 'sablon'
+
+/**
+ * A kommentek kiszóközölése. A sortörések helyben maradnak, tehát a maszkolt
+ * szöveg indexei a nyers forráséval egyeznek — a sorszám pontosan visszafejthető.
+ */
+export function kommentekNelkul(forras: string): string {
+  const ki: string[] = []
+  let allapot: Allapot = 'kod'
+  let i = 0
+  const push = (karakter: string, komment: boolean): void => {
+    ki.push(komment && karakter !== '\n' ? ' ' : karakter)
+  }
+  while (i < forras.length) {
+    const c = forras[i]
+    const kovetkezo = forras[i + 1]
+    switch (allapot) {
+      case 'kod':
+        if (c === '/' && kovetkezo === '/') {
+          allapot = 'soros-komment'
+          push(' ', true)
+          push(' ', true)
+          i += 2
+          continue
+        }
+        if (c === '/' && kovetkezo === '*') {
+          allapot = 'blokk-komment'
+          push(' ', true)
+          push(' ', true)
+          i += 2
+          continue
+        }
+        if (c === "'") allapot = 'aposztrof'
+        else if (c === '"') allapot = 'idezojel'
+        else if (c === '`') allapot = 'sablon'
+        push(c, false)
+        i += 1
+        continue
+      case 'soros-komment':
+        if (c === '\n') allapot = 'kod'
+        push(c, true)
+        i += 1
+        continue
+      case 'blokk-komment':
+        if (c === '*' && kovetkezo === '/') {
+          allapot = 'kod'
+          push(' ', true)
+          push(' ', true)
+          i += 2
+          continue
+        }
+        push(c, true)
+        i += 1
+        continue
+      default: {
+        // Stringen/sablonon belül: az escape-elt karakter átugorva, hogy a
+        // `\'` ne zárja le a literált.
+        if (c === '\\') {
+          push(c, false)
+          if (kovetkezo !== undefined) push(kovetkezo, false)
+          i += 2
+          continue
+        }
+        const zaro = allapot === 'aposztrof' ? "'" : allapot === 'idezojel' ? '"' : '`'
+        if (c === zaro) allapot = 'kod'
+        // A soron belül le nem zárt aposztróf/idézőjel (pl. JSX-szövegben álló
+        // írásjel) nem ragadhat be: a sortörés visszaadja a kód-állapotot.
+        else if (c === '\n' && allapot !== 'sablon') allapot = 'kod'
+        push(c, false)
+        i += 1
+        continue
+      }
+    }
+  }
+  return ki.join('')
+}
+
+export interface Talalat {
+  readonly sor: number
+  readonly szabaly: Szabaly
+  readonly reszlet: string
+}
+
+/** Egy forrásfájl tiltott találatai (kommentek nélkül, sorszámmal). */
+export function tiltottTalalatok(forras: string): Talalat[] {
+  const maszkolt = kommentekNelkul(forras)
+  const talalatok: Talalat[] = []
+  for (const szabaly of SZABALYOK) {
+    const minta = new RegExp(szabaly.minta.source, szabaly.minta.flags)
+    let egyezes = minta.exec(maszkolt)
+    while (egyezes !== null) {
+      const elotte = maszkolt.slice(0, egyezes.index)
+      const sor = elotte.split('\n').length
+      const sorKezdet = elotte.lastIndexOf('\n') + 1
+      const sorVege = maszkolt.indexOf('\n', egyezes.index)
+      talalatok.push({
+        sor,
+        szabaly,
+        reszlet: forras
+          .slice(sorKezdet, sorVege === -1 ? forras.length : sorVege)
+          .trim()
+          .slice(0, 120),
+      })
+      egyezes = minta.exec(maszkolt)
+    }
+  }
+  return talalatok.sort((a, b) => a.sor - b.sor)
+}
+
+function fajlokat(gyoker: string): string[] {
+  const talalat: string[] = []
+  const bejar = (konyvtar: string): void => {
+    for (const bejegyzes of readdirSync(konyvtar)) {
+      const teljes = join(konyvtar, bejegyzes)
+      if (statSync(teljes).isDirectory()) {
+        bejar(teljes)
+        continue
+      }
+      if (bejegyzes.endsWith('.d.ts') || /\.test\.tsx?$/.test(bejegyzes)) continue
+      if (KITERJESZTESEK.some((veg) => bejegyzes.endsWith(veg))) talalat.push(teljes)
+    }
+  }
+  bejar(join(REPO, gyoker))
+  return talalat
+}
+
+const FAJLOK = [
+  ...FAK.flatMap((fa) => fajlokat(fa)),
+  ...EXTRA_FAJLOK.map((fajl) => join(REPO, fajl)),
+]
+  .map((teljes) => teljes.slice(REPO.length))
+  .sort()
+
+const FORRASOK = new Map<string, string>(
+  FAJLOK.map((ut) => [ut, readFileSync(join(REPO, ut), 'utf8')]),
+)
+
+describe('G-UI7 — a bejáró tényleg végigméri a felületet', () => {
+  it('mind a négy forrásfa és a nevesített extra fájl benne van a mérésben', () => {
+    for (const fa of FAK) {
+      expect(
+        FAJLOK.some((ut) => ut.startsWith(`${fa}/`)),
+        `a(z) "${fa}" fa egyetlen fájlt sem adott — a bejáró elromlott`,
+      ).toBe(true)
+    }
+    for (const fajl of EXTRA_FAJLOK) {
+      expect(FAJLOK).toContain(fajl)
+    }
+    // Nagyságrendi kapu: ha a bejárás összeomlana, ez azonnal kiderül.
+    expect(FAJLOK.length).toBeGreaterThan(200)
+  })
+
+  it('a maszkolás NEM nyeli el a látogatói szöveget (string, sablon és JSX-szöveg is marad)', () => {
+    const mintak: ReadonlyArray<readonly [string, string]> = [
+      ['lib/checkout/route-handler.ts', 'A fizetés indítása most nem sikerült.'],
+      ['app/(frontend)/kapcsolat/_components/ContactForm.tsx', 'Az űrlap most nem érhető el.'],
+      ['lib/email/templates/layout.ts', 'automatikus üzenet'],
+    ]
+    for (const [ut, mondat] of mintak) {
+      const forras = FORRASOK.get(ut)
+      expect(forras, `hiányzó mérési minta: ${ut}`).toBeDefined()
+      expect(
+        kommentekNelkul(forras as string).includes(mondat),
+        `a maszkolás elnyelte a(z) "${mondat}" mondatot itt: ${ut}`,
+      ).toBe(true)
+    }
+  })
+})
+
+describe('G-UI7 — az őr harap (önteszt a szabályokon)', () => {
+  const nevek = (forras: string): string[] =>
+    tiltottTalalatok(forras).map((talalat) => talalat.szabaly.nev)
+
+  it('string-literálban álló tiltott szót MEGFOG', () => {
+    expect(nevek("const HIBA = 'Váratlan hiba. Kérjük, próbáld újra később.'")).toEqual(['Kérjük'])
+    expect(nevek("const HIBA = 'Sajnos nem sikerült.'")).toEqual(['Sajnos'])
+    expect(nevek("const HIBA = 'Hopp, valami elromlott.'")).toEqual(['Hopp'])
+    expect(nevek("const HIBA = 'Érvénytelen kérés.'")).toEqual(['Érvénytelen'])
+    expect(nevek("const HIBA = 'A hibakód: 500.'")).toEqual(['hibakód'])
+  })
+
+  it('JSX-ben álló nyers szöveget és sablonliterált is MEGFOG', () => {
+    expect(nevek('<p>Az űrlap nem érhető el. Kérjük, próbáld később.</p>')).toEqual(['Kérjük'])
+    expect(nevek('const x = `Ez ${nev} üzenete, kérjük, ne válaszolj rá.`')).toEqual(['Kérjük'])
+  })
+
+  it('a KOMMENTBEN idézett tiltott szót NEM fogja meg (soros, blokk és JSX-komment)', () => {
+    expect(nevek('// FIGYELEM: ez az E/1-es „kérem", NEM a tiltott „Kérjük".')).toEqual([])
+    expect(nevek('/**\n * A korábbi „Kérjük, próbáld újra később" helyett.\n * Érvénytelen/hiányzó érték → null.\n */')).toEqual(
+      [],
+    )
+    expect(nevek('{/* a GOV.UK minta tiltja a hibakódot („500") */}')).toEqual([])
+    expect(nevek("const HIBA = 'Próbáld újra.' // korábban: 'Kérjük, próbáld újra.'")).toEqual([])
+  })
+
+  it('a JOGOS alakokat NEM fogja meg (E/1 „kérem", leíró „érvénytelenné", „shopping")', () => {
+    expect(nevek("const CTA = 'Kérem a visszaállító linket'")).toEqual([])
+    expect(nevek("const T = 'Ilyenkor a régi link érvénytelenné válik.'")).toEqual([])
+    expect(nevek("const T = 'A jelszó-visszaállító link lejárt vagy érvénytelen. Kérj újat.'")).toEqual(
+      [],
+    )
+    expect(nevek("const T = 'shopping'")).toEqual([])
+  })
+
+  it('a szóhatár toldalékkal is működik (a „Kérjük"-öt nem lehet ragozással kicselezni)', () => {
+    expect(nevek("const HIBA = 'Kérjük!'")).toEqual(['Kérjük'])
+    expect(nevek("const HIBA = 'kérjük, várj'")).toEqual(['Kérjük'])
+  })
+
+  it('a több soros sablonliterálban álló `//` NEM hallgattat el egy sort', () => {
+    const forras = ['const x = `', '  https://pelda.hu', '  Kérjük, próbáld újra.', '`'].join('\n')
+    const talalatok = tiltottTalalatok(forras)
+    expect(talalatok).toHaveLength(1)
+    expect(talalatok[0].sor).toBe(3)
+  })
+})
+
+describe('G-UI7 — a felületi szövegekben nincs tiltott hibaszó (§2.7)', () => {
+  it('egyetlen látogatói szöveg sem tartalmaz „Kérjük"/„Sajnos"/„Érvénytelen"/„Hopp"/hibakódot', () => {
+    const jelentes: string[] = []
+    for (const [ut, forras] of FORRASOK) {
+      for (const talalat of tiltottTalalatok(forras)) {
+        jelentes.push(
+          `${ut}:${talalat.sor} — „${talalat.szabaly.nev}"\n` +
+            `      ott: ${talalat.reszlet}\n` +
+            `      helyette: ${talalat.szabaly.helyette}`,
+        )
+      }
+    }
+    expect(
+      jelentes,
+      jelentes.length === 0
+        ? ''
+        : 'docs/ui-sztenderdek.md §2.7 (G-UI7, A/9): a hibaüzenet mondja meg, MI történt és ' +
+          'MIT tegyen a látogató, tegezve. Tiltott szavak a felületi szövegben:\n' +
+          jelentes.join('\n'),
+    ).toEqual([])
+  })
+})

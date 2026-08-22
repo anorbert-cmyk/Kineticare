@@ -247,7 +247,7 @@ export function createCourseProgressHandler(
       const productId = parseProductId(new URL(request.url).searchParams.get('productId'))
       if (productId === null) {
         return Response.json(
-          { error: 'Hiányzó vagy érvénytelen kurzus-azonosító.' },
+          { error: 'A kurzus azonosítója hiányzik vagy nem értelmezhető. Nyisd meg újra a kurzus lapját.' },
           { status: 400 },
         )
       }
@@ -427,7 +427,7 @@ export function createCourseProgressHandler(
       return Response.json(
         {
           error:
-            'Váratlan hiba történt a kurzus-haladás lekérdezése közben. Kérjük, próbáld újra később.',
+            'A kurzus-haladás most nem kérdezhető le. Próbáld újra néhány perc múlva.',
         },
         { status: 500 },
       )

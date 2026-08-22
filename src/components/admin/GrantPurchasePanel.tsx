@@ -24,9 +24,11 @@ import { hasStaffOrOwnerRole } from '../../access/roles'
 
 const REQUEST_TIMEOUT_MS = 20_000
 
-const GENERIC_ERROR = 'A hozzáférés megadása most nem sikerült. Kérjük, próbáld újra később.'
+/** §2.7 / A/9: „Kérjük" nélkül, a következő lépés kimondva (lásd RefundPanel). */
+const GENERIC_ERROR = 'A hozzáférés megadása most nem sikerült. Próbáld újra néhány perc múlva.'
 const NETWORK_ERROR = 'Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot, és próbáld újra.'
-const PRODUCTS_ERROR = 'A kurzusok listája nem tölthető be. Kérjük, próbáld újra.'
+const PRODUCTS_ERROR =
+  'A kurzusok listája nem tölthető be. Frissítsd az oldalt, és nyisd meg újra a panelt.'
 
 interface ProductOption {
   value: string

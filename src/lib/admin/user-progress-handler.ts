@@ -248,7 +248,7 @@ export function createUserProgressHandler(
       )
       if (userIds.length === 0) {
         return Response.json(
-          { error: 'Hiányzó vagy érvénytelen felhasználó-azonosító.' },
+          { error: 'A felhasználó azonosítója hiányzik vagy nem értelmezhető. Frissítsd a listát.' },
           { status: 400 },
         )
       }
@@ -408,7 +408,7 @@ export function createUserProgressHandler(
       return Response.json(
         {
           error:
-            'Váratlan hiba történt a kurzus-haladás lekérdezése közben. Kérjük, próbáld újra később.',
+            'A kurzus-haladás most nem kérdezhető le. Próbáld újra néhány perc múlva.',
         },
         { status: 500 },
       )

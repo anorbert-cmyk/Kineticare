@@ -584,7 +584,7 @@ async function resolveBarionTransactionId(
     })
     throw new RefundError(
       502,
-      'A Barion fizetésállapot nem tartalmaz visszatéríthető tranzakciót. Kérjük, próbáld újra később.',
+      'A Barion oldalán most nincs visszatéríthető tranzakció ehhez a rendeléshez. Ellenőrizd a fizetést a Barionban, és ha ott rendben van, próbáld újra néhány perc múlva.',
     )
   }
   return refundable.TransactionId

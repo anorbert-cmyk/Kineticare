@@ -93,7 +93,10 @@ const verifyTurnstile = async (data: unknown): Promise<unknown> => {
       ? (data as Record<string, unknown>).turnstileToken
       : undefined
   if (typeof token !== 'string' || token.length === 0) {
-    throw new APIError('A spam-ellenőrzés (Turnstile) token hiányzik.', 400)
+    throw new APIError(
+      'A spam-ellenőrzés nem futott le. Frissítsd az oldalt, és küldd el újra az űrlapot.',
+      400,
+    )
   }
   const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
     method: 'POST',
@@ -103,7 +106,10 @@ const verifyTurnstile = async (data: unknown): Promise<unknown> => {
   })
   const result = (await response.json().catch(() => ({}))) as { success?: boolean }
   if (!result.success) {
-    throw new APIError('A spam-ellenőrzés (Turnstile) sikertelen. Kérjük, próbáld újra.', 400)
+    throw new APIError(
+      'A spam-ellenőrzés nem sikerült. Frissítsd az oldalt, és küldd el újra az űrlapot.',
+      400,
+    )
   }
   return data
 }

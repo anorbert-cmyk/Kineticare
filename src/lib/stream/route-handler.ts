@@ -98,7 +98,7 @@ export function createStreamTokenHandler(
       return NextResponse.json(
         {
           error:
-            'Váratlan hiba történt a videó lejátszási token kiállítása közben. Kérjük, próbáld újra később.',
+            'A videó most nem indítható el. Frissítsd az oldalt, és próbáld újra néhány perc múlva.',
         },
         { status: 500 },
       )

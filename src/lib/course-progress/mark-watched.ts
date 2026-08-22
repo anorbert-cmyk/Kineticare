@@ -56,7 +56,7 @@ export const UNKNOWN_VIDEO_MESSAGE = 'A megjelölni kívánt videó nem ehhez a 
 
 /** 400 — hiányzó vagy hibás típusú mező a kérés törzsében. */
 export const INVALID_BODY_MESSAGE =
-  'Érvénytelen kérés: a kurzus és a videó azonosítója is kötelező.'
+  'A megjelöléshez a kurzus és a videó azonosítója is kell. Frissítsd az oldalt, és próbáld újra.'
 
 export interface MarkWatchedServiceInput {
   payload: Payload

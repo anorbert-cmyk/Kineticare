@@ -123,7 +123,8 @@ describe('submitContactForm (mockolt API)', () => {
   })
 
   it('szerverhiba-ág: a Payload magyar hibaüzenetét továbbítja (pl. Turnstile 400)', async () => {
-    const turnstileMessage = 'A spam-ellenőrzés (Turnstile) sikertelen. Kérjük, próbáld újra.'
+    const turnstileMessage =
+      'A spam-ellenőrzés nem sikerült. Frissítsd az oldalt, és küldd el újra az űrlapot.'
     const mockFetch = async () =>
       new Response(JSON.stringify({ errors: [{ message: turnstileMessage }] }), { status: 400 })
 

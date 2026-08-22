@@ -401,7 +401,11 @@ describe('GET /api/admin/user-progress — jogosultság és validálás', () => 
       const body = (await response.json()) as { error: string }
 
       expect(response.status).toBe(400)
-      expect(body.error).toContain('felhasználó-azonosító')
+      // A SZÁNDÉKOT mérjük, nem a megfogalmazást (lásd a párját az
+      // admin-course-progress.test.ts-ben): melyik adat hiányzik, és mi a teendő.
+      expect(body.error).toContain('azonosító')
+      expect(body.error).toContain('felhasználó')
+      expect(body.error).toMatch(/Nyisd|Frissítsd|próbáld/i)
     }
   })
 
@@ -437,7 +441,8 @@ describe('GET /api/admin/user-progress — jogosultság és validálás', () => 
     const body = (await response.json()) as { error: string }
 
     expect(response.status).toBe(500)
-    expect(body.error).toContain('Váratlan hiba')
+    // §2.7: a hibaüzenet a helyzetet és a teendőt mondja (nem „Váratlan hiba…").
+    expect(body.error).toContain('A kurzus-haladás most nem kérdezhető le')
   })
 })
 

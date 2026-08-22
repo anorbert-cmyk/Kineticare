@@ -23,7 +23,7 @@ export type MarkWatchedResult =
   | { kind: 'error'; message: string }
 
 export const GENERIC_MARK_WATCHED_ERROR =
-  'A megjelölés most nem sikerült. Kérjük, próbáld újra néhány perc múlva.'
+  'A megjelölés most nem sikerült. Próbáld újra néhány perc múlva.'
 
 export const FORBIDDEN_MARK_WATCHED_ERROR =
   'A haladás rögzítéséhez érvényes hozzáférés szükséges ehhez a kurzushoz.'
