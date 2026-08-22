@@ -233,3 +233,29 @@ Emberi jóváhagyás után, külön PR-ben:
 4. A következő javító kör a 6. szakasz sorrendjét viszi, Sol orkesztrátorral
    és Grok 4.6 thinking csapattal.
 5. A `feat/kurzusoldal-velemenyek` továbbra sem mergelendő.
+
+---
+
+## 9. Lezárás — hol zárult le melyik találat (2026-08-22, második kör)
+
+A 0–8. szakasz a vizsgálat pillanatképe (`f1dce1d`). Ez a szakasz a kimenetel.
+
+### 9.1 Első hullám — PR #143
+
+K1, K3, K6, W1, W2, W5, W6, W8, W9, W11, W12, W13, W15, W16, W19, W20.
+A #144 ág ezeket a commitokat magában foglalja.
+
+### 9.2 Második hullám — PR #144 (tilos zóna nélkül)
+
+| # | Hol | Mi lett |
+| --- | --- | --- |
+| K4-min | `szamlazz/corrective.ts` | A `queryByKulsoAzon` a POST előtt mindig fut. Maradék seq=1-es job seq=2 után nem küld vakon. Séma nincs. |
+| W7 | `szamlazz/invoice.ts` | POST előtt statusz-újraolvasás; kiállítás után, ha `refunded`, inline stornó. Zár HTTP fölött nincs. |
+| W10 | `grant-purchase.ts` + route/CLI/panel | Lejárt hozzáférés → `access-expired` (409), nem „Már hozzáfér”. Nincs ajándék paid rendelés. |
+| W14 | `security/activation-token.ts`, `order-paid.ts` | Vendég-aktiváló token 7 nap, nem az import 30 napja. |
+| W17 | `Users.ts` `logFailedLogin` | Trusted-hop IP (`audit.resolveClientIp`). Access-szabály érintetlen. |
+| W18 | `security/rate-limit.ts` | `/api/users/login` IP- + e-mail-keret (10/10 perc). `maxLoginAttempts` megmarad. |
+
+### 9.3 Továbbra is nyitva (tulajdonosi / tilos zóna)
+
+K2, K4 teljes (migráció), K5 (access), W3 (`pool.max`), W4 (409-orákulum).
