@@ -1,5 +1,15 @@
 import type { Payload } from 'payload'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest'
 
 import {
   classifyRefundedTransactionStatus,
@@ -8,6 +18,7 @@ import {
   RefundError,
   refundOrder,
 } from '../lib/refund/refund-order'
+import { userPurchasesLockKey } from '../lib/user-purchases'
 import type { Order, User } from '../payload-types'
 
 /**
@@ -46,7 +57,7 @@ const lockState = vi.hoisted(() => ({
 }))
 
 vi.mock('../lib/advisory-lock', () => ({
-  withAdvisoryLock: async <T,>(
+  withAdvisoryLock: async <T>(
     _payload: unknown,
     lockKey: string,
     fn: () => Promise<T>,
@@ -252,8 +263,8 @@ describe('refund-zár — a pénzmozgató szakasz sorosítása', () => {
 
     const result = await runRefund(payload, {}, invoiceSpies())
 
-    // Pontosan egy zár, a rendelés azonosítójára szabott kulccsal.
-    expect(lockState.keys).toEqual([refundLockKey(ORDER_ID)])
+    // Rendelés-zár, majd a purchases-levétel vevő-zára (K1 sorrend: order → user).
+    expect(lockState.keys).toEqual([refundLockKey(ORDER_ID), userPurchasesLockKey(7)])
     expect(refundLockKey(ORDER_ID)).toBe(`refund:order:${ORDER_ID}`)
 
     // ZÁR-TARTOMÁNY: a lassú GetState a záron KÍVÜL, a pénzmozgató Refund BELÜL.
@@ -289,7 +300,9 @@ describe('refund-zár — a pénzmozgató szakasz sorosítása', () => {
     const result = await runRefund(payload, {}, invoiceSpies())
 
     // A visszatérített összeg a MARADVÁNY, nem az elavult teljes végösszeg.
-    const refundBody = JSON.parse(String((fetchMock.mock.calls[1] as [string, RequestInit])[1].body)) as {
+    const refundBody = JSON.parse(
+      String((fetchMock.mock.calls[1] as [string, RequestInit])[1].body),
+    ) as {
       TransactionsToRefund: Array<{ TransactionId: string; AmountToRefund: number }>
     }
     expect(refundBody.TransactionsToRefund[0]?.AmountToRefund).toBe(15000)

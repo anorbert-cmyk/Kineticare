@@ -2,6 +2,7 @@ import type { Payload, PayloadRequest } from 'payload'
 
 import type { User } from '../payload-types'
 import { logger as rootLogger, type Logger } from './logger'
+import { updateUserPurchases } from './user-purchases'
 
 /**
  * Ingyenes kurzusok AUTOMATIKUS hozzáférés-adása (M4) — transportfüggetlen
@@ -68,12 +69,6 @@ export interface GrantFreeCoursesResult {
   freeProductCount: number
 }
 
-/** A users.purchases bejegyzéseinek id-listája (nyers id vagy populate-olt dokumentum). */
-function userPurchaseIds(user: Pick<User, 'purchases'>): number[] {
-  const purchases = user.purchases ?? []
-  return purchases.map((entry) => (typeof entry === 'object' ? entry.id : entry))
-}
-
 /**
  * A published + ingyenes termékek idempotens beírása a felhasználó
  * purchases-listájába. Nincs mit beírnia → tiszta no-op (írási és naplózási
@@ -104,30 +99,33 @@ export async function grantFreeCoursesToUser(
     // start-checkout.ts duplavásárlás-ellenőrzésének mintájára).
   } as unknown as Parameters<Payload['find']>[0])
 
-  const owned = new Set(userPurchaseIds(user).map(String))
-  const missing = freeProducts.docs
-    .map((product) => product.id)
-    .filter((productId) => !owned.has(String(productId)))
+  const freeProductIds = freeProducts.docs.map((product) => product.id)
 
-  if (missing.length === 0) {
-    return { grantedProductIds: [], freeProductCount: freeProducts.totalDocs }
+  // K1: a vevő-zár alatt ÚJRAOLVASOTT lista a forrás. Az input.user.purchases
+  // a hook hívásakor elavult lehet (párhuzamos paid-grant / manuális grant).
+  const result = await updateUserPurchases(
+    payload,
+    user.id,
+    (current) => {
+      const owned = new Set(current.map(String))
+      const missing = freeProductIds.filter((productId) => !owned.has(String(productId)))
+      return missing.length === 0 ? current : [...current, ...missing]
+    },
+    log,
+    input.req,
+  )
+
+  const previousOwned = new Set(result.previous.map(String))
+  const grantedProductIds = freeProductIds.filter(
+    (productId) => !previousOwned.has(String(productId)),
+  )
+
+  if (result.wrote) {
+    log.info('ingyenes kurzus-hozzáférések automatikusan beírva', {
+      userId: user.id,
+      grantedProductIds,
+    })
   }
 
-  await payload.update({
-    collection: 'users',
-    id: user.id,
-    data: { purchases: [...userPurchaseIds(user), ...missing] },
-    overrideAccess: true,
-    // A hívó kérésének továbbadásával a beágyazott update a hívó
-    // tranzakciójában fut — különben afterChange(create)-ből NotFound,
-    // afterLogin-ből ön-blokkolás lenne (lásd a típus kommentjét).
-    ...(input.req ? { req: input.req } : {}),
-  })
-
-  log.info('ingyenes kurzus-hozzáférések automatikusan beírva', {
-    userId: user.id,
-    grantedProductIds: missing,
-  })
-
-  return { grantedProductIds: missing, freeProductCount: freeProducts.totalDocs }
+  return { grantedProductIds, freeProductCount: freeProducts.totalDocs }
 }

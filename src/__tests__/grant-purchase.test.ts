@@ -48,16 +48,37 @@ function createMockPayload(options: MockOptions = {}) {
   const creates: Array<{ collection: string; data: Record<string, unknown> }> = []
 
   const payload = {
-    find: vi.fn(async ({ collection }: { collection: string }) => {
+    find: vi.fn(
+      async ({
+        collection,
+        where,
+      }: {
+        collection: string
+        where?: { email?: { equals?: string } }
+      }) => {
+        if (collection === 'users') {
+          if (!(options.userExists ?? true)) {
+            return { docs: [], totalDocs: 0 }
+          }
+          const wanted = where?.email?.equals
+          if (wanted !== undefined && wanted !== user.email) {
+            return { docs: [], totalDocs: 0 }
+          }
+          return { docs: [user], totalDocs: 1 }
+        }
+        if (collection === 'products') {
+          return (options.productExists ?? true)
+            ? { docs: [product], totalDocs: 1 }
+            : { docs: [], totalDocs: 0 }
+        }
+        return { docs: [], totalDocs: 0 }
+      },
+    ),
+    findByID: vi.fn(async ({ collection }: { collection: string }) => {
       if (collection === 'users') {
-        return (options.userExists ?? true) ? { docs: [user], totalDocs: 1 } : { docs: [], totalDocs: 0 }
+        return user
       }
-      if (collection === 'products') {
-        return (options.productExists ?? true)
-          ? { docs: [product], totalDocs: 1 }
-          : { docs: [], totalDocs: 0 }
-      }
-      return { docs: [], totalDocs: 0 }
+      return user
     }),
     update: vi.fn(
       async (args: { collection: string; id: number | string; data: Record<string, unknown> }) => {
@@ -68,12 +89,10 @@ function createMockPayload(options: MockOptions = {}) {
         return args.data
       },
     ),
-    create: vi.fn(
-      async (args: { collection: string; data: Record<string, unknown> }) => {
-        creates.push(args)
-        return { id: 1 }
-      },
-    ),
+    create: vi.fn(async (args: { collection: string; data: Record<string, unknown> }) => {
+      creates.push(args)
+      return { id: 1 }
+    }),
   }
 
   return { payload: payload as unknown as Payload, updates, creates, user, product }
@@ -131,11 +150,21 @@ describe('grantPurchase — kimeneti ágak', () => {
 
   it('already-had / user-not-found ágon NEM keletkezik audit-sor', async () => {
     const had = createMockPayload({ purchases: [42] })
-    await grantPurchase({ payload: had.payload, email: EMAIL, productIdOrSku: SKU, logger: silentLogger() })
+    await grantPurchase({
+      payload: had.payload,
+      email: EMAIL,
+      productIdOrSku: SKU,
+      logger: silentLogger(),
+    })
     expect(had.creates).toHaveLength(0)
 
     const missing = createMockPayload({ userExists: false })
-    await grantPurchase({ payload: missing.payload, email: EMAIL, productIdOrSku: SKU, logger: silentLogger() })
+    await grantPurchase({
+      payload: missing.payload,
+      email: EMAIL,
+      productIdOrSku: SKU,
+      logger: silentLogger(),
+    })
     expect(missing.creates).toHaveLength(0)
   })
 
@@ -234,5 +263,32 @@ describe('grantPurchase — idempotencia', () => {
     })
 
     expect(updates[0].data).toEqual({ purchases: [11, 12, 42] })
+  })
+})
+
+describe('grantPurchase — W9 e-mail kisbetűsítés', () => {
+  it('a tárolt kisbetűs címet a vegyes írásmódú lookup is megtalálja', async () => {
+    const { payload, updates } = createMockPayload({ purchases: [] })
+
+    const result = await grantPurchase({
+      payload,
+      email: 'Vevo@Example.test',
+      productIdOrSku: SKU,
+      logger: silentLogger(),
+    })
+
+    expect(result.status).toBe('granted')
+    expect(result.userId).toBe(7)
+    expect(payload.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'users',
+        where: { email: { equals: 'vevo@example.test' } },
+      }),
+    )
+    expect(updates[0]).toMatchObject({
+      collection: 'users',
+      id: 7,
+      data: { purchases: [42] },
+    })
   })
 })

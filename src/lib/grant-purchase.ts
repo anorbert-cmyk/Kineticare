@@ -1,9 +1,9 @@
 import type { Payload } from 'payload'
 
-import type { User } from '../payload-types'
 import { auditLogStore, writeAuditLog } from './audit'
 import { maskEmail } from './email/mask'
 import { logger, type Logger } from './logger'
+import { updateUserPurchases } from './user-purchases'
 
 /**
  * Manuális kurzus-hozzáférés adása (grant) — transportfüggetlen szolgáltatás.
@@ -32,11 +32,7 @@ import { logger, type Logger } from './logger'
  * Technikai hiba (DB) természetesen kibillen.
  */
 
-export type GrantPurchaseStatus =
-  | 'granted'
-  | 'already-had'
-  | 'user-not-found'
-  | 'product-not-found'
+export type GrantPurchaseStatus = 'granted' | 'already-had' | 'user-not-found' | 'product-not-found'
 
 /** A termék-hivatkozás feloldásának módja — a hívó hibaüzenetéhez. */
 export type ProductRefKind = 'id' | 'sku'
@@ -71,12 +67,6 @@ export interface GrantPurchaseResult {
   productLabel?: string
 }
 
-/** A users.purchases bejegyzéseinek id-listája (depth: 0 mellett nyers id-k). */
-function userPurchaseIds(user: User): number[] {
-  const purchases = user.purchases ?? []
-  return purchases.map((entry) => (typeof entry === 'object' ? entry.id : entry))
-}
-
 /** Numerikus adatbázis-id vagy sku? (A products kollekcióban nincs slug — az üzleti kulcs a sku.) */
 export function resolveProductRefKind(productIdOrSku: string): ProductRefKind {
   return /^\d+$/.test(productIdOrSku) ? 'id' : 'sku'
@@ -108,9 +98,12 @@ export async function grantPurchase(options: GrantPurchaseOptions): Promise<Gran
   }
 
   // --- Felhasználó feloldása email alapján (NEM hozunk létre újat) -----------
+  // W9: a Payload az e-mailt kisbetűsen tárolja; a CLI/admin vegyes
+  // írásmódja enélkül hamis „nincs ilyen user" találatot adna.
+  const normalizedEmail = email.trim().toLowerCase()
   const users = await payload.find({
     collection: 'users',
-    where: { email: { equals: email } },
+    where: { email: { equals: normalizedEmail } },
     limit: 1,
     depth: 0,
     overrideAccess: true,
@@ -149,9 +142,20 @@ export async function grantPurchase(options: GrantPurchaseOptions): Promise<Gran
   const product = products.docs[0]
   const productLabel = product.sku ?? String(product.id)
 
-  // --- IDEMPOTENS ellenőrzés: már megvan? (no-op, NEM hiba) -----------------
-  const owned = new Set(userPurchaseIds(user).map(String))
-  if (owned.has(String(product.id))) {
+  // --- IDEMPOTENS ellenőrzés + írás a vevő-zár alatt (K1) -------------------
+  // A záron kívüli already-had ellenőrzés két párhuzamos grantnél mindkettőnek
+  // „még nincs" választ adna, és a második a stale listát írná vissza.
+  const result = await updateUserPurchases(
+    payload,
+    user.id,
+    (current) => {
+      const owned = new Set(current.map(String))
+      return owned.has(String(product.id)) ? current : [...current, product.id]
+    },
+    log,
+  )
+
+  if (!result.wrote) {
     log.info('manuális hozzáférés: a termék már a vevőnél van — no-op', {
       ...audit,
       userId: user.id,
@@ -169,14 +173,6 @@ export async function grantPurchase(options: GrantPurchaseOptions): Promise<Gran
       productLabel,
     }
   }
-
-  // --- Hozzáférés rögzítése (missing-only, a grantPurchases mintájára) ------
-  await payload.update({
-    collection: 'users',
-    id: user.id,
-    data: { purchases: [...userPurchaseIds(user), product.id] },
-    overrideAccess: true,
-  })
 
   log.info('manuális hozzáférés rögzítve', {
     ...audit,

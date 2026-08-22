@@ -1,7 +1,7 @@
 import type { Payload } from 'payload'
 import { describe, expect, it, vi, type MockInstance } from 'vitest'
 
-import type { BarionPaymentStateResponse } from '../../lib/barion'
+import type { BarionPaymentStateResponse, OrderPaymentState } from '../../lib/barion'
 import { createLogger } from '../../lib/logger'
 import {
   applyBarionStateTransition,
@@ -40,7 +40,9 @@ function createOrder(overrides: Partial<Order> = {}): Order {
   } as unknown as Order
 }
 
-function createState(overrides: Partial<BarionPaymentStateResponse> = {}): BarionPaymentStateResponse {
+function createState(
+  overrides: Partial<BarionPaymentStateResponse> = {},
+): BarionPaymentStateResponse {
   return {
     PaymentId: '11111111-2222-3333-4444-555555555555',
     PaymentRequestId: 'KH-2026-000123',
@@ -56,8 +58,11 @@ function createMockPayload(
   order: Order,
   existingOrders: Array<{ id: number; customer: number; product: number; status: string }> = [],
 ) {
-  const user = { id: CUSTOMER_ID, email: 'vevo@example.test', purchases: [] as number[] } as
-    unknown as User
+  const user = {
+    id: CUSTOMER_ID,
+    email: 'vevo@example.test',
+    purchases: [] as number[],
+  } as unknown as User
   const updates: Array<{ collection: string; data: Record<string, unknown> }> = []
   const payload = {
     // Az M5 zár a záron belül findByID-val OLVASSA ÚJRA a rendelést — a mock
@@ -66,22 +71,24 @@ function createMockPayload(
       collection === 'orders' ? order : user,
     ),
     // A hasPaidOrderFor (K5) where-kiértékelése a fixtúrákon — a valódi szűrés mása.
-    find: vi.fn(async ({ where }: { where: { and: Array<Record<string, Record<string, unknown>>> } }) => {
-      const clauses = where.and ?? []
-      const customerId = clauses.find((clause) => 'customer' in clause)?.customer.equals
-      const productIds = (clauses.find((clause) => 'items.product' in clause)?.['items.product']
-        .in ?? []) as number[]
-      const status = clauses.find((clause) => 'status' in clause)?.status.equals
-      const excludeId = clauses.find((clause) => 'id' in clause)?.id.not_equals
-      const docs = existingOrders.filter(
-        (order) =>
-          order.customer === customerId &&
-          productIds.includes(order.product) &&
-          order.status === status &&
-          order.id !== excludeId,
-      )
-      return { docs, totalDocs: docs.length }
-    }),
+    find: vi.fn(
+      async ({ where }: { where: { and: Array<Record<string, Record<string, unknown>>> } }) => {
+        const clauses = where.and ?? []
+        const customerId = clauses.find((clause) => 'customer' in clause)?.customer.equals
+        const productIds = (clauses.find((clause) => 'items.product' in clause)?.['items.product']
+          .in ?? []) as number[]
+        const status = clauses.find((clause) => 'status' in clause)?.status.equals
+        const excludeId = clauses.find((clause) => 'id' in clause)?.id.not_equals
+        const docs = existingOrders.filter(
+          (order) =>
+            order.customer === customerId &&
+            productIds.includes(order.product) &&
+            order.status === status &&
+            order.id !== excludeId,
+        )
+        return { docs, totalDocs: docs.length }
+      },
+    ),
     update: vi.fn(async (args: { collection: string; data: Record<string, unknown> }) => {
       updates.push({ collection: args.collection, data: args.data })
       if (args.collection === 'users') {
@@ -114,15 +121,15 @@ describe('assertPaymentAmountMatches — a tiszta összeg-ellenőrző', () => {
   })
 
   it('eltérő deviza → currency-differs (az összeg-egyezés önmagában NEM elég)', () => {
-    expect(assertPaymentAmountMatches(createOrder(), createState({ Currency: 'EUR' }))).toMatchObject(
-      { ok: false, detail: 'currency-differs' },
-    )
+    expect(
+      assertPaymentAmountMatches(createOrder(), createState({ Currency: 'EUR' })),
+    ).toMatchObject({ ok: false, detail: 'currency-differs' })
   })
 
   it('a deviza összehasonlítása kis-nagybetű- és szóköz-tűrő', () => {
-    expect(assertPaymentAmountMatches(createOrder(), createState({ Currency: ' huf ' }))).toMatchObject(
-      { ok: true },
-    )
+    expect(
+      assertPaymentAmountMatches(createOrder(), createState({ Currency: ' huf ' })),
+    ).toMatchObject({ ok: true })
   })
 
   it.each([
@@ -130,7 +137,10 @@ describe('assertPaymentAmountMatches — a tiszta összeg-ellenőrző', () => {
     ['hiányzó Currency a válaszban', { Currency: undefined }, 'state-currency-missing'],
   ])('%s → konzervatív bukás (%s)', (_label, overrides, detail) => {
     expect(
-      assertPaymentAmountMatches(createOrder(), createState(overrides as Partial<BarionPaymentStateResponse>)),
+      assertPaymentAmountMatches(
+        createOrder(),
+        createState(overrides as Partial<BarionPaymentStateResponse>),
+      ),
     ).toMatchObject({ ok: false, detail })
   })
 
@@ -388,7 +398,9 @@ describe('applyBarionStateTransition — K1 írási sorrend', () => {
         if (args.collection === 'users' && grantFails) {
           throw new Error('teszt: a jogosultság-beírás elhasal (DB-hiba)')
         }
-        return (base.payload as unknown as { update: (a: unknown) => Promise<unknown> }).update(args)
+        return (base.payload as unknown as { update: (a: unknown) => Promise<unknown> }).update(
+          args,
+        )
       }),
     } as unknown as Parameters<typeof applyBarionStateTransition>[0]['payload']
 
@@ -422,7 +434,6 @@ describe('applyBarionStateTransition — K1 írási sorrend', () => {
     expect(base.user.purchases).toEqual([PRODUCT_ID])
   })
 })
-
 
 // ---------------------------------------------------------------------------
 // Vendég-rendelés paid-átmenete (a fiók a fizetés UTÁN dől el)
@@ -520,5 +531,79 @@ describe('applyBarionStateTransition — vendég-rendelés (fiók nélküli) pai
     // A jogosultság a FELOLDOTT fiókra íródott.
     const userUpdate = updates.find((update) => update.collection === 'users')
     expect(userUpdate).toMatchObject({ id: users[1].id, data: { purchases: [PRODUCT_ID] } })
+  })
+})
+
+/**
+ * W20 — `paid-not-allowed` / `cancel-not-allowed` őrök. A guard kiiktatása
+ * után a többi teszt zöld maradna; refunded → paid + új számla lenne a lyuk.
+ *
+ * K6 — a `paid` ág NEM az implicit else. Hamisított negyedik uniótag
+ * (`payment_failed`) nem futhat a paid útra.
+ */
+describe('applyBarionStateTransition — W20 paid-not-allowed / cancel-not-allowed', () => {
+  it.each(['cancelled', 'refunded', 'payment_failed'] as const)(
+    'mapped paid + order.status %s → rejected/paid-not-allowed, nincs paid írás',
+    async (status) => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const order = createOrder({ status })
+      const { payload, updates, user } = createMockPayload(order)
+
+      const result = await applyBarionStateTransition({
+        payload,
+        order,
+        mapped: 'paid',
+        state: createState(),
+        log: createLogger(),
+      })
+
+      expect(result).toEqual({ action: 'rejected', reason: 'paid-not-allowed' })
+      expect(updates).toHaveLength(0)
+      expect(user.purchases).toEqual([])
+      expect(order.status).toBe(status)
+      expect(logOutput(logSpy)).toContain('RIASZT')
+      logSpy.mockRestore()
+    },
+  )
+
+  it('mapped cancelled + refunded kiinduló → rejected/cancel-not-allowed', async () => {
+    const order = createOrder({ status: 'refunded' })
+    const { payload, updates } = createMockPayload(order)
+
+    const result = await applyBarionStateTransition({
+      payload,
+      order,
+      mapped: 'cancelled',
+      state: createState({ Status: 'Canceled' }),
+      log: createLogger(),
+    })
+
+    expect(result).toEqual({ action: 'rejected', reason: 'cancel-not-allowed' })
+    expect(updates).toHaveLength(0)
+    expect(order.status).toBe('refunded')
+  })
+})
+
+describe('applyBarionStateTransition — K6 paid nem az else', () => {
+  it('hamisított negyedik mapped érték NEM a paid ágra esik', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const order = createOrder()
+    const { payload, updates, user } = createMockPayload(order)
+
+    await expect(
+      applyBarionStateTransition({
+        payload,
+        order,
+        mapped: 'payment_failed' as OrderPaymentState,
+        state: createState(),
+        log: createLogger(),
+      }),
+    ).rejects.toThrow(/ismeretlen rendelés-fizetési állapot/)
+
+    expect(updates).toHaveLength(0)
+    expect(user.purchases).toEqual([])
+    expect(order.status).toBe('payment_pending')
+    expect(logOutput(logSpy)).toContain('ismeretlen Barion-leképezés')
+    logSpy.mockRestore()
   })
 })
