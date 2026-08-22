@@ -5,7 +5,7 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
-    "startCommand": "npx payload migrate && npm start",
+    "startCommand": "npx payload migrate && exec ./node_modules/.bin/next start",
     "healthcheckPath": "/admin",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
