@@ -63,14 +63,20 @@ vi.mock('../lib/advisory-lock', () => ({
     fn: () => Promise<T>,
   ): Promise<T> => {
     lockState.keys.push(lockKey)
-    if (lockState.beforeEnter) {
+    // A beforeEnter a RENDELES-zárra várakozást modellezi. A beágyazott
+    // user-purchases zár (K1) ne futtassa újra — különben a már beírt
+    // refunds-nyomot a hook felülírná a stale tömbbel.
+    if (lockState.beforeEnter && lockKey.startsWith('refund:order:')) {
       await lockState.beforeEnter()
     }
+    const alreadyHeld = lockState.held
     lockState.held = true
     try {
       return await fn()
     } finally {
-      lockState.held = false
+      if (!alreadyHeld) {
+        lockState.held = false
+      }
     }
   },
 }))
