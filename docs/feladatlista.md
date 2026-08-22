@@ -1,13 +1,52 @@
 # Kineticare — teljes feladatlista
 
-**Utolsó frissítés:** 2026-08-09, a C-backlog nagy köre (C1, C3, C4, C5, C7, C12, C13) után.
+**Utolsó frissítés:** 2026-08-22, a #142 huszonhat tételének visszavezetése
+a #148 squash (`713976e`) után.
 
-## Állapot most
+## 2026-08-22 kritikus utak — a #148-ban lezárva
 
-> **Archív pillanatkép (2026-08-09)** — az aktuális, naprakész állapot az
-> `docs/atadas-szamlazz-kor.md` 1. szakaszában él (main: `3548b99`, CI zöld,
-> 100+ tesztfájl, 13 migráció). Az alábbi sorok a 2026-08-06-i hibakeresés
-> állapotát rögzítik, történeti értékük van.
+A teljes indoklás: `docs/review-2026-08-22-kritikus-utak.md` (vizsgálat: #142,
+javítás: #143 ⊂ #144 ⊂ #148). A 26 tétel **nem tűnt el**; a kód a `mainen`
+van. A #146 a merge előtt nyitottként hozta volna vissza őket — ezért a
+tábla itt a #148 utáni állapot.
+
+| # | Súly | Tétel | Éles main | Hol |
+| --- | --- | --- | --- | --- |
+| K1 | CRITICAL | `users.purchases` RMW, vevő-zár nélkül | kész | #148 (`withUserPurchasesLock`) |
+| K2 | CRITICAL | igazolatlan e-mail + vendég-kötés | kész (szűk) | #148; nincs `auth.verify` / migráció |
+| K3 | CRITICAL | ingyenes kurzus 7 napos reset-token bármely fiókra | kész | #148 |
+| K4 | CRITICAL | helyesbítő kísérlet rendelés-szintű | kész (min) | #148 mindig `queryByKulsoAzon`; teljes térkép nincs |
+| K5 | CRITICAL | staff PATCH a számla-állapotmezőkre | kész | #148 `denyFieldWrite` (zóna 4, tulajdonosi merge) |
+| K6 | HIGH | `paid` ág `else` (fail-open) | kész | #148 |
+| W1 | WARNING | poll-ablak beragadt `payment_pending` soron | kész | #148 |
+| W2 | WARNING | bejelentkezve nem látja a vendég-pendinget | kész | #148 |
+| W3 | WARNING | beágyazott zár + `pool.max` | szándékos nyitva | nincs cap; Railway `max_connections` × replika kellene |
+| W4 | WARNING | vendég 409 idegen e-mailre (orákulum) | kész | #148; azonos 409, „már megvásároltad” csak belépve |
+| W5 | WARNING | `storno-issue` job zsákutca | kész | #148 |
+| W6 | WARNING | hiányzó `jobs.queue` néma `false` | kész | #148 |
+| W7 | WARNING | számla-POST × refund, stornó nélkül | kész | #148 |
+| W8 | WARNING | stream-token `Cache-Control` nélkül | kész | #148 |
+| W9 | WARNING | grant e-mail nem kisbetűsít | kész | #148 |
+| W10 | WARNING | lejárt hozzáférés = „Már hozzáfér” | kész | #148 |
+| W11 | WARNING | preview `Location` Railway belső host | kész | #148 |
+| W12 | WARNING | Barion callback rate-limit nélkül | kész | #148 |
+| W13 | WARNING | `pending_repoll` kimerülés néma | kész | #148 |
+| W14 | WARNING | vendég-aktiváló token 30 nap | kész | #148 (7 nap) |
+| W15 | WARNING | logger nem redaktálja a token-kulcsokat | kész | #148 |
+| W16 | WARNING | `purchases` közvetlen írás auditálatlan | kész | #148 |
+| W17 | WARNING | failed-login hamisítható XFF | kész | #148 |
+| W18 | WARNING | `/api/users/login` nincs kereten | kész | #148 |
+| W19 | WARNING | mark-watched `userId` törzs nincs tesztelve | kész | #148 |
+| W20 | WARNING | paid-not-allowed / cancel-not-allowed 0 teszt | kész | #148 |
+
+Hátra ebből a listából: **W3** (Railway mérés), és a teljes `auth.verify` csak
+akkor, ha a K2 szűk fék nem elég. Részletek: a jegyzőkönyv 9. szakasza.
+
+## Állapot most (archív, 2026-08-09)
+
+> **Archív pillanatkép (2026-08-09)** — az alábbi sorok a 2026-08-06-i
+> hibakeresés állapotát rögzítik, történeti értékük van. A 2026-08-22-i
+> P0 lyukak a fenti táblában és a jegyzőkönyv 9. szakaszában élnek, nem itt.
 
 - main: `6560c7f`, CI zöld (typecheck 0, vitest 443/0, eslint 0 error, npm audit, gitleaks). *(2026-08-09-i pillanat)*
 - **A Railway ténylegesen buildel.** Korábban `Build · skipped (nothing to build)`
