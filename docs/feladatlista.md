@@ -1,13 +1,51 @@
 # Kineticare — teljes feladatlista
 
-**Utolsó frissítés:** 2026-08-09, a C-backlog nagy köre (C1, C3, C4, C5, C7, C12, C13) után.
+**Utolsó frissítés:** 2026-08-22, a #142-es kritikus-út jegyzőkönyv
+tételeinek visszavezetése (a lista tetején). Az A–D blokk 2026-08-09-es
+archív; azt nem írjuk felül.
 
-## Állapot most
+## 2026-08-22 kritikus utak — éles `main`en nyitva
 
-> **Archív pillanatkép (2026-08-09)** — az aktuális, naprakész állapot az
-> `docs/atadas-szamlazz-kor.md` 1. szakaszában él (main: `3548b99`, CI zöld,
-> 100+ tesztfájl, 13 migráció). Az alábbi sorok a 2026-08-06-i hibakeresés
-> állapotát rögzítik, történeti értékük van.
+A teljes indoklás: `docs/review-2026-08-22-kritikus-utak.md` (PR #142,
+squash: `b7c64c0`). A 26 tétel **nem tűnt el**. A kód a mainen a lyukakat
+még viseli. A javító commitok a #143 / #144 ágon vannak, merge nélkül.
+
+| # | Súly | Tétel | Éles main | Javítás |
+| --- | --- | --- | --- | --- |
+| K1 | CRITICAL | `users.purchases` RMW, vevő-zár nélkül | nyitva | #144 (K1 lock) |
+| K2 | CRITICAL | igazolatlan e-mail + vendég-kötés | nyitva | tulajdonosi döntés, zóna 3+4 |
+| K3 | CRITICAL | ingyenes kurzus 7 napos reset-token bármely fiókra | nyitva | #144 |
+| K4 | CRITICAL | helyesbítő kísérlet rendelés-szintű | nyitva | #144 csak K4-min; teljes = migráció |
+| K5 | CRITICAL | staff PATCH a számla-állapotmezőkre | nyitva | tulajdonosi döntés, zóna 4 |
+| K6 | HIGH | `paid` ág `else` (fail-open) | nyitva | #144 |
+| W1 | WARNING | poll-ablak beragadt `payment_pending` soron | nyitva | #144 |
+| W2 | WARNING | bejelentkezve nem látja a vendég-pendinget | nyitva | #144 |
+| W3 | WARNING | beágyazott zár + `pool.max` | nyitva | tulajdonosi döntés (Railway) |
+| W4 | WARNING | vendég 409 idegen e-mailre (orákulum) | nyitva | tulajdonosi döntés |
+| W5 | WARNING | `storno-issue` job zsákutca | nyitva | #144 |
+| W6 | WARNING | hiányzó `jobs.queue` néma `false` | nyitva | #144 |
+| W7 | WARNING | számla-POST × refund, stornó nélkül | nyitva | #144 |
+| W8 | WARNING | stream-token `Cache-Control` nélkül | nyitva | #144 |
+| W9 | WARNING | grant e-mail nem kisbetűsít | nyitva | #144 |
+| W10 | WARNING | lejárt hozzáférés = „Már hozzáfér” | nyitva | #144 |
+| W11 | WARNING | preview `Location` Railway belső host | nyitva | #144 |
+| W12 | WARNING | Barion callback rate-limit nélkül | nyitva | #144 |
+| W13 | WARNING | `pending_repoll` kimerülés néma | nyitva | #144 |
+| W14 | WARNING | vendég-aktiváló token 30 nap | nyitva | #144 |
+| W15 | WARNING | logger nem redaktálja a token-kulcsokat | nyitva | #144 |
+| W16 | WARNING | `purchases` közvetlen írás auditálatlan | nyitva | #144 |
+| W17 | WARNING | failed-login hamisítható XFF | nyitva | #144 |
+| W18 | WARNING | `/api/users/login` nincs kereten | nyitva | #144 |
+| W19 | WARNING | mark-watched `userId` törzs nincs tesztelve | nyitva | #144 |
+| W20 | WARNING | paid-not-allowed / cancel-not-allowed 0 teszt | nyitva | #144 |
+
+Ha a #143 és a #144 is nyitva marad, a #144-et kell mergelni (szuperszett).
+
+## Állapot most (archív, 2026-08-09)
+
+> **Archív pillanatkép (2026-08-09)** — az alábbi sorok a 2026-08-06-i
+> hibakeresés állapotát rögzítik, történeti értékük van. A 2026-08-22-i
+> P0 lyukak a fenti táblában és a jegyzőkönyvben élnek, nem itt.
 
 - main: `6560c7f`, CI zöld (typecheck 0, vitest 443/0, eslint 0 error, npm audit, gitleaks). *(2026-08-09-i pillanat)*
 - **A Railway ténylegesen buildel.** Korábban `Build · skipped (nothing to build)`

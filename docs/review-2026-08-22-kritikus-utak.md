@@ -6,6 +6,30 @@
 > **Célfa:** `origin/main` HEAD `f1dce1d` (Payload 3.88.0). A fán lévő
 > `9e55a0b` csak `AGENTS.md`/`CLAUDE.md`, forrást nem érint.
 
+## Hol van most (2026-08-22, délután)
+
+A 2. szakasz **mind a 26 tételt** (K1–K6, W1–W20) tartalmazza. Nem töröltük,
+nem „javult magától”. Ami eltűnésnek látszott:
+
+1. A #142 **Conversation** füle üres. A hibák a fájlban vannak, nem
+   PR-kommentben.
+2. A `docs/feladatlista.md` 2026-08-09-es archív. Ide a 26 tétel nem
+   került be, ezért a „mi van hátra” listából hiányzott.
+3. A #141 / `cursor/grok-xhigh-2d02` a #142 **előtti** `f1dce1d` fáról
+   indult. Azokon a branch-eken a jegyzőkönyv fájl nincs.
+4. A #144 9. szakasza a **javító ágon** lezárás. Az éles `main` (`b7c64c0`)
+   kódja a lyukakat **még viseli**. `withUserPurchasesLock` a mainen nincs.
+
+**Éles `main`:** mind a 26 tétel nyitva.
+
+**Javítás, nincs merge:** #143 (első hullám) + #144 (második hullám, a #143
+commitjaival). Ha mindkettő nyitva, a #144-et kell mergelni.
+
+**Továbbra is tulajdonosi döntés (tilos zóna / infra):** K2, K4 teljes,
+K5, W3, W4. A #144 a K4-nek csak a séma nélküli fékjét viszi (K4-min).
+
+A hivatalos hátralék-lista: `docs/feladatlista.md` „2026-08-22 kritikus utak”.
+
 ## 0. Egy percben
 
 Hat szál járta végig a fizetést, a számlát, a user/auth utat, a kurzus-
