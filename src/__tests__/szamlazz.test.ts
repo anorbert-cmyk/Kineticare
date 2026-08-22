@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { getSzamlazzConfig, isDuplicateOrderError, parseAgentResponse } from '../lib/szamlazz/client'
+import {
+  getSzamlazzConfig,
+  isDuplicateOrderError,
+  parseAgentResponse,
+} from '../lib/szamlazz/client'
 import {
   buildInvoiceXml,
   buyerFromOrder,
@@ -102,7 +106,11 @@ describe('getSzamlazzConfig', () => {
 
 describe('computeLineAmounts — 27% ÁFA, bruttóból', () => {
   it('mennyiség=1: netto+afa=brutto pontosan, nettoEgysegar=nettoErtek', () => {
-    const amounts = computeLineAmounts({ megnevezes: 'Kurzus', mennyiseg: 1, bruttoEgysegar: 19990 })
+    const amounts = computeLineAmounts({
+      megnevezes: 'Kurzus',
+      mennyiseg: 1,
+      bruttoEgysegar: 19990,
+    })
     expect(amounts.bruttoErtek).toBe(19990)
     expect(amounts.nettoErtek).toBe(Math.round(19990 / 1.27)) // 15740
     expect(amounts.afaErtek).toBe(19990 - amounts.nettoErtek)
@@ -116,12 +124,12 @@ describe('computeLineAmounts — 27% ÁFA, bruttóból', () => {
   })
 
   it('érvénytelen mennyiség/ár esetén invalid_data hibát dob (nem retryable)', () => {
-    expect(() => computeLineAmounts({ megnevezes: 'x', mennyiseg: 0, bruttoEgysegar: 100 })).toThrow(
+    expect(() =>
+      computeLineAmounts({ megnevezes: 'x', mennyiseg: 0, bruttoEgysegar: 100 }),
+    ).toThrow(SzamlazzApiError)
+    expect(() => computeLineAmounts({ megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: -5 })).toThrow(
       SzamlazzApiError,
     )
-    expect(() =>
-      computeLineAmounts({ megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: -5 }),
-    ).toThrow(SzamlazzApiError)
   })
 })
 
@@ -177,7 +185,11 @@ describe('computeLineAmounts — tétel-egyenletek mennyiség > 1 esetén', () =
   })
 
   it('mennyiseg=1: az egységár PONTOSAN a nettoErtek (visszafelé kompatibilis, tizedesek nélkül)', () => {
-    const amounts = computeLineAmounts({ megnevezes: 'Kurzus', mennyiseg: 1, bruttoEgysegar: 19990 })
+    const amounts = computeLineAmounts({
+      megnevezes: 'Kurzus',
+      mennyiseg: 1,
+      bruttoEgysegar: 19990,
+    })
     expect(amounts.nettoEgysegar).toBe(String(amounts.nettoErtek))
     expect(Number(amounts.nettoEgysegar) * 1).toBe(amounts.nettoErtek)
   })
@@ -250,7 +262,12 @@ describe('buildInvoiceXml — hivatalos Számla Agent séma', () => {
       previousIndex = index
     }
     // Üresen is jelen lévő kötelező tagok.
-    for (const tag of ['<arfolyamBank></arfolyamBank>', '<bankszamlaszam></bankszamlaszam>', '<postazasiNev></postazasiNev>', '<azonosito></azonosito>']) {
+    for (const tag of [
+      '<arfolyamBank></arfolyamBank>',
+      '<bankszamlaszam></bankszamlaszam>',
+      '<postazasiNev></postazasiNev>',
+      '<azonosito></azonosito>',
+    ]) {
       expect(xml).toContain(tag)
     }
   })
@@ -401,14 +418,25 @@ describe('buildInvoiceXml — áfakulcs és teljesítési dátum', () => {
     })
 
     it('üres és rossz alakú dátumok elutasítva (teljesítés és kelt egyaránt)', () => {
-      for (const rossz of ['', '   ', '2026-1-31', '2026.01.31', '31/01/2026', '2026-01-31T00:00:00Z']) {
+      for (const rossz of [
+        '',
+        '   ',
+        '2026-1-31',
+        '2026.01.31',
+        '31/01/2026',
+        '2026-01-31T00:00:00Z',
+      ]) {
         expectDateRejected({ ...BASE, teljesitesDatum: rossz }, 'teljesitesDatum')
         expectDateRejected({ ...BASE, issueDate: rossz }, 'keltDatum')
       }
     })
 
     it('helyes alakú dátum változatlanul kerül a kimenetre', () => {
-      const xml = buildInvoiceXml({ ...BASE, issueDate: '2026-08-04', teljesitesDatum: '2026-07-15' })
+      const xml = buildInvoiceXml({
+        ...BASE,
+        issueDate: '2026-08-04',
+        teljesitesDatum: '2026-07-15',
+      })
       expect(xml).toContain('<keltDatum>2026-08-04</keltDatum>')
       expect(xml).toContain('<teljesitesDatum>2026-07-15</teljesitesDatum>')
       expect(xml).toContain('<fizetesiHataridoDatum>2026-08-04</fizetesiHataridoDatum>')
@@ -442,7 +470,14 @@ describe('budapestDateString / isIsoDateString', () => {
   it('isIsoDateString: kizárólag a YYYY-MM-DD alak megy át', () => {
     expect(isIsoDateString('2026-08-04')).toBe(true)
     expect(isIsoDateString(budapestDateString(new Date('2026-08-31T22:30:00Z')))).toBe(true)
-    for (const rossz of ['', '2026-8-4', '2026/08/04', '2026-08-04T10:00:00Z', ' 2026-08-04', '2026-08-04</x>']) {
+    for (const rossz of [
+      '',
+      '2026-8-4',
+      '2026/08/04',
+      '2026-08-04T10:00:00Z',
+      ' 2026-08-04',
+      '2026-08-04</x>',
+    ]) {
       expect(isIsoDateString(rossz), rossz).toBe(false)
     }
   })
@@ -509,7 +544,10 @@ describe('parseAgentResponse', () => {
 
   it('szlahu_error fejléc: agent-hiba a kóddal', () => {
     try {
-      parseAgentResponse('bármi', new Headers({ szlahu_error: 'Lépjen be', szlahu_error_code: '51' }))
+      parseAgentResponse(
+        'bármi',
+        new Headers({ szlahu_error: 'Lépjen be', szlahu_error_code: '51' }),
+      )
       expect.unreachable()
     } catch (error) {
       const apiError = error as SzamlazzApiError
@@ -595,7 +633,9 @@ function createOrder(overrides: Partial<Order> = {}): Order {
     invoiceStatus: 'none',
     customerEmail: 'anna@example.test',
     totalHufSnapshot: 19990,
-    items: [{ product: 42, quantity: 1, titleSnapshot: 'DEMO-KEZREHAB-001', priceHufSnapshot: 19990 }],
+    items: [
+      { product: 42, quantity: 1, titleSnapshot: 'DEMO-KEZREHAB-001', priceHufSnapshot: 19990 },
+    ],
     customerSnapshot: {
       name: 'Teszt Anna',
       email: 'anna@example.test',
@@ -1091,5 +1131,89 @@ describe('issueInvoiceForOrder — idempotencia-feloldás és kísérlet-plafon'
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+/**
+ * W7 — a kezdeti paid-ellenőrzés és a POST között a refund refunded-re
+ * állíthatja a rendelést (üres invoiceNumber → stornó nem indul). Zárolás
+ * NINCS a HTTP fölött: beküldés előtt újraolvasás, kiállítás után pedig
+ * inline stornó, ha a rendelés közben refunded lett.
+ */
+describe('issueInvoiceForOrder — refund-verseny a beküldés körül (W7)', () => {
+  it('a beküldés előtti újraolvasás refunded: skipped, POST nincs', async () => {
+    const paid = createOrder({ status: 'paid' })
+    const refunded = createOrder({ status: 'refunded' })
+    let finds = 0
+    const updates: Array<Record<string, unknown>> = []
+    const payload = {
+      findByID: async () => {
+        finds += 1
+        return finds === 1 ? paid : refunded
+      },
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        updates.push(data)
+        return refunded
+      },
+    }
+    let posts = 0
+    const result = await issueInvoiceForOrder({
+      payload: payload as never,
+      orderId: 101,
+      config: ENABLED_CONFIG,
+      issueDate: '2026-08-04',
+      queryByKulsoAzon: noLookup,
+      postXml: async () => {
+        posts += 1
+        return { szamlaszam: 'KIN-2026-7' }
+      },
+    })
+
+    expect(result.outcome).toBe('skipped')
+    expect(result.reason).toContain('nem paid')
+    expect(posts).toBe(0)
+    expect(updates).toHaveLength(0)
+  })
+
+  it('kiállítás után refunded, stornó nélkül: inline stornó, a számla issued marad', async () => {
+    const order = createOrder({ status: 'paid' })
+    let finds = 0
+    const payload = {
+      findByID: async () => {
+        finds += 1
+        if (finds <= 2) {
+          return order
+        }
+        return {
+          ...order,
+          status: 'refunded' as const,
+          invoiceNumber: order.invoiceNumber,
+          stornoStatus: 'none' as const,
+          stornoNumber: undefined,
+        }
+      },
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        Object.assign(order, data)
+        return order
+      },
+    }
+    const stornoOrders: Order[] = []
+    const result = await issueInvoiceForOrder({
+      payload: payload as never,
+      orderId: 101,
+      config: ENABLED_CONFIG,
+      issueDate: '2026-08-04',
+      queryByKulsoAzon: noLookup,
+      postXml: async () => ({ szamlaszam: 'KIN-2026-7' }),
+      issueStorno: async (ord) => {
+        stornoOrders.push(ord)
+        return { outcome: 'storned', stornoNumber: 'ST-1' }
+      },
+    })
+
+    expect(result).toEqual({ outcome: 'issued', invoiceNumber: 'KIN-2026-7' })
+    expect(stornoOrders).toHaveLength(1)
+    expect(stornoOrders[0]?.invoiceNumber).toBe('KIN-2026-7')
+    expect(stornoOrders[0]?.status).toBe('refunded')
   })
 })
