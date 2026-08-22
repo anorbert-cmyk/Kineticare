@@ -113,7 +113,13 @@ figyelés onnan olvasná ki, futtatás nélkül.
 
 ## M-06 — A `purchases` írása read-modify-write, tranzakció nélkül
 
-**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** közepes
+**Státusz:** lezárva (2026-08-22, K1 vevő-zár) · **Felvéve:** 2026-07-31 · **Súly:** közepes
+
+> **Lezárás (2026-08-22):** a `users.purchases` írás közös segédre került
+> (`src/lib/user-purchases.ts`: vevő-szintű advisory-zár + záron belüli
+> újraolvasás + feltételes írás). A négy író (paid-grant, manuális grant,
+> ingyenes grant, refund-revoke) ezt hívja. Zár-sorrend: rendelés → e-mail →
+> vevő. Őr-teszt: két szál, egy vevő, mindkét termék a végállapotban.
 
 A jogosultság-kezelés két helyen is beolvassa a felhasználó teljes `purchases`
 listáját, majd a módosított teljes listát írja vissza:
@@ -500,9 +506,17 @@ a CI beüzemelésére.
 
 ## M-17 — Vendégfizetés meglévő fiókhoz kötődik e-mail-igazolás nélkül
 
-**Státusz:** nyitott · **Felvéve:** 2026-08-21 · **Súly:** magas
+**Státusz:** részben lezárva (2026-08-22, séma nélküli fék) · **Felvéve:** 2026-08-21 · **Súly:** magas
 **Hely:** `src/lib/order-status/resolve-order-customer.ts:177-240`
 **Forrás:** teljes-`main` Bugbot-átnézés (`origin/main` `80cf258`)
+
+> **Részleges lezárás (2026-08-22):** séma nélküli fék a
+> `resolveOrderCustomer`-ben: vendég-`paid` csak új vagy
+> `passwordSetupPending` `customer` fiókhoz köt. Jelszavas vevő, owner és
+> staff: skipGrant — a paid lefut, a kurzus NEM íródik a meglévő fiókra,
+> owner-riasztás. `auth.verify` továbbra is tilos zóna (3+4), nincs migráció.
+> A nyilvános `access.create: () => true` és az e-mail-csere útja megmaradt;
+> a grant-lyuk a fizetős vendégúton be van zárva.
 
 A `paid` átmenet vendég-rendelésnél a `customerEmail` alapján a meglévő fiókhoz
 köti a rendelést, és a `grantPurchases` oda írja a kurzus-jogosultságot. Ez
