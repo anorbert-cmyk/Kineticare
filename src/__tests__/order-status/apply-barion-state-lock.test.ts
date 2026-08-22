@@ -5,8 +5,11 @@ import type { BarionPaymentStateResponse } from '../../lib/barion'
 import { createLogger } from '../../lib/logger'
 import {
   applyBarionStateTransition,
+  grantPurchases,
   orderTransitionLockKey,
 } from '../../lib/order-status/apply-barion-state'
+import { revokePurchases } from '../../lib/refund/refund-order'
+import { userPurchasesLockKey } from '../../lib/user-purchases-lock'
 import type { Order, User } from '../../payload-types'
 
 /**
@@ -39,50 +42,67 @@ interface CapturedQuery {
   params: unknown[]
 }
 
+function parseLockQuery(query: unknown): CapturedQuery {
+  const candidate = query as { queryChunks?: unknown[] }
+  const chunks = Array.isArray(candidate.queryChunks) ? candidate.queryChunks : []
+  const text: string[] = []
+  const params: unknown[] = []
+  for (const chunk of chunks) {
+    const stringChunk =
+      typeof chunk === 'object' && chunk !== null ? (chunk as { value?: unknown }).value : undefined
+    if (Array.isArray(stringChunk)) {
+      text.push(stringChunk.join(''))
+    } else {
+      params.push(chunk)
+    }
+  }
+  return { sql: text.join(''), params }
+}
+
 /**
- * Szerkezeti drizzle-mock, amely FIFO-lánccal SOROSÍTJA a tranzakciókat — így a
- * Promise.all-szal indított párhuzamos átmenetek úgy futnak, mintha a Postgres
- * advisory-zár sorba rendezné őket (advisory-lock.test.ts felülete + mutex).
+ * Szerkezeti drizzle-mock: KULCSONKÉNT sorosít, mint a Postgres advisory-zár.
+ * Különböző kulcsok párhuzamosan futhatnak (két rendelés), azonos kulcs
+ * várakozik. A nestelt zár (order → user) más kulcson van, ezért NEM
+ * deadlockol — a régi, mindenáltalános FIFO-lánc a nestelt user-záron
+ * beragadt volna.
  */
 function createSerializingDrizzle(events: string[]) {
   const queries: CapturedQuery[] = []
-  let chain: Promise<unknown> = Promise.resolve()
+  const tails = new Map<string, Promise<void>>()
   const drizzle = {
     transaction: async <T>(
       run: (tx: { execute: (query: unknown) => Promise<unknown> }) => Promise<T>,
     ): Promise<T> => {
-      const result = chain.then(() => {
-        events.push('transaction-start')
-        return run({
+      events.push('transaction-start')
+      let release = (): void => {}
+      try {
+        return await run({
           execute: async (query: unknown) => {
-            // A zárkulcs KÖTÖTT paraméterként érkezik — a kinyerés módja az
-            // advisory-lock.test.ts-ból ismert (StringChunk vs. param chunk).
-            const candidate = query as { queryChunks?: unknown[] }
-            const chunks = Array.isArray(candidate.queryChunks) ? candidate.queryChunks : []
-            const text: string[] = []
-            const params: unknown[] = []
-            for (const chunk of chunks) {
-              const stringChunk =
-                typeof chunk === 'object' && chunk !== null
-                  ? (chunk as { value?: unknown }).value
-                  : undefined
-              if (Array.isArray(stringChunk)) {
-                text.push(stringChunk.join(''))
-              } else {
-                params.push(chunk)
-              }
-            }
-            queries.push({ sql: text.join(''), params })
+            const parsed = parseLockQuery(query)
+            queries.push(parsed)
+            const lockKey = String(parsed.params[0] ?? '')
+            let releaseThis = (): void => {}
+            const held = new Promise<void>((resolve) => {
+              releaseThis = resolve
+            })
+            const previous = tails.get(lockKey) ?? Promise.resolve()
+            tails.set(
+              lockKey,
+              previous.then(
+                () => held,
+                () => held,
+              ),
+            )
+            await previous
+            release = releaseThis
             events.push('lock-acquired')
             return { rows: [] }
           },
-        }).finally(() => {
-          events.push('transaction-end')
         })
-      })
-      // A lánc hibatűrő: egy elbukó védett szakasz nem akasztja meg a sort.
-      chain = result.catch(() => undefined)
-      return result
+      } finally {
+        events.push('transaction-end')
+        release()
+      }
     },
   }
   return { drizzle, queries }
@@ -101,7 +121,9 @@ function createOrder(overrides: Partial<Order> = {}): Order {
   } as unknown as Order
 }
 
-function createState(overrides: Partial<BarionPaymentStateResponse> = {}): BarionPaymentStateResponse {
+function createState(
+  overrides: Partial<BarionPaymentStateResponse> = {},
+): BarionPaymentStateResponse {
   return {
     PaymentId: '11111111-2222-3333-4444-555555555555',
     PaymentRequestId: 'KH-2026-000123',
@@ -113,33 +135,55 @@ function createState(overrides: Partial<BarionPaymentStateResponse> = {}): Bario
   }
 }
 
-function createMockPayload(order: Order, events: string[]) {
-  const user = { id: CUSTOMER_ID, email: 'vevo@example.test', purchases: [] as number[] } as
-    unknown as User
+function createMockPayload(
+  orderOrOrders: Order | Order[],
+  events: string[],
+  options: { delayFirstUserUpdateMs?: number; initialPurchases?: number[] } = {},
+) {
+  const orders = Array.isArray(orderOrOrders) ? orderOrOrders : [orderOrOrders]
+  const user = {
+    id: CUSTOMER_ID,
+    email: 'vevo@example.test',
+    purchases: [...(options.initialPurchases ?? [])],
+  } as unknown as User
   const { drizzle, queries } = createSerializingDrizzle(events)
-  const updates: Array<{ collection: string; data: Record<string, unknown> }> = []
+  const updates: Array<{ collection: string; id?: unknown; data: Record<string, unknown> }> = []
+  let userUpdates = 0
   const payload = {
     db: { drizzle },
-    findByID: vi.fn(async ({ collection }: { collection: string }) => {
+    findByID: vi.fn(async ({ collection, id }: { collection: string; id: number | string }) => {
       if (collection === 'orders') {
         events.push('order-reread')
-        return order
+        return orders.find((entry) => entry.id === id) ?? orders[0]
       }
-      return user
+      // Snapshot: a párhuzamos olvasók ne osszák meg a mutálható tömböt,
+      // különben a lost-update teszt hamisan menne át objektum-azonosítón.
+      return { ...user, purchases: [...(user.purchases ?? [])] }
     }),
     // A K5 dupla-fizetés őre (hasPaidOrderFor) ezt kérdezi — itt nincs más
     // paid rendelés, így az őr átenged (a zár-viselkedés a fókusz).
     find: vi.fn(async () => ({ docs: [], totalDocs: 0 })),
-    update: vi.fn(async (args: { collection: string; data: Record<string, unknown> }) => {
-      updates.push({ collection: args.collection, data: args.data })
-      if (args.collection === 'orders') {
-        Object.assign(order, args.data)
-      }
-      if (args.collection === 'users') {
-        Object.assign(user, args.data)
-      }
-      return args.data
-    }),
+    update: vi.fn(
+      async (args: { collection: string; id?: unknown; data: Record<string, unknown> }) => {
+        if (args.collection === 'users' && options.delayFirstUserUpdateMs) {
+          userUpdates += 1
+          if (userUpdates === 1) {
+            await new Promise<void>((resolve) => {
+              setTimeout(resolve, options.delayFirstUserUpdateMs)
+            })
+          }
+        }
+        updates.push({ collection: args.collection, id: args.id, data: args.data })
+        if (args.collection === 'orders') {
+          const target = orders.find((entry) => entry.id === args.id) ?? orders[0]
+          Object.assign(target, args.data)
+        }
+        if (args.collection === 'users') {
+          Object.assign(user, args.data)
+        }
+        return args.data
+      },
+    ),
   }
   return { payload: payload as unknown as Payload, queries, updates, user }
 }
@@ -165,11 +209,23 @@ describe('M5 — rendelés-szintű advisory-zár a paid/cancelled átmeneten', (
 
     // A kulcs a meglévő konvenciót követi (`<scope>:order:<id>`, mint a refund).
     expect(orderTransitionLockKey(ORDER_ID)).toBe(`order-transition:order:${ORDER_ID}`)
-    expect(queries).toHaveLength(1)
+    expect(userPurchasesLockKey(CUSTOMER_ID)).toBe(`purchases:user:${CUSTOMER_ID}`)
+    expect(queries.map((query) => query.params[0])).toEqual([
+      `order-transition:order:${ORDER_ID}`,
+      `purchases:user:${CUSTOMER_ID}`,
+    ])
     expect(queries[0]?.sql).toContain('pg_advisory_xact_lock')
-    expect(queries[0]?.params).toEqual([`order-transition:order:${ORDER_ID}`])
-    // Sorrend: zár megszerzése → FRISS újraolvasás → tranzakció vége.
-    expect(events).toEqual(['transaction-start', 'lock-acquired', 'order-reread', 'transaction-end'])
+    // Sorrend: rendelés-zár → FRISS rendelés-újraolvasás → user-zár (K1) → vége.
+    // Deadlock-szabály: order → user, soha fordítva.
+    expect(events).toEqual([
+      'transaction-start',
+      'lock-acquired',
+      'order-reread',
+      'transaction-start',
+      'lock-acquired',
+      'transaction-end',
+      'transaction-end',
+    ])
   })
 
   it('két PÁRHUZAMOS paid-átmenetből PONTOSAN EGY transitionedToPaid=true (az onOrderPaid egyszer futhat)', async () => {
@@ -190,9 +246,7 @@ describe('M5 — rendelés-szintű advisory-zár a paid/cancelled átmeneten', (
     expect(transitions.filter((result) => result.duplicate === true)).toHaveLength(1)
     // Egyetlen paid státusz-írás és egyetlen purchases-beírás történt.
     expect(
-      updates.filter(
-        (entry) => entry.collection === 'orders' && entry.data.status === 'paid',
-      ),
+      updates.filter((entry) => entry.collection === 'orders' && entry.data.status === 'paid'),
     ).toHaveLength(1)
     expect(updates.filter((entry) => entry.collection === 'users')).toHaveLength(1)
     expect(order.status).toBe('paid')
@@ -224,9 +278,7 @@ describe('M5 — rendelés-szintű advisory-zár a paid/cancelled átmeneten', (
     expect(cancelResult).toEqual({ action: 'rejected', reason: 'paid-cancel-rejected' })
     expect(order.status).toBe('paid')
     expect(
-      updates.filter(
-        (entry) => entry.collection === 'orders' && entry.data.status === 'cancelled',
-      ),
+      updates.filter((entry) => entry.collection === 'orders' && entry.data.status === 'cancelled'),
     ).toHaveLength(0)
   })
 
@@ -246,5 +298,68 @@ describe('M5 — rendelés-szintű advisory-zár a paid/cancelled átmeneten', (
     expect(result).toEqual({ action: 'pending' })
     expect(queries).toHaveLength(0)
     expect(events).toHaveLength(0)
+  })
+})
+
+/**
+ * K1 — users.purchases lost update KÜLÖNBÖZŐ rendeléseken, ugyanarra a vevőre.
+ *
+ * A rendelés-zár ezt NEM fogja: két order-id = két kulcs, párhuzamosan futnak.
+ * Zár nélkül: A beolvassa [], granteli 1-et, alszik az update előtt; B
+ * beolvassa [], granteli 2-t, ír; A felülír → végső = [1]. User-zárral a
+ * végső tömb MINDKÉT terméket tartalmazza.
+ */
+describe('K1 — user-szintű purchases-zár két különböző rendelésen', () => {
+  it('két KÜLÖNBÖZŐ rendelés ugyanarra a vevőre: a user-zár mindkét termék jogosultságát megőrzi (nincs lost-update)', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const events: string[] = []
+    const orderA = createOrder({ id: 101, items: [{ product: 11, quantity: 1 }] })
+    const orderB = createOrder({ id: 202, items: [{ product: 22, quantity: 1 }] })
+    const { payload, user, queries } = createMockPayload([orderA, orderB], events, {
+      delayFirstUserUpdateMs: 40,
+    })
+
+    const [resultA, resultB] = await Promise.all([
+      applyBarionStateTransition(paidInput(payload, orderA)),
+      applyBarionStateTransition(paidInput(payload, orderB)),
+    ])
+
+    expect(resultA.action).toBe('paid')
+    expect(resultB.action).toBe('paid')
+    expect(resultA.transitionedToPaid).toBe(true)
+    expect(resultB.transitionedToPaid).toBe(true)
+    expect(user.purchases).toEqual(expect.arrayContaining([11, 22]))
+    expect(user.purchases).toHaveLength(2)
+    expect(queries.map((query) => query.params[0])).toEqual(
+      expect.arrayContaining([
+        'order-transition:order:101',
+        'order-transition:order:202',
+        'purchases:user:7',
+      ]),
+    )
+  })
+
+  it('párhuzamos grant + revoke: a másik termék grantje nem veszhet el', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const events: string[] = []
+    const grantOrder = createOrder({ id: 303, items: [{ product: 22, quantity: 1 }] })
+    const revokeOrder = createOrder({
+      id: 404,
+      items: [{ product: 11, quantity: 1 }],
+      status: 'paid',
+    })
+    const { payload, user } = createMockPayload([grantOrder, revokeOrder], events, {
+      delayFirstUserUpdateMs: 40,
+      initialPurchases: [11],
+    })
+
+    await Promise.all([
+      grantPurchases(payload, grantOrder, createLogger()),
+      revokePurchases(payload, revokeOrder, createLogger()),
+    ])
+
+    // Bármelyik sorrend: a 22-es grant megmarad. A 11-es a revoke-tól függ.
+    expect(user.purchases).toContain(22)
+    expect(user.purchases).not.toContain(99)
   })
 })

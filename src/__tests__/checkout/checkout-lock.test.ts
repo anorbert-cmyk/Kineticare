@@ -294,14 +294,16 @@ describe('checkout-zár — sorosítás (TOCTOU)', () => {
 
 /**
  * VENDÉG-ÁG (P1) — a fiókhoz még nem kötött rendelést KIZÁRÓLAG az e-mail
- * azonosítja, ezért a zárkulcs és a duplavásárlás-blokk is e-mail-hatókörű.
+ * azonosítja, ezért a zárkulcs vendégnél e-mail-hatókörű, a
+ * duplavásárlás-blokk pedig MINDIG e-mail-hatókörű is (W2: bejelentkezett
+ * vevőnél a customer-ág mellett).
  *
- * A HIÁNYZÓ MÉRÉS, amit ez pótol: a `start-checkout.ts`
- * `if (buyer.customerId === null) assertNoDuplicatePurchase({ kind: 'email' })`
- * blokkját `if (false)`-ra cserélve a teljes tesztkészlet zöld maradt. Két
- * egyidejű vendég-fizetés így KÉT aktív `payment_pending` rendelést hagyna
- * ugyanarra a kurzusra — mindkettő kifizethető, a másodikat pedig már csak a
- * paid-átmenet K5-őre fogná meg, amikor a pénz MÁR le van vonva.
+ * A HIÁNYZÓ MÉRÉS, amit ez pótol: a `start-checkout.ts` e-mail-hatókörű
+ * `assertNoDuplicatePurchase({ kind: 'email' })` hívását elhagyva a
+ * vendég-tesztkészlet zöld maradt. Két egyidejű vendég-fizetés így KÉT
+ * aktív `payment_pending` rendelést hagyna ugyanarra a kurzusra — mindkettő
+ * kifizethető, a másodikat pedig már csak a paid-átmenet K5-őre fogná meg,
+ * amikor a pénz MÁR le van vonva.
  */
 describe('checkout-zár — VENDÉG (fiók nélküli) vásárlás', () => {
   const guestInput = {

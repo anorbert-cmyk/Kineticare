@@ -12,6 +12,13 @@ import { STREAM_TOKEN_PRODUCT_PARAM, STREAM_TOKEN_VIDEO_PARAM } from './contract
 import { issueStreamToken, StreamTokenError } from './issue-stream-token'
 
 /**
+ * Minden válasz `no-store`: a lejátszási jegy (és a 401/403 ág ténye) nem
+ * kerülhet böngésző- vagy köztes gyorsítótárba. A bunny-library és az
+ * admin course-progress handlerek ugyanilyen fejlécet adnak.
+ */
+const NO_STORE_HEADERS = { 'Cache-Control': 'no-store' } as const
+
+/**
  * GET /api/stream-token route-handler factory.
  *
  * A függőségek (Payload-példány) injektálva vannak, így a handler maga is
@@ -50,7 +57,7 @@ export function createStreamTokenHandler(
       if (!user) {
         return NextResponse.json(
           { error: 'A videó lejátszásához bejelentkezés szükséges.' },
-          { status: 401 },
+          { status: 401, headers: NO_STORE_HEADERS },
         )
       }
 
@@ -66,7 +73,7 @@ export function createStreamTokenHandler(
       if (rejection) {
         return NextResponse.json(
           { error: rejection.message },
-          { status: 429, headers: rateLimitHeaders(rejection) },
+          { status: 429, headers: { ...NO_STORE_HEADERS, ...rateLimitHeaders(rejection) } },
         )
       }
 
@@ -83,14 +90,17 @@ export function createStreamTokenHandler(
         logger: log,
       })
 
-      return NextResponse.json(result, { status: 200 })
+      return NextResponse.json(result, { status: 200, headers: NO_STORE_HEADERS })
     } catch (error) {
       if (error instanceof StreamTokenError) {
         log.warn('stream-token: üzleti hiba', {
           status: error.status,
           error: error.message,
         })
-        return NextResponse.json({ error: error.message }, { status: error.status })
+        return NextResponse.json(
+          { error: error.message },
+          { status: error.status, headers: NO_STORE_HEADERS },
+        )
       }
       log.error('stream-token: váratlan technikai hiba', {
         error: error instanceof Error ? error.message : String(error),
@@ -100,7 +110,7 @@ export function createStreamTokenHandler(
           error:
             'A videó most nem indítható el. Frissítsd az oldalt, és próbáld újra néhány perc múlva.',
         },
-        { status: 500 },
+        { status: 500, headers: NO_STORE_HEADERS },
       )
     }
   }

@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   isRetryDue,
@@ -9,6 +10,7 @@ import {
   type WebhookEventDoc,
   type WebhookEventStore,
 } from '../lib/idempotency'
+import { logger } from '../lib/logger'
 
 /**
  * Állapottartó in-memory mock store — a (provider, externalId) egyedi kulcsot
@@ -76,6 +78,10 @@ const baseParams = {
   externalId: 'payment-123',
   eventType: 'payment.state',
 }
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('processWebhook', () => {
   it('első alkalommal lefuttatja a handlert és processed-re állítja a rekordot', async () => {
@@ -244,5 +250,50 @@ describe('retry backoff', () => {
     const old: WebhookEventDoc = { ...recent, updatedAt: '2026-07-30T11:55:00Z' }
     expect(isRetryDue(recent, now)).toBe(false)
     expect(isRetryDue(old, now)).toBe(true)
+  })
+})
+
+/**
+ * W13 — a pending_repoll kimerülés NEM némán esik ki. A rekord `received`
+ * marad (egy későbbi Succeeded callback a route-handleren még lefut), de
+ * attempts >= MAX-nál error-riasztás megy, és a result beíródik.
+ */
+describe('processWebhook — W13 pending_repoll kimerülés', () => {
+  it('MAX nem-terminális kísérlet → error-riasztás, received + pending_repoll, későbbi Succeeded még lefut', async () => {
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {})
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    const { store, docs } = createMockStore()
+    const pendingHandler = vi.fn(async () => ({ webhookNonTerminal: true as const }))
+
+    let lastOutcome: Awaited<ReturnType<typeof processWebhook>> | undefined
+    for (let index = 0; index < MAX_WEBHOOK_ATTEMPTS; index += 1) {
+      lastOutcome = await processWebhook({ store, ...baseParams, handler: pendingHandler })
+    }
+
+    expect(lastOutcome).toMatchObject({
+      kind: 'processed',
+      nonTerminal: true,
+      attempts: MAX_WEBHOOK_ATTEMPTS,
+    })
+    expect(docs[0]).toMatchObject({
+      status: 'received',
+      result: 'pending_repoll',
+      attempts: MAX_WEBHOOK_ATTEMPTS,
+    })
+    expect(errorSpy.mock.calls.some(([message]) => String(message).includes('RIASZTÁS'))).toBe(true)
+    expect(errorSpy.mock.calls.some(([message]) => String(message).includes('pending_repoll'))).toBe(
+      true,
+    )
+    expect(warnSpy.mock.calls.length).toBeGreaterThanOrEqual(1)
+
+    // A route-handler útja NEM a scan-szűrő: egy későbbi terminális callback
+    // (Succeeded) még mindig feldolgozható — nem already-processed.
+    const paidHandler = vi.fn(async () => ({ status: 'paid' }))
+    const terminal = await processWebhook({ store, ...baseParams, handler: paidHandler })
+
+    expect(terminal).toMatchObject({ kind: 'processed', attempts: MAX_WEBHOOK_ATTEMPTS + 1 })
+    expect(terminal).not.toMatchObject({ kind: 'already-processed' })
+    expect(paidHandler).toHaveBeenCalledTimes(1)
+    expect(docs[0]).toMatchObject({ status: 'processed', attempts: MAX_WEBHOOK_ATTEMPTS + 1 })
   })
 })

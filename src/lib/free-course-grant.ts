@@ -2,6 +2,7 @@ import type { Payload, PayloadRequest } from 'payload'
 
 import type { User } from '../payload-types'
 import { logger as rootLogger, type Logger } from './logger'
+import { withUserPurchasesLock } from './user-purchases-lock'
 
 /**
  * Ingyenes kurzusok AUTOMATIKUS hozzáférés-adása (M4) — transportfüggetlen
@@ -104,30 +105,57 @@ export async function grantFreeCoursesToUser(
     // start-checkout.ts duplavásárlás-ellenőrzésének mintájára).
   } as unknown as Parameters<Payload['find']>[0])
 
-  const owned = new Set(userPurchaseIds(user).map(String))
-  const missing = freeProducts.docs
+  const staleOwned = new Set(userPurchaseIds(user).map(String))
+  const staleMissing = freeProducts.docs
     .map((product) => product.id)
-    .filter((productId) => !owned.has(String(productId)))
+    .filter((productId) => !staleOwned.has(String(productId)))
 
-  if (missing.length === 0) {
+  if (staleMissing.length === 0) {
     return { grantedProductIds: [], freeProductCount: freeProducts.totalDocs }
   }
 
-  await payload.update({
-    collection: 'users',
-    id: user.id,
-    data: { purchases: [...userPurchaseIds(user), ...missing] },
-    overrideAccess: true,
-    // A hívó kérésének továbbadásával a beágyazott update a hívó
-    // tranzakciójában fut — különben afterChange(create)-ből NotFound,
-    // afterLogin-ből ön-blokkolás lenne (lásd a típus kommentjét).
-    ...(input.req ? { req: input.req } : {}),
-  })
+  // User-szintű zár CSAK a purchases RMW körül. A termék-lekérdezés kint
+  // marad; a `req` (create/afterLogin tranzakció) a záron belüli
+  // findByID-ra és update-re is továbbadódik.
+  return withUserPurchasesLock(
+    payload,
+    user.id,
+    async () => {
+      const fresh = (await payload.findByID({
+        collection: 'users',
+        id: user.id,
+        depth: 0,
+        overrideAccess: true,
+        ...(input.req ? { req: input.req } : {}),
+      })) as User
 
-  log.info('ingyenes kurzus-hozzáférések automatikusan beírva', {
-    userId: user.id,
-    grantedProductIds: missing,
-  })
+      const owned = new Set(userPurchaseIds(fresh).map(String))
+      const missing = freeProducts.docs
+        .map((product) => product.id)
+        .filter((productId) => !owned.has(String(productId)))
 
-  return { grantedProductIds: missing, freeProductCount: freeProducts.totalDocs }
+      if (missing.length === 0) {
+        return { grantedProductIds: [], freeProductCount: freeProducts.totalDocs }
+      }
+
+      await payload.update({
+        collection: 'users',
+        id: user.id,
+        data: { purchases: [...userPurchaseIds(fresh), ...missing] },
+        overrideAccess: true,
+        // A hívó kérésének továbbadásával a beágyazott update a hívó
+        // tranzakciójában fut — különben afterChange(create)-ből NotFound,
+        // afterLogin-ből ön-blokkolás lenne (lásd a típus kommentjét).
+        ...(input.req ? { req: input.req } : {}),
+      })
+
+      log.info('ingyenes kurzus-hozzáférések automatikusan beírva', {
+        userId: user.id,
+        grantedProductIds: missing,
+      })
+
+      return { grantedProductIds: missing, freeProductCount: freeProducts.totalDocs }
+    },
+    log,
+  )
 }

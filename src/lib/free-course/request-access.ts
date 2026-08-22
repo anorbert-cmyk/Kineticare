@@ -34,8 +34,12 @@ import { freeCourseEmail } from './email'
  *  4. Belépő link: a Payload SAJÁT jelszó-visszaállító tokenje
  *     (`forgotPassword`, `disableEmail: true`) + a közös
  *     `buildPasswordResetUrl`. Külön, párhuzamos token-rendszer NINCS.
+ *     Tokent CSAK új fiókra, vagy meglévő `customer` +
+ *     `passwordSetupPending === true` fiókra írunk (K3): a 7 napos TTL
+ *     különben egy valódi, 1 órás „elfelejtettem a jelszavam" tokent is
+ *     kilőne, owner/staff fióknál pedig meglepetés-belépőt adna.
  *  5. Levél: a saját magyar sablon (`freeCourseEmail`) a Payload
- *     e-mail-adapterén át.
+ *     e-mail-adapterén át — szintén csak akkor, ha tokent is írtunk.
  *
  * ═══ FIÓK-FELDERÍTÉS ELLENI VÉDELEM (tudatos tervezési döntés) ═══
  * A visszatérési érték `status`-a és a hívó HTTP-válasza SZÁNDÉKOSAN AZONOS
@@ -50,10 +54,10 @@ import { freeCourseEmail } from './email'
  * ═══ IDEMPOTENCIA ═══
  * Kétszeri beküldés: (a) fiók — az advisory-zár + „előbb keress" miatt nem
  * keletkezik második; (b) hozzáférés — a `grantFreeCoursesToUser` csak a
- * hiányzót írja be, tehát nem duplázódik; (c) levél — ÚJ tokennel ismét
- * kimegy, és a korábbi link érvénytelenné válik (a Payload minden
- * `forgotPassword`-hívásnál új tokent ír). Ez a jelszó-emlékeztető ismert,
- * dokumentált viselkedése; a hívó oldali kérés-korlát fogja a visszaélést.
+ * hiányzót írja be, tehát nem duplázódik; (c) levél — jelszó-beállításra
+ * váró fióknál ÚJ tokennel ismét kimegy (a korábbi link érvénytelen), már
+ * aktivált vevőnél és owner/staffnál tokent NEM írunk. A hívó oldali
+ * kérés-korlát fogja a visszaélést.
  *
  * ═══ LEVÉL NÉLKÜLI ÜZEM (élő korlát, 2026-08-17) ═══
  * A `RESEND_API_KEY` a Railway-en jelenleg NINCS beállítva, tehát a provider
@@ -141,9 +145,47 @@ export interface RequestFreeCourseAccessResult {
   grantedProductIds: number[]
 }
 
+/**
+ * Token- és grant-kapu egy meglévő vagy frissen létrehozott fiókra.
+ *
+ * K3 (2026-08-22): a nyilvános igénylő `forgotPassword`-je 7 napos TTL-lel
+ * ír, a rendes jelszó-emlékeztető 1 órás. Meglévő, már aktivált vevőnél
+ * vagy owner/staff fióknál a hívás egy élő reset-tokent érvénytelenít, és
+ * staffnak meglepetés-hozzáférést adna. A HTTP-válasz ettől függetlenül
+ * `{ ok: true }` marad (fiók-felderítés elleni védelem).
+ */
+export interface FreeCourseRequestActions {
+  /** Owner/staff: soha. Customer: igen (a grant idempotens). */
+  grant: boolean
+  /**
+   * 7 napos `forgotPassword`. Csak új fiók, vagy meglévő `customer`
+   * `passwordSetupPending === true` mellett.
+   */
+  issueSetPasswordToken: boolean
+}
+
+export function resolveFreeCourseRequestActions(input: {
+  created: boolean
+  role: User['role']
+  passwordSetupPending?: boolean | null
+}): FreeCourseRequestActions {
+  if (input.role === 'owner' || input.role === 'staff') {
+    return { grant: false, issueSetPasswordToken: false }
+  }
+  return {
+    grant: true,
+    issueSetPasswordToken: input.created || input.passwordSetupPending === true,
+  }
+}
+
 /** Az advisory-zár kulcsa — cím szerint, hogy két párhuzamos igénylés soros legyen. */
 export function freeCourseRequestLockKey(email: string): string {
   return `free-course-request:${email}`
+}
+
+/** A belépő levél akkor tudna kimenni, ha a provider nem noop és van abszolút cím. */
+function isEmailDeliverable(env: EmailEnv, serverUrl: string | null): boolean {
+  return resolveEmailProvider(env).name !== 'noop' && serverUrl !== null
 }
 
 /** A users.purchases bejegyzéseinek id-listája (nyers id vagy populate-olt doc). */
@@ -315,6 +357,27 @@ export async function requestFreeCourseAccess(
     overrideAccess: true,
   })) ?? resolved.user) as User
 
+  const actions = resolveFreeCourseRequestActions({
+    created: resolved.created,
+    role: fresh.role,
+    passwordSetupPending: fresh.passwordSetupPending,
+  })
+
+  // Owner/staff: se grant, se 7 napos reset-token. A válasz attól még
+  // `{ ok: true }` — a szerepkör nem szivároghat a nyilvános végpontról.
+  if (!actions.grant) {
+    log.warn('ingyenes kurzus igénylése: meglévő owner/staff fiók — token és grant kihagyva', {
+      userId: fresh.id,
+      role: fresh.role,
+    })
+    return {
+      status: 'ok',
+      emailDelivered: isEmailDeliverable(env, input.serverUrl),
+      userCreated: resolved.created,
+      grantedProductIds: [],
+    }
+  }
+
   const grant = await grantFreeCoursesToUser({ payload, user: fresh, logger: log })
 
   // A kért termék TÉNYLEG bent van-e? A grant az ÖSSZES publikált ingyenes
@@ -342,6 +405,23 @@ export async function requestFreeCourseAccess(
     userCreated: resolved.created,
     grantedProductIds: grant.grantedProductIds,
   })
+
+  // Meglévő, már jelszavas vevő: a grant megvan, tokent NEM írunk. A
+  // `emailDelivered` a HTTP anti-enumeration miatt a provider-állapottal
+  // egyezik (a route-handler ezt tükrözi `emailSent`-ként), nem a tényleges
+  // küldéssel — különben a mező elárulná, hogy a címhez már van aktivált fiók.
+  if (!actions.issueSetPasswordToken) {
+    log.info(
+      'ingyenes kurzus igénylése: meglévő vevő, jelszó már beállítva — jelszó-token kihagyva',
+      { userId: fresh.id },
+    )
+    return {
+      status: 'ok',
+      emailDelivered: isEmailDeliverable(env, input.serverUrl),
+      userCreated: resolved.created,
+      grantedProductIds: grant.grantedProductIds,
+    }
+  }
 
   // ── 3. Belépő link + levél ────────────────────────────────────────────────
   const provider = resolveEmailProvider(env)

@@ -77,7 +77,13 @@ const MISCONFIGURED: FixtureProduct = {
   priceInHUF: null,
 }
 
-const ALL_PRODUCTS = [FREE_PUBLISHED, UNSET_PRICE_FLAG, PAID_PUBLISHED, FREE_ARCHIVED, MISCONFIGURED]
+const ALL_PRODUCTS = [
+  FREE_PUBLISHED,
+  UNSET_PRICE_FLAG,
+  PAID_PUBLISHED,
+  FREE_ARCHIVED,
+  MISCONFIGURED,
+]
 
 /**
  * A szolgáltatás where-alakjának minimális kiértékelője (a valódi szűrés mása).
@@ -108,7 +114,14 @@ function matchesWhere(product: FixtureProduct, where: unknown): boolean {
   return true
 }
 
-function createMockPayload(products: FixtureProduct[] = ALL_PRODUCTS) {
+function createMockPayload(
+  products: FixtureProduct[] = ALL_PRODUCTS,
+  userSeed: { id?: number; purchases?: number[] } = {},
+) {
+  const userDoc = {
+    id: userSeed.id ?? 7,
+    purchases: [...(userSeed.purchases ?? [])],
+  }
   const updates: Array<{ collection: string; id: number | string; data: Record<string, unknown> }> =
     []
   const payload = {
@@ -119,9 +132,18 @@ function createMockPayload(products: FixtureProduct[] = ALL_PRODUCTS) {
       const docs = products.filter((product) => matchesWhere(product, where))
       return { docs, totalDocs: docs.length }
     }),
+    findByID: vi.fn(async ({ collection, id }: { collection: string; id: number | string }) => {
+      if (collection === 'users' && Number(id) === userDoc.id) {
+        return { id: userDoc.id, purchases: [...userDoc.purchases] }
+      }
+      throw new Error('Not Found')
+    }),
     update: vi.fn(
       async (args: { collection: string; id: number | string; data: Record<string, unknown> }) => {
         updates.push(args)
+        if (args.collection === 'users' && Array.isArray(args.data.purchases)) {
+          userDoc.purchases = args.data.purchases as number[]
+        }
         return args.data
       },
     ),
@@ -210,7 +232,9 @@ describe('grantFreeCoursesToUser — mit ír be és mit nem', () => {
   })
 
   it('a meglévő purchases sosem csökken — csak a hiányzó fűződik hozzá', async () => {
-    const { payload, updates } = createMockPayload([FREE_PUBLISHED])
+    const { payload, updates } = createMockPayload([FREE_PUBLISHED], {
+      purchases: [PAID_PUBLISHED.id],
+    })
 
     await grantFreeCoursesToUser({
       payload,

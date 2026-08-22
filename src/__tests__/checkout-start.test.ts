@@ -515,6 +515,41 @@ describe('startCheckout — duplavásárlás-blokk', () => {
     expect(calls.create).toHaveLength(0)
   })
 
+  it('bejelentkezve, korábbi vendég payment_pending ugyanarra az e-mailre → 409, nincs második rendelés', async () => {
+    const { payload, calls } = createMockPayload({
+      findOrders: (where) => {
+        const text = JSON.stringify(where ?? {})
+        // A customer-hatókörű ellenőrzés NEM látja a vendég-rendelést
+        // (customer: null). Csak az e-mail-hatókörű találja meg.
+        if (text.includes('"customerEmail"') && text.includes('payment_pending')) {
+          return {
+            docs: [
+              {
+                id: 88,
+                status: 'payment_pending',
+                customer: null,
+                customerEmail: mockUser.email,
+              },
+            ],
+            totalDocs: 1,
+          }
+        }
+        return { docs: [], totalDocs: 0 }
+      },
+    })
+
+    const promise = startCheckout({ payload, user: mockUser, input: happyInput })
+    await expect(promise).rejects.toMatchObject({ status: 409 })
+    await expect(promise).rejects.toThrowError(/folyamatban van egy fizetés/)
+    expect(calls.create).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    const asText = calls.find.map((where) => JSON.stringify(where ?? {})).join('\n')
+    expect(asText).toContain('"customerEmail"')
+    expect(asText).toContain(mockUser.email)
+    expect(asText).toContain('"customer"')
+  })
+
   it('lejárt payment_pending NEM blokkol: a lekérdezés a fizetési ablakra szűkül', async () => {
     fetchMock.mockResolvedValueOnce(barionStartSuccess())
     const { payload, calls } = createMockPayload()

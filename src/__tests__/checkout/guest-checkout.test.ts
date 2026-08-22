@@ -1,7 +1,12 @@
 import type { Payload } from 'payload'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { CheckoutError, startCheckout } from '../../lib/checkout/start-checkout'
+import {
+  CHECKOUT_GUEST_EXISTING_ACCOUNT,
+  CHECKOUT_GUEST_FINISH_AFTER_LOGIN,
+  CheckoutError,
+  startCheckout,
+} from '../../lib/checkout/start-checkout'
 import {
   GUEST_EMAIL_INVALID_ERROR,
   GUEST_NAME_MISSING_ERROR,
@@ -21,8 +26,8 @@ import type { Order, Product, User } from '../../payload-types'
  *  1. a vendég-azonosító adatok validációja (tiszta mag),
  *  2. a pénztár beküldési tervében a `guest` blokk csak vendégként megy ki,
  *  3. a checkout-start vendég-ága: fiók nélküli rendelés, e-maillel,
- *  4. LÉTEZŐ e-maillel indított vendég-vásárlás nem hoz létre duplikátumot, és
- *     a már megvett kurzus 409-cel elakad MÉG A FIZETÉS ELŐTT,
+ *  4. aktivált e-mail vendégként 409 (belépés), a vásárlás ténye nem derül ki,
+ *     aktiválatlan customer folytathatja fiók nélküli rendeléssel,
  *  5. bejelentkezve a törzs `guest` mezője figyelmen kívül marad (nem lehet
  *     idegen e-mailre rendelni).
  *
@@ -280,49 +285,87 @@ describe('startCheckout — vendég-vásárlás', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('LÉTEZŐ e-mail + már megvett kurzus → 409 MÉG A FIZETÉS ELŐTT (nem dupla vásárlás)', async () => {
-    // A vevőnek van fiókja (kijelentkezve vásárol) — a duplavásárlás-ellenőrzés
-    // az e-mailhez tartozó fiók rendeléseit is nézi. Enélkül a dupla fizetést
-    // csak a paid-átmenet K5-őre fogná meg, ott viszont már levonták a pénzt.
+  it('aktivált fiók + már megvett kurzus → 409, NEM „már megvásároltad” (W4)', async () => {
     const { payload, calls } = createMockPayload({
-      existingUser: { id: 7, email: GUEST.email } as unknown as User,
+      existingUser: {
+        id: 7,
+        email: GUEST.email,
+        role: 'customer',
+        passwordSetupPending: false,
+      } as unknown as User,
       findOrders: (where) =>
         JSON.stringify(where ?? {}).includes('"paid"')
           ? { docs: [{ id: 55 }], totalDocs: 1 }
           : { docs: [], totalDocs: 0 },
     })
 
-    await expect(
-      startCheckout({
-        payload,
-        input: {
-          productId: 42,
-          consentWithdrawalWaiver: true,
+    const promise = startCheckout({
+      payload,
+      input: {
+        productId: 42,
+        consentWithdrawalWaiver: true,
         consentTerms: true,
-          billing: BILLING,
-          guest: GUEST,
-        },
-      }),
-    ).rejects.toBeInstanceOf(CheckoutError)
+        billing: BILLING,
+        guest: GUEST,
+      },
+    })
+    await expect(promise).rejects.toMatchObject({ status: 409 })
+    await expect(promise).rejects.toThrowError(CHECKOUT_GUEST_EXISTING_ACCOUNT)
     expect(calls.create).toHaveLength(0)
     expect(fetchMock).not.toHaveBeenCalled()
-    // A fiók azonosítójával ÉS az e-maillel is keresett (a fiókhoz még nem
-    // kötött, vendég-rendeléseket csak az utóbbi találná meg).
-    const asText = JSON.stringify(calls.orderWhere)
-    expect(asText).toContain('"customer"')
+    // A vásárlás-orákulum elmarad: a rendelés-táblát nem kérdezzük.
+    expect(calls.orderWhere).toHaveLength(0)
   })
 
-  it('LÉTEZŐ e-maillel, még meg nem vett kurzusra: a rendelés TOVÁBBRA IS fiók nélkül jön létre', async () => {
-    // A fiókhoz kötés a fizetés utánra tartozik: bejelentkezés nélkül senki
-    // nem írhat idegen fiók nevében rendelést a fiókba.
+  it('aktivált fiók, kurzus NÉLKÜL → UGYANAZ a 409 (K2, nincs vásárlás-orákulum)', async () => {
+    const { payload, calls } = createMockPayload({
+      existingUser: {
+        id: 7,
+        email: GUEST.email,
+        role: 'customer',
+        passwordSetupPending: false,
+        name: 'Régi Név',
+      } as unknown as User,
+    })
+
+    const promise = startCheckout({
+      payload,
+      input: {
+        productId: 42,
+        consentWithdrawalWaiver: true,
+        consentTerms: true,
+        billing: BILLING,
+        guest: GUEST,
+      },
+    })
+    await expect(promise).rejects.toMatchObject({ status: 409 })
+    await expect(promise).rejects.toThrowError(CHECKOUT_GUEST_EXISTING_ACCOUNT)
+    expect(calls.create).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(calls.orderWhere).toHaveLength(0)
+  })
+
+  it('aktiválatlan customer e-maillel, még meg nem vett kurzusra: rendelés fiók nélkül', async () => {
     fetchMock.mockResolvedValueOnce(barionStartSuccess())
     const { payload, calls } = createMockPayload({
-      existingUser: { id: 7, email: GUEST.email, name: 'Régi Név' } as unknown as User,
+      existingUser: {
+        id: 7,
+        email: GUEST.email,
+        name: 'Régi Név',
+        role: 'customer',
+        passwordSetupPending: true,
+      } as unknown as User,
     })
 
     await startCheckout({
       payload,
-      input: { productId: 42, consentWithdrawalWaiver: true, consentTerms: true, billing: BILLING, guest: GUEST },
+      input: {
+        productId: 42,
+        consentWithdrawalWaiver: true,
+        consentTerms: true,
+        billing: BILLING,
+        guest: GUEST,
+      },
     })
 
     const created = calls.create[0]
@@ -331,20 +374,25 @@ describe('startCheckout — vendég-vásárlás', () => {
   })
 
   /**
-   * P1 — AZ E-MAIL-HATÓKÖRŰ DUPLAVÁSÁRLÁS-BLOKK (start-checkout.ts:
-   * `if (buyer.customerId === null) assertNoDuplicatePurchase({ kind: 'email' })`).
+   * P1 / W2 — AZ E-MAIL-HATÓKÖRŰ DUPLAVÁSÁRLÁS-BLOKK (start-checkout.ts:
+   * mindig `assertNoDuplicatePurchase({ kind: 'email' })`, a customer-ág
+   * mellett, ha van fiók).
    *
    * MIÉRT NEM FOGTA MEG A FENTI, „LÉTEZŐ e-mail" TESZT: ott a
-   * `findExistingUserIdByEmail` TALÁL fiókot, tehát a CUSTOMER-hatókörű
-   * ellenőrzés fut le — az e-mail-hatókörű ág soha nem került mérés alá. A
-   * feltételt `if (false)`-ra cserélve a teljes tesztkészlet zöld maradt.
+   * `findExistingUserByEmail` TALÁL fiókot, tehát a CUSTOMER-hatókörű
+   * ellenőrzés is lefut — a vendég, fiók nélküli e-mail-ág önmagában
+   * nem került mérés alá. A feltételt `if (false)`-ra cserélve a teljes
+   * tesztkészlet zöld maradt.
    *
-   * AZ E-MAIL-HATÓKÖR PONTOSAN AKKOR SZÁMÍT, amikor MÉG NINCS FIÓK: a vendég
-   * elindít egy fizetést (a rendelés `customer` nélkül, `customerEmail`-lel jön
-   * létre), majd a fizetési ablakon belül újra beküld. Blokk nélkül két aktív
-   * `payment_pending` rendelés áll ugyanarra a kurzusra, MINDKETTŐ kifizethető.
-   * A másodikat már csak a paid-átmenet K5-őre fogná meg — akkor viszont a pénz
-   * MÁR le van vonva, és kézi visszatérítés kell.
+   * AZ E-MAIL-HATÓKÖR KÉT HELYEN SZÁMÍT: (1) vendég fiók nélkül — a
+   * rendelés `customer` nélkül, `customerEmail`-lel jön létre, a fizetési
+   * ablakon belüli újabb beküldést csak ez a szűrő látja; (2) bejelentkezett
+   * vevő, akinek korábbi VENDÉG payment_pendingje van ugyanarra az e-mailre
+   * (`customer: null`) — a customer-szűrő ezt nem találja, az e-mail-ág
+   * nélkül második Barion-terhelés indulna. Blokk nélkül két aktív
+   * `payment_pending` rendelés áll ugyanarra a kurzusra, MINDKETTŐ
+   * kifizethető. A másodikat már csak a paid-átmenet K5-őre fogná meg —
+   * akkor viszont a pénz MÁR le van vonva, és kézi visszatérítés kell.
    */
 
   /** A rendelés-lekérdezés hatóköre a where-ből (a mock döntéséhez). */
@@ -390,7 +438,45 @@ describe('startCheckout — vendég-vásárlás', () => {
     expect(asText).not.toContain('"customer"')
   })
 
-  it('VENDÉG, fiók NÉLKÜL, MÁR kifizetett rendeléssel az e-mailre → 409 („már megvásároltad")', async () => {
+  it('BEJELENTKEZVE, korábbi vendég payment_pending ugyanarra az e-mailre → 409, nincs második rendelés', async () => {
+    const sessionUser = {
+      id: 19,
+      email: GUEST.email,
+      name: 'Vendég Vevő',
+    } as unknown as User
+    const seenWhere: string[] = []
+    const { payload, calls } = createMockPayload({
+      findOrders: (where) => {
+        const query = orderQuery(where)
+        seenWhere.push(query.text)
+        // A customer-hatókörű ellenőrzés NEM látja a vendég-rendelést
+        // (customer: null). Csak az e-mail-hatókörű találja meg.
+        const isEmailScope = query.text.includes('"customerEmail"')
+        return query.wantsPending && isEmailScope
+          ? { docs: [{ id: 88, status: 'payment_pending', customer: null }], totalDocs: 1 }
+          : { docs: [], totalDocs: 0 }
+      },
+    })
+
+    const promise = startCheckout({
+      payload,
+      user: sessionUser,
+      input: { productId: 42, consentWithdrawalWaiver: true, consentTerms: true, billing: BILLING },
+    })
+
+    await expect(promise).rejects.toBeInstanceOf(CheckoutError)
+    await expect(promise).rejects.toMatchObject({ status: 409 })
+    await expect(promise).rejects.toThrowError(/folyamatban van egy fizetés/)
+    expect(calls.create).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    const asText = seenWhere.join('\n')
+    expect(asText).toContain('"customerEmail"')
+    expect(asText).toContain(GUEST.email)
+    expect(asText).toContain('"customer"')
+  })
+
+  it('VENDÉG, fiók NÉLKÜL, MÁR kifizetett rendeléssel az e-mailre → 409, nem „már megvásároltad” (W4)', async () => {
     const { payload, calls } = createMockPayload({
       existingUser: null,
       findOrders: (where) =>
@@ -403,7 +489,7 @@ describe('startCheckout — vendég-vásárlás', () => {
     })
 
     await expect(promise).rejects.toMatchObject({ status: 409 })
-    await expect(promise).rejects.toThrowError(/már megvásároltad/)
+    await expect(promise).rejects.toThrowError(CHECKOUT_GUEST_FINISH_AFTER_LOGIN)
     expect(calls.create).toHaveLength(0)
     expect(fetchMock).not.toHaveBeenCalled()
   })

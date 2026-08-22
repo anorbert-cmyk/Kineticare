@@ -3,8 +3,18 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi, type MockInst
 
 import { createBarionCallbackProcessor } from '../lib/barion-callback/process-callback'
 import { createBarionCallbackHandler } from '../lib/barion-callback/route-handler'
-import { processWebhook, type WebhookEventDoc, type WebhookEventStore } from '../lib/idempotency'
+import {
+  MAX_WEBHOOK_ATTEMPTS,
+  processWebhook,
+  type WebhookEventDoc,
+  type WebhookEventStore,
+} from '../lib/idempotency'
 import { onOrderPaid } from '../lib/order-paid'
+import {
+  RATE_LIMIT_RULES,
+  SlidingWindowRateLimiter,
+  type CheckRequestRateLimitOptions,
+} from '../lib/security/rate-limit'
 import type { Order, User } from '../payload-types'
 
 /**
@@ -166,6 +176,11 @@ function createUser(purchases: number[] = []): User {
 interface MockPayloadOptions {
   order?: Order | null
   user?: User
+  /**
+   * Ha true, bármely `barionPaymentId`-lekérdezés találatot ad — az „ismert
+   * PaymentId korlátlan” tesztnek kell, hogy 20+ KÜLÖNBÖZŐ GUID is ismert legyen.
+   */
+  anyPaymentIdKnown?: boolean
 }
 
 function createMockPayload(options: MockPayloadOptions = {}) {
@@ -179,6 +194,9 @@ function createMockPayload(options: MockPayloadOptions = {}) {
       const json = JSON.stringify(where ?? {})
       if (!order) return { docs: [], totalDocs: 0 }
       if (json.includes('barionPaymentId')) {
+        if (options.anyPaymentIdKnown) {
+          return { docs: [order], totalDocs: 1 }
+        }
         return order.barionPaymentId && json.includes(String(order.barionPaymentId))
           ? { docs: [order], totalDocs: 1 }
           : { docs: [], totalDocs: 0 }
@@ -274,10 +292,14 @@ function createScheduleCapture() {
 const CALLBACK_URL = 'https://shop.example.test/api/barion/callback'
 
 /** JSON-törzses kézbesítés (TARTALÉK csatorna — a Barion ma nem ilyet küld). */
-function makeRequest(body: unknown): Request {
+function makeRequest(body: unknown, options: { ip?: string } = {}): Request {
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  if (options.ip) {
+    headers['x-forwarded-for'] = options.ip
+  }
   return new Request(CALLBACK_URL, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: typeof body === 'string' ? body : JSON.stringify(body),
   })
 }
@@ -288,11 +310,16 @@ function makeRequest(body: unknown): Request {
  */
 function makeBarionRequest(
   paymentId: string,
-  options: { queryKey?: 'paymentId' | 'PaymentId'; body?: string } = {},
+  options: { queryKey?: 'paymentId' | 'PaymentId'; body?: string; ip?: string } = {},
 ): Request {
   const url = `${CALLBACK_URL}?${options.queryKey ?? 'paymentId'}=${encodeURIComponent(paymentId)}`
+  const headers = new Headers()
+  if (options.ip) {
+    headers.set('x-forwarded-for', options.ip)
+  }
   return new Request(url, {
     method: 'POST',
+    headers,
     ...(options.body === undefined ? {} : { body: options.body }),
   })
 }
@@ -302,16 +329,30 @@ function makeEmptyRequest(): Request {
   return new Request(CALLBACK_URL, { method: 'POST' })
 }
 
-function setup(options: MockPayloadOptions = {}) {
-  const { store, docs } = createWebhookStore()
+interface SetupOptions extends MockPayloadOptions {
+  rateLimit?: CheckRequestRateLimitOptions
+  initialEvents?: WebhookEventDoc[]
+}
+
+function setup(options: SetupOptions = {}) {
+  const { store, docs } = createWebhookStore(options.initialEvents)
   const { payload, calls, order, user } = createMockPayload(options)
   const capture = createScheduleCapture()
+  // Saját limiter: a tesztek ne a folyamat-alapértelmezett Map-et osszák.
+  const rateLimit = options.rateLimit ?? { limiter: new SlidingWindowRateLimiter() }
   const POST = createBarionCallbackHandler({
     getPayload: async () => payload,
     schedule: capture.schedule,
     store,
+    rateLimit,
   })
-  return { POST, store, docs, payload, calls, order, user, capture }
+  return { POST, store, docs, payload, calls, order, user, capture, rateLimit }
+}
+
+/** Determinisztikus, alakilag érvényes GUID a W12 unknown-zápor tesztekhez. */
+function guidFromIndex(index: number): string {
+  const hex = index.toString(16).padStart(12, '0')
+  return `aaaaaaaa-bbbb-cccc-dddd-${hex}`
 }
 
 const logOutput = (spy: MockInstance<(...args: unknown[]) => void>): string =>
@@ -343,11 +384,11 @@ describe('POST /api/barion/callback — bemenet-ellenőrzés', () => {
   })
 
   /**
-   * A végpont szándékosan kimarad a kérés-korlát alól (a fizetési értesítés
-   * elvesztése pénzt jelent), tehát bárki korlátlanul hívhatja. Alak-ellenőrzés
-   * nélkül minden hívás EGY webhook-events sort írna és EGY kimenő Barion
-   * GetState-hívást indítana — ezért a nem GUID-alakú PaymentId már a
-   * dedup-írás ELŐTT elakad.
+   * Az útvonal-osztályozó a callbacket szándékosan kihagyja (a fizetési
+   * értesítés elvesztése pénzt jelent). Alak-ellenőrzés nélkül minden hívás
+   * EGY webhook-events sort írna és EGY kimenő Barion GetState-hívást
+   * indítana — ezért a nem GUID-alakú PaymentId már a dedup-írás ELŐTT elakad.
+   * Az alakilag helyes, de ismeretlen GUID-ot a handler IP-kerete fogja (W12).
    */
   it('szemét (nem GUID) PaymentId → 400, DB-írás és ütemezés NÉLKÜL', async () => {
     const { POST, docs, capture } = setup()
@@ -501,7 +542,11 @@ describe('(h) aszinkron viselkedés — a 200 NEM vár a GetState-re', () => {
     expect(fetchMock).not.toHaveBeenCalled()
     // A dedup-rekord viszont már létezik (azonnal rögzítve).
     expect(docs).toHaveLength(1)
-    expect(docs[0]).toMatchObject({ provider: 'barion', externalId: PAYMENT_ID, status: 'received' })
+    expect(docs[0]).toMatchObject({
+      provider: 'barion',
+      externalId: PAYMENT_ID,
+      status: 'received',
+    })
     // A nyers body nincs tárolva — csak a strukturált paymentId.
     expect(docs[0].payload).toEqual({ paymentId: PAYMENT_ID })
 
@@ -641,38 +686,44 @@ describe('(b) duplikált callback — EXACTLY ONCE', () => {
 })
 
 describe('(c) cancelled — Canceled és Expired', () => {
-  it.each([['Canceled'], ['Expired']])('%s → payment_pending rendelés cancelled lesz', async (barionStatus) => {
-    const { POST, docs, order, capture } = setup()
-    fetchMock.mockResolvedValueOnce(getStateResponse(barionStatus))
+  it.each([['Canceled'], ['Expired']])(
+    '%s → payment_pending rendelés cancelled lesz',
+    async (barionStatus) => {
+      const { POST, docs, order, capture } = setup()
+      fetchMock.mockResolvedValueOnce(getStateResponse(barionStatus))
 
-    const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
-    expect(response.status).toBe(200)
-    await capture.runAll()
+      const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
+      expect(response.status).toBe(200)
+      await capture.runAll()
 
-    expect(order?.status).toBe('cancelled')
-    expect(docs[0]).toMatchObject({ status: 'processed', result: 'cancelled' })
-  })
+      expect(order?.status).toBe('cancelled')
+      expect(docs[0]).toMatchObject({ status: 'processed', result: 'cancelled' })
+    },
+  )
 })
 
 describe('(d) függő státusz — Prepared/Started', () => {
-  it.each([['Prepared'], ['Started']])('%s → a rendelés payment_pending marad, repoll-jelzéssel', async (barionStatus) => {
-    const { POST, docs, order, calls, capture } = setup()
-    fetchMock.mockResolvedValueOnce(getStateResponse(barionStatus))
+  it.each([['Prepared'], ['Started']])(
+    '%s → a rendelés payment_pending marad, repoll-jelzéssel',
+    async (barionStatus) => {
+      const { POST, docs, order, calls, capture } = setup()
+      fetchMock.mockResolvedValueOnce(getStateResponse(barionStatus))
 
-    const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
-    expect(response.status).toBe(200)
-    await capture.runAll()
+      const response = await POST(makeRequest({ PaymentId: PAYMENT_ID }))
+      expect(response.status).toBe(200)
+      await capture.runAll()
 
-    // Státusz VÁLTOZATLAN, purchases-beírás NINCS — a poll-job (külön ticket) dolgozza fel.
-    expect(order?.status).toBe('payment_pending')
-    expect(calls.update.filter((call) => call.collection === 'orders')).toHaveLength(0)
-    expect(calls.update.filter((call) => call.collection === 'users')).toHaveLength(0)
-    // B4: a függő kimenetel NEM VÉGLEGES — a rekord újrafeldolgozható marad
-    // (received + üres processedAt), különben a később érkező végleges státusz
-    // duplikátumként veszne el.
-    expect(docs[0]).toMatchObject({ status: 'received', result: 'pending_repoll' })
-    expect(docs[0]?.processedAt ?? null).toBeNull()
-  })
+      // Státusz VÁLTOZATLAN, purchases-beírás NINCS — a poll-job (külön ticket) dolgozza fel.
+      expect(order?.status).toBe('payment_pending')
+      expect(calls.update.filter((call) => call.collection === 'orders')).toHaveLength(0)
+      expect(calls.update.filter((call) => call.collection === 'users')).toHaveLength(0)
+      // B4: a függő kimenetel NEM VÉGLEGES — a rekord újrafeldolgozható marad
+      // (received + üres processedAt), különben a később érkező végleges státusz
+      // duplikátumként veszne el.
+      expect(docs[0]).toMatchObject({ status: 'received', result: 'pending_repoll' })
+      expect(docs[0]?.processedAt ?? null).toBeNull()
+    },
+  )
 })
 
 /**
@@ -954,5 +1005,155 @@ describe('orderNumber-fallback és titokvédelem', () => {
     await capture.runAll()
 
     expect(logOutput(logSpy)).not.toContain(DUMMY_POS_KEY)
+  })
+})
+
+/**
+ * W12 — ismeretlen PaymentId IP-kerete; ismert rendelés korlátlan.
+ *
+ * Az útvonal-osztályozó a callbacket kihagyja (a valódi Barion-retry nem
+ * eshet globális vödörbe). A handler CSAK akkor fogyaszt, ha nincs
+ * `orders.barionPaymentId` egyezés, és CSAK a `store.create` előtt.
+ */
+describe('W12 — ismeretlen PaymentId IP-kerete', () => {
+  const unknownLimit = RATE_LIMIT_RULES['barion-callback-unknown'].limit
+  const sharedIp = '203.0.113.80'
+
+  it('ismert PaymentId: 20+ callback 200, ütemez, és NEM fogyasztja az unknown-keretet', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const { POST, docs, capture, store } = setup({
+      anyPaymentIdKnown: true,
+      rateLimit: { limiter },
+    })
+    const createSpy = vi.spyOn(store, 'create')
+
+    for (let index = 0; index < unknownLimit + 5; index += 1) {
+      const response = await POST(makeBarionRequest(guidFromIndex(index), { ip: sharedIp }))
+      expect(response.status, `ismert #${index}`).toBe(200)
+      expect(await response.json()).toEqual({ ok: true, status: 'accepted' })
+    }
+
+    expect(docs).toHaveLength(unknownLimit + 5)
+    expect(createSpy).toHaveBeenCalledTimes(unknownLimit + 5)
+    expect(capture.tasks).toHaveLength(unknownLimit + 5)
+
+    // Az unknown-vödör érintetlen: egy ismeretlen GUID még mindig átmegy.
+    const unknown = setup({
+      order: null,
+      rateLimit: { limiter },
+    })
+    const leftover = await unknown.POST(makeBarionRequest(guidFromIndex(900), { ip: sharedIp }))
+    expect(leftover.status).toBe(200)
+    expect(await leftover.json()).toEqual({ ok: true, status: 'accepted' })
+    expect(unknown.docs).toHaveLength(1)
+    expect(unknown.capture.tasks).toHaveLength(1)
+  })
+
+  it('ismeretlen GUID ugyanarról az IP-ről: a keretig insert+ütemez, felette 200 no-op', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const { POST, docs, capture, store } = setup({
+      order: null,
+      rateLimit: { limiter },
+    })
+    const createSpy = vi.spyOn(store, 'create')
+
+    for (let index = 0; index < unknownLimit; index += 1) {
+      const response = await POST(makeBarionRequest(guidFromIndex(index), { ip: sharedIp }))
+      expect(response.status, `unknown #${index}`).toBe(200)
+      expect(await response.json()).toEqual({ ok: true, status: 'accepted' })
+    }
+
+    expect(docs).toHaveLength(unknownLimit)
+    expect(createSpy).toHaveBeenCalledTimes(unknownLimit)
+    expect(capture.tasks).toHaveLength(unknownLimit)
+
+    const over = await POST(makeBarionRequest(guidFromIndex(unknownLimit), { ip: sharedIp }))
+    expect(over.status).toBe(200)
+    expect(await over.json()).toEqual({ ok: true, status: 'ignored' })
+    expect(createSpy).toHaveBeenCalledTimes(unknownLimit)
+    expect(docs).toHaveLength(unknownLimit)
+    expect(capture.tasks).toHaveLength(unknownLimit)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('különböző IP-k külön vödröt kapnak', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const { POST, docs, capture } = setup({
+      order: null,
+      rateLimit: { limiter },
+    })
+
+    for (let index = 0; index < unknownLimit; index += 1) {
+      const response = await POST(makeBarionRequest(guidFromIndex(index), { ip: '198.51.100.10' }))
+      expect(response.status).toBe(200)
+    }
+    const blocked = await POST(
+      makeBarionRequest(guidFromIndex(unknownLimit), { ip: '198.51.100.10' }),
+    )
+    expect(await blocked.json()).toEqual({ ok: true, status: 'ignored' })
+
+    const otherIp = await POST(
+      makeBarionRequest(guidFromIndex(unknownLimit + 1), { ip: '198.51.100.11' }),
+    )
+    expect(otherIp.status).toBe(200)
+    expect(await otherIp.json()).toEqual({ ok: true, status: 'accepted' })
+    expect(docs).toHaveLength(unknownLimit + 1)
+    expect(capture.tasks).toHaveLength(unknownLimit + 1)
+  })
+
+  it('kimerült ismeretlen esemény: 200 no-op, nincs ütemezés (nincs új GetState)', async () => {
+    const { POST, docs, capture, store } = setup({
+      order: null,
+      initialEvents: [
+        {
+          id: 1,
+          provider: 'barion',
+          externalId: PAYMENT_ID,
+          status: 'failed',
+          attempts: MAX_WEBHOOK_ATTEMPTS,
+          result: 'failed',
+        },
+      ],
+    })
+    const createSpy = vi.spyOn(store, 'create')
+
+    const response = await POST(makeBarionRequest(PAYMENT_ID, { ip: sharedIp }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: true, status: 'received' })
+    expect(createSpy).not.toHaveBeenCalled()
+    expect(capture.tasks).toHaveLength(0)
+    expect(docs).toHaveLength(1)
+    expect(docs[0]).toMatchObject({
+      status: 'failed',
+      attempts: MAX_WEBHOOK_ATTEMPTS,
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('kimerült ISMERT rendelés eseménye: továbbra is ütemez (W13)', async () => {
+    const { POST, docs, capture } = setup({
+      initialEvents: [
+        {
+          id: 1,
+          provider: 'barion',
+          externalId: PAYMENT_ID,
+          status: 'failed',
+          attempts: MAX_WEBHOOK_ATTEMPTS,
+          result: 'failed',
+        },
+      ],
+    })
+
+    const response = await POST(makeBarionRequest(PAYMENT_ID, { ip: sharedIp }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: true, status: 'received' })
+    expect(capture.tasks).toHaveLength(1)
+    expect(docs).toHaveLength(1)
+    expect(docs[0]).toMatchObject({
+      status: 'failed',
+      attempts: MAX_WEBHOOK_ATTEMPTS,
+    })
   })
 })

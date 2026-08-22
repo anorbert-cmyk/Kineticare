@@ -11,7 +11,9 @@
  *
  * A redact-lista minden környezetben érvényes: az itt felsorolt kulcsnevek
  * értéke sosem kerül a naplóba, hanem "[REDACTED]" jelöléssel helyettesül,
- * így production-ben sem szivároghat ki érzékeny adat.
+ * így production-ben sem szivároghat ki érzékeny adat. Az `email` PONTOS
+ * egyezés (az `emailDelivered` üzemeltetési mező megmarad); a titok-jellegű
+ * kulcsok RÉSZLEGES jelölővel illeszkednek (lásd `isRedactedKey`).
  */
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
@@ -94,6 +96,23 @@ const REDACTED_KEYS: ReadonlySet<string> = new Set(
   ].map((key) => key.toLowerCase()),
 )
 
+/**
+ * Részleges, kisbetűs jelölők a titok-jellegű kulcsnevekre — az audit
+ * `isSensitiveAuditKey` mintájára (`src/lib/audit.ts`). Így a
+ * `resetPasswordToken`, `accessToken`, `sessions` és `activationUrl`
+ * sem szivárog ki. Az `email` SZÁNDÉKOSAN nincs itt: az `emailDelivered`
+ * üzemeltetési mező a terméknaplókban maradjon olvasható.
+ */
+const REDACT_KEY_MARKERS = ['password', 'token', 'secret', 'session', 'activation'] as const
+
+function isRedactedKey(key: string): boolean {
+  const lowered = key.toLowerCase()
+  if (REDACTED_KEYS.has(lowered)) {
+    return true
+  }
+  return REDACT_KEY_MARKERS.some((marker) => lowered.includes(marker))
+}
+
 function envValue(key: string): string | undefined {
   if (typeof process === 'undefined' || !process.env) {
     return undefined
@@ -141,7 +160,7 @@ function redactValue(value: unknown, seen: ReadonlySet<object>, depth: number): 
   nextSeen.add(value)
   const output: Record<string, unknown> = {}
   for (const [key, item] of Object.entries(value)) {
-    output[key] = REDACTED_KEYS.has(key.toLowerCase())
+    output[key] = isRedactedKey(key)
       ? REDACTED_VALUE
       : redactValue(item, nextSeen, depth + 1)
   }

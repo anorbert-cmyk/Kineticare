@@ -11,12 +11,22 @@ import {
   FREE_COURSE_UNAVAILABLE_ERROR,
   resolveServerUrlOrNull,
 } from '../lib/free-course/route-handler'
+import { grantFreeCoursesToUser } from '../lib/free-course-grant'
 import {
   requestFreeCourseAccess,
+  resolveFreeCourseRequestActions,
   FREE_COURSE_TOKEN_TTL_DAYS,
   FREE_COURSE_TOKEN_TTL_MS,
 } from '../lib/free-course/request-access'
 import { INVITE_TOKEN_TTL_MS } from '@/lib/customer-import/invite'
+
+vi.mock('../lib/free-course-grant', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/free-course-grant')>()
+  return {
+    ...actual,
+    grantFreeCoursesToUser: vi.fn(actual.grantFreeCoursesToUser),
+  }
+})
 import { FREE_COURSE_GENERIC_ERROR } from '../lib/free-course/ui-text'
 import {
   parseFreeCourseRequestBody,
@@ -155,8 +165,7 @@ function createMockPayload(options: MockOptions = {}) {
         return { docs, totalDocs: docs.length }
       }
       // A grantFreeCoursesToUser lekérdezése: published + priceInHUFEnabled === false.
-      const clauses =
-        (where as { and?: Array<Record<string, Record<string, unknown>>> })?.and ?? []
+      const clauses = (where as { and?: Array<Record<string, Record<string, unknown>>> })?.and ?? []
       const docs = products.filter((product) =>
         clauses.every((clause) => {
           if (clause.status?.equals !== undefined && product.status !== clause.status.equals) {
@@ -189,7 +198,14 @@ function createMockPayload(options: MockOptions = {}) {
       return row
     }),
     update: vi.fn(
-      async ({ id, data }: { collection: string; id: number | string; data: Record<string, unknown> }) => {
+      async ({
+        id,
+        data,
+      }: {
+        collection: string
+        id: number | string
+        data: Record<string, unknown>
+      }) => {
         const user = users.find((row) => String(row.id) === String(id))
         if (user && Array.isArray(data.purchases)) {
           user.purchases = (data.purchases as number[]).slice()
@@ -204,10 +220,12 @@ function createMockPayload(options: MockOptions = {}) {
         return `token-${nextToken}`
       },
     ),
-    sendEmail: vi.fn(async (message: { to: string; subject: string; html: string; text: string }) => {
-      sent.push(message)
-      return options.sendResult ?? { ok: true, provider: 'resend' }
-    }),
+    sendEmail: vi.fn(
+      async (message: { to: string; subject: string; html: string; text: string }) => {
+        sent.push(message)
+        return options.sendResult ?? { ok: true, provider: 'resend' }
+      },
+    ),
   }
 
   return {
@@ -237,12 +255,40 @@ const ENV_WITHOUT_EMAIL = {
   NEXT_PUBLIC_SERVER_URL: 'https://pelda.kineticare.hu',
 } as const
 
+/** Már aktivált vevő: jelszó be van állítva, tokent NEM szabad írni (K3). */
 const MEGLEVO_VEVO: UserRow = {
   id: 101,
   email: 'anna@pelda.hu',
   name: 'Anna',
   role: 'customer',
   purchases: [],
+  passwordSetupPending: false,
+}
+
+const MEGLEVO_OWNER: UserRow = {
+  id: 201,
+  email: 'tulaj@pelda.hu',
+  name: 'Tulajdonos',
+  role: 'owner',
+  purchases: [],
+}
+
+const MEGLEVO_STAFF: UserRow = {
+  id: 202,
+  email: 'munkatars@pelda.hu',
+  name: 'Munkatárs',
+  role: 'staff',
+  purchases: [],
+}
+
+/** Import/igénylés után, jelszó nélkül: a 7 napos belépő token IGEN. */
+const VARAKOZO_VEVO: UserRow = {
+  id: 203,
+  email: 'varakozo@pelda.hu',
+  name: 'Váró Vevő',
+  role: 'customer',
+  purchases: [],
+  passwordSetupPending: true,
 }
 
 beforeEach(() => {
@@ -250,6 +296,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', () => {
     throw new Error('TESZT: valódi hálózati hívás indult — minden HTTP-hívót injektálni kell')
   })
+  vi.mocked(grantFreeCoursesToUser).mockClear()
 })
 
 afterEach(() => {
@@ -309,6 +356,8 @@ describe('igénylés ÚJ e-mail-címmel', () => {
     expect(mock.sent[0].to).toBe('piroska@pelda.hu')
     expect(mock.sent[0].html).toContain('https://pelda.kineticare.hu/jelszo-visszaallitas?token=')
     expect(mock.sent[0].subject).toContain('SOS KézRelax villámkurzus')
+    expect(vi.mocked(grantFreeCoursesToUser)).toHaveBeenCalledTimes(1)
+    expect(mock.forgotPasswordCalls[0].expiration).toBe(FREE_COURSE_TOKEN_TTL_MS)
   })
 
   it('a belépő link a Payload SAJÁT reset-tokenjéből épül, levélküldés nélkül generálva', async () => {
@@ -325,8 +374,9 @@ describe('igénylés ÚJ e-mail-címmel', () => {
       logger: log,
     })
 
-    const call = (mock.mocks.forgotPassword as unknown as { mock: { calls: [Record<string, unknown>][] } })
-      .mock.calls[0][0]
+    const call = (
+      mock.mocks.forgotPassword as unknown as { mock: { calls: [Record<string, unknown>][] } }
+    ).mock.calls[0][0]
     // `disableEmail: true` — a levelet MI fogalmazzuk meg magyarul, nem a
     // Payload gyári sablonja megy ki.
     expect(call.disableEmail).toBe(true)
@@ -398,7 +448,10 @@ describe('igénylés MEGLÉVŐ e-mail-címmel', () => {
     expect(mock.users[0].purchases).toContain(FREE_COURSE.id)
     // A meglévő fiók NEVÉT nem írja felül az űrlapon megadott név.
     expect(mock.users[0].name).toBe('Anna')
-    expect(mock.sent).toHaveLength(1)
+    // Aktivált vevő: grant IGEN, 7 napos reset-token NEM (K3).
+    expect(vi.mocked(grantFreeCoursesToUser)).toHaveBeenCalledTimes(1)
+    expect(mock.forgotPasswordCalls).toHaveLength(0)
+    expect(mock.sent).toHaveLength(0)
   })
 
   it('a HTTP-válasz BITRE azonos új és meglévő címnél (fiók-felderítés elleni védelem)', async () => {
@@ -417,9 +470,7 @@ describe('igénylés MEGLÉVŐ e-mail-címmel', () => {
     const uj = handlerFor([MEGLEVO_VEVO])
     const meglevo = handlerFor([MEGLEVO_VEVO])
 
-    const ujValasz = await uj.handler(
-      requestFor({ email: 'uj.cim@pelda.hu', name: 'Új Látogató' }),
-    )
+    const ujValasz = await uj.handler(requestFor({ email: 'uj.cim@pelda.hu', name: 'Új Látogató' }))
     const meglevoValasz = await meglevo.handler(
       requestFor({ email: MEGLEVO_VEVO.email, name: 'Anna' }),
     )
@@ -428,9 +479,198 @@ describe('igénylés MEGLÉVŐ e-mail-címmel', () => {
     expect(await ujValasz.json()).toEqual(await meglevoValasz.json())
     // A `userCreated` a szolgáltatásban létezik (naplóhoz kell), de a válaszban
     // SOSEM jelenhet meg: abból derülne ki, ki a vevőnk.
-    expect(JSON.stringify(await handlerBody(uj.handler, { email: 'masik@pelda.hu' }))).not.toContain(
-      'userCreated',
-    )
+    expect(
+      JSON.stringify(await handlerBody(uj.handler, { email: 'masik@pelda.hu' })),
+    ).not.toContain('userCreated')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// K3: jelszó-token és grant kapu (owner/staff / aktivált vevő / pending)
+// ---------------------------------------------------------------------------
+
+describe('jelszó-token és grant kapu (K3)', () => {
+  it('a döntőtábla: új fiók és pending customer kap tokent, owner/staff semmit', () => {
+    expect(
+      resolveFreeCourseRequestActions({
+        created: true,
+        role: 'customer',
+        passwordSetupPending: true,
+      }),
+    ).toEqual({ grant: true, issueSetPasswordToken: true })
+    expect(
+      resolveFreeCourseRequestActions({
+        created: false,
+        role: 'customer',
+        passwordSetupPending: true,
+      }),
+    ).toEqual({ grant: true, issueSetPasswordToken: true })
+    expect(
+      resolveFreeCourseRequestActions({
+        created: false,
+        role: 'customer',
+        passwordSetupPending: false,
+      }),
+    ).toEqual({ grant: true, issueSetPasswordToken: false })
+    expect(
+      resolveFreeCourseRequestActions({
+        created: false,
+        role: 'owner',
+        passwordSetupPending: true,
+      }),
+    ).toEqual({ grant: false, issueSetPasswordToken: false })
+    expect(
+      resolveFreeCourseRequestActions({
+        created: false,
+        role: 'staff',
+        passwordSetupPending: false,
+      }),
+    ).toEqual({ grant: false, issueSetPasswordToken: false })
+  })
+
+  it('meglévő owner: forgotPassword NEM hívódik, grant NEM hívódik, a válasz { ok: true }', async () => {
+    const mock = createMockPayload({ users: [MEGLEVO_OWNER] })
+    const { log, warns } = createLogger()
+
+    const result = await requestFreeCourseAccess({
+      payload: mock.payload,
+      productId: FREE_COURSE.id,
+      name: 'Valaki',
+      email: MEGLEVO_OWNER.email,
+      serverUrl: 'https://pelda.kineticare.hu',
+      env: ENV_WITH_EMAIL,
+      logger: log,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.userCreated).toBe(false)
+    expect(result.grantedProductIds).toEqual([])
+    expect(mock.forgotPasswordCalls).toHaveLength(0)
+    expect(mock.sent).toHaveLength(0)
+    expect(vi.mocked(grantFreeCoursesToUser)).not.toHaveBeenCalled()
+    expect(mock.users[0].purchases).toEqual([])
+    expect(warns.join(' ')).toContain('owner/staff')
+    expect(mock.mocks.forgotPassword).not.toHaveBeenCalled()
+  })
+
+  it('meglévő staff: forgotPassword NEM hívódik, grant NEM hívódik, a válasz { ok: true }', async () => {
+    const mock = createMockPayload({ users: [MEGLEVO_STAFF] })
+    const { log } = createLogger()
+
+    const result = await requestFreeCourseAccess({
+      payload: mock.payload,
+      productId: FREE_COURSE.id,
+      name: 'Valaki',
+      email: MEGLEVO_STAFF.email,
+      serverUrl: 'https://pelda.kineticare.hu',
+      env: ENV_WITH_EMAIL,
+      logger: log,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.userCreated).toBe(false)
+    expect(result.grantedProductIds).toEqual([])
+    expect(mock.forgotPasswordCalls).toHaveLength(0)
+    expect(mock.sent).toHaveLength(0)
+    expect(vi.mocked(grantFreeCoursesToUser)).not.toHaveBeenCalled()
+    expect(mock.users[0].purchases).toEqual([])
+  })
+
+  it('meglévő customer passwordSetupPending: true — 7 napos token ÉS grant', async () => {
+    const mock = createMockPayload({ users: [VARAKOZO_VEVO] })
+    const { log } = createLogger()
+
+    const result = await requestFreeCourseAccess({
+      payload: mock.payload,
+      productId: FREE_COURSE.id,
+      name: 'Váró Vevő',
+      email: VARAKOZO_VEVO.email,
+      serverUrl: 'https://pelda.kineticare.hu',
+      env: ENV_WITH_EMAIL,
+      logger: log,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.userCreated).toBe(false)
+    expect(result.emailDelivered).toBe(true)
+    expect(vi.mocked(grantFreeCoursesToUser)).toHaveBeenCalledTimes(1)
+    expect(mock.users[0].purchases).toContain(FREE_COURSE.id)
+    expect(mock.forgotPasswordCalls).toEqual([
+      { email: VARAKOZO_VEVO.email, expiration: FREE_COURSE_TOKEN_TTL_MS },
+    ])
+    expect(mock.sent).toHaveLength(1)
+  })
+
+  it('meglévő customer jelszóval: forgotPassword NEM, grant IGEN', async () => {
+    const mock = createMockPayload({ users: [MEGLEVO_VEVO] })
+    const { log } = createLogger()
+
+    const result = await requestFreeCourseAccess({
+      payload: mock.payload,
+      productId: FREE_COURSE.id,
+      name: 'Anna',
+      email: MEGLEVO_VEVO.email,
+      serverUrl: 'https://pelda.kineticare.hu',
+      env: ENV_WITH_EMAIL,
+      logger: log,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.userCreated).toBe(false)
+    expect(vi.mocked(grantFreeCoursesToUser)).toHaveBeenCalledTimes(1)
+    expect(mock.users[0].purchases).toContain(FREE_COURSE.id)
+    expect(mock.forgotPasswordCalls).toHaveLength(0)
+    expect(mock.sent).toHaveLength(0)
+  })
+
+  it('új fiók: forgotPassword + grant, a HTTP-válasz nem árulja el a szerepkört', async () => {
+    const mock = createMockPayload({ users: [MEGLEVO_VEVO] })
+    const { log } = createLogger()
+
+    const result = await requestFreeCourseAccess({
+      payload: mock.payload,
+      productId: FREE_COURSE.id,
+      name: 'Kis Piroska',
+      email: 'piroska@pelda.hu',
+      serverUrl: 'https://pelda.kineticare.hu',
+      env: ENV_WITH_EMAIL,
+      logger: log,
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.userCreated).toBe(true)
+    expect(vi.mocked(grantFreeCoursesToUser)).toHaveBeenCalledTimes(1)
+    expect(mock.forgotPasswordCalls).toEqual([
+      { email: 'piroska@pelda.hu', expiration: FREE_COURSE_TOKEN_TTL_MS },
+    ])
+    expect(mock.sent).toHaveLength(1)
+  })
+
+  it('a HTTP-válasz owner, staff, aktivált vevő, pending vevő és új cím esetén is azonos alakú', async () => {
+    const cases: Array<{ users: UserRow[]; email: string }> = [
+      { users: [MEGLEVO_OWNER, MEGLEVO_VEVO], email: MEGLEVO_OWNER.email },
+      { users: [MEGLEVO_STAFF, MEGLEVO_VEVO], email: MEGLEVO_STAFF.email },
+      { users: [MEGLEVO_VEVO], email: MEGLEVO_VEVO.email },
+      { users: [VARAKOZO_VEVO, MEGLEVO_VEVO], email: VARAKOZO_VEVO.email },
+      { users: [MEGLEVO_VEVO], email: 'uj.cim@pelda.hu' },
+    ]
+
+    const bodies: unknown[] = []
+    for (const teszt of cases) {
+      const mock = createMockPayload({ users: teszt.users })
+      const handler = createFreeCourseRequestHandler({
+        getPayload: async () => mock.payload,
+        env: ENV_WITH_EMAIL,
+        limiter: new SlidingWindowRateLimiter(),
+      })
+      const response = await handler(requestFor({ email: teszt.email, name: 'Valaki' }))
+      expect(response.status).toBe(200)
+      const body: unknown = await response.json()
+      expect(body).toEqual({ ok: true, emailSent: true })
+      expect(JSON.stringify(body)).not.toMatch(/owner|staff|userCreated|role/u)
+      bodies.push(body)
+    }
+    expect(new Set(bodies.map((body) => JSON.stringify(body))).size).toBe(1)
   })
 })
 
@@ -572,7 +812,11 @@ describe('hiányzó RESEND_API_KEY', () => {
 
 describe('validáció', () => {
   it('a hozzájárulás KÖTELEZŐ, és sosem előpipált', () => {
-    const errors = validateFreeCourseForm({ name: 'Anna', email: 'a@pelda.hu', consentPrivacy: false })
+    const errors = validateFreeCourseForm({
+      name: 'Anna',
+      email: 'a@pelda.hu',
+      consentPrivacy: false,
+    })
     expect(errors.consentPrivacy).toBe(FREE_COURSE_CONSENT_ERROR)
   })
 
@@ -583,7 +827,12 @@ describe('validáció', () => {
   })
 
   it('a SZERVER-oldali elemző ugyanazokat a szabályokat érvényesíti', () => {
-    const rossz = parseFreeCourseRequestBody({ productId: 2, name: '', email: 'x', consentPrivacy: false })
+    const rossz = parseFreeCourseRequestBody({
+      productId: 2,
+      name: '',
+      email: 'x',
+      consentPrivacy: false,
+    })
     expect(rossz.ok).toBe(false)
     if (!rossz.ok) {
       expect(rossz.errors).toContain(FREE_COURSE_NAME_REQUIRED_ERROR)
@@ -694,9 +943,7 @@ describe('spam- és visszaélés-védelem', () => {
     expect(await rossz.json()).toEqual({ error: FREE_COURSE_TURNSTILE_ERROR })
     expect(mock.created).toHaveLength(0)
 
-    const jo = await handler(
-      requestFor({ email: 'piroska@pelda.hu', turnstileToken: 'jo-token' }),
-    )
+    const jo = await handler(requestFor({ email: 'piroska@pelda.hu', turnstileToken: 'jo-token' }))
     expect(jo.status).toBe(200)
   })
 

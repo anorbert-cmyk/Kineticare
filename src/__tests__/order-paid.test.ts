@@ -1,8 +1,8 @@
 import type { Payload } from 'payload'
 import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
-import { INVITE_TOKEN_TTL_MS } from '../lib/customer-import/invite'
 import { orderConfirmationEmail } from '../lib/email/templates/order'
+import { GUEST_ACTIVATION_TOKEN_TTL_MS } from '../lib/security/activation-token'
 import type { LogContext, Logger } from '../lib/logger'
 import { onOrderPaid, queueInvoiceIssueJob } from '../lib/order-paid'
 import { getSzamlazzConfig, isSzamlazzEnabled } from '../lib/szamlazz'
@@ -73,7 +73,9 @@ function createOrder(overrides: Partial<Order> = {}): Order {
     status: 'paid',
     customerEmail: 'anna@example.test',
     totalHufSnapshot: 19990,
-    items: [{ product: 42, quantity: 1, titleSnapshot: 'DEMO-KEZREHAB-001', priceHufSnapshot: 19990 }],
+    items: [
+      { product: 42, quantity: 1, titleSnapshot: 'DEMO-KEZREHAB-001', priceHufSnapshot: 19990 },
+    ],
     customerSnapshot: { name: 'Teszt Anna', email: 'anna@example.test' },
     ...overrides,
   } as unknown as Order
@@ -126,7 +128,12 @@ describe('onOrderPaid', () => {
         payload: {} as never,
         order: createOrder(),
         queueInvoice: async () => true,
-        send: async () => ({ ok: false, provider: 'smtp' as const, retryable: true, error: 'SMTP down' }),
+        send: async () => ({
+          ok: false,
+          provider: 'smtp' as const,
+          retryable: true,
+          error: 'SMTP down',
+        }),
       }),
     ).resolves.toBeUndefined()
   })
@@ -151,7 +158,6 @@ describe('onOrderPaid', () => {
     expect(sent).toHaveLength(0)
   })
 })
-
 
 // ---------------------------------------------------------------------------
 // Vendég-vásárlás: a visszaigazoló levél HÁROM változata
@@ -266,7 +272,7 @@ describe('onOrderPaid — a levél változata a fiók állapotából', () => {
     expect(sent[0].text).toContain('Elfelejtett jelszó')
   })
 
-  it('az alapértelmezett link-készítő a Payload forgotPassword-jét használja (30 napos, e-mail nélkül)', async () => {
+  it('az alapértelmezett link-készítő a Payload forgotPassword-jét használja (7 napos, e-mail nélkül)', async () => {
     const forgotPassword = vi.fn(async () => ACTIVATION_TOKEN)
     const sent: Array<{ text: string }> = []
     process.env.NEXT_PUBLIC_SERVER_URL = 'https://shop.example.test'
@@ -286,11 +292,12 @@ describe('onOrderPaid — a levél változata a fiók állapotából', () => {
       collection: 'users',
       data: { email: 'anna@example.test' },
       disableEmail: true,
-      expiration: INVITE_TOKEN_TTL_MS,
+      expiration: GUEST_ACTIVATION_TOKEN_TTL_MS,
     })
     expect(sent[0].text).toContain(
       `https://shop.example.test/jelszo-visszaallitas?token=${ACTIVATION_TOKEN}`,
     )
+    expect(sent[0].text).toContain('7 napig érvényes')
   })
 
   it('a NAPLÓ sem a tokent, sem a teljes linket nem tartalmazza', async () => {
@@ -381,7 +388,6 @@ describe('onOrderPaid — számlázási konfighiba mellett is kimegy a levél', 
     expect(sent[0]).not.toContain('Számlázz.hu')
   })
 })
-
 
 // ---------------------------------------------------------------------------
 // P2 — a NÉMA számla-kimaradás nem maradhat néma

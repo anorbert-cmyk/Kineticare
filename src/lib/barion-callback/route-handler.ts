@@ -5,12 +5,18 @@ import {
   isNonTerminalWebhookResult,
   isTerminallyProcessed,
   isUniqueViolation,
+  MAX_WEBHOOK_ATTEMPTS,
   processWebhook,
   webhookEventStore,
   type WebhookEventStore,
 } from '../idempotency'
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
+import {
+  checkIpRateLimit,
+  resolveRateLimitIp,
+  type CheckRequestRateLimitOptions,
+} from '../security/rate-limit'
 import { createBarionCallbackProcessor } from './process-callback'
 
 /**
@@ -42,18 +48,25 @@ import { createBarionCallbackProcessor } from './process-callback'
  *
  * Biztonsági elv: a callback-payload önmagában NEM bizonyíték — a jóváhagyás
  * kizárólag a szerver-szerver fetchPaymentState (v4) verifikációval történik
- * (lásd process-callback.ts). Ezért a HAMIS/ismeretlen (de ALAKILAG ÉRVÉNYES)
- * PaymentId is 200-at kap: az esemény a webhook-events-ben rögzül, a feldolgozó
- * riasztást naplóz, a Barion retry-ja pedig nem pörög feleslegesen egy sosem
- * sikerülő híváson.
+ * (lásd process-callback.ts). A HAMIS/ismeretlen (de ALAKILAG ÉRVÉNYES)
+ * PaymentId is 200-at kap: a Barion retry-ja nem pörög egy sosem sikerülő
+ * híváson. Az ÚTVONAL-alapú kérés-korlát (`classifyRateLimitedRoute`) a
+ * callbacket szándékosan KIHAGYJA — egy valódi fizetési értesítés elvesztése
+ * pénzt jelent, a Barion retry-ját nem szabad globális IP-vödörbe tenni.
  *
- * ALAK-ELLENŐRZÉS a DB-írás ELŐTT: a végpont szándékosan kimarad a kérés-korlát
- * alól (`classifyRateLimitedRoute` — a fizetési értesítés elvesztése pénzt
- * jelent), tehát bárki korlátlanul hívhatja. Fék nélkül minden hívás EGY új
- * webhook-events sort írna (a tábla korlátlanul nőne) és EGY kimenő Barion
- * GetState-hívást indítana. Ezért a PaymentId-nek GUID-alakúnak kell lennie:
- * ami nem az, az bizonyosan nem a Bariontól jön → 400, még a dedup-írás előtt.
- * Az alakilag helyes, de ismeretlen azonosító útja változatlan (200 + riasztás).
+ * ALAK-ELLENŐRZÉS a DB-írás ELŐTT: a PaymentId-nek GUID-alakúnak kell lennie
+ * (ami nem az → 400). Az alakilag helyes azonosítót a handler KÉT ágra bontja:
+ *  - ISMERT: van `orders` sor `barionPaymentId = PaymentId` (a checkout a
+ *    redirect előtt kiírja) → korlátlan, a régi insert/ütemezés út.
+ *  - ISMERETLEN: nincs ilyen rendelés → IP-keret (`barion-callback-unknown`,
+ *    `checkIpRateLimit`) a `store.create` ELŐTT. Túllépéskor 200 no-op, NINCS
+ *    insert, NINCS GetState. A ritka verseny (a callback a barionPaymentId-
+ *    írás előtt érkezik) egy vödörhelyet fogyaszt, de a keret alatt átmegy;
+ *    a mentőháló az order-poll.
+ * Kimerült (`attempts >= MAX_WEBHOOK_ATTEMPTS`) ISMERETLEN esemény: 200 no-op,
+ * nincs újraütemezés. ISMERT + kimerült: továbbra is ütemez (W13 — a későbbi
+ * Succeeded callbacknak le kell futnia; a route-handler nem a retry-job
+ * scan-szűrőjét használja).
  *
  * A nyers callback-bodyt szándékosan NEM tároljuk/naplózzuk — a Barion
  * callback-payloadja a PaymentId-n kívül nem hordoz releváns adatot; a
@@ -69,6 +82,11 @@ export interface BarionCallbackHandlerDeps {
    */
   schedule?: (task: () => Promise<void>) => void
   store?: WebhookEventStore
+  /**
+   * Az ismeretlen-PaymentId IP-keret injektálható (teszt: saját limiter, ne a
+   * folyamat-alapértelmezett Map). Lásd `CheckRequestRateLimitOptions`.
+   */
+  rateLimit?: CheckRequestRateLimitOptions
 }
 
 /**
@@ -77,8 +95,7 @@ export interface BarionCallbackHandlerDeps {
  * Kis- és nagybetűs hexet is elfogadunk (a Barion kisbetűset küld, de a
  * GUID-alak önmagában nem kis-nagybetű-érzékeny).
  */
-const PAYMENT_ID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PAYMENT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** Egy GUID pontosan ennyi karakter — a mintaillesztés előtti olcsó kapu. */
 export const MAX_PAYMENT_ID_LENGTH = 36
@@ -135,6 +152,27 @@ function extractPaymentId(body: unknown): string | null {
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return Response.json(body, { status })
+}
+
+/**
+ * ISMERT-e a PaymentId? Van-e `orders` sor, amelynek `barionPaymentId`-je
+ * EGYEZIK (depth 0, overrideAccess, limit 1).
+ *
+ * A checkout a Barion-redirect ELŐTT kiírja ezt az azonosítót, tehát a valódi
+ * callback ismert. Ami nem talál rendelést: véletlen GUID, VAGY ritka verseny
+ * — a callback megérkezik, mielőtt a checkout beírná a `barionPaymentId`-t.
+ * Utóbbi egy unknown-vödörhelyet fogyaszt, de a keret alatt átmegy; a
+ * mentőháló az order-poll (és a processzor orderNumber-fallbackje).
+ */
+async function isKnownBarionPaymentId(payload: Payload, paymentId: string): Promise<boolean> {
+  const found = await payload.find({
+    collection: 'orders',
+    where: { barionPaymentId: { equals: paymentId } },
+    limit: 1,
+    depth: 0,
+    overrideAccess: true,
+  })
+  return found.docs.length > 0
 }
 
 export function createBarionCallbackHandler(deps: BarionCallbackHandlerDeps) {
@@ -215,6 +253,24 @@ export function createBarionCallbackHandler(deps: BarionCallbackHandlerDeps) {
       }
 
       if (record) {
+        const attempts = record.attempts ?? 0
+        if (attempts >= MAX_WEBHOOK_ATTEMPTS) {
+          const knownExhausted = await isKnownBarionPaymentId(payload, paymentId)
+          if (!knownExhausted) {
+            // Ismeretlen + kimerült: nincs mit GetState-tel kezdeni, a retry
+            // csak táblát és kimenő hívást gyártana. 200, hogy a Barion ne
+            // pörögjön; NINCS ütemezés.
+            eventLog.info(
+              'barion-callback: ismeretlen PaymentId kísérletei kimerültek — 200 no-op, nincs GetState',
+              { attempts },
+            )
+            return jsonResponse({ ok: true, status: 'received' })
+          }
+          // ISMERT + kimerült: W13 — a route-handler NEM a retry-job
+          // scan-szűrőjét használja. Egy későbbi Succeeded callbacknak le
+          // kell futnia; processed-re itt nem zárjuk.
+        }
+
         // 'received' + még nincs eredmény = a feldolgozás ütemezve/fut;
         // 'failed' = a Barion retry-lépcső újra kézbesítette → azonnali újrapróbálás;
         // nem terminális eredmény (pending_repoll) = a fizetés korábban még függő
@@ -223,6 +279,26 @@ export function createBarionCallbackHandler(deps: BarionCallbackHandlerDeps) {
           schedule(runProcessing)
         }
         return jsonResponse({ ok: true, status: 'received' })
+      }
+
+      // Új esemény: ismert rendelés korlátlan; ismeretlen GUID IP-keretes
+      // (a ritka checkout-írás vs. callback verseny egy vödörhelyet fogyaszt,
+      // de a keret alatt átmegy — mentőháló: order-poll).
+      const known = await isKnownBarionPaymentId(payload, paymentId)
+      if (!known) {
+        const rejection = checkIpRateLimit({
+          request,
+          routeClass: 'barion-callback-unknown',
+          options: deps.rateLimit,
+        })
+        if (rejection) {
+          const ip = resolveRateLimitIp(request.headers)
+          eventLog.warn(
+            'barion-callback: ismeretlen PaymentId IP-kerete kimerült — 200 no-op, nincs GetState',
+            { paymentId, ip },
+          )
+          return jsonResponse({ ok: true, status: 'ignored' })
+        }
       }
 
       try {

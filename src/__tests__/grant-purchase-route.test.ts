@@ -1,6 +1,7 @@
 import type { Payload } from 'payload'
 import { describe, expect, it, vi } from 'vitest'
 
+import { ACCESS_EXPIRED_GRANT_MESSAGE } from '../lib/grant-purchase'
 import { createGrantPurchaseHandler } from '../lib/grant-purchase-route'
 
 /**
@@ -17,32 +18,63 @@ const EMAIL = 'vevo@example.test'
 const SKU = 'DEMO-KEZREHAB-001'
 const URL = 'http://localhost:3000/api/admin/grant-purchase'
 
+interface PaidOrderSeed {
+  createdAt: string
+  productId?: number
+}
+
 interface MockOptions {
   authUser?: { id: number; email?: string; role: string } | null
   userExists?: boolean
   productExists?: boolean
   purchases?: number[]
+  accessDurationDays?: number | null
+  paidOrders?: PaidOrderSeed[]
 }
 
 function createMockPayload(options: MockOptions = {}) {
   const user = { id: 7, email: EMAIL, purchases: options.purchases ?? [] }
-  const product = { id: 42, sku: SKU }
+  const product = {
+    id: 42,
+    sku: SKU,
+    accessDurationDays: options.accessDurationDays ?? null,
+  }
   const updates: Array<{ collection: string; data: Record<string, unknown> }> = []
 
   const payload = {
     auth: vi.fn(async () => ({
-      user: options.authUser === undefined ? { id: 1, email: 'owner@example.test', role: 'owner' } : options.authUser,
+      user:
+        options.authUser === undefined
+          ? { id: 1, email: 'owner@example.test', role: 'owner' }
+          : options.authUser,
     })),
     find: vi.fn(async ({ collection }: { collection: string }) => {
       if (collection === 'users') {
-        return (options.userExists ?? true) ? { docs: [user], totalDocs: 1 } : { docs: [], totalDocs: 0 }
+        return (options.userExists ?? true)
+          ? { docs: [user], totalDocs: 1 }
+          : { docs: [], totalDocs: 0 }
       }
       if (collection === 'products') {
         return (options.productExists ?? true)
           ? { docs: [product], totalDocs: 1 }
           : { docs: [], totalDocs: 0 }
       }
+      if (collection === 'orders') {
+        const docs = (options.paidOrders ?? []).map((order, index) => ({
+          id: 1000 + index,
+          status: 'paid' as const,
+          createdAt: order.createdAt,
+          items: [{ product: order.productId ?? product.id }],
+        }))
+        return { docs, totalDocs: docs.length }
+      }
       return { docs: [], totalDocs: 0 }
+    }),
+    findByID: vi.fn(async ({ collection, id }: { collection: string; id: number | string }) => {
+      if (collection === 'users' && (options.userExists ?? true) && Number(id) === user.id) {
+        return { ...user, purchases: [...user.purchases] }
+      }
+      throw new Error('Not Found')
     }),
     update: vi.fn(async (args: { collection: string; data: Record<string, unknown> }) => {
       updates.push(args)
@@ -98,7 +130,9 @@ describe('grant-purchase route — jogosultság-mátrix', () => {
   })
 
   it('200 staff szerepkörrel — a hozzáférés bekerül', async () => {
-    const { handler, updates } = handlerFor({ authUser: { id: 5, email: 'staff@example.test', role: 'staff' } })
+    const { handler, updates } = handlerFor({
+      authUser: { id: 5, email: 'staff@example.test', role: 'staff' },
+    })
 
     const response = await handler(postRequest(VALID_BODY))
     const body = (await response.json()) as { status: string; message: string }
@@ -132,6 +166,22 @@ describe('grant-purchase route — jogosultság-mátrix', () => {
     expect(body.message).toBe('Már hozzáfér ehhez a kurzushoz.')
     expect(updates).toHaveLength(0)
   })
+
+  it('409 access-expired: lejárt hozzáférés, magyar üzenet, nincs írás', async () => {
+    const { handler, updates } = handlerFor({
+      purchases: [42],
+      accessDurationDays: 30,
+      paidOrders: [{ createdAt: '2020-01-01T00:00:00.000Z' }],
+    })
+
+    const response = await handler(postRequest(VALID_BODY))
+    const body = (await response.json()) as { error: string; status?: string }
+
+    expect(response.status).toBe(409)
+    expect(body.error).toBe(ACCESS_EXPIRED_GRANT_MESSAGE)
+    expect(body.error).toContain('lejárt')
+    expect(updates).toHaveLength(0)
+  })
 })
 
 describe('grant-purchase route — validálás és 404-ágak', () => {
@@ -158,7 +208,9 @@ describe('grant-purchase route — validálás és 404-ágak', () => {
   it('400, ha az indok üres', async () => {
     const { handler } = handlerFor()
 
-    const response = await handler(postRequest({ email: EMAIL, productIdOrSku: SKU, reason: '   ' }))
+    const response = await handler(
+      postRequest({ email: EMAIL, productIdOrSku: SKU, reason: '   ' }),
+    )
     const body = (await response.json()) as { error: string }
 
     expect(response.status).toBe(400)

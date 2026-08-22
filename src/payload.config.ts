@@ -745,6 +745,10 @@ export default buildConfig({
       // 60 mp bőven a statement_timeout fölött van, így normál működés közben
       // nem tud beütni.
       idle_in_transaction_session_timeout: 60_000,
+      // W3 (2026-08-22): `pool.max` SZÁNDÉKOSAN nincs beállítva. A default 10
+      // a `pg` értéke. Railway `max_connections` × replikaszám nélkül a cap
+      // vagy kimeríti a DB-t, vagy hamis biztonságot ad. A beágyazott zár
+      // (rendelés → e-mail) a sorrenden múlik, nem a pool méretén.
     },
     // A DEV-MÓDÚ DRIZZLE SÉMA-PUSH KIKAPCSOLVA.
     //

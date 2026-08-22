@@ -11,13 +11,15 @@
  * Futtatás (a config a .env-ből tölti a DATABASE_URI-t / PAYLOAD_SECRET-et):
  *   npx tsx src/scripts/grant-purchase.ts --email=<vevő-email> --product=<sku-vagy-id> [--reason=<indoklás>]
  *
- * IDEMPOTENS: ha a vevő már rendelkezik a termékkel, a script „már megvan"
- * üzenettel, 0-s kilépési kóddal leáll (NEM hiba), és nem módosít semmit.
+ * IDEMPOTENS: ha a vevő már rendelkezik a termékkel és a hozzáférés él, a
+ * script „már megvan" üzenettel, 0-s kilépési kóddal leáll (NEM hiba). Ha a
+ * termék megvan, de a hozzáférés lejárt, őszinte hibaüzenet és kilépési kód 1:
+ * a manuális grant önmagában nem hosszabbít.
  *
  * Kilépési kódok:
- *   0 — siker (hozzáférés beírva VAGY már megvolt)
+ *   0 — siker (hozzáférés beírva VAGY már megvolt és él)
  *   1 — hiba (hiányzó/hibás argumentum, ismeretlen felhasználó vagy termék,
- *       adatbázis-hiba)
+ *       lejárt hozzáférés, adatbázis-hiba)
  *
  * A script NEM hoz létre felhasználót és NEM rendelést — kizárólag a
  * users.purchases mezőt egészíti ki (missing-only), overrideAccess-szel.
@@ -31,7 +33,10 @@
 
 import { getPayload } from 'payload'
 
-import { grantPurchase as grantPurchaseService } from '../lib/grant-purchase'
+import {
+  ACCESS_EXPIRED_GRANT_MESSAGE,
+  grantPurchase as grantPurchaseService,
+} from '../lib/grant-purchase'
 import { createLogger } from '../lib/logger'
 import config from '../payload.config'
 
@@ -118,6 +123,9 @@ async function grantPurchase(args: CliArgs): Promise<void> {
         ? `Nincs ilyen termék (id: ${result.productRef}). Ellenőrizd az azonosítót az admin felületen.`
         : `Nincs ilyen termék (sku: ${result.productRef}). Ellenőrizd a sku-t az admin felületen.`,
     )
+  }
+  if (result.status === 'access-expired') {
+    throw new Error(ACCESS_EXPIRED_GRANT_MESSAGE)
   }
   if (result.status === 'already-had') {
     console.log(

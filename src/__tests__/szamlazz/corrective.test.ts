@@ -39,13 +39,16 @@ const ENABLED_CONFIG = getSzamlazzConfig({
 
 /**
  * A bizonylat-lekérdezés MINDEN folyamat-tesztben injektált: injektálás nélkül a
- * retry- és a duplikátum-ág a VALÓDI Számlázz.hu-t hívná meg. Ez a mock azokra
- * az ágakra való, ahol lekérdezésnek egyáltalán nem szabad futnia — ha mégis
- * fut, hangosan bukik.
+ * retry- és a duplikátum-ág a VALÓDI Számlázz.hu-t hívná meg. A noLookup azokra
+ * az ágakra való, ahol lekérdezésnek egyáltalán nem szabad futnia (korai
+ * kilépés, kimerült plafon) — ha mégis fut, hangosan bukik. Az emptyLookup a
+ * beküldés előtti kapu „nincs találat" ága: a lekérdezés lefut, a POST mehet.
  */
 const noLookup = async (): Promise<InvoiceLookupResult | null> => {
   throw new Error('TESZT-HIBA: ezen az ágon nem futhat bizonylat-lekérdezés')
 }
+
+const emptyLookup = async (): Promise<InvoiceLookupResult | null> => null
 
 const BUYER = {
   nev: 'Teszt Anna',
@@ -170,12 +173,19 @@ describe('computeLineAmounts — negatív (korrekciós) tétel', () => {
       computeLineAmounts({ megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: -100 }),
     ).toThrow(SzamlazzApiError)
     expect(
-      computeLineAmounts({ megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: -100 }, { allowNegative: true }),
+      computeLineAmounts(
+        { megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: -100 },
+        { allowNegative: true },
+      ),
     ).toEqual({ nettoEgysegar: '-79', nettoErtek: -79, afaErtek: -21, bruttoErtek: -100 })
   })
 
   it('a kerekítés PONTOSAN az eredeti tétel tükre (teljes összegű helyesbítés nullázódik)', () => {
-    const original = computeLineAmounts({ megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: TOTAL_HUF })
+    const original = computeLineAmounts({
+      megnevezes: 'x',
+      mennyiseg: 1,
+      bruttoEgysegar: TOTAL_HUF,
+    })
     const correction = computeLineAmounts(
       { megnevezes: 'x', mennyiseg: 1, bruttoEgysegar: -TOTAL_HUF },
       { allowNegative: true },
@@ -195,7 +205,7 @@ describe('issueCorrectiveInvoiceForOrder', () => {
       payload,
       config: ENABLED_CONFIG,
       issueDate: '2026-08-09',
-      queryByKulsoAzon: noLookup,
+      queryByKulsoAzon: emptyLookup,
       refundSeq: 1,
       amountHuf: REFUND_HUF,
       reason: 'Kedvezmény utólag',
@@ -260,7 +270,7 @@ describe('issueCorrectiveInvoiceForOrder', () => {
     const result = await issueCorrectiveInvoiceForOrder(order, {
       payload,
       config: ENABLED_CONFIG,
-      queryByKulsoAzon: noLookup,
+      queryByKulsoAzon: emptyLookup,
       refundSeq: 2,
       amountHuf: 2000,
       postXml: async (xml) => {
@@ -288,7 +298,7 @@ describe('issueCorrectiveInvoiceForOrder', () => {
     const result = await issueCorrectiveInvoiceForOrder(order, {
       payload,
       config: ENABLED_CONFIG,
-      queryByKulsoAzon: noLookup,
+      queryByKulsoAzon: emptyLookup,
       refundSeq: 1,
       amountHuf: REFUND_HUF,
       postXml: async (xml) => {
@@ -299,6 +309,43 @@ describe('issueCorrectiveInvoiceForOrder', () => {
     expect(result).toEqual({ outcome: 'issued', correctiveInvoiceNumber: 'KIN-2026-9' })
     expect(sentXml[0]).toContain(`<szamlaKulsoAzon>${ORDER_NUMBER}-HELYESBITO-1</szamlaKulsoAzon>`)
     // A rendelésen rögzített LEGUTÓBBI szám/sorszám nem íródik vissza régebbire.
+    expect(order.correctiveInvoiceSeq).toBe(2)
+    expect(order.correctiveInvoiceNumber).toBe('KIN-2026-10')
+    expect(order.correctiveInvoiceStatus).toBe('issued')
+  })
+
+  it('K4: más seq-es maradék job a lekérdezésen átveszi a meglévő helyesbítőt, nem POSTol', async () => {
+    // leftover job refundSeq=1, miután a seq=2 már kiállt: a previousAttempts
+    // 0 (más seq), de a lekérdezés AKKOR IS lefut. Találatnál adopt, vak POST nincs.
+    const order = createOrder({
+      correctiveInvoiceStatus: 'issued',
+      correctiveInvoiceNumber: 'KIN-2026-10',
+      correctiveInvoiceSeq: 2,
+      correctiveInvoiceAttemptsSeq: 2,
+      correctiveInvoiceAttempts: 1,
+    })
+    const { payload } = createMockPayload(order)
+    const lookups: string[] = []
+    let posts = 0
+    const result = await issueCorrectiveInvoiceForOrder(order, {
+      payload,
+      config: ENABLED_CONFIG,
+      queryByKulsoAzon: async (kulsoAzon) => {
+        lookups.push(kulsoAzon)
+        return { szamlaszam: 'KIN-2026-9' }
+      },
+      refundSeq: 1,
+      amountHuf: REFUND_HUF,
+      postXml: async () => {
+        posts += 1
+        return { szamlaszam: 'VAK-POST' }
+      },
+    })
+
+    expect(result).toEqual({ outcome: 'issued', correctiveInvoiceNumber: 'KIN-2026-9' })
+    expect(lookups).toEqual([correctiveKulsoAzon(ORDER_NUMBER, 1)])
+    expect(posts).toBe(0)
+    // Korábbi seq átvétele: a rögzített seq/szám NEM íródik vissza.
     expect(order.correctiveInvoiceSeq).toBe(2)
     expect(order.correctiveInvoiceNumber).toBe('KIN-2026-10')
     expect(order.correctiveInvoiceStatus).toBe('issued')
@@ -383,7 +430,7 @@ describe('issueCorrectiveInvoiceForOrder', () => {
       issueCorrectiveInvoiceForOrder(order as Order, {
         payload,
         config: ENABLED_CONFIG,
-        queryByKulsoAzon: noLookup,
+        queryByKulsoAzon: emptyLookup,
         refundSeq: 1,
         amountHuf: REFUND_HUF,
         postXml: async () => {
@@ -405,7 +452,7 @@ describe('issueCorrectiveInvoiceForOrder', () => {
     const result = await issueCorrectiveInvoiceForOrder(order as Order, {
       payload,
       config: ENABLED_CONFIG,
-      queryByKulsoAzon: noLookup,
+      queryByKulsoAzon: emptyLookup,
       refundSeq: 1,
       amountHuf: REFUND_HUF,
       postXml: async () => {
@@ -421,7 +468,7 @@ describe('issueCorrectiveInvoiceForOrder', () => {
     const order = createOrder()
     const result = await issueCorrectiveInvoiceForOrder(order, {
       config: ENABLED_CONFIG,
-      queryByKulsoAzon: noLookup,
+      queryByKulsoAzon: emptyLookup,
       refundSeq: 1,
       amountHuf: REFUND_HUF,
       postXml: async () => ({ szamlaszam: 'KIN-2026-9' }),
@@ -446,7 +493,7 @@ describe('issueCorrectiveInvoiceForOrder — teljesítési dátum öröklése', 
       payload,
       config: ENABLED_CONFIG,
       issueDate: '2026-08-09',
-      queryByKulsoAzon: noLookup,
+      queryByKulsoAzon: emptyLookup,
       refundSeq: 1,
       amountHuf: REFUND_HUF,
       postXml: async (xml) => {
@@ -470,7 +517,7 @@ describe('issueCorrectiveInvoiceForOrder — teljesítési dátum öröklése', 
       payload,
       config: ENABLED_CONFIG,
       issueDate: '2026-08-09',
-      queryByKulsoAzon: noLookup,
+      queryByKulsoAzon: emptyLookup,
       refundSeq: 1,
       amountHuf: REFUND_HUF,
       postXml: async (xml) => {
@@ -509,7 +556,8 @@ describe('issueCorrectiveInvoiceForOrder — idempotencia-feloldás és kísérl
       config: ENABLED_CONFIG,
       queryByKulsoAzon: async (kulsoAzon) => {
         lookups.push(kulsoAzon)
-        return { szamlaszam: 'KIN-2026-11' }
+        // K4: az első (beküldés előtti) lekérdezés üres — a 71-es ág a POST után fut.
+        return lookups.length === 1 ? null : { szamlaszam: 'KIN-2026-11' }
       },
       refundSeq: 2,
       amountHuf: REFUND_HUF,
@@ -520,7 +568,10 @@ describe('issueCorrectiveInvoiceForOrder — idempotencia-feloldás és kísérl
 
     expect(result).toEqual({ outcome: 'issued', correctiveInvoiceNumber: 'KIN-2026-11' })
     // NEM az orderNumber: a helyesbítőnek saját horgonya van a refund-sorszámmal.
-    expect(lookups).toEqual([`${ORDER_NUMBER}${CORRECTIVE_KULSO_AZON_INFIX}2`])
+    expect(lookups).toEqual([
+      `${ORDER_NUMBER}${CORRECTIVE_KULSO_AZON_INFIX}2`,
+      `${ORDER_NUMBER}${CORRECTIVE_KULSO_AZON_INFIX}2`,
+    ])
     expect(order.correctiveInvoiceNumber).toBe('KIN-2026-11')
     expect(order.correctiveInvoiceSeq).toBe(2)
     expect(order.correctiveInvoiceStatus).toBe('issued')
@@ -553,11 +604,16 @@ describe('issueCorrectiveInvoiceForOrder — idempotencia-feloldás és kísérl
     // kiállítanának egy másodikat (dupla NAV-adatszolgáltatás).
     const order = createOrder()
     const { payload } = createMockPayload(order)
+    let lookups = 0
     await expect(
       issueCorrectiveInvoiceForOrder(order, {
         payload,
         config: ENABLED_CONFIG,
         queryByKulsoAzon: async () => {
+          lookups += 1
+          if (lookups === 1) {
+            return null
+          }
           throw new SzamlazzApiError({
             message: 'A Számlázz.hu nem válaszolt 15000 ms-en belül (bizonylat-lekérdezés).',
             kind: 'timeout',
@@ -681,8 +737,8 @@ describe('issueCorrectiveInvoiceForOrder — idempotencia-feloldás és kísérl
  * F1 — a kísérlet-plafon BIZONYLAT-szintű: a correctiveInvoiceAttempts csak a
  * correctiveInvoiceAttemptsSeq-ben rögzített refund-sorszámhoz tartozik.
  * Rendelés-szintű számlálóval a KÉSŐBBI részrefund bizonylata jogtalanul
- * „kimerült"-re futna, és értelmetlen retry-lookup indulna egy még nem létező
- * kulcsra.
+ * „kimerült"-re futna. Új seq-nél a lekérdezés lefut (K4), de üres találat
+ * után a POST mehet, a számláló 1-ről indul.
  */
 describe('issueCorrectiveInvoiceForOrder — seq-kulcsolt kísérlet-plafon (F1)', () => {
   it('a kimerült seq=1 NEM blokkolja a seq=2-t: friss számlálóval indul', async () => {
@@ -693,12 +749,15 @@ describe('issueCorrectiveInvoiceForOrder — seq-kulcsolt kísérlet-plafon (F1)
     })
     const { payload, updates } = createMockPayload(order)
     const sentXml: string[] = []
+    const lookups: string[] = []
     const result = await issueCorrectiveInvoiceForOrder(order, {
       payload,
       config: ENABLED_CONFIG,
-      // Új seq: retry-előtti lekérdezésnek NEM szabad futnia (a kulcs még nem
-      // létezhet a Számlázz.hu-nál).
-      queryByKulsoAzon: noLookup,
+      // K4: új seq-nél is lefut a lekérdezés; üres találat után a POST mehet.
+      queryByKulsoAzon: async (kulsoAzon) => {
+        lookups.push(kulsoAzon)
+        return null
+      },
       refundSeq: 2,
       amountHuf: 2000,
       postXml: async (xml) => {
@@ -708,6 +767,7 @@ describe('issueCorrectiveInvoiceForOrder — seq-kulcsolt kísérlet-plafon (F1)
     })
 
     expect(result).toEqual({ outcome: 'issued', correctiveInvoiceNumber: 'KIN-2026-10' })
+    expect(lookups).toEqual([correctiveKulsoAzon(ORDER_NUMBER, 2)])
     expect(sentXml).toHaveLength(1)
     expect(updates[0]).toEqual({
       correctiveInvoiceStatus: 'pending',
