@@ -260,35 +260,35 @@ gyanús vagy elmarad, **azonnal javít** — nem vár külön kérésre.
 3. Railway MCP / CLI nélkül a dashboard-log és a publikus healthcheck a
    tartalék; a figyelést ettől még nem szabad kihagyni.
 
-## Cursor-modellek (tulajdonosi kérés, 2026-08-20)
+## Cursor-modellek (tulajdonosi kérés, 2026-08-22)
 
-> **A csapat alapbeállítása ettől függetlenül az Opus.** Ez a szekció azt írja
-> le, mi legyen bent a Cursor pickerében / Cloud Agentjén, ha onnan dolgozol —
-> a Kineticare ügynök-csapatának modelljét viszont a tulajdonos globális
-> utasítása és a `CLAUDE.md` „Munkamodell" szekciója köti ki (Opus-ügynökök).
-> A kettő nem ütközik: ez KÉSZLET, az Opus KIOSZTÁS. (Tisztázva 2026-08-20-án,
-> tulajdonosi döntésre, mert a #124 után a két hely ellentmondott egymásnak.)
+> **A csapat kiosztása és a Cursor-készlet innentől ugyanaz.** A 2026-08-15-i
+> Opus-alapbeállítás és a 2026-08-20-i „készlet = Composer+Grok, kiosztás =
+> Opus" szétválasztás **hatályon kívül**. Részletek: `CLAUDE.md` „Munkamodell".
 
+**Alapbeállítás, külön kérés nélkül:**
+
+1. **Orkesztrátor / Cloud Agent szülő:** GPT-5.6 Sol legerősebb thinking —
+   slug: `gpt-5.6-sol-xhigh`. A pickerben / Cloud Agenten ezt indítsd vezetőnek,
+   ne Autót és ne Composert.
+2. **Agentic csapat (Task-subagent, javítás, felderítés, ellenőrzés):**
+   Cursor Grok 4.6 thinking. A kiosztható listában a 4.6-os thinking slug:
+   `cursor-grok-4.6-high-fast`. Nincs `cursor-grok-4.6-high` és nincs 4.6
+   extra-high/xhigh — ne helyettesítsd Opus-szal vagy Grok 4.5-tel.
 
 Az **Auto nem modell**: a Cursor Router kérésenként választ a készletből.
-Auto ≠ Grok 4.6, és Auto ≠ Composer. A Kineticare-munkánál a pickerben /
-Cloud Agenten **névre szólóan** ez a két modell legyen bent, ne csak Auto:
+Auto ≠ Sol, Auto ≠ Grok 4.6. Kineticare-munkánál a pickerben **névre szólóan**
+a Sol xhigh (vezető) és a Grok 4.6 (csapat) legyen bent.
 
-1. **Composer** (`composer-2.5`, szükség szerint `composer-2.5-fast`) —
-   mindennapi kódolás, gyors kör, felderítés, rövidebb alügynök. A Cursor
-   nem vonja ki; a gyors munkához ezt kell indítani.
-2. **Cursor Grok 4.6** (`cursor-grok-4.6-high`) — hosszú Cloud Agent, nehéz
-   több lépéses munka, nagy kódbázis.
-
-Alügynök (Task): ha a vezető nem köt ki mást, a gyors felderítés Composer,
-a hosszú megvalósítás Grok 4.6. Az Auto-t ne tedd a csapat egyetlen
-modelljének.
+Composer (`composer-2.5`) maradhat a készletben rövid, emberi napi kódoláshoz;
+**nem** a Kineticare ügynök-csapat alapja.
 
 A `.cursor/agents/` mappában a csapattal megosztott, Kineticare-specifikus
 Cursor-subagentek élnek. A `kineticare-bugbot` a teljes `main` ág
 Bugbot-stílusú hibavadászata (fizetés, jogosultság, számla, videó, tilos
 zónák). Használd, ha a teljes `main`t vagy a production-kritikus utakat
-kell átnézni, nem egy feature-PR diffjét:
+kell átnézni, nem egy feature-PR diffjét — a kiosztás itt is Grok 4.6
+thinking (`cursor-grok-4.6-high-fast`), a vezető Sol xhigh:
 
 ```
 Use the kineticare-bugbot subagent to review the entire main branch

@@ -111,14 +111,14 @@ gomb-gráf), `docs/gomb-inventar.md` (CTA-szótár), `docs/gomb-kontraszt-audit.
   Railway deployt (tényleges `npm run build`, migráció a start-logban,
   `GET /admin` healthcheck). Piros vagy gyanús állapotot azonnal javíts, ne
   várj külön kérésre. Részletek: `AGENTS.md` „Merge után" szekció.
-- **A modellválasztás nem szabad kéz.** A Kineticare ügynök-csapatának
-  alapbeállítása az Opus (lásd a „Munkamodell" szekciót és a tulajdonos
-  globális utasítását) — ettől eltérni csak a tulajdonos kifejezett kérésére
-  szabad. Cursorból dolgozva a picker/Cloud Agent modelljeiről az `AGENTS.md`
-  „Cursor-modellek" szekciója szól; az ott felsorolt modellek a Cursor
-  KÉSZLETÉT írják le, nem írják felül a csapat Opus-alapbeállítását.
-  A teljes `main` Bugbot-átnézéséhez a
-  `.cursor/agents/kineticare-bugbot.md` projekt-subagentet használd.
+- **A modellválasztás nem szabad kéz.** 2026-08-22-től a Kineticare
+  ügynök-csapatának alapbeállítása: **orkesztrátor = GPT-5.6 Sol legerősebb
+  thinking** (`gpt-5.6-sol-xhigh`); **a csapat = Cursor Grok 4.6 thinking**
+  (kiosztható slug: `cursor-grok-4.6-high-fast`). Ettől eltérni csak a
+  tulajdonos kifejezett kérésére szabad. Részletek: a „Munkamodell" szekció
+  és az `AGENTS.md` „Cursor-modellek" szekciója. A teljes `main`
+  Bugbot-átnézéséhez a `.cursor/agents/kineticare-bugbot.md`
+  projekt-subagentet használd.
 
 ## Üzemeltetési tanulságok — élesben szerzett
 
@@ -302,16 +302,34 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
     (1. pont). `WAITING` snapshot nélkül: előbb a lépés-események, ne indíts
     vaktában új deployt (12. pont). Hiba esetén azonnal javíts.
 
-## Munkamodell — vezető + Opus-ügynökök (tulajdonosi alapbeállítás, 2026-08-15)
+## Munkamodell — Sol orkesztrátor + Grok 4.6 csapat (tulajdonosi alapbeállítás, 2026-08-22)
 
-Minden kódolási munkánál ez az alapbeállítás, külön kérés nélkül:
+Ez a szekció **felülírja** a 2026-08-15-i Opus-alapbeállítást. A tervezés,
+a mérés, a tiszta fájl-tulajdonlás és a merge-utáni figyelés szabályai
+érvényben maradnak; ami változott: ki a vezető, és ki végzi a munkát.
 
-1. **A vezető modell tervez és ellenőriz.** A fennmaradó feladatok átnézése, a
-   megoldások aprólékos kitalálása és a feladatkiírás a vezető dolga. A kiírás
-   részletes: cél, érintett fájlok, elfogadási feltételek, tilalmak,
-   ellenőrzési mód.
-2. **A munkát Opus-ügynökök végzik**, mindegyik a saját szakterületének
-   profija. Addig dolgoznak, amíg a kiírás minden pontja kész.
+**Kiosztás (külön kérés nélkül):**
+
+| Szerep | Modell | Kiosztható slug |
+| --- | --- | --- |
+| Orkesztrátor / vezető | GPT-5.6 Sol, legerősebb thinking | `gpt-5.6-sol-xhigh` |
+| Agentic csapat (felderítés, megvalósítás, javítás, ellenőrzés) | Cursor Grok 4.6 thinking | `cursor-grok-4.6-high-fast` |
+
+A Task-subagent listában **nincs** `cursor-grok-4.6-high` és **nincs** Grok 4.6
+extra-high / xhigh. A 4.6-os thinking csapat ezért a fenti slugot kapja — ne
+helyettesítsd Opus-szal, Grok 4.5-tel vagy Composerrel, ha a tulajdonos 4.6-ot
+kért. A Sol `xhigh-fast` és a Grok `high-fast` gyorsítása csak akkor, ha a
+tulajdonos gyors kört kér; az orkesztrátor alapból a nem-fast `xhigh`.
+
+Minden kódolási munkánál:
+
+1. **A vezető (Sol xhigh) tervez és ellenőriz.** A fennmaradó feladatok
+   átnézése, a megoldások aprólékos kitalálása és a feladatkiírás a vezető
+   dolga. A kiírás részletes: cél, érintett fájlok, elfogadási feltételek,
+   tilalmak, ellenőrzési mód.
+2. **A munkát Grok 4.6 thinking ügynökök végzik**, mindegyik a saját
+   szakterületének profija. Addig dolgoznak, amíg a kiírás minden pontja kész.
+   Javító kört is ők visznek, nem az orkesztrátor „mellékesen".
 3. **Az ügynök, ha valamiben nem biztos:** előbb kutat (internet, hivatalos
    dokumentáció, a repó kódja); ha a kérdés ezek után is valódi döntést
    igényel, NEM találgat — megáll, és a kérdést visszaküldi a vezetőnek.
@@ -326,13 +344,16 @@ Minden kódolási munkánál ez az alapbeállítás, külön kérés nélkül:
    Nem kap ügynök munkát addig, amíg a terv nincs kész — mi a cél, milyen
    részfeladatokra bomlik, melyik ügynök melyiket kapja, mi a tiszta
    fájl-tulajdonlás (hogy ne írjanak egymásra, lásd a 16. üzemeltetési
-   tanulságot), és mi az elfogadási feltétel.
-7. **MINDIG teljes körű ügynök-csapat indul, Opus-ügynökökből.** Nem egyetlen
-   ügynök, hanem a feladathoz szabott csapat: felderítés, kutatás,
-   megvalósítás, ellenőrzés — mindegyik a saját szakterületén. A csapat
-   összetételét a vezető állítja össze a feladat természete szerint. (A
-   párhuzamossági korlát ~2 egyidejű ügynök, a többi sorban áll — lásd a 17.
-   üzemeltetési tanulságot; ez tervezési adat, nem elakadás.)
+   tanulságot), és mi az elfogadási feltétel. A Task-hívásokon a `model`
+   mező **kötött**: vezető = `gpt-5.6-sol-xhigh` csak akkor, ha a szülő nem
+   Sol (Cloud Agent szülőként a Sol xhigh a pickerben); a csapat minden
+   tagja = `cursor-grok-4.6-high-fast`.
+7. **MINDIG teljes körű ügynök-csapat indul, Grok 4.6 thinking ügynökökből.**
+   Nem egyetlen ügynök, hanem a feladathoz szabott csapat: felderítés,
+   kutatás, megvalósítás, ellenőrzés — mindegyik a saját szakterületén. A
+   csapat összetételét a vezető állítja össze a feladat természete szerint.
+   (A párhuzamossági korlát ~2 egyidejű ügynök, a többi sorban áll — lásd a
+   17. üzemeltetési tanulságot; ez tervezési adat, nem elakadás.)
 8. **Ismétlődő hibánál a vezető ÁTVESZI a feladatot.** Ha egy ügynök többször
    elbukik ugyanazon, vagy a megoldás nem áll össze, a vezető nem indít újabb
    kört vaktában: maga oldja meg. A cél a működő eredmény, nem a delegálás
