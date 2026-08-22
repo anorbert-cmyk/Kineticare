@@ -99,6 +99,15 @@ autocapture **kikapcsolandó**, a GeoIP-finomítás **elmarad**. Az autocapture
 kikapcsolása azért sürgős, mert ma diagnózis-beszédes kattintás-szövegeket
 rögzít („a kéztőalagút-szindrómáról szóló cikkünk").
 
+**Állapot (2026-08-22): az autocapture kikapcsolása MEGTÖRTÉNT.** A
+`buildPostHogOptions` mostantól kiírja az `autocapture: false`-t
+(`src/lib/analytics/posthog.ts`), őr-teszttel védve
+(`src/__tests__/posthog.test.ts`). A kiírás azért kellett, mert a posthog-js
+alapértelmezése BEkapcsolt autocapture — mérve a telepített csomagban
+(`node_modules/posthog-js/dist/module.js`, az alapértelmezés-blokkban:
+`…,token:"",autocapture:!0,cross_subdomain_cookie:…`). A hallgatás itt tehát
+nem semleges lett volna. Az `identifyUser` és a GeoIP változatlan.
+
 ## 5. Amit tudatosan KIHAGYUNK
 
 | Kihagyva | Miért |
