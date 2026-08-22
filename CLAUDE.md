@@ -113,12 +113,12 @@ gomb-gráf), `docs/gomb-inventar.md` (CTA-szótár), `docs/gomb-kontraszt-audit.
   várj külön kérésre. Részletek: `AGENTS.md` „Merge után" szekció.
 - **A modellválasztás nem szabad kéz.** 2026-08-22-től a Kineticare
   ügynök-csapatának alapbeállítása: **orkesztrátor = GPT-5.6 Sol legerősebb
-  thinking** (`gpt-5.6-sol-xhigh`); **a csapat = Cursor Grok 4.6 thinking**
-  (kiosztható slug: `cursor-grok-4.6-high-fast`). Ettől eltérni csak a
-  tulajdonos kifejezett kérésére szabad. Részletek: a „Munkamodell" szekció
-  és az `AGENTS.md` „Cursor-modellek" szekciója. A teljes `main`
-  Bugbot-átnézéséhez a `.cursor/agents/kineticare-bugbot.md`
-  projekt-subagentet használd.
+  thinking** (`gpt-5.6-sol-xhigh`); **minden Grok-ügynök = Cursor Grok 4.6
+  extra high** (`cursor-grok-4.6-xhigh`). A `high` / `high-fast` Grok-slug
+  tilos. Ettől eltérni csak a tulajdonos kifejezett kérésére szabad.
+  Részletek: a „Munkamodell" szekció és az `AGENTS.md` „Cursor-modellek"
+  szekciója. A teljes `main` Bugbot-átnézéséhez a
+  `.cursor/agents/kineticare-bugbot.md` projekt-subagentet használd.
 
 ## Üzemeltetési tanulságok — élesben szerzett
 
@@ -302,7 +302,7 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
     (1. pont). `WAITING` snapshot nélkül: előbb a lépés-események, ne indíts
     vaktában új deployt (12. pont). Hiba esetén azonnal javíts.
 
-## Munkamodell — Sol orkesztrátor + Grok 4.6 csapat (tulajdonosi alapbeállítás, 2026-08-22)
+## Munkamodell — Sol orkesztrátor + Grok 4.6 extra high csapat (tulajdonosi alapbeállítás, 2026-08-22)
 
 Ez a szekció **felülírja** a 2026-08-15-i Opus-alapbeállítást. A tervezés,
 a mérés, a tiszta fájl-tulajdonlás és a merge-utáni figyelés szabályai
@@ -313,13 +313,18 @@ a mérés, a tiszta fájl-tulajdonlás és a merge-utáni figyelés szabályai
 | Szerep | Modell | Kiosztható slug |
 | --- | --- | --- |
 | Orkesztrátor / vezető | GPT-5.6 Sol, legerősebb thinking | `gpt-5.6-sol-xhigh` |
-| Agentic csapat (felderítés, megvalósítás, javítás, ellenőrzés) | Cursor Grok 4.6 thinking | `cursor-grok-4.6-high-fast` |
+| Agentic csapat (felderítés, megvalósítás, javítás, ellenőrzés) | Cursor Grok 4.6 extra high | `cursor-grok-4.6-xhigh` |
 
-A Task-subagent listában **nincs** `cursor-grok-4.6-high` és **nincs** Grok 4.6
-extra-high / xhigh. A 4.6-os thinking csapat ezért a fenti slugot kapja — ne
-helyettesítsd Opus-szal, Grok 4.5-tel vagy Composerrel, ha a tulajdonos 4.6-ot
-kért. A Sol `xhigh-fast` és a Grok `high-fast` gyorsítása csak akkor, ha a
-tulajdonos gyors kört kér; az orkesztrátor alapból a nem-fast `xhigh`.
+**Minden Grok-ügynök extra high.** Cloud Agent, picker, Task-subagent, Bugbot —
+ugyanaz a szabály. A `cursor-grok-4.6-high` és a `cursor-grok-4.6-high-fast`
+**tilos** (nem extra high). A `cursor-grok-4.6-xhigh-fast` csak akkor, ha a
+tulajdonos gyors kört kér. Ne helyettesítsd Opus-szal, Grok 4.5-tel vagy
+Composerrel. A Sol `xhigh-fast` gyorsítása szintén csak tulajdonosi kérésre;
+az orkesztrátor alapból a nem-fast `xhigh`.
+
+Ha egy felület Task-listája nem tartalmazza a `cursor-grok-4.6-xhigh` slugot:
+ne vedd `high-fast`-ra. Jelezd, és a munkát az extra-high szülő végezze, vagy
+a tulajdonos indítson extra-high Cloud Agentet.
 
 Minden kódolási munkánál:
 
@@ -327,7 +332,7 @@ Minden kódolási munkánál:
    átnézése, a megoldások aprólékos kitalálása és a feladatkiírás a vezető
    dolga. A kiírás részletes: cél, érintett fájlok, elfogadási feltételek,
    tilalmak, ellenőrzési mód.
-2. **A munkát Grok 4.6 thinking ügynökök végzik**, mindegyik a saját
+2. **A munkát Grok 4.6 extra-high ügynökök végzik**, mindegyik a saját
    szakterületének profija. Addig dolgoznak, amíg a kiírás minden pontja kész.
    Javító kört is ők visznek, nem az orkesztrátor „mellékesen".
 3. **Az ügynök, ha valamiben nem biztos:** előbb kutat (internet, hivatalos
@@ -347,8 +352,8 @@ Minden kódolási munkánál:
    tanulságot), és mi az elfogadási feltétel. A Task-hívásokon a `model`
    mező **kötött**: vezető = `gpt-5.6-sol-xhigh` csak akkor, ha a szülő nem
    Sol (Cloud Agent szülőként a Sol xhigh a pickerben); a csapat minden
-   tagja = `cursor-grok-4.6-high-fast`.
-7. **MINDIG teljes körű ügynök-csapat indul, Grok 4.6 thinking ügynökökből.**
+   tagja = `cursor-grok-4.6-xhigh`.
+7. **MINDIG teljes körű ügynök-csapat indul, Grok 4.6 extra-high ügynökökből.**
    Nem egyetlen ügynök, hanem a feladathoz szabott csapat: felderítés,
    kutatás, megvalósítás, ellenőrzés — mindegyik a saját szakterületén. A
    csapat összetételét a vezető állítja össze a feladat természete szerint.

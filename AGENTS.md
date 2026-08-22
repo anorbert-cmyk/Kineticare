@@ -271,14 +271,20 @@ gyanús vagy elmarad, **azonnal javít** — nem vár külön kérésre.
 1. **Orkesztrátor / Cloud Agent szülő:** GPT-5.6 Sol legerősebb thinking —
    slug: `gpt-5.6-sol-xhigh`. A pickerben / Cloud Agenten ezt indítsd vezetőnek,
    ne Autót és ne Composert.
-2. **Agentic csapat (Task-subagent, javítás, felderítés, ellenőrzés):**
-   Cursor Grok 4.6 thinking. A kiosztható listában a 4.6-os thinking slug:
-   `cursor-grok-4.6-high-fast`. Nincs `cursor-grok-4.6-high` és nincs 4.6
-   extra-high/xhigh — ne helyettesítsd Opus-szal vagy Grok 4.5-tel.
+2. **Minden Grok-ügynök extra high:** Cloud Agent, picker, Task-subagent,
+   Bugbot, javítás, felderítés, ellenőrzés. Slug: `cursor-grok-4.6-xhigh`.
+   A `cursor-grok-4.6-high` és a `cursor-grok-4.6-high-fast` **tilos**.
+   A `cursor-grok-4.6-xhigh-fast` csak akkor, ha a tulajdonos kifejezetten
+   gyors kört kér. Ne helyettesítsd Opus-szal, Grok 4.5-tel vagy Composerrel.
+
+Ha egy felület Task-listája nem tartalmazza a `cursor-grok-4.6-xhigh` slugot:
+**ne vedd le** `high-fast`-re. Jelezd a tulajdonosnak, és a munkát az
+extra-high szülő végezze.
 
 Az **Auto nem modell**: a Cursor Router kérésenként választ a készletből.
-Auto ≠ Sol, Auto ≠ Grok 4.6. Kineticare-munkánál a pickerben **névre szólóan**
-a Sol xhigh (vezető) és a Grok 4.6 (csapat) legyen bent.
+Auto ≠ Sol, Auto ≠ Grok 4.6 extra high. Kineticare-munkánál a pickerben
+**névre szólóan** a Sol xhigh (vezető) és a Grok 4.6 extra high (csapat)
+legyen bent.
 
 Composer (`composer-2.5`) maradhat a készletben rövid, emberi napi kódoláshoz;
 **nem** a Kineticare ügynök-csapat alapja.
@@ -288,7 +294,7 @@ Cursor-subagentek élnek. A `kineticare-bugbot` a teljes `main` ág
 Bugbot-stílusú hibavadászata (fizetés, jogosultság, számla, videó, tilos
 zónák). Használd, ha a teljes `main`t vagy a production-kritikus utakat
 kell átnézni, nem egy feature-PR diffjét — a kiosztás itt is Grok 4.6
-thinking (`cursor-grok-4.6-high-fast`), a vezető Sol xhigh:
+extra high (`cursor-grok-4.6-xhigh`), a vezető Sol xhigh:
 
 ```
 Use the kineticare-bugbot subagent to review the entire main branch
