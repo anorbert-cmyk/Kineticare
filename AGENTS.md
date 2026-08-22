@@ -359,6 +359,7 @@ Kritikus, élesben szerzett tanulságok (a teljes lista a `CLAUDE.md`
 | E2E-futtatás stagingen | `docs/e2e-staging-runbook.md` |
 | OWASP biztonsági audit | `docs/owasp-security-review.md` |
 | Statisztika/Bunny review (2026-08-21) | `docs/review-2026-08-21-statisztika-bunny.md` |
+| Kritikus utak review (2026-08-22) | `docs/review-2026-08-22-kritikus-utak.md` |
 | **Piaci stratégia és végrehajtási terv** | `docs/piaci-strategia.md` |
 | Tudástár-cikkek betöltése | `docs/tudastar-cikkek-betoltese.md` |
 | Kulcsszó-célzás (mért) | `docs/kulcsszavak.md` |
