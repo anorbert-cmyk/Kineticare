@@ -4,10 +4,11 @@
  *
  * ## Mit véd
  *
- * A belépést a Payload `maxLoginAttempts` (5 → 10 perc zárolás), a
- * kapcsolat-űrlapot a Turnstile védi. A regisztráció, a jelszó-emlékeztető, a
- * jelszó-visszaállítás, a fizetésindítás és az űrlap-beküldés viszont eddig
- * korlátlanul hívható volt: ezekre ez a modul ad keretet.
+ * A belépést a Payload `maxLoginAttempts` (5 → 10 perc zárolás) fiókonként
+ * védi; emellett ez a modul IP- és e-mail-keretet ad a `/api/users/login`
+ * végpontra, hogy elosztott spray ne zárja zárolásra az áldozat fiókját.
+ * A kapcsolat-űrlapot a Turnstile védi. A regisztráció, a jelszó-emlékeztető,
+ * a jelszó-visszaállítás, a fizetésindítás és az űrlap-beküldés kerete is itt él.
  *
  * ## Három keret-ALANY (subject)
  *
@@ -16,9 +17,10 @@
  *
  *  - `ip` — a történeti alap: kliens-IP-nként (lásd lentebb az IP-kinyerés
  *    korlátait);
- *  - `email` — a jelszó-emlékeztető CÍMZETTJE. IP-rotációval a puszta IP-keret
- *    megkerülhető, és egy konkrét postaláda korlátlanul bombázható; ez a keret
- *    a címhez köt, tehát az IP-k számától függetlenül fog;
+ *  - `email` — a jelszó-emlékeztető CÍMZETTJE és a belépési kísérlet e-mailje.
+ *    IP-rotációval a puszta IP-keret megkerülhető, és egy konkrét postaláda
+ *    (vagy egy áldozat fiókja) korlátlanul bombázható; ez a keret a címhez köt,
+ *    tehát az IP-k számától függetlenül fog;
  *  - `user` — a BEJELENTKEZETT felhasználó. A hitelesített végpontokon az IP
  *    nem alkalmas kulcs (egy user IP-t vált, több user oszthat IP-t) — ott a
  *    user-azonosító a helyes alany (`GET /api/stream-token`: Bunny-jegy-farmolás
@@ -161,6 +163,13 @@ const TEN_MINUTES_MS = 10 * 60 * 1000
  *   Barion-callback (checkout által kiírt barionPaymentId) korlátlan; a
  *   véletlen GUID-zápor elakad. A ritka verseny (callback a paymentId-írás
  *   előtt) egy helyet fogyaszt, de a keret alatt átmegy.
+ * - `login` 10/10 perc: a `/api/users/login` IP-kerete. A Payload
+ *   `maxLoginAttempts` fiókonként zár; elosztott spray (sok IP → egy áldozat)
+ *   azt megkerüli. Az IP-keret a nyers próbálkozás-záport fogja.
+ * - `login-email` 10/10 perc: UGYANAZ a keret, a belépési e-mail-címre
+ *   kulcsolva. IP-rotációval a puszta IP-keret megkerülhető; a cím-keret
+ *   az áldozat fiókját védi, bárhonnan is próbálkoznak. A `maxLoginAttempts`
+ *   ettől függetlenül megmarad.
  */
 export const RATE_LIMIT_RULES = {
   registration: { limit: 5, windowMs: TEN_MINUTES_MS },
@@ -190,12 +199,15 @@ export const RATE_LIMIT_RULES = {
   // (callback a barionPaymentId-írás előtt) egy helyet fogyaszt, de átmegy;
   // a gépi GUID-zápor (táblanövekedés + GetState) elakad.
   'barion-callback-unknown': { limit: 20, windowMs: TEN_MINUTES_MS },
+  login: { limit: 10, windowMs: TEN_MINUTES_MS },
+  'login-email': { limit: 10, windowMs: TEN_MINUTES_MS },
 } as const satisfies Record<string, RateLimitRule>
 
 /**
  * A keret-osztály azonosítója. Nem minden osztály jön ÚTVONALBÓL: a
- * `password-forgot-email`, a `stream-token` és a `barion-callback-unknown`
- * keretét a hívó explicit (`checkForgotPasswordEmailRateLimit`,
+ * `password-forgot-email`, a `login-email`, a `stream-token` és a
+ * `barion-callback-unknown` keretét a hívó explicit
+ * (`checkForgotPasswordEmailRateLimit`, `checkLoginEmailRateLimit`,
  * `checkUserRateLimit`, `checkIpRateLimit`) fogyasztja.
  */
 export type RateLimitedRouteClass = keyof typeof RATE_LIMIT_RULES
@@ -218,12 +230,14 @@ export const RATE_LIMIT_MESSAGE = 'Túl sok próbálkozás. Próbáld újra pár
 
 /**
  * PONTOS útvonal → osztály. Prefix-egyezés szándékosan nincs: a `/api/users`
- * (regisztráció) és a `/api/users/login` (amit a `maxLoginAttempts` véd) így
- * nem csúszhat össze, és új Payload-végpont sem kerül véletlenül korlátozás alá.
+ * (regisztráció) és a `/api/users/login` (IP+e-mail keret; a Payload
+ * `maxLoginAttempts` fiókonként továbbra is él) így nem csúszhat össze, és új
+ * Payload-végpont sem kerül véletlenül korlátozás alá.
  */
 const ROUTE_CLASS_BY_PATH = new Map<string, RateLimitedRouteClass>([
   // Payload REST (a `(payload)/api/[...slug]` catch-all szolgálja ki):
   ['/api/users', 'registration'],
+  ['/api/users/login', 'login'],
   ['/api/users/forgot-password', 'password-forgot'],
   ['/api/form-submissions', 'form-submission'],
   // Saját route-handlerek (maguk hívják a `checkRequestRateLimit`-et):
@@ -629,21 +643,21 @@ function normalizeEmailKey(value: unknown): string | null {
 }
 
 /**
- * A jelszó-emlékeztető törzséből a címzett e-mail-címe.
+ * JSON vagy multipart `_payload` törzsből az `email` mező.
  *
  * A törzset MINDIG a kérés KLÓNJÁBÓL olvassuk, hogy az eredeti kérés
  * változatlanul továbbadható maradjon a Payload-handlernek (ugyanaz a minta,
  * mint a reset-password handlerben). Két formátumot értünk:
  *  - `application/json` — a nyilvános űrlap (`src/lib/auth-client.ts`) és a
  *    közvetlen REST-hívók;
- *  - `multipart/form-data` — a Payload ADMIN „elfelejtett jelszó" oldala, amely
- *    a mezőket egyetlen `_payload` nevű JSON-sztringbe csomagolja.
+ *  - `multipart/form-data` — a Payload ADMIN űrlapjai, amelyek a mezőket
+ *    egyetlen `_payload` nevű JSON-sztringbe csomagolják.
  *
  * Bármilyen hiba (olvashatatlan törzs, ismeretlen content-type) esetén `null`:
  * a cím-keret ilyenkor kimarad, de az IP-keret már lefutott — a bemenet-hiba
  * SOSEM nyithat rést és sosem dobhat a hívó felé.
  */
-async function readForgotPasswordEmail(request: Request): Promise<string | null> {
+async function readJsonOrMultipartEmail(request: Request): Promise<string | null> {
   const declaredLength = Number(request.headers.get('content-length') ?? '')
   if (Number.isFinite(declaredLength) && declaredLength > MAX_FORGOT_BODY_BYTES) {
     return null
@@ -694,12 +708,48 @@ export async function checkForgotPasswordEmailRateLimit(
   if (classifyRateLimitedRoute(request.method, safePathname(request.url)) !== 'password-forgot') {
     return null
   }
-  const email = await readForgotPasswordEmail(request)
+  const email = await readJsonOrMultipartEmail(request)
   if (!email) {
     return null
   }
   return consumeRateLimit({
     routeClass: 'password-forgot-email',
+    subject: 'email',
+    identifier: email,
+    logIdentifier: maskEmail(email),
+    request,
+    options,
+  })
+}
+
+/**
+ * A belépés MÁSODIK kerete: a megadott e-mail-címre kulcsolva.
+ *
+ * Miért kell az IP-keret mellé: a `login` IP-keretét IP-rotációval meg lehet
+ * kerülni, és onnantól EGY áldozat fiókját sok forrásról lehet próbálgatni —
+ * a Payload `maxLoginAttempts` ilyenkor zárolja az áldozatot. A címre kulcsolt
+ * keret ezt a támadást az IP-k számától függetlenül fogja. A
+ * `maxLoginAttempts` ettől függetlenül megmarad.
+ *
+ * A nyers cím SOSEM kerül naplóba (maszkolva megy), és a kereten kívül
+ * sehol nem tárolódik.
+ *
+ * `null` = szabad az út (nem ez az útvonal, nincs cím a törzsben, vagy belefér
+ * a keretbe).
+ */
+export async function checkLoginEmailRateLimit(
+  request: Request,
+  options: CheckRequestRateLimitOptions = {},
+): Promise<RateLimitRejection | null> {
+  if (classifyRateLimitedRoute(request.method, safePathname(request.url)) !== 'login') {
+    return null
+  }
+  const email = await readJsonOrMultipartEmail(request)
+  if (!email) {
+    return null
+  }
+  return consumeRateLimit({
+    routeClass: 'login-email',
     subject: 'email',
     identifier: email,
     logIdentifier: maskEmail(email),
@@ -732,9 +782,9 @@ export function payloadRestRateLimitResponse(rejection: RateLimitRejection): Res
  *
  * Két keret fut, ebben a sorrendben:
  *  1. IP-keret — olcsó (csak fejlécek), ezért mindig ez az első;
- *  2. a jelszó-emlékeztető ágon a CÍM-keret — ehhez a törzset (a kérés
- *     klónjából) el kell olvasni, ezért csak akkor fut le, ha az IP-keret
- *     átengedte a kérést.
+ *  2. a jelszó-emlékeztető VAGY a belépés ágon a CÍM-keret — ehhez a törzset
+ *     (a kérés klónjából) el kell olvasni, ezért csak akkor fut le, ha az
+ *     IP-keret átengedte a kérést. A két cím-keret útvonalonként kizárólagos.
  */
 export function withPayloadRestRateLimit<Args extends unknown[]>(
   handler: (request: Request, ...args: Args) => Promise<Response>,
@@ -745,7 +795,9 @@ export function withPayloadRestRateLimit<Args extends unknown[]>(
     if (ipRejection) {
       return payloadRestRateLimitResponse(ipRejection)
     }
-    const emailRejection = await checkForgotPasswordEmailRateLimit(request, options)
+    const emailRejection =
+      (await checkForgotPasswordEmailRateLimit(request, options)) ??
+      (await checkLoginEmailRateLimit(request, options))
     if (emailRejection) {
       return payloadRestRateLimitResponse(emailRejection)
     }

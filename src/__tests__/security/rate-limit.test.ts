@@ -174,6 +174,7 @@ describe('resolveRateLimitIp — IP-kinyerés proxy mögül', () => {
 describe('classifyRateLimitedRoute — mit korlátozunk', () => {
   it('a védett POST-végpontok a saját osztályukba esnek', () => {
     expect(classifyRateLimitedRoute('POST', '/api/users')).toBe('registration')
+    expect(classifyRateLimitedRoute('POST', '/api/users/login')).toBe('login')
     expect(classifyRateLimitedRoute('POST', '/api/users/forgot-password')).toBe('password-forgot')
     expect(classifyRateLimitedRoute('POST', '/api/users/reset-password')).toBe('password-reset')
     expect(classifyRateLimitedRoute('POST', '/api/checkout/start')).toBe('checkout-start')
@@ -202,8 +203,10 @@ describe('classifyRateLimitedRoute — mit korlátozunk', () => {
     }
   })
 
-  it('a belépést a Payload maxLoginAttempts védi — itt nem korlátozzuk', () => {
-    expect(classifyRateLimitedRoute('POST', '/api/users/login')).toBeNull()
+  it('a belépés IP-kerete a login osztály — a maxLoginAttempts fiókonként megmarad', () => {
+    expect(classifyRateLimitedRoute('POST', '/api/users/login')).toBe('login')
+    expect(RATE_LIMIT_RULES.login).toEqual({ limit: 10, windowMs: TEN_MINUTES })
+    expect(RATE_LIMIT_RULES['login-email']).toEqual({ limit: 10, windowMs: TEN_MINUTES })
   })
 
   it('nem felsorolt Payload-végpont érintetlen (nincs prefix-egyezés)', () => {
@@ -558,11 +561,65 @@ describe('withPayloadRestRateLimit — Payload REST POST beburkolása', () => {
 
     for (let index = 0; index < 50; index += 1) {
       const response = await handler(
-        makeRequest('https://kineticare.test/api/users/login', { ip: '203.0.113.13' }),
-        { params: Promise.resolve({ slug: ['users', 'login'] }) },
+        makeRequest('https://kineticare.test/api/users/logout', { ip: '203.0.113.13' }),
+        { params: Promise.resolve({ slug: ['users', 'logout'] }) },
       )
       expect(response.status).toBe(200)
     }
+  })
+
+  it('a 11. azonos-IP-s belépés 429, magyar üzenet, a handler el sem indul', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    let calls = 0
+    const inner: PayloadRestHandler = async () => {
+      calls += 1
+      return Response.json({ ok: true }, { status: 200 })
+    }
+    const handler = withPayloadRestRateLimit(inner, { limiter })
+    const send = () =>
+      handler(makeRequest('https://kineticare.test/api/users/login', { ip: '203.0.113.40' }), {
+        params: Promise.resolve({ slug: ['users', 'login'] }),
+      })
+
+    for (let index = 0; index < RATE_LIMIT_RULES.login.limit; index += 1) {
+      expect((await send()).status).toBe(200)
+    }
+
+    const throttled = await send()
+    expect(throttled.status).toBe(429)
+    expect(calls).toBe(RATE_LIMIT_RULES.login.limit)
+    const body = (await throttled.json()) as { errors: Array<{ message: string }> }
+    expect(body.errors[0]?.message).toBe(RATE_LIMIT_MESSAGE)
+    expect(body.errors[0]?.message).toContain('Túl sok próbálkozás')
+  })
+
+  it('belépés cím-keret: azonos e-mail, más IP — a 10. átmegy, a 11. 429', async () => {
+    const limiter = new SlidingWindowRateLimiter()
+    let calls = 0
+    const inner: PayloadRestHandler = async () => {
+      calls += 1
+      return Response.json({ ok: true }, { status: 200 })
+    }
+    const handler = withPayloadRestRateLimit(inner, { limiter })
+    const send = (ip: string) =>
+      handler(
+        new Request('https://kineticare.test/api/users/login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
+          body: JSON.stringify({ email: 'aldozat@example.test', password: 'x' }),
+        }),
+        { params: Promise.resolve({ slug: ['users', 'login'] }) },
+      )
+
+    for (let index = 0; index < RATE_LIMIT_RULES['login-email'].limit; index += 1) {
+      expect((await send(`198.51.100.${index}`)).status).toBe(200)
+    }
+
+    const throttled = await send('203.0.113.99')
+    expect(throttled.status).toBe(429)
+    expect(calls).toBe(RATE_LIMIT_RULES['login-email'].limit)
+    const body = (await throttled.json()) as { errors: Array<{ message: string }> }
+    expect(body.errors[0]?.message).toBe(RATE_LIMIT_MESSAGE)
   })
 
   it('a jelszó-emlékeztetőn a CÍM-keret is fog: más IP, azonos cím → 429, e-mail sem megy ki', async () => {
