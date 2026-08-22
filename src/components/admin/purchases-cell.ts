@@ -20,8 +20,21 @@ import { statusLabel } from './course-progress-view'
  * csússzanak szét.
  */
 
-/** Üres/hiányzó hozzáférés-lista helyőrzője. */
-export const PURCHASES_EMPTY_PLACEHOLDER = '—'
+/**
+ * Üres/hiányzó hozzáférés-lista helyőrzője.
+ *
+ * MIÉRT SZÖVEG, ÉS MIÉRT NEM KVIRTMÍNUSZ: korábban egyetlen „—" (U+2014) állt
+ * itt. Két baj volt vele. (1) A `docs/ui-sztenderdek.md` §3.1.1 szerint a
+ * kvirtmínusz magyar szövegben nem írásjel. (2) A puszta jel a képernyőolvasóban
+ * vagy néma, vagy „em dash"-ként hangzik el, tehát az információ elvész
+ * (WCAG 2.2 SC 1.3.1). Ugyanezért váltotta ki a Kurzus-haladás panel is a
+ * jelet szöveges `NO_DATA`-ra (src/components/admin/course-progress-view.ts).
+ *
+ * A szöveg SZÁNDÉKOSAN nem „Nincs adat": az adat megvan, és azt mondja, hogy
+ * a felhasználó egyetlen kurzust sem vásárolt. A kettő nem ugyanaz, és a
+ * munkatársnak épp ez a különbség számít.
+ */
+export const PURCHASES_EMPTY_PLACEHOLDER = 'Nincs kurzusa'
 
 /** A kurzus-címkéhez szükséges minimális termék-alak. */
 export interface PurchaseProductLike {
