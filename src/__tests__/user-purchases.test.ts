@@ -152,8 +152,8 @@ describe('withUserPurchasesLock — drizzle nélküli (nem-production) skip', ()
   })
 
   it('NODE_ENV=production mellett is lefut drizzle nélküli mockon (CI-útvonal)', async () => {
-    // A production NODE_ENV a withAdvisoryLock drizzle nélküli ágát dobásra
-    // viszi; a vevő-zár ezt a mockot a folyamatbeli záron futtatja, ne dobjon.
+    // Production NODE_ENV + mock Payload: a withAdvisoryLock drizzle nélkül
+    // dobna; a vevő-zár Vitestben no-op drizzle-t ad, a fn lefut.
     vi.stubEnv('NODE_ENV', 'production')
     const { payload, user } = createUserStore([1])
 
