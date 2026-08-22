@@ -6,10 +6,12 @@ import {
   INVOICE_PENDING_STALE_MS,
   MAX_CONSECUTIVE_TRANSPORT_FAILURES,
   MAX_LEADING_FAILURES,
+  ORDER_POLL_BATCH_SIZE,
   ORPHAN_ORDER_GRACE_MS,
   pollPendingOrders,
   STUCK_ORDER_WARN_MS,
 } from '../lib/order-poll/service'
+import type { applyBarionStateTransition } from '../lib/order-status/apply-barion-state'
 import type { Order } from '../payload-types'
 
 /**
@@ -94,6 +96,36 @@ interface SetupOptions {
   stateOverrides?: Partial<BarionPaymentStateResponse>
 }
 
+interface CapturedFind {
+  where?: unknown
+  sort?: string
+  limit?: number
+}
+
+/** A Payload `id: { not_in: [...] }` ágának kiolvasása a W1 pótlap-szűrőhöz. */
+function extractNotInIds(where: unknown): Array<number | string> | null {
+  if (!where || typeof where !== 'object') {
+    return null
+  }
+  const record = where as Record<string, unknown>
+  if (Array.isArray(record.and)) {
+    for (const entry of record.and) {
+      const found = extractNotInIds(entry)
+      if (found) {
+        return found
+      }
+    }
+  }
+  const idCond = record.id
+  if (idCond && typeof idCond === 'object' && 'not_in' in idCond) {
+    const notIn = (idCond as { not_in?: unknown }).not_in
+    if (Array.isArray(notIn)) {
+      return notIn as Array<number | string>
+    }
+  }
+  return null
+}
+
 function setup(options: SetupOptions = {}) {
   const pending = options.pending ?? [createPendingOrder()]
   const paidResweep = options.paidResweep ?? []
@@ -101,14 +133,40 @@ function setup(options: SetupOptions = {}) {
   const orderUpdates: Array<Record<string, unknown>> = []
   const queuedInvoices: number[] = []
   const paidCalls: number[] = []
+  const finds: CapturedFind[] = []
 
   const payload = {
-    find: async ({ where }: { collection: string; where?: unknown }) => {
+    find: async ({
+      where,
+      sort,
+      limit,
+    }: {
+      collection: string
+      where?: unknown
+      sort?: string
+      limit?: number
+    }) => {
+      finds.push({
+        ...(where !== undefined ? { where } : {}),
+        ...(sort !== undefined ? { sort } : {}),
+        ...(limit !== undefined ? { limit } : {}),
+      })
       const json = JSON.stringify(where ?? {})
-      if (json.includes('"paid"')) {
-        return { docs: paidResweep, totalDocs: paidResweep.length }
+      let docs = json.includes('"paid"') && !json.includes('payment_pending') ? [...paidResweep] : [...pending]
+      const notIn = extractNotInIds(where)
+      if (notIn) {
+        const excluded = new Set(notIn.map(String))
+        docs = docs.filter((order) => !excluded.has(String(order.id)))
       }
-      return { docs: pending, totalDocs: pending.length }
+      if (sort === 'updatedAt') {
+        docs.sort((a, b) => Date.parse(a.updatedAt ?? '') - Date.parse(b.updatedAt ?? ''))
+      } else if (sort === 'createdAt') {
+        docs.sort((a, b) => Date.parse(a.createdAt ?? '') - Date.parse(b.createdAt ?? ''))
+      }
+      if (typeof limit === 'number') {
+        docs = docs.slice(0, limit)
+      }
+      return { docs, totalDocs: docs.length }
     },
     findByID: async ({ collection, id }: { collection: string; id: number }) => {
       // Az M5 zár a záron belül ÚJRAOLVASSA a rendelést — a mock a tárolt
@@ -122,11 +180,26 @@ function setup(options: SetupOptions = {}) {
       }
       return user
     },
-    update: async ({ collection, data }: { collection: string; data: Record<string, unknown> }) => {
+    update: async ({
+      collection,
+      id,
+      data,
+    }: {
+      collection: string
+      id?: number | string
+      data: Record<string, unknown>
+    }) => {
       if (collection === 'orders') {
         orderUpdates.push(data)
-        for (const order of [...pending, ...paidResweep]) {
-          Object.assign(order, data)
+        const pool = [...pending, ...paidResweep]
+        const target = id === undefined ? undefined : pool.find((order) => order.id === id)
+        if (target) {
+          Object.assign(target, data)
+          // A Payload valódi update-je bökí az updatedAt-et — a W1 touch
+          // (status: payment_pending újraírása) csak így kerül a sor végére.
+          if (data.status === 'payment_pending') {
+            target.updatedAt = new Date(NOW).toISOString()
+          }
         }
       }
       if (collection === 'users') {
@@ -168,6 +241,7 @@ function setup(options: SetupOptions = {}) {
     queuedInvoices,
     paidCalls,
     pending,
+    finds,
   }
 }
 
@@ -317,7 +391,9 @@ describe('order-poll — elveszett callback-mentés', () => {
     expect(summary.transitionedPaid).toBe(0)
     expect(summary.failed).toBe(1)
     expect(order.status).toBe('payment_pending')
-    expect(orderUpdates).toHaveLength(0)
+    // W1 — rejected után touch: ugyanaz a státusz íródik vissza, hogy az
+    // updatedAt elmozduljon. Státusz NEM cancelled/failed.
+    expect(orderUpdates).toEqual([{ status: 'payment_pending' }])
     expect(user.purchases).toEqual([])
     expect(paidCalls).toHaveLength(0)
   })
@@ -885,5 +961,108 @@ describe('order-poll — a futás eleji mennyezet (MAX_LEADING_FAILURES)', () =>
 
     expect(fetchState).toHaveBeenCalledTimes(pending.length)
     expect(summary.skipped).toBe(0)
+  })
+})
+
+/**
+ * W1 — rejected sorfej (head-of-line). 25 total-mismatch poison a legrégebbi
+ * updatedAt-tel kitölti az ablakot; a 26. Succeeded rendelés csak akkor
+ * zárul paid-re UGYANABBAN a pollPendingOrders-hívásban, ha a rejected
+ * sorokat megérintjük és egy pótlapot kérünk a már látott id-k nélkül.
+ */
+describe('order-poll — W1 rejected sorfej (updatedAt + touch + pótlap)', () => {
+  const PAYABLE_ID = 499
+
+  function poisonBatch(): Order[] {
+    return Array.from({ length: ORDER_POLL_BATCH_SIZE }, (_, index) =>
+      createPendingOrder({
+        id: 400 + index,
+        orderNumber: `KH-POISON-${index}`,
+        barionPaymentId: `poison-${String(index).padStart(2, '0')}`,
+        createdAt: isoHoursAgo(10),
+        updatedAt: isoHoursAgo(10),
+      }),
+    )
+  }
+
+  it('25 rejected + 1 újabb Succeeded → egy futásban transitionedPaid >= 1 (a 26. paid)', async () => {
+    const poisons = poisonBatch()
+    const payable = createPendingOrder({
+      id: PAYABLE_ID,
+      orderNumber: 'KH-PAYABLE',
+      barionPaymentId: 'payable-payment',
+      createdAt: isoHoursAgo(1),
+      updatedAt: isoHoursAgo(1),
+    })
+    const { payload, onPaid, queueInvoice, paidCalls, finds } = setup({
+      pending: [...poisons, payable],
+      stateStatus: 'Succeeded',
+    })
+
+    const fetchState = vi.fn(async (paymentId: string): Promise<BarionPaymentStateResponse> => {
+      return getStateResponse('Succeeded', { PaymentId: paymentId })
+    })
+
+    const applyTransition = vi.fn(async ({ order }: { order: Order }) => {
+      if (order.id === PAYABLE_ID) {
+        return { action: 'paid' as const, transitionedToPaid: true }
+      }
+      return { action: 'rejected' as const, reason: 'total-mismatch' }
+    }) as unknown as typeof applyBarionStateTransition
+
+    const summary = await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      applyTransition,
+      invoicingEnabled: () => false,
+      now: NOW,
+    })
+
+    expect(summary.transitionedPaid).toBeGreaterThanOrEqual(1)
+    expect(paidCalls).toEqual([PAYABLE_ID])
+    expect(summary.failed).toBe(ORDER_POLL_BATCH_SIZE)
+    expect(summary.scanned).toBe(ORDER_POLL_BATCH_SIZE + 1)
+
+    // GetState a rejected sorokra NEM ismétlődik — a pótlap csak a nem látott id.
+    expect(fetchState).toHaveBeenCalledTimes(ORDER_POLL_BATCH_SIZE + 1)
+    expect(fetchState).toHaveBeenCalledWith('payable-payment')
+
+    expect(finds.length).toBeGreaterThanOrEqual(2)
+    expect(finds[0]?.sort).toBe('updatedAt')
+    expect(finds[0]?.limit).toBe(ORDER_POLL_BATCH_SIZE)
+    const refill = finds.find((entry, index) => index > 0 && extractNotInIds(entry.where))
+    expect(refill).toBeDefined()
+    expect(extractNotInIds(refill?.where)).toEqual(expect.arrayContaining(poisons.map((order) => order.id)))
+    expect(extractNotInIds(refill?.where)).not.toContain(PAYABLE_ID)
+
+    for (const poison of poisons) {
+      expect(poison.status).toBe('payment_pending')
+    }
+  })
+
+  it('a függő ablak updatedAt szerint nyílik (nem createdAt)', async () => {
+    const { payload, fetchState, onPaid, queueInvoice, finds } = setup({
+      pending: [createPendingOrder()],
+      stateStatus: 'Prepared',
+    })
+
+    await pollPendingOrders({
+      payload,
+      fetchState,
+      onPaid,
+      queueInvoice,
+      invoicingEnabled: () => false,
+      now: NOW,
+    })
+
+    const pendingFinds = finds.filter((entry) => {
+      const json = JSON.stringify(entry.where ?? {})
+      return json.includes('payment_pending')
+    })
+    expect(pendingFinds.length).toBeGreaterThanOrEqual(1)
+    expect(pendingFinds[0]?.sort).toBe('updatedAt')
+    expect(pendingFinds[0]?.sort).not.toBe('createdAt')
   })
 })

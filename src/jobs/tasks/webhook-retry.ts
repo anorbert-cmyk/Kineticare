@@ -25,9 +25,15 @@ import { createStaleAwareBeforeSchedule } from '../schedule-guard'
  *   is nő, tehát a kimerülés-szűrő (K3) itt is fékez.
  * - Exponenciális backoff: a retryDelayMs szerinti várakozás letelte előtt az
  *   esemény kimarad (isRetryDue).
- * - KIMERÜLÉS (attempts >= MAX_WEBHOOK_ATTEMPTS): az esemény failed marad, és a
- *   riasztás A KIMERÜLÉS PILLANATÁBAN megy (az utolsó kísérlet failed+
- *   retryable:false kimenetelénél, error-szintű owner-jelzés).
+ * - KIMERÜLÉS (attempts >= MAX_WEBHOOK_ATTEMPTS):
+ *   - failed-ág: az esemény `failed` marad, a riasztás A KIMERÜLÉS
+ *     PILLANATÁBAN megy (retryable:false).
+ *   - pending_repoll-ág (W13): a rekord `received` MARAD (egy későbbi
+ *     Succeeded callback a route-handleren még feldolgozható), de a scan
+ *     kihagyja. A riasztás az attemptProcessingben megy; a task `exhausted`
+ *     számlálója nő, a `succeeded` NEM — ez nem terminális győzelem. A
+ *     `failed` számlálót NEM növeljük: a handler nem dobott, a fizetés
+ *     függőben maradt.
  *
  * ABLAK-VÉDELEM (K3): a scan-szűrő KIZÁRI a kimerült rekordokat
  * (`attempts < MAX`). Ez azért kell, mert a 25-ös, legrégebbit-előnyben-
@@ -134,7 +140,19 @@ export const webhookRetryTask: TaskConfig<WebhookRetryJobIO> = {
         externalId: event.externalId,
         handler: processor,
       })
-      if (outcome.kind === 'processed' || outcome.kind === 'already-processed') {
+      if (outcome.kind === 'processed') {
+        if (outcome.nonTerminal && outcome.attempts >= MAX_WEBHOOK_ATTEMPTS) {
+          // W13 — pending_repoll kimerülés: NEM terminális siker. A `failed`
+          // számláló a dobó handleré (lásd lent); itt a handler lefutott, a
+          // fizetés viszont továbbra is függő. A riasztást az
+          // attemptProcessing már kiírta.
+          exhausted += 1
+        } else if (!outcome.nonTerminal) {
+          succeeded += 1
+        }
+        // Köztes pending_repoll (attempts < MAX): retried nőtt, succeeded nem
+        // — a kimenetel nem terminális győzelem, a következő scan még viszi.
+      } else if (outcome.kind === 'already-processed') {
         succeeded += 1
       } else if (outcome.kind === 'failed') {
         if (!outcome.retryable) {

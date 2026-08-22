@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { createBarionCallbackProcessor } from '../../lib/barion-callback/process-callback'
 import {
   MAX_WEBHOOK_ATTEMPTS,
+  processWebhook,
   registerWebhookProcessor,
   type WebhookEventDoc,
   type WebhookEventStore,
@@ -309,6 +310,47 @@ describe('webhook-retry handler — retry-kimenetelek', () => {
 
     expect(result.output).toMatchObject({ scanned: 1, retried: 0, skipped: 1 })
     expect(processor).not.toHaveBeenCalled()
+  })
+
+  it('W13 — pending_repoll UTOLSÓ kísérlete → exhausted, NEM succeeded, rekord received marad; későbbi processWebhook még lefut', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const event = createEvent({
+      status: 'received',
+      attempts: MAX_WEBHOOK_ATTEMPTS - 1,
+      result: 'pending_repoll',
+    })
+    const { store, docs } = createWebhookStore([event])
+    registerWebhookProcessor('barion', async () => ({ webhookNonTerminal: true }))
+
+    const first = await runHandler(store)
+
+    expect(first.output).toMatchObject({ retried: 1, exhausted: 1, succeeded: 0, failed: 0 })
+    expect(docs[0]).toMatchObject({
+      status: 'received',
+      result: 'pending_repoll',
+      attempts: MAX_WEBHOOK_ATTEMPTS,
+    })
+    const firstLogs = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(firstLogs).toContain('RIASZTÁS')
+    expect(firstLogs).toContain('pending_repoll')
+
+    // A retry-scan többé nem viszi (attempts >= MAX), a riasztás nem ismétlődik.
+    logSpy.mockClear()
+    const second = await runHandler(store)
+    expect(second.output).toMatchObject({ scanned: 0, retried: 0, exhausted: 0, succeeded: 0 })
+    expect(logSpy.mock.calls.map((call) => String(call[0])).join('\n')).not.toContain('kimerültek')
+
+    // A route-handler (processWebhook) viszont még mindig feldolgozhat egy
+    // későbbi Succeeded callbacket — nem already-processed.
+    const paid = await processWebhook({
+      store,
+      provider: 'barion',
+      externalId: event.externalId,
+      handler: async () => ({ status: 'paid' }),
+    })
+    expect(paid.kind).toBe('processed')
+    expect(paid).not.toMatchObject({ kind: 'already-processed' })
+    expect(docs[0]?.status).toBe('processed')
   })
 
   it('regisztrálatlan provider eseménye kimarad (skipped), érintetlen marad', async () => {
