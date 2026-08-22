@@ -256,6 +256,16 @@ A #144 ág ezeket a commitokat magában foglalja.
 | W17 | `Users.ts` `logFailedLogin` | Trusted-hop IP (`audit.resolveClientIp`). Access-szabály érintetlen. |
 | W18 | `security/rate-limit.ts` | `/api/users/login` IP- + e-mail-keret (10/10 perc). `maxLoginAttempts` megmarad. |
 
-### 9.3 Továbbra is nyitva (tulajdonosi / tilos zóna)
+### 9.3 Tulajdonosi döntések (2026-08-22, „Te döntesz”)
 
-K2, K4 teljes (migráció), K5 (access), W3 (`pool.max`), W4 (409-orákulum).
+| # | Döntés | Mit jelent |
+| --- | --- | --- |
+| K2 | Szűk kötés, nincs `auth.verify` / migráció | Vendég csak aktiválatlan `customer` fiókhoz köt. Aktivált vevő / staff / owner: 409 belépésre, a paid-átmenet nem grantol idegen fiókra. |
+| K4 teljes | Nem | A K4-min (mindig `queryByKulsoAzon`) elég. Bizonylat-szintű térkép = generált migráció, most nincs hozadéka. |
+| K5 | Mező `update` zárva | Számla / stornó / helyesbítő mezők: `denyFieldWrite`. REST/admin senkinek. Jobok `overrideAccess: true`. **Tilos zóna 4, merge előtt emberi review.** |
+| W3 | Nincs `pool.max` | Railway `max_connections` × replika nélkül a cap vagy kimerít, vagy hazudik. Komment a `payload.config.ts` poolján. |
+| W4 | Nincs vásárlás-orákulum | Vendégnek ugyanaz a 409, akár van kurzusuk, akár nincs. „Már megvásároltad” csak bejelentkezve. |
+
+### 9.4 Hátra
+
+Nincs nyitott tétel ebből a listából. A teljes `auth.verify` (K2 séma) későbbi, külön kör, ha a szűk fék nem elég.
