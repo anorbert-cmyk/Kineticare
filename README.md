@@ -63,6 +63,7 @@ kizárólag a kezdőlap szekciósorát és a landing tartalmi képeit tölti be
 | UX-hierarchia-audit | `docs/ux-hierarchia-audit.md` |
 | OWASP biztonsági audit | `docs/owasp-security-review.md` |
 | Statisztika/Bunny review (2026-08-21) | `docs/review-2026-08-21-statisztika-bunny.md` |
+| Kritikus utak review (2026-08-22) | `docs/review-2026-08-22-kritikus-utak.md` |
 | **Piaci stratégia és végrehajtási terv** | `docs/piaci-strategia.md` |
 | Tudástár-cikkek betöltése | `docs/tudastar-cikkek-betoltese.md` |
 | Kulcsszó-célzás (mért) | `docs/kulcsszavak.md` |
