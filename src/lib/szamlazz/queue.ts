@@ -1,19 +1,25 @@
 import type { Payload } from 'payload'
 
 import { ORDER_MAINTENANCE_QUEUE } from '../../jobs/queues'
-import type { Logger } from '../logger'
+import { logger as rootLogger, type Logger } from '../logger'
 
 /**
  * A Számlázz.hu-jobok sorba állítása (C4/C5).
  *
- * A refund-folyamat szinkron, owner-vezérelt HTTP-művelet: a stornó/helyesbítő
- * kiállítása ott inline, best-effort fut. Ha az inline kísérlet ÚJRAPRÓBÁLHATÓ
- * hibába fut (timeout/hálózat/5xx/szlahu_down), a bizonylat nem veszhet el —
- * ezek a segédek állítják sorba a megfelelő taskot az order-maintenance
- * queue-ban (a queueInvoiceIssueJob mintájára, src/lib/order-paid.ts).
+ * A helyesbítő számla (C5) automatikus újrapróbálása: ha az inline kísérlet
+ * ÚJRAPRÓBÁLHATÓ hibába fut (timeout/hálózat/5xx/szlahu_down), a
+ * queueCorrectiveInvoiceJob állítja sorba a corrective-invoice-issue taskot
+ * (a queueInvoiceIssueJob mintájára, src/lib/order-paid.ts).
+ *
+ * A stornó (C4) NEM automatikus újrapróbálás: egy inline POST után az állapot
+ * bizonytalan (F3), a vak retry dupla stornót okozhat. A queueStornoIssueJob
+ * csak kézi / explicit újrasorbaállításra való, miután ember megerősítette,
+ * hogy a Számlázz.hu-fiókban NINCS stornó.
  *
  * A sorba állítás maga is best-effort: hibája SOHA nem billentheti ki a már
  * sikeres visszatérítést — a függvények false-szal térnek vissza és naplóznak.
+ * A HIÁNYZÓ JOB-SOR NEM LEHET NÉMA (P2 / W6): payload.jobs.queue nélkül
+ * error-szintű RIASZTÁS megy ki (a queueInvoiceIssueJob mintájára).
  */
 
 type JobsQueueLike = {
@@ -35,6 +41,13 @@ async function queueOrderMaintenanceTask(
     // taskokat — a runtime jobs.queue létezik, ezért strukturálisan castolunk.
     const jobs = (payload as unknown as { jobs?: JobsQueueLike }).jobs
     if (typeof jobs?.queue !== 'function') {
+      const alertLog = log ?? rootLogger
+      alertLog.error(
+        'RIASZTÁS: a Payload job-sor nem érhető el (payload.jobs.queue hiányzik) — a ' +
+          'számlázási job NEM állt sorba. Ellenőrizd a Payload jobs-konfigurációt és a ' +
+          'task regisztrációját.',
+        { task, ...input },
+      )
       return false
     }
     await jobs.queue({ task, input, queue: ORDER_MAINTENANCE_QUEUE })
@@ -50,7 +63,11 @@ async function queueOrderMaintenanceTask(
   }
 }
 
-/** A stornó-kiállítás újrapróbálása egy rendelésre (teljes visszatérítés). */
+/**
+ * A stornó-kiállítás KÉZI / explicit újrapróbálása egy rendelésre.
+ * Automatikus retry után (inline POST timeout) TILOS hívni — lásd
+ * issueStornoBestEffort és a storno-issue task fejkommentjét.
+ */
 export function queueStornoIssueJob(
   payload: Payload,
   orderId: number,

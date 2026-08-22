@@ -1,6 +1,7 @@
 import type { Payload } from 'payload'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { Logger } from '../lib/logger'
 import { refundOrder } from '../lib/refund/refund-order'
 import type { IssueCorrectiveInvoiceDeps } from '../lib/szamlazz/corrective'
 import type { IssueStornoForOrderDeps } from '../lib/szamlazz/storno'
@@ -10,7 +11,8 @@ import type { Order, User } from '../payload-types'
 /**
  * A visszatérítés BIZONYLAT-DÖNTÉSE (C4/C5): teljes refundnál stornó,
  * részlegesnél helyesbítő (módosító) számla — és az újrapróbálható
- * Számlázz.hu-hibák job-ba terelése.
+ * helyesbítő-hibák job-ba terelése. A stornó automatikus újrapróbálása
+ * TILOS (egy inline POST után az állapot bizonytalan, F3).
  *
  * A Barion-oldal mockolt fetch-csel fut (a refund.test.ts mintája), a
  * Számlázz.hu-hívók injektálva — így a teszt kizárólag a döntési logikát és a
@@ -311,9 +313,19 @@ describe('újrapróbálható Számlázz.hu-hiba → job sorba állítása', () =
     retryable: false,
   })
 
-  it('stornó-timeout → storno-issue job sorba kerül, a refund eredménye VÁLTOZATLAN', async () => {
+  it('stornó-timeout → NINCS storno-issue job (F3 csapda), RIASZTÁS, a refund eredménye VÁLTOZATLAN', async () => {
     const { payload, queued } = createMockPayload(createOrder())
     const spies = createSzamlazzSpies({ stornoError: retryableError })
+    const errors: string[] = []
+    const capturingLogger: Logger = {
+      debug: () => undefined,
+      info: () => undefined,
+      warn: () => undefined,
+      error: (msg: string) => {
+        errors.push(msg)
+      },
+      child: () => capturingLogger,
+    }
     fetchMock.mockResolvedValueOnce(getStateResponse()).mockResolvedValueOnce(refundResponse(TOTAL_HUF))
 
     const result = await refundOrder({
@@ -321,14 +333,15 @@ describe('újrapróbálható Számlázz.hu-hiba → job sorba állítása', () =
       orderNumber: ORDER_NUMBER,
       input: {},
       actor: ACTOR,
+      logger: capturingLogger,
       issueStorno: spies.issueStorno,
       issueCorrective: spies.issueCorrective,
     })
 
     expect(result.orderStatus).toBe('refunded')
-    expect(queued).toEqual([
-      { task: 'storno-issue', input: { orderId: 555 }, queue: 'order-maintenance' },
-    ])
+    expect(queued.some((entry) => entry.task === 'storno-issue')).toBe(false)
+    expect(queued).toHaveLength(0)
+    expect(errors.some((msg) => msg.includes('RIASZTÁS'))).toBe(true)
   })
 
   it('helyesbítő-timeout → corrective-invoice-issue job sorba kerül a refund-sorszámmal', async () => {

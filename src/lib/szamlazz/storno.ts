@@ -54,8 +54,11 @@ import {
  * (none|pending|storned|failed), stornoNumber, stornoAttempts és
  * stornoLastError mezőket hordozza — a számla-státusz (invoiceStatus /
  * invoiceNumber) mintájára. Az issueStornoForOrder Payload-példány mellett
- * ezeket írja is; a retryable hibák újrapróbálását a storno-issue job végzi
- * (src/jobs/tasks/storno-issue.ts, az invoice-issue mintájára).
+ * ezeket írja is. A retryable hibák AUTOMATIKUS újrapróbálása TILOS: egy
+ * inline POST után az állapot bizonytalan (F3), a vak retry dupla stornót
+ * okozhat. A storno-issue job csak kézi / explicit újrasorbaállításra való,
+ * miután ember megerősítette, hogy a Számlázz.hu-fiókban NINCS stornó
+ * (src/jobs/tasks/storno-issue.ts).
  */
 
 /**
@@ -180,9 +183,10 @@ export async function postStornoXml(
 
   // F6: a törzs OLVASÁSA is megszakadhat (streamelés közbeni timeout,
   // TCP-vágás). Ha ez nyers TypeError-ként lépne ki, elveszne a retryable
-  // osztályozás, és a hívó nem állítaná sorba az újrapróbálást — a bizonylat
-  // némán elveszne. A parseAgentResponse saját (már osztályozott)
-  // SzamlazzApiError-jait változatlanul engedjük tovább.
+  // osztályozás: a hívó nem tudná, hogy a POST már elindult, és a
+  // bizonytalan állapot RIASZTÁS nélkül maradna. A parseAgentResponse
+  // saját (már osztályozott) SzamlazzApiError-jait változatlanul engedjük
+  // tovább.
   let result: SzamlazzParsedSuccess
   try {
     const body = await response.text()
@@ -224,9 +228,10 @@ export interface IssueStornoForOrderDeps {
 }
 
 /**
- * Újrapróbálandó-e a stornó a kapott hiba alapján. Ez a retry-döntés egyetlen
- * forrása: a hívó (refund-bekötés) ez alapján állítja sorba a storno-issue
- * jobot, a job pedig a dobott hibától kap Payload-szintű újrapróbálást.
+ * Újrapróbálandó-e a stornó a kapott hiba alapján. A hívó (refund-bekötés)
+ * ez alapján dönt: retryable timeout/hálózat után RIASZTÁS megy ki, és
+ * NEM kerül sorba a storno-issue job (egy inline POST után az állapot
+ * bizonytalan — F3, dupla stornó kockázata).
  */
 export function isRetryableStornoError(error: unknown): boolean {
   return error instanceof SzamlazzApiError && error.retryable
@@ -257,9 +262,11 @@ function buyerEmailFromOrder(order: Order): string {
  *   'failed' + RIASZTÁS, beküldés NÉLKÜL: a stornó állapota bizonytalan,
  *   és a vak újraküldés dupla stornót okozhatna (F3);
  * - duplikátum-jelzés (71/152) → 'failed' + RIASZTÁS, kézi egyeztetéssel;
- * - retryable provider/timeout-hiba → stornoStatus 'failed' + THROW (a
- *   storno-issue job újrapróbálja — a következő futás már a fenti
- *   „bizonytalan állapot" ágra fut, tehát legfeljebb EGY beküldés történik).
+ * - retryable provider/timeout-hiba → stornoStatus 'failed' + THROW. A
+ *   hívó NEM állít sorba automatikus retry-t: a következő
+ *   issueStornoForOrder a fenti „bizonytalan állapot" ágra futna, tehát
+ *   soha nem POSTolna újra — a sorbaállítás csapda volna. Emberi
+ *   ellenőrzés kell a Számlázz.hu-fiókban.
  *
  * A `deps.payload` megadásakor minden állapotátmenet a rendelésre is felkerül
  * (pending → storned | failed, attempts-számlálóval és utolsó hibaüzenettel).
@@ -408,11 +415,10 @@ export async function issueStornoForOrder(
         error: error.message,
       })
       if (error.retryable) {
-        // A hívó (refund-bekötés) a storno-issue jobot állítja sorba, a job
-        // pedig a dobott hibától kap Payload-szintű újrapróbálást. Az
-        // újrafutás a stornoAttempts>0 miatt már NEM küld be újra, hanem
-        // riaszt és kézi ellenőrzést kér (F3) — ez a tudatos ár azért, hogy
-        // dupla stornó semmiképp ne keletkezhessen.
+        // A POST már elindult. A hívó (refund-bekötés) NEM állít sorba
+        // automatikus retry-t: a storno-issue job a stornoAttempts>0 miatt
+        // F3-on RIASZTÁS-sal megállna, és soha nem POSTolna újra — a
+        // sorbaállítás tehát csapda. Dupla stornó semmiképp ne keletkezhessen.
         throw error
       }
       return { outcome: 'failed', reason: error.message }

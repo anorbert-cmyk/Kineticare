@@ -12,7 +12,6 @@ import {
   issueCorrectiveInvoiceForOrder,
   issueStornoForOrder,
   queueCorrectiveInvoiceJob,
-  queueStornoIssueJob,
   type IssueCorrectiveInvoiceDeps,
   type IssueStornoForOrderDeps,
 } from '../szamlazz'
@@ -92,9 +91,12 @@ import {
  *     refundnál HELYESBÍTŐ (módosító) számla az eredeti számlára hivatkozva
  *     (C5) — a korábbi részrefundokhoz már helyesbítő készült, a teljes
  *     stornó a részösszeget másodszor is jóváírná. Újrapróbálható
- *     Számlázz.hu-hibánál a megfelelő job kerül sorba. Bizonylat KIZÁRÓLAG
- *     igazoltan megtörtént visszatérítéshez készül (M-11): ismeretlen
- *     tranzakció-státusznál kimarad, riasztással.
+ *     Számlázz.hu-hibánál a helyesbítő job kerül sorba; a stornó
+ *     automatikus újrapróbálása TILOS (egy inline POST után az állapot
+ *     bizonytalan, a vak retry dupla stornót okozhat — lásd
+ *     issueStornoBestEffort). Bizonylat KIZÁRÓLAG igazoltan megtörtént
+ *     visszatérítéshez készül (M-11): ismeretlen tranzakció-státusznál
+ *     kimarad, riasztással.
  *
  * Hibaág-szabály: BarionApiError (kind szerint naplózva requestId-vel) esetén
  * a rendelés NEM változik — a DB-írás kizárólag a sikeres Barion-refund UTÁN
@@ -350,8 +352,12 @@ export async function revokePurchases(
  * STORNÓ teljes visszatérítéshez — best-effort (C4).
  *
  * A kiállítás állapota a rendelésre kerül (stornoStatus/stornoNumber/…), így a
- * kimaradt bizonylat lekérdezhető. Újrapróbálható hibánál a storno-issue job
- * kerül sorba; a kimenetel a refund HTTP-válaszát SOSEM befolyásolja.
+ * kimaradt bizonylat lekérdezhető. Ha az inline POST már elindult, és
+ * újrapróbálható hibába (timeout/hálózat) fut, a storno-issue job NEM kerül
+ * sorba: a job a F3 bizonytalan-állapot ágon soha nem POSTolna újra, viszont
+ * a vak újrapróbálás dupla stornót okozhatna. Ilyenkor error-szintű RIASZTÁS
+ * kéri az emberi ellenőrzést a Számlázz.hu-fiókban. A kimenetel a refund
+ * HTTP-válaszát SOSEM befolyásolja.
  */
 async function issueStornoBestEffort(params: {
   options: RefundOrderOptions
@@ -380,14 +386,21 @@ async function issueStornoBestEffort(params: {
     }
   } catch (error) {
     const retryable = isRetryableStornoError(error)
-    log.error(
-      'refund: a stornó-számla kiállítása hibával állt le (best-effort) — a refund eredménye ettől változatlan',
-      { retryable, error: error instanceof Error ? error.message : String(error) },
-    )
     if (retryable) {
-      // Újrapróbálható provider-hiba: a bizonylat nem veszhet el — a job
-      // viszi tovább (a szamlaKulsoAzon-horgony véd a duplikáció ellen).
-      await queueStornoIssueJob(options.payload, order.id, log)
+      // Az inline POST már elindult (issueStornoForOrder a pending-írás
+      // UTÁN dob retryable-t). A storno-issue job ilyenkor F3-on
+      // (previousAttempts > 0, nincs stornoNumber) RIASZTÁS-sal megáll,
+      // és SOHA nem POSTolna újra — a sorbaállítás tehát csapda volna.
+      // Automatikus újrapróbálás TILOS (dupla stornó kockázata).
+      log.error(
+        'RIASZTÁS: a stornó-számla kiállítására már történt egy POST, az állapot bizonytalan — automatikus újrapróbálás TILOS (dupla stornó kockázata). A tulajdonosnak a Számlázz.hu-fiókban kell ellenőriznie, hogy készült-e stornó.',
+        { retryable, error: error instanceof Error ? error.message : String(error) },
+      )
+    } else {
+      log.error(
+        'refund: a stornó-számla kiállítása hibával állt le (best-effort) — a refund eredménye ettől változatlan',
+        { retryable, error: error instanceof Error ? error.message : String(error) },
+      )
     }
   }
 }
@@ -878,8 +891,10 @@ export async function refundOrder(options: RefundOrderOptions): Promise<RefundOr
   // A bizonylat hibája (a retryable Számlázz.hu-hibákat is beleértve) NEM
   // billentheti ki a már sikeres refundot: minden ág elkapva és strukturáltan
   // naplózva. A refund szinkron route-handler, ezért a kiállítás itt, inline
-  // fut; ÚJRAPRÓBÁLHATÓ hibánál a megfelelő job kerül sorba (storno-issue /
-  // corrective-invoice-issue), így a bizonylat nem veszhet el.
+  // fut. ÚJRAPRÓBÁLHATÓ helyesbítő-hibánál a corrective-invoice-issue job
+  // kerül sorba. Stornónál az automatikus újrapróbálás TILOS: egy inline
+  // POST után az állapot bizonytalan, a job F3-on soha nem POSTolna újra,
+  // a vak retry pedig dupla stornót okozhatna.
   if (statusOutcome !== 'succeeded') {
     orderLog.warn(
       'refund: a bizonylat automatikus kiállítása kimaradt, mert a Barion nem igazolta vissza a tranzakció sikerét — emberi pótlás szükséges',

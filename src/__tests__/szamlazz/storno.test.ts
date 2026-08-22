@@ -225,7 +225,7 @@ describe('issueStornoForOrder', () => {
     expect(calls).toBe(0)
   })
 
-  it('retryable provider-hibánál THROW (a hívó/job újrapróbálhatja)', async () => {
+  it('retryable provider-hibánál THROW (a hívó RIASZTÁST ír, automatikus retry tilos)', async () => {
     await expect(
       issueStornoForOrder(createOrder(), {
         config: ENABLED_CONFIG,
@@ -431,7 +431,8 @@ describe('issueStornoForOrder — állapot a rendelésen (C4)', () => {
 /**
  * F6 — a válasz-TÖRZS olvasása is megszakadhat (streamelés közbeni timeout,
  * TCP-vágás). Ha ez nyers TypeError-ként lépne ki, elveszne a retryable
- * osztályozás, és a refund-ág nem állítaná sorba az újrapróbálást.
+ * osztályozás, és a refund-ág nem tudná, hogy a POST már elindult
+ * (bizonytalan állapot, RIASZTÁS nélkül).
  *
  * A fetch stubolt: a teszt SOHA nem megy ki a valódi Számlázz.hu-ra.
  */

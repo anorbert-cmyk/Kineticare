@@ -6,19 +6,24 @@ import { logger } from '../../lib/logger'
 
 /**
  * storno-issue task (C4): egy rendelés stornó-számlájának kiállítása a
- * Számlázz.hu dedikált sztornó interfészén. A refund-folyamat (teljes
- * visszatérítés) inline, best-effort próbálkozik; ha az ÚJRAPRÓBÁLHATÓ hibába
- * fut (timeout/hálózat/5xx/szlahu_down), a bizonylat nem veszhet el — ilyenkor
- * ez a task kerül sorba (order-maintenance queue).
+ * Számlázz.hu dedikált sztornó interfészén.
  *
- * Retry-szabály (az invoice-issue mintája): a task 3× próbálkozhat (Payload
- * job-retry). A szolgáltatás KIZÁRÓLAG retryable provider/timeout-hibánál dob;
- * üzleti hibánál (nincs eredeti számlaszám, agent-elutasítás, kimerült
- * kísérletszám) 'failed' kimenetet ad, és a job lezárul.
+ * NEM automatikus újrapróbálás. A refund-folyamat a stornót inline,
+ * best-effort próbálja. Ha az inline POST már elindult, és timeout/hálózat
+ * miatt elszakad, az állapot bizonytalan (F3): a vak retry dupla stornót
+ * okozhat. Ezért a refund NEM állítja sorba ezt a taskot. A task csak
+ * KÉZI / explicit újrasorbaállításra való — miután ember megerősítette a
+ * Számlázz.hu-fiókban, hogy NINCS stornó (és a rendelés stornoAttempts-jét
+ * szükség szerint visszaállította).
  *
- * Duplikáció ellen két horgony véd: a szamlaKulsoAzon
- * (`${orderNumber}-STORNO`) provider-oldalon, és a rendelésre írt
- * stornoStatus/stornoNumber alkalmazás-oldalon ('already-storned' no-op).
+ * Ha a taskot mégis egy már próbált rendelésre futtatják (stornoAttempts > 0,
+ * nincs stornoNumber), az issueStornoForOrder F3-on RIASZTÁS-sal megáll, és
+ * SOHA nem POSTol újra. Ez a biztonsági őr a dupla stornó ellen.
+ *
+ * Retry-szabály: a task 3× próbálkozhat (Payload job-retry), de ez csak a
+ * kézi, tiszta állapotú újrafuttatásra vonatkozik. Üzleti hibánál (nincs
+ * eredeti számlaszám, agent-elutasítás, kimerült kísérletszám, F3
+ * bizonytalan állapot) 'failed' kimenetet ad, és a job lezárul.
  */
 
 interface StornoIssueJobIO {

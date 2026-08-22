@@ -331,20 +331,25 @@ describe('startCheckout — vendég-vásárlás', () => {
   })
 
   /**
-   * P1 — AZ E-MAIL-HATÓKÖRŰ DUPLAVÁSÁRLÁS-BLOKK (start-checkout.ts:
-   * `if (buyer.customerId === null) assertNoDuplicatePurchase({ kind: 'email' })`).
+   * P1 / W2 — AZ E-MAIL-HATÓKÖRŰ DUPLAVÁSÁRLÁS-BLOKK (start-checkout.ts:
+   * mindig `assertNoDuplicatePurchase({ kind: 'email' })`, a customer-ág
+   * mellett, ha van fiók).
    *
    * MIÉRT NEM FOGTA MEG A FENTI, „LÉTEZŐ e-mail" TESZT: ott a
    * `findExistingUserIdByEmail` TALÁL fiókot, tehát a CUSTOMER-hatókörű
-   * ellenőrzés fut le — az e-mail-hatókörű ág soha nem került mérés alá. A
-   * feltételt `if (false)`-ra cserélve a teljes tesztkészlet zöld maradt.
+   * ellenőrzés is lefut — a vendég, fiók nélküli e-mail-ág önmagában
+   * nem került mérés alá. A feltételt `if (false)`-ra cserélve a teljes
+   * tesztkészlet zöld maradt.
    *
-   * AZ E-MAIL-HATÓKÖR PONTOSAN AKKOR SZÁMÍT, amikor MÉG NINCS FIÓK: a vendég
-   * elindít egy fizetést (a rendelés `customer` nélkül, `customerEmail`-lel jön
-   * létre), majd a fizetési ablakon belül újra beküld. Blokk nélkül két aktív
-   * `payment_pending` rendelés áll ugyanarra a kurzusra, MINDKETTŐ kifizethető.
-   * A másodikat már csak a paid-átmenet K5-őre fogná meg — akkor viszont a pénz
-   * MÁR le van vonva, és kézi visszatérítés kell.
+   * AZ E-MAIL-HATÓKÖR KÉT HELYEN SZÁMÍT: (1) vendég fiók nélkül — a
+   * rendelés `customer` nélkül, `customerEmail`-lel jön létre, a fizetési
+   * ablakon belüli újabb beküldést csak ez a szűrő látja; (2) bejelentkezett
+   * vevő, akinek korábbi VENDÉG payment_pendingje van ugyanarra az e-mailre
+   * (`customer: null`) — a customer-szűrő ezt nem találja, az e-mail-ág
+   * nélkül második Barion-terhelés indulna. Blokk nélkül két aktív
+   * `payment_pending` rendelés áll ugyanarra a kurzusra, MINDKETTŐ
+   * kifizethető. A másodikat már csak a paid-átmenet K5-őre fogná meg —
+   * akkor viszont a pénz MÁR le van vonva, és kézi visszatérítés kell.
    */
 
   /** A rendelés-lekérdezés hatóköre a where-ből (a mock döntéséhez). */
@@ -388,6 +393,44 @@ describe('startCheckout — vendég-vásárlás', () => {
     expect(asText).toContain('"customerEmail"')
     expect(asText).toContain(GUEST.email)
     expect(asText).not.toContain('"customer"')
+  })
+
+  it('BEJELENTKEZVE, korábbi vendég payment_pending ugyanarra az e-mailre → 409, nincs második rendelés', async () => {
+    const sessionUser = {
+      id: 19,
+      email: GUEST.email,
+      name: 'Vendég Vevő',
+    } as unknown as User
+    const seenWhere: string[] = []
+    const { payload, calls } = createMockPayload({
+      findOrders: (where) => {
+        const query = orderQuery(where)
+        seenWhere.push(query.text)
+        // A customer-hatókörű ellenőrzés NEM látja a vendég-rendelést
+        // (customer: null). Csak az e-mail-hatókörű találja meg.
+        const isEmailScope = query.text.includes('"customerEmail"')
+        return query.wantsPending && isEmailScope
+          ? { docs: [{ id: 88, status: 'payment_pending', customer: null }], totalDocs: 1 }
+          : { docs: [], totalDocs: 0 }
+      },
+    })
+
+    const promise = startCheckout({
+      payload,
+      user: sessionUser,
+      input: { productId: 42, consentWithdrawalWaiver: true, consentTerms: true, billing: BILLING },
+    })
+
+    await expect(promise).rejects.toBeInstanceOf(CheckoutError)
+    await expect(promise).rejects.toMatchObject({ status: 409 })
+    await expect(promise).rejects.toThrowError(/folyamatban van egy fizetés/)
+    expect(calls.create).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    const asText = seenWhere.join('\n')
+    expect(asText).toContain('"customerEmail"')
+    expect(asText).toContain(GUEST.email)
+    expect(asText).toContain('"customer"')
   })
 
   it('VENDÉG, fiók NÉLKÜL, MÁR kifizetett rendeléssel az e-mailre → 409 („már megvásároltad")', async () => {

@@ -668,11 +668,12 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
           productId,
         )
       }
-      // Vendégnél a fiókhoz még nem kötött (customer nélküli) rendeléseket is
-      // meg kell nézni — azokat kizárólag az e-mail azonosítja.
-      if (buyer.customerId === null) {
-        await assertNoDuplicatePurchase(payload, { kind: 'email', email: buyer.email }, productId)
-      }
+      // A fiókhoz még nem kötött (vendég) rendeléseket kizárólag az e-mail
+      // azonosítja. Bejelentkezett vevőnél is le kell futtatni: a korábbi
+      // vendég payment_pending (customer: null, customerEmail: ugyanaz)
+      // egyébként láthatatlan maradna, és második Barion-terhelés indulna.
+      // Vendég fiók nélkül: csak ez az e-mail-ág fut (existingUserId null).
+      await assertNoDuplicatePurchase(payload, { kind: 'email', email: buyer.email }, productId)
 
       let lastConflict: unknown
       for (let attempt = 1; attempt <= ORDER_NUMBER_CONFLICT_MAX_ATTEMPTS; attempt += 1) {
