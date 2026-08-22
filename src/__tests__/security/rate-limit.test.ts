@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   checkForgotPasswordEmailRateLimit,
+  checkIpRateLimit,
   checkUserRateLimit,
   classifyRateLimitedRoute,
   checkRequestRateLimit,
@@ -77,12 +78,8 @@ describe('resolveRateLimitIp — IP-kinyerés proxy mögül', () => {
   it('a kliens által hamisított lánc-eleje NEM befolyásolja a keret kulcsát', () => {
     // Két kérés, két KÜLÖNBÖZŐ hamisított előtaggal, ugyanarról a valódi IP-ről:
     // a kulcsnak azonosnak kell lennie, különben a korlát megkerülhető.
-    const first = resolveRateLimitIp(
-      new Headers({ 'x-forwarded-for': '1.1.1.1, 198.51.100.5' }),
-    )
-    const second = resolveRateLimitIp(
-      new Headers({ 'x-forwarded-for': '2.2.2.2, 198.51.100.5' }),
-    )
+    const first = resolveRateLimitIp(new Headers({ 'x-forwarded-for': '1.1.1.1, 198.51.100.5' }))
+    const second = resolveRateLimitIp(new Headers({ 'x-forwarded-for': '2.2.2.2, 198.51.100.5' }))
     expect(first).toBe('198.51.100.5')
     expect(second).toBe(first)
   })
@@ -183,7 +180,15 @@ describe('classifyRateLimitedRoute — mit korlátozunk', () => {
     expect(classifyRateLimitedRoute('POST', '/api/form-submissions')).toBe('form-submission')
   })
 
-  it('a Barion-callbacket SOSEM korlátozzuk (fizetési értesítés)', () => {
+  it('a Barion-callbacket ÚTVONALON SOSEM korlátozzuk (fizetési értesítés)', () => {
+    expect(classifyRateLimitedRoute('POST', '/api/barion/callback')).toBeNull()
+  })
+
+  it('az ismeretlen-callback osztály a szabálytáblában van, de NEM útvonal-besorolt', () => {
+    expect(RATE_LIMIT_RULES['barion-callback-unknown']).toEqual({
+      limit: 20,
+      windowMs: TEN_MINUTES,
+    })
     expect(classifyRateLimitedRoute('POST', '/api/barion/callback')).toBeNull()
   })
 
@@ -376,8 +381,7 @@ describe('checkRequestRateLimit — kérés-szintű döntés', () => {
   it('a keret túllépésekor 429-döntés magyar üzenettel és Retry-After-rel', () => {
     const clock = createClock()
     const limiter = new SlidingWindowRateLimiter({ now: clock.now })
-    const request = () =>
-      makeRequest('https://kineticare.test/api/users', { ip: '203.0.113.2' })
+    const request = () => makeRequest('https://kineticare.test/api/users', { ip: '203.0.113.2' })
 
     for (let index = 0; index < RATE_LIMIT_RULES.registration.limit; index += 1) {
       expect(checkRequestRateLimit(request(), { limiter })).toBeNull()
@@ -530,10 +534,9 @@ describe('withPayloadRestRateLimit — Payload REST POST beburkolása', () => {
     }
     const handler = withPayloadRestRateLimit(inner, { limiter, rules })
     const send = () =>
-      handler(
-        makeRequest('https://kineticare.test/api/form-submissions', { ip: '203.0.113.12' }),
-        { params: Promise.resolve({ slug: ['form-submissions'] }) },
-      )
+      handler(makeRequest('https://kineticare.test/api/form-submissions', { ip: '203.0.113.12' }), {
+        params: Promise.resolve({ slug: ['form-submissions'] }),
+      })
 
     expect((await send()).status).toBe(201)
     expect((await send()).status).toBe(201)
@@ -652,11 +655,13 @@ describe('checkForgotPasswordEmailRateLimit — per-cím keret', () => {
       }),
     ).toBeNull()
 
-    expect(checkRequestRateLimit(forgotRequest(cim, '198.51.100.20'), { limiter, rules })).toBeNull()
-    const rejection = await checkForgotPasswordEmailRateLimit(
-      forgotRequest(cim, '198.51.100.20'),
-      { limiter, rules },
-    )
+    expect(
+      checkRequestRateLimit(forgotRequest(cim, '198.51.100.20'), { limiter, rules }),
+    ).toBeNull()
+    const rejection = await checkForgotPasswordEmailRateLimit(forgotRequest(cim, '198.51.100.20'), {
+      limiter,
+      rules,
+    })
 
     expect(rejection).not.toBeNull()
     expect(rejection?.routeClass).toBe('password-forgot-email')
@@ -686,10 +691,13 @@ describe('checkForgotPasswordEmailRateLimit — per-cím keret', () => {
     const limiter = new SlidingWindowRateLimiter()
 
     expect(
-      await checkForgotPasswordEmailRateLimit(forgotRequest('Aldozat@Example.Test', '203.0.113.22'), {
-        limiter,
-        rules,
-      }),
+      await checkForgotPasswordEmailRateLimit(
+        forgotRequest('Aldozat@Example.Test', '203.0.113.22'),
+        {
+          limiter,
+          rules,
+        },
+      ),
     ).toBeNull()
     expect(
       await checkForgotPasswordEmailRateLimit(
@@ -740,8 +748,9 @@ describe('checkForgotPasswordEmailRateLimit — per-cím keret', () => {
       })
     }
 
-    expect(await checkForgotPasswordEmailRateLimit(multipart('203.0.113.24'), { limiter, rules }))
-      .toBeNull()
+    expect(
+      await checkForgotPasswordEmailRateLimit(multipart('203.0.113.24'), { limiter, rules }),
+    ).toBeNull()
     expect(
       await checkForgotPasswordEmailRateLimit(multipart('198.51.100.24'), { limiter, rules }),
     ).not.toBeNull()
@@ -756,10 +765,15 @@ describe('checkForgotPasswordEmailRateLimit — per-cím keret', () => {
         body,
       })
 
-    expect(await checkForgotPasswordEmailRateLimit(raw('ez nem json {'), { limiter, rules })).toBeNull()
+    expect(
+      await checkForgotPasswordEmailRateLimit(raw('ez nem json {'), { limiter, rules }),
+    ).toBeNull()
     expect(await checkForgotPasswordEmailRateLimit(raw('{}'), { limiter, rules })).toBeNull()
     expect(
-      await checkForgotPasswordEmailRateLimit(raw(JSON.stringify({ email: 42 })), { limiter, rules }),
+      await checkForgotPasswordEmailRateLimit(raw(JSON.stringify({ email: 42 })), {
+        limiter,
+        rules,
+      }),
     ).toBeNull()
     expect(
       await checkForgotPasswordEmailRateLimit(raw('valami', 'text/plain'), { limiter, rules }),
@@ -799,6 +813,61 @@ describe('checkForgotPasswordEmailRateLimit — per-cím keret', () => {
  * Per-user keret a hitelesített végpontokra (GET /api/stream-token). Az IP itt
  * nem alkalmas kulcs: egy user IP-t vált, több user oszthat egy NAT-IP-t.
  */
+describe('checkIpRateLimit — explicit IP-keret (útvonal-besorolás nélkül)', () => {
+  const rules = {
+    ...RATE_LIMIT_RULES,
+    'barion-callback-unknown': { limit: 2, windowMs: TEN_MINUTES },
+  }
+  const callbackRequest = (ip: string): Request =>
+    makeRequest('https://kineticare.test/api/barion/callback', { ip })
+
+  it('a keretig enged, felette elutasít — az útvonal ettől még null osztályú', () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const check = () =>
+      checkIpRateLimit({
+        request: callbackRequest('203.0.113.70'),
+        routeClass: 'barion-callback-unknown',
+        options: { limiter, rules },
+      })
+
+    expect(classifyRateLimitedRoute('POST', '/api/barion/callback')).toBeNull()
+    expect(check()).toBeNull()
+    expect(check()).toBeNull()
+    const rejection = check()
+    expect(rejection?.routeClass).toBe('barion-callback-unknown')
+    expect(rejection?.message).toBe(RATE_LIMIT_MESSAGE)
+    expect(rejection?.retryAfterSeconds).toBeGreaterThan(0)
+  })
+
+  it('a különböző IP-k nem fogyasztják egymás keretét', () => {
+    const limiter = new SlidingWindowRateLimiter()
+    const check = (ip: string) =>
+      checkIpRateLimit({
+        request: callbackRequest(ip),
+        routeClass: 'barion-callback-unknown',
+        options: { limiter, rules },
+      })
+
+    expect(check('203.0.113.71')).toBeNull()
+    expect(check('203.0.113.71')).toBeNull()
+    expect(check('203.0.113.71')).not.toBeNull()
+    expect(check('203.0.113.72')).toBeNull()
+  })
+
+  it('a checkRequestRateLimit a callback úton továbbra sem fogyaszt (útvonal-térkép)', () => {
+    const limiter = new SlidingWindowRateLimiter()
+    for (let index = 0; index < 50; index += 1) {
+      expect(
+        checkRequestRateLimit(
+          makeRequest('https://kineticare.test/api/barion/callback', { ip: '203.0.113.73' }),
+          { limiter },
+        ),
+      ).toBeNull()
+    }
+    expect(limiter.trackedKeyCount).toBe(0)
+  })
+})
+
 describe('checkUserRateLimit — per-user keret', () => {
   const rules = { ...RATE_LIMIT_RULES, 'stream-token': { limit: 2, windowMs: MINUTE } }
   const streamRequest = (): Request =>

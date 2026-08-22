@@ -29,12 +29,16 @@
  * email:aldozat@example.com` fejléccel az áldozat e-mail-keretét lehetne
  * elfogyasztani.
  *
- * SOSEM korlátozott: a Barion-callback (`POST /api/barion/callback` — a
- * fizetési értesítés elvesztése pénzt jelent) és a healthcheck (`GET /admin`).
- * Az ÚTVONAL-alapú (IP-s) besorolás továbbra is csak POST-ra és PONTOS
- * útvonal-egyezésre épül (lásd `ROUTE_CLASS_BY_PATH`), így új végpont csak
- * szándékos felvétellel kerül a hatálya alá; a nem-POST végpontok kerete
- * (stream-token) a handlerben, explicit hívással él.
+ * ÚTVONAL-alapon SOSEM korlátozott: a Barion-callback (`POST /api/barion/callback`
+ * — egy valódi fizetési értesítés elvesztése pénzt jelent, ezért NINCS a
+ * `ROUTE_CLASS_BY_PATH`-ban) és a healthcheck (`GET /admin`). Az ismeretlen
+ * (nincs `orders.barionPaymentId`) GUID-ok IP-keretét a callback-handler
+ * hívja explicit (`checkIpRateLimit`, `barion-callback-unknown`); a valódi
+ * Barion-retry így nem esik globális vödörbe. Az ÚTVONAL-alapú (IP-s)
+ * besorolás továbbra is csak POST-ra és PONTOS útvonal-egyezésre épül
+ * (lásd `ROUTE_CLASS_BY_PATH`), így új végpont csak szándékos felvétellel
+ * kerül a hatálya alá; a nem-POST és a handler-explicit keretek
+ * (stream-token, ismeretlen Barion-GUID) a hívóban élnek.
  *
  * ## Vállalt korlát — folyamaton belüli számláló
  *
@@ -152,6 +156,11 @@ const TEN_MINUTES_MS = 10 * 60 * 1000
  *   előtt (exp−5 perc) kér jegyet — percenként néhányat; a 60-as keret ezt bőven
  *   elbírja, a szkriptelt jegy-farmolás (minden hívás Bunny-jegyet állít ki)
  *   viszont elakad rajta.
+ * - `barion-callback-unknown` 20/10 perc: NEM útvonal-besorolt. A handler
+ *   CSAK ismeretlen PaymentId-re fogyasztja (`checkIpRateLimit`). A valódi
+ *   Barion-callback (checkout által kiírt barionPaymentId) korlátlan; a
+ *   véletlen GUID-zápor elakad. A ritka verseny (callback a paymentId-írás
+ *   előtt) egy helyet fogyaszt, de a keret alatt átmegy.
  */
 export const RATE_LIMIT_RULES = {
   registration: { limit: 5, windowMs: TEN_MINUTES_MS },
@@ -174,12 +183,20 @@ export const RATE_LIMIT_RULES = {
   // bőven elég a kézi használatra (a panel egy kattintás = egy hívás), és a
   // kimenő kérést felhasználónként százra korlátozza.
   'bunny-videos': { limit: 20, windowMs: ONE_MINUTE_MS },
+  // Ismeretlen Barion-PaymentId (nincs orders.barionPaymentId): véletlen
+  // GUID-zápor ellen, IP-nként. A handler hívja (`checkIpRateLimit`) — az
+  // útvonal NINCS a ROUTE_CLASS_BY_PATH-ban, különben a valódi Barion-retry
+  // is ugyanabba a vödörbe esne. 20/10 perc: a ritka versenyhelyzet
+  // (callback a barionPaymentId-írás előtt) egy helyet fogyaszt, de átmegy;
+  // a gépi GUID-zápor (táblanövekedés + GetState) elakad.
+  'barion-callback-unknown': { limit: 20, windowMs: TEN_MINUTES_MS },
 } as const satisfies Record<string, RateLimitRule>
 
 /**
  * A keret-osztály azonosítója. Nem minden osztály jön ÚTVONALBÓL: a
- * `password-forgot-email` és a `stream-token` keretét a hívó explicit
- * (`checkForgotPasswordEmailRateLimit`, `checkUserRateLimit`) fogyasztja.
+ * `password-forgot-email`, a `stream-token` és a `barion-callback-unknown`
+ * keretét a hívó explicit (`checkForgotPasswordEmailRateLimit`,
+ * `checkUserRateLimit`, `checkIpRateLimit`) fogyasztja.
  */
 export type RateLimitedRouteClass = keyof typeof RATE_LIMIT_RULES
 
@@ -546,6 +563,39 @@ export function checkUserRateLimit(input: {
     subject: 'user',
     identifier,
     logIdentifier: identifier,
+    request: input.request,
+    options: input.options ?? {},
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Explicit IP-keret (útvonal-besorolás nélkül)
+// ---------------------------------------------------------------------------
+
+/**
+ * Explicit IP-keret fogyasztása — útvonal-besorolás NÉLKÜL.
+ *
+ * A `checkRequestRateLimit` a `ROUTE_CLASS_BY_PATH`-ból osztályoz; ami nincs
+ * a térképen, az onnan mindig szabad. A Barion-callback szándékosan kimarad
+ * onnan (egy valódi fizetési értesítés elvesztése pénzt jelent), ezért a
+ * handler CSAK az ismeretlen PaymentId-kre hívja ezt, a
+ * `barion-callback-unknown` osztállyal. Útvonal-alapú besorolás ide nem jó:
+ * az minden POST-ot ugyanabba a vödörbe tenné, a valódi Barion-retry-t is.
+ *
+ * A hívó dönt a válaszról: a callback-handler 200 no-op-ot ad (a Barion
+ * nem-200-ra újra kézbesít), más végpont 429-et építhet.
+ */
+export function checkIpRateLimit(input: {
+  readonly request: Request
+  readonly routeClass: RateLimitedRouteClass
+  readonly options?: CheckRequestRateLimitOptions
+}): RateLimitRejection | null {
+  const ip = resolveRateLimitIp(input.request.headers)
+  return consumeRateLimit({
+    routeClass: input.routeClass,
+    subject: 'ip',
+    identifier: ip,
+    logIdentifier: ip,
     request: input.request,
     options: input.options ?? {},
   })
