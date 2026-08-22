@@ -43,7 +43,7 @@ describe('buildDumpFileName — időbélyeges fájlnév (UTC)', () => {
   })
 
   it('érvénytelen időpontra hibát dob', () => {
-    expect(() => buildDumpFileName(new Date('nem-datum'))).toThrow(/Érvénytelen időpont/)
+    expect(() => buildDumpFileName(new Date('nem-datum'))).toThrow(/nem valódi dátum/)
   })
 
   it('a generált név megfelel a saját felismerő mintának', () => {
@@ -236,7 +236,7 @@ describe('parseBackupArgs — CLI-kapcsolók', () => {
     const result = parseBackupArgs(['/mnt/mentes'])
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.message).toContain('Érvénytelen argumentum')
+      expect(result.message).toContain('Nem értelmezhető argumentum')
     }
   })
 

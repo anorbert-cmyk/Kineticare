@@ -30,6 +30,18 @@ export const EMPTY_CONTACT_VALUES: ContactFormValues = {
   consentPrivacy: false,
 }
 
+/**
+ * A lap tetején álló hibaösszegzés szövege (GOV.UK error summary).
+ *
+ * §2.7 / A/9: a korábbi „Kérjük, ellenőrizd a megjelölt mezőket…" udvariaskodott
+ * ott, ahol a látogatónak nincs más választása, és nem mondta meg, MI a baj.
+ * Az új mondat előbb a helyzetet írja le, utána a teendőt. SZÓ SZERINT azonos
+ * az időpontkérő űrlapéval (`src/lib/appointment/validation.ts` `errorSummary`):
+ * ugyanaz a helyzet = ugyanaz a szöveg (WCAG 2.2 SC 3.2.4).
+ */
+export const CONTACT_ERROR_SUMMARY =
+  'Néhány mező kitöltése hiányzik vagy javításra vár. Nézd át a megjelölt mezőket, és küldd el újra.'
+
 /** Egyszerű, szándékosan szigorú e-mail-ellenőrzés (RFC helyett UX-szint). */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 

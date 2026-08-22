@@ -83,7 +83,10 @@ export function createGrantPurchaseHandler(
           body = JSON.parse(rawBody) as GrantPurchaseRequestBody
         } catch {
           return Response.json(
-            { error: 'Érvénytelen kérés: a törzsnek JSON-nak kell lennie.' },
+            {
+              error:
+                'A hozzáférés nem adható meg: a kérés adatai nem értelmezhetők. Frissítsd az oldalt, és próbáld újra.',
+            },
             { status: 400 },
           )
         }
@@ -156,7 +159,7 @@ export function createGrantPurchaseHandler(
       return Response.json(
         {
           error:
-            'Váratlan hiba történt a hozzáférés megadása közben. Kérjük, próbáld újra később.',
+            'A hozzáférés megadása most nem sikerült. Próbáld újra néhány perc múlva.',
         },
         { status: 500 },
       )

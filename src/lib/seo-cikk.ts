@@ -32,6 +32,12 @@ import { absoluteUrl, faqPageJsonLd, SITE_NAME } from './seo'
  *   https://schema.org/lastReviewed
  * - schema.org, reviewedBy (domain: WebPage, érték: Person vagy Organization):
  *   https://schema.org/reviewedBy
+ * - schema.org, about (domain: CreativeWork, érték: **Thing**):
+ *   https://schema.org/about
+ * - schema.org, keywords (domain: CreativeWork, érték: Text; a tételeket
+ *   „typically delimited by commas"): https://schema.org/keywords
+ * - schema.org, MedicalSignOrSymptom (Thing > MedicalEntity > MedicalCondition
+ *   > MedicalSignOrSymptom): https://schema.org/MedicalSignOrSymptom
  * - Google Search Central, Article structured data:
  *   https://developers.google.com/search/docs/appearance/structured-data/article
  * - Google Search Central, FAQPage:
@@ -98,6 +104,26 @@ export interface SchemaPerson {
   name: string
   /** Végzettség/titulus, pl. „gyógytornász, kézterapeuta". */
   credentials?: string | null
+}
+
+/**
+ * A cikk TÁRGYA entitásként — a séma `about` mezőjének forrása.
+ *
+ * A típus a schema.org hierarchiáját követi (ellenőrizve 2026-08-21,
+ * https://schema.org/MedicalSignOrSymptom): Thing > MedicalEntity >
+ * MedicalCondition > MedicalSignOrSymptom. Nevesített betegségnél
+ * `MedicalCondition`, panasznál (zsibbadás, fájdalom) `MedicalSignOrSymptom`,
+ * mert a schema.org saját megfogalmazása szerint „a symptom is generally
+ * subjective while a sign is objective".
+ *
+ * A mezőnevek MAGYARUL állnak, mert a forrásuk a mért kulcsszó-tábla
+ * (`src/lib/tudastar/seo-kulcsszavak.ts` `targy` mezője); így a mérés alakja
+ * átalakítás nélkül illeszkedik a séma-rétegre, és nem keletkezik egy néma
+ * fordítási lépés a kettő között.
+ */
+export interface ArticleSubject {
+  tipus: 'MedicalCondition' | 'MedicalSignOrSymptom'
+  nev: string
 }
 
 /** Egy nyers GYIK-sor a CMS-ből (a mezők üresen is jöhetnek). */
@@ -173,6 +199,48 @@ function personNode(person: SchemaPerson | undefined): Record<string, unknown> |
 }
 
 /**
+ * A `keywords` mező értéke: trimmelt, ismétlés nélküli, VESSZŐVEL elválasztott
+ * lista — érvényes tétel híján `undefined`.
+ *
+ * A vesszős alak a schema.org saját megfogalmazása: „Multiple textual entries
+ * in a keywords list are typically delimited by commas, or by repeating the
+ * property" (ellenőrizve 2026-08-21, https://schema.org/keywords). A tulajdonság
+ * a `CreativeWork`-ön áll, tehát az `Article`-ön és a `WebPage`-en egyaránt
+ * érvényes — a kettős típusú node-on nem kell választani.
+ *
+ * Az ismétlés kiszűrése nem kozmetika: az elsődleges kifejezés a mért táblában
+ * a másodlagosak közt is felbukkanhat, és ugyanaz a szó kétszer semmit nem tesz
+ * hozzá a gépi olvasó képéhez.
+ */
+function keywordsValue(keywords: readonly string[] | undefined): string | undefined {
+  const unique = new Set<string>()
+  for (const keyword of keywords ?? []) {
+    const text = trimmedText(keyword)
+    if (text !== undefined) {
+      unique.add(text)
+    }
+  }
+  return unique.size > 0 ? [...unique].join(', ') : undefined
+}
+
+/**
+ * Az `about` node: a cikk tárgya entitásként, KIZÁRÓLAG `@type` + `name`
+ * alakban. Név nélkül `undefined` — üres entitást nem hirdetünk.
+ *
+ * A szigorú kételemű alak a lényeg: a `MedicalCondition` klinikai
+ * altulajdonságai (`possibleTreatment`, `signOrSymptom`, `typicalTest`)
+ * SZÁNDÉKOSAN kimaradnak, mert azok már a lapon nem látható állítások
+ * lennének.
+ */
+function subjectNode(subject: ArticleSubject | undefined): Record<string, unknown> | undefined {
+  if (subject === undefined) {
+    return undefined
+  }
+  const name = trimmedText(subject.nev)
+  return name === undefined ? undefined : { '@type': subject.tipus, name }
+}
+
+/**
  * A cikkoldal strukturált adata: EGY entitás, `['Article', 'MedicalWebPage']`
  * kettős típussal.
  *
@@ -204,11 +272,36 @@ function personNode(person: SchemaPerson | undefined): Record<string, unknown> |
  * hanem `Organization`-re esik vissza; a schema.org `author`-ja mindkét
  * típust engedi.
  *
- * AMI TUDATOSAN NINCS BENNE: `about: MedicalCondition` (gépi formában kódolt
- * klinikai állítás lenne), `citation` (a Lexical-fából nem azonosítható
- * megbízhatóan a forrásjegyzék; a hibás kinyerés rosszabb, mint a hiány),
- * `aggregateRating`/`review` (nincs értékelés-adat, kitalálni tilos),
- * `speakable` és `medicalAudience` (nincs látható megfelelőjük a lapon).
+ * A CIKK TÁRGYA (`about`) ÉS A MÉRT KULCSSZAVAK (`keywords`) — FELÜLVIZSGÁLVA
+ * 2026-08-21. Ez a modul korábban kihagyta az `about`-ot, azzal az indokkal,
+ * hogy „gépi formában kódolt klinikai állítás lenne". A felülvizsgálat két
+ * dolgot választ szét, amit az akkori indoklás egybemosott:
+ *
+ * - Klinikai ÁLLÍTÁS az volna, ha a `MedicalCondition` node a kezeléseket, a
+ *   tüneteket vagy a vizsgálatokat is kódolná (`possibleTreatment`,
+ *   `signOrSymptom`, `typicalTest`). Ilyen mező itt NINCS, és a `subjectNode`
+ *   szerkezetileg nem is tud ilyet előállítani.
+ * - Az `about` értéke a cikk TÁRGYA entitásként, `@type` + `name` alakban:
+ *   pontosan az, amiről a látható H1 és a törzs szól. A schema.org szerint az
+ *   `about` a `CreativeWork` tulajdonsága, várt értéke `Thing`, tehát a
+ *   `MedicalCondition` és a `MedicalSignOrSymptom` egyaránt érvényes érték
+ *   (ellenőrizve 2026-08-21, https://schema.org/about).
+ *
+ * A Google irányelve ugyanezt kéri: „Your structured data must be a true
+ * representation of the page content" — a téma-entitás igaz és a lapon
+ * látható, a klinikai részletek kódolása viszont már nem lenne az.
+ *
+ * A két mező FORRÁSA a Monid-mérés (`src/lib/tudastar/seo-kulcsszavak.ts`), és
+ * csak azoknál a cikkeknél áll rendelkezésre, amikhez van mérés. Mérés nélkül
+ * mindkét kulcs egyszerűen kimarad: kulcsszót vagy tárgyat kitalálni ugyanaz a
+ * hiba lenne, mint ellenőrzési dátumot ellenőrzés nélkül kiírni.
+ *
+ * AMI TOVÁBBRA IS TUDATOSAN NINCS BENNE: `citation` (a Lexical-fából nem
+ * azonosítható megbízhatóan a forrásjegyzék; a hibás kinyerés rosszabb, mint a
+ * hiány), `aggregateRating`/`review` (nincs értékelés-adat, kitalálni tilos),
+ * `speakable`, `medicalAudience` és `medicalSpecialty` (nincs látható
+ * megfelelőjük a lapon), valamint a `MedicalCondition` bármely klinikai
+ * altulajdonsága.
  */
 export function postArticleJsonLd(args: {
   post: ArticleSeoPost
@@ -222,13 +315,22 @@ export function postArticleJsonLd(args: {
   lastReviewed?: string | null
   /** A megosztási kép abszolút URL-je (`resolveOgImageUrl`). */
   imageUrl?: string
+  /**
+   * A cikk MÉRT célkifejezései (`src/lib/tudastar/seo-kulcsszavak.ts`).
+   * Mérés nélküli cikknél nincs — kulcsszót kitalálni tilos.
+   */
+  keywords?: readonly string[]
+  /** A cikk tárgya entitásként; mérés nélküli cikknél nincs. */
+  about?: ArticleSubject
 }): Record<string, unknown> {
-  const { post, path, author, reviewer, lastReviewed, imageUrl } = args
+  const { post, path, author, reviewer, lastReviewed, imageUrl, keywords, about } = args
   const description = trimmedText(post.excerpt)
   const datePublished = trimmedText(post.publishedAt)
   const dateModified = trimmedText(post.updatedAt)
   const reviewedBy = personNode(reviewer)
   const reviewedOn = schemaDateOnly(lastReviewed)
+  const keywordList = keywordsValue(keywords)
+  const subject = subjectNode(about)
 
   return {
     '@context': 'https://schema.org',
@@ -240,6 +342,8 @@ export function postArticleJsonLd(args: {
     ...(datePublished !== undefined ? { datePublished } : {}),
     ...(dateModified !== undefined ? { dateModified } : {}),
     ...(imageUrl !== undefined ? { image: [imageUrl] } : {}),
+    ...(keywordList !== undefined ? { keywords: keywordList } : {}),
+    ...(subject !== undefined ? { about: subject } : {}),
     author: personNode(author) ?? publisherNode(),
     ...(reviewedBy !== undefined ? { reviewedBy } : {}),
     ...(reviewedOn !== undefined ? { lastReviewed: reviewedOn } : {}),

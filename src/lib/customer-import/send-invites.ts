@@ -67,7 +67,7 @@ export function inviteEmail(input: InviteEmailInput): EmailTemplate {
   const validity = `A link ${days} napig érvényes.`
   const wrongPerson =
     `Ezt a levelet a(z) ${input.email} címre küldtük, mert ezzel a címmel vásároltál nálunk korábban. ` +
-    'Ha nem te vagy a címzett, vagy nem ismered fel a vásárlást, kérjük, ne használd a linket — ' +
+    'Ha nem te vagy a címzett, vagy nem ismered fel a vásárlást, ne használd a linket: ' +
     'válaszolj erre a levélre, és utánanézünk.'
   const notWorking =
     'Ha a link már lejárt vagy nem működik, az oldal „Elfelejtett jelszó" gombjával bármikor ' +
@@ -80,7 +80,7 @@ export function inviteEmail(input: InviteEmailInput): EmailTemplate {
       '<strong>újra fizetned nem kell</strong>, csak egy jelszót kell beállítanod.',
     'Kattints az alábbi gombra, adj meg egy jelszót (legalább 12 karakter, kis- és nagybetűvel ' +
       'és számmal), majd a belépés után a <strong>Kurzusaim</strong> oldalon találod az anyagaidat.',
-    `<strong>${escapeHtml(validity)}</strong> A link személyre szól — kérjük, ne add tovább.`,
+    `<strong>${escapeHtml(validity)}</strong> A link személyre szól, ne add tovább senkinek.`,
     escapeHtml(notWorking),
     escapeHtml(wrongPerson),
   ]
@@ -90,7 +90,7 @@ export function inviteEmail(input: InviteEmailInput): EmailTemplate {
       'újra fizetned nem kell, csak egy jelszót kell beállítanod.',
     'Nyisd meg az alábbi linket, adj meg egy jelszót (legalább 12 karakter, kis- és nagybetűvel ' +
       'és számmal), majd a belépés után a Kurzusaim oldalon találod az anyagaidat.',
-    `${validity} A link személyre szól — kérjük, ne add tovább.`,
+    `${validity} A link személyre szól, ne add tovább senkinek.`,
     notWorking,
     wrongPerson,
   ]

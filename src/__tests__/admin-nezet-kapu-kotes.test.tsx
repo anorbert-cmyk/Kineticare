@@ -2,6 +2,8 @@ import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { STATISTICS_ACCESS_DENIED_MESSAGE } from '../lib/statistics/revenue'
+
 /**
  * ŐR — A NYILVÁNOS ADMIN-NÉZETEK KAPUJA A LEKÉRDEZÉSEK ELŐTT FUT.
  *
@@ -97,7 +99,10 @@ describe('Statisztika nézet: a kapu a lekérdezések ELŐTT zár', () => {
       expect(revenueKem, 'a bevétel-lekérdezés lefutott a tiltott ágon').not.toHaveBeenCalled()
       expect(engagementKem, 'a kurzus-hatás lekérdezés lefutott a tiltott ágon').not.toHaveBeenCalled()
       expect(html).toContain('data-keret="frame"')
-      expect(html.toLowerCase()).toContain('jogosultság')
+      // A KONSTANSRA hivatkozunk, nem egy beírt szóra: a korábbi
+      // `toContain('jogosultság')` némán elengedte volna a szöveg cseréjét,
+      // ha az új mondatban véletlenül benne marad a szó.
+      expect(html).toContain(STATISTICS_ACCESS_DENIED_MESSAGE)
     })
   }
 
@@ -119,7 +124,7 @@ describe('Videótár nézet: ugyanaz a kapu-kötés', () => {
     it(`${nev} a panel nem renderel`, () => {
       const html = renderToStaticMarkup(BunnyLibraryView(props(user)))
       expect(bunnyPanelKem, 'a Bunny-panel rendereltetett a tiltott ágon').not.toHaveBeenCalled()
-      expect(html).toContain('Ehhez a nézethez nincs jogosultságod.')
+      expect(html).toContain('A Videótárat csak munkatárs vagy tulajdonos nézheti meg.')
     })
   }
 

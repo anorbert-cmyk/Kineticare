@@ -182,7 +182,10 @@ function parseInput(input: CheckoutStartInput, hasSession: boolean): ParsedInput
   const productId =
     typeof rawId === 'number' ? rawId : typeof rawId === 'string' ? Number(rawId) : Number.NaN
   if (!Number.isInteger(productId) || productId <= 0) {
-    throw new CheckoutError(400, 'Érvénytelen vagy hiányzó termékazonosító (productId).')
+    throw new CheckoutError(
+      400,
+      'A kurzus azonosítója hiányzik vagy nem értelmezhető. Nyisd meg újra a kurzus oldalát, és onnan indítsd a fizetést.',
+    )
   }
 
   let quantity = 1
@@ -198,7 +201,10 @@ function parseInput(input: CheckoutStartInput, hasSession: boolean): ParsedInput
   if (input.priceHuf !== undefined) {
     const rawPrice = typeof input.priceHuf === 'number' ? input.priceHuf : Number(input.priceHuf)
     if (!Number.isFinite(rawPrice) || rawPrice < 0) {
-      throw new CheckoutError(400, 'Érvénytelen ár (priceHuf).')
+      throw new CheckoutError(
+        400,
+        'A kurzus ára nem értelmezhető. Frissítsd az oldalt, hogy a mai ár töltődjön be, és indítsd újra a fizetést.',
+      )
     }
     priceHuf = rawPrice
   }
@@ -697,7 +703,7 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
       })
       throw new CheckoutError(
         503,
-        'A rendelés létrehozása most nem sikerült a nagy terhelés miatt. Kérjük, próbáld újra néhány másodperc múlva.',
+        'A rendelés létrehozása most nem sikerült a nagy terhelés miatt. Próbáld újra néhány másodperc múlva.',
       )
     },
     log,
@@ -706,7 +712,10 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
   const orderNumber = order.orderNumber
   if (!orderNumber) {
     log.error('checkout-start: a rendelés rendelésszám nélkül jött létre', { orderId: order.id })
-    throw new CheckoutError(500, 'A rendelés létrehozása nem sikerült. Kérjük, próbáld újra.')
+    throw new CheckoutError(
+      500,
+      'A rendelés létrehozása most nem sikerült. Próbáld újra néhány perc múlva.',
+    )
   }
 
   // A végösszeg KIZÁRÓLAG a szerver-oldali snapshot: az orderIntegrity-hook
@@ -801,7 +810,7 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
     })
     throw new CheckoutError(
       502,
-      'A fizetés indítása jelenleg nem sikerült. Kérjük, próbáld újra néhány perc múlva.',
+      'A fizetés indítása most nem sikerült. Próbáld újra néhány perc múlva.',
     )
   }
 

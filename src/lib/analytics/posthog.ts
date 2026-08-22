@@ -133,6 +133,21 @@ export function buildPostHogOptions(): Partial<PostHogConfig> {
     // INDULÁSKOR letiltja, tehát a projekt-beállítástól függetlenül érvényes.
     // Ez a kettő közül a szigorúbb — szándékosan.
     disable_session_recording: true,
+    // AUTOCAPTURE KIKAPCSOLVA — tulajdonosi döntés (2026-08-21):
+    // „kikapcsoljuk, ne bonyolítsuk". A posthog-js alapból BEkapcsolva
+    // hagyja, tehát ezt ki KELL írni; a hallgatás itt nem semleges.
+    //
+    // MIÉRT: az oldal 12 üzleti eseményt küld, mindet EGYETLEN, szándékosan
+    // megírt burkolón keresztül (captureAnalyticsEvent) — vagyis pontosan
+    // tudjuk, mi megy ki és milyen mezőkkel. Az autocapture ehhez képest
+    // minden kattintást és mezőváltást felküld, és az elem SZÖVEGÉT is
+    // magával viszi. Egy kézrehabilitációs oldalon ez olyan panasz-
+    // és állapot-szövegeket sodorhatna be az elemzésbe, amelyekre nincs
+    // jogalapunk (a mezők ÉRTÉKÉT a posthog-js maszkolja, a köréjük írt
+    // címkéket és gombfeliratokat viszont nem). A haszon ezzel szemben
+    // nulla lenne: nem az ismeretlen kattintásokat keressük, hanem a már
+    // megnevezett tölcsér-lépéseket mérjük.
+    autocapture: false,
   }
 }
 

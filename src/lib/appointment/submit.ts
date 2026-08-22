@@ -57,11 +57,11 @@ export const APPOINTMENT_GENERIC_ERROR =
 
 /** Turnstile-kulcs mellett, még token nélküli állapotban ez az üzenet megy ki. */
 export const APPOINTMENT_TURNSTILE_PENDING_ERROR =
-  'Kérjük, várd meg a spam-ellenőrzés befejezését, majd küldd el újra.'
+  'A spam-ellenőrzés még fut. Várd meg, amíg lezárul, és küldd el újra.'
 
 /** Az űrlap nem elérhető (nincs mögötte beküldési cím) — a telefonos út marad. */
 export const APPOINTMENT_UNAVAILABLE_ERROR =
-  'Az űrlap most nem érhető el. Kérjük, hívj minket telefonon, és egyeztetjük az időpontot.'
+  'Az űrlap most nem érhető el. Hívj minket telefonon, és egyeztetjük az időpontot.'
 
 /**
  * Turnstile-widget láthatósága: CSAK beállított site key mellett renderelünk

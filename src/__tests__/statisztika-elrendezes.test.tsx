@@ -271,6 +271,7 @@ const report: RevenueReport = {
   totals: { laikusHuf: 6870000, szakemberHuf: 4434000, totalHuf: 11304000, orderCount: 276 },
   courses: [
     {
+      title: 'Kézrehabilitáció otthon: az alapok',
       sku: 'kez-rehab-otthon-alap',
       audience: 'laikus',
       revenueHuf: 2385000,
@@ -279,6 +280,7 @@ const report: RevenueReport = {
       freeItemCount: 4,
     },
     {
+      title: 'Kézterápia gyógytornászoknak, 1. modul',
       sku: 'gyogytornasz-kezterapia-modul-1',
       audience: 'szakember',
       revenueHuf: 3600000,
@@ -313,10 +315,15 @@ const engagement: CourseEngagementReport = {
       averagePercent: 58,
       completionRateOfEnrolled: 44,
       completionRateOfStarted: 52,
+      notStartedNames: ['Bodor Anna', 'Kis Péter', 'Szabó Éva'],
+      notStartedWithoutName: 0,
+      omitted: 0,
+      truncated: false,
     },
   ],
   truncated: false,
   skipped: 0,
+  omitted: 0,
 }
 
 const HTML = renderToStaticMarkup(createElement(StatisticsReport, { report, engagement }))

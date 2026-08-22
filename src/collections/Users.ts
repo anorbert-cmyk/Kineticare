@@ -327,7 +327,8 @@ export const Users: CollectionConfig = {
     // lista „Szűrők" gombjával lehet rá (relationship-mező → kurzus-választó).
     defaultColumns: ['name', 'email', 'role', 'purchases', 'lastLoginAt'],
     description:
-      'Szerkesztők és vásárlók. A szerepkört csak tulajdonos állíthatja át; a megvásárolt kurzusokat munkatárs és tulajdonos szerkesztheti.',
+      'Szerkesztők és vásárlók. A szerepkört csak tulajdonos állíthatja át; a megvásárolt kurzusokat munkatárs és tulajdonos szerkesztheti. ' +
+      'A „Megvásárolt kurzusok" oszlopban a kurzus mellett a haladás is látszik: ez számított érték, ezért eszerint rendezni és szűrni nem lehet.',
   },
   auth: {
     maxLoginAttempts: 5,
@@ -370,6 +371,34 @@ export const Users: CollectionConfig = {
       type: 'text',
       required: true,
       label: 'Név',
+    },
+    {
+      name: 'credentials',
+      type: 'text',
+      label: 'Végzettség, titulus',
+      admin: {
+        description:
+          'Rövid szakmai titulus, például: gyógytornász, kézterapeuta. A cikkek szerzősorában és a szerző-blokkban jelenik meg. Csak olyan végzettséget írj ide, ami igazolható.',
+      },
+    },
+    {
+      name: 'bioShort',
+      type: 'textarea',
+      label: 'Rövid szakmai bemutatkozás',
+      admin: {
+        description:
+          '1–2 mondat a szakterületről, a cikkek végi szerző-blokkba. Csak igazolható állítás kerülhet bele, gyógyulást ígérő megfogalmazás nem.',
+      },
+    },
+    {
+      name: 'portrait',
+      type: 'upload',
+      relationTo: 'media',
+      label: 'Arckép',
+      admin: {
+        description:
+          'Arckép a cikkek végi szerző-blokkba. Valódi portré legyen, ne logó vagy illusztráció: az olvasók a mérések szerint egyedül az igazi arcképet nézik meg.',
+      },
     },
     {
       name: 'role',
@@ -434,6 +463,7 @@ export const Users: CollectionConfig = {
         description:
           'A felhasználó által megvásárolt kurzusok (hozzáférés). Fizetés után magától töltődik; ' +
           'munkatárs és tulajdonos kézzel is hozzáadhat vagy elvehet. A vevő saját magának nem adhat hozzáférést. ' +
+          'A listaoszlopban minden kurzus mellett a haladás is megjelenik: ez számított érték, ezért eszerint rendezni és szűrni nem lehet. ' +
           'Szűrés a listában: Szűrők → Megvásárolt kurzusok.',
         components: {
           // A listaoszlop a kurzus CÍMÉT mutatja (displayTitle), nem a puszta

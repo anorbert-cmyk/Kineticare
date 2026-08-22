@@ -36,7 +36,7 @@ function pad(value: number, length: number): string {
 /** `kineticare-YYYYMMDD-HHmmss.dump` képzése az adott időpontból (UTC). */
 export function buildDumpFileName(now: Date): string {
   if (Number.isNaN(now.getTime())) {
-    throw new Error('Érvénytelen időpont a mentésfájl nevének képzéséhez.')
+    throw new Error('A mentésfájl neve nem képezhető: a kapott időpont nem valódi dátum.')
   }
   const date = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1, 2)}${pad(now.getUTCDate(), 2)}`
   const time = `${pad(now.getUTCHours(), 2)}${pad(now.getUTCMinutes(), 2)}${pad(now.getUTCSeconds(), 2)}`
@@ -201,7 +201,7 @@ export function parseBackupArgs(argv: readonly string[]): ArgParseResult {
     if (!match) {
       return {
         ok: false,
-        message: `Érvénytelen argumentum: "${raw}" (a forma: --kulcs=érték).`,
+        message: `Nem értelmezhető argumentum: "${raw}" (a forma: --kulcs=érték).`,
       }
     }
     const [, key, value] = match

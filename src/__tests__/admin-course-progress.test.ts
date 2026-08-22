@@ -7,13 +7,19 @@ import {
   dropOffLabel,
   filterStudents,
   formatRelativeHungarian,
-  moduleColumnLabel,
+  moduleColumnCell,
   nextLessonLabel,
+  readProgressDeepLink,
   ringGeometry,
+  sortIndicator,
   sortStudents,
   statusLabel,
+  studentRowLabel,
   studentsCsv,
   visibleCountLabel,
+  NO_DATA,
+  PROGRESS_DEEP_LINK_PARAM,
+  PROGRESS_PANEL_ANCHOR,
 } from '../components/admin/course-progress-view'
 import {
   createCourseProgressHandler,
@@ -480,7 +486,13 @@ describe('GET /api/admin/course-progress — jogosultság és validálás', () =
     const body = (await response.json()) as { error: string }
 
     expect(response.status).toBe(400)
-    expect(body.error).toContain('kurzus-azonosító')
+    // A SZÁNDÉKOT mérjük, nem a megfogalmazást: az üzenet mondja meg, MELYIK
+    // adat hiányzik, és mondja meg a teendőt (docs/ui-sztenderdek.md §2.7).
+    // A korábbi `toContain('kurzus-azonosító')` a kötőjeles alakra kötötte a
+    // tesztet, ezért egy jogos átfogalmazás elbuktatta.
+    expect(body.error).toContain('azonosító')
+    expect(body.error).toContain('kurzus')
+    expect(body.error).toMatch(/Nyisd|Frissítsd|próbáld/i)
   })
 
   it('400 nem szám vagy nem pozitív productId esetén', async () => {
@@ -513,7 +525,8 @@ describe('GET /api/admin/course-progress — jogosultság és validálás', () =
     const body = (await response.json()) as { error: string }
 
     expect(response.status).toBe(500)
-    expect(body.error).toContain('Váratlan hiba')
+    // §2.7: a hibaüzenet a helyzetet és a teendőt mondja (nem „Váratlan hiba…").
+    expect(body.error).toContain('A kurzus-haladás most nem kérdezhető le')
   })
 })
 
@@ -913,7 +926,7 @@ describe('visibleCountLabel — élő visszajelzés a szűrésről', () => {
 
   it('szűrés ÉS korlát együtt is egyértelmű', () => {
     expect(visibleCountLabel(25, 41, 305)).toBe(
-      '305 hallgatóból 41 felel meg a szűrésnek — ebből 25 látszik',
+      '305 hallgatóból 41 felel meg a szűrésnek, ebből 25 látszik',
     )
   })
 
@@ -939,8 +952,33 @@ describe('nextLessonLabel — „Következő lecke" oszlop', () => {
     )
   })
 
-  it('befejezettnél nincs következő lecke', () => {
-    expect(nextLessonLabel({ status: 'befejezte', currentLessonTitle: null })).toBe('—')
+  it('befejezettnél nincs következő lecke, és ezt KI IS MONDJA', () => {
+    expect(nextLessonLabel({ status: 'befejezte', currentLessonTitle: null })).toBe(
+      'Nincs hátralévő lecke',
+    )
+  })
+
+  /**
+   * A mag KÉT esetben ad null-t (course-progress-stats.ts): kész a kurzus,
+   * vagy nincs elindítható lecke. A kettő nem ugyanaz, ezért nem is ugyanaz
+   * a felirat. A korábbi „—" mindkettőre ugyanazt a néma jelet adta.
+   */
+  it('lecke nélküli kurzusnál NEM azt mondja, hogy befejezte', () => {
+    expect(nextLessonLabel({ status: 'nem-kezdte', currentLessonTitle: null })).toBe(NO_DATA)
+    expect(nextLessonLabel({ status: 'folyamatban', currentLessonTitle: null })).toBe(NO_DATA)
+  })
+
+  it('egyetlen felirat sem visel kvirtmínuszt (ui-sztenderdek §3.1.1)', () => {
+    const feliratok = [
+      nextLessonLabel({ status: 'befejezte', currentLessonTitle: null }),
+      nextLessonLabel({ status: 'nem-kezdte', currentLessonTitle: null }),
+      nextLessonLabel({ status: 'nem-kezdte', currentLessonTitle: 'Bevezető' }),
+      visibleCountLabel(25, 41, 305),
+      NO_DATA,
+    ]
+    for (const felirat of feliratok) {
+      expect(felirat, felirat).not.toContain(String.fromCodePoint(0x2014))
+    }
   })
 })
 
@@ -967,14 +1005,127 @@ describe('dropOffLabel — a lemorzsolódás-oszlop', () => {
   })
 })
 
-describe('moduleColumnLabel — a fejezetcím ismétlődése', () => {
-  it('a modul ELSŐ során jelenik meg', () => {
-    expect(moduleColumnLabel('4. ELŐZD MEG A BAJT', null)).toBe('4. ELŐZD MEG A BAJT')
-    expect(moduleColumnLabel('4. ELŐZD MEG A BAJT', '3. GYAKORLATOK')).toBe('4. ELŐZD MEG A BAJT')
+describe('moduleColumnCell — a fejezetcím ismétlődése', () => {
+  it('a modul ELSŐ során NEM ismétlődőként jelenik meg', () => {
+    expect(moduleColumnCell('4. ELŐZD MEG A BAJT', null)).toEqual({
+      text: '4. ELŐZD MEG A BAJT',
+      repeated: false,
+    })
+    expect(moduleColumnCell('4. ELŐZD MEG A BAJT', '3. GYAKORLATOK')).toEqual({
+      text: '4. ELŐZD MEG A BAJT',
+      repeated: false,
+    })
   })
 
-  it('a modulon BELÜL nem ismétlődik', () => {
-    expect(moduleColumnLabel('4. ELŐZD MEG A BAJT', '4. ELŐZD MEG A BAJT')).toBe('')
+  /**
+   * A korábbi változat ÜRES STRINGET adott, tehát a cella tényleg üres maradt:
+   * a képernyőolvasó a modul 2., 3., 4. leckéjénél nem tudta megmondani, melyik
+   * fejezetről van szó (WCAG 2.2 SC 1.3.1). A szöveg mostantól MINDIG ott van,
+   * csak a megjelenítés rejti el.
+   */
+  it('ismétlődésnél a SZÖVEG megmarad, csak a `repeated` billen át', () => {
+    const cella = moduleColumnCell('4. ELŐZD MEG A BAJT', '4. ELŐZD MEG A BAJT')
+    expect(cella.repeated).toBe(true)
+    expect(cella.text).toBe('4. ELŐZD MEG A BAJT')
+  })
+
+  it('üres fejezetcímnél sem marad üres a cella', () => {
+    expect(moduleColumnCell('', null)).toEqual({ text: NO_DATA, repeated: false })
+    expect(moduleColumnCell('   ', null).text).toBe(NO_DATA)
+  })
+})
+
+describe('studentRowLabel — a sorfejléc azonosítója', () => {
+  it('a nevet viszi, ha van', () => {
+    expect(studentRowLabel({ name: 'Kovács Anna', email: 'anna@example.test' })).toBe('Kovács Anna')
+  })
+
+  /**
+   * A sorfejléc nem lehet üres: ezt olvassa fel a képernyőolvasó a „67%" cella
+   * előtt. Név híján az e-mail azonosít — UGYANAZ a tartalék, amit a névszerinti
+   * rendezés használ, tehát a sorrend és a felolvasott azonosító nem csúszik szét.
+   */
+  it('név híján az e-mail azonosít', () => {
+    expect(studentRowLabel({ name: null, email: 'anna@example.test' })).toBe('anna@example.test')
+    expect(studentRowLabel({ name: '   ', email: 'anna@example.test' })).toBe('anna@example.test')
+  })
+
+  it('se név, se e-mail: akkor sem üres', () => {
+    expect(studentRowLabel({ name: null, email: '' })).toBe(NO_DATA)
+  })
+})
+
+describe('sortIndicator — LÁTHATÓ rendezés-jelölés', () => {
+  /**
+   * Eddig CSAK `aria-sort` volt: a látó felhasználó nem tudta, hogy a fejléc
+   * rendezhető, és azt sem, melyik szerint áll a lista (NN/g, Data Tables).
+   * A három jel ALAKBAN különbözik, nem árnyalatban (WCAG 2.2 SC 1.4.1).
+   */
+  it('az AKTÍV oszlop iránya látszik', () => {
+    expect(sortIndicator('haladas', 'haladas', 'asc')).toEqual({ glyph: '↑', active: true })
+    expect(sortIndicator('haladas', 'haladas', 'desc')).toEqual({ glyph: '↓', active: true })
+  })
+
+  it('az inaktív oszlopon is van jel — hogy látszódjon: rendezhető', () => {
+    expect(sortIndicator('nev', 'haladas', 'asc')).toEqual({ glyph: '⇅', active: false })
+  })
+
+  it('a három jel PÁRONKÉNT különbözik (nem csak a szín különbözteti meg)', () => {
+    const jelek = new Set([
+      sortIndicator('nev', 'nev', 'asc').glyph,
+      sortIndicator('nev', 'nev', 'desc').glyph,
+      sortIndicator('nev', 'haladas', 'asc').glyph,
+    ])
+    expect(jelek.size).toBe(3)
+  })
+})
+
+describe('readProgressDeepLink — a Statisztika oldalról érkező mély link', () => {
+  /**
+   * A szerződés KÖTÖTT (docs/statisztika-audit-2026-08-21.md 1. pont):
+   *   /admin/collections/products/<id>?haladas=nem-kezdte#kurzus-haladas
+   * A panel ilyenkor magától tölt be, beállítja a szűrőt és odagörget.
+   * Paraméter nélkül MINDEN marad a gombra induló viselkedésnél (a mai
+   * fejkomment teljesítmény-indoka sértetlen).
+   */
+  it('a szerződés három állapotát elfogadja', () => {
+    expect(readProgressDeepLink('?haladas=nem-kezdte')).toBe('nem-kezdte')
+    expect(readProgressDeepLink('?haladas=folyamatban')).toBe('folyamatban')
+    expect(readProgressDeepLink('?haladas=befejezte')).toBe('befejezte')
+  })
+
+  it('a kérdőjel nélküli alakot is érti (URLSearchParams.toString())', () => {
+    expect(readProgressDeepLink('haladas=befejezte')).toBe('befejezte')
+  })
+
+  it('más paraméterek mellől is kiszedi', () => {
+    expect(readProgressDeepLink('?limit=10&haladas=folyamatban&sort=-id')).toBe('folyamatban')
+  })
+
+  it('paraméter NÉLKÜL null — ilyenkor nincs automata betöltés', () => {
+    expect(readProgressDeepLink('')).toBeNull()
+    expect(readProgressDeepLink(null)).toBeNull()
+    expect(readProgressDeepLink(undefined)).toBeNull()
+    expect(readProgressDeepLink('?limit=10')).toBeNull()
+  })
+
+  it('ISMERETLEN vagy hibás érték: úgy viselkedik, mintha nem lenne paraméter', () => {
+    expect(readProgressDeepLink('?haladas=elakadt')).toBeNull()
+    expect(readProgressDeepLink('?haladas=')).toBeNull()
+    expect(readProgressDeepLink('?haladas=NEM-KEZDTE')).toBeNull()
+    expect(readProgressDeepLink('?haladas[]=nem-kezdte')).toBeNull()
+    // A „mind" nincs a szerződésben, és nem is szűkít semmire.
+    expect(readProgressDeepLink('?haladas=mind')).toBeNull()
+  })
+
+  it('értelmezhetetlen query-stringen sem dob', () => {
+    expect(() => readProgressDeepLink('%%%')).not.toThrow()
+    expect(readProgressDeepLink('%%%')).toBeNull()
+  })
+
+  it('a paraméter és a horgony neve a szerződés szerinti', () => {
+    expect(PROGRESS_DEEP_LINK_PARAM).toBe('haladas')
+    expect(PROGRESS_PANEL_ANCHOR).toBe('kurzus-haladas')
   })
 })
 

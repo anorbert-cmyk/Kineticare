@@ -645,7 +645,7 @@ describe('startCheckout — termék- és inputellenőrzés', () => {
       input: { productId: 'abc', consentWithdrawalWaiver: true, consentTerms: true },
     })
     await expect(promise).rejects.toMatchObject({ status: 400 })
-    await expect(promise).rejects.toThrowError(/termékazonosító/)
+    await expect(promise).rejects.toThrowError(/kurzus azonosítója/)
   })
 })
 
@@ -681,7 +681,7 @@ describe('startCheckout — Barion-hibaág', () => {
     const promise = startCheckout({ payload, user: mockUser, input: happyInput })
     await expect(promise).rejects.toBeInstanceOf(CheckoutError)
     await expect(promise).rejects.toMatchObject({ status: 502 })
-    await expect(promise).rejects.toThrowError(/fizetés indítása jelenleg nem sikerült/)
+    await expect(promise).rejects.toThrowError(/fizetés indítása most nem sikerült/)
 
     expect(calls.update[0]).toMatchObject({ id: 101, data: { status: 'payment_failed' } })
   })
@@ -815,7 +815,8 @@ describe('POST /api/checkout/start route-handler', () => {
 
     expect(response.status).toBe(500)
     const body = (await response.json()) as { error: string }
-    expect(body.error).toContain('Váratlan hiba')
+    // §2.7: a helyzet + a teendő, technikai részlet nélkül.
+    expect(body.error).toContain('A fizetés indítása most nem sikerült')
     expect(body.error).not.toContain('DB-kapcsolat')
   })
 

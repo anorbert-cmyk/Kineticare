@@ -210,7 +210,7 @@ export function BunnyLibraryPanelView({
 }: BunnyLibraryPanelViewProps) {
   return (
     <div className="field-type" style={panelStyle}>
-      <h4 style={{ marginTop: 0 }}>Videók a Bunny tárból</h4>
+      <h3 style={{ marginTop: 0 }}>Videók a Bunny tárból</h3>
       <p style={noteStyle}>
         A feltöltés a Bunny felületén történik. Itt a tárban lévő felvételek listája látszik. Másold
         ki a videó azonosítóját, illeszd a lecke „Videó azonosítója” mezőjébe, írd be a hosszt

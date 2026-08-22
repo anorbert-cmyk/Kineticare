@@ -186,10 +186,10 @@ describe('a Számla Agent dátum-kapuja: érvényes változatlan, naptárilag le
   it('naptárilag lehetetlen nap NEM megy ki a Számla Agent felé (szigorítás)', () => {
     for (const rossz of ['2026-13-45', '2026-02-30', '2026-02-29']) {
       expect(() => buildInvoiceXml({ ...BASE, teljesitesDatum: rossz }), rossz).toThrow(
-        /Érvénytelen dátum/,
+        /nem valódi dátum/,
       )
       expect(() => buildInvoiceXml({ ...BASE, issueDate: rossz }), rossz).toThrow(
-        /Érvénytelen dátum/,
+        /nem valódi dátum/,
       )
     }
   })

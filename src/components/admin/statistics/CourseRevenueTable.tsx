@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 import { AUDIENCE_LABELS } from '../../../lib/course-audience'
 import { formatHuf, type CourseRevenueRow } from '../../../lib/statistics/revenue'
 import {
@@ -12,10 +14,39 @@ import {
   thStyle,
 } from './styles'
 
-/** Bevétel kurzusonként — a 12 hónapos ablakon belüli fizetett tételekből. */
+/**
+ * Bevétel kurzusonként — a 12 hónapos ablakon belüli fizetett tételekből.
+ *
+ * ═══ A SORFEJLÉC A KURZUS CÍME, NEM A SKU (H7, 2026-08-21-i audit) ═══
+ * Korábban a sorfejléc a sku volt (`kez-rehab-otthon-alap`), miközben UGYANAZ
+ * a kurzus a haladás-táblában a címével szerepelt: egy lapon két néven futott
+ * ugyanaz a termék. Ez a WCAG 2.2 SC 3.2.4 Consistent Identification sérülése
+ * (https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html),
+ * és a két tábla összevetését is ellehetetlenítette. A sku másodlagos,
+ * „Azonosító" nevű oszlopba került: nem hagyjuk el, mert a Számlázz.hu
+ * tételsora ezt a sztringet viszi, tehát ez az egyetlen kapocs a kimutatás és
+ * a könyvelési export között.
+ */
+
+/* A hatodik oszlop (Azonosító) miatt szélesebb minimum: a sku hosszú,
+   kötőjeles sztring, és a számoszlopok nowrapok. Keskeny viewporton a wrap
+   görget, nem a lap (WCAG 1.4.10 / G225). */
+const revenueTableStyle: CSSProperties = {
+  ...tableStyle,
+  minWidth: 'calc(704 * var(--kc-as-px, 1px))',
+}
+
+/* A sku technikai azonosító: kisebb hangsúly, de OLVASHATÓ marad (a méretet
+   nem visszük a három token alá, csak a színt halkítjuk — a méret-tokenek
+   szabálya: docs/ui-sztenderdek.md). */
+const skuCellStyle: CSSProperties = {
+  ...tdStyle,
+  color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
+}
+
 export function CourseRevenueTable({ rows }: { rows: readonly CourseRevenueRow[] }) {
   if (rows.length === 0) {
-    return <p style={noticeStyle}>Ebben az időszakban még nincs fizetett kurzus-tétel.</p>
+    return <p style={noticeStyle}>Ebben a 12 hónapban még senki nem vásárolt kurzust.</p>
   }
   return (
     /* role="region" + aria-labelledby + tabIndex: a keskeny viewporton
@@ -29,7 +60,7 @@ export function CourseRevenueTable({ rows }: { rows: readonly CourseRevenueRow[]
       aria-labelledby="kc-stat-kurzus-bevetel-cim"
       tabIndex={0}
     >
-      <table style={tableStyle}>
+      <table style={revenueTableStyle}>
         <caption style={captionStyle} id="kc-stat-kurzus-bevetel-cim">
           Bevétel kurzusonként, ugyanabban a 12 hónapban
         </caption>
@@ -39,7 +70,10 @@ export function CourseRevenueTable({ rows }: { rows: readonly CourseRevenueRow[]
               Kurzus
             </th>
             <th style={thStyle} scope="col">
-              Ág
+              Azonosító
+            </th>
+            <th style={thStyle} scope="col">
+              Kinek szól
             </th>
             <th style={thNumericStyle} scope="col">
               Bevétel
@@ -47,8 +81,12 @@ export function CourseRevenueTable({ rows }: { rows: readonly CourseRevenueRow[]
             <th style={thNumericStyle} scope="col">
               Rendelések
             </th>
+            {/* „Ingyenes tétel" helyett: a „tétel" a rendelés-adatmodell szava,
+                a munkatárs viszont hozzáférést ad ingyen. A mértékegység a
+                fejlécben áll, hogy a számoszlop tiszta maradjon (GOV.UK,
+                Table: https://design-system.service.gov.uk/components/table/). */}
             <th style={thNumericStyle} scope="col">
-              Ingyenes tétel
+              Ingyenes hozzáférés (db)
             </th>
           </tr>
         </thead>
@@ -56,8 +94,9 @@ export function CourseRevenueTable({ rows }: { rows: readonly CourseRevenueRow[]
           {rows.map((row) => (
             <tr key={row.sku}>
               <th style={rowHeaderStyle} scope="row">
-                {row.sku}
+                {row.title}
               </th>
+              <td style={skuCellStyle}>{row.sku}</td>
               <td style={tdStyle}>{AUDIENCE_LABELS[row.audience]}</td>
               <td style={numericStyle}>{formatHuf(row.revenueHuf)}</td>
               <td style={numericStyle}>{row.orderCount.toLocaleString('hu-HU')}</td>

@@ -197,7 +197,10 @@ export function createFreeCourseRequestHandler(
       raw = await request.json()
     } catch {
       return NextResponse.json(
-        { error: 'Érvénytelen kérés: a törzsnek JSON-nak kell lennie.' },
+        {
+          error:
+            'Az igénylés nem küldhető el: a kérés adatai nem értelmezhetők. Frissítsd az oldalt, és próbáld újra.',
+        },
         { status: 400 },
       )
     }

@@ -46,13 +46,14 @@ function mapBarionError(error: BarionApiError): { status: number; message: strin
   if (error.kind === 'timeout') {
     return {
       status: 504,
-      message: 'A Barion nem válaszolt időben a visszatérítésre. A rendelés nem változott — kérjük, próbáld újra.',
+      message:
+        'A Barion nem válaszolt időben a visszatérítésre. A rendelés nem változott, próbáld újra néhány perc múlva.',
     }
   }
   return {
     status: 502,
     message:
-      'A visszatérítés a Barion felé jelenleg nem sikerült. A rendelés nem változott — kérjük, próbáld újra később.',
+      'A visszatérítés a Barion felé most nem sikerült. A rendelés nem változott, próbáld újra néhány perc múlva.',
   }
 }
 
@@ -100,7 +101,10 @@ export function createRefundHandler(
           body = JSON.parse(rawBody)
         } catch {
           return Response.json(
-            { error: 'Érvénytelen kérés: a törzsnek JSON-nak kell lennie.' },
+            {
+              error:
+                'A visszatérítés nem indítható: a kérés adatai nem értelmezhetők. Frissítsd az oldalt, és próbáld újra.',
+            },
             { status: 400 },
           )
         }
@@ -136,7 +140,10 @@ export function createRefundHandler(
         error: error instanceof Error ? error.message : String(error),
       })
       return Response.json(
-        { error: 'Váratlan hiba történt a visszatérítés közben. Kérjük, próbáld újra később.' },
+        {
+          error:
+            'A visszatérítés most nem sikerült. Nézd meg a rendelés állapotát, és ha nem változott, próbáld újra néhány perc múlva.',
+        },
         { status: 500 },
       )
     }

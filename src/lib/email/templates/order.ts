@@ -113,7 +113,7 @@ export function orderConfirmationEmail(input: {
       `A vásárláshoz fiókot készítettünk a(z) ${account.email} címmel. ` +
       'Már csak egy jelszót kell beállítanod — utána a Kurzusaim oldalon éred el az anyagot.'
     const validity =
-      `A jelszó-beállító link ${account.expiresInDays} napig érvényes, és személyre szól — kérjük, ne add tovább.`
+      `A jelszó-beállító link ${account.expiresInDays} napig érvényes, és személyre szól, ne add tovább senkinek.`
     const notWorking =
       'Ha a link lejárt vagy nem működik, a belépési oldal „Elfelejtett jelszó" gombjával bármikor ' +
       'kérhetsz újat — ugyanezzel az e-mail-címmel.'

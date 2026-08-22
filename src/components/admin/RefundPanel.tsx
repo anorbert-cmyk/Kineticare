@@ -31,7 +31,13 @@ import { refundBlockedReason, refundConfirmQuestion, validateRefundAmount } from
 
 const REQUEST_TIMEOUT_MS = 30_000
 
-const GENERIC_ERROR = 'A visszatérítés most nem sikerült. Kérjük, próbáld újra később.'
+/**
+ * A magyar mikroszöveg-szabályzat (`docs/ui-sztenderdek.md` §2.7, A/9) szerint
+ * a hibaüzenet TEGEZ és megmondja a következő lépést: a korábbi „Kérjük,
+ * próbáld újra később" udvariaskodott (GOV.UK: a „please" választást sugall
+ * ott, ahol nincs választás), és a „később"-től nem lett okosabb az olvasó.
+ */
+const GENERIC_ERROR = 'A visszatérítés most nem sikerült. Próbáld újra néhány perc múlva.'
 const NETWORK_ERROR = 'Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot, és próbáld újra.'
 
 interface OrderSummary {
@@ -173,7 +179,7 @@ export function RefundPanel() {
   if (isInitializing) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Visszatérítés</h4>
+        <h3 style={{ marginTop: 0 }}>Visszatérítés</h3>
         <p style={noteStyle}>Betöltés…</p>
       </div>
     )
@@ -182,7 +188,7 @@ export function RefundPanel() {
   if (!orderNumber) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Visszatérítés</h4>
+        <h3 style={{ marginTop: 0 }}>Visszatérítés</h3>
         <p style={noteStyle}>
           A visszatérítés csak mentett, kifizetett rendelésen indítható.
         </p>
@@ -193,7 +199,7 @@ export function RefundPanel() {
   if (!hasOwnerRole(user)) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Visszatérítés</h4>
+        <h3 style={{ marginTop: 0 }}>Visszatérítés</h3>
         <p style={noteStyle}>Visszatérítést csak a tulajdonos indíthat.</p>
       </div>
     )
@@ -203,7 +209,7 @@ export function RefundPanel() {
   if (blockedReason) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Visszatérítés</h4>
+        <h3 style={{ marginTop: 0 }}>Visszatérítés</h3>
         <p style={noteStyle}>{blockedReason}</p>
       </div>
     )
@@ -211,7 +217,7 @@ export function RefundPanel() {
 
   return (
     <div className="field-type" style={panelStyle}>
-      <h4 style={{ marginTop: 0 }}>Visszatérítés</h4>
+      <h3 style={{ marginTop: 0 }}>Visszatérítés</h3>
       <p style={noteStyle}>
         {totalHuf === null
           ? 'Üresen hagyva a teljes összeg térül vissza.'

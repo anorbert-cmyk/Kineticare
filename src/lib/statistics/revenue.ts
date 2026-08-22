@@ -38,6 +38,12 @@ export interface RevenueOrderItemInput {
   quantity: number
   /** A tétel sku-snapshotja — a kurzusonkénti bontáshoz. */
   titleSnapshot?: string | null
+  /**
+   * A termék MAI marketingcíme (products.displayTitle), ha a lekérdezés
+   * populálta. A bevétel-tábla sorfejléce ez, nem a sku — lásd a
+   * `CourseRevenueRow.title` indoklását.
+   */
+  displayTitle?: string | null
 }
 
 export interface RevenueOrderInput {
@@ -57,6 +63,32 @@ export interface MonthlyRevenueRow {
 }
 
 export interface CourseRevenueRow {
+  /**
+   * A kurzus EMBERI neve (products.displayTitle), ennek hiányában a sku.
+   *
+   * ═══ MIÉRT NEM A SKU A SORFEJLÉC (H7, 2026-08-21-i audit) ═══
+   * A bevétel-tábla sorfejléce korábban a sku volt (`kez-rehab-otthon-alap`),
+   * miközben UGYANAZ a kurzus a haladás-táblában a CÍMÉVEL szerepelt
+   * („Kézrehabilitáció otthon: az alapok"). Egy lapon két néven futott ugyanaz
+   * a termék, ami a WCAG 2.2 SC 3.2.4 Consistent Identification sérülése
+   * (https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html),
+   * és a két tábla összevetését is ellehetetlenítette.
+   *
+   * A CSOPORTOSÍTÁS továbbra is a sku-snapshot szerint megy (lásd `sku`): a
+   * cím változhat, a snapshot nem, tehát a bevétel akkor sem csúszik szét, ha
+   * a terméket időközben átnevezték.
+   */
+  title: string
+  /**
+   * A rendeléskor rögzített sku-snapshot (orders.items.titleSnapshot).
+   *
+   * Ez marad a csoportosítás kulcsa, és a felületen másodlagos oszlopként
+   * („Azonosító") jelenik meg. Nem hagyjuk el, mert a Számlázz.hu tételsora
+   * és a Barion-tételsor is EZT a sztringet viszi
+   * (src/lib/szamlazz/invoice.ts, src/lib/checkout/start-checkout.ts), tehát
+   * ez az egyetlen kapocs a kimutatás és a könyvelési export között. Törölt
+   * vagy átnevezett terméknél ez az egyetlen megmaradó azonosító is.
+   */
   sku: string
   audience: CourseAudience
   revenueHuf: number
@@ -112,7 +144,14 @@ export function canAccessStatistics(user: RoleUser | null | undefined): boolean 
   return hasStaffOrOwnerRole(user)
 }
 
-export const STATISTICS_ACCESS_DENIED_MESSAGE = 'Ehhez a nézethez nincs jogosultságod.'
+/*
+ * „Oldal", nem „nézet": a „nézet" a Payload fejlesztői szava (custom admin
+ * view), a munkatárs viszont oldalt lát. A magyar mikroszöveg-szabályzat
+ * (docs/ui-sztenderdek.md §3.1) a felhasználó szavát kéri, nem a
+ * keretrendszerét.
+ */
+export const STATISTICS_ACCESS_DENIED_MESSAGE =
+  'A Statisztikát csak munkatárs vagy tulajdonos nézheti meg.'
 
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
@@ -323,9 +362,14 @@ export function aggregateCourseRevenue(orders: readonly RevenueOrderInput[]): Co
     for (const item of order.items) {
       const skuRaw = typeof item.titleSnapshot === 'string' ? item.titleSnapshot.trim() : ''
       const sku = skuRaw.length > 0 ? skuRaw : '(nincs azonosító)'
+      const cim = typeof item.displayTitle === 'string' ? item.displayTitle.trim() : ''
       let row = bySku.get(sku)
       if (row === undefined) {
         row = {
+          // A cím a rendezés miatt is kell, ezért már itt eldől; ha egyik
+          // tételnél sincs populált termék (törölt kurzus), a sku marad a
+          // sorfejléc — ez az egyetlen név, amit ilyenkor igazat mondhatunk.
+          title: cim.length > 0 ? cim : sku,
           sku,
           audience: normalizeAudience(item.audience),
           revenueHuf: 0,
@@ -335,6 +379,11 @@ export function aggregateCourseRevenue(orders: readonly RevenueOrderInput[]): Co
           orderIds: new Set<number>(),
         }
         bySku.set(sku, row)
+      } else if (cim.length > 0 && row.title === row.sku) {
+        // A rendelések a legfrissebbel kezdődnek, de egy régebbi tételnél is
+        // előfordulhat, hogy csak ott van populált termék: az első ISMERT
+        // címet vesszük át, a későbbi ismétlés nem írja felül.
+        row.title = cim
       }
       const amount = itemRevenue(item)
       row.revenueHuf += amount
@@ -351,6 +400,7 @@ export function aggregateCourseRevenue(orders: readonly RevenueOrderInput[]): Co
 
   return [...bySku.values()]
     .map((row) => ({
+      title: row.title,
       sku: row.sku,
       audience: row.audience,
       revenueHuf: row.revenueHuf,
@@ -358,7 +408,15 @@ export function aggregateCourseRevenue(orders: readonly RevenueOrderInput[]): Co
       itemCount: row.itemCount,
       freeItemCount: row.freeItemCount,
     }))
-    .sort((a, b) => b.revenueHuf - a.revenueHuf || a.sku.localeCompare(b.sku, 'hu'))
+    .sort(
+      (a, b) =>
+        b.revenueHuf - a.revenueHuf ||
+        // A LÁTHATÓ név szerint rendezünk holtversenynél (azt olvassa a
+        // munkatárs), a sku csak a végső, egyedi tiebreaker — így a sorrend
+        // determinisztikus marad két azonos című terméknél is.
+        a.title.localeCompare(b.title, 'hu') ||
+        a.sku.localeCompare(b.sku, 'hu'),
+    )
 }
 
 export function emptyFunnel(): OrderFunnelCounts {

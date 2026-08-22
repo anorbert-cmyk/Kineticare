@@ -109,8 +109,9 @@ export const APPOINTMENT_EMAIL_TOO_LONG_ERROR = 'Ez az e-mail-cím túl hosszú.
 export const APPOINTMENT_REASON_TOO_LONG_ERROR = `A leírás legfeljebb ${APPOINTMENT_REASON_MAX_LENGTH} karakter lehet. A többit elmondhatod a telefonos egyeztetésen.`
 export const APPOINTMENT_AVAILABILITY_INVALID_ERROR =
   'Az időpont-sávokat nem tudtuk értelmezni. Jelöld be újra a felkínált lehetőségek közül, amelyik megfelel.'
-export const APPOINTMENT_CONSENT_ERROR =
-  'Az időpontkéréshez kérjük a hozzájárulásod az adataid kezeléséhez.'
+/** §2.7: cselekvést mond, nem udvariaskodik; szó szerint azonos a másik két
+ *  űrlap hozzájárulás-hibájával (WCAG 2.2 SC 3.2.4). */
+export const APPOINTMENT_CONSENT_ERROR = 'Pipáld be az adatkezelési hozzájárulást.'
 
 /**
  * Az űrlap RÖGZÍTETT felületi szövegei (mezőfeliratok, segédszövegek,
@@ -146,7 +147,7 @@ export const APPOINTMENT_UI_TEXT = {
     'Jelöld be az összeset, ami megfelel. Ez nem foglalás: a pontos időpontot telefonon egyeztetjük.',
   submitLabel: 'Időpontot kérek',
   submitPending: 'Küldés…',
-  errorSummary: 'Kérjük, ellenőrizd a megjelölt mezőket, majd próbáld újra.',
+  errorSummary: 'Néhány mező kitöltése hiányzik vagy javításra vár. Nézd át a megjelölt mezőket, és küldd el újra.',
   successTitle: 'Megkaptuk az időpontkérésed',
   successBody:
     'Két munkanapon belül telefonon keresünk, és egyeztetjük a pontos időpontot. Ha közben megváltozna valami, hívj minket nyugodtan.',

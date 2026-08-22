@@ -261,7 +261,7 @@ export function renderLayout(input: LayoutInput): Pick<EmailTemplate, 'html' | '
             <tr>
               <td style="padding:20px 4px 0 4px;font-family:${BETU.torzs};font-size:12px;line-height:1.7;color:${SZIN.inkHalk};">
                 ${BRAND_NAME} · Kézrehabilitációs online kurzusplatform<br />
-                Ez egy automatikus üzenet a(z) ${BRAND_NAME} rendszerétől, kérjük, ne válaszolj rá.
+                Ez egy automatikus üzenet a(z) ${BRAND_NAME} rendszerétől, erre a címre ne válaszolj.
               </td>
             </tr>
 
@@ -310,7 +310,7 @@ export function renderLayout(input: LayoutInput): Pick<EmailTemplate, 'html' | '
 
   textLines.push(
     '',
-    `Ez egy automatikus üzenet a(z) ${BRAND_NAME} rendszerétől, kérjük, ne válaszolj rá.`,
+    `Ez egy automatikus üzenet a(z) ${BRAND_NAME} rendszerétől, erre a címre ne válaszolj.`,
   )
 
   return { html, text: textLines.join('\n') }

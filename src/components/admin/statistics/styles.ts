@@ -155,6 +155,20 @@ export const leadStyle: CSSProperties = {
   maxWidth: MEASURE,
 }
 
+/*
+ * Szekción BELÜLI felvezető mondat (a `h2` alatt, az adat fölött). Ugyanaz a
+ * mérték és halkított szín, mint a lap leadjénél, csak alul kap térközt: így
+ * a mondat a címhez tartozik, nem az adathoz tapad. A cím leíró, a lead
+ * cselekvésre késztető — a kettő szétválasztása a WCAG 2.2 SC 2.4.6 (Headings
+ * and Labels) és a GOV.UK „egy dolgot mond egy elem" elvének a következménye.
+ */
+export const leadInSectionStyle: CSSProperties = {
+  color: 'var(--kc-as-text-muted, var(--theme-elevation-650))',
+  marginTop: 0,
+  marginBottom: 'var(--kc-as-space-4, calc(var(--base) * 1))',
+  maxWidth: MEASURE,
+}
+
 export const cardRowStyle: CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
@@ -208,6 +222,19 @@ export const sectionStyle: CSSProperties = {
   borderTop: '1px solid var(--kc-as-hairline, var(--theme-elevation-100))',
   marginBottom: 'var(--kc-as-space-7, calc(var(--base) * 1.75))',
   paddingTop: 'var(--kc-as-space-6, calc(var(--base) * 1.5))',
+}
+
+/*
+ * A LAP ELSŐ szekciója (összesítő kártyák). Ugyanaz a szekció, csak felül
+ * NINCS hairline és nincs belső térköz: a fejrész saját záróvonala már
+ * elválasztja a laptól, két egymás alatti vonal pedig zajt csinálna. Az alsó
+ * térközt a kártyasor saját `marginBottom`-ja adja, ezért itt 0 — így a
+ * függőleges ritmus pontosan annyi marad, amennyi a `h2` bevezetése előtt
+ * volt.
+ */
+export const sectionTopStyle: CSSProperties = {
+  marginBottom: 0,
+  paddingTop: 0,
 }
 
 /* A diagram KERETE. A RevenueChart SVG-je a saját, természetes felső

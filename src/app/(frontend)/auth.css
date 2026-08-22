@@ -2,8 +2,15 @@
  * Auth-oldalak stílusai (belepes, regisztracio, elfelejtett-jelszo, jelszo-visszaallitas).
  */
 
+/* MÉRT SORHOSSZ (Chromium, valódi tördelés, Range-alapú sorbontás, 2026-08-21):
+   mérték NÉLKÜL a felvezető 768 px-en 83/89/90 (min/medián/max) karakter/sor,
+   1024 px-en 86/87/87 volt — a skill 45–85-ös sávja FÖLÖTT. A `--kc-measure-comfort`
+   (30rem ≈ 66 karakter) a repó saját, bevezetőkre szánt mérték-tokenje
+   (tokens.css „Mérték (sorhossz)"), tehát nem új szám kerül be. Mérés után:
+   768 px-en 55/62/64, 1440 px-en 51/57/61. */
 .kc-auth-lead {
   margin: 0 0 var(--kc-space-6);
+  max-width: var(--kc-measure-comfort);
   color: var(--kc-color-text-muted);
 }
 
@@ -66,4 +73,109 @@
 
 .kc-auth-success h2 {
   margin: 0 0 var(--kc-space-3);
+}
+
+/* A megerősítő panel MÁSODIK mondata (ForgotPasswordForm `successNote`) — ma a
+   `/belepes-atallas` hozzáférés-mondata áll benne. Külön szabály kell, mert a
+   base.css minden `p` margóját nullázza, tehát a két mondat egymásra ülne. */
+.kc-auth-success__note {
+  margin-top: var(--kc-space-3);
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   /belepes-atallas — az átköltöztetett vevő lapja.
+
+   A lap SAJÁT függőleges ritmust kap, mert a base.css minden címsor-, bekezdés-
+   és listamargót nullára állít (base.css `h1…figure { margin: 0 }`), a lap
+   pedig hét egymás utáni blokkból áll. A `* + *` alak („lobotomizált bagoly")
+   azért jobb az egyenkénti margóknál, mert egy később beszúrt bekezdés is
+   megkapja a ritmust, elfelejtett szabály nélkül.
+   ─────────────────────────────────────────────────────────────────────────── */
+.kc-atallas > * + * {
+  margin-top: var(--kc-space-5);
+}
+
+/* A két szakaszcím nagyobb levegőt kap: a lap három, egymástól FÜGGETLEN
+   kérdésre válaszol (mit tegyek / mi lesz ezután / mi van, ha nem jön a levél),
+   és a csoportosítást a térköz jelöli, nem vonal.
+
+   MIÉRT KOMPONENS-CÍM (törzsméret + 700), ÉS NEM SZEKCIÓ-CÍM (L lépcső):
+   a base.css a H1-et és a H2-t UGYANARRA az L lépcsőre teszi, tehát a két
+   alcím a lap elsődleges cselekvésénél is hangosabb lenne (1440 px-en 46,4 px
+   betűvel, a gomb fölött). Itt viszont nem külön szekciókról van szó, hanem
+   EGY folyamat két utókérdéséről. A megoldás a repóban MÁR ÉLŐ minta: a
+   `.kc-auth-success > h2` ugyanígy komponens-cím (lásd feljebb) — új
+   betűméret tehát nem kerül be, csak a meglévő M lépcső 700-as súllyal.
+   A H2 szint SEMANTIKAILAG marad (nincs átugrott címsorszint, WCAG 1.3.1). */
+.kc-atallas > h2 {
+  margin-top: var(--kc-space-7);
+  font-family: var(--kc-font-body);
+  font-size: var(--kc-font-m);
+  font-weight: var(--kc-font-weight-bold);
+}
+
+/* A hozzáférés-mondat kiemelt doboza. A szerkezet BITRE a meglévő állapot-négyes
+   nyelve (1px telített keret + halk felület), a token-pár pedig a már definiált
+   `info` szerep (tokens.css): keret `--kc-color-info` (#2f6e9f), felület
+   `--kc-color-info-surface` (#e6f0f8), szöveg `--kc-color-text` (#10243e).
+   Új márkaszín nem kerül be.
+
+   MÉRT KONTRASZT (WCAG 2.2 · 1.4.3 és 1.4.11):
+     szöveg #10243e a #e6f0f8 felületen ....... 13,53:1  (küszöb 4,5:1)
+     keret  #2f6e9f a #e6f0f8 felületen ........  4,72:1  (küszöb 3:1)
+     keret  #2f6e9f a lap #f6f9fc hátterén .....  5,16:1  (küszöb 3:1)
+   A számokat a `belepes-atallas-ui.test.ts` őr számolja újra a
+   gomb-kontraszt.test.ts kontraszt-motorjával, tehát egy token-csere kibukik. */
+.kc-atallas__notice {
+  padding: var(--kc-space-4) var(--kc-space-5);
+  border: 1px solid var(--kc-color-info);
+  border-radius: var(--kc-radius-md);
+  background-color: var(--kc-color-info-surface);
+  color: var(--kc-color-text);
+}
+
+/* A három lépés SORSZÁMOZOTT: sorrendet ír le, nem felsorolást. A listajel
+   helyét a base.css `padding-inline-start` adja; itt csak a sorok közötti
+   térköz kell. */
+.kc-atallas__steps > li + li {
+  margin-top: var(--kc-space-2);
+}
+
+/* Önállóan álló auth-hivatkozások SORA (segítségkérés, visszaút).
+
+   MIÉRT NEM a `.kc-auth-alt`: az MONDATBA ágyazott linkeknek való („Még nincs
+   fiókod? Regisztráció"), és 13–14 px-es, 18–19 px magas soron ül. Mérve
+   (Chromium, 2026-08-21): a `/elfelejtett-jelszo` egyedül álló „Vissza a
+   belépéshez" linkje 117,1 × 18 CSS px volt 320 px-en — a WCAG 2.2 · 2.5.8
+   Target Size (Minimum) 24 × 24-es küszöbe ALATT. A sikerkritérium „Inline"
+   kivétele a MONDATBAN álló linkre szól („The target is in a sentence or its
+   size is otherwise constrained by the line-height of non-target text"), egy
+   önálló bekezdésben álló hivatkozásra tehát nem hivatkozhatunk vele.
+   https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
+
+   A 44 px a repó saját, szigorúbb célja (ui.css gomb-magasság), nem a minimum.
+   A vízszintes köz (space-6 = 32px) azért kell, hogy a két célfelület ne
+   érjen össze. Az aláhúzás WCAG 1.4.1 (G183): a linket nem jelölheti egyedül
+   a szín. */
+.kc-auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--kc-space-6);
+}
+
+.kc-auth-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--kc-color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+/* A lap prózája a törzs-mértékre szorul (a címsorok nem: rövidek, és a
+   34rem-es mérték a 46 px-es H1-en 12 karakteres sorokat adna). MÉRT érték a
+   szorítás előtt: 768 px-en 94 karakter/sor a felvezetőben és a törzsben.  */
+.kc-atallas > p,
+.kc-atallas > ol {
+  max-width: var(--kc-measure);
 }

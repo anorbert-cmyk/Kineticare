@@ -193,7 +193,7 @@ export type RateLimitSubject = 'ip' | 'email' | 'user'
 export type RateLimitRules = Readonly<Record<RateLimitedRouteClass, RateLimitRule>>
 
 /** A felhasználónak megjelenő üzenet — technikai részletet szándékosan nem árul el. */
-export const RATE_LIMIT_MESSAGE = 'Túl sok próbálkozás. Kérjük, próbáld újra pár perc múlva.'
+export const RATE_LIMIT_MESSAGE = 'Túl sok próbálkozás. Próbáld újra pár perc múlva.'
 
 // ---------------------------------------------------------------------------
 // Útvonal-osztályozás

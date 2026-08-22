@@ -12,6 +12,7 @@ import {
   pageHeaderStyle,
   pageStyle,
   sectionStyle,
+  sectionTopStyle,
 } from './statistics/styles'
 import { TotalsCards } from './statistics/TotalsCards'
 
@@ -31,6 +32,25 @@ import { TotalsCards } from './statistics/TotalsCards'
  * tesztelhető; ez a fájl csak a sorrendet és az oldalszintű szövegeket adja.
  * A vizuális nyelv és a reszponzivitás indoklása (forrás-URL-ekkel):
  * ./statistics/styles.ts és a custom.scss fejkommentje.
+ *
+ * ═══ A SZEKCIÓK SORRENDJE (vezetői döntés, 2026-08-21) ═══
+ * A cselekvésre késztető szekció megy felülre. A lap korábban eredményjelző
+ * tábla volt, nem teendőlista: a tetején a legkevésbé cselekvésre késztető
+ * szám állt (12 havi kumulált bevétel), a legcselekvőbb (sikertelen fizetés)
+ * a negyedik helyen, hajtás alatt. Egyszemélyes vállalkozásnál ez fordítva
+ * hasznos. A mai sorrend:
+ *   1. összesítő kártyák (saját `h2`-vel),
+ *   2. Rendelések állapota (a tölcsér: mi vár befejezésre),
+ *   3. Ki hol tart a kurzusokban (a „nem kezdte el" nevekkel),
+ *   4. Havi bevétel,
+ *   5. Bevétel kurzusonként.
+ * Ez nem mond ellent a docs/ertekesitesi-ux-skill.md üzleti sorrendjének: az
+ * a VEVŐI felület cél-hierarchiája, nem egy belső irányítópulté. Az elv
+ * forrása: NN/g, Dashboard Design — a dashboard gyors leolvasásra való, és a
+ * legfontosabb, cselekvést kérő adat kerül a bal felső sarokba
+ * (https://www.nngroup.com/articles/dashboards-preattentive/, hozzáférés:
+ * 2026-08-21). A döntés teljes indoklása:
+ * docs/statisztika-audit-2026-08-21.md 3. pont.
  */
 
 export function StatisticsAccessDenied() {
@@ -53,7 +73,7 @@ export function StatisticsUnavailable() {
 
 /**
  * A teljes kimutatás. Az `engagement` hiánya (null/undefined) NEM dönti el az
- * oldalt: a bevételi szekciók változatlanul megjelennek, a Kurzus-hatás
+ * oldalt: a bevételi szekciók változatlanul megjelennek, a haladás-szekció
  * helyén magyar magyarázat áll — a részleges adat is több, mint a semmi.
  */
 export function StatisticsReport({
@@ -80,28 +100,36 @@ export function StatisticsReport({
         <h1 style={headingStyle}>Statisztika</h1>
         <p style={leadStyle}>
           Havi bevétel a számla teljesítési dátuma szerint (ha nincs számla, a rendelés leadásának
-          budapesti hónapja). Csak a kifizetett rendelések számítanak. Az otthoni és a szakmai ág
-          tételenként válik szét, mert egy kosárban mindkettő lehet.
+          hónapja, magyar idő szerint). Csak a kifizetett rendelések számítanak. Az otthoni és a
+          szakmai ág tételenként válik szét, mert egy kosárban mindkettő lehet.
         </p>
         {report.truncated ? (
           <p style={{ ...noticeStyle, marginTop: 'var(--kc-as-space-3, calc(var(--base) * 0.75))' }}>
-            A lista a felső korlát miatt csonka. A kimutatás a beolvasott rendeléseket mutatja, nem
-            a teljes archívumot.
+            Sok a rendelés, ezért csak a legutóbbiakat számoltuk össze. A számok emiatt kisebbek a
+            valóságosnál.
           </p>
         ) : null}
       </header>
-      <TotalsCards totals={report.totals} />
-      <MonthlyRevenueSection rows={report.months} />
-      <section style={sectionStyle}>
-        <h2>Kurzusonként</h2>
-        <CourseRevenueTable rows={report.courses} />
+      {/* Az összesítő kártyák MOST kaptak `h2`-t. Fejléc nélkül a lap első
+          adatblokkja kimaradt a címsorfából, tehát képernyőolvasóval nem
+          lehetett ráugrani, és a „mit mutat ez a négy szám" kérdésre sem volt
+          válasz a kártyák fölött (WCAG 2.2 SC 2.4.6 Headings and Labels:
+          https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels.html).
+          A szekció felül NEM kap hairline-t: a fejrész zárása már elválasztja,
+          két egymás alatti vonal fölösleges lenne. */}
+      <section style={sectionTopStyle}>
+        <h2>Bevétel az elmúlt 12 hónapban</h2>
+        <TotalsCards totals={report.totals} />
       </section>
       <FunnelSection funnel={report.funnel} />
-      {/* A korábbi, link nélküli „Kurzus-haladás" záró szekciót ez a szekció
-          váltja: a haladás-összesítő már itt, táblázatban látszik, a
-          hallgatónkénti névsorhoz pedig soronkénti link visz a kurzus
-          lapjára — a szöveges útbaigazítás a szekció alján él tovább. */}
+      {/* A haladás-szekció a nevekkel: a „nem kezdte el" szám maga is link, ami
+          a kurzus lapján rögtön a szűrt névsorra visz. */}
       <CourseEngagementSection engagement={engagement} />
+      <MonthlyRevenueSection rows={report.months} />
+      <section style={sectionStyle}>
+        <h2>Bevétel kurzusonként</h2>
+        <CourseRevenueTable rows={report.courses} />
+      </section>
     </div>
   )
 }

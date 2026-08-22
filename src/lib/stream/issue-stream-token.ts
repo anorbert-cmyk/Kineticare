@@ -69,7 +69,7 @@ const FORBIDDEN_MESSAGE = 'A videó megtekintéséhez a kurzus megvásárlása s
 
 /** Egységes 503-as üzenet — a BUNNY_STREAM_* konfiguráció/adat hibáira. */
 const UNAVAILABLE_MESSAGE =
-  'A videólejátszás ideiglenesen nem érhető el. Kérjük, próbáld újra később.'
+  'A videólejátszás ideiglenesen nem érhető el. Próbáld újra néhány perc múlva.'
 
 function parseProductId(raw: unknown): number {
   if (typeof raw === 'number' && Number.isInteger(raw) && raw > 0) {
@@ -81,7 +81,10 @@ function parseProductId(raw: unknown): number {
       return parsed
     }
   }
-  throw new StreamTokenError(400, 'Érvénytelen vagy hiányzó termékazonosító.')
+  throw new StreamTokenError(
+    400,
+    'A kurzus azonosítója hiányzik vagy nem értelmezhető. Frissítsd az oldalt, és indítsd újra a videót.',
+  )
 }
 
 /** A users.purchases relationship eleme lehet id (number) vagy populate-olt Product. */
@@ -234,7 +237,7 @@ export async function issueStreamToken(
   if (lesson.status !== 'ready') {
     throw new StreamTokenError(
       409,
-      'A videó feldolgozása még folyamatban van. Kérjük, próbáld újra később.',
+      'A videó feldolgozása még folyamatban van. Nézz vissza néhány perc múlva.',
     )
   }
   // A tananyag-modell a nem pozitív hosszt már null-ra normalizálta; a jegy

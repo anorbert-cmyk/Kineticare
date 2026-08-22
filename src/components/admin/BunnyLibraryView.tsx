@@ -18,7 +18,7 @@ const pageStyle: CSSProperties = {
   maxWidth: '64rem',
 }
 
-const DENIED_MESSAGE = 'Ehhez a nézethez nincs jogosultságod.'
+const DENIED_MESSAGE = 'A Videótárat csak munkatárs vagy tulajdonos nézheti meg.'
 
 export function BunnyLibraryView(props: AdminViewServerProps) {
   const { req } = props.initPageResult
@@ -40,7 +40,7 @@ export function BunnyLibraryView(props: AdminViewServerProps) {
         <p style={{ color: 'var(--theme-elevation-650)', maxWidth: '42rem' }}>
           A felvételek a Bunny Stream tárban élnek. Töltsd fel őket ott, majd ide behívva másold a
           videó azonosítóját a kurzus leckéjébe. A vevő és az ingyenes kurzus nézője a meglévő
-          lejátszón látja a videót — innen nem indul feltöltés.
+          lejátszón látja a videót, feltöltés innen nem indul.
         </p>
         <BunnyLibraryPanel />
       </div>
