@@ -71,12 +71,12 @@ export function inviteEmail(input: InviteEmailInput): EmailTemplate {
     'válaszolj erre a levélre, és utánanézünk.'
   const notWorking =
     'Ha a link már lejárt vagy nem működik, az oldal „Elfelejtett jelszó" gombjával bármikor ' +
-    'kérhetsz újat — ugyanezzel az e-mail-címmel. Ilyenkor a régi link érvénytelenné válik, ' +
+    'kérhetsz újat, ugyanezzel az e-mail-címmel. Ilyenkor a régi link érvénytelenné válik, ' +
     'mindig a legfrissebb levélben lévőt használd.'
 
   const bodyHtml = [
     escapeHtml(greeting),
-    'Elkészült az új Kineticare-fiókod. A korábban megvásárolt kurzusaid már benne vannak — ' +
+    'Elkészült az új Kineticare-fiókod. A korábban megvásárolt kurzusaid már benne vannak: ' +
       '<strong>újra fizetned nem kell</strong>, csak egy jelszót kell beállítanod.',
     'Kattints az alábbi gombra, adj meg egy jelszót (legalább 12 karakter, kis- és nagybetűvel ' +
       'és számmal), majd a belépés után a <strong>Kurzusaim</strong> oldalon találod az anyagaidat.',
@@ -86,7 +86,7 @@ export function inviteEmail(input: InviteEmailInput): EmailTemplate {
   ]
   const bodyText = [
     greeting,
-    'Elkészült az új Kineticare-fiókod. A korábban megvásárolt kurzusaid már benne vannak — ' +
+    'Elkészült az új Kineticare-fiókod. A korábban megvásárolt kurzusaid már benne vannak: ' +
       'újra fizetned nem kell, csak egy jelszót kell beállítanod.',
     'Nyisd meg az alábbi linket, adj meg egy jelszót (legalább 12 karakter, kis- és nagybetűvel ' +
       'és számmal), majd a belépés után a Kurzusaim oldalon találod az anyagaidat.',
@@ -96,7 +96,7 @@ export function inviteEmail(input: InviteEmailInput): EmailTemplate {
   ]
 
   return {
-    subject: 'Itt a linked — állítsd be a jelszavad a Kineticare új felületén',
+    subject: 'Itt a linked: állítsd be a jelszavad a Kineticare új felületén',
     ...renderLayout({
       heading: 'Állítsd be a jelszavad',
       paragraphsHtml: bodyHtml,

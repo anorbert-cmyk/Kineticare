@@ -38,6 +38,29 @@ import { normalizeProgressEntry, readEntityId } from './purchases-cell'
 /** A kérés felső időkorlátja; a `loadCourseTitles`-szel azonos. */
 const REQUEST_TIMEOUT_MS = 20_000
 
+/**
+ * A gyorsítótár-bejegyzések élettartama.
+ *
+ * ═══ MIÉRT KELL LEJÁRAT ═══
+ * A gyorsítótár modul-szintű, tehát a Payload egyoldalas adminjában addig él,
+ * amíg a fül nyitva van. Lejárat nélkül két baja volt. (1) A munkatárs
+ * ÓRÁKIG a betöltéskori százalékot látta: a lista frissítése (rendezés,
+ * szűrés, oldalváltás) nem indított új kérést, mert a bejegyzés megvolt.
+ * (2) Ha a szerver a csonkolás-szabály miatt kihagyott egy felhasználót, arról
+ * ÜRES tömb került a gyorsítótárba, és ott is ragadt ÖRÖKRE — az a sor a
+ * munkamenet végéig haladás nélkül maradt, holott a következő kérés már
+ * megkaphatta volna.
+ *
+ * ═══ MIÉRT PONT 60 MÁSODPERC ═══
+ * Rövidebb, mint amennyit a munkatárs egy lista-munkamenetben eltölt (keresés,
+ * rendezés, néhány sor megnyitása), tehát a haladás észszerű időn belül
+ * frissül. Ugyanakkor hosszabb, mint egy oldal megnyitásának ideje, ezért az
+ * EGY oldalon belüli ismételt renderelések (React StrictMode kettős mountja,
+ * oszlop-átméretezés, sorrend-váltás) továbbra is EGY hálózati kört jelentenek
+ * — a csomagoló logika értelme épp ez.
+ */
+const CACHE_TTL_MS = 60_000
+
 type ProgressEntries = readonly UserCourseProgressEntry[]
 
 /**
@@ -46,14 +69,40 @@ type ProgressEntries = readonly UserCourseProgressEntry[]
  */
 const NO_ENTRIES: ProgressEntries = Object.freeze([])
 
+/** Egy gyorsítótár-bejegyzés a hozzá tartozó időbélyeggel. */
+interface CacheEntry {
+  entries: ProgressEntries
+  /** `Date.now()` a bejegyzés írásakor — ebből dől el a lejárat. */
+  storedAt: number
+}
+
 /**
  * Feloldott sorok: felhasználó-azonosító → haladások.
  *
  * KIZÁRÓLAG sikeres, értelmezhető válaszból kerül ide bejegyzés — a hibás
  * kör nem mérgezi meg a gyorsítótárat. Az újrarenderelés (rendezés, oszlop-
- * átméretezés, szűrő) így nem indít új kérést.
+ * átméretezés, szűrő) így a `CACHE_TTL_MS` ablakon belül nem indít új kérést,
+ * utána viszont friss adatot kér.
  */
-const cache = new Map<number, ProgressEntries>()
+const cache = new Map<number, CacheEntry>()
+
+/**
+ * Az érvényes (le nem járt) bejegyzés, vagy `null`.
+ *
+ * A lejárt bejegyzést TÖRÖLJÜK, nem csak átugorjuk: így a térkép nem nő
+ * korlátlanul egy hosszan nyitva hagyott admin-fülön.
+ */
+function readFreshEntries(userId: number): ProgressEntries | null {
+  const cached = cache.get(userId)
+  if (cached === undefined) {
+    return null
+  }
+  if (Date.now() - cached.storedAt >= CACHE_TTL_MS) {
+    cache.delete(userId)
+    return null
+  }
+  return cached.entries
+}
 
 /** A már elindított, még be nem fejezett kérések ígéretei, azonosítónként. */
 const inFlight = new Map<number, Promise<ProgressEntries | null>>()
@@ -168,7 +217,7 @@ async function requestChunk(userIds: readonly number[]): Promise<void> {
       continue
     }
     const entries = rows.get(userId) ?? NO_ENTRIES
-    cache.set(userId, entries)
+    cache.set(userId, { entries, storedAt: Date.now() })
     settle(userId, entries)
   }
 }
@@ -210,7 +259,8 @@ function scheduleFlush(): void {
  *
  * A hívás nem indít azonnal kérést: az azonosító a következő makrotaszkban
  * kimenő csomagba kerül. Ugyanarra a felhasználóra a második hívás nem
- * indít új kört (a folyamatban lévő ígéretet, majd a gyorsítótárat kapja).
+ * indít új kört (a folyamatban lévő ígéretet, majd a friss gyorsítótár-
+ * bejegyzést kapja); a `CACHE_TTL_MS` letelte után viszont új kör indul.
  *
  * @returns a haladások, vagy `null`, ha az adat nem szerezhető meg — ilyenkor
  *          a cella haladás nélkül, a mai alakjában jelenik meg
@@ -220,8 +270,8 @@ export function loadUserProgress(userId: number): Promise<ProgressEntries | null
   if (id === null) {
     return Promise.resolve(null)
   }
-  const cached = cache.get(id)
-  if (cached !== undefined) {
+  const cached = readFreshEntries(id)
+  if (cached !== null) {
     return Promise.resolve(cached)
   }
   const running = inFlight.get(id)

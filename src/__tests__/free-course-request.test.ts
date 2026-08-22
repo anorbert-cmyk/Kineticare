@@ -801,11 +801,11 @@ describe('belépő levél', () => {
 
   it('nem használ töltelék gondolatjelet (a tulajdonos kifejezett kikötése)', () => {
     // A MI szövegünk: tárgy + a levéltörzs bekezdései. A közös e-mail-váz
-    // (`src/lib/email/templates/layout.ts`) fejsora „Kineticare — <cím>"
-    // alakú, tehát U+2014-et TARTALMAZ: az a váz MINDEN tranzakciós levélé,
-    // nem ezé a folyamaté, és a javítása külön kör (a jelentésben megnevezve).
-    // Ezt a tesztet szándékosan nem tágítjuk rá, hogy ne mérjünk idegen hibát,
-    // és ne is fedjük el.
+    // (`src/lib/email/templates/layout.ts`) fejsora a 2026-08-22-i review-kör
+    // óta „Kineticare: <cím>" alakú, tehát már nem tartalmaz U+2014-et. A
+    // szűrő (a „Kineticare " kezdetű sor kihagyása) megmaradt, hogy a teszt
+    // továbbra is CSAK a saját folyamat szövegét mérje, ne a közös vázét —
+    // a váz saját őre az order-paid.test.ts.
     const sajatSorok = template.text
       .split('\n')
       .filter((line) => !line.startsWith('Kineticare '))

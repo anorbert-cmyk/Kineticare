@@ -352,6 +352,31 @@ describe('collection access bekötés a végleges configban', () => {
     expect(purchasesField?.access?.update?.(fieldAccessArgs(staff))).toBe(true)
     expect(purchasesField?.access?.update?.(fieldAccessArgs(customer))).toBe(false)
     expect(purchasesField?.access?.update?.(fieldAccessArgs(null))).toBe(false)
+
+    // A három szerző-mező (credentials, bioShort, portrait) írása szintén
+    // staff/owner-only. Enélkül a vevő a SAJÁT rekordján (canUpdateUser)
+    // beírhatna magának szakmai titulust, amit a cikkek szerző- és
+    // lektor-blokkja meg a MedicalWebPage séma nyilvánosan megjelenít —
+    // YMYL-tartalomnál hamis szakmai hitelesítés (biztonsági review,
+    // 2026-08-22). Az őr mindhárom mezőn a TELJES szerepkör-mátrixot méri,
+    // hogy a mező-access törlése ne csúszhasson vissza némán.
+    for (const fieldName of ['credentials', 'bioShort', 'portrait'] as const) {
+      const field = findField(users as CollectionConfig, fieldName)
+      expect(field?.access?.create?.(fieldAccessArgs(owner)), `${fieldName} create owner`).toBe(
+        true,
+      )
+      expect(field?.access?.update?.(fieldAccessArgs(owner)), `${fieldName} update owner`).toBe(
+        true,
+      )
+      expect(field?.access?.update?.(fieldAccessArgs(staff)), `${fieldName} update staff`).toBe(
+        true,
+      )
+      expect(
+        field?.access?.update?.(fieldAccessArgs(customer)),
+        `${fieldName} update customer`,
+      ).toBe(false)
+      expect(field?.access?.update?.(fieldAccessArgs(null)), `${fieldName} update anon`).toBe(false)
+    }
   })
 
   it('products: ár-mezők és status owner-only írásúak', async () => {

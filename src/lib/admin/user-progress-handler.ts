@@ -82,6 +82,14 @@ import {
  * - 500: váratlan technikai hiba (naplózva requestId-vel)
  * Minden hibaüzenet MAGYARUL, a felhasználónak szólóan.
  *
+ * ═══ GYORSÍTÓTÁR: SEMMILYEN ÁGON ═══
+ * Minden válasz `no-store` (a Videótár-végpont mintája,
+ * src/lib/stream/bunny-library-handler.ts). A 200-as ág konkrét vevők
+ * haladását hordozza — ez sem böngésző-, sem köztes gyorsítótárba nem való —,
+ * a HIBAÁGAK pedig azért kapják meg, mert enélkül egy 401/403 válasz
+ * megragadhatna, és a bejelentkezés UTÁN is a tiltó választ szolgálná ki
+ * (illetve fordítva: egy másik munkatárs gépén a korábbi 200 jelenne meg).
+ *
  * ═══ NAPLÓZÁS ═══
  * A naplóba KIZÁRÓLAG azonosító, darabszám, szerepkör és requestId kerül.
  * Név és e-mail SEMMILYEN ágon nem — az `email` ugyan a logger redact-listáján
@@ -119,6 +127,12 @@ export const USER_PROGRESS_ROW_PAGE_SIZE = 1_000
  * százalékot mutasson.
  */
 export const USER_PROGRESS_ROW_MAX = 20_000
+
+/**
+ * Minden válasz `no-store` — a részletes indoklás a fejkommentben.
+ * Ugyanaz a konstans-alak, mint a Videótár-végponton.
+ */
+const NO_STORE_HEADERS = { 'Cache-Control': 'no-store' } as const
 
 /** A Payload find-válaszának minimális alakja, amit a lapozás használ. */
 interface FindResultLike<T> {
@@ -225,7 +239,7 @@ export function createUserProgressHandler(
       if (!user) {
         return Response.json(
           { error: 'A kurzus-haladás megtekintéséhez bejelentkezés szükséges.' },
-          { status: 401 },
+          { status: 401, headers: NO_STORE_HEADERS },
         )
       }
       if (!hasStaffOrOwnerRole(user)) {
@@ -239,7 +253,7 @@ export function createUserProgressHandler(
             error:
               'A kurzus-haladás megtekintéséhez munkatársi vagy tulajdonosi jogosultság kell.',
           },
-          { status: 403 },
+          { status: 403, headers: NO_STORE_HEADERS },
         )
       }
 
@@ -249,7 +263,7 @@ export function createUserProgressHandler(
       if (userIds.length === 0) {
         return Response.json(
           { error: 'A felhasználó azonosítója hiányzik vagy nem értelmezhető. Frissítsd a listát.' },
-          { status: 400 },
+          { status: 400, headers: NO_STORE_HEADERS },
         )
       }
       if (userIds.length > USER_PROGRESS_MAX_USERS) {
@@ -259,7 +273,7 @@ export function createUserProgressHandler(
           {
             error: `Egyszerre legfeljebb ${String(USER_PROGRESS_MAX_USERS)} felhasználó haladása kérhető le. Kisebb csomagokban kérd le őket.`,
           },
-          { status: 400 },
+          { status: 400, headers: NO_STORE_HEADERS },
         )
       }
 
@@ -306,7 +320,27 @@ export function createUserProgressHandler(
           requestedUsers: userIds.length,
           returnedUsers: response.users.length,
         })
-        return Response.json(response, { status: 200 })
+        return Response.json(response, { status: 200, headers: NO_STORE_HEADERS })
+      }
+
+      // A kurzus-korlátot a LEKÉRDEZÉS ELŐTT nézzük meg. A `productIdSet` a
+      // kért felhasználók `purchases` listáiból gyűlik össze, tehát a mérete
+      // NEM következik a felhasználó-korlátból: száz vevő elvileg több ezer
+      // különböző kurzust hozhat, és az azonosítók így korlátlanul kerülnének
+      // két `in` kifejezésbe. Az utólagos lapozás-plafon
+      // (`USER_PROGRESS_PRODUCT_MAX`) ezt már csak a beolvasott sorokra
+      // korlátozza — magát a lekérdezést nem.
+      if (productIdSet.size > USER_PROGRESS_PRODUCT_MAX) {
+        log.warn('user-progress: túl sok különböző kurzus egy kérésben', {
+          requestedUsers: userIds.length,
+          products: productIdSet.size,
+        })
+        return Response.json(
+          {
+            error: `Egyszerre legfeljebb ${String(USER_PROGRESS_PRODUCT_MAX)} különböző kurzus haladása kérhető le, a kért felhasználókhoz ennél több tartozik. Kisebb csomagokban kérd le őket.`,
+          },
+          { status: 400, headers: NO_STORE_HEADERS },
+        )
       }
 
       const productIds = [...productIdSet].sort((left, right) => left - right)
@@ -400,7 +434,7 @@ export function createUserProgressHandler(
         progressRowsReturned: teljes.rows.length,
       })
 
-      return Response.json(response, { status: 200 })
+      return Response.json(response, { status: 200, headers: NO_STORE_HEADERS })
     } catch (error) {
       log.error('user-progress: váratlan technikai hiba', {
         error: error instanceof Error ? error.message : String(error),
@@ -410,7 +444,7 @@ export function createUserProgressHandler(
           error:
             'A kurzus-haladás most nem kérdezhető le. Próbáld újra néhány perc múlva.',
         },
-        { status: 500 },
+        { status: 500, headers: NO_STORE_HEADERS },
       )
     }
   }

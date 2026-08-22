@@ -67,8 +67,13 @@ import { describe, expect, it } from 'vitest'
 
 const REPO = fileURLToPath(new URL('..', import.meta.url))
 
-/** A bejárt forrásfák (a `src/` alatt) — itt élnek a felhasználói szövegek. */
-const FAK = ['lib', 'components', 'app', 'collections'] as const
+/**
+ * A bejárt forrásfák (a `src/` alatt) — itt élnek a felhasználói szövegek.
+ * A `fields`, `blocks` és `plugins` fák a Payload-tartalom szerkesztői és
+ * megjelenítő rétege: felirat, segédszöveg és hibaüzenet ugyanúgy születhet
+ * bennük, tehát ugyanaz a szabály vonatkozik rájuk.
+ */
+const FAK = ['lib', 'components', 'app', 'collections', 'fields', 'blocks', 'plugins'] as const
 
 /**
  * A fákon kívüli, NEVESÍTETT extra fájl: a Payload-konfiguráció hookjai
@@ -147,6 +152,16 @@ export function kommentekNelkul(forras: string): string {
     const kovetkezo = forras[i + 1]
     switch (allapot) {
       case 'kod':
+        // Kódban a fordított perjel REGEX-LITERÁLBAN áll (`/^https?:\/\//i`).
+        // Escape-átugrás nélkül a `\/` utáni `/` soros kommentet nyitna, a
+        // `\/` utáni `*` pedig blokk-kommentet — mindkettő elnémítaná a
+        // valódi üzeneteket. Ugyanaz a lépés, mint a literálok ágában.
+        if (c === '\\') {
+          push(c, false)
+          if (kovetkezo !== undefined) push(kovetkezo, false)
+          i += 2
+          continue
+        }
         if (c === '/' && kovetkezo === '/') {
           allapot = 'soros-komment'
           push(' ', true)
@@ -267,7 +282,7 @@ const FORRASOK = new Map<string, string>(
 )
 
 describe('G-UI7 — a bejáró tényleg végigméri a felületet', () => {
-  it('mind a négy forrásfa és a nevesített extra fájl benne van a mérésben', () => {
+  it('minden forrásfa és a nevesített extra fájl benne van a mérésben', () => {
     for (const fa of FAK) {
       expect(
         FAJLOK.some((ut) => ut.startsWith(`${fa}/`)),
@@ -322,6 +337,32 @@ describe('G-UI7 — az őr harap (önteszt a szabályokon)', () => {
     )
     expect(nevek('{/* a GOV.UK minta tiltja a hibakódot („500") */}')).toEqual([])
     expect(nevek("const HIBA = 'Próbáld újra.' // korábban: 'Kérjük, próbáld újra.'")).toEqual([])
+  })
+
+  /**
+   * MÉRT KIJÁTSZÁS (2026-08-22). A maszkoló kód-ága nem ismerte az escape-et,
+   * ezért egy REGEX-LITERÁL elnémíthatta a saját sora maradékát (`\/` + `/`),
+   * a `\/` + `*` alak pedig a következő blokk-komment-záróig MINDENT. A repóban
+   * ÉLT: a régi és az új maszkolás összevetve 205 karakter / 11 sor / 10 fájl
+   * különbséget adott (pl. `lib/szamlazz/client.ts:149`, `lib/seo.ts:53`,
+   * `components/lexical/serialize.tsx:205,232`) — ennyi látogatói szöveg állt
+   * a mérésen kívül. Új tiltott találat egyik újonnan látható sorban sincs,
+   * tehát a javítás nem hoz be regressziót, csak a vak foltot szünteti meg.
+   */
+  it('a regex-literálbeli escape-elt perjel NEM nyit kommentet', () => {
+    // (1) `\/` + `/` → korábban SOROS kommentet nyitott a sor maradékára.
+    expect(nevek("const U = /^https?:\\/\\//iu; const HIBA = 'Kérjük, próbáld újra.'")).toEqual([
+      'Kérjük',
+    ])
+    // (2) `\/` + `*` → korábban BLOKK-kommentet nyitott a következő sorokra is.
+    const regexUtan = [
+      'const VEG = /\\/*$/u',
+      "const A = 'Sajnos nem sikerült.'",
+      "const B = 'Érvénytelen kérés.'",
+    ].join('\n')
+    expect(nevek(regexUtan)).toEqual(['Sajnos', 'Érvénytelen'])
+    // (3) A VALÓDI blokk-komment ettől függetlenül néma marad.
+    expect(nevek("/* Kérjük, ne írj ilyet. */\nconst OK = 'Próbáld újra.'")).toEqual([])
   })
 
   it('a JOGOS alakokat NEM fogja meg (E/1 „kérem", leíró „érvénytelenné", „shopping")', () => {

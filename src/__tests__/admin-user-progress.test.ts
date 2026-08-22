@@ -9,6 +9,7 @@ import {
 } from '../lib/admin/user-course-progress'
 import {
   createUserProgressHandler,
+  USER_PROGRESS_PRODUCT_MAX,
   USER_PROGRESS_ROW_MAX,
 } from '../lib/admin/user-progress-handler'
 import {
@@ -94,8 +95,8 @@ describe('buildUserProgressRows — csoportosítás és inverzió', () => {
     })
 
     expect(rows).toEqual([
-      { userId: 1, courses: [{ productId: 10, percent: 50, status: 'folyamatban' }] },
-      { userId: 2, courses: [{ productId: 20, percent: 75, status: 'folyamatban' }] },
+      { userId: 1, courses: [{ productId: 10, percent: 50, status: 'folyamatban', lessonCount: 4 }] },
+      { userId: 2, courses: [{ productId: 20, percent: 75, status: 'folyamatban', lessonCount: 4 }] },
     ])
   })
 
@@ -109,8 +110,8 @@ describe('buildUserProgressRows — csoportosítás és inverzió', () => {
 
     expect(rows[0].courses.map((entry) => entry.productId)).toEqual([10, 20])
     expect(rows[0].courses).toEqual([
-      { productId: 10, percent: 0, status: 'nem-kezdte' },
-      { productId: 20, percent: 25, status: 'folyamatban' },
+      { productId: 10, percent: 0, status: 'nem-kezdte', lessonCount: 4 },
+      { productId: 20, percent: 25, status: 'folyamatban', lessonCount: 4 },
     ])
   })
 
@@ -131,7 +132,7 @@ describe('buildUserProgressRows — csoportosítás és inverzió', () => {
       curriculums,
     })
 
-    expect(rows[0].courses).toEqual([{ productId: 10, percent: 25, status: 'folyamatban' }])
+    expect(rows[0].courses).toEqual([{ productId: 10, percent: 25, status: 'folyamatban', lessonCount: 4 }])
   })
 
   it('a duplikált felhasználó egyszer szerepel', () => {
@@ -142,7 +143,7 @@ describe('buildUserProgressRows — csoportosítás és inverzió', () => {
     })
 
     expect(rows).toHaveLength(1)
-    expect(rows[0].courses).toEqual([{ productId: 10, percent: 25, status: 'folyamatban' }])
+    expect(rows[0].courses).toEqual([{ productId: 10, percent: 25, status: 'folyamatban', lessonCount: 4 }])
   })
 
   it('olyan kurzus haladás-sora, amihez a felhasználó már nem fér hozzá: nem hoz elő sort', () => {
@@ -153,7 +154,7 @@ describe('buildUserProgressRows — csoportosítás és inverzió', () => {
     })
 
     expect(rows).toEqual([
-      { userId: 1, courses: [{ productId: 10, percent: 0, status: 'nem-kezdte' }] },
+      { userId: 1, courses: [{ productId: 10, percent: 0, status: 'nem-kezdte', lessonCount: 4 }] },
     ])
   })
 
@@ -164,7 +165,7 @@ describe('buildUserProgressRows — csoportosítás és inverzió', () => {
       curriculums,
     })
 
-    expect(rows[0].courses).toEqual([{ productId: 10, percent: 100, status: 'befejezte' }])
+    expect(rows[0].courses).toEqual([{ productId: 10, percent: 100, status: 'befejezte', lessonCount: 4 }])
   })
 })
 
@@ -402,9 +403,11 @@ describe('GET /api/admin/user-progress — jogosultság és validálás', () => 
 
       expect(response.status).toBe(400)
       // A SZÁNDÉKOT mérjük, nem a megfogalmazást (lásd a párját az
-      // admin-course-progress.test.ts-ben): melyik adat hiányzik, és mi a teendő.
-      expect(body.error).toContain('azonosító')
-      expect(body.error).toContain('felhasználó')
+      // admin-course-progress.test.ts-ben): melyik adat hiányzik, és mi a
+      // teendő. A két szó EGYÜTT, ebben a sorrendben kell — a korábbi, külön
+      // `toContain` páros egy „a kurzus azonosítója… felhasználó…" alakú,
+      // ROSSZ MEZŐT megnevező üzenetet is átengedett volna.
+      expect(body.error).toMatch(/felhasználó\w* azonosító/i)
       expect(body.error).toMatch(/Nyisd|Frissítsd|próbáld/i)
     }
   })
@@ -428,6 +431,73 @@ describe('GET /api/admin/user-progress — jogosultság és validálás', () => 
     const response = await handler(getRequest(`?users=${eppannyi.join(',')}`))
 
     expect(response.status).toBe(200)
+  })
+
+  it('400, ha a kért felhasználókhoz TÚL SOK különböző kurzus tartozik', async () => {
+    // A kurzus-halmaz a `purchases` listákból gyűlik, tehát a mérete NEM
+    // következik a felhasználó-korlátból: ellenőrzés nélkül korlátlan
+    // azonosító-lista menne két `in` kifejezésbe.
+    const sokKurzus = Array.from(
+      { length: USER_PROGRESS_PRODUCT_MAX + 1 },
+      (_unused, index) => index + 1,
+    )
+    const { handler, calls } = handlerFor({ users: [{ id: 1, purchases: sokKurzus }] })
+
+    const response = await handler(getRequest('?users=1'))
+    const body = (await response.json()) as { error: string }
+
+    expect(response.status).toBe(400)
+    // Az üzenet KIMONDJA a korlátot: enélkül a hívó nem tudná, mit tegyen.
+    expect(body.error).toContain(String(USER_PROGRESS_PRODUCT_MAX))
+    // A tananyag- és haladás-lekérdezés EL SEM INDUL (csak a users-olvasás fut le).
+    expect(calls.map((call) => call.collection)).toEqual(['users'])
+  })
+
+  it('a kurzus-korláttal PONTOSAN egyező kérés még kiszolgálódik', async () => {
+    const eppannyi = Array.from(
+      { length: USER_PROGRESS_PRODUCT_MAX },
+      (_unused, index) => index + 1,
+    )
+    const { handler } = handlerFor({ users: [{ id: 1, purchases: eppannyi }] })
+
+    expect((await handler(getRequest('?users=1'))).status).toBe(200)
+  })
+
+  it('az int4-tartományon KÍVÜLI azonosító kimarad az értelmezésből', async () => {
+    // A `users.id` Postgres `integer`: a `9e18` egész ugyan, de a lekérdezés
+    // tartomány-hibával dőlne el tőle, vagyis egy kézzel írt URL 500-ast adna.
+    expect(parseUserIdsParam('9e18')).toEqual([])
+    expect(parseUserIdsParam('2147483648')).toEqual([])
+    expect(parseUserIdsParam(String(Number.MAX_SAFE_INTEGER + 2))).toEqual([])
+    // A határ maga ÉRVÉNYES, és a hétköznapi azonosítók változatlanul azok.
+    expect(parseUserIdsParam('2147483647')).toEqual([2_147_483_647])
+    expect(parseUserIdsParam('1,2,3')).toEqual([1, 2, 3])
+
+    // Végponton: a tartományon kívüli azonosító 400-at ad, nem 500-at.
+    const { handler, calls } = handlerFor()
+    expect((await handler(getRequest('?users=9e18'))).status).toBe(400)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('MINDEN ág no-store fejlécet ad (200, 401, 403, 400, 500)', async () => {
+    // A 200-as ág konkrét vevők haladását hordozza; a tiltó ágak azért kapják
+    // meg, hogy egy 401/403 válasz ne ragadhasson be a bejelentkezés utánra.
+    const { handler } = handlerFor()
+    expect((await handler(getRequest())).headers.get('Cache-Control')).toBe('no-store')
+    expect((await handler(getRequest('?users=abc'))).headers.get('Cache-Control')).toBe('no-store')
+
+    const anon = handlerFor({ authUser: null })
+    expect((await anon.handler(getRequest())).headers.get('Cache-Control')).toBe('no-store')
+
+    const customer = handlerFor({ authUser: { id: 9, role: 'customer' } })
+    expect((await customer.handler(getRequest())).headers.get('Cache-Control')).toBe('no-store')
+
+    const hibas = createUserProgressHandler({
+      getPayload: async () => {
+        throw new Error('adatbázis nem elérhető')
+      },
+    })
+    expect((await hibas(getRequest())).headers.get('Cache-Control')).toBe('no-store')
   })
 
   it('500 váratlan technikai hibánál (magyar üzenet)', async () => {
@@ -459,11 +529,11 @@ describe('GET /api/admin/user-progress — 200 válasz', () => {
         {
           userId: 1,
           courses: [
-            { productId: 10, percent: 50, status: 'folyamatban' },
-            { productId: 20, percent: 25, status: 'folyamatban' },
+            { productId: 10, percent: 50, status: 'folyamatban', lessonCount: 4 },
+            { productId: 20, percent: 25, status: 'folyamatban', lessonCount: 4 },
           ],
         },
-        { userId: 2, courses: [{ productId: 20, percent: 25, status: 'folyamatban' }] },
+        { userId: 2, courses: [{ productId: 20, percent: 25, status: 'folyamatban', lessonCount: 4 }] },
       ],
     })
   })
@@ -537,7 +607,7 @@ describe('GET /api/admin/user-progress — 200 válasz', () => {
     const body = (await response.json()) as UserProgressResponse
 
     expect(body.users[0].courses).toEqual([
-      { productId: 10, percent: 25, status: 'folyamatban' },
+      { productId: 10, percent: 25, status: 'folyamatban', lessonCount: 4 },
     ])
   })
 
@@ -555,7 +625,7 @@ describe('GET /api/admin/user-progress — 200 válasz', () => {
     const body = (await response.json()) as UserProgressResponse
 
     expect(body.users[0].courses).toEqual([
-      { productId: 10, percent: 50, status: 'folyamatban' },
+      { productId: 10, percent: 50, status: 'folyamatban', lessonCount: 4 },
     ])
   })
 
@@ -569,7 +639,7 @@ describe('GET /api/admin/user-progress — 200 válasz', () => {
     const body = (await response.json()) as UserProgressResponse
 
     expect(body.users[0].courses).toEqual([
-      { productId: 10, percent: 25, status: 'folyamatban' },
+      { productId: 10, percent: 25, status: 'folyamatban', lessonCount: 4 },
     ])
   })
 
@@ -608,7 +678,7 @@ describe('GET /api/admin/user-progress — 200 válasz', () => {
     // Csak az 1. felhasználó adata TELJES — a 2. félbevágott, a 3. sorai be sem
     // jöttek, ezért mindkettő kimarad.
     expect(body.users).toEqual([
-      { userId: 1, courses: [{ productId: 10, percent: 50, status: 'folyamatban' }] },
+      { userId: 1, courses: [{ productId: 10, percent: 50, status: 'folyamatban', lessonCount: 4 }] },
     ])
   })
 })

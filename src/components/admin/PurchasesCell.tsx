@@ -23,7 +23,10 @@ import { loadUserProgress } from './user-progress-client'
  *   Otthoni KézRehab Program · 45% · folyamatban
  *
  * A haladást a `loadUserProgress` tölti be, szintén oldalanként egyetlen
- * kérésben (a cellák azonosítói egy csomagba gyűlnek).
+ * kérésben (a cellák azonosítói egy csomagba gyűlnek). A sor SZÖVEGÉT teljes
+ * egészében a `formatPurchaseRows` állítja elő — a „nincs tananyag" állapotot
+ * is (`purchases-cell.ts`), hogy a megjelenítés egyetlen, tesztelhető helyen
+ * dőljön el.
  *
  * ═══ HÁROM TERVEZÉSI DÖNTÉS, INDOKKAL ═══
  *

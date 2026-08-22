@@ -101,8 +101,53 @@ const ORDER_SELECT = {
 const PAGED_ORDER_SORT: string[] = ['-createdAt', 'id']
 
 /**
+ * Csonkolt-e a beolvasás, amikor a felső korlátig eljutottunk.
+ *
+ * ═══ MIÉRT KELL EZ A SORREND (mérve, 2026-08-21) ═══
+ * A korábbi szabály a `hasNextPage` hiányában a `pageDocs.length === pageSize`
+ * tartalék-ágra esett vissza — az viszont a PONTOSAN a korláttal egyező,
+ * TELJES halmazt is csonkoltnak jelölte: ha az utolsó lap történetesen tele
+ * volt, a felület „a valóságnál kisebb számok" figyelmeztetést írt ki hiánytalan
+ * adatra. A hamis riasztás ugyanolyan kár, mint az elhallgatott csonkolás: a
+ * munkatárs a jó számban sem bízik meg többé.
+ *
+ * A sorrend ezért:
+ *  1. `totalDocs` — a Payload a TALÁLATOK teljes számát adja, tehát ebből
+ *     egyértelműen eldől a kérdés: több van-e, mint amennyit beolvashattunk.
+ *  2. `hasNextPage` — szintén a szervertől jön, csak közvetve válaszol.
+ *  3. TARTALÉK: „az utolsó lap tele volt". EZ CSAK BECSLÉS, és szándékosan a
+ *     hamis pozitív irányába téved (inkább jelezzen csonkolást, mint hogy
+ *     elhallgassa) — de csak akkor fut, ha a szerver EGYIK számot sem adta meg,
+ *     ami valós Payload-válasznál nem fordul elő, mockolt tesztben viszont igen.
+ */
+export function isReadTruncated(input: {
+  /** A Payload `totalDocs` mezője az utolsó lapról (ha adta). */
+  totalDocs: number | null | undefined
+  /** A Payload `hasNextPage` mezője az utolsó lapról (ha adta). */
+  hasNextPage: boolean | null | undefined
+  /** A felső korlát. */
+  maxDocs: number
+  /** Ennyi sort olvastunk be a levágás ELŐTT. */
+  loaded: number
+  /** Az utolsó lap sorainak száma és a kért lapméret. */
+  pageDocsLength: number
+  pageSize: number
+}): boolean {
+  const { totalDocs, hasNextPage, maxDocs, loaded, pageDocsLength, pageSize } = input
+  if (typeof totalDocs === 'number' && Number.isFinite(totalDocs) && totalDocs >= 0) {
+    return totalDocs > maxDocs
+  }
+  if (typeof hasNextPage === 'boolean') {
+    return hasNextPage || loaded > maxDocs
+  }
+  return pageDocsLength === pageSize || loaded > maxDocs
+}
+
+/**
  * Lapozott beolvasás felső korláttal. A pontosan a korláttal egyező, teljes
- * halmaz NEM csonkolt — ugyanaz a szabály, mint a kurzus-haladás panelen.
+ * halmaz NEM csonkolt — ugyanaz a szabály, mint a kurzus-haladás panelen
+ * (a döntést a KÖZÖS `isReadTruncated` hozza, hogy a két olvasó ne csúszhasson
+ * szét).
  */
 export async function readStatisticsPages<T>(
   fetchPage: (page: number, limit: number) => Promise<FindResultLike<T>>,
@@ -117,11 +162,16 @@ export async function readStatisticsPages<T>(
     const pageDocs = Array.isArray(result.docs) ? result.docs : []
     docs.push(...pageDocs)
     if (docs.length >= maxDocs) {
-      const hasMorePages =
-        typeof result.hasNextPage === 'boolean' ? result.hasNextPage : pageDocs.length === pageSize
       return {
         docs: docs.slice(0, maxDocs),
-        truncated: hasMorePages || docs.length > maxDocs,
+        truncated: isReadTruncated({
+          totalDocs: result.totalDocs,
+          hasNextPage: result.hasNextPage,
+          maxDocs,
+          loaded: docs.length,
+          pageDocsLength: pageDocs.length,
+          pageSize,
+        }),
       }
     }
     if (pageDocs.length < pageSize || result.hasNextPage === false) {

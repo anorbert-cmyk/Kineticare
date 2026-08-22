@@ -19,6 +19,7 @@ import {
   formatCourseLabel,
   formatPurchaseLabels,
   formatPurchaseRows,
+  INLINE_NO_LESSONS_LABEL,
   inlineStatusLabel,
   normalizeProgressEntry,
   PROGRESS_SEPARATOR,
@@ -30,6 +31,7 @@ import {
 import { statusLabel } from '../components/admin/course-progress-view'
 import type { UserCourseProgressEntry } from '../lib/admin/user-progress-contract'
 import { courseTitle } from '../lib/courses'
+import { NO_LESSONS_LABEL } from '../lib/curriculum/progress'
 
 const titles = new Map<string, string>([
   ['11', 'Otthoni KézRehab Program'],
@@ -80,6 +82,18 @@ describe('hozzáférés-azonosítók olvasása', () => {
     expect(readPurchaseIds(null)).toEqual([])
     expect(readPurchaseIds('11')).toEqual([])
     expect(readPurchaseIds([null, {}, { id: {} }, 11])).toEqual(['11'])
+  })
+
+  it('DEDUPLIKÁL, a beérkezési sorrendet megtartva', () => {
+    // A `purchases` mezőn nincs egyediség-kényszer: egy kézi szerkesztés vagy
+    // ismételt hozzáférés-adás ugyanazt a kurzust kétszer is felviheti. A
+    // cella ilyenkor UGYANAZT a sort írta ki kétszer — a szerver oldala
+    // (`purchasedProductIds`) viszont már eddig is deduplikált.
+    expect(readPurchaseIds([10, 10, 20])).toEqual(['10', '20'])
+    // A szám és a szám alakú szöveg UGYANAZ az azonosító.
+    expect(readPurchaseIds([10, '10'])).toEqual(['10'])
+    // Vegyes alakok: a feloldott dokumentum és a polimorf érték is beleszámít.
+    expect(readPurchaseIds([{ id: 11 }, 11, { relationTo: 'products', value: 11 }])).toEqual(['11'])
   })
 })
 
@@ -134,13 +148,19 @@ describe('cella-sorok', () => {
  * MINDEN ADAT KITALÁLT.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-/** Egy érvényes haladás-bejegyzés, a szerződés alakjában. */
+/**
+ * Egy érvényes haladás-bejegyzés, a szerződés alakjában.
+ *
+ * A `lessonCount` alapból pozitív: a 0 KÜLÖN megjelenési állapot („nincs
+ * tananyag"), azt a saját blokkja méri.
+ */
 function entry(
   productId: number,
   percent: number,
   status: UserCourseProgressEntry['status'],
+  lessonCount = 8,
 ): UserCourseProgressEntry {
-  return { productId, percent, status }
+  return { productId, percent, status, lessonCount }
 }
 
 describe('állapot mondatközi alakja', () => {
@@ -183,26 +203,59 @@ describe('sor-azonosító olvasása a Payload rowData propjából', () => {
 
 describe('haladás-bejegyzés ellenőrzése', () => {
   it('érvényes bejegyzést átenged', () => {
-    expect(normalizeProgressEntry({ productId: 11, percent: 45, status: 'folyamatban' })).toEqual(
-      entry(11, 45, 'folyamatban'),
-    )
+    expect(
+      normalizeProgressEntry({ productId: 11, percent: 45, status: 'folyamatban', lessonCount: 8 }),
+    ).toEqual(entry(11, 45, 'folyamatban'))
   })
 
   it('hibás alakot null-lal nyel el', () => {
     expect(normalizeProgressEntry(null)).toBeNull()
     expect(normalizeProgressEntry('11')).toBeNull()
-    expect(normalizeProgressEntry({ percent: 45, status: 'folyamatban' })).toBeNull()
-    expect(normalizeProgressEntry({ productId: 11, status: 'folyamatban' })).toBeNull()
-    expect(normalizeProgressEntry({ productId: 11, percent: 45 })).toBeNull()
-    expect(normalizeProgressEntry({ productId: 11, percent: '45', status: 'folyamatban' })).toBeNull()
-    expect(normalizeProgressEntry({ productId: 11, percent: Number.NaN, status: 'folyamatban' })).toBeNull()
-    expect(normalizeProgressEntry({ productId: 11, percent: 45, status: 'ismeretlen' })).toBeNull()
+    expect(normalizeProgressEntry({ percent: 45, status: 'folyamatban', lessonCount: 8 })).toBeNull()
+    expect(normalizeProgressEntry({ productId: 11, status: 'folyamatban', lessonCount: 8 })).toBeNull()
+    expect(normalizeProgressEntry({ productId: 11, percent: 45, lessonCount: 8 })).toBeNull()
+    expect(
+      normalizeProgressEntry({ productId: 11, percent: '45', status: 'folyamatban', lessonCount: 8 }),
+    ).toBeNull()
+    expect(
+      normalizeProgressEntry({
+        productId: 11,
+        percent: Number.NaN,
+        status: 'folyamatban',
+        lessonCount: 8,
+      }),
+    ).toBeNull()
+    expect(
+      normalizeProgressEntry({ productId: 11, percent: 45, status: 'ismeretlen', lessonCount: 8 }),
+    ).toBeNull()
+  })
+
+  it('a hiányzó vagy hibás leckeszám ÉRVÉNYTELEN — nem „alapértelmezett 0"', () => {
+    // A `lessonCount` KÖTELEZŐ: enélkül a „nincs tananyag" állapot nem
+    // különböztethető meg a valódi 0%-tól, és pont az a hamis „0% · nem kezdte
+    // el" sor jönne vissza, ami miatt a mező született.
+    expect(normalizeProgressEntry({ productId: 11, percent: 45, status: 'folyamatban' })).toBeNull()
+    expect(
+      normalizeProgressEntry({ productId: 11, percent: 45, status: 'folyamatban', lessonCount: -1 }),
+    ).toBeNull()
+    expect(
+      normalizeProgressEntry({ productId: 11, percent: 45, status: 'folyamatban', lessonCount: 2.5 }),
+    ).toBeNull()
+    expect(
+      normalizeProgressEntry({ productId: 11, percent: 45, status: 'folyamatban', lessonCount: '8' }),
+    ).toBeNull()
+    // A 0 viszont ÉRVÉNYES érték: ez maga a „nincs tananyag" állapot.
+    expect(
+      normalizeProgressEntry({ productId: 11, percent: 0, status: 'nem-kezdte', lessonCount: 0 }),
+    ).toEqual(entry(11, 0, 'nem-kezdte', 0))
   })
 
   it('a szerződést sértő százalékot 0–100 közé szorítja és egészre kerekíti', () => {
-    expect(normalizeProgressEntry({ productId: 11, percent: -4, status: 'nem-kezdte' })?.percent).toBe(0)
-    expect(normalizeProgressEntry({ productId: 11, percent: 140, status: 'befejezte' })?.percent).toBe(100)
-    expect(normalizeProgressEntry({ productId: 11, percent: 45.6, status: 'folyamatban' })?.percent).toBe(46)
+    const p = (percent: number, status: string): number | undefined =>
+      normalizeProgressEntry({ productId: 11, percent, status, lessonCount: 8 })?.percent
+    expect(p(-4, 'nem-kezdte')).toBe(0)
+    expect(p(140, 'befejezte')).toBe(100)
+    expect(p(45.6, 'folyamatban')).toBe(46)
   })
 })
 
@@ -244,6 +297,30 @@ describe('cella-sorok haladással', () => {
     ])
     expect(rows.map((row) => row.percent)).toEqual([20, 100])
     expect(rows.map((row) => row.status)).toEqual(['folyamatban', 'befejezte'])
+  })
+
+  it('0 ELINDÍTHATÓ leckénél „nincs tananyag" — se százalék, se állapot-szó', () => {
+    // MÉRT HIBA (vezetői kör, 2026-08-21): a lecke `status` alapértelmezése
+    // `processing`, ezért egy friss kurzusnál a nevező 0, és a cella azt
+    // állította, hogy „0% · nem kezdte el" — olyan vevőkről is, akik a
+    // kurzust korábban végignézték.
+    const row = formatPurchaseRows([11], titles, [entry(11, 0, 'nem-kezdte', 0)])[0]
+    expect(row.text).toBe('Otthoni KézRehab Program · még nincs tananyag')
+    expect(row.text).not.toContain('%')
+    expect(row.text).not.toContain('nem kezdte el')
+    // A sor SEM százalékot, SEM állapotot nem hordoz — a komponens így nem is
+    // tud belőle mást rajzolni.
+    expect(row.percent).toBeNull()
+    expect(row.status).toBeNull()
+  })
+
+  it('a „nincs tananyag" szó a vevői felirat mondatközi alakja (egy fogalom, egy szó)', () => {
+    expect(INLINE_NO_LESSONS_LABEL).toBe('még nincs tananyag')
+    // Ha a vevői felirat változik, ez a teszt vezeti rá az admin-listát is
+    // (WCAG 2.2 SC 3.2.4, Consistent Identification).
+    expect(INLINE_NO_LESSONS_LABEL.toLocaleLowerCase('hu-HU')).toBe(
+      NO_LESSONS_LABEL.toLocaleLowerCase('hu-HU'),
+    )
   })
 
   it('0% és 100% is kiíródik (nem esik ki üresként)', () => {

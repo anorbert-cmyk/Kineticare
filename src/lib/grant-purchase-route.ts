@@ -106,7 +106,8 @@ export function createGrantPurchaseHandler(
       const reason = readRequiredString(body.reason)
       if (!reason) {
         return Response.json(
-          { error: 'Az indok megadása kötelező — ez kerül az audit-naplóba.' },
+          // Szó szerint AZONOS a GrantPurchasePanel kliens-üzenetével (3.2.4).
+          { error: 'Add meg az indokot: ez kerül az audit-naplóba.' },
           { status: 400 },
         )
       }

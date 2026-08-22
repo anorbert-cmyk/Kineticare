@@ -115,7 +115,7 @@ küldhető ki, közös link NINCS.
 
 ### 4.2. Aktiváló levél (T−3) — személyre szóló linkkel
 
-> **Tárgy:** Itt a linked — állítsd be a jelszavad a Kineticare új felületén
+> **Tárgy:** Itt a linked: állítsd be a jelszavad a Kineticare új felületén
 >
 > Kedves {{nev}}!
 >

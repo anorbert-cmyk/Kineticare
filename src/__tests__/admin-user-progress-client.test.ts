@@ -9,7 +9,10 @@
  *    részeredmények összefésülődnek,
  *  - hiba esetén a cellák `null`-t kapnak, a gyorsítótár NEM mérgeződik meg,
  *    tehát a következő megnyitás újrapróbálja,
- *  - ugyanarra a felhasználóra nem indul második kör.
+ *  - ugyanarra a felhasználóra nem indul második kör,
+ *  - a gyorsítótár-bejegyzés 60 másodperc után ELÉVÜL: a munkatárs nem lát
+ *    órákig régi százalékot, és a csonkolás miatt kihagyott felhasználó üres
+ *    listája sem ragad be a munkamenet végéig.
  *
  * VALÓDI HÁLÓZATI HÍVÁS TILOS (CLAUDE.md, 15. üzemeltetési tanulság): a
  * `fetch` minden tesztben stubolt, és az `afterEach` visszaállítja. A modul
@@ -61,7 +64,7 @@ function okResponse(call: unknown): Response {
   const body: UserProgressResponse = {
     users: requestedIds(call).map((userId) => ({
       userId,
-      courses: [{ productId: userId, percent: 45, status: 'folyamatban' }],
+      courses: [{ productId: userId, percent: 45, status: 'folyamatban', lessonCount: 8 }],
     })),
   }
   return new Response(JSON.stringify(body), { status: 200 })
@@ -245,6 +248,74 @@ describe('hibatűrés', () => {
   })
 })
 
+/*
+ * A GYORSÍTÓTÁR LEJÁRATA.
+ *
+ * Két MÉRT hibát old meg egyszerre. (1) A modul-szintű gyorsítótár sosem
+ * évült el, tehát a munkatárs a fül nyitva tartásáig — órákig — a
+ * betöltéskori százalékot látta. (2) A csonkolás miatt kihagyott felhasználó
+ * ÜRES tömbként került be, és ott is ragadt: az a sor a munkamenet végéig
+ * haladás nélkül maradt.
+ *
+ * A tesztek HAMIS IDŐZÍTŐVEL mérnek — valódi várakozás nincs bennük.
+ */
+describe('gyorsítótár lejárata', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** A betöltő a következő makrotaszkban küld: hamis időzítőnél pörgetni kell. */
+  async function loadWithTimers(
+    load: (userId: number) => Promise<unknown>,
+    userId: number,
+  ): Promise<unknown> {
+    const pending = load(userId)
+    await vi.advanceTimersByTimeAsync(0)
+    return pending
+  }
+
+  it('a lejárat ELŐTT nincs új kérés, UTÁNA van', async () => {
+    vi.useFakeTimers()
+    const mockFetch = vi.fn((...call: unknown[]) => Promise.resolve(okResponse(call)))
+    vi.stubGlobal('fetch', mockFetch)
+    const { loadUserProgress } = await freshModule()
+
+    await loadWithTimers(loadUserProgress, 4)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+
+    // 59 mp: a bejegyzés még friss (egy lista-munkamenet oldalankénti dupla
+    // kérése így továbbra is EGY hálózati kör marad).
+    vi.advanceTimersByTime(59_000)
+    await loadWithTimers(loadUserProgress, 4)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+
+    // 60 mp fölött a bejegyzés lejárt: friss adatot kérünk.
+    vi.advanceTimersByTime(2_000)
+    await loadWithTimers(loadUserProgress, 4)
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('a KIHAGYOTT felhasználó üres listája sem ragad be örökre', async () => {
+    vi.useFakeTimers()
+    // Előbb a csonkolás miatt kimaradt felhasználó (üres válasz), majd egy
+    // teljes válasz — a lejárat után ennek kell megérkeznie.
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ users: [] }), { status: 200 }))
+      .mockImplementation((...call: unknown[]) => Promise.resolve(okResponse(call)))
+    vi.stubGlobal('fetch', mockFetch)
+    const { loadUserProgress } = await freshModule()
+
+    expect(await loadWithTimers(loadUserProgress, 4)).toEqual([])
+
+    vi.advanceTimersByTime(61_000)
+    expect(await loadWithTimers(loadUserProgress, 4)).toEqual([
+      { productId: 4, percent: 45, status: 'folyamatban', lessonCount: 8 },
+    ])
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('válasz értelmezése', () => {
   it('hibás ELEM kimarad, a többi megmarad', async () => {
     const { readUserProgressRows } = await freshModule()
@@ -256,15 +327,20 @@ describe('válasz értelmezése', () => {
         {
           userId: 4,
           courses: [
-            { productId: 11, percent: 45, status: 'folyamatban' },
-            { productId: 12, percent: 45, status: 'ismeretlen' },
+            { productId: 11, percent: 45, status: 'folyamatban', lessonCount: 8 },
+            { productId: 12, percent: 45, status: 'ismeretlen', lessonCount: 8 },
+            // Hiányzó leckeszám: a bejegyzés érvénytelen, mert enélkül a
+            // „nincs tananyag" állapot nem különböztethető meg a valódi 0%-tól.
+            { productId: 13, percent: 45, status: 'folyamatban' },
             null,
-            { percent: 10, status: 'folyamatban' },
+            { percent: 10, status: 'folyamatban', lessonCount: 8 },
           ],
         },
       ],
     })
-    expect(rows?.get(4)).toEqual([{ productId: 11, percent: 45, status: 'folyamatban' }])
+    expect(rows?.get(4)).toEqual([
+      { productId: 11, percent: 45, status: 'folyamatban', lessonCount: 8 },
+    ])
     expect(rows?.size).toBe(1)
   })
 

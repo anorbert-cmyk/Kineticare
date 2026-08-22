@@ -376,6 +376,19 @@ export const Users: CollectionConfig = {
       name: 'credentials',
       type: 'text',
       label: 'Végzettség, titulus',
+      /**
+       * ═══ TILOS ZÓNA 4 — access-változás, emberi jóváhagyással (2026-08-22) ═══
+       * A biztonsági review találata: mezőszintű access nélkül a vevő a SAJÁT
+       * rekordján (canUpdateUser engedi) beírhatna magának szakmai titulust,
+       * amit a cikkek szerző- és lektor-blokkja meg a MedicalWebPage séma
+       * nyilvánosan megjelenít — YMYL-tartalomnál ez hamis szakmai hitelesítés
+       * lenne. Ezért a három szerző-mező (credentials, bioShort, portrait)
+       * írása kizárólag staff/owner — a `purchases` és a `role` mintájára.
+       */
+      access: {
+        create: isStaffOrOwnerFieldAccess,
+        update: isStaffOrOwnerFieldAccess,
+      },
       admin: {
         description:
           'Rövid szakmai titulus, például: gyógytornász, kézterapeuta. A cikkek szerzősorában és a szerző-blokkban jelenik meg. Csak olyan végzettséget írj ide, ami igazolható.',
@@ -385,6 +398,11 @@ export const Users: CollectionConfig = {
       name: 'bioShort',
       type: 'textarea',
       label: 'Rövid szakmai bemutatkozás',
+      // Írás csak staff/owner — az indoklás a credentials mezőnél (tilos zóna 4).
+      access: {
+        create: isStaffOrOwnerFieldAccess,
+        update: isStaffOrOwnerFieldAccess,
+      },
       admin: {
         description:
           '1–2 mondat a szakterületről, a cikkek végi szerző-blokkba. Csak igazolható állítás kerülhet bele, gyógyulást ígérő megfogalmazás nem.',
@@ -395,6 +413,11 @@ export const Users: CollectionConfig = {
       type: 'upload',
       relationTo: 'media',
       label: 'Arckép',
+      // Írás csak staff/owner — az indoklás a credentials mezőnél (tilos zóna 4).
+      access: {
+        create: isStaffOrOwnerFieldAccess,
+        update: isStaffOrOwnerFieldAccess,
+      },
       admin: {
         description:
           'Arckép a cikkek végi szerző-blokkba. Valódi portré legyen, ne logó vagy illusztráció: az olvasók a mérések szerint egyedül az igazi arcképet nézik meg.',

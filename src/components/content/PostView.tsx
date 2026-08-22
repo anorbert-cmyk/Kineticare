@@ -2,7 +2,8 @@ import Link from 'next/link'
 
 import type { Category, Post, User } from '../../payload-types'
 import { estimateReadingMinutes } from '../../lib/reading-time'
-import { absoluteUrl, articleJsonLd, breadcrumbJsonLd, resolveOgImageUrl } from '../../lib/seo'
+import { absoluteUrl, breadcrumbJsonLd, resolveOgImageUrl } from '../../lib/seo'
+import { postArticleJsonLd } from '../../lib/seo-cikk'
 import { Badge } from '../ui/Badge'
 import { Container } from '../ui/Container'
 import { Section } from '../ui/Section'
@@ -74,11 +75,19 @@ export function PostView({ post, related: relatedProp, showMeta = true }: PostVi
 
   return (
     <article>
+      {/* A cikk sémáját a KÖZÖS `postArticleJsonLd` adja — ugyanaz a függvény,
+          amit az élő cikkoldal (`PostArticle`) hív. A régi `articleJsonLd`
+          hívás azért került ki innen, mert így a repóban két, egymástól
+          eltérő Article-séma élt: ez a komponens `Article` típust adott,
+          `MedicalWebPage` nélkül, tehát a `reviewedBy`/`lastReviewed` sosem
+          lett volna érvényes rajta. A bemenetek ugyanazok, amiket a
+          `PostArticle` is átad — annyi, amennyit ez a komponens ismer: a
+          látható byline neve és a megosztási kép. */}
       <JsonLd
-        data={articleJsonLd({
+        data={postArticleJsonLd({
           post,
           path: `/blog/${post.slug}`,
-          ...(author ? { authorName: author } : {}),
+          ...(author ? { author: { name: author } } : {}),
           imageUrl: resolveOgImageUrl(post),
         })}
       />

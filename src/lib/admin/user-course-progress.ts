@@ -217,11 +217,17 @@ export function buildUserProgressRows(input: BuildUserProgressRowsInput): UserPr
       enrollments,
       progressRows: rowsByProduct.get(productId) ?? [],
     })
+    // A nevező a KÖZÖS szabály szerint az ELINDÍTHATÓ leckék száma (ugyanaz a
+    // `playable` szűrés, amit a `summarizeCurriculum` használ). A 0-t nem
+    // nyeljük le: a cella ebből tudja megkülönböztetni a „még nincs tananyag"
+    // esetet a valódi 0%-tól (user-progress-contract.ts, `lessonCount`).
+    const lessonCount = curriculum.lessons.filter((lesson) => lesson.playable).length
     for (const student of stats.students) {
       entriesByUser.get(student.userId)?.push({
         productId,
         percent: student.percent,
         status: student.status,
+        lessonCount,
       })
     }
   }

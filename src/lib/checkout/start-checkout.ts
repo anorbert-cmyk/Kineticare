@@ -382,7 +382,9 @@ async function assertNoDuplicatePurchase(
     overrideAccess: true,
   } as unknown as Parameters<Payload['find']>[0])
   if (paidOrders.totalDocs > 0) {
-    throw new CheckoutError(409, 'Ezt a terméket már megvásároltad — a kurzust a fiókodban éred el.')
+    // §3.1.1: a kvirtmínusz magyar szövegben nem írásjel. A két állítás két
+    // mondat (`docs/gomb-inventar.md` §7 jóváhagyott cseréje).
+    throw new CheckoutError(409, 'Ezt a kurzust már megvásároltad. A fiókodban éred el.')
   }
 
   // Csak a Barion-fizetési ablakban (default 30 perc) lévő payment_pending

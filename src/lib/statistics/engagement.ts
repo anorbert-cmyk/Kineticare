@@ -31,6 +31,20 @@ export interface CourseEngagementRow {
   completed: number
   /** Akik megvették (hozzáférnek), de egy leckét sem jelöltek késznek. */
   notStarted: number
+  /**
+   * A kurzus ELINDÍTHATÓ leckéinek száma — a százalékok nevezője.
+   *
+   * ═══ MIÉRT KELL A FELÜLETNEK ═══
+   * A lecke `status` mezőjének alapértelmezése `processing`, ezért egy frissen
+   * feltöltött kurzusnál ez 0. A közös összesítő ilyenkor — helyesen, nullával
+   * osztás nélkül — mindenkit `nem-kezdte` állapotba sorol, a tábla viszont
+   * ebből azt állította, hogy a hozzáférők egyike sem kezdte el, sőt NÉV
+   * SZERINT fel is sorolta őket. Ez hamis állítás konkrét emberekről (köztük
+   * olyanokról, akik a kurzust korábban végignézték), ezért a megjelenítés
+   * ezt a 0-t külön állapotként kezeli — a mag (`buildCourseProgressStats`)
+   * változatlan marad.
+   */
+  totalLessons: number
   /** A hozzáférők százalékainak átlaga, egészre kerekítve (0–100). */
   averagePercent: number
   /** Befejezők aránya a hozzáférőkhöz mérve (0–100). */
@@ -195,6 +209,10 @@ export function buildCourseEngagementRow(input: CourseEngagementInput): CourseEn
     started: stats.totals.started,
     completed: stats.totals.completed,
     notStarted: stats.totals.notStarted,
+    // A nevező a KÖZÖS szabály szerinti `playable` leckeszám — ugyanaz a
+    // szűrés, amit a `summarizeCurriculum` és a kurzuslap `meta.totalLessons`
+    // mezője használ, tehát a két felület nem tud szétcsúszni.
+    totalLessons: input.curriculum.lessons.filter((lesson) => lesson.playable).length,
     averagePercent: stats.totals.averagePercent,
     completionRateOfEnrolled: stats.totals.completionRateOfEnrolled,
     completionRateOfStarted: stats.totals.completionRateOfStarted,
