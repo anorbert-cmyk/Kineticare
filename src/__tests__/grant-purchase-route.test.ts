@@ -1,6 +1,7 @@
 import type { Payload } from 'payload'
 import { describe, expect, it, vi } from 'vitest'
 
+import { ACCESS_EXPIRED_GRANT_MESSAGE } from '../lib/grant-purchase'
 import { createGrantPurchaseHandler } from '../lib/grant-purchase-route'
 
 /**
@@ -17,16 +18,27 @@ const EMAIL = 'vevo@example.test'
 const SKU = 'DEMO-KEZREHAB-001'
 const URL = 'http://localhost:3000/api/admin/grant-purchase'
 
+interface PaidOrderSeed {
+  createdAt: string
+  productId?: number
+}
+
 interface MockOptions {
   authUser?: { id: number; email?: string; role: string } | null
   userExists?: boolean
   productExists?: boolean
   purchases?: number[]
+  accessDurationDays?: number | null
+  paidOrders?: PaidOrderSeed[]
 }
 
 function createMockPayload(options: MockOptions = {}) {
   const user = { id: 7, email: EMAIL, purchases: options.purchases ?? [] }
-  const product = { id: 42, sku: SKU }
+  const product = {
+    id: 42,
+    sku: SKU,
+    accessDurationDays: options.accessDurationDays ?? null,
+  }
   const updates: Array<{ collection: string; data: Record<string, unknown> }> = []
 
   const payload = {
@@ -46,6 +58,15 @@ function createMockPayload(options: MockOptions = {}) {
         return (options.productExists ?? true)
           ? { docs: [product], totalDocs: 1 }
           : { docs: [], totalDocs: 0 }
+      }
+      if (collection === 'orders') {
+        const docs = (options.paidOrders ?? []).map((order, index) => ({
+          id: 1000 + index,
+          status: 'paid' as const,
+          createdAt: order.createdAt,
+          items: [{ product: order.productId ?? product.id }],
+        }))
+        return { docs, totalDocs: docs.length }
       }
       return { docs: [], totalDocs: 0 }
     }),
@@ -143,6 +164,22 @@ describe('grant-purchase route — jogosultság-mátrix', () => {
     expect(response.status).toBe(200)
     expect(body.status).toBe('already-had')
     expect(body.message).toBe('Már hozzáfér ehhez a kurzushoz.')
+    expect(updates).toHaveLength(0)
+  })
+
+  it('409 access-expired: lejárt hozzáférés, magyar üzenet, nincs írás', async () => {
+    const { handler, updates } = handlerFor({
+      purchases: [42],
+      accessDurationDays: 30,
+      paidOrders: [{ createdAt: '2020-01-01T00:00:00.000Z' }],
+    })
+
+    const response = await handler(postRequest(VALID_BODY))
+    const body = (await response.json()) as { error: string; status?: string }
+
+    expect(response.status).toBe(409)
+    expect(body.error).toBe(ACCESS_EXPIRED_GRANT_MESSAGE)
+    expect(body.error).toContain('lejárt')
     expect(updates).toHaveLength(0)
   })
 })
