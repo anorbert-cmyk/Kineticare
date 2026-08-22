@@ -53,14 +53,17 @@ import { budapestDateString, isIsoDateString } from './xml'
  *    megfogja az ismételt beküldést (71/152-es hibakóddal).
  * 3. szamlaKulsoAzon = `${orderNumber}-HELYESBITO-<refund-sorszám>`: ez a
  *    VISSZAKERESÉS kulcsa (xmlszamlapdf-lekérdezés), NEM önálló duplikáció-
- *    védelem — a hivatalos dokumentáció ilyen hatást nem ígér. A retry előtti
- *    és a 71/152 utáni lekérdezés ezzel dönti el, létezik-e már a bizonylat.
+ *    védelem — a hivatalos dokumentáció ilyen hatást nem ígér. A beküldés
+ *    ELŐTTI lekérdezés (K4) a duplikáció-kapu: nemcsak ugyanazon seq
+ *    újrapróbálását fogja, hanem a más seq-es maradék jobot is (pl. seq=1
+ *    retry, miután a seq=2 már kiállt). A 71/152 utáni feloldás ugyanezzel
+ *    a kulccsal dönti el, létezik-e már a bizonylat.
  *
  * Kísérlet-plafon (A14/F1): a beküldés-számláló BIZONYLAT-szintű, azaz a
  * refund-sorszámhoz kulcsolt (correctiveInvoiceAttempts +
  * correctiveInvoiceAttemptsSeq). Rendelés-szintű számlálóval több részrefund
- * után a KÉSŐBBI bizonylat jogtalanul „kimerült"-re futna, és új seq-nél
- * értelmetlen retry-lookup indulna egy még nem létező kulcsra.
+ * után a KÉSŐBBI bizonylat jogtalanul „kimerült"-re futna. A previousAttempts
+ * CSAK a plafonhoz kell — a lekérdezés ettől függetlenül mindig lefut.
  */
 
 export const CORRECTIVE_KULSO_AZON_INFIX = '-HELYESBITO-'
@@ -186,7 +189,8 @@ export function isRetryableCorrectiveError(error: unknown): boolean {
  *   → 'failed' (NEM dob: emberi pótlás kell, az újrapróbálás nem segít);
  * - retryable provider/timeout-hiba → THROW (a corrective-invoice-issue job
  *   újrapróbálja; az újrabeküldést a bizonylat-szintű kísérlet-plafon fékezi,
- *   és minden ismétlés ELŐTT kulsoAzon-lekérdezés fut).
+ *   és minden beküldés ELŐTT kulsoAzon-lekérdezés fut — K4: nemcsak ugyanazon
+ *   seq retryjén, hanem más seq-es maradék jobon is).
  */
 export async function issueCorrectiveInvoiceForOrder(
   order: Order,
@@ -274,8 +278,9 @@ export async function issueCorrectiveInvoiceForOrder(
   // A14/F1: perzisztens kísérlet-plafon a helyesbítő-beküldésekre is —
   // BIZONYLAT-szinten. A számláló csak akkor a mienk, ha ugyanahhoz a
   // refund-sorszámhoz tartozik; új seq friss számlálóval indul (különben egy
-  // korábbi bizonylat kimerült kerete blokkolná a következőt, és értelmetlen
-  // retry-lookup futna egy még nem létező kulcsra).
+  // korábbi bizonylat kimerült kerete blokkolná a következőt). A
+  // previousAttempts CSAK a plafonhoz kell — a lekérdezés ettől függetlenül
+  // mindig lefut (K4: más seq-es maradék job anti-duplikáció kapuja).
   const attemptsSeq = order.correctiveInvoiceAttemptsSeq ?? 0
   const previousAttempts =
     attemptsSeq === deps.refundSeq ? (order.correctiveInvoiceAttempts ?? 0) : 0
@@ -359,15 +364,17 @@ export async function issueCorrectiveInvoiceForOrder(
   }
 
   try {
-    // A12: újrapróbáláskor a beküldés megismétlése ELŐTT lekérdezés — a
-    // „kérés elment, válasz elveszett" esetben a bizonylat már létezhet.
-    // A lekérdezés hibája szándékosan propagál (bizonytalan állapotban nem
-    // szabad vakon újra beküldeni), és NEM növeli a kísérletszámot (F10).
-    if (previousAttempts > 0) {
-      const found = await lookup(kulsoAzon, config)
-      if (found) {
-        return await adoptExisting(found.szamlaszam, 'retry-elotti lekerdezes')
-      }
+    // K4: a lekérdezés MINDIG lefut a beküldés (attempts-növelés / POST)
+    // előtt — nem csak ugyanazon seq újrapróbálásakor. A „kérés elment,
+    // válasz elveszett" mellett ez a kapu a más seq-es maradék jobot is
+    // megfogja (pl. seq=1 retry, miután a seq=2 már kiállt): találatnál
+    // átvesszük a meglévő bizonylatot, vak POST nincs. A previousAttempts
+    // csak a plafonhoz kell. A lekérdezés hibája szándékosan propagál
+    // (bizonytalan állapotban nem szabad vakon újra beküldeni), és NEM
+    // növeli a kísérletszámot (F10).
+    const found = await lookup(kulsoAzon, config)
+    if (found) {
+      return await adoptExisting(found.szamlaszam, 'bekuldes-elotti lekerdezes')
     }
 
     attempts = previousAttempts + 1

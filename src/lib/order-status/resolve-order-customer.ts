@@ -5,6 +5,7 @@ import { withAdvisoryLock } from '../advisory-lock'
 import { maskEmail } from '../email/mask'
 import type { Logger } from '../logger'
 import { generateInitialPassword } from '../security/initial-password'
+import { isGuestBindableAccount } from './guest-bindable-account'
 
 /**
  * FIÓK-FELOLDÁS a fizetés után (vendég-vásárlás, tulajdonosi döntés 2026-08-15).
@@ -15,10 +16,11 @@ import { generateInitialPassword } from '../security/initial-password'
  * modul a paid-átmenet magjából fut le, és az e-mail alapján ELDÖNTI, melyik
  * fiók kapja a rendelést:
  *
- *  - ha az e-mailhez MÁR VAN fiók → a rendelés ahhoz kötődik. A fiók nevét,
- *    jelszavát, szerepkörét és meglévő jogosultságait SOSEM írjuk felül —
- *    egy vendégként leadott rendelés nem módosíthat meglévő fiókot (a
- *    hozzáférés-beírás a `grantPurchases` missing-only logikáján megy);
+ *  - ha az e-mailhez MÁR VAN aktiválatlan `customer` fiók (rendszer-létrehozott)
+ *    → a rendelés ahhoz kötődik. A fiók nevét, jelszavát, szerepkörét SOSEM
+ *    írjuk felül. Aktivált vevő / staff / owner: NEM kötünk (K2) — a paid
+ *    átmenet hangosan elbukik, a hozzáférést kézi grant adja, nem az
+ *    előregisztrált idegen fiók;
  *  - ha még NINCS fiók → `customer` szerepkörrel létrejön, véletlen és
  *    eldobható kezdőjelszóval (a Payload jelszó nélkül nem hoz létre
  *    auth-rekordot). A vevő a visszaigazoló levél jelszó-beállító linkjével
@@ -176,6 +178,11 @@ export async function resolveOrderCustomer(input: {
     async (): Promise<{ user: User; created: boolean }> => {
       const existing = await findUserByEmail(payload, email)
       if (existing) {
+        if (!isGuestBindableAccount(existing)) {
+          throw new Error(
+            'a vendég-rendelés aktivált vagy nem-customer fiókhoz nem köthető — a vevő jelentkezzen be',
+          )
+        }
         return { user: existing, created: false }
       }
 
@@ -218,6 +225,11 @@ export async function resolveOrderCustomer(input: {
         // ütközik. Ilyenkor a MÁSIK szál fiókját fogadjuk el — duplikátum nem jöhet létre.
         const raced = await findUserByEmail(payload, email)
         if (raced) {
+          if (!isGuestBindableAccount(raced)) {
+            throw new Error(
+              'a vendég-rendelés aktivált vagy nem-customer fiókhoz nem köthető — a vevő jelentkezzen be',
+            )
+          }
           log.warn('fiók-feloldás: a fiókot közben egy párhuzamos szál hozta létre — azt használjuk', {
             cimzett: maskEmail(email),
             userId: raced.id,

@@ -10,6 +10,7 @@ import {
   isAdminFieldAccess,
   isDocumentOwner,
   isOwnerFieldAccess,
+  denyFieldWrite,
   streamAssetReadAccess,
 } from '../access'
 import { courseModulesField } from '../fields/course-modules'
@@ -957,6 +958,8 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       index: true,
       access: {
         read: isOwnerFieldAccess,
+        create: denyFieldWrite,
+        update: denyFieldWrite,
       },
       admin: {
         description: 'A Barion oldali fizetés azonosítója — hibakereséshez.',
@@ -966,6 +969,10 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       name: 'barionPaymentRequestId',
       type: 'text',
       label: 'Barion kérésazonosító',
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
     },
     {
       name: 'invoiceNumber',
@@ -973,12 +980,18 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       label: 'Számla sorszáma',
       access: {
         read: isOwnerFieldAccess,
+        create: denyFieldWrite,
+        update: denyFieldWrite,
       },
     },
     {
       name: 'invoicePdfUrl',
       type: 'text',
       label: 'Számla PDF linkje',
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
     },
     {
       name: 'invoiceStatus',
@@ -991,8 +1004,13 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
         { label: 'Kiállítva', value: 'issued' },
         { label: 'Sikertelen', value: 'failed' },
       ],
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
       admin: {
         description: 'A számlázás állapota. A rendszer állítja — ne írd át.',
+        readOnly: true,
       },
     },
     {
@@ -1003,6 +1021,10 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       type: 'number',
       defaultValue: 0,
       label: 'Számla-kísérletek száma',
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
       admin: {
         readOnly: true,
         description:
@@ -1013,6 +1035,10 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       name: 'invoiceLastError',
       type: 'text',
       label: 'Számlázás utolsó hibája',
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
       admin: {
         readOnly: true,
         description: 'Az utolsó sikertelen számlakiállítási kísérlet hibaüzenete — hibakereséshez.',
@@ -1026,6 +1052,10 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       name: 'invoiceCompletionDate',
       type: 'text',
       label: 'Számla teljesítési dátuma',
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
       admin: {
         readOnly: true,
         description:
@@ -1047,8 +1077,13 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
         { label: 'Stornózva', value: 'storned' },
         { label: 'Sikertelen', value: 'failed' },
       ],
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
       admin: {
         description: 'A stornó-számla állapota. A rendszer állítja — ne írd át.',
+        readOnly: true,
       },
     },
     {
@@ -1059,6 +1094,8 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       label: 'Stornó-számla sorszáma',
       access: {
         read: isOwnerFieldAccess,
+        create: denyFieldWrite,
+        update: denyFieldWrite,
       },
     },
     {
@@ -1066,6 +1103,10 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       type: 'number',
       defaultValue: 0,
       label: 'Stornó-kísérletek száma',
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
       admin: {
         readOnly: true,
         description:
@@ -1076,6 +1117,10 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       name: 'stornoLastError',
       type: 'text',
       label: 'Stornó utolsó hibája',
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
       admin: {
         readOnly: true,
         description: 'Az utolsó sikertelen stornó-kísérlet hibaüzenete — hibakereséshez.',
@@ -1095,8 +1140,13 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
         { label: 'Kiállítva', value: 'issued' },
         { label: 'Sikertelen', value: 'failed' },
       ],
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
       admin: {
         description: 'A helyesbítő (módosító) számla állapota. A rendszer állítja — ne írd át.',
+        readOnly: true,
       },
     },
     {
@@ -1107,6 +1157,8 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       label: 'Helyesbítő számla sorszáma',
       access: {
         read: isOwnerFieldAccess,
+        create: denyFieldWrite,
+        update: denyFieldWrite,
       },
     },
     {
@@ -1118,6 +1170,10 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       type: 'number',
       defaultValue: 0,
       label: 'Helyesbített visszatérítés sorszáma',
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
       admin: {
         readOnly: true,
         description:
@@ -1130,6 +1186,10 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       type: 'number',
       defaultValue: 0,
       label: 'Helyesbítő-kísérletek száma',
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
       admin: {
         readOnly: true,
         description:
@@ -1140,6 +1200,10 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       name: 'correctiveInvoiceLastError',
       type: 'text',
       label: 'Helyesbítő utolsó hibája',
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
       admin: {
         readOnly: true,
         description: 'Az utolsó sikertelen helyesbítő-kísérlet hibaüzenete — hibakereséshez.',
@@ -1154,6 +1218,10 @@ const ordersCollectionOverride: CollectionOverride = ({ defaultCollection }) => 
       type: 'number',
       defaultValue: 0,
       label: 'Helyesbítő-kísérletek refund-sorszáma',
+      access: {
+        create: denyFieldWrite,
+        update: denyFieldWrite,
+      },
       admin: {
         readOnly: true,
         description:

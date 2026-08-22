@@ -11,8 +11,7 @@ import type { Order, User } from '../../payload-types'
  * Amit ez a fájl bizonyít:
  *  1. ÚJ e-mail → `customer` szerepkörű fiók jön létre, jelszó-beállítás
  *     függőben jelzővel, és a rendelés hozzá kötődik;
- *  2. LÉTEZŐ e-mail → NINCS duplikátum és NINCS felülírás (a név, a szerepkör
- *     és a jelszó érintetlen marad);
+ *  2. LÉTEZŐ aktivált e-mail → NEM köt (K2); aktiválatlan customer köt;
  *  3. PÁRHUZAMOS callback ugyanarra az e-mailre → PONTOSAN EGY fiók
  *     (idempotencia, e-mail-szintű advisory-zár alatt);
  *  4. bejelentkezett vásárlásnál csak beolvasás történik (alreadyLinked);
@@ -191,7 +190,7 @@ describe('resolveOrderCustomer — vendég-vásárlás fiók-feloldása', () => 
     expect(lockState.keys).toEqual([`order-customer:${EMAIL}`])
   })
 
-  it('LÉTEZŐ e-mail: nincs duplikátum és nincs felülírás (név/szerepkör/jelszó érintetlen)', async () => {
+  it('LÉTEZŐ aktivált fiók (staff/customer): NEM köt, nincs új fiók (K2)', async () => {
     const { payload, state } = createFakePayload([
       {
         id: 7,
@@ -203,25 +202,34 @@ describe('resolveOrderCustomer — vendég-vásárlás fiók-feloldása', () => 
       },
     ])
 
-    const result = await resolveOrderCustomer({ payload, order: guestOrder(), log })
-
-    expect(result).toMatchObject({
-      userId: 7,
-      created: false,
-      alreadyLinked: false,
-      // Van saját jelszava → NEM jár jelszó-beállító link.
-      passwordSetupPending: false,
-    })
+    await expect(resolveOrderCustomer({ payload, order: guestOrder(), log })).rejects.toThrow(
+      /aktivált vagy nem-customer/,
+    )
     expect(state.creates).toHaveLength(0)
-    // A tulajdonosi fixtúra-fiókon kívül nem keletkezett új rekord.
-    expect(state.users).toHaveLength(2)
+    expect(state.orderUpdates).toHaveLength(0)
     expect(state.users[1]).toMatchObject({
       name: 'Eredeti Név',
       role: 'staff',
       password: 'DUMMY-NEM-VALODI-HASH',
     })
-    // Fiók-módosítás egyáltalán nem történt — csak a rendelés kötése.
-    expect(state.orderUpdates).toEqual([{ id: 101, data: { customer: 7 } }])
+  })
+
+  it('LÉTEZŐ aktivált customer: NEM köt (K2)', async () => {
+    const { payload, state } = createFakePayload([
+      {
+        id: 8,
+        email: EMAIL,
+        name: 'Meglévő Vevő',
+        role: 'customer',
+        passwordSetupPending: false,
+      },
+    ])
+
+    await expect(resolveOrderCustomer({ payload, order: guestOrder(), log })).rejects.toThrow(
+      /aktivált vagy nem-customer/,
+    )
+    expect(state.creates).toHaveLength(0)
+    expect(state.orderUpdates).toHaveLength(0)
   })
 
   it('LÉTEZŐ, de még AKTIVÁLATLAN fiók (import/korábbi vendég-vásárlás) → továbbra is jár a jelszó-beállító link', async () => {

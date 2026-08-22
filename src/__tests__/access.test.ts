@@ -12,6 +12,7 @@ import {
   isSelfOrAdmin,
   isStaffOrOwner,
   isStaffOrOwnerFieldAccess,
+  denyFieldWrite,
   publishedOrAdmin,
 } from '../access'
 import { visibleMenusOrAdmin } from '../access/menus-visibility'
@@ -419,6 +420,40 @@ describe('collection access bekötés a végleges configban', () => {
       const field = findField(orders as CollectionConfig, name)
       expect(field, name).toBeDefined()
       expect(field?.access?.update, name).toBe(isOwnerFieldAccess)
+    }
+  })
+
+  it('orders: számla/stornó/helyesbítő mezőket staff és owner REST-en sem ír (K5)', async () => {
+    const config = await configPromise
+    const orders = (config.collections ?? []).find((c) => c.slug === 'orders') as
+      | CollectionConfig
+      | undefined
+    expect(orders).toBeDefined()
+
+    const locked = [
+      'invoiceStatus',
+      'invoiceNumber',
+      'invoicePdfUrl',
+      'invoiceAttempts',
+      'invoiceLastError',
+      'invoiceCompletionDate',
+      'stornoStatus',
+      'stornoNumber',
+      'stornoAttempts',
+      'stornoLastError',
+      'correctiveInvoiceStatus',
+      'correctiveInvoiceNumber',
+      'correctiveInvoiceSeq',
+      'correctiveInvoiceAttempts',
+      'correctiveInvoiceLastError',
+      'correctiveInvoiceAttemptsSeq',
+    ]
+    for (const name of locked) {
+      const field = findField(orders as CollectionConfig, name)
+      expect(field, name).toBeDefined()
+      expect(field?.access?.update, `${name} update`).toBe(denyFieldWrite)
+      expect(field?.access?.update?.(fieldAccessArgs(staff)), `${name} staff`).toBe(false)
+      expect(field?.access?.update?.(fieldAccessArgs(owner)), `${name} owner`).toBe(false)
     }
   })
 

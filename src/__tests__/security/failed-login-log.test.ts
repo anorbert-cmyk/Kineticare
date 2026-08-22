@@ -7,11 +7,11 @@ import { Users } from '../../collections/Users'
  * A sikertelen bejelentkezés naplózása (afterError hook).
  *
  * A hook VISELKEDÉSE — mikor és mit naplóz — a szerződés: csak a `/login`
- * útvonal auth-hibáira szólal meg, jelszót sosem ír ki. A naplózott IP-nek a
- * kliens címének kell lennie: az `x-forwarded-for` teljes láncának naplózása
- * félrevezető, mert a saját proxy-rétegünk IP-jei is bekerülnek, és ugyanaz a
- * kliens kérésenként más értékkel jelenik meg — így a brute-force-gyanús
- * bejegyzések IP szerinti összevetése eltörik.
+ * útvonal auth-hibáira szólal meg, jelszót sosem ír ki. A naplózott IP a
+ * MEGBÍZHATÓ hop (CF / az `x-forwarded-for` hátulról számított eleme, lásd
+ * src/lib/audit.ts) — nem a kliens által hamisítható első hop. A teljes lánc
+ * naplózása félrevezető lenne, és a brute-force-gyanús bejegyzések IP szerinti
+ * összevetése eltörne.
  */
 
 type FailedLoginArgs = {
@@ -55,13 +55,13 @@ const loginRequest = (headers: Record<string, string>): FailedLoginArgs['req'] =
 })
 
 describe('logFailedLogin — a naplózott IP', () => {
-  it('az x-forwarded-for lánc első (kliens-) elemét naplózza, nem a teljes láncot', () => {
+  it('az x-forwarded-for lánc MEGBÍZHATÓ (hátulról első) elemét naplózza, nem a hamisítható első hopot', () => {
     logFailedLogin({
       error: new AuthenticationError(),
       req: loginRequest({ 'x-forwarded-for': '203.0.113.7, 70.41.3.18, 150.172.238.178' }),
     })
 
-    expect(loggedContext()?.ip).toBe('203.0.113.7')
+    expect(loggedContext()?.ip).toBe('150.172.238.178')
   })
 
   it('x-forwarded-for hiányában az x-real-ip fejlécre esik vissza', () => {

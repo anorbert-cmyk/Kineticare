@@ -6,7 +6,7 @@ import {
   validatePasswordStrength,
 } from '../lib/security/password-policy'
 import { createLogger } from '../lib/logger'
-import { resolveClientIp } from '../lib/client-ip'
+import { resolveClientIp } from '../lib/audit'
 import { deleteCourseProgressOnParentDelete } from '../lib/course-progress/cleanup'
 import { grantFreeCoursesToUser } from '../lib/free-course-grant'
 import {
@@ -215,8 +215,7 @@ const logFailedLogin: CollectionAfterErrorHook = ({ error, req }) => {
     return
   }
   const email = typeof req.data?.email === 'string' ? req.data.email : undefined
-  // Az x-forwarded-for a teljes proxy-láncot tartalmazza — csak az első,
-  // kliens-oldali elem naplózandó (lásd src/lib/client-ip.ts).
+  // Megbízható kliens-IP (CF / x-forwarded-for hátulról; lásd src/lib/audit.ts).
   const ip = resolveClientIp(req.headers) ?? 'ismeretlen'
   logger.warn('Sikertelen bejelentkezés', {
     email,

@@ -3,8 +3,10 @@ import type { Payload } from 'payload'
 import type { Order } from '../payload-types'
 import { isSzamlazzEnabled } from './szamlazz'
 import { ORDER_MAINTENANCE_QUEUE } from '../jobs/queues'
-import { INVITE_TOKEN_TTL_MS } from './customer-import/invite'
-import { INVITE_TOKEN_TTL_DAYS } from './customer-import/send-invites'
+import {
+  GUEST_ACTIVATION_TOKEN_TTL_DAYS,
+  GUEST_ACTIVATION_TOKEN_TTL_MS,
+} from './security/activation-token'
 import { sendMail, type SendResult } from './email'
 import { maskEmail } from './email/mask'
 import { orderConfirmationEmail, type OrderConfirmationAccount } from './email/templates/order'
@@ -31,9 +33,10 @@ import { buildPasswordResetUrl } from './password-reset-url'
  * jelszót (most létrehozott vagy korábban rendszer által létrehozott fiók), a
  * levél tartalmazza a jelszó-beállító linket. A tokent NEM egy párhuzamos
  * rendszer adja, hanem a Payload SAJÁT jelszó-visszaállítója
- * (`payload.forgotPassword`, `disableEmail: true`) — ugyanaz a mechanizmus,
- * amit a vásárló-import aktiváló levele használ (src/lib/customer-import/invite.ts),
- * ugyanazzal a 30 napos élettartammal és ugyanazzal a fogadó oldallal.
+ * (`payload.forgotPassword`, `disableEmail: true`) — ugyanaz a mechanizmus
+ * és ugyanaz a fogadó oldal, amit a vásárló-import aktiváló levele használ
+ * (src/lib/customer-import/invite.ts). A vendég-vásárlás tokenje 7 napig él
+ * (`GUEST_ACTIVATION_TOKEN_TTL_*`); az importé továbbra is 30 nap.
  *
  * A LINK TITOK: sem a token, sem a teljes link SOHA nem kerül naplóba (a
  * címzett is csak maszkolva) — az invite.ts szabálya itt is érvényes.
@@ -157,7 +160,7 @@ async function defaultActivationUrl(
       collection: 'users',
       data: { email: input.email },
       disableEmail: true,
-      expiration: INVITE_TOKEN_TTL_MS,
+      expiration: GUEST_ACTIVATION_TOKEN_TTL_MS,
     })
     if (typeof token !== 'string' || token === '') {
       log.warn('aktiváló link nem készült el (a felhasználó nem található)', {
@@ -244,7 +247,7 @@ export async function onOrderPaid(deps: OnOrderPaidDeps): Promise<void> {
           : {
               kind: 'password-setup',
               activationUrl,
-              expiresInDays: INVITE_TOKEN_TTL_DAYS,
+              expiresInDays: GUEST_ACTIVATION_TOKEN_TTL_DAYS,
               email: accountEmail,
             }
     } else if (deps.account && !deps.account.alreadyLinked) {

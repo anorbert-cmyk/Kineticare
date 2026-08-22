@@ -14,9 +14,11 @@ import { writeOrderInvoicingState } from './order-state'
 import {
   SzamlazzApiError,
   type IssueInvoiceResult,
+  type IssueStornoResult,
   type SzamlazzClientConfig,
   type SzamlazzVatMode,
 } from './types'
+import type { IssueStornoForOrderDeps } from './storno'
 
 /**
  * Számla-XML építés és számlakiállítás a paid rendeléshez (T-024/W4-01).
@@ -182,10 +184,7 @@ export function computeLineAmounts(
     })
   }
   const negativeAllowed = options.allowNegative === true
-  if (
-    !Number.isFinite(item.bruttoEgysegar) ||
-    (!negativeAllowed && item.bruttoEgysegar < 0)
-  ) {
+  if (!Number.isFinite(item.bruttoEgysegar) || (!negativeAllowed && item.bruttoEgysegar < 0)) {
     throw new SzamlazzApiError({
       message: `A számlatétel bruttó egységára nem értelmezhető (${item.bruttoEgysegar}); számot kell megadni.`,
       kind: 'invalid_data',
@@ -457,6 +456,15 @@ export interface IssueInvoiceForOrderDeps {
   ) => Promise<InvoiceLookupResult | null>
   /** A kelt-dátum felülírása (teszteléshez); alapból a mai dátum. */
   issueDate?: string
+  /**
+   * Injektálható stornó-kiállítás (teszteléshez); alapból a valódi
+   * issueStornoForOrder. A refund-verseny (W7) utáni inline stornóhoz kell:
+   * ha a számla kiállt, de közben a rendelés refunded lett, a stornót ITT
+   * állítjuk ki. queueStornoIssueJob TILOS (W5 — a sorbaállítás csapda).
+   * invoice.ts NEM importál a refund-orderből (ciklus: a refund a
+   * szamlazz-modulból húz).
+   */
+  issueStorno?: (order: Order, deps?: IssueStornoForOrderDeps) => Promise<IssueStornoResult>
 }
 
 /**
@@ -474,7 +482,10 @@ export interface IssueInvoiceForOrderDeps {
 export async function issueInvoiceForOrder(
   deps: IssueInvoiceForOrderDeps,
 ): Promise<IssueInvoiceResult> {
-  const log = (deps.logger ?? rootLogger).child({ module: 'szamlazz-invoice', orderId: deps.orderId })
+  const log = (deps.logger ?? rootLogger).child({
+    module: 'szamlazz-invoice',
+    orderId: deps.orderId,
+  })
   const config = deps.config ?? getSzamlazzConfig()
 
   if (!config.enabled) {
@@ -498,7 +509,10 @@ export async function issueInvoiceForOrder(
     orderLog.info('a rendeléshez már kiállították a számlát — idempotens no-op', {
       invoiceNumber: order.invoiceNumber ?? null,
     })
-    return { outcome: 'already-issued', ...(order.invoiceNumber ? { invoiceNumber: order.invoiceNumber } : {}) }
+    return {
+      outcome: 'already-issued',
+      ...(order.invoiceNumber ? { invoiceNumber: order.invoiceNumber } : {}),
+    }
   }
 
   /**
@@ -537,7 +551,9 @@ export async function issueInvoiceForOrder(
 
   const items = itemsFromOrder(order)
   if (!items) {
-    orderLog.error('RIASZTÁS: a rendelés-tételekből hiányzik az ár-snapshot — számla nem állítható ki')
+    orderLog.error(
+      'RIASZTÁS: a rendelés-tételekből hiányzik az ár-snapshot — számla nem állítható ki',
+    )
     await writeOrderInvoicingState(deps.payload, deps.orderId, { invoiceStatus: 'failed' })
     return { outcome: 'failed', reason: 'hiányzó tétel ár-snapshot' }
   }
@@ -578,6 +594,55 @@ export async function issueInvoiceForOrder(
    */
   let attempts = previousAttempts
   const lookup = deps.queryByKulsoAzon ?? queryInvoiceByKulsoAzon
+  const rereadOrder = async (): Promise<Order | null> => {
+    return (await deps.payload.findByID({
+      collection: 'orders',
+      id: deps.orderId,
+      depth: 0,
+      overrideAccess: true,
+    })) as Order | null
+  }
+  /**
+   * W7: a számla kiállt (vagy átvettük), de a refund közben refunded-re
+   * állíthatta a rendelést üres invoiceNumberrel — stornó nem indulna.
+   * Itt, a számla számának rögzítése UTÁN újraolvasunk, és ha kell, inline
+   * stornózunk. A lockot NEM tartjuk HTTP fölött (CLAUDE.md: hosszú nyitott
+   * tranzakció fagyasztja az írásokat). A stornó hibája NEM billenti a
+   * számla-kimenetet failed-re.
+   */
+  const stornoIfRefundedAfterIssue = async (invoiceNumber: string): Promise<void> => {
+    const latest = await rereadOrder()
+    if (!latest) {
+      return
+    }
+    const recordedInvoice = latest.invoiceNumber?.trim() || invoiceNumber
+    const hasStorno = Boolean(latest.stornoNumber?.trim()) || latest.stornoStatus === 'storned'
+    if (latest.status !== 'refunded' || !recordedInvoice || hasStorno) {
+      return
+    }
+    const issueStorno = deps.issueStorno ?? (await import('./storno')).issueStornoForOrder
+    const orderForStorno: Order = { ...latest, invoiceNumber: recordedInvoice }
+    try {
+      const stornoResult = await issueStorno(orderForStorno, {
+        payload: deps.payload,
+        config,
+        logger: orderLog,
+        reason: 'a számla a refund után állt ki — automatikus stornó',
+      })
+      if (stornoResult.outcome === 'failed') {
+        orderLog.error(
+          'RIASZTÁS: a számla kiállt, de a rendelés közben refunded lett, és a stornó nem készült el',
+          { invoiceNumber: recordedInvoice, reason: stornoResult.reason ?? null },
+        )
+      }
+    } catch (stornoError) {
+      const message = stornoError instanceof Error ? stornoError.message : String(stornoError)
+      orderLog.error(
+        'RIASZTÁS: a számla kiállt, de a rendelés közben refunded lett, és a stornó hibával állt le',
+        { invoiceNumber: recordedInvoice, error: message },
+      )
+    }
+  }
   /** A meglévő bizonylat átvétele (lekérdezés-találat vagy 71/152-feloldás). */
   const adoptExisting = async (szamlaszam: string, via: string): Promise<IssueInvoiceResult> => {
     await writeOrderInvoicingState(deps.payload, deps.orderId, {
@@ -595,6 +660,7 @@ export async function issueInvoiceForOrder(
       via,
       attempts,
     })
+    await stornoIfRefundedAfterIssue(szamlaszam)
     return { outcome: 'issued', invoiceNumber: szamlaszam }
   }
 
@@ -609,6 +675,17 @@ export async function issueInvoiceForOrder(
       if (found) {
         return await adoptExisting(found.szamlaszam, 'retry-elotti lekerdezes')
       }
+    }
+
+    // W7: a kezdeti paid-ellenőrzés és a POST között a refund refunded-re
+    // állíthatja a rendelést. Zárolás NINCS a HTTP fölött — ehelyett
+    // közvetlenül a kísérlet-növelés / POST előtt újraolvasunk.
+    const latestBeforePost = await rereadOrder()
+    if (!latestBeforePost || latestBeforePost.status !== 'paid') {
+      orderLog.info('a rendelés státusza nem paid — számlakiállítás kihagyva', {
+        status: latestBeforePost?.status ?? null,
+      })
+      return { outcome: 'skipped', reason: 'a rendelés státusza nem paid' }
     }
 
     attempts = previousAttempts + 1
@@ -647,6 +724,7 @@ export async function issueInvoiceForOrder(
       ...(trustedPdfUrl ? { invoicePdfUrl: trustedPdfUrl } : {}),
     })
     orderLog.info('számla kiállítva', { invoiceNumber: result.szamlaszam, attempts })
+    await stornoIfRefundedAfterIssue(result.szamlaszam)
     return { outcome: 'issued', invoiceNumber: result.szamlaszam }
   } catch (error) {
     // 71/152 — „Már létező rendelésszám": nem hiba, hanem idempotencia-találat.

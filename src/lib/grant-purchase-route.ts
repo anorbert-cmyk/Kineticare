@@ -1,7 +1,7 @@
 import type { Payload } from 'payload'
 
 import { hasStaffOrOwnerRole } from '../access/roles'
-import { grantPurchase } from './grant-purchase'
+import { ACCESS_EXPIRED_GRANT_MESSAGE, grantPurchase } from './grant-purchase'
 import { logger } from './logger'
 import { generateRequestId, getRequestId } from './request-id'
 
@@ -26,6 +26,8 @@ import { generateRequestId, getRequestId } from './request-id'
  * - 400: hiányzó/érvénytelen email, kurzus-azonosító vagy indok
  * - 401/403: RBAC (fent)
  * - 404: ismeretlen felhasználó, illetve ismeretlen kurzus (külön üzenettel)
+ * - 409: a kurzus a purchases-ben van, de a hozzáférés lejárt — a manuális
+ *   grant önmagában nem hosszabbít
  * - 500: váratlan technikai hiba (naplózva requestId-vel)
  */
 export interface GrantPurchaseHandlerDeps {
@@ -101,7 +103,10 @@ export function createGrantPurchaseHandler(
       }
       const productIdOrSku = readRequiredString(body.productIdOrSku)
       if (!productIdOrSku) {
-        return Response.json({ error: 'Válassz kurzust a hozzáférés megadásához.' }, { status: 400 })
+        return Response.json(
+          { error: 'Válassz kurzust a hozzáférés megadásához.' },
+          { status: 400 },
+        )
       }
       const reason = readRequiredString(body.reason)
       if (!reason) {
@@ -138,6 +143,12 @@ export function createGrantPurchaseHandler(
           { status: 404 },
         )
       }
+      if (result.status === 'access-expired') {
+        return Response.json(
+          { error: ACCESS_EXPIRED_GRANT_MESSAGE, status: result.status },
+          { status: 409 },
+        )
+      }
 
       return Response.json(
         {
@@ -159,8 +170,7 @@ export function createGrantPurchaseHandler(
       })
       return Response.json(
         {
-          error:
-            'A hozzáférés megadása most nem sikerült. Próbáld újra néhány perc múlva.',
+          error: 'A hozzáférés megadása most nem sikerült. Próbáld újra néhány perc múlva.',
         },
         { status: 500 },
       )

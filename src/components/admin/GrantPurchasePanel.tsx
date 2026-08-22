@@ -26,6 +26,8 @@ const REQUEST_TIMEOUT_MS = 20_000
 
 /** §2.7 / A/9: „Kérjük" nélkül, a következő lépés kimondva (lásd RefundPanel). */
 const GENERIC_ERROR = 'A hozzáférés megadása most nem sikerült. Próbáld újra néhány perc múlva.'
+const ACCESS_EXPIRED_GRANT_MESSAGE =
+  'A hozzáférés lejárt. Új paid rendelés kell a megújításhoz. A manuális grant önmagában nem hosszabbít.'
 const NETWORK_ERROR = 'Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot, és próbáld újra.'
 const PRODUCTS_ERROR =
   'A kurzusok listája nem tölthető be. Frissítsd az oldalt, és nyisd meg újra a panelt.'
@@ -198,6 +200,14 @@ export function GrantPurchasePanel() {
         body = await response.json()
       } catch {
         body = null
+      }
+      const expiredStatus =
+        typeof body === 'object' &&
+        body !== null &&
+        (body as Record<string, unknown>).status === 'access-expired'
+      if (expiredStatus || response.status === 409) {
+        setErrorMessage(readServerError(body) ?? ACCESS_EXPIRED_GRANT_MESSAGE)
+        return
       }
       if (!response.ok) {
         setErrorMessage(readServerError(body) ?? GENERIC_ERROR)

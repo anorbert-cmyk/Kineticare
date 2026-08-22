@@ -2,6 +2,7 @@ import type { Payload } from 'payload'
 
 import type { User } from '../payload-types'
 import { auditLogStore, writeAuditLog } from './audit'
+import { resolveSingleCourseAccess } from './course-access-lookup'
 import { maskEmail } from './email/mask'
 import { logger, type Logger } from './logger'
 import { withUserPurchasesLock } from './user-purchases-lock'
@@ -24,16 +25,24 @@ import { withUserPurchasesLock } from './user-purchases-lock'
  *  - src/lib/grant-purchase-route.ts (POST /api/admin/grant-purchase, staff
  *    vagy owner jogosultsággal).
  *
- * IDEMPOTENS: ha a vevőnél már megvan a termék, a hívás `already-had`
- * eredménnyel tér vissza és NEM ír az adatbázisba. Csak a hiányzó terméket
- * fűzi a listához — meglévő jogosultságot sosem vesz el.
+ * IDEMPOTENS: ha a vevőnél már megvan a termék ÉS a hozzáférés él (vagy
+ * korlátlan), a hívás `already-had` eredménnyel tér vissza és NEM ír. Ha a
+ * termék a purchases-ben van, de a hozzáférés lejárt (`accessDurationDays` +
+ * utolsó paid rendelés), `access-expired` jön vissza: sem purchases-írás, sem
+ * ajándék paid rendelés (az nem hosszabbítana, számlát/Bariont viszont
+ * kockáztatna). Csak a hiányzó terméket fűzi a listához.
  *
  * A modul soha nem dob üzleti hibát: az ismeretlen felhasználó/termék is
  * strukturált eredmény (a hívó képezi HTTP-státuszra, illetve CLI-üzenetre).
  * Technikai hiba (DB) természetesen kibillen.
  */
 
-export type GrantPurchaseStatus = 'granted' | 'already-had' | 'user-not-found' | 'product-not-found'
+export type GrantPurchaseStatus =
+  'granted' | 'already-had' | 'access-expired' | 'user-not-found' | 'product-not-found'
+
+/** A lejárt hozzáférés őszinte üzenete — route, CLI és admin panel. */
+export const ACCESS_EXPIRED_GRANT_MESSAGE =
+  'A hozzáférés lejárt. Új paid rendelés kell a megújításhoz. A manuális grant önmagában nem hosszabbít.'
 
 /** A termék-hivatkozás feloldásának módja — a hívó hibaüzenetéhez. */
 export type ProductRefKind = 'id' | 'sku'
@@ -163,6 +172,37 @@ export async function grantPurchase(options: GrantPurchaseOptions): Promise<Gran
 
       const owned = new Set(userPurchaseIds(fresh).map(String))
       if (owned.has(String(product.id))) {
+        const durationDays = product.accessDurationDays
+        const hasFiniteDuration =
+          typeof durationDays === 'number' && Number.isFinite(durationDays) && durationDays > 0
+
+        if (hasFiniteDuration) {
+          const access = await resolveSingleCourseAccess({
+            payload,
+            userId: user.id,
+            product,
+            logger: log,
+          })
+          if (access.reason === 'expired') {
+            log.info('manuális hozzáférés: a hozzáférés lejárt — nem hosszabbít', {
+              ...audit,
+              userId: user.id,
+              productId: product.id,
+              sku: product.sku,
+              result: 'access-expired',
+            })
+            return {
+              status: 'access-expired' as const,
+              email,
+              productRef: productIdOrSku,
+              productRefKind,
+              userId: user.id,
+              productId: product.id,
+              productLabel,
+            }
+          }
+        }
+
         log.info('manuális hozzáférés: a termék már a vevőnél van — no-op', {
           ...audit,
           userId: user.id,
