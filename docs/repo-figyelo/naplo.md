@@ -17,6 +17,59 @@ Feldolgozott tartomány: <régi sha>..<új sha> (N commit)
 
 ---
 
+## 2026-08-21 — Teljes main Security Review
+
+Feldolgozott tartomány: `origin/main` HEAD `80cf258` (nem digest; Cursor
+Security Review subagent, P0 auth/fizetés/számla/stream/jobok).
+
+### Mi változott
+A Security Review **megerősítette az M-17-et (High)** és az **M-06-ot
+(Medium)**. Critical nincs. **M-10** a kódban javított (refund advisory-zár);
+a megfigyelés-fájl lezárva. Az ingyenes kurzus igénylés ugyanazzal az
+e-mail-kötéssel dolgozik, de claim-levelet küld — az M-17 a fizetős
+vendégút.
+
+### Mit jelent
+Nincs új, a Bugbotnál súlyosabb rés. A fizetésjóváhagyás GetState v4 +
+összeg-assert + advisory-zár. Runtime `confirmOrder` nincs.
+
+### Tiltott zóna érintve?
+Igen, 4. pont: az M-17 javítása access/auth, emberi döntés. 1–3 és 5 nem.
+
+### Következő figyelnivaló
+M-17 termékdöntés; M-06 felhasználó-szintű zár vs. elfogadott kockázat.
+
+---
+
+## 2026-08-21 — Teljes main Bugbot-átnézés
+
+Feldolgozott tartomány: `origin/main` HEAD `80cf258` (nem digest-futás; a
+`.cursor/agents/kineticare-bugbot.md` subagent + beépített Bugbot).
+
+### Mi változott
+A Bugbot egy új, magas súlyú találatot hozott, a kód megerősítette:
+**M-17** (vendégfizetés e-mail-igazolás nélkül kötődik meglévő fiókhoz).
+Ugyanebben a körben a kód alapján **M-12** és **M-14** lezárható lett
+(credential-hook + webhook-retry K3 szűrő); a megfigyelés-fájl elavult
+„nyitott/emberi döntés” státusza nem a jelenlegi `main`.
+
+### Mit jelent
+Az M-17 javítása auth/access döntés, ügynök nem nyúl hozzá. A P0
+fizetési/stream útvonalakon a Bugbot más új kritikus hibát nem jelzett;
+az M-06 (purchases read-modify-write) a `grantPurchases` kódjában továbbra
+is fent van.
+
+### Tiltott zóna érintve?
+Nem. Nincs `confirmOrder`-hívás a runtime-ban (adapter dob + őr-teszt);
+nincs kézi migráció; az M-17 javítása szándékosan nem készült el ebben a
+körben, mert access/auth.
+
+### Következő figyelnivaló
+Emberi döntés az M-17-re (verify vs. claim-link vs. e-mail-csere utáni
+újraigazolás). M-06 továbbra is nyitott.
+
+---
+
 ## 2026-08-09 — Biztonsági kör 2: az élő triázs-találatok beépültek
 
 A lezárt #39–#47 PR-ek triázsából élőnek bizonyult találatok javítása egy

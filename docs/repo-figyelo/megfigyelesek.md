@@ -259,8 +259,14 @@ van, minden korai callback egy elveszett vásárlás kockázata.
 
 ## M-10 — Párhuzamos refundok elvesztik egymás nyomát
 
-**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Státusz:** lezárva (2026-08-21) · **Felvéve:** 2026-07-31 · **Súly:** magas
 **Hely:** `src/lib/refund/refund-order.ts:385`
+
+> **Lezárás (2026-08-21, Security Review a teljes mainen):** a pénzmozgató
+> szakasz `withAdvisoryLock` + friss újraolvasás alatt fut
+> (`refund-order.ts`, ~635–638). Két párhuzamos refund nem térít vissza
+> kétszer, és a `refunds` tömb írása sem veszít bejegyzést. A napló 2026-08-09
+> óta M-11-gyel együtt zárta; a megfigyelés-fájl státusza maradt „nyitott".
 
 A refund-folyamat végig **egyetlen, a legelején beolvasott order-pillanatképből**
 dolgozik, és a `refunds` json-t teljes tömb-felülírással írja vissza —
@@ -325,8 +331,16 @@ explicit ellenőrzése; ismeretlen vagy sikertelen státusznál a rendelés mara
 
 ## M-12 — Staff bármely felhasználó (owner is) jelszavát és e-mail-címét átírhatja
 
-**Státusz:** emberi döntésre vár · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Státusz:** lezárva (2026-08-21) · **Felvéve:** 2026-07-31 · **Súly:** magas
 **Hely:** `src/collections/Users.ts:23`
+
+> **Lezárás (2026-08-21, teljes-main Bugbot-átnézés):** a kód már két független
+> réteggel zárja az eredeti támadást. A collection-írás `canUpdateUser`
+> (`src/access/users-update.ts`): staff nem nyúl owner/staff rekordhoz. A
+> `blockForeignCredentialChange` beforeChange hook a változás természetére néz:
+> nem-owner idegen rekordon e-mailt és jelszót nem cserélhet. Őr:
+> `src/__tests__/security/users-credential-guard.test.ts`. A 2026-08-09-i
+> „emberi döntésre vár” állapot elavult.
 
 > **2026-08-09:** változatlanul külön, emberi jóváhagyású PR-re vár (a Users
 > access-szabályai és auth-hookjai a CLAUDE.md 4. tilos zónája) — a
@@ -387,8 +401,13 @@ dátumából), vagy a mező kerüljön ki, amíg nincs mögötte logika — jele
 
 ## M-14 — A kimerült webhook-események véglegesen elzárják a retry-batchet
 
-**Státusz:** nyitott · **Felvéve:** 2026-07-31 · **Súly:** magas
+**Státusz:** lezárva (2026-08-21) · **Felvéve:** 2026-07-31 · **Súly:** magas
 **Hely:** `src/jobs/tasks/webhook-retry.ts:57`
+
+> **Lezárás (2026-08-21, teljes-main Bugbot-átnézés):** a scan K3 szűrője
+> (`attempts < MAX_WEBHOOK_ATTEMPTS`) kizárja a kimerült rekordokat a 25-ös
+> ablakból; a kimerülés pillanatában owner-riasztás megy. A fejkomment
+> szándékosan ezt a M-14-es eltömődést írja le ellenszerrel.
 
 A retry-job fix, `updatedAt` szerint **növekvő** sorrendű, 25 elemű lapot kér a
 `received`/`failed` eseményekből — de nem szűri ki a véglegesen elakadt
@@ -476,3 +495,46 @@ réteg nem ellenőrzi újra**.
 **Javaslat:** a hook kapjon DB-független unit-tesztet (a Payload-hívások
 mockolásával, de a hook valódi futtatásával). Ez az M-01-nél is konkrétabb ok
 a CI beüzemelésére.
+
+---
+
+## M-17 — Vendégfizetés meglévő fiókhoz kötődik e-mail-igazolás nélkül
+
+**Státusz:** nyitott · **Felvéve:** 2026-08-21 · **Súly:** magas
+**Hely:** `src/lib/order-status/resolve-order-customer.ts:177-240`
+**Forrás:** teljes-`main` Bugbot-átnézés (`origin/main` `80cf258`)
+
+A `paid` átmenet vendég-rendelésnél a `customerEmail` alapján a meglévő fiókhoz
+köti a rendelést, és a `grantPurchases` oda írja a kurzus-jogosultságot. Ez
+szándékos termékdöntés (2026-08-15, duplikátum-fiók ellen), de **az e-mail
+tulajdonát senki nem igazolja**:
+
+- a `users` collection `access.create: () => true` (nyilvános regisztráció);
+- a Payload `auth.verify` **nincs bekapcsolva** (`src/lib/email/users-auth.ts`:
+  a verify-sablon csak akkor kerül rá, ha a verify amúgy is engedélyezett;
+  jelenleg nincs);
+- a vevő a saját e-mail-címét a fiókján átírhatja (`canUpdateUser` + a
+  `blockForeignCredentialChange` a *saját* rekordot átengedi).
+
+**Forgatókönyv:** a támadó a valódi vevő címére regisztrál, saját jelszóval.
+A vevő vendégként fizet ugyanazzal a címmel. A kurzus a támadó fiókjába kerül.
+A támadó ezután átírja a fiók e-mail-címét a sajátjára: az Elfelejtett jelszó
+már nem a vevő postaládájába megy, a pénz és a hozzáférés elveszett.
+
+Ez nem `confirmOrder`, nem migráció, és a javítás **auth/access döntés**
+(verify bekapcsolása, vagy vendég-paidnél ne automatikus grant, hanem
+igazoló link). A CLAUDE.md 4. pontja szerint access/auth-hook átírás csak
+emberi jóváhagyással.
+
+**Javaslat (emberi döntés, nem ügynök-fix):**
+
+1. Payload `auth.verify` bekapcsolása élesen, **vagy**
+2. meglévő fiókra vendég-`paid` ne írjon `purchases`-t automatikusan: a
+   címzett kapjon „vedd át a vásárlást” linket, **vagy**
+3. e-mail-csere után újraigazolás, amíg a fiókon van élő `purchases`.
+
+Az **ingyenes kurzus igénylés** (`src/lib/free-course/request-access.ts`)
+ugyanúgy e-mailhez köti a meglévő fiókot, de utána `forgotPassword` belépő
+linket küld a címzett postaládájába. A postaláda gazdája így vissza tudja
+venni a fiókot. A vendég-`paid` úton ilyen claim-levél **nincs** — ezért az
+M-17 a fizetős vendégutat jelenti, nem az ingyenes igénylést.
