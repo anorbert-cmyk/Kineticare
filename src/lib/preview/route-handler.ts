@@ -68,7 +68,7 @@ export function createPreviewHandler(
       return Response.json(
         {
           error:
-            'Az előnézet most nem érhető el egy technikai hiba miatt. Kérjük, próbáld újra kicsit később.',
+            'Az előnézet most nem érhető el egy technikai hiba miatt. Próbáld újra néhány perc múlva.',
         },
         { status: 500 },
       )

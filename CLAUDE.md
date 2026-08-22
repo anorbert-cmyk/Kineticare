@@ -249,6 +249,20 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
     `git merge-base --is-ancestor` ezért hamisan „nincs benne"-t mond. A helyes
     ellenőrzés: `git diff <branch-tip> <squash-commit>` — ha üres, a tartalom
     hiánytalanul átment, és a branch force-with-lease-szel újraalapozható.
+20b. **Futó ügynökök mellett a `git add -A` SZAKADT fájlt commitolhat.** Mérve
+    2026-08-21: a `npm run typecheck` zöld volt, utána `git add -A`, majd a
+    CI mégis `TS1002: Unterminated string literal`-lel bukott. A gyökérok
+    verseny-helyzet: a mérés és a stage-elés KÖZÖTT az ügynök újraírta a
+    fájlt, és a stage a félbeírt állapotot rögzítette (`'nem is` / új sor /
+    `te hibáztál')`). A mérés tehát a KORÁBBI, teljes tartalmat igazolta, a
+    commit meg a KÉSŐBBI, csonkát vitte fel.
+    **Szabály: azt kell ellenőrizni, ami STAGE-ELVE van, nem azt, ami a
+    mérés pillanatában a lemezen volt.** Sorrend: `git add -A` → futtasd a
+    typecheck-et → `git status --short` és `git diff --stat` (üresnek kell
+    lennie a stage-elt fájlokra) → csak ezután commit. Ha a fájlok a mérés
+    alatt mozogtak, kezdd elölről. Alternatíva: `git show :<fajl>` a
+    stage-elt tartalomra, és azt ellenőrizd.
+
 21. **Idézőjelet tartalmazó commit-üzenet töri a `git commit -m "…"`-t** (a
     string korán lezárul, a maradék pathspec-ként hibázik, de a `git add` már
     lefutott — így a következő commit magával viszi a bestage-elt fájlokat!).
@@ -268,6 +282,18 @@ nézd végig, hogy nem ezek egyikébe futottál-e.
     `initdb` rootként nem indul): a socket-könyvtárnak `pgrun`-írhatónak kell
     lennie (`-k <dir>`), és a scratchpad SZÜLŐ könyvtáraira is kell `o+x`
     bejárási jog, különben a `pg_ctl` „Permission denied"-dal áll le.
+
+22c. **A scratchpadben NEM fér el a Postgres unix socketje.** A socket teljes
+    útja legfeljebb **107 bájt** lehet, a session-scratchpad útja önmagában
+    ~90 karakter, tehát a `-k <scratchpad-alkönyvtár>` mindig elbukik:
+    `Unix-domain socket path … is too long` → `could not create any
+    Unix-domain sockets` → `FATAL`. A hiba megtévesztő, mert a `pg_ctl` csak
+    annyit ír, hogy „could not start server". **Megoldás:** kapcsold ki a unix
+    socketet és menj TCP-n: `-o "-p 5433 -k '' -h 127.0.0.1"`, a kliens pedig
+    `postgres://postgres@127.0.0.1:5433/<db>`. Mellékfeltétel: a `-l <logfile>`
+    fájlt a `pg_ctl` a `pgrun` nevében nyitja, ezért a logfájlnak LÉTEZNIE kell
+    és `pgrun`-tulajdonúnak — különben „Permission denied", és a szerver
+    naplója sosem íródik ki. (Mérve 2026-08-21.)
 
 23. **Merge után azonnal a GitHub CI és a Railway.** A squash-merge nem zárja
     a kört. A `main` CI (`ci.yml` + gitleaks) legyen zöld; a Railway-en

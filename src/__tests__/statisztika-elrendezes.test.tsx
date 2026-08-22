@@ -271,6 +271,7 @@ const report: RevenueReport = {
   totals: { laikusHuf: 6870000, szakemberHuf: 4434000, totalHuf: 11304000, orderCount: 276 },
   courses: [
     {
+      title: 'Kézrehabilitáció otthon: az alapok',
       sku: 'kez-rehab-otthon-alap',
       audience: 'laikus',
       revenueHuf: 2385000,
@@ -279,6 +280,7 @@ const report: RevenueReport = {
       freeItemCount: 4,
     },
     {
+      title: 'Kézterápia gyógytornászoknak, 1. modul',
       sku: 'gyogytornasz-kezterapia-modul-1',
       audience: 'szakember',
       revenueHuf: 3600000,
@@ -310,13 +312,19 @@ const engagement: CourseEngagementReport = {
       started: 121,
       completed: 63,
       notStarted: 21,
+      totalLessons: 24,
       averagePercent: 58,
       completionRateOfEnrolled: 44,
       completionRateOfStarted: 52,
+      notStartedNames: ['Bodor Anna', 'Kis Péter', 'Szabó Éva'],
+      notStartedWithoutName: 0,
+      omitted: 0,
+      truncated: false,
     },
   ],
   truncated: false,
   skipped: 0,
+  omitted: 0,
 }
 
 const HTML = renderToStaticMarkup(createElement(StatisticsReport, { report, engagement }))
@@ -579,5 +587,38 @@ describe('Statisztika — a diagram nem hagy félig üres kártyát a széles la
     expect(keret, 'nincs diagram-keret a szekcióban').toBeDefined()
     const px = hossz(String(deklaracio(keret?.stilus ?? '', 'max-width')), valtozok, 1525, 13)
     expect(px).toBeCloseTo(866, 3)
+  })
+})
+
+
+describe('Statisztika — a kiemelt darabszám színe nem nyeli el a hover-visszajelzést', () => {
+  /* MÉRT HIBA: a „Nem kezdte el" szám-linkje inline `color`-t vitt, a
+     style-attribútum pedig MINDEN szelektort ver — a `.kc-adminstat a:hover`
+     szabály (a lap link-nyelve) ezen az egy linken sosem érvényesült. A szín
+     ezért osztályba került; ez az őr azt méri, hogy a rendezés helyes marad. */
+  const cssKommentNelkul = BRAND_CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+
+  it('a kiemelés OSZTÁLYBÓL jön, a márka danger tokenjével', () => {
+    expect(cssKommentNelkul).toMatch(
+      /\.kc-adminstat \.kc-adminstat__count-danger\s*\{[^}]*color:\s*var\(--kc-as-danger\)/,
+    )
+  })
+
+  it('a hover-szabály SPECIFIKUSABB, mint a kiemelés osztálya', () => {
+    // `.kc-adminstat a:hover` = (0,2,1); `.kc-adminstat .kc-adminstat__count-danger`
+    // = (0,2,0). A nagyobb nyer, tehát egér alatt a link-szín érvényesül.
+    expect(cssKommentNelkul).toMatch(
+      /\.kc-adminstat a:hover\s*\{[^}]*color:\s*var\(--kc-as-link-hover\)/,
+    )
+    // Az osztály NEM kap `a` elem-szelektort: azzal (0,2,1)-re nőne, és a
+    // döntést a forrássorrend hozná — pontosan az a törékenység, amit
+    // elkerülünk.
+    expect(cssKommentNelkul).not.toMatch(/\.kc-adminstat a\.kc-adminstat__count-danger/)
+  })
+
+  it('a sötét ág a TOKENBŐL jön — külön szabály nem kell hozzá', () => {
+    expect(cssKommentNelkul).toMatch(
+      /\[data-theme='dark'\]\s*\.kc-adminstat\s*\{[^}]*--kc-as-danger:/,
+    )
   })
 })

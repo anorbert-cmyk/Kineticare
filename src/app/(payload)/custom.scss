@@ -411,14 +411,42 @@
   color: var(--kc-as-text);
 }
 
+/* KIEMELT DARABSZÁM (Kurzus-hatás tábla, „Nem kezdte el").
+
+   MIÉRT OSZTÁLY, ÉS NEM INLINE STÍLUS: a szín korábban a komponensben,
+   `style={{ color: … }}`-ként állt. A style-attribútum MINDEN szelektort ver,
+   ezért a fenti `a:hover` szabály — a lap link-nyelve — ezen az egy linken
+   sosem érvényesült: az egér alatt a szín nem változott, csak az aláhúzás
+   vastagsága. Osztályként a specifikusság (0,2,0) a hover (0,2,1) ALATT
+   marad, tehát nyugalomban ez a szín látszik, egér alatt és kattintás közben
+   viszont a link-nyelv veszi át.
+
+   SZÍN: a `--kc-as-danger` márka-token, világos témán #b3261e (fehéren
+   6,54:1), sötét témán #ffb4ab (7,16:1 / 9,20:1) — a két ágat maga a token
+   váltja, lásd a fenti jegyzőkönyvet és a sötét blokkot. A jelentést az
+   oszlopfejléc hordozza, a szín csak kiegészítő jelzés (WCAG 2.2 SC 1.4.1). */
+.kc-adminstat .kc-adminstat__count-danger {
+  color: var(--kc-as-danger);
+  font-weight: 700;
+}
+
 /* A görgetőkonténerek (tabla-wrap, diagram) tabindex="0"-t viselnek, hogy
    billentyűzetről is görgethetők legyenek (WCAG 2.1.1 Keyboard; axe-szabály:
    scrollable-region-focusable —
    https://dequeuniversity.com/rules/axe/4.12/scrollable-region-focusable;
    a minta: Adrian Roselli, Under-Engineered Responsive Tables —
    https://adrianroselli.com/2020/11/under-engineered-responsive-tables.html).
-   Fókuszban ugyanaz a gyűrű jár nekik, mint a linkeknek (WCAG 2.4.7). */
+   Fókuszban ugyanaz a gyűrű jár nekik, mint a linkeknek (WCAG 2.4.7).
+
+   A `summary` 2026-08-21-én került a listába: a Statisztika oldal
+   „nem kezdte el" névsora nyitható blokkban (<details>/<summary>) ül, és a
+   summary billentyűzettel fókuszálható. MÉRVE (Chromium, CDP, valódi Tab):
+   a rendszer-alapértelmezett gyűrűt kapta (outline-style: auto, 1px,
+   #101010), vagyis a lap saját, 2px-es #2f6e9f gyűrűjétől eltérőt. Egy lapon
+   kétféle fókuszjelölés a következetes azonosítás ellen való (WCAG 2.2
+   SC 3.2.4), ezért a summary ugyanazt a gyűrűt kapja, mint a linkek. */
 .kc-adminstat a:focus-visible,
+.kc-adminstat summary:focus-visible,
 .kc-adminstat [role='region'][tabindex]:focus-visible {
   outline: 2px solid var(--kc-as-focus);
   outline-offset: 2px;

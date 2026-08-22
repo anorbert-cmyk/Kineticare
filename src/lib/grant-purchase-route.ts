@@ -83,7 +83,10 @@ export function createGrantPurchaseHandler(
           body = JSON.parse(rawBody) as GrantPurchaseRequestBody
         } catch {
           return Response.json(
-            { error: 'Érvénytelen kérés: a törzsnek JSON-nak kell lennie.' },
+            {
+              error:
+                'A hozzáférés nem adható meg: a kérés adatai nem értelmezhetők. Frissítsd az oldalt, és próbáld újra.',
+            },
             { status: 400 },
           )
         }
@@ -103,7 +106,8 @@ export function createGrantPurchaseHandler(
       const reason = readRequiredString(body.reason)
       if (!reason) {
         return Response.json(
-          { error: 'Az indok megadása kötelező — ez kerül az audit-naplóba.' },
+          // Szó szerint AZONOS a GrantPurchasePanel kliens-üzenetével (3.2.4).
+          { error: 'Add meg az indokot: ez kerül az audit-naplóba.' },
           { status: 400 },
         )
       }
@@ -156,7 +160,7 @@ export function createGrantPurchaseHandler(
       return Response.json(
         {
           error:
-            'Váratlan hiba történt a hozzáférés megadása közben. Kérjük, próbáld újra később.',
+            'A hozzáférés megadása most nem sikerült. Próbáld újra néhány perc múlva.',
         },
         { status: 500 },
       )

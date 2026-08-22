@@ -5,6 +5,7 @@ import { buildCurriculum } from '../curriculum/curriculum'
 import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
 import { trimTruncatedProgress } from '../statistics/progress-truncation'
+import { isReadTruncated } from '../statistics/query'
 import {
   buildCourseProgressStats,
   type CourseEnrollment,
@@ -74,6 +75,14 @@ import {
  * - 404: nincs ilyen kurzus
  * - 500: váratlan technikai hiba (naplózva requestId-vel)
  * Minden hibaüzenet MAGYARUL, a felhasználónak szólóan.
+ *
+ * ═══ GYORSÍTÓTÁR: SEMMILYEN ÁGON ═══
+ * Minden válasz `no-store` (a Videótár-végpont mintája,
+ * src/lib/stream/bunny-library-handler.ts). A 200-as ág névvel és e-maillel
+ * azonosított hallgatók haladását hordozza — ez sem böngésző-, sem köztes
+ * gyorsítótárba nem való —, a HIBAÁGAK pedig azért kapják meg, mert enélkül
+ * egy 401/403 válasz megragadhatna, és a bejelentkezés UTÁN is a tiltó
+ * választ szolgálná ki.
  */
 
 export interface CourseProgressHandlerDeps {
@@ -88,6 +97,12 @@ export const ENROLLMENT_MAX = 2_000
 export const PROGRESS_PAGE_SIZE = 500
 /** Legfeljebb ennyi haladás-sort olvasunk be egy kérésben. */
 export const PROGRESS_MAX = 20_000
+
+/**
+ * Minden válasz `no-store` — a részletes indoklás a fejkommentben.
+ * Ugyanaz a konstans-alak, mint a Videótár-végponton.
+ */
+const NO_STORE_HEADERS = { 'Cache-Control': 'no-store' } as const
 
 /** A lapozott olvasás eredménye — a csonkolás ténye is benne van. */
 interface PagedResult<T> {
@@ -111,7 +126,10 @@ interface FindResultLike<T> {
  * A ciklus akkor áll meg, ha (a) a Payload jelzi, hogy nincs több lap,
  * (b) egy lap az elvártnál kevesebb sort adott (a `hasNextPage` hiányában is
  * megbízható jel), vagy (c) elértük a felső korlátot. A (c) esetben a
- * `truncated` igaz lesz, és a hívó ezt KIÍRJA a válaszban.
+ * csonkolás tényét a KÖZÖS `isReadTruncated` dönti el (src/lib/statistics/
+ * query.ts) — ugyanaz a szabály, mint a statisztika-lekérdezésben, hogy a két
+ * olvasó ne mondhasson mást ugyanarra a helyzetre —, és a hívó ezt KIÍRJA a
+ * válaszban.
  */
 async function readAllPages<T>(
   fetchPage: (page: number, limit: number) => Promise<FindResultLike<T>>,
@@ -134,9 +152,18 @@ async function readAllPages<T>(
       // A korlátot pontosan tartjuk, hogy a válaszban közölt darabszám igaz legyen.
       // Csonkolás CSAK akkor van, ha tényleg maradt beolvasatlan sor: a pontosan
       // a korláttal egyező, teljes halmaz NEM csonkolt (hamis riasztás nélkül).
-      const hasMorePages =
-        typeof result.hasNextPage === 'boolean' ? result.hasNextPage : pageDocs.length === pageSize
-      return { docs: docs.slice(0, maxDocs), totalDocs, truncated: hasMorePages || docs.length > maxDocs }
+      return {
+        docs: docs.slice(0, maxDocs),
+        totalDocs,
+        truncated: isReadTruncated({
+          totalDocs,
+          hasNextPage: result.hasNextPage,
+          maxDocs,
+          loaded: docs.length,
+          pageDocsLength: pageDocs.length,
+          pageSize,
+        }),
+      }
     }
     if (pageDocs.length < pageSize || result.hasNextPage === false) {
       return { docs, totalDocs, truncated: false }
@@ -227,7 +254,7 @@ export function createCourseProgressHandler(
       if (!user) {
         return Response.json(
           { error: 'A kurzus-haladás megtekintéséhez bejelentkezés szükséges.' },
-          { status: 401 },
+          { status: 401, headers: NO_STORE_HEADERS },
         )
       }
       if (!hasStaffOrOwnerRole(user)) {
@@ -240,15 +267,15 @@ export function createCourseProgressHandler(
             error:
               'A kurzus-haladás megtekintéséhez munkatársi vagy tulajdonosi jogosultság kell.',
           },
-          { status: 403 },
+          { status: 403, headers: NO_STORE_HEADERS },
         )
       }
 
       const productId = parseProductId(new URL(request.url).searchParams.get('productId'))
       if (productId === null) {
         return Response.json(
-          { error: 'Hiányzó vagy érvénytelen kurzus-azonosító.' },
-          { status: 400 },
+          { error: 'A kurzus azonosítója hiányzik vagy nem értelmezhető. Nyisd meg újra a kurzus lapját.' },
+          { status: 400, headers: NO_STORE_HEADERS },
         )
       }
 
@@ -265,7 +292,7 @@ export function createCourseProgressHandler(
       if (!product) {
         return Response.json(
           { error: `Nincs ilyen kurzus (azonosító: ${String(productId)}).` },
-          { status: 404 },
+          { status: 404, headers: NO_STORE_HEADERS },
         )
       }
 
@@ -403,9 +430,9 @@ export function createCourseProgressHandler(
         // A szöveg SOSEM hallgatja el a csonkolást, és külön kimondja, ha
         // diákok maradtak ki: a megjelenített számok viszont MINDIG teljesek.
         notice: truncated
-          ? `A kurzusnak a megjeleníthetőnél több adata van, ezért a lista csonkolt (legfeljebb ${String(ENROLLMENT_MAX)} beiratkozott és ${String(PROGRESS_MAX)} haladás-sor).${
+          ? `A kurzusnak a megjeleníthetőnél több adata van, ezért a lista csonkolt (legfeljebb ${String(ENROLLMENT_MAX)} hozzáférő és ${String(PROGRESS_MAX)} haladás-sor).${
               kihagyottDiakok > 0
-                ? ` ${String(kihagyottDiakok)} hallgató kimaradt a listából, mert róluk csak hiányos — így félrevezető — haladás látszana.`
+                ? ` ${String(kihagyottDiakok)} hallgató kimaradt a listából, mert róluk csak hiányos, ezért félrevezető haladás látszana.`
                 : ''
             } A megjelenített hallgatók adatai teljesek.`
           : null,
@@ -419,7 +446,7 @@ export function createCourseProgressHandler(
         truncated,
       })
 
-      return Response.json(response, { status: 200 })
+      return Response.json(response, { status: 200, headers: NO_STORE_HEADERS })
     } catch (error) {
       log.error('course-progress: váratlan technikai hiba', {
         error: error instanceof Error ? error.message : String(error),
@@ -427,9 +454,9 @@ export function createCourseProgressHandler(
       return Response.json(
         {
           error:
-            'Váratlan hiba történt a kurzus-haladás lekérdezése közben. Kérjük, próbáld újra később.',
+            'A kurzus-haladás most nem kérdezhető le. Próbáld újra néhány perc múlva.',
         },
-        { status: 500 },
+        { status: 500, headers: NO_STORE_HEADERS },
       )
     }
   }

@@ -67,36 +67,36 @@ export function inviteEmail(input: InviteEmailInput): EmailTemplate {
   const validity = `A link ${days} napig érvényes.`
   const wrongPerson =
     `Ezt a levelet a(z) ${input.email} címre küldtük, mert ezzel a címmel vásároltál nálunk korábban. ` +
-    'Ha nem te vagy a címzett, vagy nem ismered fel a vásárlást, kérjük, ne használd a linket — ' +
+    'Ha nem te vagy a címzett, vagy nem ismered fel a vásárlást, ne használd a linket: ' +
     'válaszolj erre a levélre, és utánanézünk.'
   const notWorking =
     'Ha a link már lejárt vagy nem működik, az oldal „Elfelejtett jelszó" gombjával bármikor ' +
-    'kérhetsz újat — ugyanezzel az e-mail-címmel. Ilyenkor a régi link érvénytelenné válik, ' +
+    'kérhetsz újat, ugyanezzel az e-mail-címmel. Ilyenkor a régi link érvénytelenné válik, ' +
     'mindig a legfrissebb levélben lévőt használd.'
 
   const bodyHtml = [
     escapeHtml(greeting),
-    'Elkészült az új Kineticare-fiókod. A korábban megvásárolt kurzusaid már benne vannak — ' +
+    'Elkészült az új Kineticare-fiókod. A korábban megvásárolt kurzusaid már benne vannak: ' +
       '<strong>újra fizetned nem kell</strong>, csak egy jelszót kell beállítanod.',
     'Kattints az alábbi gombra, adj meg egy jelszót (legalább 12 karakter, kis- és nagybetűvel ' +
       'és számmal), majd a belépés után a <strong>Kurzusaim</strong> oldalon találod az anyagaidat.',
-    `<strong>${escapeHtml(validity)}</strong> A link személyre szól — kérjük, ne add tovább.`,
+    `<strong>${escapeHtml(validity)}</strong> A link személyre szól, ne add tovább senkinek.`,
     escapeHtml(notWorking),
     escapeHtml(wrongPerson),
   ]
   const bodyText = [
     greeting,
-    'Elkészült az új Kineticare-fiókod. A korábban megvásárolt kurzusaid már benne vannak — ' +
+    'Elkészült az új Kineticare-fiókod. A korábban megvásárolt kurzusaid már benne vannak: ' +
       'újra fizetned nem kell, csak egy jelszót kell beállítanod.',
     'Nyisd meg az alábbi linket, adj meg egy jelszót (legalább 12 karakter, kis- és nagybetűvel ' +
       'és számmal), majd a belépés után a Kurzusaim oldalon találod az anyagaidat.',
-    `${validity} A link személyre szól — kérjük, ne add tovább.`,
+    `${validity} A link személyre szól, ne add tovább senkinek.`,
     notWorking,
     wrongPerson,
   ]
 
   return {
-    subject: 'Itt a linked — állítsd be a jelszavad a Kineticare új felületén',
+    subject: 'Itt a linked: állítsd be a jelszavad a Kineticare új felületén',
     ...renderLayout({
       heading: 'Állítsd be a jelszavad',
       paragraphsHtml: bodyHtml,

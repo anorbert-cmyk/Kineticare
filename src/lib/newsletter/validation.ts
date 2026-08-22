@@ -48,8 +48,13 @@ export const NEWSLETTER_EMAIL_MAX_LENGTH = 254
 export const NEWSLETTER_EMAIL_REQUIRED_ERROR = 'Add meg az e-mail-címed.'
 export const NEWSLETTER_EMAIL_FORMAT_ERROR = 'Érvényes e-mail-címet adj meg (pl. nev@pelda.hu).'
 export const NEWSLETTER_EMAIL_TOO_LONG_ERROR = 'Ez az e-mail-cím túl hosszú.'
-export const NEWSLETTER_CONSENT_ERROR =
-  'A feliratkozáshoz kérjük a hozzájárulásod az adataid kezeléséhez.'
+/**
+ * §2.7 (GOV.UK): mondja meg, MIT KELL TENNI. A korábbi „kérjük a
+ * hozzájárulásod" udvariaskodott, és nem mutatott cselekvést. A szöveg
+ * SZÓ SZERINT azonos a `free-course/validation.ts` hozzájárulás-hibájával:
+ * ugyanaz a cselekvés = ugyanaz a szöveg (WCAG 2.2 SC 3.2.4).
+ */
+export const NEWSLETTER_CONSENT_ERROR = 'Pipáld be az adatkezelési hozzájárulást.'
 
 /** Az e-mail-cím ellenőrzése; `null` = rendben. */
 function emailError(rawEmail: string): string | null {

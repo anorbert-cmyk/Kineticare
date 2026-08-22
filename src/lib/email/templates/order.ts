@@ -111,19 +111,19 @@ export function orderConfirmationEmail(input: {
     const account = input.account
     const created =
       `A vásárláshoz fiókot készítettünk a(z) ${account.email} címmel. ` +
-      'Már csak egy jelszót kell beállítanod — utána a Kurzusaim oldalon éred el az anyagot.'
+      'Már csak egy jelszót kell beállítanod, utána a Kurzusaim oldalon éred el az anyagot.'
     const validity =
-      `A jelszó-beállító link ${account.expiresInDays} napig érvényes, és személyre szól — kérjük, ne add tovább.`
+      `A jelszó-beállító link ${account.expiresInDays} napig érvényes, és személyre szól, ne add tovább senkinek.`
     const notWorking =
       'Ha a link lejárt vagy nem működik, a belépési oldal „Elfelejtett jelszó" gombjával bármikor ' +
-      'kérhetsz újat — ugyanezzel az e-mail-címmel.'
+      'kérhetsz újat, ugyanezzel az e-mail-címmel.'
     paragraphsHtml.push(escapeHtml(created), `<strong>${escapeHtml(validity)}</strong>`, escapeHtml(notWorking))
     paragraphsText.push(created, validity, notWorking)
     cta = { label: 'Jelszó beállítása', url: account.activationUrl }
   } else if (input.account?.kind === 'login') {
     const account = input.account
     const existing =
-      `A kurzus már elérhető a meglévő fiókodban — jelentkezz be a(z) ${account.email} címmel, ` +
+      `A kurzus már elérhető a meglévő fiókodban: jelentkezz be a(z) ${account.email} címmel, ` +
       'és a Kurzusaim oldalon megtalálod.'
     const noPassword =
       'Ha nem emlékszel a jelszavadra, a belépési oldal „Elfelejtett jelszó" gombjával állíthatsz be újat.'
@@ -133,7 +133,7 @@ export function orderConfirmationEmail(input: {
   }
 
   return {
-    subject: `Sikeres vásárlás — ${input.orderNumber}`,
+    subject: `Sikeres vásárlás: ${input.orderNumber}`,
     ...renderLayout({
       // Az előnézeti szöveg a postaláda LISTÁJÁBAN áll a tárgy mellett. Enélkül
       // a kliens a levél első szavait húzná be, ami itt a wordmark lenne.

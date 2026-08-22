@@ -176,7 +176,7 @@ export function computeLineAmounts(
 ): InvoiceLineAmounts {
   if (!Number.isInteger(item.mennyiseg) || item.mennyiseg < 1) {
     throw new SzamlazzApiError({
-      message: `Érvénytelen mennyiség a számlatételben (${item.mennyiseg}).`,
+      message: `A számlatétel mennyisége nem értelmezhető (${item.mennyiseg}); legalább 1-es egész szám kell.`,
       kind: 'invalid_data',
       retryable: false,
     })
@@ -187,7 +187,7 @@ export function computeLineAmounts(
     (!negativeAllowed && item.bruttoEgysegar < 0)
   ) {
     throw new SzamlazzApiError({
-      message: `Érvénytelen bruttó egységár a számlatételben (${item.bruttoEgysegar}).`,
+      message: `A számlatétel bruttó egységára nem értelmezhető (${item.bruttoEgysegar}); számot kell megadni.`,
       kind: 'invalid_data',
       retryable: false,
     })
@@ -234,7 +234,7 @@ function formatNettoEgysegar(value: number): string {
 function isoDateForXml(value: string, mezo: string): string {
   if (!isIsoDateString(value)) {
     throw new SzamlazzApiError({
-      message: `Érvénytelen dátum a számla ${mezo} mezőjében — kizárólag YYYY-MM-DD alak fogadható el.`,
+      message: `A számla ${mezo} mezőjében nem valódi dátum áll: kizárólag YYYY-MM-DD alak fogadható el.`,
       kind: 'invalid_data',
       retryable: false,
     })

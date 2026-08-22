@@ -25,6 +25,65 @@ export type StudentSortKey = 'nev' | 'haladas' | 'aktivitas'
 
 export type SortDirection = 'asc' | 'desc'
 
+/**
+ * Hiányzó érték felirata a táblacellákban.
+ *
+ * A korábbi „—" (U+2014, kvirtmínusz) KÉT szabályt sértett egyszerre:
+ * a magyar mikroszöveg-szabályzat szerint a kvirtmínusz magyar szövegben nem
+ * írásjel (`docs/ui-sztenderdek.md` §3.1.1), a puszta jel pedig a
+ * képernyőolvasóban vagy néma, vagy „em dash"-ként hangzik el, tehát a cella
+ * jelentése elvész (WCAG 2.2 SC 1.3.1). Szó áll a helyén.
+ */
+export const NO_DATA = 'Nincs adat'
+
+/**
+ * A mély link query-paraméterének neve.
+ *
+ * A szerződés KÖTÖTT (vezetői döntés, `docs/statisztika-audit-2026-08-21.md`
+ * 1. pont): a Statisztika oldal
+ * `/admin/collections/products/<id>?haladas=nem-kezdte#kurzus-haladas`
+ * alakban linkel ide.
+ */
+export const PROGRESS_DEEP_LINK_PARAM = 'haladas'
+
+/** A panel horgonya, hogy a mély link oda tudjon görgetni. */
+export const PROGRESS_PANEL_ANCHOR = 'kurzus-haladas'
+
+/**
+ * A mély link állapot-paraméterének kiolvasása egy query-stringből.
+ *
+ * MIÉRT NEM DOB: ismeretlen vagy hibás értéknél `null`-t ad, és a panel úgy
+ * viselkedik, mintha nem lenne paraméter. Egy elgépelt vagy elavult link
+ * SOSEM okozhat hibaképernyőt egy belső munkalapon (NN/g, 5. heurisztika,
+ * Error Prevention: https://www.nngroup.com/articles/ten-usability-heuristics/).
+ *
+ * A „mind" SZÁNDÉKOSAN nincs az elfogadott értékek között: a szerződés a
+ * három állapotot sorolja fel, és a „mind" nem szűkít semmire, tehát az
+ * automata betöltést sem indokolja.
+ *
+ * @param search a query-string, `?`-kal vagy anélkül (`location.search` alak)
+ */
+export function readProgressDeepLink(
+  search: string | null | undefined,
+): CourseStudentStatus | null {
+  if (typeof search !== 'string' || search.trim().length === 0) {
+    return null
+  }
+  let value: string | null = null
+  try {
+    value = new URLSearchParams(
+      search.startsWith('?') ? search.slice(1) : search,
+    ).get(PROGRESS_DEEP_LINK_PARAM)
+  } catch {
+    // Értelmezhetetlen query-string (pl. hibás százalék-escape) — nincs link.
+    return null
+  }
+  if (value === 'nem-kezdte' || value === 'folyamatban' || value === 'befejezte') {
+    return value
+  }
+  return null
+}
+
 /** Az állapot-chip magyar felirata. */
 export function statusLabel(status: CourseStudentStatus): string {
   switch (status) {
@@ -149,6 +208,24 @@ export function filterStudents(
   })
 }
 
+/**
+ * A hallgató sorának AZONOSÍTÓJA (a `<th scope="row">` tartalma).
+ *
+ * A táblázat sorfejléce nem lehet üres: a képernyőolvasó ezt olvassa fel a
+ * „67%" cella előtt, hogy kiderüljön, kié az érték (WCAG 2.2 SC 1.3.1).
+ * Ha a felhasználó nem adott meg nevet, az e-mail-cím azonosít — ugyanaz a
+ * tartalék, amit a névszerinti rendezés is használ, tehát a lista sorrendje
+ * és a felolvasott azonosító nem tud szétcsúszni.
+ */
+export function studentRowLabel(student: { name: string | null; email: string }): string {
+  const nev = (student.name ?? '').trim()
+  if (nev.length > 0) {
+    return nev
+  }
+  const email = student.email.trim()
+  return email.length > 0 ? email : NO_DATA
+}
+
 /** Rendezéskor a hiányzó időpont mindig a lista végére kerül. */
 function activityMs(student: CourseStudentProgress): number {
   if (student.lastActivityAt === null) {
@@ -207,6 +284,32 @@ export function ariaSortValue(
   return direction === 'asc' ? 'ascending' : 'descending'
 }
 
+/**
+ * A LÁTHATÓ rendezés-jelölés az oszlopfejlécen.
+ *
+ * Eddig csak `aria-sort` volt: a képernyőolvasó tudta, hogy az oszlop
+ * rendezhető és melyik szerint áll a lista, a LÁTÓ felhasználó nem. NN/g,
+ * Data Tables: „Indicate which column the table is sorted by"
+ * (https://www.nngroup.com/articles/data-tables/); ugyanezt kéri a GOV.UK
+ * Design System rendezhető táblája
+ * (https://design-system.service.gov.uk/components/table/).
+ *
+ * A három jel ALAKBAN is különbözik, nem csak árnyalatban, tehát a
+ * megkülönböztetés nem szín-függő (WCAG 2.2 SC 1.4.1 Use of Color):
+ *   ⇅ = rendezhető, de nem e szerint áll a lista
+ *   ↑ = növekvő   ↓ = csökkenő
+ */
+export function sortIndicator(
+  column: StudentSortKey,
+  activeKey: StudentSortKey,
+  direction: SortDirection,
+): { glyph: string; active: boolean } {
+  if (column !== activeKey) {
+    return { glyph: '⇅', active: false }
+  }
+  return { glyph: direction === 'asc' ? '↑' : '↓', active: true }
+}
+
 /** A kis kördiagram (ring) geometriája. */
 export interface RingGeometry {
   /** A kör sugara a viewBox-ban. */
@@ -258,6 +361,18 @@ export const STUDENT_PAGE_STEP = 50
  * A szűrő/kereső melletti élő visszajelzés szövege.
  *
  * SOSEM hallgat: ha a lista korlátozott, azt is kimondja, hány sor van összesen.
+ *
+ * A korábbi „… felel meg a szűrésnek — ebből 25 látszik" alak kvirtmínuszt
+ * (U+2014) használt töltelék-elválasztóként, ami a magyar mikroszöveg-
+ * szabályzat szerint hiba (`docs/ui-sztenderdek.md` §3.1.1–3.1.3: két állítás
+ * közé vessző, kettőspont vagy pont való). Vessző áll a helyén.
+ *
+ * A négy ág SZÁNDÉKOSAN pont nélkül zárul: ez felirat, nem mondat. GOV.UK,
+ * Style guide („Do not use full stops at the end of… short pieces of text
+ * that are not sentences" — https://www.gov.uk/guidance/style-guide/a-to-z),
+ * és Shopify Polaris, Punctuation
+ * (https://polaris.shopify.com/content/grammar-and-mechanics). Egyetlen ágra
+ * tett pont a másik hármat is elrontaná („305 hallgató.").
  */
 export function visibleCountLabel(shown: number, matching: number, total: number): string {
   if (matching === total) {
@@ -266,7 +381,7 @@ export function visibleCountLabel(shown: number, matching: number, total: number
       : `${String(total)} hallgató`
   }
   const talalat = `${String(total)} hallgatóból ${String(matching)} felel meg a szűrésnek`
-  return shown < matching ? `${talalat} — ebből ${String(shown)} látszik` : talalat
+  return shown < matching ? `${talalat}, ebből ${String(shown)} látszik` : talalat
 }
 
 /**
@@ -282,7 +397,10 @@ export function nextLessonLabel(student: {
   currentLessonTitle: string | null
 }): string {
   if (student.currentLessonTitle === null) {
-    return '—'
+    // A mag két ESETBEN ad null-t (course-progress-stats.ts): a kurzus kész,
+    // vagy nincs elindítható lecke. A kettő nem ugyanaz, ezért nem is
+    // ugyanaz a felirat: a „Nincs adat" a befejezett sorban hazugság volna.
+    return student.status === 'befejezte' ? 'Nincs hátralévő lecke' : NO_DATA
   }
   if (student.status === 'nem-kezdte') {
     return `Itt fog kezdeni: ${student.currentLessonTitle}`
@@ -313,14 +431,40 @@ export function dropOffLabel(
   return valtozas < 0 ? `−${String(-valtozas)} fő` : `+${String(valtozas)} fő`
 }
 
+/** A „Fejezet" cella tartalma és az, hogy vizuálisan ismétlődik-e. */
+export interface ModuleCell {
+  /** A cella SZÖVEGE. Ismétlődésnél is a teljes fejezetcím, sosem üres. */
+  text: string
+  /** Igaz, ha az előző sorban ugyanez a fejezetcím állt. */
+  repeated: boolean
+}
+
 /**
- * A „Fejezet" oszlop értéke: a modulcím CSAK a modul első során jelenik meg.
+ * A „Fejezet" oszlop cellája.
  *
- * Enélkül egy hatleckés modulnál hatszor egymás alatt állt ugyanaz a hosszú
- * cím, és a szem nem talált fogódzót a leckék között.
+ * A modulcím vizuálisan CSAK a modul első során jelenik meg: enélkül egy
+ * hatleckés modulnál hatszor egymás alatt állt ugyanaz a hosszú cím, és a
+ * szem nem talált fogódzót a leckék között.
+ *
+ * A korábbi változat viszont ÜRES STRINGET adott az ismétlődő soroknál, tehát
+ * a cella tényleg üres maradt: a képernyőolvasó a 2., 3., 4. lecke sorában
+ * nem tudta megmondani, melyik fejezetről van szó, pedig az oszlopfejléc azt
+ * ígéri (WCAG 2.2 SC 1.3.1 Info and Relationships —
+ * https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html).
+ * Ezért a szöveg MINDIG a teljes cím, és az ismétlődést a megjelenítés rejti
+ * el (a hívó `srOnly`-ba teszi), nem az adat. Ugyanezt a szétválasztást
+ * javasolja a WAI táblázat-útmutatója is: a vizuális tömörítés nem veheti el
+ * a cella programozott tartalmát
+ * (https://www.w3.org/WAI/tutorials/tables/).
+ *
+ * Üres fejezetcímnél `NO_DATA` áll, nem üres cella.
  */
-export function moduleColumnLabel(moduleTitle: string, previousModuleTitle: string | null): string {
-  return moduleTitle === previousModuleTitle ? '' : moduleTitle
+export function moduleColumnCell(
+  moduleTitle: string,
+  previousModuleTitle: string | null,
+): ModuleCell {
+  const text = moduleTitle.trim().length === 0 ? NO_DATA : moduleTitle
+  return { text, repeated: moduleTitle === previousModuleTitle }
 }
 
 /** Egy CSV-mező idézőjelezése (Excel-kompatibilis: a `"` duplázva). */

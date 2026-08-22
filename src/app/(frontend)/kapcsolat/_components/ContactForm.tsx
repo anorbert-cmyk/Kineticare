@@ -17,6 +17,7 @@ import {
   type SubmitResult,
 } from '../_lib/submit'
 import {
+  CONTACT_ERROR_SUMMARY,
   EMPTY_CONTACT_VALUES,
   isContactFormValid,
   validateContactForm,
@@ -137,7 +138,7 @@ export function ContactForm({ formId, turnstileSiteKey }: ContactFormProps) {
     }
 
     if (turnstileEnabled && !turnstileToken) {
-      setSubmitError('Kérjük, igazold a spam-ellenőrzéssel, hogy nem vagy robot.')
+      setSubmitError('Pipáld ki a spam-ellenőrzést, utána küldheted el az üzenetet.')
       errorSummaryRef.current?.focus()
       return
     }
@@ -191,7 +192,7 @@ export function ContactForm({ formId, turnstileSiteKey }: ContactFormProps) {
           role="alert"
           tabIndex={-1}
         >
-          {submitError ?? 'Kérjük, ellenőrizd a megjelölt mezőket, majd próbáld újra.'}
+          {submitError ?? CONTACT_ERROR_SUMMARY}
         </div>
       ) : null}
 
@@ -317,8 +318,8 @@ export function ContactForm({ formId, turnstileSiteKey }: ContactFormProps) {
 
       {!formAvailable ? (
         <p className="kc-contact-form__unavailable" role="alert">
-          Az űrlap ideiglenesen nem érhető el. Kérjük, próbáld később, vagy írj nekünk közvetlenül
-          e-mailben — a címünket a láblécben találod.
+          Az űrlap most nem érhető el. Próbáld újra később, vagy írj nekünk közvetlenül e-mailben:
+          a címünket a láblécben találod.
         </p>
       ) : null}
 

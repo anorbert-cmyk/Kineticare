@@ -67,7 +67,7 @@ export function createCheckoutStartHandler(
         body = await request.json()
       } catch {
         return NextResponse.json(
-          { error: 'Érvénytelen kérés: a törzsnek JSON-nak kell lennie.' },
+          { error: 'A fizetés nem indítható: a kérés adatai nem értelmezhetők. Frissítsd az oldalt, és próbáld újra.' },
           { status: 400 },
         )
       }
@@ -93,7 +93,7 @@ export function createCheckoutStartHandler(
         error: error instanceof Error ? error.message : String(error),
       })
       return NextResponse.json(
-        { error: 'Váratlan hiba történt a fizetés indítása közben. Kérjük, próbáld újra később.' },
+        { error: 'A fizetés indítása most nem sikerült. Próbáld újra néhány perc múlva.' },
         { status: 500 },
       )
     }

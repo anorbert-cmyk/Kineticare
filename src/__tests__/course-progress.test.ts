@@ -291,7 +291,8 @@ describe('POST /api/course-progress/mark-watched — auth- és hibamátrix', () 
 
     expect(response.status).toBe(400)
     expect(await readJson(response)).toEqual({
-      error: 'Érvénytelen kérés: a törzsnek JSON-nak kell lennie.',
+      error:
+        'A haladás nem menthető: a kérés adatai nem értelmezhetők. Frissítsd az oldalt, és próbáld újra.',
     })
   })
 
@@ -355,7 +356,7 @@ describe('POST /api/course-progress/mark-watched — auth- és hibamátrix', () 
     const body = await readJson(response)
 
     expect(response.status).toBe(500)
-    expect(String(body.error)).toContain('Váratlan hiba történt')
+    expect(String(body.error)).toContain('A haladás mentése most nem sikerült')
     expect(String(body.error)).not.toContain('unique constraint')
   })
 

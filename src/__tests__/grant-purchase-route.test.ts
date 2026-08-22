@@ -172,7 +172,9 @@ describe('grant-purchase route — validálás és 404-ágak', () => {
     const body = (await response.json()) as { error: string }
 
     expect(response.status).toBe(400)
-    expect(body.error).toContain('JSON')
+    // §2.7: a látogatói üzenetben nincs technikai zsargon („JSON"), a teendő viszont ott van.
+    expect(body.error).toContain('a kérés adatai nem értelmezhetők')
+    expect(body.error).toContain('Frissítsd az oldalt')
   })
 
   it('404 ismeretlen felhasználónál', async () => {
@@ -208,6 +210,6 @@ describe('grant-purchase route — validálás és 404-ágak', () => {
     const body = (await response.json()) as { error: string }
 
     expect(response.status).toBe(500)
-    expect(body.error).toContain('Váratlan hiba')
+    expect(body.error).toContain('A hozzáférés megadása most nem sikerült')
   })
 })

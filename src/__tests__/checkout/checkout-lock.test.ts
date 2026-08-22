@@ -391,7 +391,7 @@ describe('checkout — rendelésszám-ütközés (23505) újrapróbálása', () 
 
     await expect(promise).rejects.toBeInstanceOf(CheckoutError)
     await expect(promise).rejects.toMatchObject({ status: 503 })
-    await expect(promise).rejects.toThrowError(/próbáld újra néhány másodperc múlva/)
+    await expect(promise).rejects.toThrowError(/Próbáld újra néhány másodperc múlva/)
     expect(calls.create).toBe(4)
     expect(fetchMock).not.toHaveBeenCalled()
   })

@@ -2,6 +2,8 @@ import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { STATISTICS_ACCESS_DENIED_MESSAGE } from '../lib/statistics/revenue'
+
 /**
  * ŐR — A NYILVÁNOS ADMIN-NÉZETEK KAPUJA A LEKÉRDEZÉSEK ELŐTT FUT.
  *
@@ -56,8 +58,9 @@ vi.mock('../lib/statistics/engagement-query', () => ({
 }))
 
 vi.mock('../components/admin/BunnyLibraryPanel', () => ({
-  BunnyLibraryPanel: () => {
-    bunnyPanelKem()
+  // A kém a PROPOKAT is rögzíti: a nézet címsor-szintje ebből mérhető.
+  BunnyLibraryPanel: (panelProps: unknown) => {
+    bunnyPanelKem(panelProps)
     return createElement('div', null, 'panel')
   },
 }))
@@ -97,7 +100,10 @@ describe('Statisztika nézet: a kapu a lekérdezések ELŐTT zár', () => {
       expect(revenueKem, 'a bevétel-lekérdezés lefutott a tiltott ágon').not.toHaveBeenCalled()
       expect(engagementKem, 'a kurzus-hatás lekérdezés lefutott a tiltott ágon').not.toHaveBeenCalled()
       expect(html).toContain('data-keret="frame"')
-      expect(html.toLowerCase()).toContain('jogosultság')
+      // A KONSTANSRA hivatkozunk, nem egy beírt szóra: a korábbi
+      // `toContain('jogosultság')` némán elengedte volna a szöveg cseréjét,
+      // ha az új mondatban véletlenül benne marad a szó.
+      expect(html).toContain(STATISTICS_ACCESS_DENIED_MESSAGE)
     })
   }
 
@@ -119,12 +125,23 @@ describe('Videótár nézet: ugyanaz a kapu-kötés', () => {
     it(`${nev} a panel nem renderel`, () => {
       const html = renderToStaticMarkup(BunnyLibraryView(props(user)))
       expect(bunnyPanelKem, 'a Bunny-panel rendereltetett a tiltott ágon').not.toHaveBeenCalled()
-      expect(html).toContain('Ehhez a nézethez nincs jogosultságod.')
+      expect(html).toContain('A Videótárat csak munkatárs vagy tulajdonos nézheti meg.')
     })
   }
 
   it('staff szerepkörrel a panel renderel', () => {
     renderToStaticMarkup(BunnyLibraryView(props({ role: 'staff' })))
     expect(bunnyPanelKem).toHaveBeenCalledTimes(1)
+  })
+
+  it('a nézet h2-t kér a paneltől — a lap h1-e alatt nincs címsor-ugrás', () => {
+    // A panel alapértelmezése `h3` (a termék-szerkesztő környezete), itt
+    // viszont közvetlenül a lap `h1`-e alatt ül: a h1 → h3 ugrásból a
+    // képernyőolvasót használó munkatárs hiányzó szakaszt olvasna ki
+    // (WCAG 2.2 SC 1.3.1, Info and Relationships).
+    renderToStaticMarkup(BunnyLibraryView(props({ role: 'staff' })))
+    expect(bunnyPanelKem).toHaveBeenCalledWith(
+      expect.objectContaining({ headingLevel: 'h2' }),
+    )
   })
 })

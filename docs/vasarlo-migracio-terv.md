@@ -78,6 +78,7 @@ teljen el több nap. A generált link 30 napig érvényes, de a vevő fejében a
 | Mi lesz a kurzusaival? | A megvásárolt kurzusok hozzáférésként (`purchases`) átkerülnek. A már meglévő hozzáféréseket az import **sosem törli** — csak kiegészíti. |
 | Kell újra fizetnie? | Nem. Az import nem hoz létre rendelést és nem indít fizetést. |
 | Mi van, ha kétszer futtatjuk az importot? | Semmi. A művelet idempotens: a második kör a kész sorokat kihagyja. |
+| Mi a helyzet, ha a vevő MÁR fent van, csak nem tud belépni? | Ez a 4.5. „egyetlen levél" esete: közös linket kap a `/belepes-atallas` lapra (4.6.), ott a saját címével kér visszaállító linket. Új import nem kell hozzá. |
 
 ---
 
@@ -114,7 +115,7 @@ küldhető ki, közös link NINCS.
 
 ### 4.2. Aktiváló levél (T−3) — személyre szóló linkkel
 
-> **Tárgy:** Itt a linked — állítsd be a jelszavad a Kineticare új felületén
+> **Tárgy:** Itt a linked: állítsd be a jelszavad a Kineticare új felületén
 >
 > Kedves {{nev}}!
 >
@@ -181,6 +182,109 @@ Erre a levélre a Katák válaszolnak; a `[ ]` részeket a helyzethez kell igaz�
 >
 > Üdvözlettel:
 > {{alairas}}
+
+### 4.5. EGYETLEN levél a MÁR feltöltött vevőknek (2026-08-21, tulajdonosi kérés)
+
+A 4.1–4.3. hármas az EREDETI forgatókönyvhöz készült (bejelentés T−10,
+aktiváló T−3, emlékeztető T−1), ahol az import még hátravan. Ez a szakasz a
+MÁSIK helyzetre szól, amit a tulajdonos kért: **a vevők már fent vannak az új
+oldalon**, csak nem tudják, hogy a régi jelszavuk nem működik. Ilyenkor egyetlen
+levél megy ki, és az mindent elmond.
+
+**Miért közös link, és miért nem személyre szóló.** A 4.2. aktiváló levél
+személyes tokent visz; ez a levél **nem**. Három oka van:
+
+1. a tulajdonos kérése szó szerint az, hogy a vevők „jöjjenek majd fel az új
+   oldalra és kérjenek új jelszót": ő maga kérte a kérésre épülő utat;
+2. közös link mellett **nincs mail merge**: a levél sima körlevélként is
+   kiküldhető, tehát nem kell a `linkek.csv`-t (titkot tartalmazó fájlt)
+   kézbe venni;
+3. token nem kerül a levélbe, tehát a továbbküldött vagy kiszivárgott levél
+   nem ér semmit. (A visszaállító link, amit a vevő MAGÁNAK kér, 1 óráig él:
+   Payload alapérték, `forgotPassword.expiration = 3600000 ms`.)
+
+Ára: a vevő két levelet kap (ezt, majd a saját visszaállító linkjét). Ha egy
+lépést akartok, a 4.2. levél és a `--send-invites` út továbbra is él, az
+viszont mail merge-öt és a token kezelését kívánja.
+
+> **Tárgy:** Új helyen a kurzusaid: állítsd be a jelszavad
+>
+> Kedves {{nev}}!
+>
+> A Kineticare kurzusai új, saját felületre költöztek. Ezért írunk: a **régi
+> jelszavad az új oldalon nem működik**, mert a korábbi oldal külön rendszer
+> volt, és a jelszavakat onnan nem vesszük át. Nem veszett el semmi, és nem is
+> te hibáztál: mindenkinek új jelszót kell beállítania, aki eddig a régi oldalon
+> vásárolt.
+>
+> **A megvásárolt kurzusaid megvannak, újra fizetned nem kell.**
+>
+> Állítsd be a jelszavad: {{belepes_atallas_url}}
+>
+> A megnyíló oldalon add meg azt az e-mail-címet, amelyre ezt a levelet kaptad.
+> Küldünk rá egy linket, azon beállítod a saját jelszavad, és utána a
+> **Kurzusaim** oldalon ott lesz minden anyagod. A link 1 óráig érvényes; ha
+> lejár, ugyanott kérhetsz újat.
+>
+> Ha pár percen belül nem érkezik meg a levél, nézd meg a levélszemét mappát is,
+> és keress rá a Kineticare szóra. Ugyanarra a címre 10 percen belül legfeljebb
+> 3 levelet küldünk ki, ezért ha többször is kérted, várj néhány percet az újabb
+> próbálkozással.
+>
+> Ha elakadsz, vagy nem emlékszel, melyik címmel vásároltál, válaszolj erre a
+> levélre. Emberi választ kapsz, és megkeressük a fiókodat.
+>
+> Üdvözlettel:
+> {{alairas}}
+
+**A behelyettesítendő mezők**
+
+| Mező | Mi kerül bele | Ki adja meg |
+| --- | --- | --- |
+| `{{nev}}` | a vevő keresztneve; merge nélkül „Kedves Vásárlónk!" a megszólítás | levelezőrendszer / Katák |
+| `{{belepes_atallas_url}}` | az átállási céllap teljes címe: a `NEXT_PUBLIC_SERVER_URL` + `/belepes-atallas` | üzemeltetés |
+| `{{alairas}}` | az aláírás (a 4.1–4.3. levelekével AZONOS, 1. alapelv) | Katák |
+
+**Amit a levél SZÁNDÉKOSAN nem tartalmaz:** dátumot (a régi felület
+lekapcsolásának napját a tulajdonos még nem adta meg), határidőt, sürgetést és
+második linket. Egy levél = egy gomb (3. alapelv).
+
+**A két szám a levélben nem díszítés.** A „10 percen belül legfeljebb 3 levelet"
+a `password-forgot-email` kérés-korlát emberi nyelvű alakja
+(`src/lib/security/rate-limit.ts`); ugyanez a mondat áll a céllapon is, és
+őr-teszt köti a keret valódi értékéhez
+(`src/__tests__/belepes-atallas-ui.test.tsx`). Ha a keretet valaha átállítjátok,
+a teszt kidobja a levélből és a lapról is elavult mondatot.
+
+### 4.6. Hova visz a levél linkje: `/belepes-atallas`
+
+A levél EGYETLEN linkje a `/belepes-atallas` lapra megy. Ez nem a
+„Elfelejtett jelszó" lap: az átköltöztetett vevő **nem felejtette el** a
+jelszavát, az a régi rendszerben működött. Ha a levél az „Elfelejtetted a
+jelszavad?" című lapra vinné, a cím nem az ő helyzetét írná le (WCAG 2.2 ·
+2.4.6 Headings and Labels), és a vevő azt hihetné, rossz helyre jutott.
+
+A lap négy dolgot teljesít, mindegyiket őr-teszt méri:
+
+1. kimondja, hogy **nem a vevő hibázott**, és megmondja az okot (a régi oldal
+   külön rendszer volt);
+2. kimondja szó szerint: **„A megvásárolt kurzusaid megvannak, újra fizetned
+   nem kell."**, a beküldés előtt és a beküldés utáni megerősítő panelen is;
+3. **egy** kért cselekvés van rajta (a visszaállító link kérése), ugyanazzal a
+   végponttal, kérés-korláttal és gombfelirattal, mint a `/elfelejtett-jelszo`;
+4. van **visszaút** (`/belepes`) és **segítségkérés** (`/kapcsolat`).
+
+A lap keresőben nem jelenik meg: a `robots.txt` `/belepes` tiltása
+előtag-egyezéssel a `/belepes-atallas`-ra is áll.
+
+**Aki a levelet nem kapja meg**, a megszokott úton érkezik: fejléc → Belépés →
+régi jelszó → „Hibás e-mail-cím vagy jelszó." → „Elfelejtetted a jelszavad?".
+Ezért a `/elfelejtett-jelszo` lap is kapott egy állandó bekezdést arról, hogy a
+régi oldal jelszava itt nem működik, és hogy a kurzusok megvannak. A `/belepes`
+lap SZÁNDÉKOSAN nem kapott átállási sávot: a GOV.UK Design System szerint
+lineáris folyamatban a sáv nem a helyes eszköz, és „there's evidence that people
+often miss them"
+(https://design-system.service.gov.uk/components/notification-banner/).
 
 ---
 
@@ -539,14 +643,25 @@ próbafutás: a terv átnézése olcsóbb, mint a takarítás.
 
 Ezek a nyitott pontok — nélkülük az eszköz kész, de az átállás nem indítható.
 
-| # | Mi hiányzik | Kitől | Miért blokkoló |
+**Legutóbbi felülvizsgálat: 2026-08-21.** Ami azóta teljesült, áthúzva marad
+(nem törölve): a lista így mutatja, mi mozdult, és mi nem.
+
+| # | Mi hiányzik | Kitől | Állapot 2026-08-21-én |
 | --- | --- | --- | --- |
-| 1 | ~~A systeme.io-export pontos formátuma~~ → **MEGVAN** (2026-08-16): `"Email","First name","Last name","Tag","Date Registered"`, vesszős elválasztó, címke-alapú lista. A parser felismeri (6.0.1.) | Katák | Teljesítve. Új export érkezésekor egy `--parse-only` futás megmutatja, változott-e a fejléc. |
-| 2 | **Címke → SKU tábla** — melyik Kineticare-termék felel meg a `SOS KézRelax vásárló` és az `Otthoni KézRehab vásárló` címkének | Katák | Enélkül a címkék nem leképezettként kimaradnak (a vevő fiókot kapna, kurzus-hozzáférést nem). A SKU az adminban, a Kurzusok listában látszik. |
-| 3 | ~~E-mail-küldés döntése~~ → **ELDÖNTVE: Resend.** Az élesítés lépései a 10.1. pontban | üzemeltetés | A döntés megvan, de a Resend-fiók, a **domain-hitelesítés** és az API-kulcs beállítása nélkül a levél nem megy ki. |
-| 4 | **Adatbázis-mentés** (feladatlista C14) | üzemeltetés | Tömeges írás előtt kötelező visszaállítási pont. |
-| 5 | **Az átállás dátuma** és a levelek aláírása | Katák | A levélsablonok `{{datum_*}}` és aláírás-mezői. |
-| 6 | **Kettős e-mail-címek listája** (aki más címmel vásárolt, mint amit használ) | Katák | Ezek kézi összevezetést igényelnek — az import e-mail-cím alapján dolgozik. |
+| 1 | ~~A systeme.io-export pontos formátuma~~ | Katák | **KÉSZ** (2026-08-16): `"Email","First name","Last name","Tag","Date Registered"`, vesszős elválasztó, címke-alapú lista; a parser felismeri (6.0.1.). Új export érkezésekor egy `--parse-only` futás megmutatja, változott-e a fejléc. |
+| 2 | **Címke → SKU tábla** — melyik Kineticare-termék felel meg a `SOS KézRelax vásárló` és az `Otthoni KézRehab vásárló` címkének | Katák | **NYITOTT.** Enélkül a címkék nem leképezettként kimaradnak (a vevő fiókot kapna, kurzus-hozzáférést nem). A SKU az adminban, a Kurzusok listában látszik. |
+| 3 | ~~E-mail-küldés döntése és beállítása~~ | üzemeltetés | **RÉSZBEN KÉSZ.** A szolgáltató eldöntve (Resend); a `RESEND_API_KEY` és az `EMAIL_FROM` a Railway Kineticare-szolgáltatásán BE VAN ÁLLÍTVA. Ami MÉG NINCS igazolva: a feladó-domain **Verified** állapota a Resendben, és egy sikeres **próbalevél** (10.1. 5. lépés). Amíg ez a kettő nincs meg, a körlevél nem indítható. |
+| 4 | **Adatbázis-mentés** (feladatlista C14) | üzemeltetés | **NYITOTT** a `DATABASE_URI` GitHub-secret beállításáig (`db-backup.yml`). Tömeges írás előtt kötelező visszaállítási pont. |
+| 5 | **Az átállás dátuma** és a levelek aláírása | Katák | **NYITOTT.** A 4.1–4.3. sablonok `{{datum_*}}` mezői és MINDEN levél `{{alairas}}` mezője. A 4.5. „egyetlen levél" dátumot SZÁNDÉKOSAN nem tartalmaz, aláírást viszont igen. |
+| 6 | **Kettős e-mail-címek listája** (aki más címmel vásárolt, mint amit használ) | Katák | **NYITOTT.** Kézi összevezetést igényel: az import e-mail-cím alapján dolgozik. |
+| 7 | ~~A vevői céllap, ahova a levél linkje visz~~ | technikai | **KÉSZ** (2026-08-21): `/belepes-atallas` (4.6.), plusz a `/elfelejtett-jelszo` állandó bekezdése a régi vevőnek. Őr-teszt: `src/__tests__/belepes-atallas-ui.test.tsx`. |
+| 8 | **A levél kiküldésének csatornája** | üzemeltetés | **NYITOTT DÖNTÉS.** A 4.5. levél közös linkes, tehát mail merge nélkül is mehet. Eldöntendő, hogy Resend broadcast megy-e, vagy a Katák saját levelezője; ettől függ, hogy a `{{nev}}` mező kitölthető-e. |
+
+**Ami NEM hiányzik (mérve, ne induljon rá újabb kör):** a jelszó-kérő és
+jelszó-beállító lap, az enumeráció-védelem (a végpont mindig 200-at ad), a
+kérés-korlát (IP-re és a CÍMZETT címére is 3 kérés / 10 perc), a
+`passwordSetupPending` jelző és annak automatikus törlése az első belépéskor, a
+CSV-import, az aktiválási linkek és a magyar levélsablonok.
 
 ### 10.1. E-mail-küldés élesítése (Resend)
 
@@ -568,14 +683,19 @@ az kizárólag üzemeltetői beállítás. Sorrendben:
    Railway → Variables** felületén: `RESEND_API_KEY`. A kulcs
    **soha** nem kerülhet a repóba, PR-be, jegybe vagy chat-üzenetbe. Ha
    véletlenül mégis kikerül: a Resendben azonnal vonjátok vissza és
-   generáljatok újat.
+   generáljatok újat. **(2026-08-21: beállítva.)**
 4. **Feladó beállítása:** `EMAIL_FROM` (pl. `Kineticare <no-reply@kineticare.hu>`)
    — a domain rész legyen az a domain, amit a 2. lépésben hitelesítettetek.
+   **(2026-08-21: beállítva.)**
    Beállítás nélkül a rendszer `noreply@localhost`-ra esik vissza, ami élesben
    biztosan visszapattan.
 5. **Próbalevél**: az oldalon az „Elfelejtett jelszó" gombbal kérjetek
    visszaállítást egy saját címre. Ha megérkezik és a linkről be tudtok
-   állítani jelszót, a lánc működik.
+   állítani jelszót, a lánc működik. **Ez a lépés 2026-08-21-én még nincs
+   igazolva** — a kulcs megléte nem bizonyítja, hogy a domain Verified, és hogy
+   a levél be is érkezik. A 4.5. körlevél előtt EZ az utolsó kapu.
+   A próbát a `/belepes-atallas` lapról érdemes futtatni: az a lap megy ki a
+   levélben, tehát a teljes vevői utat egyszerre méritek.
 6. Csak ezután futtassátok a `--send-invites`-t (6.4.1.).
 
 **Amíg ezek nincsenek kész:** a rendszer nem hibázik, csak nem küld levelet —

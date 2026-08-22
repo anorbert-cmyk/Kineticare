@@ -483,7 +483,7 @@ describe('issueStreamToken — paywall és token-kiállítás', () => {
     const { payload } = createMockPayload()
     const promise = issueStreamToken({ payload, user: buyerUser, productId: 'abc' })
     await expect(promise).rejects.toMatchObject({ status: 400 })
-    await expect(promise).rejects.toThrowError(/termékazonosító/)
+    await expect(promise).rejects.toThrowError(/kurzus azonosítója/)
   })
 
   it('hiányzó BUNNY_STREAM_TOKEN_AUTH_KEY → 503 magyar üzenettel (lazy ENV-ellenőrzés)', async () => {
@@ -604,7 +604,7 @@ describe('GET /api/stream-token route-handler', () => {
 
     expect(response.status).toBe(400)
     const body = (await response.json()) as { error: string }
-    expect(body.error).toContain('termékazonosító')
+    expect(body.error).toContain('kurzus azonosítója')
   })
 
   it('hiányzó token-kulcs → 503 magyar üzenettel', async () => {
@@ -635,7 +635,7 @@ describe('GET /api/stream-token route-handler', () => {
 
     expect(response.status).toBe(500)
     const body = (await response.json()) as { error: string }
-    expect(body.error).toContain('Váratlan hiba')
+    expect(body.error).toContain('A videó most nem indítható el')
     expect(body.error).not.toContain('DB-kapcsolat')
   })
 

@@ -82,6 +82,7 @@ interface EngagementProductDoc {
 
 interface EngagementEnrollmentDoc {
   id?: unknown
+  name?: unknown
 }
 
 interface EngagementProgressDoc {
@@ -99,10 +100,24 @@ const PRODUCT_SELECT = {
   videos: true,
 } as const
 
-/* Üres select = csak az `id` jön vissza (a Payload a select-módban az id-t
-   mindig adja). Így a vevő e-mailje, számlázási adata és purchases-listája
-   be sem kerül a memóriába — ez a nézet csak darabszámot mutat. */
-const ENROLLMENT_SELECT = {} as const
+/*
+ * A hozzáférő-lekérdezés KIZÁRÓLAG a nevet kéri ki (az `id`-t a Payload
+ * select-módban mindig adja). A vevő e-mailje, számlázási adata és
+ * purchases-listája így be sem kerül a memóriába.
+ *
+ * ═══ MIÉRT PONT A NÉV, ÉS MIÉRT NEM TÖBB ═══
+ * A statisztika-oldal kurzusonként kiírja a „nem kezdte el" hallgatók nevét
+ * (legfeljebb tízet), mert a tulajdonos ezt kérte, és mert ebből a csoportból
+ * lesz aznap cselekvés. Az E-MAIL viszont a magasabb kockázatú mező, és nem is
+ * kérte senki: a döntési dokumentum 6.7 pontja tiltja a lapra vitelét
+ * (docs/statisztika-audit-2026-08-21.md). A hallgatónkénti teljes adat
+ * (e-maillel, kereséssel, exporttal) a kurzus szerkesztőlapján él tovább.
+ *
+ * Ezt a szűkítést őr-teszt védi: a users-lekérdezés select-je pontosan
+ * `{ name: true }`, és a renderelt lapon nem lehet e-mail
+ * (src/__tests__/statistics-engagement.test.ts).
+ */
+const ENROLLMENT_SELECT = { name: true } as const
 
 const PROGRESS_SELECT = { user: true, videoRef: true } as const
 
@@ -177,8 +192,8 @@ export async function queryCourseEngagement(
 
     try {
       // „Hozzáfér" = akinek a purchases listája tartalmazza a terméket — a
-      // course-progress handler definíciója. Csak az azonosító kell: a nevet
-      // és az e-mailt ez a nézet nem mutatja, a névsor a kurzus lapján él.
+      // course-progress handler definíciója. Az azonosító mellett a NÉV jön
+      // át (a „nem kezdte el" névsorhoz), e-mail nem: lásd ENROLLMENT_SELECT.
       const enrollmentPage = await readStatisticsPages<EngagementEnrollmentDoc>(
         (page, limit) =>
           deps.payload.find({
@@ -222,7 +237,9 @@ export async function queryCourseEngagement(
         if (userId === null) {
           continue
         }
-        enrollments.push({ userId, email: '', name: null })
+        // Az `email` szándékosan üres sztring: a közös összesítő szerződése
+        // kéri a mezőt, de ez a nézet nem olvassa be és nem is mutatja.
+        enrollments.push({ userId, email: '', name: trimmedOrNull(enrollmentDoc.name) })
       }
 
       const progressRows: CourseProgressStatRow[] = []
@@ -248,6 +265,11 @@ export async function queryCourseEngagement(
         productId,
         title: productLabel(doc, productId),
         audience: doc.audience,
+        // A csonkolás vesztesége kurzusonként megy tovább: darabszámnál alsó
+        // becslés, NÉVSORNÁL viszont hamis állítás lenne elhallgatni, hogy
+        // valaki hiányzik a listáról (döntési dokumentum 1. pont).
+        omitted: teljes.omitted,
+        truncated: enrollmentPage.truncated || progressPage.truncated,
         // hasAccess: true — az admin a teljes szerkezetet látja; a modellből
         // ebben a nézetben csak a leckeszám (nevező) hasznosul, GUID nem megy ki.
         curriculum: buildCurriculum(

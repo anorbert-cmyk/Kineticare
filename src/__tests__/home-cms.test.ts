@@ -670,7 +670,11 @@ describe('PostView (poszt-oldal-render)', () => {
     expect(html).toContain('Kapcsolódó 3')
     expect(html).not.toContain('Kapcsolódó 4')
     expect(html).not.toContain('Kapcsolódó draft')
-    expect(html).toContain('"@type":"Article"')
+    // A séma a KÖZÖS `postArticleJsonLd`-ből jön (ugyanaz, amit az élő
+    // cikkoldal hív): `Article` + `MedicalWebPage` kettős típus. A korábbi,
+    // `MedicalWebPage` nélküli `articleJsonLd`-hívás azért került ki, mert
+    // rajta a `reviewedBy`/`lastReviewed` sosem lett volna érvényes.
+    expect(html).toContain('"@type":["Article","MedicalWebPage"]')
   })
 
   it('articleJsonLd: headline, dátumok, szerző, publisher', () => {

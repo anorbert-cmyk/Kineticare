@@ -52,7 +52,7 @@ export function PurchasesOverviewPanel() {
 
   return (
     <div className="field-type" style={panelStyle}>
-      <h4 style={{ marginTop: 0 }}>Megvásárolt kurzusok (áttekintés)</h4>
+      <h3 style={{ marginTop: 0 }}>Megvásárolt kurzusok (áttekintés)</h3>
       {ids.length === 0 ? (
         <p style={noteStyle}>
           {'Ennek a felhasználónak még nincs kurzus-hozzáférése. Hozzáadni a fenti ' +

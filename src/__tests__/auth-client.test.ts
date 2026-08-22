@@ -56,7 +56,7 @@ describe('forgotPassword', () => {
   it('A2 — 429 (IP-alapú korlát) esetén NEM hazudik sikert, a szerver üzenetét adja vissza', async () => {
     const mockFetch = vi.fn().mockResolvedValue(
       new Response(
-        JSON.stringify({ errors: [{ message: 'Túl sok próbálkozás. Kérjük, próbáld újra pár perc múlva.' }] }),
+        JSON.stringify({ errors: [{ message: 'Túl sok próbálkozás. Próbáld újra pár perc múlva.' }] }),
         { status: 429, headers: { 'Content-Type': 'application/json' } },
       ),
     )
@@ -109,7 +109,7 @@ describe('resetPassword', () => {
   it('C1 — a 429 (IP-alapú korlát) üzenete átjön', async () => {
     const mockFetch = vi.fn().mockResolvedValue(
       new Response(
-        JSON.stringify({ errors: [{ message: 'Túl sok próbálkozás. Kérjük, próbáld újra pár perc múlva.' }] }),
+        JSON.stringify({ errors: [{ message: 'Túl sok próbálkozás. Próbáld újra pár perc múlva.' }] }),
         { status: 429, headers: { 'Content-Type': 'application/json' } },
       ),
     )

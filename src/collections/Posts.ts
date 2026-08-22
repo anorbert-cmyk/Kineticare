@@ -155,6 +155,42 @@ export const Posts: CollectionConfig = {
       },
     },
     {
+      name: 'reviewedBy',
+      type: 'relationship',
+      relationTo: 'users',
+      label: 'Szakmai ellenőrzést végezte',
+      admin: {
+        description:
+          'A gyógytornász, aki a cikk klinikai állításait a forrásokkal együtt ellenőrizte.',
+      },
+    },
+    {
+      name: 'reviewedAt',
+      type: 'date',
+      label: 'Utolsó szakmai ellenőrzés',
+      admin: {
+        description:
+          'Az utolsó szakmai ellenőrzés napja. Csak akkor töltsd ki, ha az ellenőrzés tényleg megtörtént.',
+        // Csak NAP, óra nélkül: a mező leírása napról beszél, a cikkoldalon
+        // pedig a `formatPostDate` amúgy is dátumot mutat (PostAuthorBox,
+        // az NHS „Page last reviewed" mintája). Óraválasztót felkínálni olyan
+        // pontosságot ígérne, aminek se jelentése, se megjelenése nincs.
+        // Kizárólag megjelenítés: az oszlop marad `timestamp`, séma nem változik.
+        date: { pickerAppearance: 'dayOnly' },
+      },
+    },
+    {
+      name: 'nextReviewAt',
+      type: 'date',
+      label: 'Következő ellenőrzés',
+      admin: {
+        description:
+          'A következő tervezett ellenőrzés napja (az NHS-minta szerint jellemzően 2 év).',
+        // Lásd a `reviewedAt` indoklását: nap-pontosság, megjelenítés-szintű.
+        date: { pickerAppearance: 'dayOnly' },
+      },
+    },
+    {
       name: 'categories',
       type: 'relationship',
       relationTo: 'categories',
@@ -173,6 +209,41 @@ export const Posts: CollectionConfig = {
       label: 'Kapcsolódó bejegyzések',
       admin: {
         description: 'Legfeljebb 3 cikk, amit a bejegyzés alján ajánlunk az olvasónak.',
+      },
+    },
+    {
+      name: 'faq',
+      type: 'array',
+      maxRows: 6,
+      label: 'Gyakori kérdések (GYIK)',
+      labels: { singular: 'Kérdés', plural: 'Kérdések' },
+      admin: {
+        description:
+          'Mások ezt is kérdezik: 2–6 rövid kérdés-válasz a cikk végére. A válasz önmagában is megálljon (2–4 mondat), mert a keresők és az AI-válaszok pontosan ezt idézik.',
+      },
+      fields: [
+        {
+          name: 'question',
+          type: 'text',
+          required: true,
+          label: 'Kérdés',
+        },
+        {
+          name: 'answer',
+          type: 'textarea',
+          required: true,
+          label: 'Válasz',
+        },
+      ],
+    },
+    {
+      name: 'ctaCourse',
+      type: 'relationship',
+      relationTo: 'products',
+      label: 'Ajánlott kurzus',
+      admin: {
+        description:
+          'A cikk végi ajánló erre a kurzusra mutat. Üresen hagyva az ajánló a kurzuslistára visz.',
       },
     },
   ],

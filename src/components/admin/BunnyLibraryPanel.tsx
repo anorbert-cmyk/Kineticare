@@ -194,11 +194,28 @@ export function bunnyLibraryPanelReducer(
   }
 }
 
+/**
+ * A panel címsorának szintje.
+ *
+ * ═══ MIÉRT PROP, ÉS MIÉRT `h3` AZ ALAP ═══
+ * A panel két helyen jelenik meg, KÜLÖNBÖZŐ címsor-környezetben. A kurzus
+ * szerkesztőlapján mezőként ül, a Payload saját címsorai alatt: ott a `h3` a
+ * helyes szint, ezért az alapértelmezés ez marad. Az önálló Videótár nézetben
+ * viszont közvetlenül a lap `h1`-e alatt áll, tehát a `h3` egy szintet
+ * ÁTUGRANA (h1 → h3), amit a WCAG 2.2 SC 1.3.1 (Info and Relationships)
+ * alatti bevett gyakorlat tilt: a képernyőolvasót használó munkatárs a
+ * kihagyott szintből azt olvassa ki, hogy egy szakaszt nem talál. Ezért a
+ * nézet `h2`-t kér (src/components/admin/BunnyLibraryView.tsx).
+ */
+export type BunnyLibraryHeadingLevel = 'h2' | 'h3'
+
 export interface BunnyLibraryPanelViewProps {
   state: BunnyLibraryPanelState
   onLibraryChange: (kind: BunnyLibraryKind) => void
   onLoad: () => void
   onCopy: (guid: string) => void
+  /** A panel címsorának szintje; alap: `h3` (a termék-szerkesztő környezete). */
+  headingLevel?: BunnyLibraryHeadingLevel
 }
 
 /** A panel megjelenítő fele: állapotot kap, nem tart. */
@@ -207,10 +224,12 @@ export function BunnyLibraryPanelView({
   onLibraryChange,
   onLoad,
   onCopy,
+  headingLevel = 'h3',
 }: BunnyLibraryPanelViewProps) {
+  const Heading = headingLevel
   return (
     <div className="field-type" style={panelStyle}>
-      <h4 style={{ marginTop: 0 }}>Videók a Bunny tárból</h4>
+      <Heading style={{ marginTop: 0 }}>Videók a Bunny tárból</Heading>
       <p style={noteStyle}>
         A feltöltés a Bunny felületén történik. Itt a tárban lévő felvételek listája látszik. Másold
         ki a videó azonosítóját, illeszd a lecke „Videó azonosítója” mezőjébe, írd be a hosszt
@@ -294,7 +313,9 @@ export function BunnyLibraryPanelView({
   )
 }
 
-export function BunnyLibraryPanel() {
+export function BunnyLibraryPanel({
+  headingLevel = 'h3',
+}: { headingLevel?: BunnyLibraryHeadingLevel } = {}) {
   const { user } = useAuth<{ id: number | string; role?: string | null }>()
   const [state, dispatch] = useReducer(bunnyLibraryPanelReducer, initialBunnyLibraryPanelState)
 
@@ -349,6 +370,7 @@ export function BunnyLibraryPanel() {
       onLibraryChange={(kind) => dispatch({ type: 'library-changed', kind })}
       onLoad={() => void load(state.kind)}
       onCopy={(guid) => void copyGuid(guid)}
+      headingLevel={headingLevel}
     />
   )
 }

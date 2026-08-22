@@ -1,5 +1,9 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { PostArticle } from '../components/content/PostArticle'
+import { postFaqItems as postFaqItemsOfPost } from '../components/content/post-article'
 import { absoluteUrl, articleJsonLd, blogJsonLd, breadcrumbJsonLd } from '../lib/seo'
 import {
   POST_FAQ_MAX_ITEMS,
@@ -9,6 +13,7 @@ import {
   type ArticleSeoPost,
   type PostFaqSource,
 } from '../lib/seo-cikk'
+import { kulcsszoFor } from '../lib/tudastar/seo-kulcsszavak'
 import type { Post } from '../payload-types'
 
 /**
@@ -386,12 +391,96 @@ describe('Cikk-séma: dátumok (a módosítás NEM ellenőrzés)', () => {
   })
 })
 
+describe('Cikk-séma: a MÉRT kulcsszavak és a cikk TÁRGYA', () => {
+  // A `keywords` és az `about` a Monid-mérésből jön
+  // (src/lib/tudastar/seo-kulcsszavak.ts). Ez a két mező az EGYETLEN hely,
+  // ahol a mérés kifejezései gépi olvasásra is kikerülnek a lapról, ezért
+  // külön őrt kap: ha valaki átépíti a séma-építőt és elveszti őket, ez a
+  // blokk bukjon.
+
+  it('a keywords VESSZŐVEL elválasztott szöveg (a schema.org saját alakja)', () => {
+    // https://schema.org/keywords — „Multiple textual entries in a keywords
+    // list are typically delimited by commas, or by repeating the property".
+    const jsonLd = postArticleJsonLd({
+      post: cikk(),
+      path: '/blog/x',
+      keywords: ['teniszkönyök', 'teniszkönyök gyakorlatok'],
+    })
+
+    expect(jsonLd.keywords).toBe('teniszkönyök, teniszkönyök gyakorlatok')
+  })
+
+  it('trimmel, az üres tételt eldobja, és nem ismétel', () => {
+    const jsonLd = postArticleJsonLd({
+      post: cikk(),
+      path: '/blog/x',
+      keywords: ['  teniszkönyök  ', 'teniszkönyök', '   ', 'teniszkönyök gyakorlatok'],
+    })
+
+    expect(jsonLd.keywords).toBe('teniszkönyök, teniszkönyök gyakorlatok')
+  })
+
+  it('csupa üres kulcsszónál NINCS keywords kulcs (nem üres mező)', () => {
+    const jsonLd = postArticleJsonLd({ post: cikk(), path: '/blog/x', keywords: ['', '   '] })
+    expect('keywords' in jsonLd).toBe(false)
+  })
+
+  it('az about PONTOSAN két kulcsot visz: @type és name', () => {
+    // A cikk TÁRGYA entitásként még nem klinikai állítás. Klinikai állítás a
+    // possibleTreatment/signOrSymptom/typicalTest volna — a node szerkezetileg
+    // nem tud ilyet előállítani, és ezt itt meg is mérjük.
+    const jsonLd = postArticleJsonLd({
+      post: cikk(),
+      path: '/blog/x',
+      about: { tipus: 'MedicalCondition', nev: 'Teniszkönyök' },
+    })
+    const about = node(jsonLd, 'about')
+
+    expect(about).toEqual({ '@type': 'MedicalCondition', name: 'Teniszkönyök' })
+    expect(Object.keys(about).sort()).toEqual(['@type', 'name'])
+  })
+
+  it('a panasz-típus (MedicalSignOrSymptom) is átmegy, névvel', () => {
+    // Thing > MedicalEntity > MedicalCondition > MedicalSignOrSymptom
+    // (https://schema.org/MedicalSignOrSymptom).
+    const jsonLd = postArticleJsonLd({
+      post: cikk(),
+      path: '/blog/x',
+      about: { tipus: 'MedicalSignOrSymptom', nev: 'Kézzsibbadás' },
+    })
+
+    expect(node(jsonLd, 'about')['@type']).toBe('MedicalSignOrSymptom')
+    expect(node(jsonLd, 'about').name).toBe('Kézzsibbadás')
+  })
+
+  it('név nélküli tárgynál nincs about (üres entitást nem hirdetünk)', () => {
+    const jsonLd = postArticleJsonLd({
+      post: cikk(),
+      path: '/blog/x',
+      about: { tipus: 'MedicalCondition', nev: '   ' },
+    })
+    expect('about' in jsonLd).toBe(false)
+  })
+
+  it('MÉRÉS NÉLKÜL egyik mező sem jelenik meg', () => {
+    const jsonLd = postArticleJsonLd({ post: cikk(), path: '/blog/x', author: KATA })
+
+    expect('keywords' in jsonLd).toBe(false)
+    expect('about' in jsonLd).toBe(false)
+  })
+})
+
 describe('Cikk-séma: amit TUDATOSAN nem állít', () => {
   it('nincs kitalált klinikai vagy értékelési adat a node-ban', () => {
     // A gépi formában kódolt klinikai állítás ugyanúgy állítás: az orvosi
     // tartalom-szabály (minden állításhoz forrás) a sémára is áll. Az
     // értékelés-mezőket a fogyasztóvédelem és a Google irányelve is tiltja
     // valós adat nélkül.
+    //
+    // Az `about` NEM tartozik ide (felülvizsgálva 2026-08-21): az értéke a
+    // cikk tárgya entitásként, `@type` + `name` alakban, vagyis pontosan az,
+    // amiről a látható H1 és a törzs szól. A klinikai ALTULAJDONSÁGOK viszont
+    // továbbra is tiltottak, és a lista őrzi őket.
     const jsonLd = postArticleJsonLd({
       post: cikk(),
       path: '/blog/x',
@@ -399,10 +488,11 @@ describe('Cikk-séma: amit TUDATOSAN nem állít', () => {
       reviewer: LEKTOR,
       lastReviewed: '2026-08-18',
       imageUrl: absoluteUrl('/media/x.jpg'),
+      about: { tipus: 'MedicalCondition', nev: 'Teniszkönyök' },
+      keywords: ['teniszkönyök'],
     })
 
     for (const tiltott of [
-      'about',
       'citation',
       'aggregateRating',
       'review',
@@ -411,6 +501,9 @@ describe('Cikk-séma: amit TUDATOSAN nem állít', () => {
       'medicalSpecialty',
     ]) {
       expect(tiltott in jsonLd).toBe(false)
+    }
+    for (const klinikai of ['possibleTreatment', 'signOrSymptom', 'typicalTest', 'riskFactor']) {
+      expect(klinikai in node(jsonLd, 'about')).toBe(false)
     }
   })
 })
@@ -509,5 +602,235 @@ describe('Cikk-GYIK: a séma és a látható lista KÖZÖS forrása', () => {
 
     expect(hosszuValasz.length).toBeGreaterThan(400)
     expect(node(mainEntity[0]!, 'acceptedAnswer').text).toBe(hosszuValasz)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A CIKKOLDAL RENDERELT SÉMÁJA — az építő és a lap ÖSSZE VAN KÖTVE
+//
+// Miért kell a fenti egység-tesztek MELLÉ ez a réteg. A `postArticleJsonLd`
+// hónapokig hibátlanul megvolt és zölden tesztelt, miközben a cikkoldal a régi
+// `articleJsonLd`-t hívta: a `MedicalWebPage` típus, a `reviewedBy` és a
+// `lastReviewed` SOHA nem jutott ki egyetlen lapra sem. Egység-teszt ezt nem
+// foghatta meg, mert a hiba a HÍVÁSI helyen volt. Ez a blokk ezért a
+// SZERVER-RENDELT kimenetből olvassa vissza a sémát — pontosan azt, amit a
+// keresőrobot lát.
+// ---------------------------------------------------------------------------
+
+/** Minimális, érvényes Lexical-törzs a komponens-rendereléshez. */
+const TORZS = {
+  root: {
+    type: 'root',
+    direction: 'ltr',
+    format: '',
+    indent: 0,
+    version: 1,
+    children: [
+      {
+        type: 'paragraph',
+        direction: 'ltr',
+        format: '',
+        indent: 0,
+        version: 1,
+        children: [
+          {
+            type: 'text',
+            detail: 0,
+            format: 0,
+            mode: 'normal',
+            style: '',
+            text: 'Rövid bevezető.',
+            version: 1,
+          },
+        ],
+      },
+    ],
+  },
+}
+
+/**
+ * Cikk-fixture a komponenshez.
+ *
+ * A `Record<string, unknown>` + kettős konverzió SZÁNDÉKOS: a cikkoldal olyan
+ * mezőket is olvas (`faq`, `reviewedBy`, `reviewedAt`), amelyeket a séma-kör
+ * vezet be, és a felület szerződése épp az, hogy nélkülük is helyesen működik.
+ */
+const lapPost = (overrides: Record<string, unknown> = {}): Post =>
+  ({
+    id: 3,
+    title: 'Teniszkönyök kezelése házilag',
+    slug: 'teniszkonyok',
+    excerpt: 'Mit tehetsz otthon, ha belenyilall a könyöködbe.',
+    status: 'published',
+    publishedAt: '2026-08-10T08:00:00.000Z',
+    updatedAt: '2026-08-12T09:30:00.000Z',
+    createdAt: '2026-08-09T08:00:00.000Z',
+    content: TORZS,
+    categories: [{ id: 5, title: 'Kézrehabilitáció', slug: 'kezrehabilitacio' }],
+    ...overrides,
+  }) as unknown as Post
+
+/** A lap összes JSON-LD blokkja, feloldva. */
+function jsonLdBlocks(post: Post): Record<string, unknown>[] {
+  const html = renderToStaticMarkup(createElement(PostArticle, { post }))
+  return [
+    ...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g),
+  ].map((match) => JSON.parse(match[1]!.replace(/\\u003c/g, '<')) as Record<string, unknown>)
+}
+
+/** A cikk-entitás node-ja a renderelt lapról (az egyetlen tömbös @type). */
+function cikkSema(post: Post): Record<string, unknown> {
+  const article = jsonLdBlocks(post).find((block) => Array.isArray(block['@type']))
+  expect(article, 'nincs cikk-entitás a renderelt lapon').toBeDefined()
+  return article!
+}
+
+describe('A renderelt cikkoldal sémája', () => {
+  it('a lapra a KETTŐS típusú node kerül ki, nem a régi sima Article', () => {
+    expect(cikkSema(lapPost())['@type']).toEqual(['Article', 'MedicalWebPage'])
+  })
+
+  it('a lapon PONTOSAN egy cikk-entitás áll (nem két külön node)', () => {
+    const cikkNodeok = jsonLdBlocks(lapPost()).filter((block) => Array.isArray(block['@type']))
+    expect(cikkNodeok).toHaveLength(1)
+  })
+
+  it('SZERZŐ NÉLKÜL az author Organization, nem márkanevű Person', () => {
+    // A Person{name:'Kineticare'} típushiba volt: a Kineticare nem személy.
+    const author = node(cikkSema(lapPost()), 'author')
+
+    expect(author['@type']).toBe('Organization')
+    expect(author.name).toBe('Kineticare')
+  })
+
+  it('szerzővel Person megy ki, a titulus a jobTitle-ben', () => {
+    const author = node(
+      cikkSema(lapPost({ author: { id: 2, name: 'Kocsis Kata', credentials: 'gyógytornász' } })),
+      'author',
+    )
+
+    expect(author['@type']).toBe('Person')
+    expect(author.name).toBe('Kocsis Kata')
+    expect(author.jobTitle).toBe('gyógytornász')
+  })
+
+  it('a MÉRT kulcsszavak és a cikk tárgya KIKERÜL a lapra', () => {
+    // REGRESSZIÓS ŐR: ha valaki átállítja a séma-építőt és elveszti ezt a két
+    // mezőt, ez bukik. A várt értékek magából a mérésből jönnek, nem
+    // másolatból — így a mérés bővülése nem teszi hazuggá a tesztet.
+    const meres = kulcsszoFor('teniszkonyok')
+    expect(meres, 'a teniszkönyök-cikkhez van mérés').toBeDefined()
+
+    const jsonLd = cikkSema(lapPost())
+    const keywords = String(jsonLd.keywords)
+
+    for (const kifejezes of [meres!.elsodleges, ...meres!.masodlagos]) {
+      expect(keywords, `hiányzik a kulcsszó: ${kifejezes}`).toContain(kifejezes)
+    }
+    expect(jsonLd.about).toEqual({ '@type': meres!.targy.tipus, name: meres!.targy.nev })
+  })
+
+  it('MÉRÉS NÉLKÜLI cikken nincs keywords és nincs about', () => {
+    const jsonLd = cikkSema(lapPost({ slug: 'nincs-hozza-meres', title: 'Valami más' }))
+
+    expect('keywords' in jsonLd).toBe(false)
+    expect('about' in jsonLd).toBe(false)
+  })
+
+  it('LEKTORÁLT cikken a reviewedBy és a lastReviewed is kikerül', () => {
+    const jsonLd = cikkSema(
+      lapPost({
+        reviewedBy: { id: 7, name: 'Nagy Kata', credentials: 'gyógytornász' },
+        reviewedAt: '2026-08-18T14:25:00.000Z',
+      }),
+    )
+
+    expect(node(jsonLd, 'reviewedBy')['@type']).toBe('Person')
+    expect(node(jsonLd, 'reviewedBy').name).toBe('Nagy Kata')
+    // A schema.org szerint a lastReviewed értéke Date, nem DateTime.
+    expect(jsonLd.lastReviewed).toBe('2026-08-18')
+  })
+
+  it('ELLENŐRZÉS NÉLKÜL egyik ellenőrzés-mező sem jelenik meg', () => {
+    // Ellenőrzés-dátum ellenőrzés nélkül hazugság (docs/tudastar-ux-terv.md 5.6).
+    const jsonLd = cikkSema(lapPost())
+
+    expect('reviewedBy' in jsonLd).toBe(false)
+    expect('lastReviewed' in jsonLd).toBe(false)
+  })
+
+  it('a lektor önmagában, dátum nélkül is kimehet (és fordítva)', () => {
+    const csakLektor = cikkSema(
+      lapPost({ reviewedBy: { id: 7, name: 'Nagy Kata', credentials: 'gyógytornász' } }),
+    )
+    const csakDatum = cikkSema(lapPost({ reviewedAt: '2026-06-02' }))
+
+    expect('reviewedBy' in csakLektor).toBe(true)
+    expect('lastReviewed' in csakLektor).toBe(false)
+    expect('reviewedBy' in csakDatum).toBe(false)
+    expect(csakDatum.lastReviewed).toBe('2026-06-02')
+  })
+
+  it('a séma a LÁTHATÓ címet és bevezetőt viszi', () => {
+    const jsonLd = cikkSema(lapPost())
+
+    expect(jsonLd.headline).toBe('Teniszkönyök kezelése házilag')
+    expect(jsonLd.description).toBe('Mit tehetsz otthon, ha belenyilall a könyöködbe.')
+    expect(jsonLd.mainEntityOfPage).toBe(absoluteUrl('/blog/teniszkonyok'))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// EGYETLEN GYIK-SZŰRŐ A REPÓBAN
+//
+// A `postFaqItems` korábban KÉT példányban élt: a komponens-oldali változat a
+// dokumentumból olvasott és saját szűrőt futtatott, a séma-oldali pedig egy
+// tömböt kapott. Két külön szűrő idővel szétcsúszik, és pont az a látható
+// lista és séma közti eltérés keletkezik belőle, ami miatt a keresők elvetik a
+// strukturált adatot. A komponens-oldali változat ma CSAK OLVAS, a szűrést a
+// séma-rétegre bízza — ezt méri ez a blokk.
+// ---------------------------------------------------------------------------
+
+describe('A komponens-oldali GYIK-olvasó a séma-réteg szűrőjét használja', () => {
+  it('ugyanúgy trimmel és ugyanúgy dobja a hiányos tételt', () => {
+    const doksi = lapPost({
+      faq: [
+        { question: '  Meddig tart?  ', answer: '  Az okától függ.  ' },
+        { question: 'Válasz nélküli kérdés?', answer: '   ' },
+        { question: null, answer: 'Kérdés nélküli válasz.' },
+      ],
+    })
+
+    expect(postFaqItemsOfPost(doksi)).toEqual([
+      { question: 'Meddig tart?', answer: 'Az okától függ.' },
+    ])
+  })
+
+  it('a plafon a KÖZÖS konstans, nem egy külön beégetett szám', () => {
+    const sok = Array.from({ length: POST_FAQ_MAX_ITEMS + 3 }, (_unused, index) => ({
+      question: `Kérdés ${index + 1}?`,
+      answer: `Válasz ${index + 1}.`,
+    }))
+
+    expect(postFaqItemsOfPost(lapPost({ faq: sok }))).toHaveLength(POST_FAQ_MAX_ITEMS)
+  })
+
+  it('a két belépési pont UGYANAZT adja ugyanarra a bemenetre', () => {
+    const nyers = [
+      { question: 'Meddig tart?', answer: 'Az okától függ.' },
+      { question: 'Kell sín?', answer: 'A tünetektől függ.' },
+      { question: '  ', answer: 'Csonka.' },
+    ]
+
+    expect(postFaqItemsOfPost(lapPost({ faq: nyers }))).toEqual(postFaqItems(nyers))
+  })
+
+  it('nem szöveges mező nem okoz hibát, csak kimarad', () => {
+    const doksi = lapPost({ faq: [{ question: 42, answer: 'Szám a kérdés helyén.' }] })
+    expect(postFaqItemsOfPost(doksi)).toEqual([])
+  })
+
+  it('faq mező nélküli cikken üres a lista (nem hiba)', () => {
+    expect(postFaqItemsOfPost(lapPost())).toEqual([])
   })
 })

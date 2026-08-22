@@ -148,7 +148,10 @@ export function createMarkWatchedHandler(
           body = JSON.parse(rawBody)
         } catch {
           return Response.json(
-            { error: 'Érvénytelen kérés: a törzsnek JSON-nak kell lennie.' },
+            {
+              error:
+                'A haladás nem menthető: a kérés adatai nem értelmezhetők. Frissítsd az oldalt, és próbáld újra.',
+            },
             { status: 400 },
           )
         }
@@ -173,7 +176,7 @@ export function createMarkWatchedHandler(
         error: error instanceof Error ? error.message : String(error),
       })
       return Response.json(
-        { error: 'Váratlan hiba történt a haladás mentése közben. Kérjük, próbáld újra később.' },
+        { error: 'A haladás mentése most nem sikerült. Próbáld újra néhány perc múlva.' },
         { status: 500 },
       )
     }

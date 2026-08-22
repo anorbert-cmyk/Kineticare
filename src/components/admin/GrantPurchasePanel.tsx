@@ -24,9 +24,11 @@ import { hasStaffOrOwnerRole } from '../../access/roles'
 
 const REQUEST_TIMEOUT_MS = 20_000
 
-const GENERIC_ERROR = 'A hozzáférés megadása most nem sikerült. Kérjük, próbáld újra később.'
+/** §2.7 / A/9: „Kérjük" nélkül, a következő lépés kimondva (lásd RefundPanel). */
+const GENERIC_ERROR = 'A hozzáférés megadása most nem sikerült. Próbáld újra néhány perc múlva.'
 const NETWORK_ERROR = 'Nem sikerült elérni a szervert. Ellenőrizd a kapcsolatot, és próbáld újra.'
-const PRODUCTS_ERROR = 'A kurzusok listája nem tölthető be. Kérjük, próbáld újra.'
+const PRODUCTS_ERROR =
+  'A kurzusok listája nem tölthető be. Frissítsd az oldalt, és nyisd meg újra a panelt.'
 
 interface ProductOption {
   value: string
@@ -168,7 +170,7 @@ export function GrantPurchasePanel() {
     }
     if (reason.trim().length === 0) {
       setSuccessMessage(null)
-      setErrorMessage('Az indok megadása kötelező — ez kerül az audit-naplóba.')
+      setErrorMessage('Add meg az indokot: ez kerül az audit-naplóba.')
       return
     }
     const label = products.find((option) => option.value === selectedProduct)?.label ?? selectedProduct
@@ -216,7 +218,7 @@ export function GrantPurchasePanel() {
   if (isInitializing) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h4>
+        <h3 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h3>
         <p style={noteStyle}>Betöltés…</p>
       </div>
     )
@@ -225,7 +227,7 @@ export function GrantPurchasePanel() {
   if (!hasStaffOrOwnerRole(user)) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h4>
+        <h3 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h3>
         <p style={noteStyle}>
           Kurzus-hozzáférést csak munkatárs vagy tulajdonos adhat.
         </p>
@@ -236,9 +238,9 @@ export function GrantPurchasePanel() {
   if (!email) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h4>
+        <h3 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h3>
         <p style={noteStyle}>
-          Előbb mentsd a felhasználót — a hozzáférés az e-mail-cím alapján adható.
+          Előbb mentsd a felhasználót: a hozzáférés az e-mail-cím alapján adható.
         </p>
       </div>
     )
@@ -246,7 +248,7 @@ export function GrantPurchasePanel() {
 
   return (
     <div className="field-type" style={panelStyle}>
-      <h4 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h4>
+      <h3 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h3>
       <p style={noteStyle}>
         Kézi jóváírás (elhibázott fizetés, ajándék kurzus). A művelet naplózásra kerül, és
         ismételt megadás esetén sem duplázódik.

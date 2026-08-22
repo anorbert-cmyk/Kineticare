@@ -55,7 +55,7 @@ export const NEWSLETTER_SUCCESS_MESSAGE =
 
 /** Turnstile-kulcs mellett, még token nélküli állapotban ez az üzenet megy ki. */
 export const NEWSLETTER_TURNSTILE_PENDING_ERROR =
-  'Kérjük, várd meg a spam-ellenőrzés befejezését, majd küldd el újra.'
+  'A spam-ellenőrzés még fut. Várd meg, amíg lezárul, és küldd el újra.'
 
 /**
  * Turnstile-widget láthatósága: CSAK beállított site key mellett renderelünk.

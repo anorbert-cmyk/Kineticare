@@ -64,7 +64,9 @@ export const FREE_COURSE_EMAIL_TOO_LONG_ERROR = 'Ez az e-mail-cím túl hosszú.
  * MIT KELL TENNI, ne csak azt, hogy „kötelező". A „Kérjük" SZÁNDÉKOSAN nincs
  * benne: a GOV.UK szerint a „please" választást sugall ott, ahol nincs
  * választás (§2.7, A/9). A hírlevél-űrlap mai üzenete ezt a szabályt sérti
- * („A feliratkozáshoz kérjük a hozzájárulásod…") — az javítása külön kör.
+ * („A feliratkozáshoz kérjük a hozzájárulásod…") — ezt a G-UI7-kör javította
+ * 2026-08-22-én: a hírlevél és az időpontkérő ma SZÓ SZERINT ezt a szöveget
+ * használja.
  */
 export const FREE_COURSE_CONSENT_ERROR = 'Pipáld be az adatkezelési hozzájárulást.'
 

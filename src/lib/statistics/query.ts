@@ -7,7 +7,8 @@
  * - A `refunds` mezőt NEM kérjük le és NEM olvassuk (owner-only, CLAUDE.md 4.).
  * - `depth: 1` kell az `items[].product.audience`-hez. Ha a product csak
  *   azonosító (szám vagy `{ id }` audience nélkül), a
- *   `hydrateProductAudience` külön `products.find`-del pótolja. Explicit
+ *   `hydrateProductFields` külön `products.find`-del pótolja (az ágat és a
+ *   bevétel-tábla sorfejlécéhez kellő marketingcímet is). Explicit
  *   `audience: null` marad null → laikus.
  * - Lapozás felső korláttal: a `limit: 0` korlátlan memóriát jelentene. A
  *   kurzus-haladás panel mintájára explicit lapméret + max, és a csonkolást
@@ -100,8 +101,53 @@ const ORDER_SELECT = {
 const PAGED_ORDER_SORT: string[] = ['-createdAt', 'id']
 
 /**
+ * Csonkolt-e a beolvasás, amikor a felső korlátig eljutottunk.
+ *
+ * ═══ MIÉRT KELL EZ A SORREND (mérve, 2026-08-21) ═══
+ * A korábbi szabály a `hasNextPage` hiányában a `pageDocs.length === pageSize`
+ * tartalék-ágra esett vissza — az viszont a PONTOSAN a korláttal egyező,
+ * TELJES halmazt is csonkoltnak jelölte: ha az utolsó lap történetesen tele
+ * volt, a felület „a valóságnál kisebb számok" figyelmeztetést írt ki hiánytalan
+ * adatra. A hamis riasztás ugyanolyan kár, mint az elhallgatott csonkolás: a
+ * munkatárs a jó számban sem bízik meg többé.
+ *
+ * A sorrend ezért:
+ *  1. `totalDocs` — a Payload a TALÁLATOK teljes számát adja, tehát ebből
+ *     egyértelműen eldől a kérdés: több van-e, mint amennyit beolvashattunk.
+ *  2. `hasNextPage` — szintén a szervertől jön, csak közvetve válaszol.
+ *  3. TARTALÉK: „az utolsó lap tele volt". EZ CSAK BECSLÉS, és szándékosan a
+ *     hamis pozitív irányába téved (inkább jelezzen csonkolást, mint hogy
+ *     elhallgassa) — de csak akkor fut, ha a szerver EGYIK számot sem adta meg,
+ *     ami valós Payload-válasznál nem fordul elő, mockolt tesztben viszont igen.
+ */
+export function isReadTruncated(input: {
+  /** A Payload `totalDocs` mezője az utolsó lapról (ha adta). */
+  totalDocs: number | null | undefined
+  /** A Payload `hasNextPage` mezője az utolsó lapról (ha adta). */
+  hasNextPage: boolean | null | undefined
+  /** A felső korlát. */
+  maxDocs: number
+  /** Ennyi sort olvastunk be a levágás ELŐTT. */
+  loaded: number
+  /** Az utolsó lap sorainak száma és a kért lapméret. */
+  pageDocsLength: number
+  pageSize: number
+}): boolean {
+  const { totalDocs, hasNextPage, maxDocs, loaded, pageDocsLength, pageSize } = input
+  if (typeof totalDocs === 'number' && Number.isFinite(totalDocs) && totalDocs >= 0) {
+    return totalDocs > maxDocs
+  }
+  if (typeof hasNextPage === 'boolean') {
+    return hasNextPage || loaded > maxDocs
+  }
+  return pageDocsLength === pageSize || loaded > maxDocs
+}
+
+/**
  * Lapozott beolvasás felső korláttal. A pontosan a korláttal egyező, teljes
- * halmaz NEM csonkolt — ugyanaz a szabály, mint a kurzus-haladás panelen.
+ * halmaz NEM csonkolt — ugyanaz a szabály, mint a kurzus-haladás panelen
+ * (a döntést a KÖZÖS `isReadTruncated` hozza, hogy a két olvasó ne csúszhasson
+ * szét).
  */
 export async function readStatisticsPages<T>(
   fetchPage: (page: number, limit: number) => Promise<FindResultLike<T>>,
@@ -116,11 +162,16 @@ export async function readStatisticsPages<T>(
     const pageDocs = Array.isArray(result.docs) ? result.docs : []
     docs.push(...pageDocs)
     if (docs.length >= maxDocs) {
-      const hasMorePages =
-        typeof result.hasNextPage === 'boolean' ? result.hasNextPage : pageDocs.length === pageSize
       return {
         docs: docs.slice(0, maxDocs),
-        truncated: hasMorePages || docs.length > maxDocs,
+        truncated: isReadTruncated({
+          totalDocs: result.totalDocs,
+          hasNextPage: result.hasNextPage,
+          maxDocs,
+          loaded: docs.length,
+          pageDocsLength: pageDocs.length,
+          pageSize,
+        }),
       }
     }
     if (pageDocs.length < pageSize || result.hasNextPage === false) {
@@ -135,6 +186,22 @@ function audienceFromProduct(product: unknown): unknown {
     return undefined
   }
   return (product as { audience?: unknown }).audience
+}
+
+/**
+ * A termék MAI marketingcíme a populált relationshipből.
+ *
+ * A bevétel-tábla sorfejléce ez, nem a sku-snapshot (H7, 2026-08-21-i audit):
+ * ugyanaz a kurzus nem futhat két néven egy lapon (WCAG 2.2 SC 3.2.4). Ha a
+ * termék nincs populálva vagy időközben törölték, `null` jön vissza, és az
+ * aggregátor a sku-ra esik vissza.
+ */
+function displayTitleFromProduct(product: unknown): string | null {
+  if (typeof product !== 'object' || product === null) {
+    return null
+  }
+  const value = (product as { displayTitle?: unknown }).displayTitle
+  return typeof value === 'string' ? value : null
 }
 
 function finiteOrZero(value: unknown): number {
@@ -174,6 +241,7 @@ export function mapOrderDocToRevenueInput(doc: StatisticsOrderDoc): RevenueOrder
         priceHuf: finiteOrZero(item.priceHufSnapshot),
         quantity: quantityOf(item.quantity),
         titleSnapshot: typeof item.titleSnapshot === 'string' ? item.titleSnapshot : null,
+        displayTitle: displayTitleFromProduct(item.product),
       })
     }
   }
@@ -202,7 +270,7 @@ function productIdOf(product: unknown): number | null {
 }
 
 /**
- * Audience-t kell pótolni, ha a product csak azonosító, vagy `{ id }` van
+ * Pótolni kell a termék mezőit, ha a product csak azonosító, vagy `{ id }` van
  * audience kulcs nélkül. Explicit `audience: null` NEM hiányzó: az a laikus
  * fallback a `normalizeAudience`-ben.
  */
@@ -219,7 +287,12 @@ function productNeedsAudienceHydration(product: unknown): boolean {
   return !('audience' in product)
 }
 
-async function hydrateProductAudience(
+/**
+ * A hiányzó termék-mezők (ág és marketingcím) pótlása EGYETLEN, batchelt
+ * lekérdezéssel. A cím ugyanabban a körben jön, mint az ág: külön hívás
+ * ugyanazokra a sorokra fölösleges kör lenne.
+ */
+async function hydrateProductFields(
   payload: Pick<Payload, 'find'>,
   docs: StatisticsOrderDoc[],
 ): Promise<StatisticsOrderDoc[]> {
@@ -244,14 +317,16 @@ async function hydrateProductAudience(
     depth: 0,
     pagination: false,
     limit: missingIds.size,
-    select: { id: true, audience: true },
+    select: { id: true, audience: true, displayTitle: true },
     overrideAccess: true,
-  })) as FindResultLike<{ id?: unknown; audience?: unknown }>
+  })) as FindResultLike<{ id?: unknown; audience?: unknown; displayTitle?: unknown }>
 
   const audienceById = new Map<number, unknown>()
+  const titleById = new Map<number, unknown>()
   for (const product of products.docs ?? []) {
     if (typeof product.id === 'number') {
       audienceById.set(product.id, product.audience)
+      titleById.set(product.id, product.displayTitle)
     }
   }
 
@@ -268,7 +343,7 @@ async function hydrateProductAudience(
           }
           return {
             ...item,
-            product: { id, audience: audienceById.get(id) },
+            product: { id, audience: audienceById.get(id), displayTitle: titleById.get(id) },
           }
         })
       : doc.items,
@@ -358,7 +433,7 @@ export async function queryRevenueReport(deps: QueryRevenueReportDeps): Promise<
 
   const funnel = await countOrderFunnel(deps.payload)
 
-  const hydrated = await hydrateProductAudience(deps.payload, paidPage.docs)
+  const hydrated = await hydrateProductFields(deps.payload, paidPage.docs)
   const orders = hydrated.map(mapOrderDocToRevenueInput)
   return buildRevenueReport(orders, funnel, {
     now: deps.now,

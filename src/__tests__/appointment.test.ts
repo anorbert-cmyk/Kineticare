@@ -293,16 +293,18 @@ describe('submitAppointmentForm (mockolt API)', () => {
   })
 
   it('a szerver MAGYAR hibaüzenetét mutatja tovább (pl. Turnstile-hiba)', async () => {
+    // A fixtúra a VALÓDI szerződés (`src/payload.config.ts` form-builder hook):
+    // a korábbi „A spam-ellenőrzés (Turnstile) sikertelen." szöveget az A/9 kör
+    // már átírta, tehát ez a mock elavult mondatot mért.
+    const szerverUzenet =
+      'A spam-ellenőrzés nem sikerült. Frissítsd az oldalt, és küldd el újra az űrlapot.'
     const fetchMock = async () =>
-      new Response(
-        JSON.stringify({ errors: [{ message: 'A spam-ellenőrzés (Turnstile) sikertelen.' }] }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } },
-      )
+      new Response(JSON.stringify({ errors: [{ message: szerverUzenet }] }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
     const result = await submitAppointmentForm(buildAppointmentPayload(ERVENYES, '42'), fetchMock)
-    expect(result).toEqual({
-      ok: false,
-      message: 'A spam-ellenőrzés (Turnstile) sikertelen.',
-    })
+    expect(result).toEqual({ ok: false, message: szerverUzenet })
   })
 
   it('hálózati hibánál általános, magyar üzenetet ad (nem dob)', async () => {

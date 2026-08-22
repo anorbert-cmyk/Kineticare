@@ -125,6 +125,28 @@ function selectOnChange(
   throw new Error('A panelben nincs videótár-választó onChange kezelővel.')
 }
 
+describe('Bunny panel — a címsor szintje a környezethez igazodik', () => {
+  it('alapból h3 (a termék-szerkesztő környezete)', () => {
+    expect(render(BETOLTOTT_VEDETT)).toContain('<h3 style="margin-top:0">Videók a Bunny tárból</h3>')
+  })
+
+  it('kérésre h2 — az önálló Videótár nézet a lap h1-e alá teszi', () => {
+    // A h1 → h3 ugrásból a képernyőolvasót használó munkatárs hiányzó
+    // szakaszt olvasna ki (WCAG 2.2 SC 1.3.1, Info and Relationships).
+    const html = renderToStaticMarkup(
+      createElement(BunnyLibraryPanelView, {
+        state: BETOLTOTT_VEDETT,
+        onLibraryChange: () => {},
+        onLoad: () => {},
+        onCopy: () => {},
+        headingLevel: 'h2' as const,
+      }),
+    )
+    expect(html).toContain('<h2 style="margin-top:0">Videók a Bunny tárból</h2>')
+    expect(html).not.toContain('<h3')
+  })
+})
+
 describe('Bunny panel — a videótár-váltás kiüríti az előző tár listáját', () => {
   it('kiindulás: a védett tár azonosítója és a csonka-jelzés látszik', () => {
     const html = render(BETOLTOTT_VEDETT)

@@ -1,6 +1,6 @@
 import type { OrderFunnelCounts } from '../../../lib/statistics/revenue'
 import { StatCard } from './StatCard'
-import { cardRowStyle, noticeStyle, sectionStyle } from './styles'
+import { cardRowStyle, leadInSectionStyle, noticeStyle, sectionStyle } from './styles'
 
 /**
  * A visszatérítés és a bevétel viszonya — PONTOSAN, ahogy a kód működik.
@@ -26,15 +26,30 @@ const VISSZATERITES_MEGJEGYZES =
   'A teljesen visszatérített rendelés nem számít bevételnek. A részlegesen visszatérített viszont fizetettnek marad, ezért a bevételben a teljes összegével szerepel.'
 
 /**
- * „Ami beavatkozást kérhet" szekció: a rendelés-tölcsér operatív oldala.
+ * „Rendelések állapota" szekció: a rendelés-tölcsér operatív oldala.
  * A tölcsér a TELJES állományt számolja (nem a 12 hónapos ablakot), mert a
  * nyitott vagy sikertelen fizetés akkor is teendő, ha régi.
+ *
+ * ═══ MIÉRT NEM „AMI BEAVATKOZÁST KÉRHET" A CÍM (2026-08-21) ═══
+ * A régi cím félrevezető volt: olyan kártyákat is takart, amik NEM kérnek
+ * beavatkozást (fizetve, megszakítva). A címsor mondja meg, mit tartalmaz a
+ * szekció (WCAG 2.2 SC 2.4.6 Headings and Labels:
+ * https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels.html), a
+ * teendőt pedig a cím ALATTI mondat mondja ki — így a cím leíró, a lead
+ * cselekvésre késztető.
  */
 export function FunnelSection({ funnel }: { funnel: OrderFunnelCounts }) {
   const needsAttention = funnel.created + funnel.paymentPending + funnel.paymentFailed
   return (
     <section style={sectionStyle}>
-      <h2>Ami beavatkozást kérhet</h2>
+      <h2>Rendelések állapota</h2>
+      {/* A teendő-mondat a cím alatt, LEAD-ként: ez a szekció lényege, és a
+          kártyák fölött olvasva rögtön keretet ad a négy számnak. */}
+      <p style={leadInSectionStyle}>
+        {needsAttention === 0
+          ? 'Nincs nyitott vagy sikertelen fizetés, ami beavatkozást kérne.'
+          : `${needsAttention.toLocaleString('hu-HU')} rendelés vár még befejezésre vagy újrakezdésre (leadva, fizetésre vár, vagy a kártya nem ment át).`}
+      </p>
       <div style={cardRowStyle}>
         <StatCard label="Fizetve" value={funnel.paid.toLocaleString('hu-HU')} />
         {/* „vagy", nem per-jel: a GOV.UK stílus-szabály szerint a / nem
@@ -60,11 +75,9 @@ export function FunnelSection({ funnel }: { funnel: OrderFunnelCounts }) {
         />
         <StatCard label="Megszakítva" value={funnel.cancelled.toLocaleString('hu-HU')} />
       </div>
-      <p style={noticeStyle}>
-        {needsAttention === 0
-          ? `Nincs nyitott vagy sikertelen fizetés, ami beavatkozást kérne. ${VISSZATERITES_MEGJEGYZES}`
-          : `${needsAttention.toLocaleString('hu-HU')} rendelés vár még befejezésre vagy újrakezdésre (leadva, fizetésre vár, vagy a kártya nem ment át). ${VISSZATERITES_MEGJEGYZES}`}
-      </p>
+      {/* A visszatérítés-megjegyzés a kártyák ALATT marad: ez nem teendő,
+          hanem a bevétel-számok olvasati szabálya. */}
+      <p style={noticeStyle}>{VISSZATERITES_MEGJEGYZES}</p>
     </section>
   )
 }
