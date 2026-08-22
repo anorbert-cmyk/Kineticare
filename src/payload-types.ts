@@ -1606,7 +1606,7 @@ export interface Post {
   _status?: ('draft' | 'published') | null;
 }
 /**
- * Szerkesztők és vásárlók. A szerepkört csak tulajdonos állíthatja át; a megvásárolt kurzusokat munkatárs és tulajdonos szerkesztheti.
+ * Szerkesztők és vásárlók. A szerepkört csak tulajdonos állíthatja át; a megvásárolt kurzusokat munkatárs és tulajdonos szerkesztheti. A „Megvásárolt kurzusok" oszlopban a kurzus mellett a haladás is látszik: ez számított érték, ezért eszerint rendezni és szűrni nem lehet.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "users".
@@ -1631,7 +1631,7 @@ export interface User {
    */
   role: 'owner' | 'staff' | 'customer';
   /**
-   * A felhasználó által megvásárolt kurzusok (hozzáférés). Fizetés után magától töltődik; munkatárs és tulajdonos kézzel is hozzáadhat vagy elvehet. A vevő saját magának nem adhat hozzáférést. Szűrés a listában: Szűrők → Megvásárolt kurzusok.
+   * A felhasználó által megvásárolt kurzusok (hozzáférés). Fizetés után magától töltődik; munkatárs és tulajdonos kézzel is hozzáadhat vagy elvehet. A vevő saját magának nem adhat hozzáférést. A listaoszlopban minden kurzus mellett a haladás is megjelenik: ez számított érték, ezért eszerint rendezni és szűrni nem lehet. Szűrés a listában: Szűrők → Megvásárolt kurzusok.
    */
   purchases?: (number | Product)[] | null;
   billingName?: string | null;
