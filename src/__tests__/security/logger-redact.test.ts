@@ -76,6 +76,32 @@ describe('logger — az e-mail-cím redakciója', () => {
     expect(lastContext().cimzett).toBe('k***@example.com')
   })
 
+  it('az emailDelivered üzemeltetési mező NEM redaktált (email csak pontos egyezés)', () => {
+    createLogger().info('teszt', { emailDelivered: true, email: 'kiss.anna@example.com' })
+
+    expect(lastContext()).toEqual({ emailDelivered: true, email: '[REDACTED]' })
+  })
+
+  it('a részleges titok-jelölők fogják a resetPasswordToken / activationUrl / sessions / accessToken kulcsokat', () => {
+    // Egyértelműen DUMMY értékek — a teszt a KULCSNEVET őrzi, nem titkot (CLAUDE.md #1).
+    createLogger().info('teszt', {
+      resetPasswordToken: 'DUMMY-RESET-TOKEN',
+      activationUrl: 'https://example.test/activate/DUMMY',
+      sessions: [{ id: 'DUMMY-SESSION' }],
+      accessToken: 'DUMMY-ACCESS-TOKEN',
+      userId: 7,
+    })
+
+    expect(lastContext()).toEqual({
+      resetPasswordToken: '[REDACTED]',
+      activationUrl: '[REDACTED]',
+      sessions: '[REDACTED]',
+      accessToken: '[REDACTED]',
+      userId: 7,
+    })
+    expect(JSON.stringify(lastContext())).not.toContain('DUMMY')
+  })
+
   it('a korábbi érzékeny kulcsok változatlanul redaktáltak', () => {
     // Egyértelműen DUMMY, rövid értékek — a teszt állítása az, hogy a KULCS
     // alapján redaktálunk, tehát az érték tartalma közömbös (CLAUDE.md #1).

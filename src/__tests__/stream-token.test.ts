@@ -639,6 +639,54 @@ describe('GET /api/stream-token route-handler', () => {
     expect(body.error).not.toContain('DB-kapcsolat')
   })
 
+  it('minden válasz no-store, a 200-as és a tiltó ágon is', async () => {
+    const expectNoStore = (response: Response): void => {
+      expect(response.headers.get('Cache-Control')).toBe('no-store')
+    }
+
+    const { payload } = createMockPayload()
+    const GET = createStreamTokenHandler({ getPayload: async () => payload })
+    const ok = await GET(makeRequest('?productId=42'))
+    expect(ok.status).toBe(200)
+    expectNoStore(ok)
+
+    const { payload: anonPayload } = createMockPayload({ authUser: null })
+    const ANON = createStreamTokenHandler({ getPayload: async () => anonPayload })
+    const unauthorized = await ANON(makeRequest('?productId=42'))
+    expect(unauthorized.status).toBe(401)
+    expectNoStore(unauthorized)
+
+    const { payload: nonBuyerPayload } = createMockPayload({ authUser: nonBuyerUser })
+    const FORBIDDEN = createStreamTokenHandler({ getPayload: async () => nonBuyerPayload })
+    const forbidden = await FORBIDDEN(makeRequest('?productId=42'))
+    expect(forbidden.status).toBe(403)
+    expectNoStore(forbidden)
+
+    const badRequest = await GET(makeRequest(''))
+    expect(badRequest.status).toBe(400)
+    expectNoStore(badRequest)
+
+    const limiter = new SlidingWindowRateLimiter()
+    const limitedRules = { ...RATE_LIMIT_RULES, 'stream-token': { limit: 1, windowMs: 60_000 } }
+    const LIMITED = createStreamTokenHandler({
+      getPayload: async () => payload,
+      rateLimit: { limiter, rules: limitedRules },
+    })
+    expect((await LIMITED(makeRequest('?productId=42'))).status).toBe(200)
+    const throttled = await LIMITED(makeRequest('?productId=42'))
+    expect(throttled.status).toBe(429)
+    expectNoStore(throttled)
+
+    const FAIL = createStreamTokenHandler({
+      getPayload: async () => {
+        throw new Error('DB-kapcsolat megszakadt')
+      },
+    })
+    const failed = await FAIL(makeRequest('?productId=42'))
+    expect(failed.status).toBe(500)
+    expectNoStore(failed)
+  })
+
   /**
    * Per-user kérés-korlát: a végpont hitelesített, és minden hívása
    * Bunny-lejátszási jegyet állít ki — fék nélkül egy belépett fiók

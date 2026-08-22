@@ -2,6 +2,7 @@ import { logger } from '../logger'
 import { generateRequestId, getRequestId } from '../request-id'
 import { sanitizeReturnUrl } from '../return-url'
 import { EXIT_PREVIEW_PATH } from './preview-target'
+import { publicRedirectBase } from './public-redirect-base'
 
 /**
  * Piszkozat-előnézetből való KILÉPÉS (`/next/exit-preview`).
@@ -64,27 +65,11 @@ export function createExitPreviewHandler(
 
     // Szándékosan NEM Response.redirect(): az azzal létrehozott válasz fejlécei
     // csak olvashatók, így a Next nem tudná törölni rajta a draft mode sütijét.
-    //
-    // Az átirányítás bázisa a PUBLIKUS origin: a proxy (Railway edge) mögött a
-    // request.url a konténer belső címét (pl. http://localhost:8080) hordozza,
-    // ami élesben élhetetlen Location-fejlécet adna (pentest-megállapítás).
-    // Az env csak akkor bázis, ha érvényes abszolút http(s) URL — egyébként a
-    // request.url a vésztartalék (üres/hibás env sosem dobhat 500-at).
-    const envOrigin = (process.env.NEXT_PUBLIC_SERVER_URL ?? '').replace(/\/+$/, '')
-    let base = request.url
-    if (envOrigin !== '') {
-      try {
-        const parsed = new URL(envOrigin)
-        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-          base = parsed.origin
-        }
-      } catch {
-        // érvénytelen env — a request.url marad a bázis
-      }
-    }
+    // Location-bázis: publikus origin, ha van érvényes NEXT_PUBLIC_SERVER_URL
+    // (Railway belső host ellen) — lásd publicRedirectBase.
     return new Response(null, {
       status: 307,
-      headers: { Location: new URL(target, base).toString() },
+      headers: { Location: new URL(target, publicRedirectBase(request.url)).toString() },
     })
   }
 }

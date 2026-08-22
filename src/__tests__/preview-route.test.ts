@@ -14,6 +14,7 @@ import {
   PREVIEW_PATH,
   previewTargetPath,
 } from '../lib/preview/preview-target'
+import { publicRedirectBase } from '../lib/preview/public-redirect-base'
 import { createPreviewHandler } from '../lib/preview/route-handler'
 
 /**
@@ -155,6 +156,22 @@ describe('buildAdminPreviewUrl (az admin „Előnézet" gombja)', () => {
 })
 
 describe('/next/preview — jogosultság-ellenőrzés', () => {
+  const originalServerUrl = process.env.NEXT_PUBLIC_SERVER_URL
+
+  beforeEach(() => {
+    // A Location-tesztek a request.url originjét várják: üres env → fallback.
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', '')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    if (originalServerUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_SERVER_URL
+    } else {
+      process.env.NEXT_PUBLIC_SERVER_URL = originalServerUrl
+    }
+  })
+
   it.each([
     ['staff', staff],
     ['owner', owner],
@@ -210,6 +227,75 @@ describe('/next/preview — jogosultság-ellenőrzés', () => {
     )
 
     expect(harness.authHeaders()?.get('x-request-id')).toBe('teszt-keres-1')
+  })
+})
+
+describe('publicRedirectBase — publikus origin vs. belső host', () => {
+  const originalServerUrl = process.env.NEXT_PUBLIC_SERVER_URL
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    if (originalServerUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_SERVER_URL
+    } else {
+      process.env.NEXT_PUBLIC_SERVER_URL = originalServerUrl
+    }
+  })
+
+  it('érvényes NEXT_PUBLIC_SERVER_URL → a publikus origin, nem a request.url', () => {
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'https://kineticare.hu')
+    expect(publicRedirectBase('http://localhost:8080/next/preview')).toBe('https://kineticare.hu')
+  })
+
+  it('üres env → a request.url a vésztartalék', () => {
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', '')
+    expect(publicRedirectBase('http://localhost:8080/next/preview')).toBe(
+      'http://localhost:8080/next/preview',
+    )
+  })
+
+  it('érvénytelen env → a request.url a vésztartalék', () => {
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'nem-url')
+    expect(publicRedirectBase('http://localhost:8080/next/preview')).toBe(
+      'http://localhost:8080/next/preview',
+    )
+  })
+})
+
+describe('/next/preview — Location a publikus originre épül', () => {
+  const originalServerUrl = process.env.NEXT_PUBLIC_SERVER_URL
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    if (originalServerUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_SERVER_URL
+    } else {
+      process.env.NEXT_PUBLIC_SERVER_URL = originalServerUrl
+    }
+  })
+
+  it('NEXT_PUBLIC_SERVER_URL=https://kineticare.hu: 307 Location a publikus originre megy, a belső host ellenére', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', 'https://kineticare.hu')
+    const harness = harnessWithUser(staff)
+
+    const response = await harness.handler(
+      new Request('http://localhost:8080/next/preview?collection=pages&slug=rolunk'),
+    )
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('Location')).toBe('https://kineticare.hu/rolunk')
+  })
+
+  it('üres env: a Location a request.url originjére esik vissza', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SERVER_URL', '')
+    const harness = harnessWithUser(staff)
+
+    const response = await harness.handler(
+      new Request('http://localhost:8080/next/preview?collection=pages&slug=rolunk'),
+    )
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('Location')).toBe('http://localhost:8080/rolunk')
   })
 })
 

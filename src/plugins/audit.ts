@@ -18,7 +18,7 @@ import { auditLogStore, resolveClientIp, writeAuditLog } from '../lib/audit'
  *   használnak draft-verziózást),
  * - products: publish-átmenet (drafts `_status` mező → published),
  * - orders: refund-mezők (refundReason, refundedAt) változása,
- * - users: role-változás.
+ * - users: role-változás, purchases-változás (`purchase-change`).
  *
  * Fontos: a plugins-láncban az ecommerce plugin UTÁN kell futnia, különben a
  * products/orders collectionök még nem léteznének az injekciókor.
@@ -62,6 +62,53 @@ function fieldValue(doc: unknown, field: string): unknown {
   return (doc as Record<string, unknown>)[field]
 }
 
+/**
+ * Relationship-id kinyerése: nyers szám/szöveg vagy populate-olt `{ id }`.
+ * Ismeretlen alak → null (nem számít bele az összehasonlításba).
+ */
+function relationId(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value)
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed === '' ? null : trimmed
+  }
+  if (typeof value === 'object' && value !== null) {
+    return relationId((value as { id?: unknown }).id)
+  }
+  return null
+}
+
+/**
+ * A users.purchases mező stabil lenyomata: rendezett id-lista.
+ * Az átrendezés önmagában nem esemény; id hozzáadása/elvétele igen.
+ */
+function sortedPurchaseIds(doc: unknown): string[] {
+  const raw = fieldValue(doc, 'purchases')
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  const ids: string[] = []
+  for (const item of raw) {
+    const id = relationId(item)
+    if (id !== null) {
+      ids.push(id)
+    }
+  }
+  ids.sort()
+  return ids
+}
+
+function purchasesChanged(previousDoc: unknown, doc: unknown): boolean {
+  const before = sortedPurchaseIds(previousDoc)
+  const after = sortedPurchaseIds(doc)
+  if (before.length !== after.length) {
+    return true
+  }
+  return before.some((id, index) => id !== after[index])
+}
+
 /** A vizsgált átmenetek eldöntése — tiszta függvény, külön tesztelhető. */
 export function auditActionsForChange(
   collectionSlug: string,
@@ -90,6 +137,9 @@ export function auditActionsForChange(
     }
     if (collectionSlug === 'users' && fieldValue(previousDoc, 'role') !== fieldValue(doc, 'role')) {
       actions.push('role-change')
+    }
+    if (collectionSlug === 'users' && purchasesChanged(previousDoc, doc)) {
+      actions.push('purchase-change')
     }
   }
   return actions

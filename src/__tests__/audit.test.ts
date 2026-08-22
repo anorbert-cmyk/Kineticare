@@ -139,6 +139,51 @@ describe('auditActionsForChange', () => {
       auditActionsForChange('users', 'update', { lastLoginAt: 'b' }, { lastLoginAt: 'a' }),
     ).toEqual([])
   })
+
+  it('users purchases hozzáadására purchase-change', () => {
+    expect(
+      auditActionsForChange('users', 'update', { purchases: [1, 2] }, { purchases: [1] }),
+    ).toEqual(['purchase-change'])
+  })
+
+  it('users role-only változás: role-change, nincs purchase-change', () => {
+    expect(
+      auditActionsForChange(
+        'users',
+        'update',
+        { role: 'staff', purchases: [1] },
+        { role: 'customer', purchases: [1] },
+      ),
+    ).toEqual(['role-change'])
+  })
+
+  it('users role + purchases együtt: mindkét action', () => {
+    expect(
+      auditActionsForChange(
+        'users',
+        'update',
+        { role: 'staff', purchases: [1, 2] },
+        { role: 'customer', purchases: [1] },
+      ),
+    ).toEqual(['role-change', 'purchase-change'])
+  })
+
+  it('users create továbbra is csak create (nincs purchase-change zaj az új fiókon)', () => {
+    expect(
+      auditActionsForChange('users', 'create', { id: 1, purchases: [42] }, undefined),
+    ).toEqual(['create'])
+  })
+
+  it('users purchases csak átrendezve vagy populate-olt alakban: nincs purchase-change', () => {
+    expect(
+      auditActionsForChange(
+        'users',
+        'update',
+        { purchases: [2, 1] },
+        { purchases: [{ id: 1 }, { id: 2 }] },
+      ),
+    ).toEqual([])
+  })
 })
 
 type CreateCall = {

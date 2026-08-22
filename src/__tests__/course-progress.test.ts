@@ -184,6 +184,26 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 
 const VALID_BODY = { productId: String(PRODUCT_ID), videoRef: VIDEO_REF_1 }
 
+/** A Payload `where` fából a `user.equals` érték — a hostile userId-teszthez. */
+function userEqualsFromWhere(where: unknown): unknown {
+  if (typeof where !== 'object' || where === null) {
+    return undefined
+  }
+  const record = where as Record<string, unknown>
+  if (record.user && typeof record.user === 'object' && record.user !== null) {
+    return (record.user as { equals?: unknown }).equals
+  }
+  if (Array.isArray(record.and)) {
+    for (const clause of record.and) {
+      const found = userEqualsFromWhere(clause)
+      if (found !== undefined) {
+        return found
+      }
+    }
+  }
+  return undefined
+}
+
 describe('POST /api/course-progress/mark-watched — auth- és hibamátrix', () => {
   it('401: bejelentkezés nélkül nem rögzíthető haladás', async () => {
     const { POST, create } = setup({ authUser: null })
@@ -320,6 +340,38 @@ describe('POST /api/course-progress/mark-watched — auth- és hibamátrix', () 
     expect(createArgs.data.user).toBe(buyerUser.id)
     expect(createArgs.data.product).toBe(PRODUCT_ID)
     expect(createArgs.data.videoRef).toBe(VIDEO_REF_1)
+  })
+
+  it('a törzs userId mezőjét FIGYELMEN KÍVÜL hagyja: a haladás a bejelentkezett useré', async () => {
+    const { POST, create, find } = setup()
+
+    const response = await POST(
+      makeRequest({
+        productId: String(PRODUCT_ID),
+        videoRef: VIDEO_REF_1,
+        userId: 999,
+      }),
+    )
+
+    expect(response.status).toBe(200)
+
+    const progressFinds = find.mock.calls.filter((call) => {
+      const args = call[0] as { collection?: string }
+      return args.collection === 'course-progress'
+    })
+    expect(progressFinds.length).toBeGreaterThan(0)
+    for (const call of progressFinds) {
+      const args = call[0] as { where?: unknown }
+      expect(userEqualsFromWhere(args.where)).toBe(buyerUser.id)
+      expect(userEqualsFromWhere(args.where)).not.toBe(999)
+    }
+
+    expect(create).toHaveBeenCalledTimes(1)
+    const createArgs = create.mock.calls[0]?.[0] as unknown as {
+      data: Record<string, unknown>
+    }
+    expect(createArgs.data.user).toBe(buyerUser.id)
+    expect(createArgs.data.user).not.toBe(999)
   })
 
   it('200 idempotens: a már megnézett videó { alreadyWatched: true }, új sor nélkül', async () => {
