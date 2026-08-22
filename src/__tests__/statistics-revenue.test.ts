@@ -63,7 +63,9 @@ describe('canAccessStatistics — a nézet egyetlen védelme', () => {
   it('a magyar elutasító szöveg a nézetben él', () => {
     // „Oldal", nem „nézet": a „nézet" a Payload fejlesztői szava, a munkatárs
     // oldalt lát (ui-sztenderdek §3.1 — a felhasználó szavát használjuk).
-    expect(STATISTICS_ACCESS_DENIED_MESSAGE).toBe('Ehhez az oldalhoz nincs jogosultságod.')
+    expect(STATISTICS_ACCESS_DENIED_MESSAGE).toBe(
+      'A Statisztikát csak munkatárs vagy tulajdonos nézheti meg.',
+    )
   })
 
   it('anoním látogatónál a DefaultTemplate kimarad, bejelentkezett usernél nem', () => {

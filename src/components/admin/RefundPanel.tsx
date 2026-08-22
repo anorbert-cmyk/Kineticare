@@ -173,7 +173,7 @@ export function RefundPanel() {
   if (isInitializing) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Visszatérítés</h4>
+        <h3 style={{ marginTop: 0 }}>Visszatérítés</h3>
         <p style={noteStyle}>Betöltés…</p>
       </div>
     )
@@ -182,7 +182,7 @@ export function RefundPanel() {
   if (!orderNumber) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Visszatérítés</h4>
+        <h3 style={{ marginTop: 0 }}>Visszatérítés</h3>
         <p style={noteStyle}>
           A visszatérítés csak mentett, kifizetett rendelésen indítható.
         </p>
@@ -193,7 +193,7 @@ export function RefundPanel() {
   if (!hasOwnerRole(user)) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Visszatérítés</h4>
+        <h3 style={{ marginTop: 0 }}>Visszatérítés</h3>
         <p style={noteStyle}>Visszatérítést csak a tulajdonos indíthat.</p>
       </div>
     )
@@ -203,7 +203,7 @@ export function RefundPanel() {
   if (blockedReason) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Visszatérítés</h4>
+        <h3 style={{ marginTop: 0 }}>Visszatérítés</h3>
         <p style={noteStyle}>{blockedReason}</p>
       </div>
     )
@@ -211,7 +211,7 @@ export function RefundPanel() {
 
   return (
     <div className="field-type" style={panelStyle}>
-      <h4 style={{ marginTop: 0 }}>Visszatérítés</h4>
+      <h3 style={{ marginTop: 0 }}>Visszatérítés</h3>
       <p style={noteStyle}>
         {totalHuf === null
           ? 'Üresen hagyva a teljes összeg térül vissza.'

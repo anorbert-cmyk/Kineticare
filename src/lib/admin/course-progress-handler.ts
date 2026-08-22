@@ -403,9 +403,9 @@ export function createCourseProgressHandler(
         // A szöveg SOSEM hallgatja el a csonkolást, és külön kimondja, ha
         // diákok maradtak ki: a megjelenített számok viszont MINDIG teljesek.
         notice: truncated
-          ? `A kurzusnak a megjeleníthetőnél több adata van, ezért a lista csonkolt (legfeljebb ${String(ENROLLMENT_MAX)} beiratkozott és ${String(PROGRESS_MAX)} haladás-sor).${
+          ? `A kurzusnak a megjeleníthetőnél több adata van, ezért a lista csonkolt (legfeljebb ${String(ENROLLMENT_MAX)} hozzáférő és ${String(PROGRESS_MAX)} haladás-sor).${
               kihagyottDiakok > 0
-                ? ` ${String(kihagyottDiakok)} hallgató kimaradt a listából, mert róluk csak hiányos — így félrevezető — haladás látszana.`
+                ? ` ${String(kihagyottDiakok)} hallgató kimaradt a listából, mert róluk csak hiányos, ezért félrevezető haladás látszana.`
                 : ''
             } A megjelenített hallgatók adatai teljesek.`
           : null,

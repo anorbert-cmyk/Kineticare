@@ -150,7 +150,8 @@ export function canAccessStatistics(user: RoleUser | null | undefined): boolean 
  * (docs/ui-sztenderdek.md §3.1) a felhasználó szavát kéri, nem a
  * keretrendszerét.
  */
-export const STATISTICS_ACCESS_DENIED_MESSAGE = 'Ehhez az oldalhoz nincs jogosultságod.'
+export const STATISTICS_ACCESS_DENIED_MESSAGE =
+  'A Statisztikát csak munkatárs vagy tulajdonos nézheti meg.'
 
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null

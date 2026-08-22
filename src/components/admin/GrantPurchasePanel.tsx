@@ -216,7 +216,7 @@ export function GrantPurchasePanel() {
   if (isInitializing) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h4>
+        <h3 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h3>
         <p style={noteStyle}>Betöltés…</p>
       </div>
     )
@@ -225,7 +225,7 @@ export function GrantPurchasePanel() {
   if (!hasStaffOrOwnerRole(user)) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h4>
+        <h3 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h3>
         <p style={noteStyle}>
           Kurzus-hozzáférést csak munkatárs vagy tulajdonos adhat.
         </p>
@@ -236,7 +236,7 @@ export function GrantPurchasePanel() {
   if (!email) {
     return (
       <div className="field-type" style={panelStyle}>
-        <h4 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h4>
+        <h3 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h3>
         <p style={noteStyle}>
           Előbb mentsd a felhasználót — a hozzáférés az e-mail-cím alapján adható.
         </p>
@@ -246,7 +246,7 @@ export function GrantPurchasePanel() {
 
   return (
     <div className="field-type" style={panelStyle}>
-      <h4 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h4>
+      <h3 style={{ marginTop: 0 }}>Kurzus-hozzáférés adása</h3>
       <p style={noteStyle}>
         Kézi jóváírás (elhibázott fizetés, ajándék kurzus). A művelet naplózásra kerül, és
         ismételt megadás esetén sem duplázódik.
