@@ -11,6 +11,7 @@ import {
   type BillingFieldError,
   type NormalizedBilling,
 } from './billing'
+import { isGuestBindableAccount } from '../order-status/guest-bindable-account'
 import {
   GUEST_SUMMARY_MISSING,
   guestSummaryMessage,
@@ -18,6 +19,38 @@ import {
   type GuestFieldError,
   type NormalizedGuest,
 } from './guest'
+
+/**
+ * Bejelentkezett duplavásárlás. A munkamenet a saját fiók, ez nem orákulum.
+ * `docs/gomb-inventar.md` §7 jóváhagyott mondat.
+ */
+export const CHECKOUT_ALREADY_PURCHASED =
+  'Ezt a kurzust már megvásároltad. A fiókodban éred el.'
+
+/**
+ * W4 + K2 vendégüzenet. Ugyanez megy, ha az e-mailhez aktivált fiók tartozik,
+ * akár van kurzusuk, akár nincs: a válasz nem árulja el a vásárlást
+ * (egészségügyi adat).
+ *
+ * Forrás:
+ * - GOV.UK Design System, Passwords: ne áruld el, a felhasználónév vagy a
+ *   jelszó volt-e hibás.
+ *   https://design-system.service.gov.uk/patterns/passwords/
+ * - OWASP Authentication Cheat Sheet: generic hiba, ne legyen
+ *   user-enumeration eltérés.
+ *   https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+ * - WCAG 2.2 3.3.3 Error Suggestion: mondd meg, hogyan javítható (belépés),
+ *   ne extra állapotot.
+ */
+export const CHECKOUT_GUEST_EXISTING_ACCOUNT =
+  'Ehhez az e-mail-címhez már van fiók. Jelentkezz be, és onnan tudod megvenni vagy megnyitni a kurzust.'
+
+/**
+ * Vendég, nincs aktivált fiók, de van paid rendelés az e-mailre: ne mondjuk,
+ * hogy „már megvásároltad” (W4). A következő lépés a belépés / aktiválás.
+ */
+export const CHECKOUT_GUEST_FINISH_AFTER_LOGIN =
+  'Ezt a lépést bejelentkezés után tudod befejezni.'
 
 /**
  * Checkout-start szolgáltatás (T-021) — a POST /api/checkout/start végpont
@@ -371,6 +404,7 @@ async function assertNoDuplicatePurchase(
   payload: Payload,
   scope: DuplicateScope,
   productId: number,
+  paidMessage: string,
 ): Promise<void> {
   const baseWhere = duplicateScopeWhere(scope, productId)
 
@@ -382,9 +416,7 @@ async function assertNoDuplicatePurchase(
     overrideAccess: true,
   } as unknown as Parameters<Payload['find']>[0])
   if (paidOrders.totalDocs > 0) {
-    // §3.1.1: a kvirtmínusz magyar szövegben nem írásjel. A két állítás két
-    // mondat (`docs/gomb-inventar.md` §7 jóváhagyott cseréje).
-    throw new CheckoutError(409, 'Ezt a kurzust már megvásároltad. A fiókodban éred el.')
+    throw new CheckoutError(409, paidMessage)
   }
 
   // Csak a Barion-fizetési ablakban (default 30 perc) lévő payment_pending
@@ -459,13 +491,17 @@ function isOrderNumberConflict(error: unknown): boolean {
  * A rendelés VEVŐJE — a munkamenet felhasználója vagy a vendég-adatok.
  *
  * A `customerId` vendégnél SZÁNDÉKOSAN null: a rendelés fiók nélkül jön létre,
- * a fiók a fizetés UTÁN dől el. Az `existingUserId` viszont már itt is
- * feloldódhat (ha az e-mailhez tartozik fiók) — kizárólag a
+ * a fiók a fizetés UTÁN dől el. Az `existingUser` viszont már itt is
+ * feloldódhat (ha az e-mailhez tartozik fiók) — a K2-kapuhoz, a
  * duplavásárlás-ellenőrzéshez és a zárkulcshoz, KÖTÉS NÉLKÜL.
  */
 interface CheckoutBuyer {
   customerId: number | null
-  existingUserId: number | null
+  existingUser: {
+    id: number
+    role?: string | null
+    passwordSetupPending?: boolean | null
+  } | null
   email: string
   name: string | null
 }
@@ -528,11 +564,11 @@ function buildCustomerSnapshot(
  * A hiba NEM végzetes: ha a lekérdezés elszáll, a checkout mehet tovább (a
  * fiók-kötés úgyis a fizetés után dől el), csak a kényelmi ellenőrzés marad ki.
  */
-async function findExistingUserIdByEmail(
+async function findExistingUserByEmail(
   payload: Payload,
   email: string,
   log: Logger,
-): Promise<number | null> {
+): Promise<CheckoutBuyer['existingUser']> {
   try {
     const { docs } = await payload.find({
       collection: 'users',
@@ -542,8 +578,16 @@ async function findExistingUserIdByEmail(
       pagination: false,
       overrideAccess: true,
     })
-    const id = docs[0]?.id
-    return typeof id === 'number' ? id : null
+    const found = docs[0]
+    if (typeof found?.id !== 'number') {
+      return null
+    }
+    return {
+      id: found.id,
+      role: typeof found.role === 'string' ? found.role : null,
+      passwordSetupPending:
+        typeof found.passwordSetupPending === 'boolean' ? found.passwordSetupPending : null,
+    }
   } catch (error) {
     log.warn('checkout-start: a vendég e-mailhez tartozó fiók keresése sikertelen (a checkout folytatódik)', {
       error: error instanceof Error ? error.message : String(error),
@@ -566,7 +610,11 @@ async function resolveBuyer(
   if (user !== null) {
     return {
       customerId: user.id,
-      existingUserId: user.id,
+      existingUser: {
+        id: user.id,
+        role: user.role,
+        passwordSetupPending: user.passwordSetupPending === true,
+      },
       email: (user.email ?? '').trim().toLowerCase(),
       name: user.name ?? null,
     }
@@ -579,7 +627,7 @@ async function resolveBuyer(
   }
   return {
     customerId: null,
-    existingUserId: await findExistingUserIdByEmail(payload, guest.email, log),
+    existingUser: await findExistingUserByEmail(payload, guest.email, log),
     email: guest.email,
     name: guest.name,
   }
@@ -653,27 +701,46 @@ export async function startCheckout(options: CheckoutStartOptions): Promise<Chec
    * fülön belépve, a másikon vendégként indít fizetést.
    */
   const lockKey =
-    buyer.existingUserId !== null
-      ? `checkout:${buyer.existingUserId}:${productId}`
+    buyer.existingUser !== null
+      ? `checkout:${buyer.existingUser.id}:${productId}`
       : `checkout:guest:${buyer.email}:${productId}`
 
   const order = await withAdvisoryLock(
     payload,
     lockKey,
     async () => {
-      if (buyer.existingUserId !== null) {
+      // K2 + W4: aktivált / staff / owner fiókra a vendég nem indít fizetést.
+      // Az üzenet azonos, akár van kurzusuk, akár nincs.
+      if (
+        user === null &&
+        buyer.existingUser !== null &&
+        !isGuestBindableAccount(buyer.existingUser)
+      ) {
+        throw new CheckoutError(409, CHECKOUT_GUEST_EXISTING_ACCOUNT)
+      }
+
+      const paidMessage =
+        user !== null ? CHECKOUT_ALREADY_PURCHASED : CHECKOUT_GUEST_FINISH_AFTER_LOGIN
+
+      if (buyer.existingUser !== null) {
         await assertNoDuplicatePurchase(
           payload,
-          { kind: 'customer', userId: buyer.existingUserId },
+          { kind: 'customer', userId: buyer.existingUser.id },
           productId,
+          paidMessage,
         )
       }
       // A fiókhoz még nem kötött (vendég) rendeléseket kizárólag az e-mail
       // azonosítja. Bejelentkezett vevőnél is le kell futtatni: a korábbi
       // vendég payment_pending (customer: null, customerEmail: ugyanaz)
       // egyébként láthatatlan maradna, és második Barion-terhelés indulna.
-      // Vendég fiók nélkül: csak ez az e-mail-ág fut (existingUserId null).
-      await assertNoDuplicatePurchase(payload, { kind: 'email', email: buyer.email }, productId)
+      // Vendég fiók nélkül: csak ez az e-mail-ág fut (existingUser null).
+      await assertNoDuplicatePurchase(
+        payload,
+        { kind: 'email', email: buyer.email },
+        productId,
+        paidMessage,
+      )
 
       let lastConflict: unknown
       for (let attempt = 1; attempt <= ORDER_NUMBER_CONFLICT_MAX_ATTEMPTS; attempt += 1) {
